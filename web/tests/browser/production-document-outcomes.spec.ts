@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { aCardAsking, BROKEN_PATH, HUGE_PATH } from './documentBackend.ts'
+import { aCardAsking, BROKEN_PATH, HUGE_PATH, linkTo } from './documentBackend.ts'
 import { test } from './test.ts'
 
 /**
@@ -18,12 +18,6 @@ const OUTCOMES = [
   ['a failed read', BROKEN_PATH],
   ['no file', 'docs/gone.md'],
 ] as const
-
-/** The link by the path it ends with, which reads the same in every language. */
-const linkTo = (page: Page, path: string) => {
-  const escaped = path.replaceAll('.', String.raw`\.`)
-  return page.getByRole('link', { name: new RegExp(`${escaped}$`, 'u') })
-}
 
 const viewer = (page: Page) => page.locator('.document-viewer')
 
@@ -45,7 +39,11 @@ for (const locale of ['en-US', 'ru-RU'])
           await link.focus()
           await page.keyboard.press('Enter')
           // The read has come to what it comes to: a text or a refusal, no longer waiting.
-          await expect(viewer(page).locator('.document-text, .document-refusal')).toBeVisible()
+          await expect(
+            viewer(page).locator(
+              '.document-text, .document-refusal .platform-state-panel:not([aria-busy])',
+            ),
+          ).toBeVisible()
           await expect.poll(() => focusInViewer(page)).toBe(true)
 
           await page.keyboard.press('Escape')

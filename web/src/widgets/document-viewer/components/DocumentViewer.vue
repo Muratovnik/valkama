@@ -56,6 +56,7 @@ const {
   close,
   document: shownFile,
   failure,
+  focusRight,
   go,
   loading,
   parsed,
@@ -157,10 +158,11 @@ function blocksFor(shown: RichDocument, suffix: string): { first: number; marks:
 }
 
 /**
- * Focus follows the reader. A block a link sent them to is an answer to the press, which
- * asks for the ring; the head of a document just opened is only where reading starts,
- * and the input that opened it decides. A page opened by an address or a reload answers
- * nothing: focus waits on what it is read with, unringed, where the keys that scroll work.
+ * Focus follows the reader, while `focusRight` says it may. A block a link sent them to is an
+ * answer to the press, which asks for the ring; the head of a document just opened is only
+ * where reading starts, and the input that opened it decides. A page opened by an address or
+ * a reload answers nothing: focus waits on what it is read with, unringed, where the keys
+ * that scroll work.
  */
 function land(box: HTMLElement | null) {
   if (props.page && !pageWasTouched()) scroller.value?.focus({ preventScroll: true })
@@ -176,7 +178,7 @@ function goToSuffix(suffix: string) {
   const body = scroller.value
   const box = first === -1 || !body ? null : (text.value?.bring(first, body) ?? null)
   if (!box) body?.scrollTo({ top: 0 })
-  land(box)
+  focusRight.take(() => land(box))
 }
 
 watch(placement, async (aim) => {
@@ -188,8 +190,11 @@ watch(placement, async (aim) => {
     anchorMissing.value = ''
     marked.value = new Set()
     scroller.value?.scrollTo({ top: aim.top })
-    if (!aim.link || !focusLink(aim.link)) land(null)
+    focusRight.take(() => {
+      if (!aim.link || !focusLink(aim.link)) land(null)
+    })
   }
+  focusRight.spend()
 })
 
 const { focusLink, lineAt } = useReaderPlace({
@@ -204,20 +209,16 @@ const { focusLink, lineAt } = useReaderPlace({
 })
 
 /**
- * Beside what it was opened from nothing else takes focus as it opens, so it comes in here
- * from the link that opened it, once there is a viewer to come to and whatever the read
- * comes to — a text, a refusal, a failed read: from then on Escape closes this and not the
- * card. One rule for every outcome, since a refusal sets no place for the text's own
- * landing to act on; focus the reader moved elsewhere stays there. A drawer has its own
- * first control to go to.
+ * Beside what it was opened from nothing else takes focus as it opens, so it comes in here as
+ * a read starts, before anything is known of what it comes to: from then on Escape closes
+ * this and not the card, for a text and a refusal alike. A drawer has its own first control
+ * to go to.
  */
 function comeIn() {
-  if (!props.beside || !props.view.atOpener()) return
-  if (failure.value && refusal.value) refusal.value.focus({ preventScroll: true })
-  else header.value?.focusTitle()
+  if (props.beside && loading.value) focusRight.take(() => header.value?.focusTitle())
 }
 onMounted(comeIn)
-watch(loading, comeIn, { flush: 'post' })
+watch(place, comeIn, { flush: 'post' })
 
 /** What held focus went with the state: a refusal is what to read now, else the title. */
 useFocusKeeper(root, () => {

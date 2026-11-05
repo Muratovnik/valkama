@@ -5,8 +5,8 @@
  * the page itself. Escape pressed there is the window's and not the viewer's: it asked to
  * close the card behind a document still open.
  *
- * It acts only on focus the viewer had and lost to nothing. A read the window's return
- * started never takes focus from where the reader went meanwhile.
+ * It acts only on focus the viewer had and lost to nothing, so it takes it from nobody. A
+ * move that would take focus from where the reader stands asks `useFocusRight`.
  */
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { Ref } from 'vue'

@@ -134,6 +134,12 @@ export const HUB_TITLE = 'Needs my answer'
 export const aCardAsking = (page: Page, prompt: string) =>
   openQuestion(page, [asked({ prompt })], () => installDocuments(page))
 
+/** The link by the path it ends with, which reads the same in every language. */
+export const linkTo = (scope: Locator | Page, path: string) => {
+  const escaped = path.replaceAll('.', String.raw`\.`)
+  return scope.getByRole('link', { name: new RegExp(`${escaped}$`, 'u') })
+}
+
 /** The link's name says what it opens, and nothing about how the text happens to word it. */
 export const linkIn = (scope: Locator, path: string) =>
   scope.getByRole('link', { name: `Open the document in Valkama: ${path}` })

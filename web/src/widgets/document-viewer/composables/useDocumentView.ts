@@ -11,6 +11,8 @@ import { computed, nextTick, ref, shallowRef } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
+import { useFocusRight } from '@/widgets/document-viewer/composables/useFocusRight.ts'
+
 import { DocumentRefusal, readDocument } from '@/shared/api/documentApi.ts'
 import type { ProjectDocument } from '@/shared/api/documentApi.ts'
 import { inlineWords, parseRichDocument } from '@/shared/lib/richText.ts'
@@ -135,6 +137,7 @@ export function useDocumentView() {
   let openedFrom: HTMLElement | null = null
   /** Each read is numbered, so an answer that arrives after a newer request is dropped. */
   let reading = 0
+  const focusRight = useFocusRight()
 
   const toSuffix = (suffix: string) => {
     placement.value = { kind: 'suffix', serial: placement.value.serial + 1, suffix }
@@ -153,7 +156,10 @@ export function useDocumentView() {
       document.value = text
       then()
     } catch (error) {
-      if (serial === reading) failure.value = failureOf(error)
+      if (serial === reading) {
+        failure.value = failureOf(error)
+        focusRight.spend()
+      }
     } finally {
       if (serial === reading) loading.value = false
     }
@@ -164,6 +170,7 @@ export function useDocumentView() {
     const focused = globalThis.document.activeElement
     openedFrom = focused instanceof HTMLElement ? focused : null
     visits.value = []
+    focusRight.give()
     void read(target, () => toSuffix(target.suffix))
   }
 
@@ -172,6 +179,7 @@ export function useDocumentView() {
    * leaves the place the reader was at behind them, for Back.
    */
   function go(target: DocumentPlace) {
+    focusRight.give()
     const current = place.value
     if (current && samePlace(current, target) && document.value) {
       place.value = target
@@ -190,6 +198,7 @@ export function useDocumentView() {
     const visit = visits.value.at(-1)
     if (!visit) return
     visits.value = visits.value.slice(0, -1)
+    focusRight.give()
     void read(visit.place, () => {
       const serial = placement.value.serial + 1
       placement.value = { kind: 'scroll', link: visit.link, serial, top: visit.top }
@@ -198,6 +207,7 @@ export function useDocumentView() {
 
   function close() {
     reading++
+    focusRight.spend()
     place.value = null
     document.value = null
     failure.value = null
@@ -292,9 +302,8 @@ export function useDocumentView() {
     placement,
     refresh,
     staleness,
+    focusRight,
     canGoBack: computed(() => visits.value.length > 0),
-    /** Focus still stands on the link the document was opened from, where nothing took it. */
-    atOpener: () => openedFrom !== null && globalThis.document.activeElement === openedFrom,
     /**
      * The viewer answers for the reader, for a place a link or a new text leaves behind.
      * Gives back how to stop: the next host's viewer may have taken over by then.

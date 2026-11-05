@@ -504,7 +504,9 @@ checkouts are therefore distinguishable even at the same version.
   could not be shown — over 512 KiB, a read the server failed, a file no longer there — left
   focus on the card's link, so Escape closed the card and dropped focus on the page. Focus
   now goes into the document whatever its read comes to, and Escape closes the document
-  alone and gives focus back to the link.
+  alone and gives focus back to the link. Focus moved during the read stays where it was
+  moved, and a read begun by the window's return never takes it, so typing in the card is
+  not cut off when a refused file turns readable.
 - **The folded document strip answers to what it says.** Folded beside a card, the strip
   shows «Document: <title>» but was named «Document width», so a voice command naming what
   is on it found nothing. It is now named by those words, with «Document width» as its
