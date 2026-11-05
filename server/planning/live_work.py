@@ -37,17 +37,19 @@ nothing: `agents` may say a subagent stands on each item its parent held when it
 started and how many those were, but as a reason to move they would move them all.
 
 A session is at work when its last lifecycle event is a `prompt`, so a turn is
-running, or when it has a live subagent: a subagent row of it that is `active`
-and started since its last real start. A compacted context is reported as a start too, and it is none: the
-client runs on with its turn and its subagents (`sessions.COMPACTED_START`), so
-it counts neither as a lifecycle event nor as a start here. A subagent continued
-later starts again under its own id, and its row's `last_seen` says when, since
-only its start and its stop move that time. A write is any Planning write call this session confirmed and
-that names the item: a claim, a step, a comment, a link (which names its source
-item). A session at work moves only the items it or its live subagents are seen
-working on; the others it holds stand still, so a coordinator holding many items
-does not move them all on every turn or for every subagent. A session with no prompt recorded has written nothing since one.
-Only the items the caller passes are mapped, whatever else a session wrote to.
+running, or when it has a live subagent: a subagent row of it that is `active`,
+started since its last real start and not fallen silent. A compacted context is
+reported as a start too, and it is none: the client runs on with its turn and its
+subagents (`sessions.COMPACTED_START`), so it counts neither as a lifecycle event
+nor as a start here. A subagent continued later starts again under its own id, and
+its row's `last_seen` says when, since only its start and its stop move that time.
+A write is any Planning write call this session confirmed and that names the item:
+a claim, a step, a comment, a link (which names its source item). A session at work
+moves only the items it or its live subagents are seen working on; the others it
+holds stand still, so a coordinator holding many items does not move them all on
+every turn or for every subagent. A session with no prompt recorded has written
+nothing since one. Only the items the caller passes are mapped, whatever else a
+session wrote to.
 
 An item takes the strongest state of its sessions and attempts, `working`
 before `held` before `waiting` before `quiet`, and an item with none stands in
@@ -63,9 +65,20 @@ subagent, so only the session's own events count as its last one. A subagent a
 client restart cut off leaves no end, so only one started since the session's
 last real start is taken to run.
 
+One that fell with the client running leaves no end either, and its row's
+`last_seen` cannot tell: between a start and a stop nothing moves it, so an hour
+behind is what a subagent working for an hour looks like. What does move is its
+transcript, written with every message and tool result, whose time is read as
+`agents` reads it. So a subagent runs for `SUBAGENT_SILENT` past the later of its
+last start and that time. With no such file to read, as for a client that keeps
+none there, time since its start says nothing about its work, and only the day a
+silent session gets stops it.
+
 What the rule cannot see: a client that died in the middle of a turn reads as
 at work for a day and `quiet` after it, since only a check of the process could
-tell more. A long turn that writes nothing moves nothing: its items read `held`
+tell more. A subagent that fell moves its items for up to `SUBAGENT_SILENT` more,
+and one in a single step that writes nothing for longer stops moving until it
+writes. A long turn that writes nothing moves nothing: its items read `held`
 until its first write, and so do a coordinator's while a subagent of it works
 having written nothing, held no step and been given a label with no number. A
 label says what its launch meant and not what the subagent does, so one that names
@@ -73,8 +86,10 @@ an item it only reads moves that item. A link moves only its source item, the on
 its call names. A session that is not at work puts nothing in the map for an item
 it only wrote to.
 
-The map is five reads, whatever the number of items. A store an earlier build
-wrote may lack what they ask for, and then the map is empty rather than an error.
+The map is five reads, whatever the number of items, and the status of one file
+for each live subagent started longer ago than `SUBAGENT_SILENT`. A store an earlier
+build wrote may lack what they ask for, and then the map is empty rather than an
+error.
 """
 
 from __future__ import annotations
@@ -83,14 +98,20 @@ import json
 import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from .. import sessions
 from ..hooks import normalize
-from . import calls, leases, mentions
+from . import agents, calls, leases, mentions
 
 #: How long a live session may stay silent before it reads `quiet`.
 LIVE_QUIET = timedelta(hours=24)
+#: How long a subagent's transcript may stay unwritten before it no longer runs. A
+#: running agent's transcript goes unwritten for as long as one tool call or one
+#: answer takes: the longest stretch across hundreds of recorded runs, some over three
+#: hours long, was ten minutes, the limit of one shell command. Twice the hour a very
+#: long step may take leaves it running, at the cost of two hours' motion on a fallen one.
+SUBAGENT_SILENT = timedelta(hours=2)
 
 WORKING = "working"
 HELD = "held"
@@ -100,18 +121,19 @@ _STRENGTH = {WORKING: 0, HELD: 1, WAITING: 2, QUIET: 3}
 
 _SECOND = 19
 _STAMP = "%Y-%m-%dT%H:%M:%SZ"
+_MOMENT = "%Y-%m-%dT%H:%M:%S"
 
 #: Whether this store holds every column the reads below ask for. A table that
 #: is not there has no rows here, so one answer covers a missing table as well.
 _HOLDS_EVERYTHING = (
     "SELECT (SELECT COUNT(*) FROM pragma_table_info('work_items') WHERE name = 'claim_call_id')"
     " + (SELECT COUNT(*) FROM pragma_table_info('sessions')"
-    "    WHERE name IN ('parent_session_id', 'agent_id', 'label'))"
+    "    WHERE name IN ('parent_session_id', 'agent_id', 'label', 'transcript_path'))"
     " + (SELECT COUNT(*) FROM pragma_table_info('execution_events')"
     "    WHERE name IN ('agent_id', 'work_item_id', 'source'))"
     " + (SELECT COUNT(*) FROM pragma_table_info('executions') WHERE name = 'status')"
 )
-_COLUMNS_ASKED = 8
+_COLUMNS_ASKED = 9
 
 #: The session of each confirmed call that took a claim on one of these items.
 _CLAIMS = (
@@ -131,10 +153,10 @@ _SESSIONS = (
     "WITH top AS (SELECT value AS id FROM json_each(?1)"
     " UNION SELECT id FROM sessions"
     "  WHERE status = 'active' AND parent_session_id = '' AND last_seen >= ?2)"
-    " SELECT id, '' AS parent, '' AS agent_id, '' AS label, status, last_seen FROM sessions"
-    " WHERE id IN (SELECT id FROM top)"
+    " SELECT id, '' AS parent, '' AS agent_id, '' AS label, status, last_seen,"
+    " transcript_path FROM sessions WHERE id IN (SELECT id FROM top)"
     " UNION ALL"
-    " SELECT id, parent_session_id, agent_id, label, status, last_seen FROM sessions"
+    " SELECT id, parent_session_id, agent_id, label, status, last_seen, '' FROM sessions"
     " WHERE parent_session_id != '' AND status = 'active'"
     " AND parent_session_id IN (SELECT id FROM top)"
 )
@@ -263,6 +285,18 @@ def _named_by(label: str, references: Mapping[str, str]) -> set[str]:
     }
 
 
+def _runs(subagent: sqlite3.Row, session: str, transcript: str, now: datetime) -> bool:
+    """Whether a subagent started since its session really started has not fallen silent."""
+
+    started = str(subagent["last_seen"])[:_SECOND]
+    if started >= (now - SUBAGENT_SILENT).strftime(_MOMENT):
+        return True
+    written = agents.transcript_moment(transcript, session, str(subagent["agent_id"]))
+    if written:
+        return written >= (now - SUBAGENT_SILENT).strftime(_MOMENT)
+    return started >= (now - LIVE_QUIET).strftime(_MOMENT)
+
+
 def _states(
     conn: sqlite3.Connection, named: set[str], references: Mapping[str, str]
 ) -> tuple[dict[str, dict], dict[str, _SeenOn]]:
@@ -276,10 +310,12 @@ def _states(
     recent = (now - LIVE_QUIET).strftime(_STAMP)
     live: dict[str, dict] = {}
     subagents: dict[str, list[sqlite3.Row]] = {}
+    transcripts: dict[str, str] = {}
     for row in conn.execute(_SESSIONS, (json.dumps(sorted(named)), recent)):
         if row["parent"]:
             subagents.setdefault(str(row["parent"]), []).append(row)
             continue
+        transcripts[str(row["id"])] = str(row["transcript_path"] or "")
         seen = leases.moment(row["last_seen"])
         if row["status"] != "active" or seen is None or seen < now - leases.LEASE_PERIOD:
             continue
@@ -293,17 +329,19 @@ def _states(
     seen_on: dict[str, _SeenOn] = {}
     for session, read in _lifecycle(conn, awake).items():
         items = set(read.written)
-        agents: set[str] = set()
+        running: set[str] = set()
         for row in subagents.get(session, []):
             # A subagent started in the second its session started counts, as a
             # claim and a launch in one second do in `agents`.
-            if str(row["last_seen"])[:_SECOND] >= read.started:
+            if str(row["last_seen"])[:_SECOND] >= read.started and _runs(
+                row, session, transcripts[session], now
+            ):
                 agent = str(row["agent_id"])
-                agents.add(calls.label_id(agent))
+                running.add(calls.label_id(agent))
                 items |= read.by_agent.get(agent, set())
                 items |= _named_by(str(row["label"] or ""), references)
-        seen_on[session] = _SeenOn(items, agents)
-        if read.last_kind == "prompt" or agents:
+        seen_on[session] = _SeenOn(items, running)
+        if read.last_kind == "prompt" or running:
             live[session] = {"state": WORKING}
     return live, seen_on
 

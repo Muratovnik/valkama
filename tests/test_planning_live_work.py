@@ -9,7 +9,8 @@ other is `waiting`, and a compacted context is no such start or event. A session
 at work makes an item `working` only when it wrote there since its last prompt,
 itself or through a subagent, or when a live subagent of it wrote there since that
 subagent last started, holds an open step there or names it by number in its
-label; its other items are `held`.
+label; its other items are `held`. A live subagent is an active row started since
+the session really started, not silent past `SUBAGENT_SILENT` by its transcript.
 
 Every case reads `planning_payload`, so the key is checked where views take it.
 Hook events go through the real ingest path and claims through the real write
@@ -700,6 +701,88 @@ class SubagentWorkTests(LiveWorkCase):
         self.assertEqual([HELD] * 14, [self.state_of(reference) for reference in others])
 
 
+class SilentSubagentTests(LiveWorkCase):
+    """A subagent row stays `active` when its agent falls, and only its transcript can tell.
+
+    The row moves only at the agent's start and stop, so the case starts it long ago
+    and says through the transcript's time how long it has really been silent.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.directory = directory.name
+        self.reference = self.item()
+        self.session = _session()
+        self.claim(self.reference, self.session)
+        self.hook(
+            self.session,
+            "session-start",
+            ago(days=2),
+            source="startup",
+            transcript_path=os.path.join(self.directory, f"{self.session}.jsonl"),
+        )
+
+    def started(self, **delta: float) -> None:
+        """The agent started that long ago, named by the item's number; its parent's turn ended."""
+
+        self.hook(self.session, "subagent-start", ago(**delta), agent="a1")
+        self.hook(
+            self.session,
+            "post-tool-use",
+            ago(**delta),
+            tool_name="Agent",
+            tool_response={"agentId": "a1"},
+            tool_input={"description": f"build {self.reference}"},
+        )
+        self.hook(self.session, "stop", ago(seconds=30))
+
+    def transcript_written(self, delta: timedelta) -> None:
+        folder = os.path.join(self.directory, self.session, "subagents")
+        os.makedirs(folder)
+        path = os.path.join(folder, "agent-a1.jsonl")
+        with open(path, "w", encoding="utf-8"):
+            pass
+        written = (NOW - delta).timestamp()
+        os.utime(path, (written, written))
+
+    def test_a_subagent_silent_for_an_hour_in_a_long_step_still_runs(self) -> None:
+        self.started(hours=5)
+        self.transcript_written(timedelta(hours=1))
+        self.assertEqual(WORKING, self.state_of(self.reference))
+
+    def test_a_subagent_silent_up_to_the_limit_runs_and_past_it_does_not(self) -> None:
+        self.started(hours=5)
+        self.transcript_written(live_work.SUBAGENT_SILENT)
+        self.assertEqual(WORKING, self.state_of(self.reference))
+        path = os.path.join(self.directory, self.session, "subagents", "agent-a1.jsonl")
+        written = (NOW - live_work.SUBAGENT_SILENT - timedelta(seconds=1)).timestamp()
+        os.utime(path, (written, written))
+        self.assertEqual(WAITING, self.state_of(self.reference), "its parent's turn has ended")
+
+    def test_a_recent_start_outweighs_an_old_transcript(self) -> None:
+        self.started(minutes=30)
+        self.transcript_written(timedelta(hours=5))
+        self.assertEqual(WORKING, self.state_of(self.reference))
+
+    def test_with_no_transcript_only_a_day_since_its_start_stops_a_subagent(self) -> None:
+        self.started(hours=23)
+        self.assertEqual(WORKING, self.state_of(self.reference))
+        self.hook(self.session, "subagent-stop", ago(seconds=20), agent="a1")
+        self.assertEqual(WAITING, self.state_of(self.reference))
+
+    def test_with_no_transcript_a_subagent_past_a_day_does_not_run(self) -> None:
+        self.started(days=1, seconds=1)
+        self.assertEqual(WAITING, self.state_of(self.reference))
+
+    def test_a_fallen_subagent_leaves_its_parents_running_turn_as_it_was(self) -> None:
+        self.started(hours=5)
+        self.transcript_written(timedelta(hours=3))
+        self.hook(self.session, "user-prompt-submit", ago(seconds=10))
+        self.assertEqual(HELD, self.state_of(self.reference))
+
+
 class StoreAgeTests(unittest.TestCase):
     """A store an earlier build wrote lacks what the map asks for, and reads empty."""
 
@@ -715,7 +798,8 @@ class StoreAgeTests(unittest.TestCase):
         )
         conn.executescript(
             f"CREATE TABLE work_items(work_item_id TEXT, claim_ref TEXT{claim});"
-            f"CREATE TABLE sessions(id TEXT, status TEXT, last_seen TEXT, started_at TEXT{parent});"
+            f"CREATE TABLE sessions(id TEXT, status TEXT, last_seen TEXT, started_at TEXT,"
+            f" transcript_path TEXT{parent});"
             "CREATE TABLE execution_events(id INTEGER, kind TEXT, session_id TEXT, agent_id TEXT,"
             " identity_state TEXT, occurred_at TEXT, received_at TEXT, work_item_id TEXT,"
             " source TEXT);"

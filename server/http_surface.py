@@ -69,6 +69,11 @@ CLIENT_DISCONNECT_ERRORS = (
 )
 
 
+#: How often a stream reads again with nothing written: what it says can change with
+#: time alone, as when a session or a subagent falls silent while nothing else happens.
+STREAM_REREAD_SECONDS = 60.0
+
+
 class EventFrames:
     """What an event stream writes for each rebuilt payload.
 
@@ -1288,6 +1293,7 @@ class Handler(BaseHTTPRequestHandler):
 
             try:
                 push()
+                last_read = time.monotonic()
                 while True:
                     changed = False
                     try:
@@ -1296,8 +1302,13 @@ class Handler(BaseHTTPRequestHandler):
                     except queue.Empty:
                         pass
                     current_version = source.execute("PRAGMA data_version").fetchone()[0]
-                    if changed or current_version != observed_version:
+                    if (
+                        changed
+                        or current_version != observed_version
+                        or time.monotonic() - last_read >= STREAM_REREAD_SECONDS
+                    ):
                         observed_version = current_version
+                        last_read = time.monotonic()
                         push()
                     else:
                         self.wfile.write(b": keep-alive\n\n")

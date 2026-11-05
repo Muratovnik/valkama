@@ -270,6 +270,35 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             time.sleep(0.05)
         self.assertEqual([], watchers.WATCHERS._queues)
 
+    def test_an_open_stream_says_what_time_alone_changed_with_nothing_written(self) -> None:
+        said = {"live_work": "before"}
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        response = None
+        try:
+            with (
+                mock.patch.object(
+                    http_surface.planning_views, "planning_payload", lambda *_, **__: said
+                ),
+                mock.patch.object(http_surface, "STREAM_REREAD_SECONDS", 0.1),
+            ):
+                client.request("GET", "/api/events?view=planning")
+                response = client.getresponse()
+                self.assertIn(b"before", response.readline())
+                said = {"live_work": "after"}
+                deadline = time.monotonic() + 3
+                line = response.readline()
+                while not line.startswith(b"data: ") and time.monotonic() < deadline:
+                    line = response.readline()
+                self.assertIn(b"after", line)
+        finally:
+            if response is not None:
+                response.close()
+            client.close()
+        deadline = time.monotonic() + 3
+        while watchers.WATCHERS._queues and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual([], watchers.WATCHERS._queues)
+
     def test_only_canonical_extensionless_platform_routes_receive_spa_fallback(self) -> None:
         status, content_type, _ = self._get("/modules/planning/global")
         self.assertEqual(200, status)

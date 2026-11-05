@@ -165,6 +165,9 @@ checkouts are therefore distinguishable even at the same version.
   with a description naming its number, however often its coordinator is woken in between.
   An item a coordinator merely holds stays still, and a step a stopped subagent left moves
   nothing.
+- **A subagent that fell stops moving the graph.** Its record stays active with no end, so a
+  subagent whose transcript has gone unwritten for two hours no longer counts as running. A
+  page left open learns of it within a minute, even when nothing else is written.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

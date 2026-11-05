@@ -198,9 +198,10 @@ session. A session counts while its row says active and its last sign of life is
 than a claim's lease, fourteen days.
 
 A session is at work when its last lifecycle event of its own is a prompt, so a turn
-is running, or when one of its subagents is active and started since the session last
-really started. A compacted context is reported as a session start and is no such thing:
-the client runs on with its turn and its subagents. Then:
+is running, or when it has a live subagent: active, started since the session last really
+started, and with a transcript written within two hours. Where no such file can be read,
+only a day since its start stops it. A compacted context is reported as a session start
+and is no such thing: the client runs on with its turn and its subagents. Then:
 
 - `working`: a session at work is seen working on this item, whether or not it holds it.
   Since its last prompt it wrote to the item through Planning, itself or through a subagent

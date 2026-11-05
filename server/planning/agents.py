@@ -92,6 +92,15 @@ def _file_moment(path: str) -> str:
     return datetime.fromtimestamp(int(written), UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def transcript_moment(parent_transcript: str, session_id: str, agent_id: str) -> str:
+    """When a subagent's transcript was last written, as `_moment` reads a stored time.
+
+    Empty when there is no such file to read, which says nothing about the agent.
+    """
+
+    return _file_moment(_agent_transcript(parent_transcript, session_id, agent_id))
+
+
 def _holds_activity(conn: sqlite3.Connection) -> bool:
     """Whether this store records agents: one an earlier build wrote may not."""
 
@@ -339,10 +348,10 @@ def _on_item(
     ]
     for agent in listed:
         if not agent.ended_at:
-            path = _agent_transcript(
+            written = transcript_moment(
                 transcript_of(agent.session_id), agent.session_id, agent.agent_id
             )
-            agent.last_activity = max(agent.last_activity, _file_moment(path))
+            agent.last_activity = max(agent.last_activity, written)
     listed.sort(key=lambda agent: (agent.last_activity, agent.agent_id), reverse=True)
     return [_present(agent, steps) for agent in listed]
 
