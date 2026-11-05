@@ -570,6 +570,50 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     }
 
 
+def pin_work_item(conn: sqlite3.Connection, reference: str, pinned: bool) -> str:
+    """Pin an item for the person, or take the pin away; the id of the item.
+
+    A pin is the person's own list, not a change to the item: no event, no
+    revision, nothing an agent is told. The call still has its row, naming the
+    item, as every write's does. A pin already as asked writes nothing more, and
+    one taken away goes with nothing else; deleting the item takes it by cascade.
+    """
+
+    if not isinstance(pinned, bool):
+        raise model.PlanningError("pinned must be a boolean")
+    row = _row_for_write(conn, reference, None)
+    identity = str(row["work_item_id"])
+    call = calls.call_id(conn, identity)
+    if pinned:
+        conn.execute(
+            "INSERT OR IGNORE INTO pinned_work_items(work_item_id, call_id) VALUES (?, ?)",
+            (identity, call),
+        )
+    else:
+        conn.execute("DELETE FROM pinned_work_items WHERE work_item_id = ?", (identity,))
+    return identity
+
+
+def list_pins(conn: sqlite3.Connection, spaces: list[str]) -> list[dict]:
+    """The pins of these spaces' items, by space key and number, as an export carries them."""
+
+    return [
+        {
+            "reference": f"{row['key']}-{row['number']}",
+            "work_item_id": str(row["work_item_id"]),
+            "pinned_at": str(row["pinned_at"]),
+        }
+        for row in conn.execute(
+            "SELECT p.key, i.number, i.work_item_id, n.pinned_at FROM pinned_work_items n"
+            " JOIN work_items i ON i.work_item_id = n.work_item_id"
+            " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id"
+            " WHERE i.planning_space_id IN (SELECT value FROM json_each(?))"
+            " ORDER BY p.key, i.number",
+            (json.dumps(spaces),),
+        )
+    ]
+
+
 #: The most characters one event's detail may hold; `_log` refuses a longer one.
 EVENT_DETAIL_LIMIT = 512
 
@@ -1383,6 +1427,13 @@ def _fold(
             ).rowcount,
             "links": _repoint_links(conn, identity, survivor_id, involved, author),
         }
+        # The person's pin follows the work. A survivor pinned already keeps its own
+        # pin, from when it was pinned, and the merged item is left with none.
+        conn.execute(
+            "UPDATE OR IGNORE pinned_work_items SET work_item_id = ? WHERE work_item_id = ?",
+            (survivor_id, identity),
+        )
+        conn.execute("DELETE FROM pinned_work_items WHERE work_item_id = ?", (identity,))
         if found:
             set_checklist(conn, identity, [], force=True, author=author)
         if not _linked(conn, identity, survivor_id, "duplicates"):

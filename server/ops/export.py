@@ -123,10 +123,14 @@ def _planning(conn: sqlite3.Connection, chosen: tuple[str, ...] | None) -> dict:
             items.extend(planning_service.get_work_item(conn, identity) for identity in identities)
             for identity in identities:
                 questions.extend(planning_requests.of_item(conn, identity))
+        # A person's pins are theirs to lose as much as the items are.
+        pins = planning_service.list_pins(
+            conn, [str(space["planning_space_id"]) for space in spaces]
+        )
     finally:
         if began:
             conn.rollback()
-    return {"planning_spaces": spaces, "work_items": items, "requests": questions}
+    return {"planning_spaces": spaces, "work_items": items, "requests": questions, "pins": pins}
 
 
 def _every_item(conn: sqlite3.Connection, space: dict) -> list[str]:

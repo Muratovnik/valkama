@@ -20,7 +20,18 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from .. import query_params
-from . import calls, chain, migration, model, read_model, requests, service, usage, views
+from . import (
+    calls,
+    chain,
+    live_frame,
+    migration,
+    model,
+    read_model,
+    requests,
+    service,
+    usage,
+    views,
+)
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
@@ -526,6 +537,16 @@ def _merge(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _pin(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """Pin an item for the person, or unpin it, and answer with the live-work frame."""
+
+    pinned = _field(payload, "pinned")
+    if not isinstance(pinned, bool):
+        raise PlanningHttpError(400, "invalid_request", "pinned must be a boolean")
+    service.pin_work_item(conn, _text(payload, "id"), pinned)
+    return live_frame.frame(conn)
+
+
 def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.set_summary(
         conn,
@@ -970,6 +991,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/checklist/tick": _checklist_tick,
     "/api/planning/work-item/link": _link,
     "/api/planning/work-item/merge": _merge,
+    "/api/planning/work-item/pin": _pin,
     "/api/planning/work-item/summary": _summary,
     "/api/planning/work-item/comment": _comment,
     "/api/planning/work-item/comment/resolve": _resolve,
