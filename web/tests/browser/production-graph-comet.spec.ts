@@ -215,3 +215,23 @@ test('only a line with a comet is measured, and only until its path changes', as
   )
   expect(await measured()).toBe(settled)
 })
+
+/** How far apart a line's comets stand: one to a line, and no further than eight seconds. */
+const period = ({ dash, length }: { dash: number; length: number }) => Math.min(length + dash, 1280)
+
+test('a comet takes the new length of a line the layout moves', async ({ page }) => {
+  await serveWorking(page)
+  await opened(page)
+  const before = await comets(page)
+  for (const run of before) expect(run.dash + run.gap).toBeCloseTo(period(run), 0)
+  const lengths = (runs: typeof before) => runs.map((run) => Math.round(run.length)).join(' ')
+  await page.locator('.graph-frame-fold').first().focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(async () => lengths(await comets(page))).not.toBe(lengths(before))
+  await expect
+    .poll(async () => {
+      const runs = await comets(page)
+      return runs.filter((run) => Math.abs(run.dash + run.gap - period(run)) > 0.5).length
+    })
+    .toBe(0)
+})
