@@ -25,11 +25,12 @@ _REF_SQL = ",".join(f"'{kind}'" for kind in sorted(model.REF_KINDS))
 
 _NOW = "(strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
 
-#: What schema 10 appends, by table, in the order it appends it. A comment is
-#: the root of a thread when it names no parent and a reply when it names one --
+#: What schemas 10 and 12 append, by table, in the order they append it. A comment
+#: is the root of a thread when it names no parent and a reply when it names one --
 #: a root comment or a question, never both -- and only a root carries the
 #: resolve mark. A question keeps the number of its current answer; the answers
-#: it replaced live in `work_item_request_answers`. ALTER TABLE can only append,
+#: it replaced live in `work_item_request_answers`. Schema 12 lets a question stand
+#: on a root comment, as the list of choices under it. ALTER TABLE can only append,
 #: so the base schema declares these last from the same text and a fresh store
 #: has the shape a migrated one reaches.
 _THREAD_COLUMNS = {
@@ -44,7 +45,13 @@ _THREAD_COLUMNS = {
         ("resolution", "resolution TEXT NOT NULL DEFAULT ''"),
         ("resolved_call_id", "resolved_call_id INTEGER REFERENCES execution_events(id)"),
     ),
-    "work_item_requests": (("answer_version", "answer_version INTEGER NOT NULL DEFAULT 0"),),
+    "work_item_requests": (
+        ("answer_version", "answer_version INTEGER NOT NULL DEFAULT 0"),
+        (
+            "comment_id",
+            "comment_id INTEGER REFERENCES work_item_comments(id) ON DELETE CASCADE",
+        ),
+    ),
 }
 
 
@@ -209,6 +216,13 @@ CREATE TABLE IF NOT EXISTS work_item_request_answers(
     call_id INTEGER REFERENCES execution_events(id),
     PRIMARY KEY(request_id, version)
 );
+-- The items a person keeps in view, added with schema 12. A person's own list:
+-- a pin outlives the item's close and goes only with the item itself.
+CREATE TABLE IF NOT EXISTS pinned_work_items(
+    work_item_id TEXT PRIMARY KEY REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    pinned_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id)
+);
 
 """
 
@@ -323,6 +337,9 @@ _THREAD_TRIGGERS = {
 #: Created here rather than in the base schema, which runs before this against a
 #: table that may not have the columns yet. The partial indexes serve the two
 #: ways a thread is read -- its replies by parent -- and the open roots of an item.
+#: Schema 12 adds the list a root carries, by its comment, and the mentions of an
+#: item read back from the comment that made them; that one comes after the event
+#: table is rebuilt for its action, so the rebuild has nothing to carry.
 _THREAD_INDEXES = (
     "CREATE INDEX IF NOT EXISTS work_item_comments_reply_to"
     " ON work_item_comments(reply_to) WHERE reply_to IS NOT NULL",
@@ -331,18 +348,23 @@ _THREAD_INDEXES = (
     "CREATE INDEX IF NOT EXISTS work_item_comments_unresolved"
     " ON work_item_comments(work_item_id, id)"
     " WHERE reply_to IS NULL AND reply_to_request IS NULL AND resolved_at IS NULL",
+    "CREATE INDEX IF NOT EXISTS work_item_requests_comment"
+    " ON work_item_requests(comment_id) WHERE comment_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS work_item_events_mentioned"
+    " ON work_item_events(detail) WHERE action = 'mentioned'",
 )
 
 
 def migrate_threads(conn: sqlite3.Connection) -> None:
-    """Schema 10's Planning step: threads, the resolve mark and answer versions, once.
+    """Schema 10's and 12's Planning step: threads, the resolve mark, answer versions,
+    a question on a root comment and the mention action, once.
 
     Appends the columns `_THREAD_COLUMNS` names, numbers an answered question's
     current answer 1 in the same call that adds the column (a later open leaves
     the numbers alone), widens the event CHECK, and creates the indexes and the
-    triggers that keep a thread's shape. The table of replaced answers comes
-    from the base schema, which `store.connect()` runs before this. Every part
-    looks before it writes, so a store that has them is left as it was.
+    triggers that keep a thread's shape. The table of replaced answers and the
+    pins come from the base schema, which `store.connect()` runs before this.
+    Every part looks before it writes, so a store that has them is left as it was.
     """
 
     added: set[str] = set()
@@ -514,6 +536,7 @@ SCHEMA_TABLES = (
     "work_item_events",
     "work_item_requests",
     "work_item_request_answers",
+    "pinned_work_items",
 )
 
 

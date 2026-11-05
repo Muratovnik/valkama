@@ -93,6 +93,9 @@ EVENT_ACTIONS = (
     "comment_resolved",
     "comment_reopened",
     "request_changed",
+    # Schema 12: a comment on another item named this one, the comment's id as the
+    # detail.
+    "mentioned",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 

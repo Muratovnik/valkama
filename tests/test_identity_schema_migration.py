@@ -79,7 +79,8 @@ SCHEMA10_COLUMNS = {
         "resolution",
         "resolved_call_id",
     },
-    "work_item_requests": {"answer_version"},
+    # Schema 12's column: the chain runs on to this build's own schema.
+    "work_item_requests": {"answer_version", "comment_id"},
     "sessions": {"opened_in", "opened_host", "opened_folder", "host_session_id"},
 }
 SCHEMA10_TABLES = {
@@ -89,6 +90,8 @@ SCHEMA10_TABLES = {
     "usage_runs",
     "usage_segments",
     "usage_requests",
+    # Schema 12's.
+    "pinned_work_items",
 }
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",

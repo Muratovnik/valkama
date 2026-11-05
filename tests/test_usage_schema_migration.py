@@ -1,8 +1,9 @@
-"""Schema 10 to 11: the usage tables, under one recovery point of their own.
+"""Schema 10 onward: the usage tables, under one recovery point of their own.
 
 The source is a store built from the catalog the last schema-10 build created. What
 this suite holds the migration to: every existing value stays, the three tables and
-their indexes arrive once under one recovery point labelled `preschema11`, a second
+their indexes arrive once under one recovery point labelled `preschema11`, which also
+covers the rest of the chain to this build's own schema, a second
 open writes nothing, a fresh store has the same catalog directly, the recovery point
 brings the store back to 10, and a schema-10 build refuses the result. The new names
 are stated here rather than read from the code under test.
@@ -22,6 +23,9 @@ from server import store, store_backups
 from tests import schema9, schema10
 
 ADDED_TABLES = {"usage_runs", "usage_segments", "usage_requests"}
+#: Schema 12's: the chain runs on to this build's own schema in the same open.
+LATER_TABLES = {"pinned_work_items"}
+LATER_COLUMNS = {"work_item_requests": {"comment_id"}}
 ADDED_INDEXES = {
     "usage_segments_item",
     "usage_segments_session",
@@ -59,11 +63,22 @@ def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
 
 
 def _rows(conn: sqlite3.Connection) -> dict[str, list[tuple]]:
-    tables = sorted(_catalog(conn, "table") - ADDED_TABLES)
+    tables = sorted(_catalog(conn, "table") - ADDED_TABLES - LATER_TABLES)
     return {
-        table: [tuple(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY 1")]
+        table: [
+            tuple(row)
+            for row in conn.execute(f"SELECT {_kept(conn, table)} FROM {table} ORDER BY 1")
+        ]
         for table in tables
     }
+
+
+def _kept(conn: sqlite3.Connection, table: str) -> str:
+    """The table's columns, less those the later steps append."""
+
+    later = LATER_COLUMNS.get(table, set())
+    names = [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
+    return ", ".join(name for name in names if name not in later)
 
 
 class SchemaElevenTests(unittest.TestCase):
@@ -88,7 +103,9 @@ class SchemaElevenTests(unittest.TestCase):
     def test_a_schema_10_store_reaches_11_and_keeps_every_value(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(11, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertTrue(_catalog(conn, "table") >= ADDED_TABLES)
         self.assertTrue(_catalog(conn, "index") >= ADDED_INDEXES)
         columns = {row[1] for row in conn.execute("PRAGMA table_info(usage_segments)")}
@@ -128,7 +145,9 @@ class SchemaElevenTests(unittest.TestCase):
 
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(11, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         conn.row_factory = None
         self.assertEqual(self.before, _rows(conn))
 
@@ -166,7 +185,10 @@ class SchemaElevenTests(unittest.TestCase):
         with mock.patch.object(store, "STORE_SCHEMA_VERSION", 10):
             with self.assertRaises(store.StoreTooNewError) as refusal:
                 store.connect()
-        self.assertEqual((11, 10), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 10),
+            (refusal.exception.stored, refusal.exception.supported),
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
 

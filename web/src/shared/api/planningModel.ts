@@ -59,6 +59,7 @@ const EVENT_ACTIONS = [
   'request_changed',
   'comment_resolved',
   'comment_reopened',
+  'mentioned',
   'overridden',
 ] as const
 

@@ -36,16 +36,18 @@ ADDED_COLUMNS = {
         "resolution",
         "resolved_call_id",
     ],
-    "work_item_requests": ["answer_version"],
+    # Schema 12 appends the last one: the chain runs on to this build's own schema.
+    "work_item_requests": ["answer_version", "comment_id"],
     "sessions": ["opened_in", "opened_host", "opened_folder", "host_session_id"],
 }
-#: Schema 11's tables are the rest of the chain to this build's own schema.
+#: Schema 11's and 12's tables are the rest of the chain to this build's own schema.
 ADDED_TABLES = {
     "work_item_request_answers",
     "owner_alert_settings",
     "usage_runs",
     "usage_segments",
     "usage_requests",
+    "pinned_work_items",
 }
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {

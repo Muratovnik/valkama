@@ -78,8 +78,9 @@ KINDS = {
 #: The actions never told. `created`: an item a person filed says what it says, in
 #: the description an agent reads when it takes it. `execution_attached`: a launch
 #: or an observed session, which the agent in question already knows. `overridden`:
-#: a note on the transition or merge beside it, which is told.
-NOT_TOLD = frozenset({"created", "execution_attached", "overridden"})
+#: a note on the transition or merge beside it, which is told. `mentioned`: the store
+#: holds the action, and no write records it yet.
+NOT_TOLD = frozenset({"created", "execution_attached", "overridden", "mentioned"})
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.

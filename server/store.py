@@ -236,7 +236,14 @@ MIGRATIONS = {
 # 11 added the usage tables, and no existing row changed its meaning. It is raised
 # so the upgrade takes a recovery point of its own, and because a build at 10 would
 # run on while nothing keeps those tables current, which reads as work that stopped.
-STORE_SCHEMA_VERSION = 11
+#
+# 12 let a question stand on a root comment as the list of choices under it
+# (`work_item_requests.comment_id`), added the `mentioned` event and a person's
+# pins (`pinned_work_items`). A build at 11 would refuse a whole card over the
+# event it does not know, raise an alert for a list as if it were a question
+# waiting on the person, and carry a list away from its comment in a merge; the
+# ratchet makes it refuse a store at 12 instead.
+STORE_SCHEMA_VERSION = 12
 
 
 class StoreTooNewError(RuntimeError):
@@ -717,8 +724,8 @@ def connect() -> sqlite3.Connection:
             # older than 8 still goes through the classification and the
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
-            # labelled for it; a store at 9 needs only schema 10's steps, and one at
-            # 10 only schema 11's.
+            # labelled for it; a store at 9 needs only schema 10's steps, one at
+            # 10 only schema 11's and 12's, and one at 11 only schema 12's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a
@@ -743,7 +750,7 @@ def connect() -> sqlite3.Connection:
                 )
             elif upgrade:
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preschema10" if stored_version < 10 else "preschema11", locate=_backups
+                    conn, f"preschema{stored_version + 1}", locate=_backups
                 )
             else:
                 pretable_backup = _snapshot_before_new_tables(conn)

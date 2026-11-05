@@ -10,6 +10,7 @@ import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
+import { mentionMessages } from '@/shared/i18n/mentionMessages.ts'
 import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
@@ -1029,6 +1030,7 @@ export const en = {
     url: 'URL',
   },
   activity: {
+    ...mentionMessages.en.activity,
     request_created: 'Question or decision requested',
     request_answered: 'Answer recorded',
     request_declined: 'Request declined',
