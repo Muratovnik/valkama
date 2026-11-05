@@ -315,6 +315,9 @@ checkouts are therefore distinguishable even at the same version.
   declining or withdrawing a question never produced a notice, a `from_person` line or the
   `person_spoke` refusal, because the interface answers through a route those reads did not
   count as Planning's.
+- A question's options show code in their labels as code, as their descriptions already
+  did: a label such as «The standard `vue/max-lines-per-block`» showed its backticks. In
+  the form a link in a label reads as its words, since a press there also chooses the option.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

@@ -24,7 +24,11 @@ defineProps<{
     :key="entry.id"
     class="request-chosen"
   >
-    <span class="request-chosen-label">{{ entry.label }}</span>
+    <RichText
+      class="request-chosen-label"
+      :source="entry.label"
+      inline
+    />
     <RichText
       class="request-chosen-text"
       :source="entry.description"
