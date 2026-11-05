@@ -174,6 +174,9 @@ checkouts are therefore distinguishable even at the same version.
 - **The moving mark stays visible on a graph zoomed far out.** Its stroke used to thin below
   a pixel with the lines it runs on; it now keeps a pixel and a half while its length shrinks
   with the field.
+- **A card on a graph zoomed far out no longer shows three unexplained dots.** Its number
+  stands whole inside the block at any length, and what an agent is doing on it is in the
+  card's tooltip and accessible name, on its lines and in its frame's count.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

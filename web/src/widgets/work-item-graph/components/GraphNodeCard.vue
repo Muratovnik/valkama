@@ -120,6 +120,9 @@ const accessibleName = computed(() =>
     ...(root ? [t('graph.rootLabel')] : []),
   ].join(' · '),
 )
+
+/** A block has no words of its own, so its tooltip says what the card would. */
+const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
 </script>
 
 <template>
@@ -151,6 +154,7 @@ const accessibleName = computed(() =>
       marked,
     }"
     :aria-label="accessibleName"
+    :title="blockTitle"
     :data-walk-target="node.work_item_id"
     :tabindex="tabIndex"
     @focus="emit('focus', node.work_item_id)"
@@ -162,8 +166,6 @@ const accessibleName = computed(() =>
       :marker-state="markerState"
       :chain-group="chainGroup"
       :root="root"
-      :live="live"
-      :still="still"
     />
     <template v-else>
       <span

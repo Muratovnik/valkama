@@ -440,10 +440,10 @@ test('zoomed out, a card keeps the longest reference inside itself', async ({ pa
   })
   expect(inside).toBe(true)
   await expect(card).toHaveAccessibleName(new RegExp(`^${LONG_REFERENCE} `, 'u'))
-  // An ordinary reference stands whole beside its working dots.
+  // An ordinary reference stands whole.
   const name = page
     .locator(`.flow-node-card[data-walk-target="${identity(3)}"]`)
-    .locator('.flow-node-overview-name')
+    .locator('.flow-node-overview-reference')
   // Within the pixel an integer width rounds off, as the suite's clipping check allows.
   expect(await name.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThan(
     2,

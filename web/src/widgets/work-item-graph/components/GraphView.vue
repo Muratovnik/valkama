@@ -173,9 +173,13 @@ const anyMoving = computed(
     [...cardById.value.keys()].some((id) => moving.value.has(id)) ||
     [...frameById.value.values()].some((frame) => workingIn(frame) > 0),
 )
-/** A drawn card is held by a session not working on it now: the key names its still dots. */
-const anyHeld = computed(() =>
-  [...cardById.value.keys()].some((id) => live.value[id]?.state === 'held'),
+/**
+ * A drawn card is held by a session not working on it now: the key names its still dots,
+ * which a card zoomed out past reading does not draw.
+ */
+const anyHeld = computed(
+  () =>
+    !overview.value && [...cardById.value.keys()].some((id) => live.value[id]?.state === 'held'),
 )
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 

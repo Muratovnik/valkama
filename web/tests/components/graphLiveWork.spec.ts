@@ -99,9 +99,12 @@ describe('a card with live work', () => {
     )
   })
 
-  it('zoomed out, carries the dots after its reference', () => {
+  it('zoomed out, draws no dots and keeps the word in its name and tooltip', () => {
     const wrapper = card({ state: 'working' }, { overview: true })
-    expect(wrapper.get('.flow-node-overview-reference .work-dots').classes()).not.toContain('still')
+    expect(wrapper.find('.work-dots').exists()).toBe(false)
+    const button = wrapper.get('.flow-node-card')
+    expect(button.attributes('aria-label')).toContain('working')
+    expect(button.attributes('title')).toContain('working')
   })
 })
 

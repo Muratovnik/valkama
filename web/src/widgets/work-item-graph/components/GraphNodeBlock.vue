@@ -4,11 +4,17 @@
  * dot, grown to the card — with its reference on it. A chain view colours it
  * by progress, as the card's branch map does, at a zoom where nothing else on
  * the card survives. The root is framed in the text colour, so it is found
- * without its word.
+ * without its word. It carries no sign of what an agent is doing: three dots
+ * with no word beside them said nothing on a block already filled with a colour.
+ * That stays on the lines' comets and the frame's count, and in the card's name
+ * and tooltip.
+ *
+ * The reference is grown to read at this zoom, and held to what the block has room
+ * for, so a long one stands whole at a smaller size rather than running off the edge.
  */
-import { computed } from 'vue'
+import { onMounted, ref, useTemplateRef, watch } from 'vue'
 
-import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
@@ -18,24 +24,31 @@ const {
   markerState,
   reference,
   chainGroup,
-  live = null,
   root = false,
-  still = false,
 } = defineProps<{
   /** The card's marker, which colours the block outside a chain. */
   markerState: Extract<SemanticStatePair, { dimension: 'work-item-node-marker' }>['state']
   reference: string
   /** Where the card stands in the chain the field is scoped to, which colours it there. */
   chainGroup?: ChainGroup
-  /** Live work on the card, which the block says with the working dots after its reference. */
-  live?: LiveWork | null
   root?: boolean
-  /** The field does not move: the dots hold still. */
-  still?: boolean
 }>()
 
-/** Only work an agent is seen on moves, and only while the field's motion runs. */
-const resting = computed(() => still || live?.state !== 'working')
+/** What the card's padding in the overview leaves of its width (`GraphNodeCard`). */
+const REFERENCE_ROOM = NODE_WIDTH - 48
+const REFERENCE_LARGEST = 2.2
+
+const label = useTemplateRef<HTMLElement>('reference-label')
+const scale = ref(REFERENCE_LARGEST)
+
+/** A transform leaves the layout's width as it was, so this reads the unscaled text. */
+function fitReference() {
+  const width = label.value?.offsetWidth ?? 0
+  scale.value = width > 0 ? Math.min(REFERENCE_LARGEST, REFERENCE_ROOM / width) : REFERENCE_LARGEST
+}
+
+onMounted(fitReference)
+watch(() => reference, fitReference, { flush: 'post' })
 </script>
 
 <template>
@@ -52,15 +65,12 @@ const resting = computed(() => still || live?.state !== 'working')
       :class="{ root }"
       :data-tone="statePresentation('work-item-node-marker', markerState).tone"
     />
-    <span class="flow-node-overview-reference"
-      ><span class="flow-node-overview-name">{{ reference }}</span
-      ><span
-        v-if="live"
-        class="work-dots flow-node-overview-live"
-        aria-hidden="true"
-        :class="{ still: resting }"
-        ><i /><i /><i /></span
-    ></span>
+    <span
+      ref="reference-label"
+      class="flow-node-overview-reference"
+      :style="{ '--overview-reference-scale': scale }"
+      >{{ reference }}</span
+    >
   </span>
 </template>
 
@@ -99,31 +109,15 @@ const resting = computed(() => still || live?.state !== 'working')
 /* Drawn in the field's own space, which the camera scales down: the type ramp's
    largest step, scaled with the drawing rather than set off the ramp. */
 .flow-node-overview-reference {
+  --overview-reference-scale: 2.2;
+
   position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  max-width: calc((100% + var(--space-6)) / 2.2);
   color: var(--color-text-on-action);
   font: var(--font-drawer-title);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  transform: scale(2.2);
+  transform: scale(var(--overview-reference-scale));
   transform-origin: left center;
-}
-
-.flow-node-overview-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* After the reference, grown with it; they give way before it does. */
-.flow-node-overview-live {
-  flex: 0 1000 auto;
-  min-width: 0;
-  margin-inline-start: var(--space-1);
-  overflow: hidden;
 }
 </style>
