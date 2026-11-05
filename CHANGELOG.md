@@ -141,6 +141,10 @@ checkouts are therefore distinguishable even at the same version.
   The header is now one height, the height of a card, folded or open.
 - **An epic's title has room on the graph.** It stands on its own two lines under the
   reference and the state, as a card's does, instead of the 80 pixels left beside them.
+- **An epic with no tasks says «No tasks» on the graph,** with no empty progress edge and
+  no chevron, in place of «0 of 0 done». A frame whose work the view hides keeps its
+  counts and edge and offers no chevron until the view can draw that work; a stored
+  «open» for such a frame is ignored and kept for when it can.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

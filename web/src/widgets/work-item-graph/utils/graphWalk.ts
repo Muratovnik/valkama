@@ -66,15 +66,18 @@ export function headerBox(frame: PlacedFrame): Box {
 }
 
 /**
- * Whether a frame's fold button is drawn and is a target. Zoomed out to the
- * overview a header is a band, and its fold is hidden where the epic's own
- * button stands beside it; a header with no other button — the work under
- * none — keeps it, or a field of that frame alone would take no focus at all.
- * The header's view reads this, so what is drawn and what the keyboard can
- * reach are one rule.
+ * Whether a frame's fold button is drawn and is a target. A frame with nothing
+ * to unfold has none. Zoomed out to the overview a header is a band, and its
+ * fold is hidden where the epic's own button stands beside it; a header with no
+ * other button — the work under none — keeps it, or a field of that frame alone
+ * would take no focus at all. The header's view reads this, so what is drawn and
+ * what the keyboard can reach are one rule.
  */
-export function foldIsTarget(frame: Pick<PlacedFrame, 'epic'>, overview: boolean): boolean {
-  return !overview || frame.epic === null
+export function foldIsTarget(
+  frame: Pick<PlacedFrame, 'epic' | 'foldable'>,
+  overview: boolean,
+): boolean {
+  return frame.foldable && (!overview || frame.epic === null)
 }
 
 /**

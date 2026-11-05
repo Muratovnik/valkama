@@ -118,9 +118,7 @@ function frameNode(frame: Frame, nested: Map<string, Frame[]>, touched: Set<stri
       children: loose.map((item) => card(item.work_item_id)),
     })
   }
-  return children.length
-    ? { id: frame.id, layoutOptions: { ...FRAME_OPTIONS }, children }
-    : { id: frame.id, width: FOLDED_WIDTH, height: FRAME_HEADER }
+  return { id: frame.id, layoutOptions: { ...FRAME_OPTIONS }, children }
 }
 
 /** The top-level frame each drawn frame and card stands in. */
@@ -309,6 +307,7 @@ export async function layoutFrames(
     epic: frame.epic,
     parentId: frame.parentId,
     folded: frame.folded,
+    foldable: frame.foldable,
     progress: frame.progress,
     members: frame.members,
     ...box(placed.get(frame.id), frame.id),

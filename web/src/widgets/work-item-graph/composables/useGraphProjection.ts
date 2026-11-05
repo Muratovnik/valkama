@@ -360,7 +360,7 @@ export function useGraphProjection(
     showDone,
     toggle: (frameId) => {
       const frame = frameNow(frameId)
-      if (frame) frameChoices.toggle(frame, shown.value !== null)
+      if (frame?.foldable) frameChoices.toggle(frame, shown.value !== null)
     },
   }
 }

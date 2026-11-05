@@ -99,6 +99,7 @@ function frame(
     epic: id === NO_EPIC_FRAME ? null : { ...base, work_item_id: id },
     parentId: null,
     folded,
+    foldable: true,
     ...box,
     progress: { active: 0, ahead: 2, blocked: 0, done: 0, review: 0, total: 2 },
     members: [],
@@ -188,4 +189,19 @@ test('zoomed out to the overview, an epic header has no fold target, and the wor
     walkTargets(graph, { overview: false }).map((target) => target.id),
     walkTargets(graph).map((target) => target.id),
   )
+})
+
+test('a header with nothing to unfold has no fold target, at any zoom', () => {
+  const graph = {
+    frames: [
+      { ...frame('E', { x: 0, y: 0, width: 288, height: 112 }, true), foldable: false },
+      frame('G', { x: 400, y: 0, width: 288, height: 112 }, true),
+    ],
+    nodes: [],
+  }
+  for (const overview of [false, true]) {
+    const targets = new Set(walkTargets(graph, { overview }).map((target) => target.id))
+    assert.ok(targets.has(frameTarget('E')))
+    assert.ok(!targets.has(foldTarget('E')))
+  }
 })

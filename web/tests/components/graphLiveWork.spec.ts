@@ -116,6 +116,7 @@ describe('a frame with live work under it', () => {
           epic: EPIC,
           parentId: null,
           folded: true,
+          foldable: true,
           x: 0,
           y: 0,
           width: 288,

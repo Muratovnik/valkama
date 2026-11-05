@@ -7,7 +7,9 @@
  * so every open item stands somewhere on the field. A frame folds to its header
  * alone. Whether it starts folded follows from its structure only — how much
  * open work it holds — never from who is working on it, or every turn an agent
- * took would lay the field out again.
+ * took would lay the field out again. A frame with nothing the view can draw
+ * inside it has nothing to unfold, so it stays folded whatever was stored for
+ * it, until the view can draw something there.
  *
  * A link is drawn between the drawn ends it reaches: a card itself, an epic's
  * frame, or the folded frame a card stands in. Several links between one pair
@@ -53,6 +55,8 @@ interface ProjectedFrame {
   /** Whether it is folded when the operator chose nothing. */
   defaultFolded: boolean
   epic: WorkItemBrief | null
+  /** Unfolding it would draw a card or a frame standing in it. */
+  foldable: boolean
   folded: boolean
   id: string
   /** Open and closed work under it, nested frames' included. */
@@ -158,11 +162,17 @@ function frameCandidates(
       parentId: epic ? tree.parentOf(epic) : null,
       defaultFolded,
       folded: input.choices?.[id] ?? defaultFolded,
+      foldable: true,
       open: openWork,
       progress: progressOf(members),
       members: members.map((item) => item.work_item_id),
       cards: visible.filter((item) => tree.home(item) === id).sort(byNumber),
     })
+  }
+  const holders = new Set([...candidates.values()].map((frame) => frame.parentId))
+  for (const frame of candidates.values()) {
+    frame.foldable = frame.cards.length > 0 || holders.has(frame.id)
+    if (!frame.foldable) frame.folded = true
   }
   return candidates
 }
@@ -268,10 +278,10 @@ function linkOrder(left: { from: string; to: string }, right: { from: string; to
 }
 
 /**
- * The structure a layout depends on: the frames and how they are folded, the
- * cards in each, the lines and whether each is solid, and whether finished
- * work is drawn. A state, a holder, live work, a title or a label is laid on
- * the placed field by id and is not part of it.
+ * The structure a layout depends on: the frames and how they are folded, whether
+ * each can be, the cards in each, the lines and whether each is solid, and
+ * whether finished work is drawn. A state, a holder, live work, a title or a label
+ * is laid on the placed field by id and is not part of it.
  */
 function structureKey(
   showDone: boolean,
@@ -284,6 +294,7 @@ function structureKey(
       frame.id,
       frame.parentId,
       frame.folded,
+      frame.foldable,
       frame.folded ? [] : frame.cards.map((item) => item.work_item_id),
     ]),
     edges.map((edge) => [edge.id, edge.kind === 'blocks']),

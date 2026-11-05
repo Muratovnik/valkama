@@ -7,6 +7,7 @@ import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
+import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { openMessages } from '@/shared/i18n/openMessages.ts'
@@ -231,22 +232,7 @@ export const en = {
     chainDismiss: 'Dismiss',
     closed: 'Closed · {count}',
     closedToggle: 'Draw the closed members of the chain',
-    frame: {
-      noEpic: 'No epic',
-      epic: 'Epic {reference} “{title}”',
-      parent: 'Item {reference} “{title}”',
-      foldEpic: 'Collapse epic {reference} “{title}”',
-      unfoldEpic: 'Expand epic {reference} “{title}”',
-      foldParent: 'Collapse item {reference} “{title}”',
-      unfoldParent: 'Expand item {reference} “{title}”',
-      foldNone: 'Collapse the work under no epic',
-      unfoldNone: 'Expand the work under no epic',
-      doneOf: '{done} of {total} done',
-      review: 'in review',
-      active: 'in progress',
-      blocked: 'blocked',
-      working: 'working',
-    },
+    frame: graphFrameMessages.en.frame,
     live: {
       working: 'working',
       held: 'held',

@@ -14,7 +14,8 @@
  * The header is one height and one arrangement whether the frame is folded or
  * open (`FRAME_HEADER`), so folding moves nothing in it. Each line keeps its
  * place whatever the others hold; only counts that take a third line take it
- * from the title's second.
+ * from the title's second. An epic nothing was filed under says so and draws no
+ * edge; a frame with nothing to unfold has no chevron, and its column stays.
  *
  * The work under no epic is a frame too, with no epic to open. A frame inside
  * a frame is a well cut into it, a step below. Zoomed out past reading, the
@@ -98,7 +99,8 @@ const title = computed(() => epic.value?.title ?? t('graph.frame.noEpic'))
 const openLabel = computed(() => {
   const kind = isEpic.value ? 'epic' : 'parent'
   const head = named.value ? t(`graph.frame.${kind}`, named.value) : t('graph.frame.noEpic')
-  const done = t('graph.frame.doneOf', { done: frame.progress.done, total: frame.progress.total })
+  const { done: finished, total } = frame.progress
+  const done = total ? t('graph.frame.doneOf', { done: finished, total }) : t('graph.frame.noTasks')
   const groups = countedGroups(frame.progress).map(({ group, count }) => {
     const word = t(`graph.frame.${group}`, count)
     return `${count} ${word}`
@@ -255,6 +257,7 @@ function onOpenBlur() {
         </template>
       </component>
       <GraphFrameProgress
+        v-if="frame.progress.total > 0"
         class="graph-frame-progress"
         :progress="frame.progress"
       />

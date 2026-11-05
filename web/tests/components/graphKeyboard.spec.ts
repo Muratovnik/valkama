@@ -25,6 +25,7 @@ function frame(id: string, folded: boolean, parentId: string | null = null): Pla
     epic: { ...boardItem(1, 'backlog'), work_item_id: id },
     parentId,
     folded,
+    foldable: true,
     x: 0,
     y: parentId ? 80 : 0,
     width: folded ? 288 : 640,

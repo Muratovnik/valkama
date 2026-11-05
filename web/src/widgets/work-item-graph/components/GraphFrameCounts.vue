@@ -3,7 +3,8 @@
  * How the work under a frame stands, in words, each number beside its word
  * rather than inside it. The counts are never cut: they take a second line
  * first. They count the epic, not the view, so what a filter or «Open» hides is
- * in these numbers too.
+ * in these numbers too, and only an epic nothing was filed under says it has no
+ * tasks.
  */
 import { computed } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
@@ -33,7 +34,13 @@ function word(group: (typeof groups.value)[number]['group'], count: number): str
 
 <template>
   <span class="graph-frame-counts">
+    <span
+      v-if="progress.total === 0"
+      class="graph-frame-count"
+      >{{ t('graph.frame.noTasks') }}</span
+    >
     <Translation
+      v-else
       class="graph-frame-count"
       keypath="graph.frame.doneOf"
       tag="span"

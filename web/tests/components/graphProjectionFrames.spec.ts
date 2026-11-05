@@ -283,6 +283,18 @@ describe('folding a frame', () => {
     scope.stop()
   })
 
+  it('stores nothing and lays nothing out for a frame with nothing to unfold', async () => {
+    const { projection, scope } = filtered((all) => [...all], [item('epic-2', 5)])
+    await settle()
+    const before = runs.length
+    projection.toggle('epic-2')
+    await settle()
+    expect(runs).toHaveLength(before)
+    expect(projection.folded('epic-2')).toBe(true)
+    expect(localStorage.getItem('valkama-graph-frames') ?? '').not.toContain('epic-2')
+    scope.stop()
+  })
+
   it('keeps the choice for the page when storage refuses it', async () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota')

@@ -60,10 +60,11 @@ test('a field of frames too large to read opens on its first header at the top-l
 test('the keyboard enters where the camera looks: the first target in sight as the field is read', async () => {
   const placed = await finishedFirst()
   const phone = { width: 302, height: 640 }
-  const camera = graphCameraView(placed, phone)
-  assert.ok(camera)
+  const view = graphCameraView(placed, phone)
+  assert.ok(view)
   const [first] = walkTargets(placed).sort(readingOrder)
-  // The field's first target is out of this camera's sight.
+  // The camera stands just past the field's first target, so it is out of sight.
+  const camera = { ...view, x: -(first.x + first.width) * view.zoom }
   const centre = (target: { height: number; width: number; x: number; y: number }) => ({
     x: (target.x + target.width / 2) * camera.zoom + camera.x,
     y: (target.y + target.height / 2) * camera.zoom + camera.y,

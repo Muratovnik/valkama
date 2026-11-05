@@ -341,3 +341,71 @@ describe('the broad space', () => {
     }
   })
 })
+
+const frameIn =
+  (items: WorkItemBrief[], extra: Partial<FrameProjectionInput> = {}) =>
+  (id: string) => {
+    const found = frameProjection({ items, links: [], showDone: false, ...extra }).frames.find(
+      (entry) => entry.id === id,
+    )
+    if (!found) throw new Error(`${id} is not drawn`)
+    return found
+  }
+
+/** The key of a field that holds the frame «held» folded by choice. */
+const heldKey = (items: WorkItemBrief[]) =>
+  frameProjection({ items, links: [], showDone: false, choices: { held: true } }).key
+
+describe('whether a frame has anything to unfold', () => {
+  it('an epic nothing was filed under has not, and stays folded whatever was stored', () => {
+    const items = [...space(), item('empty', 50, { epic: true })]
+    const stored: Record<string, boolean>[] = [{}, { empty: false }]
+    for (const choices of stored) {
+      const frame = frameIn(items, { choices })('empty')
+      expect(frame.foldable).toBe(false)
+      expect(frame.folded).toBe(true)
+      expect(frame.progress.total).toBe(0)
+    }
+  })
+
+  it('an epic whose work the view hides has not until the view draws it, and counts it all along', () => {
+    const items = [
+      ...space(),
+      item('finished', 60, { epic: true }),
+      item('f1', 61, { parent: 'finished', state: 'done' }),
+    ]
+    const hidden = frameIn(items, { choices: { finished: false } })('finished')
+    expect(hidden).toMatchObject({ foldable: false, folded: true })
+    expect(hidden.progress).toMatchObject({ done: 1, total: 1 })
+    const drawn = frameIn(items, { showDone: true, choices: { finished: false } })('finished')
+    expect(drawn).toMatchObject({ foldable: true, folded: false })
+  })
+
+  it('an epic holding only another epic has it to unfold, though it holds no tasks', () => {
+    const items = [
+      ...space(),
+      item('outer', 70, { epic: true }),
+      item('inner', 71, { epic: true, parent: 'outer' }),
+    ]
+    const outer = frameIn(items, { choices: { outer: false } })('outer')
+    expect(outer).toMatchObject({ foldable: true, folded: false })
+    expect(outer.progress.total).toBe(0)
+    expect(frameIn(items, { choices: { outer: false } })('inner').foldable).toBe(false)
+  })
+
+  it('a frame a filter found work in has it to unfold; an empty epic is not drawn under one', () => {
+    const items = [...space(), item('empty', 50, { epic: true })]
+    const shown = new Set(['b1'])
+    const projected = frameProjection({ items, links: [], showDone: false, shown })
+    expect(projected.frames.map((frame) => frame.id)).toEqual([ids.E2])
+    expect(projected.frames[0].foldable).toBe(true)
+    // The count stays the epic's own, not the filter's.
+    expect(projected.frames[0].progress.total).toBeGreaterThan(1)
+  })
+
+  it('changes the field’s key, because the keyboard walks what the layout placed', () => {
+    const before = [...space(), item('held', 80, { epic: true })]
+    const after = [...before, item('h1', 81, { parent: 'held' })]
+    expect(heldKey(before)).not.toBe(heldKey(after))
+  })
+})

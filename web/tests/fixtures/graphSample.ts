@@ -42,6 +42,7 @@ function frame(
     id: epic?.work_item_id ?? NO_EPIC_FRAME,
     epic,
     parentId: null,
+    foldable: true,
     ...box,
     progress: progressOf(members),
     members: members.map((item) => item.work_item_id),

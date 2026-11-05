@@ -38,6 +38,7 @@ function frame(overrides: Partial<PlacedFrame> = {}): PlacedFrame {
     epic: EPIC,
     parentId: null,
     folded: false,
+    foldable: true,
     x: 0,
     y: 0,
     width: 600,
@@ -176,6 +177,51 @@ describe("a frame's header", () => {
     })
     expect(stop.get('button.graph-frame-open').attributes('tabindex')).toBe('0')
     expect(stop.get('.graph-frame-fold').attributes('tabindex')).toBe('-1')
+  })
+})
+
+const empty = () => frame({ folded: true, foldable: false, progress: progress({}) })
+
+describe('a frame with nothing to unfold', () => {
+  it('says it has no tasks, in place of counting none of none, in both languages', () => {
+    const ru = header({ frame: empty() }, 'ru')
+    expect(countsOf(ru)).toEqual(['Нет задач'])
+    ru.unmount()
+    const en = header({ frame: empty() })
+    expect(countsOf(en)).toEqual(['No tasks'])
+    expect(en.get('button.graph-frame-open').attributes('aria-label')).toBe(
+      'Epic MAIN-12 “Frames on the graph” · No tasks',
+    )
+  })
+
+  it('draws no empty edge and no fold, and still opens the epic', async () => {
+    const wrapper = header({ frame: empty() })
+    expect(wrapper.find('.frame-progress').exists()).toBe(false)
+    expect(wrapper.find('.graph-frame-fold').exists()).toBe(false)
+    await wrapper.get('button.graph-frame-open').trigger('click')
+    expect(wrapper.emitted('open')).toEqual([['MAIN-12']])
+  })
+
+  it('zoomed out, keeps its reference and draws no edge either', () => {
+    const wrapper = header({ frame: empty(), overview: true })
+    expect(wrapper.get('.graph-frame-reference').text()).toBe('MAIN-12')
+    expect(wrapper.find('.frame-progress').exists()).toBe(false)
+  })
+
+  it('whose work the view hides, counts it and draws its edge, with no fold to press', () => {
+    const wrapper = header({
+      frame: frame({ folded: true, foldable: false, progress: progress({ done: 7 }) }),
+    })
+    expect(countsOf(wrapper)).toEqual(['7 of 7 done'])
+    expect(wrapper.findAll('.frame-progress-part')).toHaveLength(1)
+    expect(wrapper.find('.graph-frame-fold').exists()).toBe(false)
+  })
+
+  it('that holds another epic and no tasks, says so and keeps the fold', () => {
+    const wrapper = header({ frame: frame({ foldable: true, progress: progress({}) }) })
+    expect(countsOf(wrapper)).toEqual(['No tasks'])
+    expect(wrapper.find('.frame-progress').exists()).toBe(false)
+    expect(wrapper.find('.graph-frame-fold').exists()).toBe(true)
   })
 })
 

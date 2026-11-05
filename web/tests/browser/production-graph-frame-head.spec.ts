@@ -1,6 +1,7 @@
 /**
  * An epic's header as the built app lays it out: it is one header whether the
- * frame is folded or open, and the title is the thing it leaves room for.
+ * frame is folded or open, an epic with no tasks says so and offers nothing to
+ * open, and the title is the thing a header leaves room for.
  *
  * Served a small space made for it, so that each case below is on the field by
  * its own numbers rather than wherever a large space happens to put one.
@@ -51,6 +52,8 @@ const LONG_TITLE =
 const OPEN = 1
 /** An open epic nothing was ever filed under. */
 const EMPTY = 10
+/** An open epic whose every task is finished: «Open» hides them all. */
+const FINISHED = 20
 /** An open epic with so much open work that it starts folded, and every group in its counts. */
 const CROWDED = 40
 
@@ -64,6 +67,8 @@ const SPACE: WorkItemBrief[] = [
   item(OPEN, 'dev', { kind: 'epic', container: true, title: LONG_TITLE }),
   ...underEpic(OPEN, 2, ['todo', 'dev', 'done', 'done', 'done']),
   item(EMPTY, 'review', { kind: 'epic', title: LONG_TITLE }),
+  item(FINISHED, 'dev', { kind: 'epic', container: true, title: 'Connect the release' }),
+  ...underEpic(FINISHED, 21, repeat('done', 7)),
   item(CROWDED, 'dev', { kind: 'epic', container: true, title: LONG_TITLE }),
   ...underEpic(CROWDED, 100, [
     ...repeat('done', 120),
@@ -95,6 +100,9 @@ async function serveSpace(page: Page) {
 const frameOf = (page: Page, n: number) => page.locator(`.graph-frame[data-frame="${identity(n)}"]`)
 const foldOf = (page: Page, n: number) =>
   page.locator(`[data-walk-target="frame:${identity(n)}:fold"]`)
+const heightOf = (frame: Locator) =>
+  frame.evaluate((element) => (element as HTMLElement).offsetHeight)
+
 async function openField(page: Page, width = 1500) {
   await page.setViewportSize({ width, height: 900 })
   await serveSpace(page)
@@ -160,7 +168,96 @@ for (const width of [1500, 390]) {
     await toggleAndSettle(page, OPEN)
     expectSamePlaces(open, await headerPlaces(frame), PARTS)
   })
+
+  test(`an epic with no tasks says so, draws no edge and offers nothing to open at ${width}px`, async ({
+    page,
+  }) => {
+    await openField(page, width)
+    const frame = frameOf(page, EMPTY)
+    await expect(frame.locator('.graph-frame-count')).toHaveText(['Нет задач'])
+    await expect(frame.locator('.frame-progress')).toHaveCount(0)
+    await expect(foldOf(page, EMPTY)).toHaveCount(0)
+    await expect(frame.locator('button.graph-frame-open')).toHaveAccessibleName(
+      `Эпик MAIN-${EMPTY} «${LONG_TITLE}» · Нет задач`,
+    )
+    // One height with any other folded epic, so its neighbours and lines keep their grid.
+    expect(await heightOf(frame)).toBe(await heightOf(frameOf(page, CROWDED)))
+  })
 }
+
+test('the keyboard walks past the fold an epic with no tasks does not have', async ({ page }) => {
+  await openField(page)
+  await page.locator(`[data-walk-target="frame:${identity(EMPTY)}"]`).focus()
+  await page.keyboard.press('ArrowLeft')
+  // Wherever the arrow lands, it is a button the field draws and never this frame's fold.
+  const landed = await page.evaluate(
+    () => (document.activeElement as HTMLElement | null)?.dataset.walkTarget ?? '',
+  )
+  expect(landed).not.toBe(`frame:${identity(EMPTY)}:fold`)
+  await expect(page.locator('.graph-flow [tabindex="0"]')).toHaveCount(1)
+})
+
+test('a stored «open» leaves a frame with nothing to draw looking like any other', async ({
+  page,
+}) => {
+  await openField(page)
+  const before = await headerPlaces(frameOf(page, FINISHED))
+  const height = await heightOf(frameOf(page, EMPTY))
+  // A toggle shows the key the choices are stored under; the rest is what an
+  // earlier version, which offered these frames a fold, could have left there.
+  await toggleAndSettle(page, OPEN)
+  await page.evaluate(
+    ([empty, finished]) => {
+      const stored = JSON.parse(localStorage.getItem('valkama-graph-frames') ?? '{}') as Record<
+        string,
+        Record<string, boolean>
+      >
+      for (const space of Object.values(stored)) {
+        space[empty] = false
+        space[finished] = false
+      }
+      localStorage.setItem('valkama-graph-frames', JSON.stringify(stored))
+    },
+    [identity(EMPTY), identity(FINISHED)],
+  )
+  await page.reload()
+  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  await expect(frameOf(page, EMPTY)).toHaveClass(/folded/u)
+  await expect(frameOf(page, FINISHED)).toHaveClass(/folded/u)
+  await expect(foldOf(page, EMPTY)).toHaveCount(0)
+  await expect(foldOf(page, FINISHED)).toHaveCount(0)
+  expect(await heightOf(frameOf(page, EMPTY))).toBe(height)
+  expectSamePlaces(before, await headerPlaces(frameOf(page, FINISHED)), PARTS)
+})
+
+test('work the view hides is still counted, and is offered once the view can draw it', async ({
+  page,
+}) => {
+  await openField(page)
+  const frame = frameOf(page, FINISHED)
+  // «Open» hides all seven finished tasks: the count stays the epic's own, the
+  // edge full, and there is nothing to unfold until «All» draws them.
+  await expect(frame.locator('.graph-frame-count')).toHaveText(['7 из 7 выполнено'])
+  await expect(frame.locator('.frame-progress')).toHaveCount(1)
+  await expect(foldOf(page, FINISHED)).toHaveCount(0)
+  await page.getByRole('radio', { name: /^Все/u }).click()
+  await expect(foldOf(page, FINISHED)).toHaveCount(1)
+  await expect(frame.locator('.graph-frame-count')).toHaveText(['7 из 7 выполнено'])
+  await foldOf(page, FINISHED).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator(`.flow-node-card[data-walk-target="${identity(21)}"]`)).toHaveCount(1)
+})
+
+test('a filter that finds nothing in an epic draws no «no tasks» for it', async ({ page }) => {
+  await openField(page)
+  await page.getByPlaceholder('Номер или название').fill('MAIN-3')
+  await expect(page.locator('.graph-flow .flow-node-card')).toHaveCount(1)
+  await expect(page.getByText('Нет задач', { exact: true })).toHaveCount(0)
+  // The frame the filter found its card in still counts its whole epic.
+  await expect(frameOf(page, OPEN).locator('.graph-frame-count').first()).toHaveText(
+    '3 из 5 выполнено',
+  )
+})
 
 test('a header gives its title two lines of the card’s width and keeps the rest in its names', async ({
   page,
@@ -251,4 +348,8 @@ test('zoomed out, a header is its reference and edge, in one place folded and op
     )
   })
   expect(whole).toBe(true)
+  // An epic with no tasks keeps its reference and draws no empty edge out here too.
+  const empty = frameOf(page, EMPTY)
+  await expect(empty.locator('.graph-frame-reference')).toBeVisible()
+  await expect(empty.locator('.frame-progress')).toHaveCount(0)
 })

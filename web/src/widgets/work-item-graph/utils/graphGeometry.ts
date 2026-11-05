@@ -42,6 +42,8 @@ export interface FrameProgress {
  */
 export interface PlacedFrame {
   epic: WorkItemBrief | null
+  /** Unfolding it would draw something; without that it stays folded and offers no fold. */
+  foldable: boolean
   folded: boolean
   height: number
   /** An epic's or container's `work_item_id`, or `NO_EPIC_FRAME`. */

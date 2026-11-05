@@ -7,6 +7,7 @@ import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
+import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { openMessages } from '@/shared/i18n/openMessages.ts'
@@ -230,22 +231,7 @@ export const ru = {
     chainDismiss: 'Закрыть',
     closed: 'Закрытые · {count}',
     closedToggle: 'Показывать закрытые задачи цепочки',
-    frame: {
-      noEpic: 'Без эпика',
-      epic: 'Эпик {reference} «{title}»',
-      parent: 'Задача {reference} «{title}»',
-      foldEpic: 'Свернуть эпик {reference} «{title}»',
-      unfoldEpic: 'Развернуть эпик {reference} «{title}»',
-      foldParent: 'Свернуть задачу {reference} «{title}»',
-      unfoldParent: 'Развернуть задачу {reference} «{title}»',
-      foldNone: 'Свернуть работу без эпика',
-      unfoldNone: 'Развернуть работу без эпика',
-      doneOf: '{done} из {total} выполнено',
-      review: 'на проверке',
-      active: 'в работе',
-      blocked: 'заблокирована | заблокированы | заблокировано',
-      working: 'работает | работают | работают',
-    },
+    frame: graphFrameMessages.ru.frame,
     live: {
       working: 'работает',
       held: 'у сессии',
