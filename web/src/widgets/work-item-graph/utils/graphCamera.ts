@@ -98,8 +98,10 @@ const cardTarget = (node: PlacedNode): WalkTarget => ({
  *
  * Given where the camera stands (`sight`), the keyboard enters where the
  * operator is looking: that card when it is in sight, else the first target in
- * sight as the field is read; only with nothing in sight does it fall back to
- * the card or the field's first target, which a press then brings into view.
+ * sight as the field is read, one wholly in sight before one the field's edge
+ * cuts, since a press centres a cut one and the camera would leave where the
+ * operator put it; only with nothing in sight does it fall back to the card or
+ * the field's first target, which a press then brings into view.
  * In the overview it reads the targets the overview draws (`walkTargets`).
  */
 export function graphAnchor(
@@ -115,7 +117,11 @@ export function graphAnchor(
   const targets = walkTargets(graph, { overview: sight?.overview }).sort(readingOrder)
   if (sight) {
     const inSight = (target: WalkTarget) => seen(target, sight.camera, sight.dimensions)
-    const looked = chosen && inSight(chosen) ? chosen : targets.find((target) => inSight(target))
+    const looked =
+      chosen && inSight(chosen)
+        ? chosen
+        : (targets.find((target) => whole(target, sight.camera, sight.dimensions)) ??
+          targets.find((target) => inSight(target)))
     if (looked) return looked
   }
   return chosen ?? targets[0]
@@ -283,6 +289,18 @@ export function headerOnScreen(
 ): { x: number; y: number } | null {
   const frame = graph.frames.find((entry) => entry.id === frameId)
   return frame ? { x: frame.x * camera.zoom + camera.x, y: frame.y * camera.zoom + camera.y } : null
+}
+
+/** Whether all of a box stands inside the field at this camera. */
+function whole(box: Box, camera: ViewportTransform, dimensions: Dimensions): boolean {
+  const x = box.x * camera.zoom + camera.x
+  const y = box.y * camera.zoom + camera.y
+  return (
+    x >= 0 &&
+    y >= 0 &&
+    x + box.width * camera.zoom <= dimensions.width &&
+    y + box.height * camera.zoom <= dimensions.height
+  )
 }
 
 /** Whether a box's centre stands inside the field at this camera. */

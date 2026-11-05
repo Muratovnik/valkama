@@ -57,6 +57,27 @@ test('a field of frames too large to read opens on its first header at the top-l
   assert.equal(graphAnchor(placed, {}, { camera, dimensions })?.id, first.id)
 })
 
+test('the keyboard enters on a target wholly in sight before one the field’s edge cuts', () => {
+  const box = { height: 100, width: 100, frameId: 'F' }
+  const cut = { ...box, id: 'cut', x: 0, y: 0 }
+  const clear = { ...box, id: 'clear', x: 200, y: 300 }
+  const graph = {
+    width: 400,
+    height: 500,
+    edges: [],
+    frames: [],
+    nodes: [cut, clear].map((target, number) => ({
+      ...source.nodes[number],
+      ...target,
+      work_item_id: target.id,
+    })),
+  }
+  // The first card's centre is in sight, its top is not.
+  const camera = { x: 0, y: -40, zoom: 1 }
+  const anchor = graphAnchor(graph, {}, { camera, dimensions: { width: 400, height: 500 } })
+  assert.equal(anchor?.id, 'clear')
+})
+
 test('the keyboard enters where the camera looks: the first target in sight as the field is read', async () => {
   const placed = await finishedFirst()
   const phone = { width: 302, height: 640 }

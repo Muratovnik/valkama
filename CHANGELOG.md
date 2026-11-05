@@ -146,6 +146,10 @@ checkouts are therefore distinguishable even at the same version.
   counts and edge and offers no chevron until the view can draw that work; a stored
   «open» for such a frame is ignored and kept for when it can.
 
+- **Tabbing into the graph no longer moves the camera the operator set.** The keyboard
+  entered on the first target whose centre was in sight, and pressing it centred the
+  camera on it if the edge of the field cut it. It now enters on a target wholly in sight.
+
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
 ### Added
