@@ -702,9 +702,7 @@ class SubagentWorkTests(LiveWorkCase):
         )
         self.assertEqual([HELD] * 14, [self.state_of(reference) for reference in others])
 
-
-class LowerSignTests(SubagentWorkTests):
-    """A subagent with no write, step or label number, by the rest of the ladder."""
+    # -- a subagent with no write, step or label number, by the rest of the ladder --
 
     def packet(self, session: str, agent: str, reference: str) -> None:
         """What the usage reader found in that subagent's packet."""
