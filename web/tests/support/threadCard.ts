@@ -63,7 +63,7 @@ export const thread = (wrapper: VueWrapper, id: number) => wrapper.get(`#work-re
 export const inThread = (wrapper: VueWrapper, id: number, name: string) => {
   const button = thread(wrapper, id)
     .findAll('button')
-    .find((candidate) => candidate.text() === name)
+    .find((candidate) => candidate.text() === name || candidate.attributes('aria-label') === name)
   if (!button) throw new Error(`No ${name} in thread ${id}`)
   return button
 }

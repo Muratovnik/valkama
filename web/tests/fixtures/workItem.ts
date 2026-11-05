@@ -58,8 +58,11 @@ export function workItemFixture(title: string, revision: number): WorkItem {
   }
 }
 
+/** A button by what it says, in words or, for an icon, in its accessible name. */
 export function getButton(wrapper: VueWrapper, text: string) {
-  const button = wrapper.findAll('button').find((entry) => entry.text() === text)
+  const button = wrapper
+    .findAll('button')
+    .find((entry) => entry.text() === text || entry.attributes('aria-label') === text)
   if (button === undefined) throw new Error(`Missing button: ${text}`)
   return button
 }

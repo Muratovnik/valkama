@@ -96,7 +96,26 @@ describe('a thread on the card', () => {
   })
 })
 
+describe('where the card cannot be written on', () => {
+  it('offers nothing on an entry', () => {
+    const wrapper = open(card([root(1), reply(2, 1)]), { writable: false })
+    expect(thread(wrapper, 1).findAll('button')).toEqual([])
+  })
+})
+
 describe('replying', () => {
+  it('leaves a form for the very icon that opened it, in a thread of several', async () => {
+    const wrapper = open(card([root(1), reply(2, 1), reply(3, 1)]))
+    const onReply = thread(wrapper, 1).findAll('.reply button[aria-label="Reply"]')[1]
+    if (!onReply) throw new Error('No Reply on the second reply')
+    await onReply.trigger('click')
+    await nextTick()
+    expect(document.activeElement).toBe(replyField(wrapper).element)
+    key(replyField(wrapper), 'Escape')
+    await flushPromises()
+    expect(document.activeElement).toBe(onReply.element)
+  })
+
   it('sends under the root, closes the field and lands on the new reply once it is read', async () => {
     const item = card([root(1), reply(2, 1)])
     const wrapper = open(item)

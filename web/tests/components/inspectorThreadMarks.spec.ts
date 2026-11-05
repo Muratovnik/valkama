@@ -61,7 +61,7 @@ describe('a question has a thread too', () => {
     const tail = wrapper.get('.thread-question .thread-tail')
     expect(tail.text()).toContain('Which docs?')
     expect(wrapper.find('.thread-entry').exists()).toBe(false)
-    await getButton(wrapper, 'Reply in thread').trigger('click')
+    await getButton(wrapper, 'Reply').trigger('click')
     expect(wrapper.find('.reply-mark').exists()).toBe(false)
     await replyField(wrapper).setValue('All of them')
     vi.mocked(replyInThread).mockResolvedValueOnce({
@@ -201,7 +201,7 @@ describe('marking', () => {
     expect(toggle.attributes('aria-expanded')).toBe('false')
     ;(toggle.element as HTMLButtonElement).focus()
     await toggle.trigger('click')
-    expect(toggle.text()).toBe('Collapse')
+    expect(toggle.attributes('aria-label')).toBe('Collapse')
     expect(toggle.attributes('aria-expanded')).toBe('true')
     expect(document.activeElement).toBe(toggle.element)
     expect(thread(wrapper, 1).text()).toContain('Reply 2')
@@ -227,7 +227,7 @@ describe('marking', () => {
     })
     await wrapper.setProps({ item: card([root(1)]) })
     await flushPromises()
-    expect(button.text()).toBe('Resolve')
+    expect(button.attributes('aria-label')).toBe('Resolve')
     expect(document.activeElement).toBe(button.element)
   })
 

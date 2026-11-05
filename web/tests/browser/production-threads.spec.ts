@@ -26,6 +26,9 @@ async function openTalkedOn(page: Page, width = 1280) {
 const threadOf = (drawer: Locator, text: string) =>
   drawer.locator('.thread-entry').filter({ hasText: text })
 const focused = (page: Page) => page.locator(':focus')
+/** The icon on the head of the root; each reply under it carries one of its own. */
+const replyOn = (thread: Locator) =>
+  thread.getByRole('button', { name: 'Reply', exact: true }).first()
 
 for (const [size, width] of [
   ['1280', 1280],
@@ -36,9 +39,9 @@ for (const [size, width] of [
     const thread = threadOf(drawer, 'Should the second report')
     await thread.focus()
     await page.keyboard.press('Tab')
-    await expect(focused(page)).toHaveText('Reply')
+    await expect(focused(page)).toHaveAccessibleName('Reply')
     await page.keyboard.press('Tab')
-    await expect(focused(page)).toHaveText('Resolve')
+    await expect(focused(page)).toHaveAccessibleName('Resolve')
     await page.keyboard.press('Shift+Tab')
     await page.keyboard.press('Enter')
     const field = thread.getByRole('textbox', { name: 'Your reply' })
@@ -49,7 +52,7 @@ for (const [size, width] of [
     await page.keyboard.press('Escape')
     await expect(field).toBeHidden()
     await expect(drawer).toBeVisible()
-    await expect(focused(page)).toHaveText('Reply')
+    await expect(focused(page)).toHaveAccessibleName('Reply')
 
     await page.keyboard.press('Enter')
     await expect(field).toBeFocused()
@@ -104,7 +107,7 @@ for (const [size, width] of [
     await page.keyboard.press('Escape')
     await expect(field).toBeHidden()
     await expect(drawer).toBeVisible()
-    await expect(focused(page)).toHaveText('Resolve')
+    await expect(focused(page)).toHaveAccessibleName('Resolve')
 
     // With words in it, Escape asks as a reply's field does, and a second one keeps them.
     await page.keyboard.press('Enter')
@@ -125,7 +128,7 @@ for (const [size, width] of [
     await expect(focused(page)).toHaveText('Keep writing')
     await thread.getByRole('button', { name: 'Discard draft', exact: true }).click()
     await expect(field).toBeHidden()
-    await expect(focused(page)).toHaveText('Resolve')
+    await expect(focused(page)).toHaveAccessibleName('Resolve')
 
     await page.keyboard.press('Enter')
     await expect(field).toHaveValue('')
@@ -145,16 +148,16 @@ for (const [size, width] of [
     await expect(folded.locator('.thread-first')).toHaveCSS('text-overflow', 'ellipsis')
 
     await page.keyboard.press('Tab')
-    await expect(focused(page)).toHaveText('Expand')
+    await expect(focused(page)).toHaveAccessibleName('Expand')
     await expect(focused(page)).toHaveAttribute('aria-expanded', 'false')
     await page.keyboard.press('Enter')
-    await expect(focused(page)).toHaveText('Collapse')
+    await expect(focused(page)).toHaveAccessibleName('Collapse')
     await expect(focused(page)).toHaveAttribute('aria-expanded', 'true')
     await expect(folded.locator('.reply')).toHaveCount(1)
 
     await folded.getByRole('button', { name: 'Reopen', exact: true }).focus()
     await page.keyboard.press('Enter')
-    await expect(focused(page)).toHaveText('Resolve')
+    await expect(focused(page)).toHaveAccessibleName('Resolve')
     expect(backend.writes.at(-1)).toEqual({
       author: 'user',
       id: backend.item.work_item_id,
@@ -180,9 +183,7 @@ test('the button for held replies stands before them and opens them on the first
   await expect(thread.locator('.reply').first()).toContainText('First reply')
 })
 
-test('what opens more of a thread is lighter than what acts on it, and starts where its text does', async ({
-  page,
-}) => {
+test('what opens more of a thread is bare, and starts where its text does', async ({ page }) => {
   const { backend, drawer } = await openTalkedOn(page)
   const long = Array.from({ length: 14 }, (_, at) => `Line ${at + 1} of a long root.`).join('\n\n')
   backend.item.comments.push(
@@ -207,17 +208,14 @@ test('what opens more of a thread is lighter than what acts on it, and starts wh
       .first()
       .evaluate((node) => node.getBoundingClientRect().left)
   const bare = 'rgba(0, 0, 0, 0)'
-  // Raising the rest of a text or of a thread is a reading step; Reply and Resolve change it.
+  // Raising the rest of a text or of a thread is a reading step, in words since they say how
+  // much is left; what acts on the entry is `production-thread-actions.spec.ts`.
   const more = await look('Show all')
   const earlier = await look('Show 2 more replies')
-  const replying = await look('Reply')
-  const resolving = await look('Resolve')
   expect(more.ground).toBe(bare)
   expect(earlier.ground).toBe(bare)
-  expect(replying.ground).not.toBe(bare)
-  expect(resolving.ground).not.toBe(bare)
   expect(Math.abs(more.words - (await startOf('.thread-text')))).toBeLessThanOrEqual(1)
-  expect(Math.abs(earlier.words - (await startOf('.thread-actions')))).toBeLessThanOrEqual(1)
+  expect(Math.abs(earlier.words - (await startOf('.thread-text')))).toBeLessThanOrEqual(1)
 })
 
 for (const width of [1500, 390]) {
@@ -243,12 +241,12 @@ test('a reply set aside for another thread comes back with its words', async ({ 
   const { drawer } = await openTalkedOn(page)
   const one = threadOf(drawer, 'Should the second report')
   const other = threadOf(drawer, 'Four replies below')
-  await one.getByRole('button', { name: 'Reply', exact: true }).click()
+  await replyOn(one).click()
   await page.keyboard.type('Words to keep')
-  await other.getByRole('button', { name: 'Reply', exact: true }).click()
+  await replyOn(other).click()
   await expect(drawer.getByRole('textbox', { name: 'Your reply' })).toHaveCount(1)
   await expect(one.locator('.thread-flag', { hasText: 'Draft' })).toBeVisible()
-  await one.getByRole('button', { name: 'Reply', exact: true }).click()
+  await replyOn(one).click()
   await expect(one.getByRole('textbox', { name: 'Your reply' })).toHaveValue('Words to keep')
   await expect(one.locator('.thread-flag', { hasText: 'Draft' })).toHaveCount(0)
 })
@@ -256,7 +254,7 @@ test('a reply set aside for another thread comes back with its words', async ({ 
 test('Cancel asks before it drops a reply, with focus on the way back', async ({ page }) => {
   const { drawer } = await openTalkedOn(page)
   const thread = threadOf(drawer, 'Should the second report')
-  await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+  await replyOn(thread).click()
   await page.keyboard.type('Words')
   await thread.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(thread.getByRole('button', { name: 'Keep writing', exact: true })).toBeFocused()
@@ -265,13 +263,13 @@ test('Cancel asks before it drops a reply, with focus on the way back', async ({
   await thread.getByRole('button', { name: 'Cancel', exact: true }).click()
   await thread.getByRole('button', { name: 'Discard draft', exact: true }).click()
   await expect(thread.getByRole('textbox', { name: 'Your reply' })).toBeHidden()
-  await expect(focused(page)).toHaveText('Reply')
+  await expect(focused(page)).toHaveAccessibleName('Reply')
 })
 
 test('a reply whose mark failed stands, and the mark can be tried again', async ({ page }) => {
   const { backend, drawer } = await openTalkedOn(page)
   const thread = threadOf(drawer, 'Should the second report')
-  await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+  await replyOn(thread).click()
   await page.keyboard.type('Settled here')
   await thread.getByRole('checkbox', { name: 'Mark the thread resolved' }).check()
   backend.failNextMark()
@@ -291,7 +289,7 @@ test('a reply whose mark failed stands, and the mark can be tried again', async 
 test('a refused reply keeps its words and offers the read', async ({ page }) => {
   const { backend, drawer } = await openTalkedOn(page)
   const thread = threadOf(drawer, 'Should the second report')
-  await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+  await replyOn(thread).click()
   await page.keyboard.type('Refused words')
   backend.failNextWrite()
   await page.keyboard.press('Control+Enter')
@@ -364,7 +362,7 @@ test('a question keeps its answer apart from what is said under it', async ({ pa
   await page.setViewportSize({ width: 390, height: 900 })
   const { backend, card, drawer, requests } = await openQuestion(page, [asked()])
   await expect(card).toBeVisible()
-  await drawer.getByRole('button', { name: 'Reply in thread', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Reply', exact: true }).click()
   await expect(drawer.getByRole('checkbox', { name: 'Mark the thread resolved' })).toHaveCount(0)
   await page.keyboard.type('Which comments?')
   await page.keyboard.press('Control+Enter')
@@ -398,7 +396,7 @@ test.describe('on a phone in Russian', () => {
       expect(overflow, where).toBeLessThanOrEqual(0)
     }
     await fits('the feed')
-    await thread.getByRole('button', { name: 'Ответить', exact: true }).click()
+    await thread.getByRole('button', { name: 'Ответить', exact: true }).first().click()
     await fits('a reply being written')
     await thread.getByRole('button', { name: 'Разобрано', exact: true }).click()
     await fits('a mark being written')

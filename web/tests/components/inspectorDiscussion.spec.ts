@@ -256,10 +256,9 @@ describe('task description and discussion', () => {
       item: { ...item, summary_comment_id: 11, summary: { done: '<img src=x>', next: 'Review' } },
     })
     expect(wrapper.get('.thread-label').text()).toContain('task outcome')
-    expect(wrapper.findAll('.thread-entry button').map((button) => button.text())).toEqual([
-      'Reply',
-      'Resolve',
-    ])
+    expect(
+      wrapper.findAll('.thread-entry button').map((button) => button.attributes('aria-label')),
+    ).toEqual(['Reply', 'Resolve'])
     const outcome = mount(InspectorSummary, {
       props: {
         item: { ...item, summary_comment_id: 11, summary: { done: '<img src=x>', next: 'Review' } },

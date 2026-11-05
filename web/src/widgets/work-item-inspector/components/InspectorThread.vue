@@ -22,6 +22,10 @@
  *
  * A question folding lifts all that stands below it, a report's Make task outcome among it,
  * so a stray press reaches nothing anywhere in the thread.
+ *
+ * Replying is the one icon on the head of an entry, on a question as on a comment. What it
+ * opens stands under the replies of the thread; the sheet under a question exists only while
+ * it has something to hold.
  */
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -58,6 +62,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import EntryAction from '@/shared/ui/EntryAction.vue'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -201,23 +206,28 @@ defineExpose({ revealQuestion })
           :suggest="suggest"
           @update:draft="drafts[requestIdentity(row.entry)] = $event"
           @updated="emit('answered', $event)"
-        />
+        >
+          <template
+            v-if="writable"
+            #actions
+          >
+            <EntryAction
+              :id="replyAnchor(row.key)"
+              icon="reply"
+              :disabled="busy"
+              :label="t('threads.reply')"
+              @click="show(row.key, 'reply', $event)"
+            />
+          </template>
+        </RequestCard>
         <div
-          v-if="writable || row.replies.length"
+          v-if="row.replies.length || isOpen(row.key) || fresh(row) || draftSetAside(row)"
           class="thread-tail"
         >
           <div
-            v-if="writable"
-            class="thread-tail-actions"
+            v-if="fresh(row) || draftSetAside(row)"
+            class="thread-tail-flags"
           >
-            <VButton
-              :id="replyAnchor(row.key)"
-              variant="ghost"
-              size="inline"
-              :disabled="busy"
-              @click="show(row.key, 'reply')"
-              >{{ t('threads.replyInThread') }}</VButton
-            >
             <span
               v-if="fresh(row)"
               class="thread-tail-flag"
@@ -230,6 +240,7 @@ defineExpose({ revealQuestion })
             >
           </div>
           <InspectorThreadReplies
+            :busy="busy"
             :can-mark="false"
             :parent="questionParent(row)"
             :replies="row.replies"
@@ -237,6 +248,7 @@ defineExpose({ revealQuestion })
             :suggest="suggest"
             :thread-key="row.key"
             :when="when"
+            :writable="writable"
             @refresh="emit('refresh')"
           />
         </div>
@@ -335,7 +347,7 @@ defineExpose({ revealQuestion })
   }
 }
 
-.thread-tail-actions {
+.thread-tail-flags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-2);

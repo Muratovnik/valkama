@@ -30,6 +30,7 @@ import {
   ChevronsUp,
   ChevronUp,
   CircleAlert,
+  CircleCheck,
   CircleHelp,
   CircleSlash,
   Code,
@@ -40,6 +41,7 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  Flag,
   Hash,
   Info,
   Italic,
@@ -58,6 +60,8 @@ import {
   Plus,
   RadioTower,
   RefreshCw,
+  Reply,
+  RotateCcw,
   Search,
   Settings,
   SquareKanban,
@@ -88,6 +92,7 @@ const ICONS: Record<string, Component> = {
   'chevron-down': ChevronDown,
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
+  'chevron-up': ChevronUp,
   'close': X,
   'client': Monitor,
   'copy': Copy,
@@ -97,7 +102,7 @@ const ICONS: Record<string, Component> = {
   // An editor, as a place a session or a file opens in: VS Code and its kin share it, and
   // an agent's own app takes its client's glyph above.
   'editor': CodeXml,
-  // The owner's editor, where a document the viewer only reads can be changed.
+  // Changing what is written: a document in the owner's editor, an answer in its form.
   'edit': SquarePen,
   // Another window: a document's own page, which the viewer's head opens.
   'external-link': ExternalLink,
@@ -144,6 +149,12 @@ const ICONS: Record<string, Component> = {
   'format-link': Link,
   'format-list': List,
   'mention': Hash,
+  // What a person does to an entry of a discussion. The mark's own glyph says the talk
+  // stopped and how to start it again, and has no colour of success.
+  'reply': Reply,
+  'resolve': CircleCheck,
+  'reopen': RotateCcw,
+  'outcome': Flag,
 }
 
 interface GlyphShape {

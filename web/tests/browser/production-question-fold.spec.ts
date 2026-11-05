@@ -172,7 +172,7 @@ test('a deadline passed offers to check the status, until the question has close
   requests.settle(QUESTION_ID, { status: 'expired', expired_reason: 'deadline' })
   await check.click()
   await expect(card.locator('.request-state')).toContainText('Closed')
-  await expect(card.getByRole('button')).toHaveCount(0)
+  await expect(card.locator('button:not([aria-label="Reply"])')).toHaveCount(0)
 })
 
 test('a question waiting stands under the form past the first hundred, and the cut is said', async ({

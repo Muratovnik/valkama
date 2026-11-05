@@ -51,6 +51,17 @@ checkouts are therefore distinguishable even at the same version.
   or while another window is in front. A refusal stays until it is put away.
 - That notice now says what it is about: a session by its holder and its place, a file
   or a folder by its name, and a copied command by its session.
+### Changed
+
+- **What can be done to an entry of a discussion is a quiet icon on its first line.** Reply,
+  Resolve and its removal, folding a resolved thread, Change answer and Make task outcome
+  stand beside the author and the time instead of as buttons in a row of their own under
+  each entry. They always show, say their name under the pointer and to a screen reader, and
+  grow to a 44px target on a phone and under a finger.
+- **There is one Reply.** A question, a comment, a report and a reply each have the same icon,
+  and it opens the one field under the last reply of that thread. Reply in thread is gone: a
+  thread is one level deep, so the two buttons only ever did the same thing. Leaving the field
+  brings focus back to the icon that opened it.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

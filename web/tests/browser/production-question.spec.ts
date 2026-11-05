@@ -235,7 +235,8 @@ test('declining is the quiet way out, and an expired question folds the same way
   const expired = card.filter({ hasText: 'Too late for this' })
   await expect(expired.locator('.request-state')).toContainText('Closed')
   await expect(expired.getByRole('radio')).toHaveCount(0)
-  await expect(expired.getByRole('button')).toHaveCount(0)
+  // Replying stays: what is said under a question does not end with it.
+  await expect(expired.locator('button:not([aria-label="Reply"])')).toHaveCount(0)
 })
 
 for (const failure of [503, 'abort'] as const) {

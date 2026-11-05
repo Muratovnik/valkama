@@ -84,7 +84,8 @@ export const under = (page: Page, at: Point) =>
   page.evaluate(({ x, y }) => {
     const control = document.elementFromPoint(x, y)?.closest('button, label')
     const prompt = control?.closest('.request-card')?.querySelector('.request-prompt')
-    return `${prompt?.textContent?.trim()}: ${control?.textContent?.trim()}`
+    const named = control?.getAttribute('aria-label') ?? control?.textContent?.trim()
+    return `${prompt?.textContent?.trim()}: ${named}`
   }, at)
 
 /**
@@ -97,11 +98,10 @@ export async function inReach(control: Locator) {
 }
 
 /**
- * Two questions in a card, with their foot in reach of the mouse. The reply row under the
- * upper one keeps what rises from reaching the pointer by about one option, so the upper
- * one holds one more option than the list's scenes do.
+ * Two questions in a card, with their foot in reach of the mouse, and the upper one holding
+ * as many options as bring the foot of the lower one up to the pointer as it folds.
  */
-export async function inCard(page: Page, upper = 6, lower = 2) {
+export async function inCard(page: Page, upper = 5, lower = 2) {
   await page.setViewportSize({ width: 1680, height: 1050 })
   const opened = await openQuestion(page, pair(upper, lower))
   const top = opened.card.filter({ hasText: 'The upper question' })

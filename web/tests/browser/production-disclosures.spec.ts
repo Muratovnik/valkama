@@ -45,9 +45,7 @@ for (const width of [1500, 390])
     expect(send.ground).not.toBe(BARE)
   })
 
-test('earlier answers open from a bare line in the answer’s column, apart from Change', async ({
-  page,
-}) => {
+test('earlier answers open from a bare line in the answer’s column', async ({ page }) => {
   const { card, drawer } = await openQuestion(page, [
     asked({
       status: 'answered',
@@ -80,8 +78,6 @@ test('earlier answers open from a bare line in the answer’s column, apart from
   expect(earlier.ground).toBe(BARE)
   const column = await startOf(card.locator('.request-reply-meta'))
   expect(Math.abs(earlier.words - column)).toBeLessThanOrEqual(1)
-  const change = await look(card.getByRole('button', { name: 'Change answer', exact: true }))
-  expect(change.ground).not.toBe(BARE)
 })
 
 test('the rest of a card’s agents opens from a bare line where the rows start', async ({

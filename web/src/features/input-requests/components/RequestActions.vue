@@ -17,9 +17,9 @@
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
  *
- * An answered question offers to change its answer here, where a question offers everything
- * else, and while that form is open the same two places hold Cancel and Save. Cancel is
- * always there to press: whatever else is wrong, the way out of the form is not.
+ * While the form of a change is open, which an icon on the question's head opens, the same two
+ * places hold Cancel and Save. Cancel is always there to press: whatever else is wrong, the way
+ * out of the form is not.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -31,8 +31,6 @@ import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   busy: boolean
-  /** The answer can be changed from here and its form is not open. */
-  changeable: boolean
   /** The form of a change is open. */
   changing: boolean
   /** Whether declining was asked for, and the next word on it decides. */
@@ -51,7 +49,6 @@ const emit = defineEmits<{
   'onward': []
   'open': []
   'refresh': []
-  'start-change': []
   'way-out': []
 }>()
 const { t } = useI18n()
@@ -84,14 +81,11 @@ const onward = computed(() => {
 function focusWayOut() {
   root.value?.querySelector<HTMLElement>('.request-way-out')?.focus({ preventScroll: true })
 }
-function focusChange() {
-  root.value?.querySelector<HTMLElement>('.request-change')?.focus({ preventScroll: true })
-}
 function pressWayOut() {
   emit('way-out')
   focusWayOut()
 }
-defineExpose({ focusChange, focusWayOut })
+defineExpose({ focusWayOut })
 </script>
 
 <template>
@@ -111,13 +105,6 @@ defineExpose({ focusChange, focusWayOut })
       :aria-disabled="busyMark"
       @click="emit('refresh')"
       >{{ t('requests.checkStatus') }}</VButton
-    >
-    <VButton
-      v-if="changeable"
-      class="request-change"
-      variant="ghost"
-      @click="emit('start-change')"
-      >{{ t('requests.changeAnswer') }}</VButton
     >
     <!-- Next to the two answers it asks between. -->
     <div

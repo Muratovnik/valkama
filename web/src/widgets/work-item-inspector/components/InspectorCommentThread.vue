@@ -7,6 +7,10 @@
  * mark. A resolved one folds to the mark and the first line of the root, unless a form was
  * left open in it: the words in there outrank the fold. Folding takes away what held focus,
  * whoever marked it, so focus goes to the article, the element that stays.
+ *
+ * What can be done to the root stands on its head as icons, read from the right: the mark,
+ * replying, and on a report making it the outcome, so the first two never move. The mark's
+ * icon names what a press will do, and the line of the mark says how the thread stands.
  */
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,9 +34,10 @@ import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import EntryAction from '@/shared/ui/EntryAction.vue'
+import EntryHead from '@/shared/ui/EntryHead.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import MetaLine from '@/shared/ui/MetaLine.vue'
-import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -116,7 +121,9 @@ const markLine = computed(() => {
     : t('threads.resolvedLine', { who, when })
 })
 const foldToggleLabel = computed(() => t(folded.value ? 'threads.expand' : 'threads.collapse'))
+const foldToggleIcon = computed(() => (folded.value ? 'chevron-down' : 'chevron-up'))
 const expandedMark = computed(() => !folded.value)
+const resolveIcon = computed(() => (mark.value ? 'reopen' : 'resolve'))
 const resolveLabel = computed(() => t(mark.value ? 'threads.reopen' : 'threads.resolve'))
 const firstLine = computed(() =>
   plainText(root.value.report ? root.value.report.done : root.value.body),
@@ -149,12 +156,12 @@ watch(
   },
   { flush: 'pre' },
 )
-function pressResolve() {
+function pressResolve(press: Event) {
   if (mark.value) sendReopen(key.value, root.value.id)
-  else show(key.value, 'resolve')
+  else show(key.value, 'resolve', press)
 }
-function pressReply() {
-  show(key.value, 'reply')
+function pressReply(press: Event) {
+  show(key.value, 'reply', press)
 }
 function pressFold() {
   toggle(key.value)
@@ -173,25 +180,25 @@ function sendMark() {
     :class="{ 'is-folded': folded }"
     :aria-labelledby="labelledBy"
   >
-    <div
-      v-if="mark"
-      class="thread-mark-row"
-    >
+    <EntryHead v-if="mark">
       <p
         :id="markId"
         class="thread-mark"
       >
         {{ markLine }}
       </p>
-      <VButton
+      <template
         v-if="!formOpen"
-        variant="text"
-        size="inline"
-        :aria-expanded="expandedMark"
-        @click="pressFold"
-        >{{ foldToggleLabel }}</VButton
+        #actions
       >
-    </div>
+        <EntryAction
+          :aria-expanded="expandedMark"
+          :icon="foldToggleIcon"
+          :label="foldToggleLabel"
+          @click="pressFold"
+        />
+      </template>
+    </EntryHead>
     <template v-if="folded">
       <p class="thread-first">
         <span
@@ -203,7 +210,7 @@ function sendMark() {
       </p>
       <div
         v-if="replyCount || hasFlags"
-        class="thread-actions"
+        class="thread-flags"
       >
         <span
           v-if="replyCount"
@@ -219,12 +226,40 @@ function sendMark() {
       </div>
     </template>
     <template v-else>
-      <MetaLine
-        :id="metaId"
-        class="thread-meta"
-        :when="when(root.at)"
-        >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
-      >
+      <EntryHead>
+        <MetaLine
+          :id="metaId"
+          class="thread-meta"
+          :when="when(root.at)"
+          >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
+        >
+        <template
+          v-if="writable"
+          #actions
+        >
+          <EntryAction
+            v-if="root.kind === 'report' && root.report && !isOutcome"
+            icon="outcome"
+            :disabled="busy"
+            :label="t('workItem.makeOutcome')"
+            @click="emit('select', root.id)"
+          />
+          <EntryAction
+            :id="replyId"
+            icon="reply"
+            :disabled="busy"
+            :label="t('threads.reply')"
+            @click="pressReply"
+          />
+          <EntryAction
+            :id="resolveId"
+            :disabled="busy"
+            :icon="resolveIcon"
+            :label="resolveLabel"
+            @click="pressResolve"
+          />
+        </template>
+      </EntryHead>
       <template v-if="root.kind === 'report' && root.report">
         <strong class="thread-label">{{ reportLabel }}</strong>
         <CollapsibleText
@@ -234,13 +269,6 @@ function sendMark() {
         >
           <InspectorReport :report="root.report" />
         </CollapsibleText>
-        <VButton
-          v-if="writable && !isOutcome"
-          class="thread-action"
-          :disabled="busy"
-          @click="emit('select', root.id)"
-          >{{ t('workItem.makeOutcome') }}</VButton
-        >
       </template>
       <blockquote
         v-if="root.kind === 'comment' && root.checklist_item_id"
@@ -255,27 +283,9 @@ function sendMark() {
         :text="root.body"
       />
       <div
-        v-if="writable || hasFlags"
-        class="thread-actions"
+        v-if="hasFlags"
+        class="thread-flags"
       >
-        <template v-if="writable">
-          <VButton
-            :id="replyId"
-            variant="ghost"
-            size="inline"
-            :disabled="busy"
-            @click="pressReply"
-            >{{ t('threads.reply') }}</VButton
-          >
-          <VButton
-            :id="resolveId"
-            variant="ghost"
-            size="inline"
-            :disabled="busy"
-            @click="pressResolve"
-            >{{ resolveLabel }}</VButton
-          >
-        </template>
         <span
           v-for="flag in flags"
           :key="flag"
@@ -301,6 +311,7 @@ function sendMark() {
         @submit="sendMark"
       />
       <InspectorThreadReplies
+        :busy="busy"
         :can-mark="canMark"
         :parent="parent"
         :replies="row.replies"
@@ -308,6 +319,7 @@ function sendMark() {
         :suggest="suggest"
         :thread-key="key"
         :when="when"
+        :writable="writable"
         @refresh="emit('refresh')"
       />
     </template>
@@ -347,11 +359,7 @@ function sendMark() {
   font: var(--font-editor);
 }
 
-.thread-action {
-  justify-self: start;
-}
-
-.thread-actions {
+.thread-flags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-2);
@@ -362,14 +370,6 @@ function sendMark() {
 .thread-flag {
   color: var(--color-text-muted);
   font: var(--font-detail);
-}
-
-.thread-mark-row {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: space-between;
-  align-items: flex-start;
-  min-width: 0;
 }
 
 .thread-mark {

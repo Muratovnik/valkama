@@ -80,12 +80,12 @@ describe('an answered question in the threaded feed', () => {
     closed.state = { ...closed.state, key: 'done', category: 'completed', is_terminal: true }
     const { wrapper } = guarded(closed, [answered()])
     const question = wrapper.get('.thread-question')
-    expect(question.text()).not.toContain('Change answer')
+    expect(question.find('[aria-label="Change answer"]').exists()).toBe(false)
     expect(question.text()).toContain('Reopen the task to change this answer.')
   })
 
   it('offers the change while the task is open', () => {
     const { wrapper } = guarded(card([root(1)]), [answered()])
-    expect(wrapper.get('.thread-question').text()).toContain('Change answer')
+    expect(wrapper.find('.thread-question [aria-label="Change answer"]').exists()).toBe(true)
   })
 })

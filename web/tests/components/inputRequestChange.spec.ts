@@ -89,9 +89,12 @@ function card(subject: InputRequestEntry, props: Record<string, unknown> = {}) {
 }
 const buttonNamed = (wrapper: Wrapper, name: string) =>
   present(
-    wrapper.findAll('button').find((control) => control.text() === name),
+    wrapper
+      .findAll('button')
+      .find((control) => control.text() === name || control.attributes('aria-label') === name),
     name,
   )
+const offered = (wrapper: Wrapper) => wrapper.find('[aria-label="Change answer"]').exists()
 const press = async (wrapper: Wrapper, name: string) => {
   await buttonNamed(wrapper, name).trigger('click')
   await flushPromises()
@@ -112,12 +115,12 @@ afterEach(() => {
 
 describe('changing an answer', () => {
   it('offers it only while the source can write and the task is open', () => {
-    expect(card(entry()).text()).toContain('Change answer')
+    expect(offered(card(entry()))).toBe(true)
     const readOnly = entry()
     readOnly.target.writable = false
-    expect(card(readOnly).text()).not.toContain('Change answer')
+    expect(offered(card(readOnly))).toBe(false)
     const closed = card(entry(), { itemClosed: true })
-    expect(closed.text()).not.toContain('Change answer')
+    expect(offered(closed)).toBe(false)
     expect(closed.text()).toContain('Reopen the task to change this answer.')
     const full = entry()
     full.request.answer_version = 50
@@ -132,11 +135,11 @@ describe('changing an answer', () => {
       answered_at: '2026-10-24T11:00:00Z',
     }))
     const atLimit = card(full)
-    expect(atLimit.text()).not.toContain('Change answer')
+    expect(offered(atLimit)).toBe(false)
     expect(atLimit.text()).toContain('cannot be changed again')
     const declined = requestEntry()
     declined.request.status = 'declined'
-    expect(card(declined).text()).not.toContain('Change answer')
+    expect(offered(card(declined))).toBe(false)
   })
 
   it('opens the same form on the answer in force, with Save off until it differs', async () => {

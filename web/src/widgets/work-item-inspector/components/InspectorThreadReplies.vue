@@ -5,8 +5,12 @@
  *
  * A thread of four or more shows its last two until asked, and the button asks in place;
  * what it opens takes focus, so the reader lands on the first reply they had not seen.
+ *
+ * A reply can be answered as the root can, and the answer joins the same thread: threads are
+ * one level deep, so whichever entry was pressed, the field is the one under the last reply
+ * and the parent is the thread's root.
  */
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ThreadComment } from '@/widgets/work-item-inspector/utils/threadRows.ts'
@@ -21,6 +25,8 @@ import type { ThreadParent } from '@/features/discussion-thread/composables/useT
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import EntryAction from '@/shared/ui/EntryAction.vue'
+import EntryHead from '@/shared/ui/EntryHead.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import MetaLine from '@/shared/ui/MetaLine.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -33,10 +39,14 @@ const props = withDefaults(
     /** The root the mark goes on, when this thread's root can carry one. */
     root: number | null
     threadKey: string
+    /** A write on the card is under way, so nothing can be asked of it yet. */
+    busy?: boolean
     suggest?: InstanceType<typeof MarkdownEditor>['$props']['suggest']
+    /** This card can be written on. A thread with no `parent` still takes no reply. */
+    writable?: boolean
     when: (value: string | null) => string
   }>(),
-  { suggest: undefined },
+  { busy: false, suggest: undefined, writable: false },
 )
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
@@ -47,8 +57,10 @@ const {
   markAgain,
   marks,
   pending,
+  reachedAgain,
   replies: drafts,
   sendReply,
+  show,
   unmarked,
 } = injectThreadForms()
 
@@ -56,6 +68,7 @@ const SHOWN_WHEN_HELD = 2
 const HELD_FROM = 4
 const listId = useId()
 const list = ref<HTMLElement | null>(null)
+const composer = ref<InstanceType<typeof ReplyComposer> | null>(null)
 const showingAll = ref(false)
 const held = computed(() => props.replies.length >= HELD_FROM)
 const shown = computed(() =>
@@ -68,6 +81,8 @@ const toggleLabel = computed(() =>
 )
 const failedMark = computed(() => props.root !== null && unmarked.value.has(props.root))
 const writing = computed(() => isOpen(props.threadKey, 'reply'))
+const canReply = computed(() => props.writable && props.parent !== null)
+watch(reachedAgain, () => composer.value?.focus())
 const replyError = computed(() => errorAt(props.threadKey, 'reply'))
 const text = computed({
   get: () => drafts.value[props.threadKey] ?? '',
@@ -129,12 +144,25 @@ function retryMark() {
         class="reply"
         tabindex="-1"
       >
-        <MetaLine
-          class="reply-meta"
-          :when="when(reply.at)"
-          >{{ authorOf(reply) }}
-          <span v-if="sessionOf(reply)">{{ sessionOf(reply) }}</span></MetaLine
-        >
+        <EntryHead>
+          <MetaLine
+            class="reply-meta"
+            :when="when(reply.at)"
+            >{{ authorOf(reply) }}
+            <span v-if="sessionOf(reply)">{{ sessionOf(reply) }}</span></MetaLine
+          >
+          <template
+            v-if="canReply"
+            #actions
+          >
+            <EntryAction
+              icon="reply"
+              :disabled="busy"
+              :label="t('threads.reply')"
+              @click="show(threadKey, 'reply', $event)"
+            />
+          </template>
+        </EntryHead>
         <CollapsibleText
           class="reply-text"
           :text="reply.body"
@@ -157,6 +185,7 @@ function retryMark() {
     </p>
     <ReplyComposer
       v-if="writing"
+      ref="composer"
       v-model:text="text"
       v-model:mark="mark"
       :can-mark="canMark"

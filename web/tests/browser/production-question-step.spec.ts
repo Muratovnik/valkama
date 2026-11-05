@@ -64,12 +64,11 @@ async function folds(page: Page, at: Point, opened: Awaited<ReturnType<typeof th
   await expect.poll(() => under(page, at)).toMatch(/^The third question: /u)
 }
 
-// On a phone 844px tall the top of the view stands on the reply row under the first
-// question, and the browser's scroll anchoring holds everything below still as that question
-// folds: nothing rises, so there is no press to guard. A taller phone puts the question itself
-// at the top, and what is under it rises.
+// On a phone 844px tall the browser's scroll anchoring holds everything below still as the
+// first question folds: nothing rises, so there is no press to guard. A taller phone puts the
+// question itself at the top, and what is under it rises.
 for (const [width, height, options] of [
-  [1680, 1050, 6],
+  [1680, 1050, 5],
   [390, 932, 6],
 ] as const) {
   test(`at ${width} a question folding brings no refusal under a pointer aimed at Send in another`, async ({
@@ -143,7 +142,7 @@ test('in the list a row kept because something was chosen in it folds, and lifts
 test('the same with no press between: a pointer that only went elsewhere finds no refusal when the question moves', async ({
   page,
 }) => {
-  const opened = await threeInCard(page, 6)
+  const opened = await threeInCard(page, 5)
   const { requests, second, third } = opened
   await choose(page, second)
   const at = await inMiddle(send(second))
@@ -163,7 +162,7 @@ test('the same with no press between: a pointer that only went elsewhere finds n
 test('a pointer resting on the confirm of a question that moves finds no refusal either', async ({
   page,
 }) => {
-  const opened = await threeInCard(page, 6)
+  const opened = await threeInCard(page, 5)
   const { requests, second } = opened
   await raise(page, second)
   const at = await centre(onward(second))
@@ -305,8 +304,8 @@ test('focus leaving its question ends the step, and focus moving inside it does 
   await expect(asking(top)).toBeVisible()
   await page.keyboard.press('Tab')
   await expect(asking(top)).toHaveCount(0)
-  // The way out of a question is its own thread, and the next question after that.
-  await expect(page.locator(':focus')).toHaveText('Reply in thread')
+  // The way out of a question is the next one, whose head comes first.
+  await expect(page.locator(':focus')).toHaveAccessibleName('Reply')
   await page.keyboard.press('Tab')
   await expect(next.getByRole('radio').first()).toBeFocused()
   expect(writesTo(requests)).toEqual([])

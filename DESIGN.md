@@ -1132,14 +1132,24 @@ questions than one read brings reads those still waiting on their own, and says 
 newest and those waiting are shown and older ones left out.
 Whatever answers a comment, a report or a question stands under it as a thread, a reply set
 off from its root by one rule, and the whole thread is one `article` named by its root's
-meta line. Threads open by their latest activity and then hold still: a reply arriving says
-«New reply» on its thread and moves nothing until the card is opened again, while a new
+meta line. What can be done to an entry stands at the end of that line, as icons in the muted
+ink that always show, since a phone has no pointer to bring them out with (`EntryHead`,
+`EntryAction`): Reply, the mark and its removal, Make task outcome, Change answer, and on the
+line of a mark the fold. They rise to full ink under the pointer and the keys, and carry their
+words in `title` and `aria-label`. An icon is a 28px target with a fine pointer and 44px under
+a finger or on a screen a phone's width, drawn bare either way, so the difference is room
+around the glyph. The words of the line wrap in a column of their own, so no name reaches the
+icons. Only what shows more of what an entry says keeps its words, because those say how much
+is left. Every entry has the one Reply, because threads are one level deep and an answer to a
+reply joins the same root: it opens the one field under the thread's last reply, focus goes
+into the field, and leaving it brings focus back to the icon pressed. Threads open by their
+latest activity and then hold still: a reply arriving says «New reply» on its thread and moves nothing until the card is opened again, while a new
 thread takes the top. Four replies or more show their last two under a button that opens
 the rest in place. One form stands open at a time, a reply's field or a mark's line, and
 what was written in another thread stays there as a draft the card asks about before
 leaving. A resolved comment or report folds to its mark and the first line of its root, in
 the muted ink and with no sign of success, because the mark says the discussion stopped and
-nothing about whether it went well; it opens with a button that stays where it is, and it
+nothing about whether it went well; it opens with an icon that stays where it is, and it
 stays open while a form is left in it. The heading counts what is unresolved whichever way
 the view is set. The unresolved view hides marked threads and closed questions and says how
 many, and a thread marked in that view stays under the reader's hands until the view
@@ -1221,14 +1231,14 @@ every option would be read out when an answer arrives. Declined or closed, the q
 its prompt and a quiet line. It says "you" only when the server says the call that closed it came
 through this interface, because a name is only what the caller signed. An option's label stays
 the text it was in the form, while words written in a field or a note are markdown.
-An answer can be changed while its task is open, from the foot where a question keeps everything
-else it can do. The same form opens on the answer in force, and Save stays off until the form
-says something else. Cancel closes at once if nothing changed and otherwise asks first, with
+An answer can be changed while its task is open, from an icon on the question's first line, which
+keeps its room while the form stands so the time beside it does not move. The same form opens on
+the answer in force, and Save stays off until the form says something else. Cancel closes at once if nothing changed and otherwise asks first, with
 focus on going on, and Escape from inside is that same Cancel. The change is written against the
 revision the form opened on, so an answer that moved on under it is a conflict to read, with the
 draft kept, and not something overwritten. The line of the reply then says it was changed and
 when, and «Previous answers» opens what it replaced, newest first, as plain words with who said
-them. A closed task says to reopen it instead of offering the button. An
+them. A closed task says to reopen it instead of offering the icon. An
 answer arriving from elsewhere folds it the same way, and a note still in the form stays in
 view, saying it was not sent, until the person leaves. While a question waits, the card's
 facts carry a mark that brings it into view under the tabs from any section.

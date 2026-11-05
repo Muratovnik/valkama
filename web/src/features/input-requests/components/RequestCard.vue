@@ -8,9 +8,11 @@
  * sends, every kind of field goes through it, and a send that fails keeps all of it with
  * the reason in the foot. Once the question is no longer waiting it folds (`RequestFold`).
  *
- * An answer can be changed while its task is open. The same form opens on the answer in
+ * An answer can be changed while its task is open, from an icon on the head of the question,
+ * where the host's own icons (`actions`) stand beside it. The same form opens on the answer in
  * force, and Save does nothing until the form says something else. Cancel with something
  * changed asks first, with focus on the way back, and Escape from inside is that same Cancel.
+ * While the form stands the icon keeps its room, so the time beside it does not move.
  *
  * Folding takes the controls that had focus away, whoever answered, so focus goes to how
  * it ended: the person stays on the question they were in. What is held belongs to the
@@ -49,6 +51,8 @@ import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
+import EntryAction from '@/shared/ui/EntryAction.vue'
+import EntryHead from '@/shared/ui/EntryHead.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -140,9 +144,8 @@ watch(pastDue, async (past) => {
   await nextTick()
   moveFocus(deadlineLine.value)
 })
-const offersChange = computed(() => changeable.value && !changing.value)
 const hasFoot = computed(() =>
-  [inForm.value, offersChange.value, canRefresh.value, props.standalone, error.value].some(Boolean),
+  [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
 const busyMark = computed(() => busy.value || undefined)
 const fieldsDisabled = computed(() => busy.value || !(changing.value || writable.value))
@@ -171,7 +174,8 @@ const unsentChosen = computed(() =>
 const change = useAnswerChange({
   busy,
   focusCancel: () => actions.value?.focusWayOut(),
-  focusChange: () => actions.value?.focusChange(),
+  focusChange: () =>
+    card.value?.querySelector<HTMLElement>('.request-change')?.focus({ preventScroll: true }),
   forget,
   request,
   reveal,
@@ -269,11 +273,24 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       :entry="entry"
       @select="emit('select', $event)"
     />
-    <MetaLine
-      class="request-meta"
-      :when="stamp(request.created_at)"
-      >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
-    >
+    <EntryHead>
+      <MetaLine
+        class="request-meta"
+        :when="stamp(request.created_at)"
+        >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
+      >
+      <template #actions>
+        <EntryAction
+          v-if="changeable || changing"
+          class="request-change"
+          icon="edit"
+          :class="{ 'is-away': changing }"
+          :label="t('requests.changeAnswer')"
+          @click="change.start"
+        />
+        <slot name="actions" />
+      </template>
+    </EntryHead>
     <template v-if="inForm">
       <CollapsibleText
         class="request-prompt"
@@ -363,7 +380,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
         v-show="!askingCancel"
         ref="actions"
         :busy="busy"
-        :changeable="offersChange"
         :changing="changing"
         :declining="declining"
         :disabled="sendDisabled"
@@ -372,7 +388,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
         :refreshable="canRefresh"
         :standalone="standalone"
         :waiting="waiting"
-        @start-change="change.start"
         @dismiss="emit('dismiss', entry)"
         @onward="pressOnward"
         @open="emit('select', entry.target)"
@@ -408,6 +423,10 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 .request-card:focus-visible {
   border-radius: var(--radius-card);
   outline-offset: var(--space-half);
+}
+
+.request-change.is-away {
+  visibility: hidden;
 }
 
 .request-fact {

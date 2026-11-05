@@ -31,6 +31,10 @@ export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${
  * Focus follows a write. A new reply exists only after the card is read again, so focus
  * waits on the reply button until then; a mark's thread stays one element as it folds, so
  * focus can go straight to it.
+ *
+ * A thread has as many ways into its reply as it has entries and only one form. So a form
+ * left comes back to the icon that opened it, and an icon pressed while its thread's form
+ * stands open takes focus to that form instead of leaving it on the icon.
  */
 export function useThreadForms(identity: () => string, changed: () => void) {
   const { pending, error, submit } = useInspectorMutation(identity, changed)
@@ -45,7 +49,10 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   const held = ref(new Set<string>())
   /** Threads opened out of their folded line. */
   const expanded = ref(new Set<string>())
+  /** Counts the presses that found their form already open, for the form to take focus. */
+  const reachedAgain = ref(0)
   let owedReply: number | null = null
+  let opener: HTMLElement | null = null
 
   useDraftSource('reply', () => Object.values(replies.value).some((text) => text.trim()))
   useDraftSource('resolution', () => Object.values(decisions.value).some((text) => text.trim()))
@@ -59,6 +66,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     held.value = new Set()
     expanded.value = new Set()
     owedReply = null
+    opener = null
   })
 
   const errorAt = (key: string, form: ThreadForm | 'reopen') =>
@@ -68,10 +76,11 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   const isOpen = (key: string, form?: ThreadForm) =>
     open.value?.key === key && (form === undefined || open.value.form === form)
 
-  function show(key: string, form: ThreadForm) {
+  function show(key: string, form: ThreadForm, press?: Event) {
     failedAt.value = null
-    if (open.value?.key === key && open.value.form === form) return
-    open.value = { form, key }
+    opener = press?.currentTarget instanceof HTMLElement ? press.currentTarget : null
+    if (open.value?.key === key && open.value.form === form) reachedAgain.value += 1
+    else open.value = { form, key }
   }
   async function hide(back: ThreadForm) {
     const key = open.value?.key
@@ -79,7 +88,9 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     failedAt.value = null
     if (!key) return
     await nextTick()
-    anchored(back === 'reply' ? replyAnchor(key) : resolveAnchor(key))?.focus()
+    const first = anchored(back === 'reply' ? replyAnchor(key) : resolveAnchor(key))
+    ;(opener?.isConnected ? opener : first)?.focus()
+    opener = null
   }
   /** Escape, or Cancel: the words go with it, since asking first is the form's. */
   function cancel() {
@@ -159,6 +170,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     markAgain,
     marks,
     pending,
+    reachedAgain,
     replies,
     sendReopen,
     sendReply,

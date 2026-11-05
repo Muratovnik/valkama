@@ -191,7 +191,7 @@ for (const gap of [180, 350]) {
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeFocused()
     await expect(top.getByText(ASKED, { exact: true })).toHaveCount(0)
-    await expect(top.getByRole('radio')).toHaveCount(7)
+    await expect(top.getByRole('radio')).toHaveCount(6)
   })
 }
 
@@ -372,12 +372,13 @@ async function reportUnder(page: Page, options: number) {
     checklist_item_text: null,
   })
   await opened.stream.signal('agents')
-  await expect(opened.drawer.getByRole('button', { name: /outcome/u })).toBeVisible()
+  const outcome = opened.drawer.getByRole('button', { name: /outcome/u })
+  await expect(outcome).toBeVisible()
   const top = opened.card
   const { y } = await inReach(decline(top))
-  // The button stands at the card's left, which the foot's way out reaches with its left end.
-  const box = await decline(top).boundingBox()
-  return { ...opened, at: { x: (box?.x ?? 0) + 10, y }, top }
+  // The icon stands above the right end of the foot's way out, so a point can lie on both.
+  const box = await outcome.boundingBox()
+  return { ...opened, at: { x: (box?.x ?? 0) + 5, y }, outcome, top }
 }
 
 const OUTCOME_OPTIONS = 3
@@ -385,12 +386,23 @@ const OUTCOME_OPTIONS = 3
 test('a second press lands on nothing in the thread, such as a report rising under it on a phone', async ({
   page,
 }) => {
-  const { at, backend, requests, stream, top } = await reportUnder(page, OUTCOME_OPTIONS)
+  const { at, backend, drawer, outcome, requests, stream, top } = await reportUnder(
+    page,
+    OUTCOME_OPTIONS,
+  )
+  expect(await under(page, at)).toContain("Don't answer")
   await press(page, at)
   // However the question came to fold, the point has not been left.
   requests.settle(UPPER, closedElsewhere)
   await stream.signal('agents')
   await expect(top.locator('.request-state')).toBeVisible()
+  // The page runs out before the report rises all the way, so the scroller carries it the rest,
+  // which is no move of the pointer.
+  await expect(drawer).toHaveCSS('transform', 'none')
+  const { y } = await centre(outcome)
+  await drawer
+    .locator('.drawer-frame-body')
+    .evaluate((node, by) => node.scrollBy({ top: by, behavior: 'instant' }), y - at.y)
   await expect.poll(() => under(page, at)).toContain('outcome')
   await press(page, at, 2)
   await pause(150)
