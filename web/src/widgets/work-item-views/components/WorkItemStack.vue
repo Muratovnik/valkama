@@ -39,6 +39,7 @@ import type { SortableEvent } from 'sortablejs'
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 import { ordersByClosing, rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { endDropClickWait } from '@/widgets/work-item-views/utils/dropClick.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -76,7 +77,8 @@ const emit = defineEmits<{
 }>()
 
 const list = ref<HTMLElement | null>(null)
-let droppedAt = 0
+/** A release's own task is under way: a click in it is that release, not a press of its own. */
+let releasing = false
 /** Whether a tile may be placed by hand among this stack's tiles. */
 const reorderable = computed(() => !ordersByClosing(props.state))
 /** What the stack says of its order, which a drop into it reads. */
@@ -156,9 +158,21 @@ function landedIn(event: SortableEvent): HTMLElement {
   return under
 }
 
+/**
+ * A release's click, in a browser that sends one, comes in the same task as the release. So
+ * the end of that task is where the release is over, however quickly the next press follows.
+ */
+function release() {
+  releasing = true
+  setTimeout(() => {
+    releasing = false
+    endDropClickWait()
+  })
+}
+
 function dropped(event: SortableEvent) {
   emit('dragging', false)
-  droppedAt = Date.now()
+  release()
   const { from, item } = event
   const to = landedIn(event)
   const oldIndex = event.oldIndex ?? 0
@@ -190,6 +204,8 @@ const sortable = useSortable(list, [], {
   // column that clips its overflow.
   forceFallback: true,
   fallbackOnBody: true,
+  // A hand shakes by a few pixels on a press (`strayPress`): that is a click, not a drag.
+  fallbackTolerance: 4,
   onStart: () => emit('dragging', true),
   onEnd: dropped,
   onUpdate() {
@@ -207,9 +223,8 @@ watch(
 )
 watch(reorderable, (sort) => sortable.option('sort', sort))
 
-/** A click that lands within a quarter second of a drop was the drop. */
 function open(reference: string) {
-  if (Date.now() - droppedAt > 250) emit('open', reference)
+  if (!releasing) emit('open', reference)
 }
 
 function tabStop(item: WorkItemBrief): 0 | -1 {
