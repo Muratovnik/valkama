@@ -13,27 +13,55 @@ const optionSchema = strictObject({
   description: z.string().min(1).max(8000).optional(),
   recommended: z.boolean().optional(),
 })
+/** The three words a review's line is answered with; the interface names them in the person's language. */
+export const VERDICTS = ['accept', 'later', 'reject'] as const
+/** The most fields one question holds, and so the most keys an answer's parts can have. */
+const FIELD_LIMIT = 40
+const PARENT_TYPES = new Set(['verdict', 'choice', 'multi_choice'])
 const fieldSchema = strictObject({
   id: identifier,
   label: z.string().min(1).max(200),
-  type: z.enum(['text', 'choice', 'multi_choice', 'boolean']),
+  type: z.enum(['text', 'choice', 'multi_choice', 'boolean', 'verdict']),
   required: z.boolean(),
   options: boundedList(optionSchema, 20),
+  /** Markdown: what the field asks, or the point it decides. Folded as an option's is. */
+  description: z.string().min(1).max(8000).optional(),
+  /** The fields of one group stand together, drawn as one section under this heading. */
+  group: z.string().min(1).max(200).optional(),
+  /** Shown and answered only while the answer of `field` holds `option`. */
+  under: strictObject({ field: identifier, option: identifier }).optional(),
+  /** What a verdict's draft is filled with; a choice recommends on its options. */
+  recommended: z.enum(VERDICTS).optional(),
 }).refine((field) => {
   const choice = field.type === 'choice' || field.type === 'multi_choice'
   return (
     (choice ? field.options.length > 0 : field.options.length === 0) &&
+    (field.recommended === undefined || field.type === 'verdict') &&
     new Set(field.options.map((option) => option.id)).size === field.options.length
   )
 }, 'Invalid field options')
+type Field = z.infer<typeof fieldSchema>
+
+/** A field under another names an earlier field of a parent's type, under nothing itself. */
+function holdsParent(fields: readonly Field[], index: number) {
+  const under = fields[index]?.under
+  if (!under) return true
+  const parent = fields.slice(0, index).find((field) => field.id === under.field)
+  if (!parent || parent.under || !PARENT_TYPES.has(parent.type)) return false
+  return parent.type === 'verdict'
+    ? (VERDICTS as readonly string[]).includes(under.option)
+    : parent.options.some((option) => option.id === under.option)
+}
 
 const answerSchema = z.union([text(8000), boundedList(text(64), 20), z.boolean()])
 const answersSchema = z
   .record(identifier, answerSchema)
-  .refine((answers) => Object.keys(answers).length <= 12)
+  .refine((answers) => Object.keys(answers).length <= FIELD_LIMIT)
 /** Text per field: an own variant (up to 8000) or a field's comment (up to 2000). */
 const perField = (max: number) =>
-  z.record(identifier, z.string().min(1).max(max)).refine((map) => Object.keys(map).length <= 12)
+  z
+    .record(identifier, z.string().min(1).max(max))
+    .refine((map) => Object.keys(map).length <= FIELD_LIMIT)
 const ownSchema = perField(8000)
 const fieldNotesSchema = perField(2000)
 
@@ -56,7 +84,7 @@ const requestSchema = strictObject({
   title: z.string().min(1).max(200),
   kind: z.enum(['question', 'decision']),
   prompt: z.string().min(1).max(8000),
-  fields: boundedList(fieldSchema, 12).min(1),
+  fields: boundedList(fieldSchema, FIELD_LIMIT).min(1),
   answers: answersSchema.nullable(),
   /** Own variants of fields with options; null while there is no answer. */
   own: ownSchema.nullable(),
@@ -87,6 +115,10 @@ const requestSchema = strictObject({
   .refine(
     (request) => new Set(request.fields.map((field) => field.id)).size === request.fields.length,
     'Duplicate field IDs',
+  )
+  .refine(
+    (request) => request.fields.every((_, index) => holdsParent(request.fields, index)),
+    'Invalid field parent',
   )
   .refine(
     (request) =>

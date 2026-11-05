@@ -1,3 +1,5 @@
+import { isShown } from '@/features/input-requests/utils/validateAnswers.ts'
+
 import type {
   InputAnswers,
   InputRequestEntry,
@@ -21,15 +23,20 @@ export function fieldOptions(
   ]
 }
 
-/** A confirmed answer as the reader reads it: options by their labels, Yes or No for a boolean. */
-function displayAnswer(
+/**
+ * A confirmed answer as the reader reads it: options by their labels, Yes or No for a boolean,
+ * a verdict in the word it was given as.
+ */
+export function displayAnswer(
   field: InputRequestField,
   value: InputAnswers[string] | undefined,
   t: Translate,
 ) {
   if (typeof value === 'boolean') return t(value ? 'requests.yes' : 'requests.no')
+  if (field.type === 'verdict' && typeof value === 'string')
+    return t(`requests.review.said.${value}`)
   const label = (option: string) =>
-    field.options.find((item) => item.id === option)?.label ?? option
+    plainText(field.options.find((item) => item.id === option)?.label ?? option)
   if (Array.isArray(value)) return value.map((option) => label(option)).join(', ')
   if (typeof value !== 'string') return ''
   return field.type === 'choice' ? label(value) : plainText(value)
@@ -68,7 +75,7 @@ export function unsentChoices(
   t: Translate,
 ): string[] {
   return fields.flatMap((field) => {
-    if (field.type === 'text') return []
+    if (field.type === 'text' || !isShown(field, draft.answers)) return []
     const parts = [
       displayAnswer(field, draft.answers[field.id], t),
       draft.ownChosen.includes(field.id) ? t('requests.ownVariant') : '',

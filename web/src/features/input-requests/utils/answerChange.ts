@@ -1,4 +1,4 @@
-import { chosenOwn, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import { chosenOwn, hasDraft, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputAnswers, InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -54,17 +54,22 @@ function sameValue(left: Value, right: Value) {
 
 /**
  * Whether a change's form says anything other than the answer in force. A chosen own
- * variant says its words, and what differs only in the spaces around it says the same.
+ * variant says its words, and what differs only in the spaces around it says the same. A field
+ * its parent hides says nothing, whatever its draft still keeps for when it shows again.
  */
 export function differsFromAnswer(request: Request, draft: RequestDraft): boolean {
   return (
     (request.note ?? '').trim() !== draft.note.trim() ||
-    request.fields.some(
-      ({ id }) =>
-        !sameValue(request.answers?.[id], draft.answers[id]) ||
-        (request.own?.[id] ?? '').trim() !== chosenOwn(draft, id) ||
-        (request.field_notes?.[id] ?? '').trim() !== (draft.fieldNotes[id] ?? '').trim(),
-    )
+    request.fields.some((field) => {
+      const { id } = field
+      const shown = isShown(field, draft.answers)
+      return (
+        !sameValue(request.answers?.[id], shown ? draft.answers[id] : undefined) ||
+        (request.own?.[id] ?? '').trim() !== (shown ? chosenOwn(draft, id) : '') ||
+        (request.field_notes?.[id] ?? '').trim() !==
+          (shown ? (draft.fieldNotes[id] ?? '') : '').trim()
+      )
+    })
   )
 }
 
