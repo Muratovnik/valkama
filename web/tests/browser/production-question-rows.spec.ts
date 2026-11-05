@@ -297,3 +297,62 @@ for (const width of WIDTHS) {
     })
   }
 }
+
+/** The list of everything waiting on one question, in a window it exactly fits while folded. */
+async function openHub(page: Page, change: Asked, width: number) {
+  await page.setViewportSize({ width, height: 1600 })
+  const { drawer } = await openQuestion(page, [asked(change)])
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: /^Needs my answer/u }).click()
+  const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
+  const scroller = dialog.locator('.dialog-frame-body')
+  await expect(dialog.locator('.request-option').first()).toBeVisible()
+  await expect(dialog).toHaveCSS('transform', 'none')
+  const frame = dialog.locator('.dialog-frame')
+  // Tight, so that it is what opens that brings the scrollbar, on top of what stands.
+  const { height } = await settledBox(frame)
+  await page.setViewportSize({ width, height: Math.ceil(height) + 50 })
+  await settledBox(frame)
+  expect(await scroller.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true)
+  return { dialog, frame, scroller }
+}
+
+for (const width of WIDTHS) {
+  test(`opening a row in the list of everything waiting moves nothing, at ${width}`, async ({
+    page,
+  }) => {
+    const { dialog, frame, scroller } = await openHub(page, { fields: [mixedField] }, width)
+    const row = dialog.locator('.request-option').nth(1)
+    const excerpt = row.locator('.request-option-excerpt')
+    const before = await readRow(row, scroller)
+    const line = await firstLine(excerpt)
+    const room = await widthOf(excerpt)
+    const top = await topOf(frame)
+    await press(page, row.getByRole('button'))
+    const detail = row.locator('.request-option-detail')
+    await expect(detail).toContainText('second paragraph')
+    expect(await scroller.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true)
+    expectRowStill(await readRow(row, scroller), before)
+    await expectContinues(detail, line, room)
+    expectNear(await topOf(frame), top, 'the dialog')
+  })
+
+  test(`opening a question's text in that list moves nothing above it, at ${width}`, async ({
+    page,
+  }) => {
+    const change = { prompt: LONG_PROMPT, fields: [mixedField] }
+    const { dialog, frame, scroller } = await openHub(page, change, width)
+    const text = dialog.locator('.collapsible-text').first()
+    const title = dialog.getByRole('heading', { name: 'Needs my answer' })
+    const held = await firstLine(text)
+    const titleTop = await topOf(title)
+    const top = await topOf(frame)
+    await press(page, dialog.locator('.collapsible-toggle').first())
+    await expect(text).toContainText('Line 24')
+    await settledBox(frame)
+    expectSameLine(await firstLine(text), held, 'first line of the question')
+    expectNear(await topOf(frame), top, 'the dialog')
+    expectNear(await topOf(title), titleTop, 'its title')
+    expect(await scrollTop(scroller)).toBe(0)
+  })
+}

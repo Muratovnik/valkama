@@ -47,12 +47,14 @@ watch(
 
 <template>
   <DialogFrame
+    placement="start"
     :open="open"
     :title="t('requests.title')"
     :subtitle="t('requests.scope')"
     :close-label="t('requests.close')"
     :pane="pane"
     :pane-room="DIALOG_ROOM_BESIDE_DOCUMENT"
+    steady-scroll
     @close="emit('close')"
     @pane-close="emit('pane-close')"
     @pane-fit="(fit) => emit('pane-fit', fit)"

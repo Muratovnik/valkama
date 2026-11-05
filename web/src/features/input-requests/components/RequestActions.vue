@@ -166,8 +166,7 @@ defineExpose({ focusWayOut })
 }
 
 /* Lying on what is above the buttons, against the foot around them, on the ground a question
-   like this has elsewhere. In a dialog, which stands centred, height pushed down would pull
-   the buttons up as well. */
+   like this has elsewhere: height pushed in here would take the buttons from under the pointer. */
 .request-asked {
   position: absolute;
   inset-inline-end: 0;

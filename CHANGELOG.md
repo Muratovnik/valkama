@@ -124,6 +124,9 @@ checkouts are therefore distinguishable even at the same version.
   ground and the word «selected», so the tick beside it is gone.
 - **Opening an option's description only adds lines under it.** In the form and in an answered
   question its first line stays where the excerpt stood, at the same width and in the same type.
+- **Opening something in the list of waiting questions moves nothing above it.** The dialog
+  stands from the top instead of the middle, and the room for its scrollbar is kept from the
+  start, so what is on screen neither jumps nor breaks into other lines.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

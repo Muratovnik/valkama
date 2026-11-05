@@ -17,7 +17,9 @@ const props = withDefaults(
     error?: string
     pane?: OverlayPaneNames | null
     paneRoom?: number
-    placement?: 'center' | 'top'
+    placement?: 'center' | 'start' | 'top'
+    /** What it holds grows as it is read, so the scrollbar's room is kept from the start. */
+    steadyScroll?: boolean
     subtitle?: string
     surfaceClass?: string
   }>(),
@@ -64,7 +66,10 @@ const busyMark = computed(() => props.busy || undefined)
         :focusable-title="Boolean(pane)"
         @close="emit('close')"
       />
-      <div class="dialog-frame-body">
+      <div
+        class="dialog-frame-body"
+        :class="{ 'is-steady': steadyScroll }"
+      >
         <slot />
         <!-- A refused submit is announced where the operator is looking: at the
              end of the form they just tried to send, not in a corner banner. -->
@@ -122,6 +127,13 @@ const busyMark = computed(() => props.busy || undefined)
   min-height: 0;
   padding: var(--space-dialog-inset);
   overflow-y: auto;
+}
+
+/* Paid for out of the end inset, so the words end where they would with no scrollbar. One that
+   arrived later narrowed all of it by its width, and every line broke somewhere else. */
+.dialog-frame-body.is-steady {
+  padding-inline-end: calc(var(--space-dialog-inset) - var(--size-scrollbar));
+  scrollbar-gutter: stable;
 }
 
 /* The head draws its own inset, the floating one; across the window it takes the body's. */

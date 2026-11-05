@@ -46,9 +46,11 @@ const props = withDefaults(
     /**
      * Where a dialog stands. One whose height follows what is typed into it
      * stands near the top: centred, its search field moved up and down the
-     * window with every result that arrived or left.
+     * window with every result that arrived or left. One that keeps its inset, and
+     * whose height follows what is opened in it, stands at the top of the room a
+     * centred one has (`start`): centred, opening a line moved all that stood above it.
      */
-    placement?: 'center' | 'top'
+    placement?: 'center' | 'start' | 'top'
     resizable?: boolean
     resizeLabel?: string
     surfaceClass?: string
@@ -124,6 +126,7 @@ const TOP_EDGE = 'calc(4px - var(--space-dialog-gutter))'
 const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: TOP_EDGE, maxHeight: '86dvh' }
 const surfaceStyle = computed(() => {
   if (props.placement === 'top') return TOP_PLACEMENT
+  if (props.placement === 'start') return { alignSelf: 'start' }
   // Two panes are as wide as they are together; the first holds this surface's own width.
   if (props.pane) return null
   const width = viewportWidth.value <= DRAWER_NARROW_BREAKPOINT ? '100vw' : `${drawerWidth.value}px`
