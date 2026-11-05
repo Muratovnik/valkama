@@ -517,6 +517,7 @@ defineExpose({ refresh, selectedId })
     :key="`${boundSpace?.data_scope_id ?? ''}:${boundSpace?.space_key ?? ''}`"
     :open="composerOpen"
     :space="model.planning_space.planning_space_id"
+    :items="model.work_items"
     @close="composerOpen = false"
     @created="itemCreated"
   />

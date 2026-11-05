@@ -73,6 +73,11 @@ checkouts are therefore distinguishable even at the same version.
   the replaced answer first, then every label at once, and only then the later fields, so
   an answer with long labels shows each answered field instead of the first few.
 
+- **A new task's epic and labels are chosen by searching what the space has.** In the
+  «New work» dialog the epic is found by its number or title, with «No epic» as the empty
+  choice, and a reference typed by hand that names no epic is no longer taken. Labels are
+  picked from those the space already uses, most used first, or added by typing a new one
+  and pressing Enter; each chosen label is a chip that its cross or Backspace removes.
 - **The skill keeps Valkama calls apart in Claude Code's auto mode.** It tells the
   agent to send them in a response of their own: the hook that adds the session to a
   call makes auto mode withdraw its review of a call that runs after it in that

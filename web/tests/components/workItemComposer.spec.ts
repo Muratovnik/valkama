@@ -13,10 +13,11 @@ import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import { PRIORITIES, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { workItem } from '../browser/planningFixtures.ts'
+import { doneState, workItem } from '../browser/planningFixtures.ts'
 import { present } from '../support/present.ts'
 
 vi.mock('@/shared/api/planningApi.ts', () => ({ createWorkItem: vi.fn() }))
@@ -24,10 +25,10 @@ vi.mock('@/shared/api/planningSearchApi.ts', () => ({ searchPlanningWorkItems: v
 
 const SPACE = '7a1c2f3e-4b5d-4e6f-8a9b-0c1d2e3f4a5b'
 
-function mountComposer(locale = 'en') {
+function mountComposer(locale = 'en', items: readonly WorkItemBrief[] = []) {
   return mount(WorkItemComposer, {
     attachTo: document.body,
-    props: { open: true, space: SPACE },
+    props: { open: true, space: SPACE, items },
     global: {
       plugins: [createI18n({ legacy: false, locale, messages })],
       stubs: { OverlayHost: { template: '<div><slot /></div>' } },
@@ -178,5 +179,97 @@ describe('WorkItemComposer priority', () => {
         expect(messages[locale].priorityMeaning.meaning[level], `${locale} ${level}`).toBeTruthy()
       }
     }
+  })
+})
+
+const optionNames = () =>
+  [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent?.trim())
+
+/** A brief of the space's work, as the board holds it. */
+const brief = (number: number, fields: Partial<WorkItemBrief>): WorkItemBrief => ({
+  ...workItem,
+  comment_count: 0,
+  work_item_id: `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`,
+  reference: `MAIN-${number}`,
+  number,
+  labels: [],
+  ...fields,
+})
+
+describe('WorkItemComposer epic and labels', () => {
+  beforeEach(() => {
+    vi.mocked(createWorkItem).mockReset()
+    vi.mocked(createWorkItem).mockResolvedValue(validateWorkItemRecord(workItem))
+  })
+  // The lists are portalled to the body, so each field is unmounted before the body is cleared.
+  const mounted: ReturnType<typeof mountComposer>[] = []
+  const open = () => {
+    const wrapper = mountComposer('en', items)
+    mounted.push(wrapper)
+    return wrapper
+  }
+  afterEach(() => {
+    for (const wrapper of mounted.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  const items = [
+    brief(3, { kind: 'epic', title: 'Old release', state: doneState }),
+    brief(7, { kind: 'task', title: 'Holds two', container: true, labels: ['docs'] }),
+    brief(12, { kind: 'epic', title: 'Parser', labels: ['platform'] }),
+    // Inside another item, so it cannot hold a new one: the hierarchy is one level deep.
+    brief(20, { kind: 'epic', title: 'Nested', parent_id: workItem.work_item_id }),
+    brief(21, { kind: 'task', title: 'Plain', labels: ['platform', 'docs', 'platform-ui'] }),
+    brief(22, { kind: 'bug', title: 'Another', labels: ['platform'] }),
+  ]
+
+  it('offers the epics and the labels the space has, in the order they are reached for', async () => {
+    const wrapper = open()
+    const [labels, epic] = wrapper.findAll('input[role="combobox"]')
+    await epic?.trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(optionNames()).toEqual([
+      'No epic',
+      'MAIN-12 · ParserDev',
+      'MAIN-7 · Holds twoDev',
+      'MAIN-3 · Old releaseDone',
+    ])
+    await epic?.trigger('keydown', { key: 'Escape' })
+    await labels?.trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
+    expect(optionNames()).toEqual(['platform', 'docs', 'platform-ui'])
+  })
+
+  it('sends the chosen epic by its reference and the labels as a list', async () => {
+    const wrapper = open()
+    await wrapper.get('input').setValue('Ship it')
+    const [labels, epic] = wrapper.findAll<HTMLInputElement>('input[role="combobox"]')
+    for (const [field, words] of [
+      [epic, 'pars'],
+      [labels, 'docs'],
+      [labels, 'release'],
+    ] as const) {
+      field?.element.focus()
+      await field?.setValue(words)
+      await flushPromises()
+      await field?.trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+    }
+    expect(wrapper.text()).toContain('docs')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(createWorkItem).toHaveBeenCalledWith(
+      expect.objectContaining({ labels: ['docs', 'release'], parent: 'MAIN-12' }),
+    )
+  })
+
+  it('sends no epic and no labels when none is chosen', async () => {
+    const wrapper = open()
+    await wrapper.get('input').setValue('Ship it')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    const sent = vi.mocked(createWorkItem).mock.calls[0]?.[0]
+    expect(sent?.labels).toEqual([])
+    expect(sent).not.toHaveProperty('parent')
   })
 })

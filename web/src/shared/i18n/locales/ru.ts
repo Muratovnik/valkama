@@ -21,6 +21,7 @@ import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
+import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
@@ -30,6 +31,7 @@ import { workItemUsageMessages } from '@/shared/i18n/workItemUsageMessages.ts'
 
 export const ru = {
   workItemLink: workItemLinkMessages.ru.workItemLink,
+  compose: workItemComposeMessages.ru.compose,
   priorityMeaning: priorityMessages.ru.priorityMeaning,
   history: activityMessages.ru.history,
   alerts: alertMessages.ru.alerts,
@@ -934,9 +936,7 @@ export const ru = {
     title: 'Название',
     description: 'Описание',
     labels: 'Метки',
-    labelsHint: 'через запятую',
     parent: 'Эпик',
-    parentHint: 'ссылка вида MAIN-12, пусто — без эпика',
     create: 'Новая работа',
     newTitle: 'Новая работа',
     cancel: 'Отмена',

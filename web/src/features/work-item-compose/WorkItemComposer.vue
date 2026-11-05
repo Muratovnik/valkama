@@ -11,24 +11,38 @@
  * editor, with a preview of what the card will show, `#` linking a task of the
  * space the item is created in, and Ctrl+Enter as this dialog's Create. Escape
  * closes an open `#` list first and the dialog only after.
+ *
+ * The epic and the labels are chosen from what the space already has, searched as they
+ * are typed (`SearchCombobox`): a reference typed by hand named an epic only when it was
+ * spelled right, and a label typed by hand forked the one the filter menu knew. A new
+ * label is still one Enter away.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { epicChoices, labelChoices } from '@/features/work-item-compose/composerChoices.ts'
+
 import { createWorkItem } from '@/shared/api/planningApi.ts'
-import { PRIORITIES, WORK_ITEM_KINDS, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
-const props = defineProps<{
-  open: boolean
-  space: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    space: string
+    /** The space's work, whose epics and labels the dialog offers. */
+    items?: readonly WorkItemBrief[]
+  }>(),
+  { items: () => [] },
+)
 
 const emit = defineEmits<{ close: []; created: [reference: string] }>()
 
@@ -38,7 +52,7 @@ const title = ref('')
 const description = ref('')
 const kind = ref<string>('task')
 const priority = ref<string>('medium')
-const labels = ref('')
+const labels = ref<string[]>([])
 const parent = ref('')
 const busy = ref(false)
 const error = ref('')
@@ -56,7 +70,7 @@ watch(
     description.value = ''
     kind.value = 'task'
     priority.value = 'medium'
-    labels.value = ''
+    labels.value = []
     parent.value = ''
     error.value = ''
     previewing.value = false
@@ -80,12 +94,12 @@ const priorityOptions = computed(() =>
   }),
 )
 
-const parentValid = computed(
-  () => parent.value.trim() === '' || WORK_ITEM_REFERENCE.test(parent.value.trim().toUpperCase()),
-)
-const submittable = computed(
-  () => title.value.trim().length > 0 && parentValid.value && !busy.value,
-)
+const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic')))
+const labelOptions = computed(() => labelChoices(props.items))
+const addLabel = (label: string) => t('compose.addLabel', { label })
+const removeLabel = (label: string) => t('compose.removeLabel', { label })
+
+const submittable = computed(() => title.value.trim().length > 0 && !busy.value)
 
 async function submit() {
   if (!submittable.value) return
@@ -98,11 +112,8 @@ async function submit() {
       kind: kind.value,
       priority: priority.value,
       description: description.value,
-      labels: labels.value
-        .split(',')
-        .map((label) => label.trim())
-        .filter(Boolean),
-      ...(parent.value.trim() ? { parent: parent.value.trim().toUpperCase() } : {}),
+      labels: labels.value,
+      ...(parent.value ? { parent: parent.value } : {}),
     })
     emit('created', created.reference)
   } catch (error_) {
@@ -152,17 +163,24 @@ async function submit() {
         @submit="submit"
       />
       <div class="composer-pair">
-        <VTextInput
+        <SearchCombobox
           v-model="labels"
           :label="t('workItem.labels')"
-          :hint="t('workItem.labelsHint')"
-          :maxlength="512"
+          :hint="t('compose.labelsHint')"
+          :options="labelOptions"
+          :empty-label="t('compose.labelsEmpty')"
+          :create-label="addLabel"
+          :remove-label="removeLabel"
+          :max="32"
+          :maxlength="64"
+          :disabled="busy"
         />
-        <VTextInput
+        <SearchCombobox
           v-model="parent"
           :label="t('workItem.parent')"
-          :hint="t('workItem.parentHint')"
-          :maxlength="20"
+          :options="epicOptions"
+          :empty-label="t('compose.epicsEmpty')"
+          :disabled="busy"
         />
       </div>
     </div>

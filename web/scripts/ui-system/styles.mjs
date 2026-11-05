@@ -25,12 +25,15 @@ const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
  * Files allowed to author selection semantics. `VTextInput` names a one-line
  * field that drives a list a combobox; `OptionGroups` is the grouped
  * multi-choice list such a field drives (the Work filter's menu).
+ * `SearchCombobox` is a form value found by typing — one, or several as chips —
+ * which takes only what its list holds, unless typed words may be added.
  */
 const selectionOwners = new Set([
   'shared/ui/ChoiceSelect.vue',
   'shared/ui/CommandList.vue',
   'shared/ui/MarkdownSuggestions.vue',
   'shared/ui/OptionGroups.vue',
+  'shared/ui/SearchCombobox.vue',
   'shared/ui/VTextInput.vue',
 ])
 /**

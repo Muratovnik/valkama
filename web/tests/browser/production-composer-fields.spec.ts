@@ -1,0 +1,132 @@
+/**
+ * The new-task dialog chooses its epic and its labels by searching what the space has.
+ *
+ * Through the real dialog over the board's own read: an epic found by a word of its
+ * title, one label the space already uses and one typed new, and what the create call
+ * then sent. The lists stand inside the dialog at a desktop's width and at a phone's.
+ */
+import { expect } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
+import { installBackend } from './backend.ts'
+import { identity, projectScope, workItem } from './planningFixtures.ts'
+import { test } from './test.ts'
+
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+
+/** Where a box stands; a box with none is a failure of its own. */
+async function measured(box: Locator) {
+  const bounds = await box.boundingBox()
+  expect(bounds).not.toBeNull()
+  return bounds ?? { x: 0, y: 0, width: 0, height: 0 }
+}
+
+/** The space as the board reads it, with an epic and a label more. */
+async function openComposer(page: Page, width: number) {
+  await page.setViewportSize({ width, height: 900 })
+  await installBackend(page, {
+    space: (model) => {
+      const items = model.work_items as Record<string, unknown>[]
+      const epic = {
+        ...items[0],
+        work_item_id: identity(12),
+        reference: 'MAIN-12',
+        number: 12,
+        title: 'Parser rework',
+        kind: 'epic',
+        claim_ref: '',
+        claim_state: null,
+        labels: ['backend'],
+      }
+      return { ...model, work_items: [...items, epic] }
+    },
+  })
+  const sent: Record<string, unknown>[] = []
+  await page.route('**/api/planning/work-items', (route) => {
+    sent.push(route.request().postDataJSON() as Record<string, unknown>)
+    return route.fulfill({ json: workItem })
+  })
+  await page.goto(BOARD)
+  await page.getByRole('button', { name: 'New work item' }).click()
+  const dialog = page.getByRole('dialog', { name: 'New work' })
+  await expect(dialog).toHaveCSS('transform', 'none')
+  return { dialog, sent }
+}
+
+test('an item is created with an epic found by search, a label the space has and a new one', async ({
+  page,
+}) => {
+  const { dialog, sent } = await openComposer(page, 1280)
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
+
+  const epic = dialog.getByRole('combobox', { name: 'Epic', exact: true })
+  await expect(epic).toHaveValue('No epic')
+  await epic.click()
+  await page.keyboard.type('rework')
+  const list = page.getByRole('listbox', { name: 'Epic' })
+  await expect(list.getByRole('option')).toHaveText(['MAIN-12 · Parser reworkDev'])
+  await page.keyboard.press('Enter')
+  await expect(list).toHaveCount(0)
+  await expect(epic).toHaveValue('MAIN-12 · Parser rework')
+
+  const labels = dialog.getByRole('combobox', { name: 'Labels', exact: true })
+  await labels.click()
+  const offered = page.getByRole('listbox', { name: 'Labels' }).getByRole('option')
+  await expect(offered).toHaveText(['backend', 'phase-1', 'platform'])
+  await page.keyboard.type('plat')
+  await expect(offered).toHaveText(['platform', 'Add “plat”'])
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('release-2')
+  await expect(offered).toHaveText(['Add “release-2”'])
+  await page.keyboard.press('Enter')
+  await expect(labels).toHaveValue('')
+  for (const label of ['platform', 'release-2'])
+    await expect(dialog.getByRole('button', { name: `Remove label ${label}` })).toBeVisible()
+
+  // Escape closes the list and leaves the dialog and what it holds.
+  await page.keyboard.press('Escape')
+  await expect(offered).toHaveCount(0)
+  await expect(dialog).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'New work item', exact: true }).click()
+  await expect.poll(() => sent.length).toBe(1)
+  expect(sent[0]).toMatchObject({
+    title: 'Ship the parser',
+    labels: ['platform', 'release-2'],
+    parent: 'MAIN-12',
+  })
+})
+
+for (const width of [1280, 390]) {
+  test(`at ${width}px an open list stands under its field and inside the dialog`, async ({
+    page,
+  }) => {
+    const { dialog } = await openComposer(page, width)
+    for (const name of ['Labels', 'Epic']) {
+      const field = dialog.getByRole('combobox', { name, exact: true })
+      await field.click()
+      const list = page.getByRole('listbox', { name })
+      await expect(list.getByRole('option').first()).toBeVisible()
+      const box = await measured(field.locator('xpath=..'))
+      const shown = await measured(list)
+      const frame = await measured(dialog)
+      expect(Math.round(shown.x)).toBe(Math.round(box.x))
+      expect(Math.round(shown.width)).toBe(Math.round(box.width))
+      expect(shown.y).toBeGreaterThan(box.y + box.height)
+      expect(shown.x + shown.width).toBeLessThanOrEqual(frame.x + frame.width)
+      expect(shown.y + shown.height).toBeLessThanOrEqual(900)
+      // In front of the dialog, not behind it: its first row is what a press there reaches.
+      const first = list.getByRole('option').first()
+      const row = await measured(first)
+      const reached = await page.evaluate(
+        ([x, y]) => document.elementFromPoint(x, y)?.closest('[role="option"]')?.textContent,
+        [row.x + row.width / 2, row.y + row.height / 2] as const,
+      )
+      expect(reached).toBe(await first.textContent())
+      await page.keyboard.press('Escape')
+      await expect(list).toHaveCount(0)
+    }
+  })
+}

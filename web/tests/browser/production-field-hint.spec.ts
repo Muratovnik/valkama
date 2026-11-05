@@ -2,8 +2,8 @@
  * A field's hint says something about the field; it is not part of the control.
  *
  * The frame used to be one `<label>` round the label, the control and the hint, and a
- * label passes a pointer on any of it to its control: resting on «comma separated»
- * under the labels lit their input as hovered, and the hint stood inside what named the
+ * label passes a pointer on any of it to its control: resting on the hint under the
+ * labels lit their input as hovered, and the hint stood inside what named the
  * control. The label's own words still hover the control, as a label does.
  */
 import { expect } from '@playwright/test'
@@ -27,21 +27,26 @@ async function openComposer(page: Page) {
   return dialog
 }
 
+const HINT = 'pick one, or type a new one'
+
 const hovered = (control: Locator) => control.evaluate((node) => node.matches(':hover'))
 
 test('a pointer on a hint leaves its field unhovered, and one on the label hovers it', async ({
   page,
 }) => {
   const dialog = await openComposer(page)
-  const control = dialog.getByRole('textbox', { name: 'Labels', exact: true })
-  const hint = dialog.getByText('comma separated', { exact: true })
+  const control = dialog.getByRole('combobox', { name: 'Labels', exact: true })
+  const hint = dialog.getByText(HINT, { exact: true })
   const label = dialog.getByText('Labels', { exact: true })
 
+  // The edge is the box the field is drawn in.
+  const edge = () =>
+    control.evaluate((node) => getComputedStyle(node.closest('.combo-box') ?? node).borderColor)
   await page.mouse.move(1, 1)
-  const resting = await control.evaluate((node) => getComputedStyle(node).borderColor)
+  const resting = await edge()
   await hint.hover()
   expect(await hovered(control)).toBe(false)
-  expect(await control.evaluate((node) => getComputedStyle(node).borderColor)).toBe(resting)
+  expect(await edge()).toBe(resting)
 
   await label.hover()
   expect(await hovered(control)).toBe(true)
@@ -51,11 +56,11 @@ test('a pointer on a hint leaves its field unhovered, and one on the label hover
 
 test('the hint describes its field rather than naming it', async ({ page }) => {
   const dialog = await openComposer(page)
-  const control = dialog.getByRole('textbox', { name: 'Labels', exact: true })
+  const control = dialog.getByRole('combobox', { name: 'Labels', exact: true })
   await expect(control).toHaveAccessibleName('Labels')
-  await expect(control).toHaveAccessibleDescription('comma separated')
+  await expect(control).toHaveAccessibleDescription(HINT)
   // A press on the hint is not a press on the field.
-  await dialog.getByText('comma separated', { exact: true }).click()
+  await dialog.getByText(HINT, { exact: true }).click()
   await expect(control).not.toBeFocused()
   await dialog.getByText('Labels', { exact: true }).click()
   await expect(control).toBeFocused()

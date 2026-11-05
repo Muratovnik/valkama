@@ -21,6 +21,7 @@ import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
+import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
@@ -30,6 +31,7 @@ import { workItemUsageMessages } from '@/shared/i18n/workItemUsageMessages.ts'
 
 export const en = {
   workItemLink: workItemLinkMessages.en.workItemLink,
+  compose: workItemComposeMessages.en.compose,
   priorityMeaning: priorityMessages.en.priorityMeaning,
   history: activityMessages.en.history,
   alerts: alertMessages.en.alerts,
@@ -934,9 +936,7 @@ export const en = {
     title: 'Title',
     description: 'Description',
     labels: 'Labels',
-    labelsHint: 'comma separated',
     parent: 'Epic',
-    parentHint: 'a reference such as MAIN-12, empty for none',
     create: 'New work item',
     newTitle: 'New work',
     cancel: 'Cancel',

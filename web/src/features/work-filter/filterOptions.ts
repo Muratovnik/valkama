@@ -20,6 +20,7 @@ import type {
 import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import { byUse } from '@/shared/lib/byUse.ts'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 type StateCategory = WorkItemBrief['state']['category']
@@ -116,16 +117,6 @@ function labelsChoices(t: Translate): FilterChoice[] {
 /** The choice is there as soon as there are two labels to combine, whichever are picked. */
 const choicesOf = (facet: ValueFacet, values: readonly string[], t: Translate) =>
   facet === 'labels' && values.length > 1 ? { choices: labelsChoices(t) } : {}
-
-/** Values by how many items carry them, then by name: the common ones first. */
-function byUse(values: readonly string[]): string[] {
-  const counts = new Map<string, number>()
-  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
-  return [...counts.keys()].sort(
-    (left, right) =>
-      (counts.get(right) ?? 0) - (counts.get(left) ?? 0) || left.localeCompare(right),
-  )
-}
 
 function valuesOf(
   facet: ValueFacet,
