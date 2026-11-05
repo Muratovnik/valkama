@@ -10,6 +10,17 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Fixed
+
+- The release check runs `npm ci` in `web` and `desktop` before anything else, so it
+  verifies what the lockfiles pin rather than whatever `node_modules` holds, and it
+  refuses a `node_modules` that is a link, because `npm ci` through a link empties its
+  target.
+- `tests/isolated.py gates` refuses an npm step on a `node_modules` that is missing or
+  differs from its lockfile, says in which directory `npm ci` is needed, and no longer
+  reports this as a failed step. Console messages in a step's summary are read in the
+  console's code page instead of coming out garbled.
+
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
 ### Added
