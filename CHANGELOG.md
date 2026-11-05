@@ -63,6 +63,12 @@ checkouts are therefore distinguishable even at the same version.
 
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
+- Moving the pointer from one graph card to the next no longer flashes the whole field
+  back to full brightness in between: the lit lineage passes straight to the next card's,
+  a card lights once the pointer rests on it for 120 ms so a sweep across the field lights
+  nothing it crosses, and leaving for empty ground restores the field after 200 ms. A
+  card's title and a zoomed-out card fade as they recede, as the lines already did. The
+  keyboard's focus still lights at once.
 - The release check runs `npm ci` in `web` and `desktop` before anything else, so it
   verifies what the lockfiles pin rather than whatever `node_modules` holds, and it
   refuses a `node_modules` that is a link, because `npm ci` through a link empties its

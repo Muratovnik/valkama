@@ -22,6 +22,7 @@ import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
+import { useGraphHover } from '@/widgets/work-item-graph/composables/useGraphHover.ts'
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
 import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
@@ -78,6 +79,7 @@ const {
   emptySpace,
   focusSet,
   hiddenDone,
+  hovered,
   live,
   openTotal,
   placed,
@@ -271,14 +273,15 @@ const {
   reveal,
 })
 
-/** A pointer over a card lights its lineage; a frame is ground and lights nothing. */
-function onNodeEnter(id: string) {
-  if (cardById.value.has(id)) applyFocus({ type: 'pointer-enter', id })
-}
-
-function onNodeLeave(id: string) {
-  if (cardById.value.has(id)) applyFocus({ type: 'pointer-leave', id })
-}
+/**
+ * A pointer resting on a card lights its lineage, and moving on to the next card
+ * passes the field straight to that one's; a frame is ground and lights nothing.
+ */
+const hover = useGraphHover({
+  apply: applyFocus,
+  accepts: (id) => cardById.value.has(id),
+  hovered: () => hovered.value,
+})
 
 function onNodeClick(id: string) {
   // Mouse and keyboard activation both arrive once through Vue Flow. A frame's
@@ -312,7 +315,7 @@ function toggleFrame(frameId: string) {
 }
 
 function onFieldPointerLeave() {
-  applyFocus({ type: 'field-leave' })
+  hover.leaveField()
 }
 </script>
 
@@ -394,8 +397,8 @@ function onFieldPointerLeave() {
         :motion="motion"
         :style="{ '--graph-comet-stroke-scale': cometStrokeScale }"
         @init="onFlowInit"
-        @node-enter="onNodeEnter"
-        @node-leave="onNodeLeave"
+        @node-enter="hover.enter"
+        @node-leave="hover.leave"
         @node-click="onNodeClick"
         @pane-leave="onFieldPointerLeave"
       >

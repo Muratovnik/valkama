@@ -83,6 +83,8 @@ export type GraphProjection = {
   /** The drawn frames, with today's counts. */
   frames: ComputedRef<PlacedFrame[]>
   hiddenDone: ComputedRef<number>
+  /** The card a pointer's hover holds, lit or behind the keyboard's focus. */
+  hovered: ComputedRef<string | null>
   live: ComputedRef<Readonly<Record<string, LiveWork>>>
   openTotal: ComputedRef<number>
   pending: Ref<boolean>
@@ -351,6 +353,7 @@ export function useGraphProjection(
     folded: (frameId) => frameNow(frameId)?.folded ?? false,
     frames,
     hiddenDone,
+    hovered: computed(() => focus.value.hovered),
     live: computed(() => input().live ?? {}),
     openTotal,
     pending,

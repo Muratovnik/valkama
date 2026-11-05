@@ -257,7 +257,12 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
   text-align: left;
   background: color-mix(in srgb, var(--color-surface-sheet) 92%, var(--color-surface-recess));
   border-radius: var(--radius-status);
-  transition: background-color var(--duration-quick) var(--ease-out);
+
+  /* Receding and coming back are eased, so a pointer or the keyboard moving
+     from one lineage to the next fades one into the other. */
+  transition:
+    background-color var(--duration-quick) var(--ease-out),
+    opacity var(--duration-quick) var(--ease-out);
   cursor: pointer;
 
   &.framed {
@@ -433,6 +438,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  transition: color var(--duration-quick) var(--ease-out);
 }
 
 /* The overview: a card too small to read becomes a block of its state's colour
@@ -461,7 +467,8 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flow-node-card {
+  .flow-node-card,
+  .flow-node-title {
     transition: none;
   }
 }

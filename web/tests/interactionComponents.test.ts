@@ -102,10 +102,13 @@ const navList = readFileSync(
 test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-editable', () => {
   // The focus reducer moved into the projection composable with the fetch and the
   // derivations it resets; the view's part is handing pointer and keyboard events
-  // to it, which `applyFocus` is.
+  // to it, which `applyFocus` is. The pointer's pass through hover intent first,
+  // so a move from card to card does not light the whole field in between.
   assert.match(graphProjection, /from '@\/widgets\/work-item-graph\/utils\/graphFocus\.ts'/)
   assert.match(graph, /useGraphProjection/)
-  assert.match(graph, /applyFocus\(\{ type: 'pointer-enter'/)
+  assert.match(graph, /useGraphHover\(\{\s*apply: applyFocus/)
+  assert.match(graph, /@node-enter="hover\.enter"/)
+  assert.match(graph, /applyFocus\(\{ type: 'focus'/)
   // The flow is its own component, which the view hands the nodes and the
   // drawings; Vue Flow is configured there, once.
   assert.match(graphField, /<VueFlow/)
