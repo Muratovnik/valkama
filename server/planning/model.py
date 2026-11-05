@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from uuid import UUID, uuid4
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -36,6 +37,26 @@ _STATE_CATEGORY_SET = frozenset(STATE_CATEGORIES)
 WORK_ITEM_KINDS = frozenset({"task", "epic", "bug", "improvement"})
 PRIORITIES = ("low", "medium", "high", "urgent")
 _PRIORITY_SET = frozenset(PRIORITIES)
+
+#: The fields `update_work_item` edits, in the order the tool declares them, and
+#: what the batch's `update` group takes. One that is absent or null changes nothing.
+UPDATABLE_FIELDS = (
+    "title",
+    "description",
+    "source",
+    "priority",
+    "labels",
+    "kind",
+    "parent",
+    "rank",
+)
+
+
+def updated_fields(arguments: Mapping[str, object]) -> list[str]:
+    """The fields an edit names, which is what its answer says it edited."""
+
+    return [name for name in UPDATABLE_FIELDS if arguments.get(name) is not None]
+
 
 # `blocks` and `discovered-from` are directed and carry the graph. `relates-to`
 # and `duplicates` are symmetric in meaning but stored once, from the item the

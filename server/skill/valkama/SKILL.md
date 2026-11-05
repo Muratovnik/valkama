@@ -83,10 +83,16 @@ Item and step claims are independent: a step's holder need not hold the item.
 
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:
-`claim`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`,
-`resolutions`, `summary`, `transition`. A refused step writes nothing and names the group
-and index to correct. Pass the `revision` of the last acknowledgement as
-`expected_revision` to refuse a stale write.
+`claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`
+or `comments`, `resolutions`, `questions`, `summary`, `transition`. Each group
+works as its single tool does: `update` as `update_work_item`, `comments` as
+several `comment_work_item` calls, `questions` as `create_work_item_request`. A
+refused step writes nothing and names the group and index to correct. Pass the
+`revision` of the last acknowledgement as `expected_revision` to refuse a stale
+write. A question cannot go in the call that closes its item, which would end it
+unanswered: move the item to review instead. A reply can name only a comment
+that existed before the call; `applied` lists the ids of the comments and
+questions the call wrote.
 
 **A response of their own in Claude Code's auto mode.** There, send Valkama calls
 in a response of their own, with no other tool beside them, and call the other

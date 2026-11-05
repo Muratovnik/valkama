@@ -16,19 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 from ..ops import configuration
-
-#: The arguments of `update_work_item` that edit the record, in the order the
-#: tool declares them. An argument that is absent or null changes nothing.
-UPDATABLE_FIELDS = (
-    "title",
-    "description",
-    "source",
-    "priority",
-    "labels",
-    "kind",
-    "parent",
-    "rank",
-)
+from . import model
 
 Acknowledge = Callable[[dict, Mapping[str, object]], dict]
 
@@ -104,8 +92,7 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
 def updated(item: dict, arguments: Mapping[str, object]) -> dict:
     """Names of the edited fields; the caller sent the values and can read them back."""
 
-    names = [name for name in UPDATABLE_FIELDS if arguments.get(name) is not None]
-    return {**_base(item), "updated": names}
+    return {**_base(item), "updated": model.updated_fields(arguments)}
 
 
 def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
@@ -170,7 +157,11 @@ def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
 
 
 def applied(item: dict, arguments: Mapping[str, object]) -> dict:
-    """A batch: what each group changed, and a transition's findings like the single tool's."""
+    """A batch: what each group changed, and a transition's findings like the single tool's.
+
+    `applied` names every comment and question the call wrote by its id, so the
+    caller needs no read to reply to one or withdraw one.
+    """
 
     return {**transitioned(item, arguments), "applied": item["applied"]}
 

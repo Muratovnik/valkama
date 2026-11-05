@@ -782,12 +782,14 @@ these groups, and applies them in this order:
 | Group | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
+| `update` | `{title?, description?, labels?, priority?, rank?, kind?, parent?, source?}` | `update_work_item` |
 | `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
-| `comment` | `{body, checklist_item_id?, reply_to?, reply_to_request?}` | `comment_work_item` |
+| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?}`, or a list of them | `comment_work_item` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
+| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
 | `summary` | `{done, next, why?}` | `set_work_item_summary` |
 | `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
 
@@ -819,6 +821,30 @@ at most 100 entries. At least one
 group must name a change, and an entry with a field its group does not take is
 refused; both are `invalid_request` before anything is written.
 `expected_revision` is checked once, against the item as the call found it.
+It belongs to the call: `update` takes none of its own.
+
+`update` edits the item as `update_work_item` does: a field that is absent or
+null is left alone, `parent: ""` clears the parent, and an edit writes no
+history event. It is applied after the claim, so a `rank` names a place among
+the items of the state the claim started the item in.
+
+`comments` writes up to 100 comments in the order sent, each as
+`comment_work_item` writes it. The older `comment` group, one comment, still
+works; a call that names both is refused with `invalid_request`. A parent named
+in `reply_to` must already exist when that entry is written: the id of a
+comment the same call writes is not known to the caller, so a reply to it is a
+second call. The same holds for `resolutions`.
+
+`questions` asks up to 100 questions, each with what `create_work_item_request`
+takes and checked by the same rules. Each is the single tool's question: it
+waits in the owner's list and raises the owner's alert once the call is
+committed. A call that asks a question and closes the item with its
+`transition` is refused, `invalid_request` on the `transition` step, and
+`force` does not carry it: a closed item reads a waiting question `expired`, so
+it would be asked and lost in one write. Move the item to review, or leave the
+question out. A question asked by an earlier call does not stop a close, as it
+never did. A closed item takes no question, and `questions` is applied before
+`transition`, so a call that reopens an item cannot also ask on it.
 
 The steps run inside one transaction. When one is refused, none of them is
 written, and the error body keeps the refusal's code, prefixes its message with
@@ -830,17 +856,24 @@ the step, and names the step:
  "step": {"group": "transition", "index": 0}}}
 ```
 
-`index` is the entry's position in a list group and 0 for the others. A refused
+`index` is the entry's position in a list group and 0 for the others. An entry
+refused for its shape, one that is not an object or names a field its group
+does not take, is named the same way. A refused
 stale revision keeps `expected` and `actual` beside it. The call is recorded as
 one call with its identity, and every row its steps write points to that call.
 
-The acknowledgement's `applied` names only the groups that changed something:
+The acknowledgement's `applied` names only the groups that changed something.
+`update` lists the fields sent, as `update_work_item` answers in `updated`;
+`comments` and `questions` list every comment and question the call wrote, so
+a reply or a withdrawal needs no read first:
 
 ```json
-{"claim": true, "checklist": [{"item_id": "…", "text": "write it", "done": false}],
- "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
- "links": 1, "comment": {"comment_id": 41}, "summary": {"summary_comment_id": 42},
- "transition": {"state": "done"}}
+{"claim": true, "update": ["title", "priority"],
+ "checklist": [{"item_id": "…", "text": "write it", "done": false}],
+ "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1, "links": 1,
+ "comments": [{"comment_id": 41, "reply_to": null, "reply_to_request": null}],
+ "questions": [{"request_id": "…", "revision": 0}],
+ "summary": {"summary_comment_id": 42}, "transition": {"state": "review"}}
 ```
 
 The single tools stay as they are. The batch is also the HTTP write

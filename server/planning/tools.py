@@ -720,8 +720,9 @@ TOOLS = [
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. Each group works"
         " exactly as its single tool does, and they apply in this order: claim,"
-        " checklist, checklist_ticks, refs, links, comment, resolutions, summary,"
-        " transition — so a claim and its steps take one call, and a closing"
+        " update, checklist, checklist_ticks, refs, links, comment or comments,"
+        " resolutions, questions, summary, transition — so a claim and its steps"
+        " take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started; a closing"
         " transition releases the claim, so no release call follows. A refused step"
@@ -737,6 +738,13 @@ TOOLS = [
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
                 " starting it when it is in a backlog or queued state.",
+            },
+            "update": {
+                "type": "object",
+                "description": "Edit the item's fields as update_work_item does;"
+                " applied.update names the fields sent.",
+                "properties": {name: _STR for name in model.UPDATABLE_FIELDS if name != "labels"}
+                | {"labels": _LABELS},
             },
             "checklist": {
                 "type": "object",
@@ -796,6 +804,23 @@ TOOLS = [
                 },
                 "required": ["body"],
             },
+            "comments": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Comments, each as comment takes it, written in order;"
+                " not together with comment. A parent must exist before the call."
+                " applied.comments lists each comment_id.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "body": _STR,
+                        "checklist_item_id": _STR,
+                        "reply_to": _INT,
+                        "reply_to_request": _STR,
+                    },
+                    "required": ["body"],
+                },
+            },
             "resolutions": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
@@ -810,6 +835,25 @@ TOOLS = [
                         "reopen": _REOPEN,
                     },
                     "required": ["comment_id"],
+                },
+            },
+            "questions": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Questions to the owner, each as create_work_item_request"
+                " takes it; refused beside a transition that closes the item, which"
+                " would end them unanswered. applied.questions lists each request_id.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "enum": ["question", "decision"]},
+                        "prompt": _STR,
+                        "fields": {"type": "array", "items": {"type": "object"}},
+                        "execution_id": _STR,
+                        "session_id": _STR,
+                        "expires_at": _STR,
+                    },
+                    "required": ["kind", "prompt", "fields"],
                 },
             },
             "summary": {

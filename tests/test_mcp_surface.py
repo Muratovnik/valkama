@@ -1689,12 +1689,15 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
             {
                 "id",
                 "claim",
+                "update",
                 "checklist",
                 "checklist_ticks",
                 "refs",
                 "links",
                 "comment",
+                "comments",
                 "resolutions",
+                "questions",
                 "summary",
                 "transition",
                 "expected_revision",
@@ -1705,10 +1708,12 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         )
         for single in (
             "claim_work_item",
+            "update_work_item",
             "tick_work_item_checklist_item",
             "attach_work_item_ref",
             "link_work_items",
             "comment_work_item",
+            "create_work_item_request",
             "set_work_item_summary",
             "transition_work_item",
         ):

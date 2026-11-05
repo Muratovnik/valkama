@@ -30,7 +30,7 @@ full item instead; it carries `url` too.
 | `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard (`person_spoke` among them) |
 | `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition; `applied.comment` as `comment_work_item` answers; `applied.resolutions` each root's `comment_id` and `resolution` |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition; `applied.update` the fields sent; `applied.comment`, and each entry of `applied.comments`, as `comment_work_item` answers; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision` |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` answers with the item it took, or nothing when no item
@@ -86,18 +86,24 @@ and any of these groups, applied in this order:
 | Group | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item` |
+| `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3"}` | `update_work_item` |
 | `checklist` | `{"items": [...], "force": false}` | `set_work_item_checklist` |
 | `checklist_ticks` | `[{"item_id": "…", "done": true}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…"}` | `comment_work_item` |
+| `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | `comment_work_item`, in order |
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | `resolve_work_item_comment` |
+| `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | `create_work_item_request` |
 | `summary` | `{"done": "…", "next": "…", "why": "…"}` | `set_work_item_summary` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | `transition_work_item` |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
-done as `{"text": "…", "done": true}` instead. A refusal
+done as `{"text": "…", "done": true}` instead. Likewise a `reply_to` or a
+resolution names only a comment that existed before the call. `questions`
+beside a `transition` that closes the item is refused, `force` or not: the close
+would end them unanswered. A refusal
 writes nothing and answers with the step:
 `{"error": {"code": "…", "message": "transition: …", "step": {"group": "transition", "index": 0}}}`.
 

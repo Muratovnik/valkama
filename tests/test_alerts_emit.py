@@ -20,6 +20,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 from server import mcp_surface, store
@@ -176,6 +177,49 @@ class OneQuestionTests(EmitHarness):
             mcp_surface.run_tool_call(conn, "list_platform_modules", {}, meta=AGENT)
         self.settle()
         self.assertEqual([], self.removed)
+
+
+class BatchQuestionTests(EmitHarness):
+    """A question asked in apply_work_item_changes owes the owner what the single tool's does."""
+
+    QUESTION: ClassVar[dict] = {"kind": "question", "prompt": "Which order?", "fields": [FIELD]}
+
+    def test_a_question_in_a_batch_is_the_toast_the_single_tool_raises(self) -> None:
+        twin = self.item("Rollout order")
+        self.ask(twin, expires_at="2099-01-01T09:30:00Z")
+        self.settle()
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            comments=[{"body": "Asking"}],
+            questions=[{**self.QUESTION, "expires_at": "2099-01-01T09:30:00Z"}],
+        )
+        self.settle()
+
+        alone, batched = self.shown
+        self.assertEqual((twin, self.ref), (alone["tag"], batched["tag"]))
+        self.assertEqual(alone["expires_at"], batched["expires_at"])
+        self.assertEqual(alone["xml"].replace(twin, self.ref), batched["xml"])
+        self.assertEqual([(self.work_item_id(self.ref), True)], self.asked[1:])
+
+    def test_two_questions_in_one_batch_are_its_one_toast_counting_both(self) -> None:
+        self.agent("apply_work_item_changes", id=self.ref, questions=[self.QUESTION] * 2)
+        self.settle()
+        (message,) = self.shown
+        self.assertIn(": 2<", message["xml"])
+
+    def test_a_refused_batch_asks_nothing(self) -> None:
+        with self.assertRaises(api.PlanningHttpError):
+            self.agent(
+                "apply_work_item_changes",
+                id=self.ref,
+                questions=[self.QUESTION],
+                comments=[{"body": "Under", "reply_to": 10_000}],
+            )
+        self.conn.rollback()
+        self.settle()
+        self.assertEqual([], self.shown)
+        self.assertEqual([], requests.open_rows(self.conn))
 
 
 class WhoWroteTests(EmitHarness):

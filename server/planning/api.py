@@ -700,17 +700,26 @@ def _author(payload: Mapping[str, object]) -> str | None:
     return value
 
 
+_COMMENT_FIELDS = frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request"})
 #: What a batch may change, in the order it applies them, with the fields each
 #: entry may name. The order is the contract: a closing transition is judged
-#: after the ticks and the summary sent beside it.
+#: after the ticks and the summary sent beside it. `comment` is the one-entry
+#: form `comments` replaced, kept for the schemas already in use; a batch names
+#: one of the two. A question's entry takes what `create_work_item_request` does.
 APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
+    ("update", frozenset(model.UPDATABLE_FIELDS)),
     ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done"})),
     ("refs", frozenset({"kind", "value", "label"})),
     ("links", frozenset({"other", "kind", "remove"})),
-    ("comment", frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request"})),
+    ("comment", _COMMENT_FIELDS),
+    ("comments", _COMMENT_FIELDS),
     ("resolutions", frozenset({"comment_id", "resolution", "reopen"})),
+    (
+        "questions",
+        frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
+    ),
     ("summary", frozenset({"done", "next", "why"})),
     ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
@@ -722,9 +731,11 @@ CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("links", frozenset({"other", "kind"})),
 )
 #: The groups that are lists of entries rather than one object.
-_APPLY_LISTS = frozenset({"checklist_ticks", "refs", "links", "resolutions"})
+_APPLY_LISTS = frozenset(
+    {"checklist_ticks", "refs", "links", "comments", "resolutions", "questions"}
+)
 #: The list groups whose answer says what each entry left rather than how many.
-_APPLY_LISTED = frozenset({"checklist_ticks", "resolutions"})
+_APPLY_LISTED = frozenset({"checklist_ticks", "comments", "resolutions", "questions"})
 #: The most entries one list in a batch may hold.
 MAX_APPLY_ENTRIES = 100
 
@@ -734,6 +745,10 @@ _Step = tuple[str, int, Mapping[str, object]]
 def _apply_entries(payload: Mapping[str, object]) -> list[_Step]:
     """Every step a batch names, in application order; a batch must name one."""
 
+    if payload.get("comment") is not None and payload.get("comments") is not None:
+        raise PlanningHttpError(
+            400, "invalid_request", "comment and comments exclude each other; send comments"
+        )
     steps = _steps(payload, APPLY_GROUPS)
     if not steps:
         raise PlanningHttpError(
@@ -751,7 +766,8 @@ def _steps(
     """Every step the payload names, in application order, refused before anything is written.
 
     A step is its group, its index within the group and its fields. `claim`
-    is a boolean, so `false` names no step.
+    is a boolean, so `false` names no step. A refused entry is named beside the
+    message as a refused write is, so the caller reads one shape for both.
     """
 
     steps: list[_Step] = []
@@ -774,8 +790,9 @@ def _steps(
             )
         for index, entry in enumerate(entries):
             label = f"{group}[{index}]" if group in _APPLY_LISTS else group
+            step = {"step": {"group": group, "index": index}}
             if not isinstance(entry, Mapping):
-                raise PlanningHttpError(400, "invalid_request", f"{label} must be an object")
+                raise PlanningHttpError(400, "invalid_request", f"{label} must be an object", step)
             unknown = sorted(set(entry) - fields)
             if unknown:
                 raise PlanningHttpError(
@@ -783,6 +800,7 @@ def _steps(
                     "invalid_request",
                     f"{label}: unknown field(s) {', '.join(unknown)}; expected"
                     f" {', '.join(sorted(fields))}",
+                    step,
                 )
             steps.append((group, index, entry))
     return steps
@@ -796,6 +814,9 @@ def _apply_step(
     if group == "claim":
         claimed = _claim(conn, base)
         return {name: claimed[name] for name in ("started", "warnings") if claimed.get(name)}, True
+    if group == "update":
+        _update(conn, {**entry, **base})
+        return {}, model.updated_fields(entry)
     if group == "checklist":
         replaced = _checklist(conn, {**entry, **base})
         return {}, [
@@ -811,13 +832,16 @@ def _apply_step(
     if group == "links":
         _link(conn, {**entry, **base})
         return {}, 1
-    if group == "comment":
+    if group in ("comment", "comments"):
         written = _comment(conn, {**entry, **base})
         # The root a reply joined, as the single tool's answer says it.
         return {}, {name: written[name] for name in ("comment_id", "reply_to", "reply_to_request")}
     if group == "resolutions":
         marked = _resolve(conn, {**entry, **base})
         return {}, {name: marked[name] for name in ("comment_id", "resolution")}
+    if group == "questions":
+        asked = _create_request(conn, {**entry, **base})
+        return {}, {name: asked[name] for name in ("request_id", "revision")}
     if group == "summary":
         answer = _summary(conn, {**base, "summary": dict(entry)})
         return {}, {"summary_comment_id": answer["summary_comment_id"]}
@@ -838,6 +862,11 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     refusal. The call row is the batch's, so one call is recorded however many
     steps it took. `expected_revision` is checked once, against the item as the
     batch found it.
+
+    The one refusal no single tool makes: a question beside the transition that
+    closes its item. Closing reads a waiting question expired, which takes back
+    the owner's alert before it is seen, so the question would be asked and lost
+    in one write. `force` does not carry it: no guard is being overridden.
     """
 
     reference = _text(payload, "id")
@@ -852,6 +881,15 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             raise model.RevisionConflictError(expected, actual)
         findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, reference)
+        # A closed item takes no question, so one asked here was asked before this close.
+        if "questions" in applied and answer["state"]["is_terminal"]:
+            raise PlanningHttpError(
+                400,
+                "invalid_request",
+                "transition: a question on an item this call closes could never be"
+                " answered; move it to review, or leave the question out",
+                {"step": {"group": "transition", "index": 0}},
+            )
     return {**answer, **findings, "applied": applied}
 
 

@@ -34,6 +34,15 @@ checkouts are therefore distinguishable even at the same version.
   General → Task type colors picks another colour per type, applies it at once, says
   when one is hard to read and lets you keep it, and resets one type or all. The choice
   is kept on the device, so a browser and the desktop app each remember their own.
+- **One batch edits an item, writes several comments and asks questions.**
+  `apply_work_item_changes` takes three more groups, each working as its single tool
+  does: `update` (`update_work_item`), `comments`, up to 100 (`comment_work_item`), and
+  `questions`, up to 100 (`create_work_item_request`). They apply in the order `claim,
+  update, checklist, checklist_ticks, refs, links, comment or comments, resolutions,
+  questions, summary, transition`. `applied` names the fields edited and the id of every
+  comment and question written. A call that names both `comment` and `comments` is
+  refused, and so is one that asks a question and closes the item, which would end the
+  question unanswered. A refused entry's shape now names its `step` too.
 
 ### Changed
 
