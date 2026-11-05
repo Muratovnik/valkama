@@ -176,6 +176,8 @@ checkouts are therefore distinguishable even at the same version.
   chosen with the keys does, instead of sending the next Tab to the top of the page. In the
   filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
+- **The buttons of «Make steps» stay at the form's end on a phone.** Wrapped under the count
+  they went to the start, unlike every other form's.
 - **A question's two answers wrap together.** Once «Check status» joined the row after a
   failed send, Send stood alone on the next line under «Don't answer», and changing an answer
   on a phone in Russian put Save under Cancel. The two now go to the next line as one pair.

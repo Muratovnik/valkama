@@ -301,10 +301,13 @@ watch(
   color: var(--color-danger);
 }
 
+/* At the form's end, on the count's line or on a line of its own under it, as every form's
+   buttons stand; wrapped, `space-between` alone put them at the start. */
 .steps-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  margin-inline-start: auto;
 }
 
 .steps-error {
