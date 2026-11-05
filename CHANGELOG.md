@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
+
 ### Added
 
 - **The space's read model says which items an agent is at work on now.** `live_work` in
