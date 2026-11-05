@@ -7,7 +7,8 @@
  * the panel finds the camera through the flow it is rendered in, and these are
  * rendered beside it, so they name the field's camera by its id. Each button is
  * still Vue Flow's own camera button, and the zoom steps stop where the field's
- * zoom does, as the panel's would.
+ * zoom does, as the panel's would. «Fit whole graph» says only that it was pressed:
+ * the field's camera knows the whole view, which is also that limit.
  *
  * The zoom glyphs carry accessible names; camera destinations have visible labels.
  */
@@ -16,13 +17,12 @@ import { useI18n } from 'vue-i18n'
 
 import { ControlButton } from '@vue-flow/controls'
 import { useVueFlow } from '@vue-flow/core'
-import type { FitViewParams } from '@vue-flow/core'
 
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
-const props = defineProps<{ fitOptions: FitViewParams }>()
+const emit = defineEmits<{ fit: [] }>()
 const { t } = useI18n()
-const { fitView, maxZoom, minZoom, viewport, zoomIn, zoomOut } = useVueFlow({ id: GRAPH_FLOW_ID })
+const { maxZoom, minZoom, viewport, zoomIn, zoomOut } = useVueFlow({ id: GRAPH_FLOW_ID })
 const atMax = computed(() => viewport.value.zoom >= maxZoom.value)
 const atMin = computed(() => viewport.value.zoom <= minZoom.value)
 </script>
@@ -55,7 +55,7 @@ const atMin = computed(() => viewport.value.zoom <= minZoom.value)
     </ControlButton>
     <ControlButton
       class="control-button control-action"
-      @click="fitView(props.fitOptions)"
+      @click="emit('fit')"
     >
       {{ t('graph.zoomReset') }}
     </ControlButton>

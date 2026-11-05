@@ -326,10 +326,11 @@ async function zoomOutToOverview(page: Page) {
   }
 }
 
-test('a field of the work under none alone, folded, still takes Tab in the overview at 390px', async ({
+test('a field of the work under none alone, folded, still takes Tab in the overview', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 900 })
+  // One folded frame fits past reading only in a window this narrow.
+  await page.setViewportSize({ width: 240, height: 900 })
   await serveLooseSpace(page)
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()

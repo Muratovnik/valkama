@@ -926,7 +926,13 @@ and when after a narrowing not one drawn node is left in
 sight, and then only across, at the operator's zoom: onto the whole of what is
 drawn where that fits, else onto its first node as it is read. A field that
 changes size follows the last rule, and leaving the graph for another view
-and coming back to the same scope finds the camera where it was left. The
+and coming back to the same scope finds the camera where it was left. The camera
+goes no further out than the zoom «Fit whole graph» gives for what is drawn now in
+the size the field has now: past it a header is a pixel or two and the map a smudge.
+The button, the wheel and a pinch stop there and the button says so, and a narrowing,
+a fold or a resize that leaves the camera further out brings it up to that zoom; a
+refresh still moves nothing. The fit is worked out from the drawing and the field and
+never reads that limit, or a field that grew could not be fitted. The
 2.1.0 rule that framed the field afresh on every new queue or search was
 withdrawn by the owner after use: each narrowing cost the operator their place
 and their zoom. The keys to the chain list its
@@ -964,7 +970,12 @@ epic's reference grown with the field, as a zoomed-out card's is, with the count
 work moving under it at the far end and a thicker edge beneath; the work under no epic
 keeps its name instead. The header is two buttons with one action each, as a card
 is one: the chevron folds or opens the frame, and the rest opens the epic's card;
-over the work under no epic the rest is plain text, with no epic to open. A card in
+over the work under no epic the rest is plain text, with no epic to open. Below a
+quarter of full size a header is a few pixels and the frame round it is what the hand
+finds, so the ground of an open frame with an epic opens that epic too and the pointer
+says so. It is the pointer's shortcut: the keyboard has the header's button and no new
+stop, a card on the ground and a frame inside a frame answer for themselves, and a drag
+from the ground moves the field. A card in
 a frame does not name its epic, since the frame does. A chain has no frames: it
 keeps its flat drawing, its root and its epics as nodes, because its progress is
 the card's map and not the field's.

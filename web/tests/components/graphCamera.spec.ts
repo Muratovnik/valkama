@@ -162,12 +162,12 @@ describe('graph camera ownership', () => {
   it('pans onto a narrowing that left nothing in sight, at the zoom the operator chose', async () => {
     const other = { ...item, work_item_id: 'work-2', reference: 'TEST-2', number: 2 }
     const graph = await openGraph([item, other])
-    // The operator zoomed and panned far from the work.
-    viewport.value = { x: -40_000, y: -40_000, zoom: 0.6 }
+    // The operator zoomed and panned far from the work. This field fits at 1, the farthest out.
+    viewport.value = { x: -40_000, y: -40_000, zoom: 1.2 }
     await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
     await laidOut()
     expect(camera.setViewport).toHaveBeenCalledTimes(2)
-    expect(camera.setViewport.mock.calls.at(-1)?.[0]).toMatchObject({ zoom: 0.6 })
+    expect(camera.setViewport.mock.calls.at(-1)?.[0]).toMatchObject({ zoom: 1.2 })
     // A switch narrows the same way: with work in sight again, it moves nothing.
     viewport.value = camera.setViewport.mock.calls.at(-1)?.[0] as typeof viewport.value
     graph.findComponent(GraphBar).vm.$emit('update:showUnlinked', true)
@@ -179,13 +179,26 @@ describe('graph camera ownership', () => {
 
   it('finds the camera where it was left on coming back to the same scope from another view', async () => {
     const graph = await openGraph([item], 'space-return')
-    viewport.value = { x: 140, y: 60, zoom: 0.8 }
+    viewport.value = { x: 140, y: 60, zoom: 1.2 }
     graph.unmount()
     camera.initialized = false
     vi.clearAllMocks()
     const again = await openGraph([item], 'space-return')
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
-    expect(camera.setViewport.mock.calls[0]?.[0]).toEqual({ x: 140, y: 60, zoom: 0.8 })
+    expect(camera.setViewport.mock.calls[0]?.[0]).toEqual({ x: 140, y: 60, zoom: 1.2 })
+    again.unmount()
+  })
+
+  it('brings a camera it held up to the whole view when it shows the field again', async () => {
+    const graph = await openGraph([item], 'space-held-past')
+    viewport.value = { x: 140, y: 60, zoom: 0.2 }
+    graph.unmount()
+    camera.initialized = false
+    vi.clearAllMocks()
+    const again = await openGraph([item], 'space-held-past')
+    expect(camera.setViewport).toHaveBeenCalledTimes(1)
+    // A field this small fits at the most a fit gives.
+    expect(camera.setViewport.mock.calls[0]?.[0]).toMatchObject({ zoom: 1 })
     again.unmount()
   })
 
@@ -244,19 +257,22 @@ describe('graph camera ownership', () => {
     // «Focus work» named no destination: it went to whichever workable item came first.
     expect(buttons.some((button) => button.text() === 'Focus work')).toBe(false)
     await whole?.trigger('click')
-    // The key and the controls stand beside the flow, so the whole flow is field
-    // and the framing leaves only its own air round the work.
-    expect(camera.fitView).toHaveBeenCalledWith({
-      padding: { top: '16px', bottom: '16px', left: '32px', right: '32px' },
-      duration: 0,
-      maxZoom: 1,
-    })
+    // The camera's own framing, set outright: the zoom limit, which it also sets, cannot hold it.
+    expect(camera.fitView).not.toHaveBeenCalled()
+    expect(camera.setViewport).toHaveBeenCalledTimes(2)
+    const [fit, options] = camera.setViewport.mock.calls.at(-1) as [
+      { x: number; y: number; zoom: number },
+      { duration: number },
+    ]
+    expect(options).toEqual({ duration: 0 })
+    expect(fit.zoom).toBeGreaterThan(0)
+    expect(fit.zoom).toBeLessThanOrEqual(1)
     await graph.setProps({ scopeKind: 'none' })
     await laidOut()
-    expect(camera.setViewport).toHaveBeenCalledTimes(2)
+    expect(camera.setViewport).toHaveBeenCalledTimes(3)
     await graph.setProps({ space: 'space-2' })
     await laidOut()
-    expect(camera.setViewport).toHaveBeenCalledTimes(3)
+    expect(camera.setViewport).toHaveBeenCalledTimes(4)
     graph.unmount()
   })
 })

@@ -40,6 +40,7 @@ function extent(boxes: readonly Box[]): {
 /** Everything drawn: the frames and the cards in them. */
 const drawing = (graph: GraphLayout): Box[] => [...graph.frames, ...graph.nodes]
 
+/** The zoom a framing may go down to is `GRAPH_ZOOM_MIN`, never the field's own limit. */
 function fitNodes(boxes: readonly Box[], dimensions: Dimensions): ViewportTransform {
   const { left, top, right, bottom } = extent(boxes)
   const options = graphFitViewOptions()
@@ -51,6 +52,23 @@ function fitNodes(boxes: readonly Box[], dimensions: Dimensions): ViewportTransf
     options.maxZoom,
     options.padding,
   )
+}
+
+/**
+ * «Fit whole graph», and with its zoom the farthest out the camera goes.
+ *
+ * Worked out from the drawing and the field alone. Vue Flow's own fit is held by the limit
+ * in the flow's store, so with the limit set from the fit a field that grew could not be
+ * fitted until the limit had moved, and the limit is this zoom: the one calculation serves
+ * both and reads neither back. Null while there is nothing to frame.
+ */
+export function graphWholeView(
+  graph: GraphLayout,
+  dimensions: Dimensions,
+): ViewportTransform | null {
+  return drawing(graph).length && dimensions.width && dimensions.height
+    ? fitNodes(drawing(graph), dimensions)
+    : null
 }
 
 /** A branch of a chain the field is framed on: its drawn nodes, and the epic that heads it. */
@@ -347,7 +365,10 @@ function panOnto(
  * new queue, search or switch — or a field that changed size — moves it only
  * when not one drawn box is left in sight, and then only across, at the zoom
  * the operator chose. The explicit «Fit whole graph» is the one way to change
- * the zoom besides the operator's own, and it is Vue Flow's own fit.
+ * the zoom besides the operator's own and one more: a camera the new drawing or
+ * the new size leaves past the whole view (`graphWholeView`) comes up to it, with
+ * a pressed header still held, since the camera does not stand further out than
+ * that. A refresh leaves even that one where it is, until the operator next moves.
  */
 export function graphCameraMove(
   cause: GraphCameraCause,
@@ -359,15 +380,19 @@ export function graphCameraMove(
   if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
   if (cause === 'open') return graphCameraView(graph, dimensions, options)
   if (cause === 'refresh') return null
+  const whole = fitNodes(drawing(graph), dimensions)
+  const past = camera.zoom < whole.zoom
   if (cause === 'toggled' && field.held) {
-    const now = headerOnScreen(graph, field.held.frameId, camera)
-    if (!now) return null
+    const zoom = past ? whole.zoom : camera.zoom
+    const now = headerOnScreen(graph, field.held.frameId, { ...camera, zoom })
+    if (!now) return past ? whole : null
     return {
       x: camera.x + field.held.screen.x - now.x,
       y: camera.y + field.held.screen.y - now.y,
-      zoom: camera.zoom,
+      zoom,
     }
   }
+  if (past) return whole
   // A frame's own centre can be empty ground, and its fold button alone at the
   // field's edge shows nothing of it; what the operator sees is a header as a
   // whole or a card, so those are what count as in sight.

@@ -88,14 +88,20 @@ const SPACE: WorkItemBrief[] = [
   ...Array.from({ length: 25 }, (_, index) => item(400 + index, 'todo')),
 ]
 
-async function serveSpace(page: Page) {
+/** The same space among enough other epics that its whole field is far out. */
+const AMONG_MANY: WorkItemBrief[] = [
+  ...SPACE,
+  ...Array.from({ length: 90 }, (_, index) => item(1000 + index, 'review', { kind: 'epic' })),
+]
+
+async function serveSpace(page: Page, items = SPACE) {
   await installBackend(page)
   await page.route('**/api/planning?*', async (route) => {
     const response = planningReadFor(new URL(route.request().url()).searchParams)
     if (response.status === 200 && 'work_items' in response.body) {
       const body = response.body as unknown as Record<string, unknown>
       body.workflow = model.workflow
-      body.work_items = SPACE
+      body.work_items = items
       body.links = []
       body.live_work = { [identity(3)]: { state: 'working' } }
     }
@@ -113,9 +119,9 @@ const foldOf = (page: Page, n: number) =>
 const heightOf = (frame: Locator) =>
   frame.evaluate((element) => (element as HTMLElement).offsetHeight)
 
-async function openField(page: Page, width = 1500) {
+async function openField(page: Page, width = 1500, items = SPACE) {
   await page.setViewportSize({ width, height: 900 })
-  await serveSpace(page)
+  await serveSpace(page, items)
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
   await expect(frameOf(page, OPEN)).toHaveCount(1)
@@ -324,20 +330,24 @@ test('a header with every group in its counts stays whole and clear of its edge'
   expect(shape.edgeBottom).toBeLessThanOrEqual(shape.frameBottom)
 })
 
-/** Press «Отдалить» until the field draws its overview. */
-async function zoomOutToOverview(page: Page) {
-  const zoomOut = page.getByRole('button', { name: 'Отдалить', exact: true })
-  for (let step = 0; step < 16; step += 1) {
-    if ((await page.locator('.graph-frame.overview').count()) > 0) return
-    await zoomOut.click()
-  }
+/**
+ * The field among many, as far out as it goes. The camera stops at the whole field, and on
+ * its own this space fits too near for the overview.
+ */
+async function openFarField(page: Page) {
+  await openField(page, 1500, AMONG_MANY)
+  await page.getByRole('button', { name: 'Весь граф', exact: true }).click()
+  await expect(page.locator('.graph-frame.far').first()).toBeVisible()
 }
 
 test('zoomed out, a header is its reference and edge, in one place folded and open', async ({
   page,
 }) => {
-  await openField(page)
-  await zoomOutToOverview(page)
+  await openFarField(page)
+  // Far out a count takes a reference's place, so the places are read a step nearer.
+  const zoomIn = page.getByRole('button', { name: 'Приблизить', exact: true })
+  for (let step = 0; step < 16 && (await page.locator('.graph-frame.far').count()) > 0; step += 1)
+    await zoomIn.click()
   await expect(frameOf(page, OPEN)).toHaveClass(/overview/u)
   await expect(frameOf(page, OPEN)).not.toHaveClass(/folded/u)
   await expect(frameOf(page, CROWDED)).toHaveClass(/folded/u)
@@ -404,14 +414,7 @@ async function targetOf(frame: Locator, target: string) {
 test('zoomed far out, a header is a target as tall as it stands with the air round it', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1500, height: 900 })
-  await openField(page)
-  await zoomOutToOverview(page)
-  const zoomOut = page.getByRole('button', { name: 'Отдалить', exact: true })
-  await expect(async () => {
-    await zoomOut.click()
-    await expect(page.locator('.graph-frame.far').first()).toBeVisible({ timeout: 300 })
-  }).toPass()
+  await openFarField(page)
   const folded = await targetOf(frameOf(page, CROWDED), `frame:${identity(CROWDED)}`)
   const open = await targetOf(frameOf(page, OPEN), `frame:${identity(OPEN)}`)
   // The header's 160, and of the 36 of air above and below it what no neighbour's
@@ -429,8 +432,7 @@ test('zoomed far out, a header is a target as tall as it stands with the air rou
 })
 
 test('zoomed out, a card keeps the longest reference inside itself', async ({ page }) => {
-  await openField(page)
-  await zoomOutToOverview(page)
+  await openFarField(page)
   const card = page.locator(`.flow-node-card[data-walk-target="${identity(2)}"]`)
   const inside = await card.evaluate((element) => {
     const box = element.getBoundingClientRect()

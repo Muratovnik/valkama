@@ -25,12 +25,14 @@ import '@vue-flow/controls/dist/style.css'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MAX, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
-defineProps<{
+const { minZoom = GRAPH_ZOOM_MIN } = defineProps<{
   edges: FlowEdge[]
   motion: GraphMotion
   nodes: FlowNode[]
   /** The camera has framed the field, so its drawing may show. */
   settled: boolean
+  /** The farthest out the camera goes, for the field as it is drawn now. */
+  minZoom?: number
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +42,13 @@ const emit = defineEmits<{
   'node-leave': [id: string]
   'pane-leave': []
 }>()
+
+/**
+ * How many pixels a hand may slip and still have pressed. Every press on the field starts
+ * a pan, and past this the press was a drag, so it opens nothing: at no slip at all, one
+ * pixel of a shaking hand on a far-out frame or card lost the press to a pan.
+ */
+const PRESS_SLOP = 4
 </script>
 
 <template>
@@ -67,8 +76,9 @@ const emit = defineEmits<{
     :zoom-on-pinch="true"
     :zoom-on-double-click="false"
     :prevent-scrolling="true"
-    :min-zoom="GRAPH_ZOOM_MIN"
+    :min-zoom="minZoom"
     :max-zoom="GRAPH_ZOOM_MAX"
+    :pane-click-distance="PRESS_SLOP"
     :apply-default="false"
     @init="emit('init')"
     @node-mouse-enter="({ node }) => emit('node-enter', node.id)"
@@ -142,13 +152,18 @@ const emit = defineEmits<{
   border-radius: var(--radius-status);
 }
 
-/* A frame is ground the cards in it stand on, and its lines run over it: Vue
-   Flow would let the open box swallow every click meant for the field behind
-   it, so only what the frame draws takes the pointer. */
+/* A frame is ground the cards in it stand on, and its lines run over it. Its box
+   takes the pointer, as Vue Flow writes on every node of a field that listens to
+   them: a press there starts the same pan the field's does, and what it means
+   besides is the frame's own to say. */
 :deep(.vue-flow__node.graph-frame-node) {
   border: 0;
   background: transparent;
-  pointer-events: none;
+}
+
+/* A drag that began on a frame says it is a drag, whatever that frame's ground says at rest. */
+:deep(.vue-flow__pane.dragging .graph-frame-node > *) {
+  cursor: grabbing;
 }
 
 :deep(.vue-flow__edge.graph-edge) {

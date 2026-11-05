@@ -21,6 +21,11 @@
  * it, counted by the epic and never by a filter, at every zoom: «90 open inside»,
  * «90 inside» in the overview, and «+90» where a word could no longer be read.
  *
+ * Far out a header is a few pixels and the frame round it is what the hand finds, so
+ * the ground of an open frame with an epic opens that epic too. It is a shortcut for
+ * the pointer alone: the header's button is the same action for the keyboard, so no
+ * new stop stands here, and a drag from the ground moves the field and opens nothing.
+ *
  * The work under no epic is a frame too, with no epic to open. A frame inside
  * a frame is a well cut into it, a step below. Zoomed out past reading, the
  * header keeps the epic's reference and its edge, grown with the field.
@@ -106,6 +111,8 @@ const openTab = computed(() => asButton(tabIndex(openTarget.value)))
 /** A frame inside a frame is a well cut into the one it stands in. */
 const nested = computed(() => frame.parentId !== null)
 const headStyle = { height: `${FRAME_HEADER}px` }
+/** Far out, the ground of an open frame opens its epic. A folded frame is all header. */
+const groundOpens = computed(() => far && !frame.folded && Boolean(epic.value))
 
 function tabIndex(target: string): number {
   return tabStop === target ? 0 : -1
@@ -113,6 +120,10 @@ function tabIndex(target: string): number {
 
 function onOpen() {
   if (epic.value) emit('open', epic.value.reference)
+}
+
+function onGround() {
+  if (groundOpens.value) onOpen()
 }
 
 function onOpenFocus() {
@@ -125,16 +136,20 @@ function onOpenBlur() {
 </script>
 
 <template>
+  <!-- The header's button is this same action for the keyboard. -->
+  <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
   <section
     class="graph-frame"
     :class="{
       far,
-      folded: frame.folded,
-      holding: frame.folded && frame.foldable,
+      'folded': frame.folded,
+      'ground-opens': groundOpens,
+      'holding': frame.folded && frame.foldable,
       nested,
       overview,
     }"
     :data-frame="frame.id"
+    @click.self="onGround"
   >
     <Handle
       id="target"
@@ -228,7 +243,7 @@ function onOpenBlur() {
 
 /* One step above the field, as the board's lane is; a frame inside a frame is
    a well, one step below the frame it is cut into. The cards stand a step
-   above either. The frame itself takes no pointer: the field behind it pans. */
+   above either. A press on the frame pans the field, as one behind it would. */
 .graph-frame {
   position: relative;
   width: 100%;
@@ -238,6 +253,14 @@ function onOpenBlur() {
 
   &.nested {
     background: var(--color-surface-recess);
+  }
+
+  &.ground-opens {
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-surface-hover);
+    }
   }
 
   /* Folded over work: the sheets of a stack under it, a shape and no hue, inside

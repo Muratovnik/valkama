@@ -57,7 +57,10 @@ export interface GraphLayout {
 /** What lays a graph out: ELK itself, or the worker a graph field keeps. */
 export type GraphLayoutEngine = { layout: (graph: ElkNode) => Promise<ElkNode> }
 
-/** Keep the interaction floor low enough for wide spaces to fit without clipping. */
+/**
+ * How far out a framing can ever go, so wide spaces fit without clipping. The operator's
+ * own limit is the field's whole view (`graphWholeView`), which stands above this.
+ */
 export const GRAPH_ZOOM_MIN = 0.01
 export const GRAPH_ZOOM_MAX = 1.45
 
@@ -88,7 +91,6 @@ export interface GraphFlowEdge {
 
 /** Options consumed by the Vue Flow camera after nodes are mounted. */
 export interface GraphFitViewOptions {
-  duration: number
   maxZoom: number
   padding: { bottom: `${number}px`; left: `${number}px`; right: `${number}px`; top: `${number}px` }
 }
@@ -108,7 +110,6 @@ export function graphFitViewOptions(): GraphFitViewOptions {
       left: `${FRAME_GAP * 2}px`,
       right: `${FRAME_GAP * 2}px`,
     },
-    duration: 0,
     maxZoom: 1,
   }
 }

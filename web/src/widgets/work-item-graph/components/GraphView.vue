@@ -208,8 +208,9 @@ const {
   cometStrokeScale,
   far,
   fitted,
-  fitOptions,
+  fitWhole,
   holdFrame,
+  minZoom,
   overview,
   onFlowInit,
   reveal,
@@ -389,6 +390,7 @@ function onFieldPointerLeave() {
         :nodes="flowNodes"
         :edges="flowEdges"
         :settled="fitted"
+        :min-zoom="minZoom"
         :motion="motion"
         :style="{ '--graph-comet-stroke-scale': cometStrokeScale }"
         @init="onFlowInit"
@@ -442,7 +444,7 @@ function onFieldPointerLeave() {
           />
         </template>
       </GraphField>
-      <GraphControls :fit-options="fitOptions" />
+      <GraphControls @fit="fitWhole" />
     </div>
   </section>
 </template>

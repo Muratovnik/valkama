@@ -13,6 +13,7 @@ import {
   graphAnchor,
   graphCameraMove,
   graphCameraView,
+  graphWholeView,
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -179,6 +180,23 @@ for (const [what, fold] of [
     )
   })
 }
+
+test('a fold that leaves the camera past the whole view comes up to it with its header held', async () => {
+  const frameId = epics[1].work_item_id
+  const before = await space()
+  const after = await space({ [frameId]: true })
+  const whole = graphWholeView(after, dimensions)
+  assert.ok(whole)
+  const camera = { x: 300, y: 200, zoom: whole.zoom / 2 }
+  const screen = headerOnScreen(before, frameId, camera)
+  assert.ok(screen)
+  const moved = graphCameraMove('toggled', after, { camera, dimensions, held: { frameId, screen } })
+  assert.ok(moved)
+  assert.equal(moved.zoom, whole.zoom)
+  const now = headerOnScreen(after, frameId, moved)
+  assert.ok(now)
+  assert.ok(Math.abs(now.x - screen.x) <= 1 && Math.abs(now.y - screen.y) <= 1)
+})
 
 test('a fold the camera holds nothing for moves nothing', async () => {
   const placed = await space()

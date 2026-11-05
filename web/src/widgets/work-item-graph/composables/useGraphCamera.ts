@@ -13,6 +13,11 @@
  * unmounts with its view, so the last camera is held here by scope and given
  * back to a field that opens on the same one.
  *
+ * The farthest out the camera goes is the field's whole view, for the drawing and
+ * the size it has now (`minZoom`). Past it a header is a pixel or two and the map a
+ * smudge. Vue Flow holds the button, the wheel and a pinch to that limit, and a move
+ * that leaves the camera past it brings it back.
+ *
  * The field's own chrome — the key above it, the controls below — stands in
  * strips of its own outside the flow, so no framing and no pan can put a node
  * under either.
@@ -27,6 +32,7 @@ import type { ViewportTransform } from '@vue-flow/core'
 import {
   graphAnchor,
   graphCameraMove,
+  graphWholeView,
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import type {
@@ -34,7 +40,7 @@ import type {
   GraphCameraCause,
   HeldFrame,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
-import { FRAME_GAP, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { FRAME_GAP, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { nodeCentre } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
@@ -187,6 +193,23 @@ export function useGraphCamera(input: CameraInput) {
   watch([() => dimensions.value.width, () => dimensions.value.height], () => place('resized'))
   watch(input.scopes, open)
 
+  /**
+   * The whole view's zoom. It keeps its last value while the projection is absent during
+   * a layout, or the field has no size, so the limit does not drop and come back.
+   */
+  const minZoom = computed<number>((last) => {
+    const placed = input.placed.value
+    const whole = placed && graphWholeView(placed, dimensions.value)
+    return whole?.zoom ?? last ?? GRAPH_ZOOM_MIN
+  })
+
+  /** «Fit whole graph»: set outright, so the limit, which is only as new as the last draw, cannot hold it. */
+  function fitWhole() {
+    const placed = input.placed.value
+    const whole = placed && graphWholeView(placed, dimensions.value)
+    if (whole) void setViewport(whole, { duration: 0 })
+  }
+
   /** Zoomed out past reading: cards are blocks and headers bands, their folds hidden. */
   const overview = computed(() => (viewport?.value.zoom ?? 1) < OVERVIEW_ZOOM)
   const far = computed(() => (viewport?.value.zoom ?? 1) < FAR_ZOOM)
@@ -215,10 +238,10 @@ export function useGraphCamera(input: CameraInput) {
         : null
       return graphAnchor(placed, options, sight)?.id ?? null
     }),
-    /** «Fit whole graph». */
-    fitOptions: graphFitViewOptions(),
     far,
+    fitWhole,
     holdFrame,
+    minZoom,
     overview,
     onFlowInit: () => {
       flowReady.value = true

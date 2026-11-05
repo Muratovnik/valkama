@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
-import { graphCameraMove, graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
+import {
+  graphCameraMove,
+  graphCameraView,
+  graphWholeView,
+} from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
@@ -95,10 +99,10 @@ test('a narrowing or a resize leaves the camera alone while any drawn node is in
 
 test('a narrowing with nothing left in sight pans onto the drawing at the same zoom', async () => {
   const placed = await chain(3)
-  const away = { x: -50_000, y: -50_000, zoom: 0.6 }
+  const away = { x: -50_000, y: -50_000, zoom: 1.2 }
   const moved = graphCameraMove('narrowed', placed, { camera: away, dimensions })
   assert.ok(moved)
-  assert.equal(moved.zoom, 0.6)
+  assert.equal(moved.zoom, 1.2)
   // Three nodes fit at this zoom, so all of them are brought into sight, centred.
   for (const node of placed.nodes) {
     const point = onScreen(node, moved)
@@ -126,4 +130,53 @@ test('an empty drawing or a field with no size moves nothing', async () => {
     graphCameraMove('narrowed', placed, { camera, dimensions: { width: 0, height: 0 } }),
     null,
   )
+})
+
+/** The zoom at which a drawing's extent fills the field, inside the air a framing leaves. */
+function fillingZoom(
+  placed: Awaited<ReturnType<typeof chain>>,
+  field: { height: number; width: number },
+) {
+  const boxes = [...placed.frames, ...placed.nodes]
+  const left = Math.min(...boxes.map((box) => box.x))
+  const top = Math.min(...boxes.map((box) => box.y))
+  const right = Math.max(...boxes.map((box) => box.x + box.width))
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height))
+  return Math.min(1, (field.width - 64) / (right - left), (field.height - 32) / (bottom - top))
+}
+
+test('the whole view is worked out from the drawing and the field, and nothing else', async () => {
+  const small = await chain(12)
+  const large = await chain(60)
+  for (const placed of [small, large]) {
+    const whole = graphWholeView(placed, dimensions)
+    assert.ok(whole)
+    assert.ok(Math.abs(whole.zoom - fillingZoom(placed, dimensions)) < 1e-9)
+  }
+  const fieldOfSmall = graphWholeView(small, dimensions)?.zoom ?? 0
+  const fieldOfLarge = graphWholeView(large, dimensions)?.zoom ?? 0
+  assert.ok(fieldOfLarge < fieldOfSmall, 'a field that grew fits further out')
+  const wider = { width: 2400, height: 1360 }
+  assert.ok((graphWholeView(large, wider)?.zoom ?? 0) > fieldOfLarge, 'a larger window fits closer')
+  assert.equal(graphWholeView(large, { width: 0, height: 0 }), null)
+})
+
+for (const cause of ['narrowed', 'resized'] as const)
+  test(`a camera a ${cause} field leaves past its whole view comes back to it`, async () => {
+    const placed = await chain(40)
+    const whole = graphWholeView(placed, dimensions)
+    assert.ok(whole)
+    const past = { x: 40, y: 40, zoom: whole.zoom / 2 }
+    assert.deepEqual(graphCameraMove(cause, placed, { camera: past, dimensions }), whole)
+    // At the whole view's own zoom it is not past it, and stays where it stands.
+    const at = { ...whole, x: whole.x + 8 }
+    assert.equal(graphCameraMove(cause, placed, { camera: at, dimensions }), null)
+  })
+
+test('a refresh never moves the camera, even one left past the whole view', async () => {
+  const placed = await chain(40)
+  const whole = graphWholeView(placed, dimensions)
+  assert.ok(whole)
+  const past = { x: 40, y: 40, zoom: whole.zoom / 2 }
+  assert.equal(graphCameraMove('refresh', placed, { camera: past, dimensions }), null)
 })

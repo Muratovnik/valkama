@@ -144,7 +144,10 @@ test('a new filter keeps the zoom the operator chose', async ({ page }) => {
   const pane = page.locator('.vue-flow__transformationpane')
   const scale = async () =>
     /scale\(([0-9.]+)\)/u.exec((await pane.getAttribute('style')) ?? '')?.[1]
-  await page.getByRole('button', { name: 'Zoom out', exact: true }).click()
+  // This field fits at its opening zoom, so the operator's own choice is nearer in.
+  const opening = await scale()
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  await expect.poll(scale).not.toBe(opening)
   const chosen = await scale()
   expect(chosen).toBeDefined()
 
