@@ -96,6 +96,10 @@ for each live subagent started longer ago than `SUBAGENT_SILENT`. A live subagen
 no write of its own adds the two reads of `_lower_signs` and, when its label has a
 number no listed item answers to, one more for that number. A store an earlier build
 wrote may lack what they ask for, and then the map is empty rather than an error.
+
+`placed` is the same read, and the map it gives is this one. Beside it, it says where
+each live subagent stands, on one item by `ladder`'s order, and which sessions are at
+work and on what, which the live-work frame (`live_frame`) counts. It adds no read.
 """
 
 from __future__ import annotations
@@ -239,6 +243,8 @@ class _Lifecycle:
     written: set[str] = field(default_factory=set)
     #: What each subagent wrote to since it last started.
     by_agent: dict[str, set[str]] = field(default_factory=dict)
+    #: The item of each subagent's latest write since it last started.
+    last_by_agent: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -258,6 +264,42 @@ class _SeenOn:
     agents: set[str]
     #: Those with no write of their own, and what their launch said of them.
     unwritten: dict[str, _Unwritten] = field(default_factory=dict)
+    #: The others, each with the item its latest write named: where `ladder` places it.
+    last_written: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class AtWork:
+    """A session at work, as the live-work frame counts it."""
+
+    #: Every item its work is on: what it holds, what it is seen on, where its subagents stand.
+    items: frozenset[str]
+    #: How many live subagents it has.
+    subagents: int
+
+
+@dataclass(frozen=True)
+class Placement:
+    """What `placed` reads: the map a graph moves by, and who stands where.
+
+    `agents` counts the live subagents `ladder`'s order places on each item, each on
+    one item, so it may name an item the caller did not pass. `at_work` holds every
+    session at work, whether or not any of its work is among the items passed.
+    """
+
+    live: dict[str, dict]
+    agents: dict[str, int] = field(default_factory=dict)
+    at_work: dict[str, AtWork] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _LowerSigns:
+    """What `_lower_signs` finds for subagents with no write of their own."""
+
+    #: The items the map moves for them: a packet's item, or a parent's single hold.
+    moved: set[str]
+    #: Where each stands, by session and agent, as `ladder` orders the signs.
+    placed: dict[tuple[str, str], str]
 
 
 def _behind(
@@ -291,8 +333,10 @@ def _lifecycle(conn: sqlite3.Connection, awake: list[str]) -> dict[str, _Lifecyc
         agent, item = str(row["agent_id"]), row["written"]
         if agent and item is None:
             read.by_agent[agent] = set()
+            read.last_by_agent.pop(agent, None)
         elif agent:
             read.by_agent.setdefault(agent, set()).add(str(item))
+            read.last_by_agent[agent] = str(item)
         elif item is not None:
             read.written.add(str(item))
         else:
@@ -357,6 +401,7 @@ def _states(
         items = set(read.written)
         running: set[str] = set()
         unwritten: dict[str, _Unwritten] = {}
+        last_written: dict[str, str] = {}
         for row in subagents.get(session, []):
             # A subagent started in the second its session started counts, as a
             # claim and a launch in one second do in `agents`.
@@ -367,24 +412,31 @@ def _states(
                 running.add(calls.label_id(agent))
                 written = read.by_agent.get(agent, set())
                 items |= written | _named_by(label, references)
-                if not written:
+                if written:
+                    last_written[calls.label_id(agent)] = read.last_by_agent[agent]
+                else:
                     packet = row["packet_item"]
                     unwritten[calls.label_id(agent)] = _Unwritten(
                         str(packet) if packet else None, label
                     )
-        seen_on[session] = _SeenOn(items, running, unwritten)
+        seen_on[session] = _SeenOn(items, running, unwritten, last_written)
         if read.last_kind == "prompt" or running:
             live[session] = {"state": WORKING}
     return live, seen_on
 
 
 def _lower_signs(
-    conn: sqlite3.Connection, states: Mapping[str, dict], seen_on: Mapping[str, _SeenOn]
-) -> set[str]:
+    conn: sqlite3.Connection,
+    states: Mapping[str, dict],
+    seen_on: Mapping[str, _SeenOn],
+    held_steps: Mapping[str, str] | None,
+) -> _LowerSigns:
     """What subagents with no write of their own stand on, by the rest of `ladder`'s order.
 
-    A step it holds, wherever that is, leaves nothing to add: `live_work` moves a listed
-    one, and an unlisted one still says this subagent is on it and not on its parent's.
+    A step it holds, wherever that is, leaves nothing to add to the map: `live_work`
+    moves a listed one, and an unlisted one still says this subagent is on it and not
+    on its parent's. A label's number moves nothing here either, since `_states` has
+    moved every listed item a label names; it only places the subagent.
     """
 
     asked = {
@@ -393,26 +445,35 @@ def _lower_signs(
         if seen.unwritten and states[session]["state"] == WORKING
     }
     if not asked:
-        return set()
+        return _LowerSigns(set(), {})
     holds: dict[str, set[str]] = {session: set() for session in asked}
     for row in conn.execute(_HOLDS, (calls.CONFIRMED, json.dumps(sorted(asked)))):
         holds[str(row["session_id"])].add(str(row["work_item_id"]))
-    on_a_step: set[tuple[str, str]] = set()
-    for holder, item in ladder.held_steps(conn).items():
+    on_a_step: dict[tuple[str, str], str] = {}
+    held = ladder.held_steps(conn) if held_steps is None else held_steps
+    for holder, item in held.items():
         ids = calls.holder_ids(holder)
         if ids is not None and ids[0] in holds:
             holds[ids[0]].add(item)
             if ids[1] is not None:
-                on_a_step.add((ids[0], ids[1]))
-    found: set[str] = set()
+                on_a_step[(ids[0], ids[1])] = item
+    found = _LowerSigns(set(), {})
     for session, unwritten in asked.items():
         for agent, known in unwritten.items():
-            if (session, agent) in on_a_step:
+            step = on_a_step.get((session, agent))
+            if step is not None:
+                found.placed[(session, agent)] = step
                 continue
             if known.packet_item is not None:
-                found.add(known.packet_item)
-            elif ladder.first_named_item(conn, known.label) is None and len(holds[session]) == 1:
-                found |= holds[session]
+                found.moved.add(known.packet_item)
+                found.placed[(session, agent)] = known.packet_item
+                continue
+            named = ladder.first_named_item(conn, known.label)
+            if named is not None:
+                found.placed[(session, agent)] = named
+            elif len(holds[session]) == 1:
+                found.moved.update(holds[session])
+                found.placed[(session, agent)] = next(iter(holds[session]))
     return found
 
 
@@ -431,8 +492,31 @@ def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, d
     """
 
     listed = list(items)
-    if not listed or not _holds_everything(conn):
+    if not listed:
         return {}
+    return placed(conn, listed).live
+
+
+def placed(
+    conn: sqlite3.Connection,
+    items: Iterable[Mapping],
+    *,
+    held_steps: Mapping[str, str] | None = None,
+) -> Placement:
+    """The map `live_work` gives, with where each live subagent stands and who is at work.
+
+    One read for both: the map is the graph's, unchanged, and the rest is what the
+    live-work frame counts. A subagent stands where `ladder` places it: the item of
+    its latest write since it last started, else an open step it holds, the item its
+    packet names first, the first item its label names, or its session's one hold.
+
+    `held_steps` is `ladder.held_steps` as the caller already read it, by holder,
+    for a caller whose items are every open item: it saves the read of them all.
+    """
+
+    listed = list(items)
+    if not _holds_everything(conn):
+        return Placement({})
     order = [str(item["work_item_id"]) for item in listed]
     identities = json.dumps(order)
     behind = _behind(conn, listed, identities)
@@ -457,9 +541,26 @@ def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, d
         if states[session]["state"] == WORKING:
             for identity in seen.items & mapped:
                 found[identity] = {"state": WORKING}
-    for identity in _lower_signs(conn, states, seen_on) & mapped:
+    lower = _lower_signs(conn, states, seen_on, held_steps)
+    for identity in lower.moved & mapped:
         found[identity] = {"state": WORKING}
     for row in conn.execute(_ATTEMPTS, (identities,)):
         found[str(row["work_item_id"])] = {"state": WORKING}
     # In the items' order, so an unchanged map is an unchanged frame of the stream.
-    return {identity: found[identity] for identity in order if identity in found}
+    live = {identity: found[identity] for identity in order if identity in found}
+    agents: dict[str, int] = {}
+    at_work: dict[str, AtWork] = {}
+    for session, seen in seen_on.items():
+        if states[session]["state"] != WORKING:
+            continue
+        standing = dict(seen.last_written)
+        for agent in seen.unwritten:
+            item = lower.placed.get((session, agent))
+            if item is not None:
+                standing[agent] = item
+        for item in standing.values():
+            agents[item] = agents.get(item, 0) + 1
+        held = {identity for identity, holders in behind.items() if session in holders}
+        work = frozenset(seen.items | held | set(standing.values()))
+        at_work[session] = AtWork(work, len(seen.agents))
+    return Placement(live, agents, at_work)
