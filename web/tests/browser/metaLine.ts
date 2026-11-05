@@ -14,9 +14,11 @@ export type DatePlace = 'first line' | 'own line'
  * Who wrote an entry and when, beside a name too long to share one line with the time. The
  * time stands at the end of the name's first line while the name keeps at least
  * `NAME_MIN_CH` there, or as much as the whole name takes if that is less; with less room
- * it takes a line of its own under the name, at its end, and the name the whole width. In
- * either place the name breaks inside a word only where that word does not fit its line.
- * A name squeezed into what the time left over once stood a word or two to a line.
+ * it takes a line of its own under the name, starting where the name starts, and the name
+ * the whole width. In either place the name breaks inside a word only where that word does
+ * not fit its line. A name squeezed into what the time left over once stood a word or two to
+ * a line, and a time on its own line held to the end of the words stood in the middle of an
+ * entry's head, under nothing, wherever icons took the rest of that line.
  */
 export async function expectDateHeld(meta: Locator, where: string): Promise<DatePlace> {
   const line = await meta.evaluate((root, minCh) => {
@@ -55,7 +57,10 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
       nameWidth: whose.reduce((sum, rect) => sum + rect.width, 0),
       nameTop: whose[0]?.top ?? Number.NaN,
       nameBottom: Math.max(...whose.map((rect) => rect.bottom)),
+      left: box.left,
+      nameLeft: Math.min(...whose.map((rect) => rect.left)),
       right: box.right,
+      whenLeft: whenBox.left,
       whenRight: whenBox.right,
       whenTop: whenBox.top,
       whenWidth: whenBox.width,
@@ -80,6 +85,7 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
     expect(line.whoWidth, `${where}: the name's room beside the date`).toBeGreaterThanOrEqual(
       owed - 1,
     )
+    expect(Math.abs(line.whenRight - line.right), `${where}: the date's end`).toBeLessThanOrEqual(1)
   } else {
     expect(line.whenTop, `${where}: the date under the name`).toBeGreaterThanOrEqual(
       line.nameBottom - 1,
@@ -87,8 +93,9 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
     expect(line.whoWidth, `${where}: the name's room above the date`).toBeGreaterThanOrEqual(
       Math.min(line.width, line.nameWidth) - 1,
     )
+    expect(Math.abs(line.whenLeft - line.left), `${where}: the date's start`).toBeLessThanOrEqual(1)
+    expect(Math.abs(line.nameLeft - line.left), `${where}: the name's start`).toBeLessThanOrEqual(1)
   }
-  expect(Math.abs(line.whenRight - line.right), `${where}: the date's end`).toBeLessThanOrEqual(1)
   expect(
     line.broken.filter(({ width }) => width <= line.whoWidth),
     `${where}: words broken that fit the name's line`,

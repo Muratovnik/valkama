@@ -70,3 +70,29 @@ for (const locale of ['en', 'ru'] as const) {
     expect(await expectDateHeld(meta, `${locale} at 1500`)).toBe('first line')
   })
 }
+
+/**
+ * The asking agent's short name over an answered question on a phone, in Russian, whose time
+ * is the longest: the icons to change the answer and to reply take the end of the line, so the
+ * time takes its own line, and it starts where the name does rather than standing in the middle
+ * of the head under nothing.
+ */
+test('ru: beside two icons at 390 the time takes its own line where the name starts', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+  await page.setViewportSize({ width: 390, height: 900 })
+  const { card } = await openQuestion(page, [
+    asked({
+      author: 'asking-agent',
+      status: 'answered',
+      answers: { route: 'move' },
+      answered_by: 'worker-agent',
+      by_person: false,
+      resolved_at: '2026-10-24T12:00:00Z',
+    }),
+  ])
+  await expect(card.getByRole('button', { name: 'Изменить ответ', exact: true })).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Ответить', exact: true })).toBeVisible()
+  expect(await expectDateHeld(card.locator('.request-meta'), 'ru at 390')).toBe('own line')
+})

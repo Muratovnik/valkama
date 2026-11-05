@@ -176,6 +176,11 @@ checkouts are therefore distinguishable even at the same version.
   chosen with the keys does, instead of sending the next Tab to the top of the page. In the
   filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
+- **An entry's time stands under its author on a phone, not in the middle of the line.**
+  Where a question's or a comment's icons took the end of its head, the time that no longer
+  fitted beside the name dropped to a line of its own and kept to the end of the words,
+  which is where the icons begin, so it stood mid-row under nothing. On its own line the
+  time now starts where the name starts; beside the name it still ends the line.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
