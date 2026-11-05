@@ -1449,6 +1449,7 @@ def serve_main(
         daemon=True,
     ).start()
     pulse = housekeeping.start_pulse(lambda line: print(line, file=sys.stderr))  # noqa: T201
+    usage = housekeeping.start_usage(lambda line: print(line, file=sys.stderr))  # noqa: T201
     # Handler reads only this immutable startup capture. The mutable dist tree
     # can be rebuilt for the next process without changing this listener.
     server.runtime_snapshot = runtime_snapshot
@@ -1463,4 +1464,5 @@ def serve_main(
         server.serve_forever()
     finally:
         pulse.set()
+        usage.set()
         server.server_close()

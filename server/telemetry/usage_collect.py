@@ -1,0 +1,344 @@
+"""Reading transcripts into usage rows, a bounded amount at a time, in the background.
+
+One pass takes what `usage_targets` finds and reads what is new. Sessions still open come
+first, so a live item's numbers stay fresh while history fills in behind them, and it
+stops starting anything when `PASS_SECONDS` is spent; the rest is the next pass's. Nothing
+here runs on a hook's path, and what a hook writes is only read.
+
+How it stays exact across restarts: the place a run was read to and everything the clock
+needs to go on are one row, updated in the transaction that writes the segments, and the
+update names the offset it read from. So a process dying between two chunks loses
+nothing, and a second listener on the same store loses the race and writes nothing.
+Reading and parsing happen outside the transaction, so it holds the write lock only for
+its few rows, and a hook waiting on it gives up after a second.
+
+Only ids, times, counters and an item id are kept. A file that is gone or got shorter
+marks its run and costs the pass nothing.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from .. import transcripts
+from ..planning import agents, calls, ladder
+from . import liveness
+from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT, Clock
+from .usage_ledger import SELECT_PROVISIONAL, Fallback, Ledger, moment, row_from, stamp
+from .usage_steps import Step, claude_step, codex_step, worth_parsing
+from .usage_targets import CLAUDE, CODEX, Finder, Target
+
+#: How long one pass may keep starting work. The server has more to do than this: a
+#: second of parsing in six is what its other threads can spare, and the whole history
+#: of a busy machine, seven gigabytes at 200 MB/s, is minutes of that.
+PASS_SECONDS = 1.0
+#: How much of one file is read and committed at a time.
+CHUNK_BYTES = 8 * 1024 * 1024
+#: A longer line is skipped unread: every one measured is a request body nobody needs.
+_MOST_LINE_BYTES = 64 * 1024 * 1024
+
+
+@dataclass
+class _Pass:
+    """What one pass reads once."""
+
+    coverage: liveness.Coverage
+    deadline: float
+    steps: dict[str, str] | None = None
+    holds: dict[str, dict] = field(default_factory=dict)
+    backlog: bool = False
+    #: The sessions that had something new.
+    moved: set[str] = field(default_factory=set)
+
+
+def _read_lines(path: str, offset: int, limit: int) -> tuple[list[bytes], int, bool]:
+    """Whole lines from `offset`, about `limit` bytes of them; where they end; whether more."""
+
+    lines: list[bytes] = []
+    with open(path, "rb") as handle:
+        handle.seek(offset)
+        position = offset
+        while position - offset < limit:
+            line = handle.readline(_MOST_LINE_BYTES)
+            if not line:
+                return lines, position, False
+            if line.endswith(b"\n"):
+                lines.append(line)
+                position += len(line)
+            elif len(line) == _MOST_LINE_BYTES:
+                while line and not line.endswith(b"\n"):
+                    position += len(line)
+                    line = handle.readline(_MOST_LINE_BYTES)
+                position += len(line)
+            else:
+                # The client is still writing this one, or it fell writing it.
+                return lines, position, False
+    return lines, position, True
+
+
+class Collector:
+    """The reader of one store, and what it remembers between its passes."""
+
+    def __init__(self, conn: sqlite3.Connection, store_path: str) -> None:
+        conn.row_factory = sqlite3.Row
+        self.conn = conn
+        self.store_path = store_path
+        self.finder = Finder(conn, transcripts.directory(store_path))
+
+    def run_pass(self, report: Callable[[str], None], seconds: float = PASS_SECONDS) -> bool:
+        """Read what is new, for about `seconds`; whether anything was left for the next pass."""
+
+        work = _Pass(
+            liveness.Coverage(liveness.intervals(self.store_path)), time.monotonic() + seconds
+        )
+        for target in self.finder.targets(work.moved):
+            if time.monotonic() >= work.deadline:
+                return True
+            try:
+                self._read(target, work)
+            except OSError:
+                self._mark(target, "unreadable")
+            except Exception as error:  # noqa: BLE001 -- one run must not cost the others
+                report(f"usage reader skipped a run: {type(error).__name__}")
+        return work.backlog
+
+    # -- reading one ----------------------------------------------------------
+
+    def _run(self, target: Target, path: str) -> sqlite3.Row:
+        """This run's row. Only a new row or a new path writes: most looks find nothing new."""
+
+        conn = self.conn
+        select = (
+            "SELECT * FROM usage_runs WHERE session_id = ? AND agent_id = ?",
+            (target.session, target.agent),
+        )
+        found = conn.execute(*select).fetchone()
+        if found is not None and found["path"] == path:
+            return found
+        conn.execute(
+            "INSERT INTO usage_runs(session_id, agent_id, client, path) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(session_id, agent_id) DO UPDATE SET path = excluded.path",
+            (target.session, target.agent, target.client, path),
+        )
+        return conn.execute(*select).fetchone()
+
+    def _mark(self, target: Target, status: str) -> None:
+        """Say a run cannot be read now. Only a change is written."""
+
+        run = self._run(target, target.path or target.archive)
+        if run["status"] != status:
+            self.conn.execute("UPDATE usage_runs SET status = ? WHERE id = ?", (status, run["id"]))
+
+    def _read(self, target: Target, work: _Pass) -> None:
+        path = target.path if target.path and os.path.isfile(target.path) else target.archive
+        if not path or not os.path.isfile(path):
+            self._mark(target, "missing")
+            return
+        size = os.path.getsize(path)
+        run = self._run(target, path)
+        offset = int(run["read_offset"])
+        if size < offset:
+            self._mark(target, "truncated")
+            return
+        if size == offset:
+            if run["status"] != "reading":
+                self._mark(target, "reading")
+            return
+        work.moved.add(target.session)
+        while True:
+            if time.monotonic() >= work.deadline:
+                work.backlog = True
+                return
+            lines, reached, more = _read_lines(path, offset, CHUNK_BYTES)
+            if reached == offset:
+                return
+            run = self._run(target, path)
+            if int(run["read_offset"]) != offset or not self._apply(
+                run, target, lines, reached, work
+            ):
+                return
+            offset = reached
+            if not more:
+                return
+
+    def _apply(
+        self, run: sqlite3.Row, target: Target, lines: list[bytes], reached: int, work: _Pass
+    ) -> bool:
+        """Turn one chunk into rows and move the reading place, as one transaction."""
+
+        conn = self.conn
+        run_id = int(run["id"])
+        state = json.loads(run["state"])
+        packet = {"item": run["packet_item"]}
+        first = state.get("clock", {}).get("first")
+        ledger = Ledger(
+            [row_from(row) for row in conn.execute(SELECT_PROVISIONAL, (run_id,))],
+            state.get("ledger", {}),
+            work.coverage,
+            lambda number: (
+                conn.execute(
+                    "SELECT 1 FROM usage_requests WHERE run_id = ? AND request = ?",
+                    (run_id, number),
+                ).fetchone()
+                is not None
+            ),
+            self._fallback(target, packet, work),
+        )
+        clock = Clock(state.get("clock", {}), work.coverage, ledger, self._keeps(target))
+        steps = self._steps(lines, target, state)
+        events = self._events(target, int(run["events_after"]))
+        cursor, after = 0, int(run["events_after"])
+        for step in steps:
+            if step.packet and target.agent and not state.get("packet_read"):
+                state["packet_read"] = True
+                packet["item"] = ladder.first_named_item(conn, step.packet)
+            step.packet = None
+            while cursor < len(events) and events[cursor][0] <= step.at:
+                self._mark_event(clock, events[cursor])
+                after = events[cursor][1]
+                cursor += 1
+            clock.feed(step)
+        if clock.high is not None:
+            ledger.retry_fallback(clock.high)
+        state["clock"], state["ledger"] = clock.state(), ledger.memo()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            moved = conn.execute(
+                "UPDATE usage_runs SET read_offset = ?, events_after = ?, state = ?, status = ?,"
+                " packet_item = COALESCE(?, packet_item), human_seconds = ?,"
+                " subagent_seconds = ?, external_seconds = ?, gap_seconds = ?, first_at = ?,"
+                " last_at = ?, read_at = ? WHERE id = ? AND read_offset = ?",
+                (
+                    reached,
+                    after,
+                    json.dumps(state, separators=(",", ":")),
+                    "reading",
+                    packet["item"],
+                    clock.left_out[HUMAN],
+                    clock.left_out[SUBAGENT],
+                    clock.left_out[EXTERNAL],
+                    clock.left_out[GAP],
+                    stamp(clock.first) if clock.first is not None else first,
+                    stamp(clock.high) if clock.high is not None else None,
+                    stamp(time.time()),
+                    run_id,
+                    run["read_offset"],
+                ),
+            ).rowcount
+            if moved != 1:
+                conn.execute("ROLLBACK")
+                return False
+            ledger.flush(conn, run_id, target.session, target.agent)
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        return True
+
+    def _steps(self, lines: list[bytes], target: Target, state: dict) -> list[Step]:
+        steps: list[Step] = []
+        own = target.session if not target.agent else None
+        memo = state.setdefault("codex", {}) if target.client == CODEX else {}
+        for line in lines:
+            if not worth_parsing(line):
+                continue
+            try:
+                row = json.loads(line)
+            except (ValueError, RecursionError):
+                continue
+            if not isinstance(row, dict):
+                continue
+            step = claude_step(row, own) if target.client == CLAUDE else codex_step(row, memo)
+            if step is not None:
+                steps.append(step)
+        return steps
+
+    def _events(self, target: Target, after: int) -> list[tuple[float, int, str, str | None]]:
+        """What the store knows of this run since last time: writes and permission requests.
+
+        A Codex child thread reports under its own id as its session, since no hook names
+        it as a subagent.
+        """
+
+        session, agent = (
+            (target.agent, "")
+            if target.client == CODEX and target.agent
+            else (target.session, target.agent)
+        )
+        return [
+            (moment(str(row["at"])), int(row["id"]), str(row["kind"]), row["work_item_id"])
+            for row in self.conn.execute(
+                "SELECT id, kind, work_item_id, COALESCE(occurred_at, received_at) AS at"
+                " FROM execution_events WHERE session_id = ? AND id > ?"
+                " AND COALESCE(agent_id, '') = ? AND ((kind = ? AND identity_state = ?"
+                " AND work_item_id IS NOT NULL) OR kind = 'attention') ORDER BY id",
+                (session, after, agent, calls.KIND, calls.CONFIRMED),
+            )
+        ]
+
+    @staticmethod
+    def _mark_event(clock: Clock, event: tuple[float, int, str, str | None]) -> None:
+        at, _identity, kind, item = event
+        if kind == calls.KIND and item is not None:
+            clock.mark_write(at, item)
+        elif kind == "attention":
+            clock.mark_attention(at)
+
+    # -- what places a stretch of work ----------------------------------------
+
+    def _holds_of(self, session: str, work: _Pass) -> dict:
+        if session not in work.holds:
+            work.holds[session] = agents.session_holds(self.conn, session)
+        return work.holds[session]
+
+    def _fallback(self, target: Target, packet: dict, work: _Pass) -> Fallback:
+        """What a turn with no write goes to, from the signals under the writes."""
+
+        session = target.session
+
+        def single_hold(at: float) -> tuple[str | None, str | None]:
+            moment_text = stamp(at)
+            held = agents.single_hold(self._holds_of(session, work), moment_text)
+            return (held, ladder.SINGLE_HOLD) if held is not None else (None, None)
+
+        if not target.agent:
+            return single_hold
+
+        def for_agent(at: float) -> tuple[str | None, str | None]:
+            if work.steps is None:
+                work.steps = ladder.held_steps(self.conn)
+            holder = calls.holder_label(target.client, session, target.agent)
+            held = work.steps.get(holder)
+            if held is not None:
+                return held, ladder.HELD_STEP
+            if packet["item"] is not None:
+                return str(packet["item"]), ladder.PACKET_NUMBER
+            row = self.conn.execute(
+                "SELECT label FROM sessions WHERE parent_session_id = ? AND agent_id = ?",
+                (session, target.agent),
+            ).fetchone()
+            named = ladder.first_named_item(self.conn, str(row[0] or "")) if row else None
+            return (named, ladder.LABEL_NUMBER) if named is not None else single_hold(at)
+
+        return for_agent
+
+    def _keeps(self, target: Target) -> Callable[[str], bool]:
+        """Whether a subagent this run started keeps a transcript of its own."""
+
+        known: dict[str, bool] = {}
+
+        def keeps(agent: str) -> bool:
+            if target.client != CLAUDE or not target.parent:
+                return True
+            if agent not in known:
+                path = agents.agent_transcript(target.parent, target.session, agent)
+                known[agent] = bool(path) and os.path.isfile(path)
+            return known[agent]
+
+        return keeps

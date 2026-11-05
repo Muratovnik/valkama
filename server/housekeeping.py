@@ -33,6 +33,11 @@ which a later sweep removes, and the copy stays owed.
 the store rather than in it, until the surface that started it ends. Both surfaces
 start it: an on-demand listener loads no server until its first connection, and an
 agent at work has an MCP process, so one of them runs whenever work can be observed.
+
+`start_usage` reads transcripts into usage rows (`telemetry.usage_collect`), on its own
+connection in the background, a bounded amount per pass. Only the listener runs it: it
+alone answers the reads of those rows, and anything an MCP process would do here
+another one would be doing too.
 """
 
 from __future__ import annotations
@@ -48,7 +53,7 @@ from dataclasses import dataclass, field
 from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
-from .telemetry import liveness
+from .telemetry import liveness, usage_collect
 
 #: The whole budget of what runs before the first request. A client gives an
 #: MCP server some seconds to start (Codex ten by default), and interpreter
@@ -61,6 +66,15 @@ START_UP_BUSY_MS = 250
 SWEEP_THREAD = "valkama-transcript-sweep"
 #: The tick's thread, by name.
 PULSE_THREAD = "valkama-liveness-tick"
+#: The usage reader's thread, by name.
+USAGE_THREAD = "valkama-usage-reader"
+#: The usage reader waits this long before its first pass, so a server loading for a
+#: waiting connection answers it first.
+USAGE_START_SECONDS = 5.0
+#: Between its passes: a live item's numbers are at most about this old.
+USAGE_PAUSE_SECONDS = 60.0
+#: Between its passes while history remains, which keeps it to a small share of the time.
+USAGE_BACKLOG_PAUSE_SECONDS = 5.0
 
 
 @dataclass
@@ -224,6 +238,49 @@ def _pulse(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
                 said = text
         if stop.wait(liveness.TICK_SECONDS):
             return
+
+
+def start_usage(report: Callable[[str], None]) -> threading.Event:
+    """Read transcripts into usage rows in the background until the event this returns is set."""
+
+    stop = threading.Event()
+    thread = threading.Thread(
+        target=_usage, args=(store.db_path(), stop, report), name=USAGE_THREAD, daemon=True
+    )
+    thread.start()
+    return stop
+
+
+def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> None:
+    """Pass after pass. A store that cannot be opened or written now is tried again later."""
+
+    if stop.wait(USAGE_START_SECONDS):
+        return
+    conn: sqlite3.Connection | None = None
+    collector: usage_collect.Collector | None = None
+    said = ""
+    try:
+        while True:
+            backlog = False
+            try:
+                if conn is None or collector is None:
+                    conn = ingest.open_light(path, store.STORE_SCHEMA_VERSION)
+                    # Nobody waits for this thread, so it may wait for a writer.
+                    conn.execute("PRAGMA busy_timeout = 5000")
+                    collector = usage_collect.Collector(conn, path)
+                backlog = collector.run_pass(report)
+                said = ""
+            except (ingest.UnwritableError, sqlite3.Error, OSError) as error:
+                text = _describe(error)
+                if text != said:
+                    report(f"usage reader did not finish a pass: {text}")
+                    said = text
+            pause = USAGE_BACKLOG_PAUSE_SECONDS if backlog else USAGE_PAUSE_SECONDS
+            if stop.wait(pause):
+                return
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _sweep(path: str, root: str, report: Callable[[str], None]) -> None:

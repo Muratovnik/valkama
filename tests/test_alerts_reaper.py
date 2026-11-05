@@ -276,6 +276,7 @@ class WhichListenerTests(ReaperHarness):
             mock.patch.object(http_surface.housekeeping, "start_up", return_value=[]),
             mock.patch.object(http_surface.housekeeping, "start_sweep"),
             mock.patch.object(http_surface.housekeeping, "start_pulse"),
+            mock.patch.object(http_surface.housekeeping, "start_usage"),
             contextlib.redirect_stderr(io.StringIO()),
         ):
             http_surface.serve_main(port)

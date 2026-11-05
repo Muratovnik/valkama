@@ -63,7 +63,7 @@ def _stamp(moment: str) -> str | None:
     return f"{moment}Z" if moment else None
 
 
-def _agent_transcript(parent_transcript: str, session_id: str, agent_id: str) -> str:
+def agent_transcript(parent_transcript: str, session_id: str, agent_id: str) -> str:
     """Where Claude Code keeps one subagent's transcript; empty when there is none to name.
 
     The subagent's file sits in a folder named for the parent session, beside the
@@ -98,7 +98,7 @@ def transcript_moment(parent_transcript: str, session_id: str, agent_id: str) ->
     Empty when there is no such file to read, which says nothing about the agent.
     """
 
-    return _file_moment(_agent_transcript(parent_transcript, session_id, agent_id))
+    return _file_moment(agent_transcript(parent_transcript, session_id, agent_id))
 
 
 def _holds_activity(conn: sqlite3.Connection) -> bool:
@@ -170,8 +170,8 @@ def _holds_of_item(conn: sqlite3.Connection, work_item_id: str) -> list[_Hold]:
     return _holds(rows).get(work_item_id, [])
 
 
-def _holds_of_session(conn: sqlite3.Connection, session_id: str) -> list[_Hold]:
-    """Every hold of one session, over every item it ever wrote to."""
+def session_holds(conn: sqlite3.Connection, session_id: str) -> dict[str, list[_Hold]]:
+    """Every hold of one session by item, over every item it ever wrote to."""
 
     rows = conn.execute(
         "SELECT e.work_item_id, e.action, e.created_at, c.identity_state, c.session_id, c.agent_id"
@@ -182,9 +182,21 @@ def _holds_of_session(conn: sqlite3.Connection, session_id: str) -> list[_Hold]:
         " ORDER BY e.work_item_id, e.id",
         (calls.KIND, session_id, calls.CONFIRMED),
     )
-    return [
-        hold for found in _holds(rows).values() for hold in found if hold.session_id == session_id
+    held: dict[str, list[_Hold]] = {}
+    for item, found in _holds(rows).items():
+        own = [hold for hold in found if hold.session_id == session_id]
+        if own:
+            held[item] = own
+    return held
+
+
+def single_hold(held: Mapping[str, list[_Hold]], moment: str) -> str | None:
+    """The one item these holds cover at a moment, or None for none or for several."""
+
+    covering = [
+        item for item, holds in held.items() if any(h.covers(_moment(moment)) for h in holds)
     ]
+    return covering[0] if len(covering) == 1 else None
 
 
 @dataclass
@@ -338,7 +350,9 @@ def _on_item(
             if not any(hold.covers(agent.started_at) for hold in holds):
                 continue
             if everything is None:
-                everything = _holds_of_session(conn, session_id)
+                everything = [
+                    hold for held in session_holds(conn, session_id).values() for hold in held
+                ]
             agent.link = CLAIM
             agent.coordinator_items = sum(hold.covers(agent.started_at) for hold in everything)
             chosen[key] = agent

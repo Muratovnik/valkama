@@ -140,6 +140,19 @@ class Coverage:
             parts.extend(self._observed(cursor, end))
         return parts, total - sum(part[1] - part[0] for part in parts)
 
+    def holes_within(self, start: float, end: float) -> float:
+        """How much of a stretch lies in holes. Before the first tick none is known of."""
+
+        if self._first is None or end <= self._first:
+            return 0.0
+        start = max(start, self._first)
+        return (end - start) - sum(part[1] - part[0] for part in self._observed(start, end))
+
+    def quality_at(self, moment: float) -> str:
+        """Whether a tick can speak for this moment."""
+
+        return OBSERVED if self._first is not None and moment >= self._first else ESTIMATED
+
     def _observed(self, start: float, end: float) -> list[tuple[float, float, str]]:
         if end - start <= BREAK_SECONDS:
             return [(start, end, OBSERVED)]
