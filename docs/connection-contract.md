@@ -104,6 +104,11 @@ landed under; `resolve_work_item_comment` answers with `work_item`,
 `comment_id` and `resolution`. Both are described in
 [Threads and the resolved mark](#threads-and-the-resolved-mark).
 
+`comment_work_item`, `report_work_item` and `set_work_item_summary` also answer
+with `list_request_id` when the call wrote a [list](#a-list-on-a-comment), and
+`comment_work_item` and `report_work_item` with `mentions` when the call named
+other items (see [Mentions](#mentions)).
+
 Every tool that writes to a work item and leaves it standing -- all of the above,
 `claim_ready_work_item`, `link_work_items`, `attach_work_item_ref`,
 `comment_work_item`, `report_work_item`, `select_work_item_summary` and the
@@ -313,6 +318,9 @@ write and a write Valkama makes itself are not listed. `client` and
 counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
+
+The read also carries `mentions`, the comments on other items that named this
+one; see [Mentions](#mentions).
 
 The HTTP read `GET /api/planning/work-item` answers with the complete record and
 no `sessions`, as before. It takes the same cut as opt-in parameters:
@@ -539,6 +547,10 @@ and takes the parameter out of the address, so a reload or Back does not open it
 after it was closed. A window already showing a current page opens the panel over what
 it shows and does not move, so a draft stays where it is.
 
+The panel holds the questions that wait for a person. A
+[list on a comment](#a-list-on-a-comment) waits for nobody, so the panel neither
+shows nor counts one.
+
 ### The card's waiting question
 
 `/open/<reference>?reveal=question` leads to the card as the plain address does, under the
@@ -554,6 +566,9 @@ keyboard on its first field, whichever section the card showed. A question answe
 by then leaves the card simply opened. A window already on this card obeys though its address
 does not change, and a window on another card asks about a draft first and drops the order if
 the draft is kept.
+
+A [list on a comment](#a-list-on-a-comment) is not a waiting question: the order never
+leads to one, and a card whose only pending question is a list opens simply.
 
 ### The `valkama:` scheme
 
@@ -773,6 +788,116 @@ An item's read adds `work_item_id`, `reference`, `title` and `scope`. A session'
 
 The tools an agent calls do not carry these numbers: they would cost it context.
 
+### The live-work frame
+
+One small read says where work is going on now, across every space of the primary
+store. The interface's side panel draws it, and the picker of
+[mentions](#mentions) offers its rows first. It reads every open item and every
+[pinned](#pins) one in one query and gives each the state a graph moves by
+(`working`, `held`, `waiting` or `quiet`). It carries no history and no time that
+moves, so a store in which nothing changed gives the same frame. Attached stores
+are not read.
+
+```json
+{"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project", "unplaced": 2,
+   "rows": [
+     {"reference": "MAIN-4", "title": "Structured answers", "kind": "epic", "parent": null,
+      "state": null, "agents": 0, "quiet_since": null, "pinned": false,
+      "state_name": "Dev", "is_terminal": false},
+     {"reference": "MAIN-12", "title": "Answer a review in one form", "kind": "task",
+      "parent": "MAIN-4", "state": "working", "agents": 2, "quiet_since": null,
+      "pinned": false, "state_name": "Dev", "is_terminal": false},
+     {"reference": "MAIN-13", "title": "Tell other work", "kind": "task",
+      "parent": "MAIN-4", "state": "quiet", "agents": 0,
+      "quiet_since": "2026-11-03T18:02:11Z", "pinned": false,
+      "state_name": "Dev", "is_terminal": false},
+     {"reference": "MAIN-7", "title": "Old migration", "kind": "task", "parent": null,
+      "state": null, "agents": 0, "quiet_since": null, "pinned": true,
+      "state_name": "Done", "is_terminal": true},
+     {"reference": "MAIN-20", "title": "Notes for the owner", "kind": "task",
+      "parent": null, "state": null, "agents": 0, "quiet_since": null, "pinned": true,
+      "state_name": "Backlog", "is_terminal": false}]}],
+ "elsewhere": 0}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `key`, `name`, `project_id` | the space, and the project that binds it; `project_id` is `null` when none does |
+| `unplaced` | how many agents are at work in this space on no row: a session at work none of whose work is a row counts once, and each of its live subagents once more |
+| `rows` | the space's rows, in the order they are drawn |
+| `elsewhere` | the same count for sessions at work whose folder lies under no space |
+| `reference`, `title`, `kind` | the item |
+| `parent` | the reference of the item's parent, which is then a row of the same space, or `null` |
+| `state` | the live state: `working`, `held`, `waiting`, `quiet`, or `null` for a row with no live work |
+| `agents` | the live subagents placed on this item, by the order usage counts by (see [How much work an item took](#how-much-work-an-item-took)), each on one item; a session's own run is not counted, since `state` already says it |
+| `quiet_since` | for a `quiet` row, when its session last gave a sign of life; `null` otherwise. It does not move while the row stays quiet |
+| `pinned` | whether a person pinned the item |
+| `state_name`, `is_terminal` | the item's workflow state, as a link names the state of its other end |
+
+**Which rows.** An open item whose state is `working`, `held`, `waiting` or
+`quiet`; a pinned item, open or closed, whatever its state; and every parent of
+those, so that `parent` always names a row. A `quiet` row is one whose session has
+been silent for more than a day; it is shown, muted, so a claim nobody works on is
+seen. Each item is one row, so an epic that is itself at work is its group's
+heading with its own state. A space with no rows and nothing unplaced is not in
+the frame.
+
+**Order.** Spaces by key. In a space, a row that is another row's parent is a
+group: the groups come first, in the [order of work](#the-order-of-work), each
+followed by its own rows, and then the rows with neither a parent nor rows of
+their own. Rows that are not groups stand by number, so a change of state does
+not move a row, and a pinned row stands at its number among the others. The frame
+is already in order; a client does not sort it.
+
+**`unplaced` and `elsewhere`.** A session's space is the space bound to the
+project whose root is the longest one that contains the session's
+`opened_folder`, or else its `cwd`. A session whose folder lies under no root, or
+under a project that binds no space, counts in `elsewhere`. This labels a counter
+and nothing more: nothing is written, nothing is routed, and no binding is ever
+inferred from a folder.
+
+**How it arrives.** There is no route to poll. A stream opened with
+`GET /api/events?view=planning`, with or without an exact scope, carries the frame
+as an event of its own beside the space's read model, and `view=live` is a stream
+that carries only that event:
+
+```text
+event: live
+data: {"spaces": [...], "elsewhere": 0}
+```
+
+A stream sends the frame when it opens and again only when the frame differs from
+the one it sent last. The frame is read from the primary store, not from the store
+of the space the stream follows. It is computed at most once every 2 seconds and at
+the stream's 60-second reread; a change that lands sooner is computed when the 2
+seconds have passed. `view=live` takes no scope: with one it is refused as any view
+other than `planning` is. A page whose space stream is open takes the frame from
+that stream, and a page with none opens `view=live`, so a tab holds one stream.
+
+### Pins
+
+A person pins an item to keep it in the side panel whether or not anyone is
+working on it. Pins live in the store, one per item, so the browser and the desktop
+app show the same ones. Only the interface pins: no tool does.
+
+`POST /api/planning/work-item/pin` takes the browser's credential and
+`{"id": "MAIN-20", "pinned": true}`, or `"pinned": false` to remove the pin, and
+answers with the [live-work frame](#the-live-work-frame) as it now stands. `id` is
+a reference or a work item id of an item in the primary store; another is
+`not_found` (404), and a `pinned` that is not a boolean is `invalid_request` (400).
+A pin that is already as asked writes nothing.
+
+A pin is the person's own list and not a change to the item: it writes no history
+event, changes no revision and takes no `expected_revision`. The call is recorded
+with its identity, as every write is, and it is never told to an agent: it is not
+in `from_person`, in a notice or in a wake.
+
+A pin outlives the item's close. A pinned closed item stays a row, with
+`is_terminal: true`, until a person removes the pin; reopening the item makes it an
+open row again. A merge gives the survivor the pins of the items merged into it, a
+deleted item takes its pin with it, and an export carries the pins as
+`planning.pins`, each `{"reference": "MAIN-20", "work_item_id": "…", "pinned_at": "…"}`.
+
 ### Several changes in one call
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
@@ -942,12 +1067,14 @@ What moves to the survivor:
   claims, so a step's holder finds it by the same id;
 - the discussion comments, including those bound to a step;
 - the requests, so a pending one goes on standing on the survivor and can be
-  answered there;
+  answered there; a [list](#a-list-on-a-comment) goes with the comment it stands
+  under, so the list of a report stays with the report on the merged item;
 - **since 2.5**, comments move by thread: a comment root moves with its replies
   and its resolved mark, a report's thread stays with the report on the merged
   item, and the replies under a question move with the question. `moved.comments`
   counts the rows that moved;
 - the refs, except one the survivor already has, which stays where it was;
+- the [pin](#pins), which the survivor keeps when it has one already;
 - the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
   `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
   same merge stays on the merged item, because moved it would tie the survivor
@@ -960,7 +1087,8 @@ and 1 link.", `next` "Continue in MAIN-12.", `why` the reason), loses its claim
 and closes in the first `cancelled` state its workflow reaches from where it
 stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
-history, its reports, its description, labels and parent. The
+history, the [mentions](#mentions) of it, its reports, its description, labels and
+parent. The
 survivor keeps its own state, holder, fields and parent; nothing is reopened or
 claimed.
 
@@ -1371,8 +1499,9 @@ person did since the item was made. The window keeps no state: an agent's write
 moves it by being written, a refused write is rolled back and moves nothing, and
 whichever agent writes next -- an orchestrator or its subagent -- is the one told,
 once. Valkama's own release of a lapsed claim and a write made outside any call
-are on neither side. An agent's write to another item -- the far end of a link --
-does not move this item's window. Order is the call rows' ids.
+are on neither side. An agent's write to another item -- the far end of a link, or
+a comment there that [mentions](#mentions) this one -- does not move this item's
+window. Order is the call rows' ids.
 
 **What is told.** Each event, oldest first:
 
@@ -1384,7 +1513,7 @@ does not move this item's window. Order is the call rows' ids.
 | `comment_id` | for `comment` and `report` |
 | `request_id` | for the question kinds |
 | `fields` | for `edited`: the fields it changed |
-| `text` | what it said, at most 300 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
+| `text` | what it said, at most 300 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, or a review's summary (see [Reading a question](#reading-a-question)), the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
 
 **Since 2.5**, four more kinds:
 
@@ -1393,18 +1522,33 @@ does not move this item's window. Order is the call rows' ids.
 | `reply` | a person replied in a thread; a new root is still told as `comment` | `comment_id`; `reply_to` or `reply_to_request`, the root; `text`, the reply |
 | `thread_resolved` | a person marked a root resolved | `comment_id`; `text`, the decision |
 | `thread_reopened` | a person removed the mark | `comment_id` |
-| `question_changed` | a person changed a given answer | `request_id`; `text`, the new answer and `was: …` the one it replaced, within the 300 characters |
+| `question_changed` | a person changed a given answer | `request_id`; `text`, [what changed](#the-difference-between-two-answers), within the 300 characters |
 
 ```json
 {"kind": "reply", "via": "interface", "at": "2026-11-03T10:12:00.000000Z",
  "comment_id": 57, "reply_to": 41, "text": "Agreed, take the second option."}
 {"kind": "question_changed", "via": "interface", "at": "2026-11-03T12:00:00.000000Z",
  "request_id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f",
- "text": "route: Threads; was: route: Flat"}
+ "text": "changed: route flat→threads"}
 ```
 
 All four count in the window and in the `person_spoke` guard as any act of a
 person does.
+
+One more kind is a person's words about this item written on another one:
+
+| `kind` | When | Also carries |
+| --- | --- | --- |
+| `mentioned` | a person named this item in the `mentions` of a comment on another item (see [Mentions](#mentions)) | `comment_id`; `from`, the reference of the item that comment stands on; `text`, the comment |
+
+```json
+{"kind": "mentioned", "via": "interface", "at": "2026-11-05T20:31:00.000000Z",
+ "comment_id": 61, "from": "MAIN-12", "text": "Decided to keep the old route; MAIN-14 can drop it."}
+```
+
+It counts in the window and in the `person_spoke` guard as the other kinds do. Another
+agent's mention is never one of these events: it is an agent's words, and it reaches
+the holders through the hook and the item's `mentions`, never through `from_person`.
 
 The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
 attaching a session and a recorded override are never told. A drag within a
@@ -1435,6 +1579,96 @@ judges each merged item before anything moves, because the merge moves its
 comments to the survivor: a merged item with a non-empty window refuses the
 merge with `person_spoke`, and `force` records it on that item once.
 
+### Mentions
+
+A number in a comment is a link and tells nobody: comments name other items all
+the time. To tell the work on another item, a comment names that item in
+`mentions`. The comment stays where it is written, and the item it names gets a
+record that points to it.
+
+**Writing.** `comment_work_item`, `report_work_item`, the HTTP write
+`POST /api/planning/work-item/comment`, the `comment` group of
+`apply_work_item_changes` and each comment where a batch writes several take
+`mentions`, a list of items by reference or work item id, on a root and on a reply
+alike. The text of the comment is not changed and is not read for references.
+
+```json
+{"id": "MAIN-12", "body": "Decided to keep the old route; MAIN-14 can drop it.",
+ "mentions": ["MAIN-14", "MAIN-15"]}
+```
+
+A call through the interface names at most 20 items, any other call at most 5, and
+a session mentions one item at most 3 times an hour. Refused before anything is
+written:
+
+| Case | Refusal |
+| --- | --- |
+| more items than the call may name | `invalid_request`: `mentions holds at most 5 items` (20 for the interface) |
+| an item named twice | `invalid_request`: `mentions names MAIN-14 twice` |
+| the comment's own item | `invalid_request`: `an item does not mention itself` |
+| an item that does not exist | `not_found` |
+| a fourth mention of one item within an hour by one session | `mention_limit`: `MAIN-14 was mentioned 3 times in the last hour by this session; write once there, or wait` |
+
+The hour counts the mentions of that item whose confirmed call names the same
+session, its subagents included. A call with no session, the interface's or an
+unconfirmed one, is not counted, and an unconfirmed call tells nobody either. A
+closed item can be mentioned: the record is written and nobody is told.
+
+**What is written.** Each item named gets one history event, `mentioned`, whose
+detail is the comment's id, under the call that wrote the comment. That call
+belongs to the comment's item, so a mention does not move the
+[window](#what-a-person-did-reaches-the-agent) of the item it names, as the far
+end of a link does not.
+
+**The answer** says who will hear, beside the comment's own keys:
+
+```json
+{"work_item": "MAIN-12", "comment_count": 10, "comment_id": 61,
+ "reply_to": null, "reply_to_request": null,
+ "mentions": [{"reference": "MAIN-14", "holders": ["claude (session 019a…)"]},
+              {"reference": "MAIN-15", "holders": [],
+               "told": "nobody yet: no holder, it stays on the item"}]}
+```
+
+`holders` are the holder of the item's claim and of each held step, as `claim_ref`
+and `claimed_by` name them. `told` is there only when they will not hear it:
+`nobody yet: no holder, it stays on the item`, `nobody: closed`, or `nobody: this
+call proved no session`. A batch's `applied.comment` carries the same `mentions`.
+
+**Reading.** Every comment, in every read, carries `mentions`, the references it
+named, `[]` when it named none. `get_work_item` carries `mentions`, the 5 newest
+comments that named this item, oldest first, and `mentions_total`; with
+`full: true` it carries all of them and no total. The HTTP item read carries the
+newest 50 and the total.
+
+```json
+{"comment_id": 61, "from": "MAIN-12", "at": "2026-11-05T20:31:00.000000Z",
+ "by_person": false, "author": "codex",
+ "quote": "Decided to keep the old route; MAIN-14 can drop it."}
+```
+
+`from` is the reference of the item the comment stands on now, and `quote` the
+first 300 characters of its body, or of a report's `done`, the last one `…` when
+cut. When that comment went with a
+deleted item, the record stays and both are `null`. `by_person` is read from the
+call, as on a comment. The card of the item named shows each record as a quiet line
+in its discussion, by time, leading to the comment; it is not a thread there, and
+an answer goes in the comment's own thread.
+
+**Who hears.** A person's mention is the person's act on the item named: it is a
+`mentioned` event in [`from_person`](#what-a-person-did-reaches-the-agent), counts
+in the `person_spoke` guard, and wakes an idle holder as any act of a person does.
+An agent's mention is never a person's, whatever `author` it signs: it is not in
+`from_person` and does not count in `person_spoke`. The holders hear it at their
+next tool call, in a block of the notice of its own, and it never wakes a session
+or continues a turn; who is told and when is in
+[the hook contract](hook-contract.md#who-is-told). With nobody holding the item,
+the record waits on it for whoever takes it next.
+
+**Merging.** A record stays where it was written: the mentions of a merged item
+stay on it and do not move to the survivor. A comment that moves in a merge keeps
+what it named, and its records then name the survivor in `from`.
+
 ### Questions and decisions
 
 `create_work_item_request` creates a persistent question or decision for one work
@@ -1444,15 +1678,106 @@ it is independent of the work item revision. Only one concurrent resolution can
 succeed. A closed task, ended bound execution or elapsed deadline prevents a
 late answer. Reading effective expiry does not write to an attached store.
 
-Fields have stable IDs and one of four types: `text`, `choice`, `multi_choice`
-or `boolean`. A required boolean can be answered `false`; omission is different.
-There is no implicit permission grant or automatic execution resume.
+Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,
+`boolean` or `verdict`. A required boolean can be answered `false`; omission is
+different. There is no implicit permission grant or automatic execution resume.
+
+A field is `{id, label, type, required, options}` and may add four keys:
+
+| Key | Value | Rule |
+| --- | --- | --- |
+| `description` | markdown of 1 to 8000 characters | on a field of any type: what the field asks, or the point it decides. The interface folds it as it folds an option's description |
+| `group` | text of 1 to 200 characters | the fields of one group stand together, and the interface draws them as one section under that heading |
+| `under` | `{field, option}` | the field is shown and answered only while the answer of `field` holds `option`; see below |
+| `recommended` | `accept`, `later` or `reject` | on a `verdict` only; a `choice` and a `multi_choice` recommend on their options |
+
+A question holds 1 to 40 fields, a field at most 20 options, and the fields of one
+question fit in 64 KiB as stored; a refusal names the limit. What a field or an
+option was not given it does not say on the way back, and a question written
+without the four keys is what it always was. The published schema of
+`create_work_item_request` names every key, so an agent reads them from the server
+whatever its skill says.
+
+**A verdict** is one line of a review: a point the person accepts, puts off or
+rejects. Its `options` is `[]`, its answer is `accept`, `later` or `reject`, and the
+interface names the three in the person's language. Like a `choice`, it takes an
+own variant in place of the verdict, and a comment.
+
+**A field under another** belongs to the answer of an earlier field, its parent:
+the steps of an accepted point, the way of doing it, the detail of one option. The
+parent is a `verdict`, `choice` or `multi_choice` field that stands earlier and is
+under nothing itself, so there is one level. `option` is `accept`, `later` or
+`reject` under a verdict, and one of the parent's option ids under a `choice` or a
+`multi_choice`. A parent holds it when that is its verdict, its chosen option, or
+one of its chosen options; an own variant holds none. The field stands in its
+parent's group: it leaves `group` out or repeats the parent's. A schema stays flat:
+a field under another is one more entry of `fields`, never nested in it.
+
+While its parent does not hold `option`, the field is hidden. An answer gives a
+hidden field nothing: no value, no own variant and no comment. A required field is
+required only while it is shown. The parent is never worked out from what is
+chosen under it: steps all left out under `accept` are an error to correct, not a
+third state of the verdict.
+
+Two points of a review, one with its steps and one with its way under `accept`:
+
+```json
+[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
+  "options": [], "group": "Checks", "recommended": "accept",
+  "description": "Fourteen refusals last week were false alarms."},
+ {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
+  "under": {"field": "p4", "option": "accept"},
+  "options": [{"id": "p4a", "label": "Mark the 14 refusals, then narrow the rule", "recommended": true},
+              {"id": "p4b", "label": "Check the claim against the file it names", "recommended": true},
+              {"id": "p4c", "label": "Skip the check on an intermediate stop"}]},
+ {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
+  "required": false, "options": [], "group": "Web code", "recommended": "accept"},
+ {"id": "p13-way", "label": "How", "type": "choice", "required": true,
+  "under": {"field": "p13", "option": "accept"},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true},
+              {"id": "css_file", "label": "Styles in CSS files"},
+              {"id": "split_first", "label": "Split the files first"}]}]
+```
+
+`recommended` is what the interface fills a draft from, and filling sends nothing.
+Choosing `accept` on a verdict with a field under it fills that field once, the
+first time: a `multi_choice` with its recommended options, or all of them when none
+is, and a `choice` with its recommended option, or nothing. "Accept recommended"
+gives every verdict still undecided its recommendation and leaves what the person
+already chose.
+
+Each refusal names the field and how to put it right, with `invalid_request` and
+nothing written:
+
+| Mistake | Refusal |
+| --- | --- |
+| options on a verdict | `field p1: a verdict takes no options; put steps or ways in a field with under: {field: p1, option: accept}` |
+| a parent no earlier field is | `field p4-steps: under names p4, which no earlier field has; a parent stands before its children` |
+| a parent of another type | `field p4-steps: under names p4, a text field; a parent is a verdict, choice or multi_choice field` |
+| an option the parent lacks | `field p4-steps: p4 is a verdict, so under.option is accept, later or reject`; `field web-detail: option x is not an option of areas` |
+| more than one level | `field x: under names y, which stands under z; one level: put it under z` |
+| another group than the parent's | `field p4-steps: a field under p4 stands in p4's group; leave group out` |
+| `recommended` on a field that is no verdict | `field p11: recommended on a field is for a verdict; in a choice put it on the option` |
+| a group split by another | `group Checks is split by Web code: fields of one group stand together` |
+| more than 40 fields | `fields must contain between 1 and 40 fields` |
+| a key a field does not take | `each field requires id, label, type, required and options and may add description, group, under and recommended` |
+
+A field without a group between two fields of one group splits it as well, and the
+refusal names that field: `group Checks is split by p7, which has no group: fields
+of one group stand together`. An answer is refused the same way:
+
+| Mistake | Refusal |
+| --- | --- |
+| a value, own variant or comment for a hidden field | `answer p4-steps stands under p4=accept, and p4 is later; leave it out` |
+| a required field left empty while it is shown | `answer p4-steps is required because p4 is accept; give an option or your own variant in own` |
+| a verdict that is none of the three | `answer p1 is accept, later or reject` |
+
+In the first, the parent reads as its answer: its verdict, its chosen option ids,
+`own variant`, or `unanswered`.
 
 An option is `{id, label, description?, recommended?}` and takes no other key.
 `description` is markdown of 1 to 8000 characters and `recommended` a boolean, true
-on at most one option of a `choice` and on any number of a `multi_choice`. What an
-option was not given it does not say on the way back. The fields of one question
-fit in 64 KiB as stored, and a refusal names the limit.
+on at most one option of a `choice` and on any number of a `multi_choice`.
 
 `answer_work_item_request` and `POST /api/modules/planning/request/answer` take
 `answers` and an optional `note` of at most 8000 characters. A comment over an open
@@ -1463,8 +1788,8 @@ question is not an answer, and neither is a reply in its thread.
 | Part | Shape | Meaning |
 | --- | --- | --- |
 | `answers` | `{field: value}` | the chosen option, options or text of a field |
-| `own` | `{field: text}`, at most 8000 characters each | the person's own variant of a `choice`, `multi_choice` or `boolean` field. It replaces the choice of a `choice` or `boolean` field, so that field takes one or the other, and stands beside the chosen options of a `multi_choice`. A `text` field has none: its text is already free |
-| `field_notes` | `{field: text}`, at most 2000 characters each | a comment on a field with options; refused on a `text` field, whose text is its own comment |
+| `own` | `{field: text}`, at most 8000 characters each | the person's own variant of a `choice`, `multi_choice`, `boolean` or `verdict` field. It replaces the choice of a `choice`, `boolean` or `verdict` field, so that field takes one or the other, and stands beside the chosen options of a `multi_choice`. A `text` field has none: its text is already free |
+| `field_notes` | `{field: text}`, at most 2000 characters each | a comment on any field but a `text` one, which is refused: its text is its own comment |
 | `note` | text, at most 8000 characters | a comment on the whole question |
 
 A required field is answered when it has a value or an own variant, and every
@@ -1485,6 +1810,19 @@ A question stays a request and writes no comment. The answer in force is kept in
  "_notes": {"route": "Threads serve the digest too"},
  "_note": "A comment on the whole question"}
 ```
+
+A review is answered just as flat. A verdict's value is its word, a field under
+another is one more key, and a point's comment and own variant are the field's:
+
+```json
+{"p1": "accept", "p12": "later", "p15": "reject",
+ "p4": "accept", "p4-steps": ["p4a", "p4c"],
+ "p13": "accept", "p13-way": "per_block",
+ "_notes": {"p15": "Frozen until spring"}, "_own": {"p9": "Labels only, no filtering"}}
+```
+
+So a comment on one point, an own variant, versions, search and export work on a
+review as on any question.
 
 Every read gives the parts apart, as `answers`, `own`, `field_notes` and `note`,
 with `note: null` when there is none. A
@@ -1519,6 +1857,51 @@ gets a changed answer as a new one. Refused, with nothing written:
 
 An answer without `change` is still given once: a second one is refused with
 `workflow_guard`. Who changed it is in `by_person` of each version.
+
+#### The difference between two answers
+
+A change is told and shown as what it changed, row by row: two whole answers of a
+review do not fit in one notice. One rule makes the difference, on the server for
+the text of `question_changed` and in the card for its previous answers, and the
+example below holds both to it.
+
+The difference compares the two answers field by field, in the order of the
+fields, and then the note on the whole question. Each part of a field that differs
+is one row, its value first, then its own variant, then its comment:
+
+| What differs | The row reads |
+| --- | --- |
+| the value of a `verdict`, `choice` or `boolean` | `p12 later→accept`, the ids or words as stored; no value on one side is `—`: `p17 —→accept`, `p13-way per_block→—` |
+| the options of a `multi_choice` | `p10-steps +lock −glob`: the added ones, then the removed ones, each in the order the field offers them |
+| the text of a `text` field | `scope rewritten` |
+| an own variant | `p9 own variant: Labels only` when given or changed; `p9 own variant removed` |
+| a field's comment | `p15 comment: Frozen until spring`; `p15 comment removed` |
+| the note on the question | `note: Ship it after the docs`; `note removed` |
+
+A quoted own variant, comment or note is cut at 60 characters, the last one `…`.
+The text of `question_changed` is `changed: ` and the rows joined by `; `, within
+300 characters: rows that do not fit are left out from the end and counted, as
+`; and 4 more`. The card draws the same rows in the same order in the person's
+words, with labels in place of ids, for a question it draws as a review (one with a
+`group`, or with more than 8 verdict fields); it shows any other question's versions
+whole, as before.
+
+The replaced answer and the one in force:
+
+```json
+{"p1": "accept", "p10": "accept", "p10-steps": ["glob", "scan"], "p12": "later", "p15": "reject"}
+{"p1": "accept", "p10": "accept", "p10-steps": ["scan", "lock"], "p12": "accept", "p15": "reject",
+ "_notes": {"p15": "Frozen until spring"}}
+```
+
+with `p10-steps` offering `glob`, `scan` and `lock` in that order, differ in three
+rows, and `question_changed` says:
+
+```text
+changed: p10-steps +lock −glob; p12 later→accept; p15 comment: Frozen until spring
+```
+
+#### Reading a question
 
 An agent reads a question three ways:
 
@@ -1557,7 +1940,9 @@ declined or withdrawn question, and the other two stay null there.
 
 The compact form stays cheap to pull. A note, a written answer and a label are cut at
 500 characters with `…`, and one question is at most 2000 characters of JSON: past
-that it keeps its first fields and leaves out the rest. An item that lost anything
+that it leaves out the labels first, every row's `label` then reading `null`, and
+only then its later fields, so a reader learns every field that was answered
+before it loses one. An item that lost anything
 this way carries `clipped: true`, and one that lost nothing has no such key. The
 whole text is in `get_work_item_request` and in the list with `full: true`.
 
@@ -1583,7 +1968,45 @@ version 2 on `previous`, the version the answer in force replaced:
 
 `answered_at` is when the answer in force was given; the first answer's time is that
 of version 1. `previous` is the first thing left out when a question runs past 2000
-characters, and its loss is marked with `clipped` as any other.
+characters, before any label, and its loss is marked with `clipped` as any other.
+
+**A review in the compact form.** A question with a `verdict` field carries two
+keys more, and its `answer` holds only what says more than a verdict does:
+
+```json
+{"id": "…", "status": "answered", "question": "Decisions on the review of the checks",
+ "verdicts": {"accept": ["p1", "p4", "p13"], "later": ["p12"], "reject": ["p15"]},
+ "undecided": ["p17"],
+ "answer": [{"field": "p4-steps", "under": "p4", "of": 3, "value": ["p4a", "p4c"], "label": null},
+            {"field": "p9", "value": null, "label": null, "own": "Labels only, no filtering"},
+            {"field": "p13-way", "under": "p13", "value": "per_block",
+             "label": "vue/max-lines-per-block"},
+            {"field": "p15", "value": "reject", "label": null, "note": "Frozen until spring"}],
+ "note": null, "answered_by": "user", "by_person": true,
+ "answered_at": "2026-11-05T18:40:00.000000Z", "answer_version": 1,
+ "replies": 0, "last_reply": null}
+```
+
+- `verdicts` names every verdict field that was given a verdict, under its word.
+  All three words are always there, with `[]` for one nobody chose.
+- `undecided` names every verdict field that is shown and was given neither a
+  verdict nor an own variant, `[]` when there is none. A verdict with an own variant
+  is decided: it is in neither list and has a row in `answer`. A hidden verdict field
+  is in neither.
+- `answer` has a row for each field under another, each verdict with a comment or an
+  own variant, and each field of another type, as any question has. A verdict with
+  neither has no row: `verdicts` already says it.
+- A row of a field under another carries `under`, its parent's id. A `multi_choice`
+  under another carries `of`, how many options it offers, and never a label, so its
+  steps read as "2 of 3" and labels do not crowd out rows; they are in
+  `get_work_item_request`.
+- The two lists stand whole before any row, and past 2000 characters only rows are
+  lost, labels first. Forty ids near their 64-character limit can fill the room
+  alone: the question then has no rows and `clipped: true`.
+- `previous` has the same shape: `verdicts`, `undecided`, `answer`, `note` and
+  `answered_at`.
+
+A question without a verdict field has neither key and reads as above.
 
 The whole form -- `get_work_item_request`, the list with `full: true`, an export and
 the interface's reads (`GET /api/modules/planning/request` and
@@ -1615,6 +2038,23 @@ The answer in force takes its `by_person` from the latest `request_answered` or
 of a question carries it: the interface and an export read those replies among the
 item's comments, where they are not duplicated. `answer_text`, the one line a notice
 and a refusal quote, includes own variants and comments.
+
+Every whole read of a question also carries `comment_id`: the comment a
+[list](#a-list-on-a-comment) stands under, and `null` for any other question. The
+compact form carries it only on a list.
+
+For a question with a `verdict` field, `answer_text` is a summary that fits a
+notice: the verdict most fields have, as a count, then the other two by their
+fields, each in the order accept, later, reject; then the own variants, the fields
+under another (a `multi_choice` as chosen/offered, a `choice` as its option id),
+any other field as `label: choice`, the undecided fields and the note. A comment
+follows its field, and a commented field of the counted verdict is named after the
+count, as `accept 15, p3 (comment: …)`. A tie for the count goes to the earlier
+word. The answer above reads:
+
+```text
+accept 3; later: p12; reject: p15 (comment: Frozen until spring); p9 own variant: Labels only, no filtering; p4-steps 2/3; p13-way: per_block; undecided: p17
+```
 
 `by_person` says whether the call that closed the question was a browser write, as
 [above](#call-identity) defines it: true for one, false for any other call that
@@ -1669,6 +2109,105 @@ with the build that wrote it. It covers a store a later build wrote only where t
 build dropped what this one reads; a later build that changed what a row means is
 not told apart. No MCP tool opens an attached store: an agent's connection is the
 primary, where `get_work_item` for such an item answers `not_found`.
+
+### A list on a comment
+
+An agent that reports several findings can offer them as a list the person ticks,
+under its own comment. The list is a question with one `multi_choice` field, and
+the comment it stands under is its `comment_id`. Answering, changing an answer, an
+own variant, a comment, `by_person`, search and export are a question's. What sets
+a list apart is that nobody waits for it.
+
+**Writing one.** `comment_work_item`, `report_work_item` and
+`set_work_item_summary` take `list`, and so do the `comment` and `summary` groups
+of `apply_work_item_changes` and each comment where a batch writes several:
+
+```json
+{"id": "MAIN-12", "body": "Found five places where the check misfires.",
+ "list": {"label": "What to take on",
+          "options": [{"id": "a", "label": "Widen the check", "recommended": true},
+                      {"id": "b", "label": "Fix the docs", "description": "The two pages that name it."}]}}
+```
+
+`label` is text of 1 to 200 characters and `options` 1 to 20 options, written as a
+question's options are. The list becomes a question of kind `question` whose prompt
+is the label and whose one field is
+`{"id": "items", "label": <label>, "type": "multi_choice", "required": false, "options": <options>}`,
+so its answer is `{"items": ["a"]}`. The comment and its list are one write in one
+transaction, under the call that writes the comment: both are written or neither.
+The answer adds `list_request_id`, and a batch's `applied.comment` or
+`applied.summary` carries it beside the comment's id:
+
+```json
+{"work_item": "MAIN-12", "comment_count": 11, "comment_id": 62,
+ "reply_to": null, "reply_to_request": null,
+ "list_request_id": "3f0c9a1e-6b2d-4e7f-9a8b-1c2d3e4f5a6b"}
+```
+
+Refused with `invalid_request`, nothing written:
+
+| Case | Refusal |
+| --- | --- |
+| a list on a reply | `a list stands on a root, and this is a reply` |
+| a key a list does not take, or options outside 1 to 20 | `list requires label and options and takes nothing else` |
+| a list in a call that closes the item | `a list on an item this call closes could never be answered; send it to review, or leave the list out` |
+
+**What it does not do.** A list holds nothing: its item closes with a list
+unticked, as with no question at all. It raises no Windows notification and takes
+none back. It is not in [the panel of open questions](#the-panel-of-open-questions)
+or its count, not on the "waiting for an answer" mark of a card or a row, and the
+interface's read of every open question, `GET /api/modules/planning/requests`
+without a target, leaves it out. It is read where its item is read:
+`get_work_item`'s `questions`, `list_work_item_requests`, `get_work_item_request`,
+the card's read of its item's questions, and an export. There it counts as a
+question, open while it is pending, and its `comment_id` tells it apart. The
+interface draws it in its comment, under the text, with no author of its own,
+since the comment has one, and no "Do not answer", since nobody waits for it.
+
+**Ticking.** Ticks are sent with one button, and ticking alone sends nothing, so
+five ticks are one answer and one notice. A person's answer is a
+`question_answered` event: the agent that wrote the list and the item's holders
+hear it, as for any question (see
+[the hook contract](hook-contract.md#who-is-told)), and the next agent write
+carries it in `from_person`. Changing it is changing an answer.
+
+**Close and reopen.** A pending list on a closed item reads `expired` with
+`expired_reason: task_closed`, as any pending question there does, and nothing is
+written: reopening the item makes it `pending` again with what it held. An answered
+list on a closed item cannot be changed (`[task_closed]`). So a list freezes with
+its item: the interface keeps ticks not yet sent in view and says that the item is
+closed, the ticks would reach nobody, and reopening it lets them be sent. An agent
+that wants the ticks keeps the item open, in review for instance.
+
+**Merging.** A list goes with its comment: a comment root's list moves to the
+survivor with it, and a report's list stays with the report on the merged item. A
+comment is deleted only with its item, and its list with it.
+
+### Steps from a comment
+
+A comment or a report that holds a Markdown list can become steps of its item in
+one action of the interface. This is the interface's alone and uses the existing
+write: no tool, store change or notice is added.
+
+- **Where.** An action on the head of a root, a reply or a report, shown only when
+  its text holds at least one list item, the card can be written and the item is
+  open.
+- **What it offers.** Every item of every list in the text, in order, a nested one
+  as a step of its own. A step's text is the item's Markdown as written, because
+  steps are drawn as Markdown. All are ticked, except an item whose text matches a
+  step the item has, or an earlier item, after trimming and collapsing spaces, case
+  kept: that one reads as already there and cannot be ticked. An item longer than
+  1000 characters cannot be ticked, and the form says why. The form counts the
+  steps there will be, out of 100, and past 100 it cannot send and says how many to
+  untick.
+- **The write.** `POST /api/planning/work-item/checklist` with the item's steps by
+  their `id`, then the new ones by text, and the `expected_revision` the card read.
+  A stale revision is `revision_conflict`, and the form offers to read the item
+  again with its ticks kept. The server checks its limits as it always does.
+- **What follows.** The steps are ordinary steps, with their ids, claims and ticks,
+  and nothing ties a step to the comment it came from. A holder hears
+  `steps_edited`, as for any change of steps a person makes; with no holder, whoever
+  claims the item next finds them.
 
 ### What a click opens
 
