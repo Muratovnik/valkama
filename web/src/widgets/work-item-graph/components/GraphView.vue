@@ -22,6 +22,7 @@ import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
+import { useGraphGroundTap } from '@/widgets/work-item-graph/composables/useGraphGroundTap.ts'
 import { useGraphHover } from '@/widgets/work-item-graph/composables/useGraphHover.ts'
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
 import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
@@ -259,13 +260,16 @@ const { nodes: flowNodes, edges: flowEdges } = useGraphFlowElements({
   moving,
 })
 
+const canvas = useTemplateRef<HTMLElement>('canvas')
+useGraphGroundTap(canvas)
+
 const {
   isTabStop,
   onFocus: keyboardFocus,
   onKeydown,
 } = useGraphKeyboard({
   anchorId,
-  canvas: useTemplateRef<HTMLElement>('canvas'),
+  canvas,
   fitted,
   focusRequest: () => props.focusRequest,
   overview,

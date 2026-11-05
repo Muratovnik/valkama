@@ -163,8 +163,10 @@ checkouts are therefore distinguishable even at the same version.
   in its tooltip and its accessible description.
 - **The graph is easier to hit from a distance, and stops where the map still reads.** Below a
   quarter of full size, a press anywhere on the ground of an open epic's frame opens that epic,
-  as its header does, and the pointer says so. Cards on it open as before, a frame inside a
-  frame opens its own epic, a drag still moves the field and Tab stops where it did. «Zoom out»,
+  as its header does, and the pointer says so. A finger's tap there opens the epic too, though
+  the browser would move it to a card in the finger's reach; a tap centred on a card opens the
+  card. Cards on it open as before, a frame inside a frame opens its own epic, a drag still
+  moves the field and Tab stops where it did. «Zoom out»,
   the wheel and a pinch now stop at the zoom «Fit whole graph» gives for what is drawn in this
   window, where the button turns off; a filter, a fold or a larger window that leaves the camera
   further out brings it up to that zoom.

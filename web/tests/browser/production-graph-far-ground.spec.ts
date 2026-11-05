@@ -53,6 +53,38 @@ function groundPoint(frame: Locator) {
   })
 }
 
+/**
+ * Where a finger aims at this frame's ground: the point of it standing clearest of the cards
+ * and the frame's edge, and how far the nearest card is from it.
+ */
+function clearGround(frame: Locator) {
+  return frame.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const flow = document.querySelector('.graph-flow')?.getBoundingClientRect() as DOMRect
+    const cards = [...document.querySelectorAll('.flow-node-card')].map((card) =>
+      card.getBoundingClientRect(),
+    )
+    const cardFrom = (x: number, y: number) =>
+      Math.min(
+        ...cards.map((card) =>
+          Math.hypot(
+            Math.max(card.left - x, 0, x - card.right),
+            Math.max(card.top - y, 0, y - card.bottom),
+          ),
+        ),
+      )
+    let best: { card: number; clear: number; x: number; y: number } | null = null
+    for (let y = Math.max(box.top, flow.top) + 1; y < Math.min(box.bottom, flow.bottom); y += 1)
+      for (let x = Math.max(box.left, flow.left) + 1; x < Math.min(box.right, flow.right); x += 1) {
+        if (document.elementFromPoint(x, y) !== element) continue
+        const card = cardFrom(x, y)
+        const clear = Math.min(card, x - box.left, box.right - x, y - box.top, box.bottom - y)
+        if (!best || clear > best.clear) best = { card, clear, x, y }
+      }
+    return best
+  })
+}
+
 /** Far out on the whole field, with the frame inside a frame open round its work. */
 async function farField(page: Page, width = 1500) {
   await openBroadField(page, width)
@@ -239,13 +271,54 @@ test('the keyboard’s stops are the same: the ground takes no Tab and no walk',
   }
 })
 
+/**
+ * A fingertip's radius: a touch about 32 pixels across. The browser moves a tap to the target it
+ * judges the finger meant within its reach, and a far-out frame's cards stand closer than that.
+ */
+const FINGER = 16
+
+/** A tap of a fingertip's size, which `page.touchscreen` cannot give. */
+async function fingerTap(page: Page, point: { x: number; y: number }) {
+  const session = await page.context().newCDPSession(page)
+  const touch = { x: point.x, y: point.y, radiusX: FINGER, radiusY: FINGER, force: 1 }
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch] })
+  await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await session.detach()
+}
+
 test.describe('under a finger', () => {
   test.use({ hasTouch: true })
 
-  test('a tap on the ground opens the epic at a phone’s width', async ({ page }) => {
+  test('a tap on the ground opens the epic at a phone’s width, with a card in the finger’s reach', async ({
+    page,
+  }) => {
     await farField(page, 390)
-    const { id, point } = await groundInSight(page.locator('.graph-frame.far:not(.folded)'))
-    await page.touchscreen.tap(point.x, point.y)
+    const { frame, id } = await groundInSight(openGround(page))
+    const point = await clearGround(frame)
+    expect(point).not.toBeNull()
+    // Far out the cards stand a few pixels apart, so the finger covers one wherever it lands.
+    expect(point?.card).toBeLessThan(FINGER)
+    await fingerTap(page, { x: point?.x ?? 0, y: point?.y ?? 0 })
     await expect.poll(() => openedReference(page)).toBe(referenceOf(id))
+  })
+
+  test('a tap centred on a card on the ground opens that card', async ({ page }) => {
+    await farField(page, 390)
+    const { frame } = await groundInSight(openGround(page))
+    const spot = await frame.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      for (const card of document.querySelectorAll<HTMLElement>('.flow-node-card')) {
+        const drawn = card.getBoundingClientRect()
+        const x = drawn.left + drawn.width / 2
+        const y = drawn.top + drawn.height / 2
+        if (x < box.left || x > box.right || y < box.top || y > box.bottom) continue
+        if (document.elementFromPoint(x, y)?.closest('.flow-node-card') !== card) continue
+        return { x, y, id: card.dataset.walkTarget ?? '' }
+      }
+      return null
+    })
+    expect(spot).not.toBeNull()
+    await fingerTap(page, { x: spot?.x ?? 0, y: spot?.y ?? 0 })
+    await expect.poll(() => openedReference(page)).toBe(referenceOf(spot?.id ?? ''))
   })
 })

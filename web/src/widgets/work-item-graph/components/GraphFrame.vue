@@ -24,7 +24,9 @@
  * Far out a header is a few pixels and the frame round it is what the hand finds, so
  * the ground of an open frame with an epic opens that epic too. It is a shortcut for
  * the pointer alone: the header's button is the same action for the keyboard, so no
- * new stop stands here, and a drag from the ground moves the field and opens nothing.
+ * new stop stands here, and a drag from the ground moves the field and opens nothing. A
+ * finger's tap the browser moves from the ground to a card nearby is given back to the
+ * ground (`useGraphGroundTap`).
  *
  * The work under no epic is a frame too, with no epic to open. A frame inside
  * a frame is a well cut into it, a step below. Zoomed out past reading, the
