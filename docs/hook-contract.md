@@ -336,7 +336,10 @@ call. For an MCP tool call it prints:
 `updatedInput` replaces the whole input, so it carries every original argument.
 An `_identity` that the model wrote itself is replaced. The output has no
 `permissionDecision`: changing the input does not need one, and `allow` would
-skip a permission prompt the user configured.
+skip the prompt for a tool no rule covers. In Claude Code 2.1.318 a deny or ask
+rule still applies over a hook's `allow`, and `allow` does not keep auto mode's
+review of a call that runs after the changed one in the same response: a live
+probe refused that call the same way with and without it.
 
 The argument is meant for a server that removes `_identity` before it validates
 arguments and checks `tool_use_id` against the call's own metadata. A server

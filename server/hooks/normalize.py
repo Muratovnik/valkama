@@ -371,7 +371,7 @@ def identity_output(payload: dict, *, opened_in: str = "") -> dict | None:
     `updatedInput` replaces the whole input, so it is the original arguments
     with `_identity` added; an `_identity` the model wrote itself is replaced.
     No `permissionDecision` is returned: rewriting the input does not need one,
-    and returning `allow` would skip a permission prompt the user configured.
+    and returning `allow` would skip the prompt for a tool no rule covers.
     Anything malformed gives nothing, and the call then proceeds unconfirmed.
 
     `opened_in`, when known, goes in as `place`: a client can resume a session
