@@ -12,6 +12,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **How much work an item actually took, and what it would cost at API prices.** The server
+  now reads the clients' transcripts in the background and tells working time from waiting
+  for a person, for a subagent or for a failed service, and from a machine that was off.
+  `GET /api/planning/work-item/usage` reads an item or its whole chain and
+  `GET /api/planning/session/usage` a session, with what no item took on a line of its own.
+  Store schema 11 holds the rows, under a snapshot taken before the upgrade; no message or
+  command text is kept, and existing transcripts are read too. The cost is an estimate, not
+  a bill.
 - **Task types have colours, and you can change them.** A type's icon and word are now
   purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
   task, on the board, in the list, on the card, in search, on the hover card, on the
@@ -235,14 +243,6 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
-- **How much work an item actually took, and what it would cost at API prices.** The server
-  now reads the clients' transcripts in the background and tells working time from waiting
-  for a person, for a subagent or for a failed service, and from a machine that was off.
-  `GET /api/planning/work-item/usage` reads an item or its whole chain and
-  `GET /api/planning/session/usage` a session, with what no item took on a line of its own.
-  Store schema 11 holds the rows, under a snapshot taken before the upgrade; no message or
-  command text is kept, and existing transcripts are read too. The cost is an estimate, not
-  a bill.
 - **The space's read model says which items an agent is at work on now.** `live_work` in
   `GET /api/planning` and its event stream maps each such item to `working` (a session
   in a turn wrote to it since its last prompt or a subagent of it holds one of its steps,
