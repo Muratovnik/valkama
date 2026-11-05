@@ -394,11 +394,11 @@ describe('human input requests', () => {
     expect(wrapper.get('.request-status').text()).toBe(
       'Waiting for an answer: 0 — the questions below have closed.',
     )
-    // With nothing left to answer, focus stays on the card just answered, on how
+    // With nothing left to answer, focus stays on the card just answered, described by how
     // it ended. The count line at the top took it once and scrolled the list away.
-    const outcome = present(wrapper.findAll('.request-card')[1], 'older card').get('.request-state')
-    expect(outcome.text()).toMatch(/^You answered/u)
-    expect(document.activeElement).toBe(outcome.element)
+    const ended = present(wrapper.findAll('.request-card')[1], 'older card')
+    expect(ended.get('.request-state').text()).toMatch(/^You answered/u)
+    expect(document.activeElement).toBe(ended.element)
   })
 
   it('names the reader as the one who answered, without repeating the space key', () => {

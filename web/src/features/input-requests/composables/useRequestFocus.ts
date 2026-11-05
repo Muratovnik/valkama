@@ -9,11 +9,20 @@ export function useRequestFocus(card: Ref<HTMLElement | null>) {
   function focus() {
     moveFocus(card.value?.querySelector<HTMLElement>('.request-title') ?? card.value)
   }
-  /** Moves focus to how this question ended, or to the question while it still waits. */
+  /**
+   * Moves focus to the question once it has ended, which its card describes by how it ended,
+   * and brings that line into view; to the question's heading while it still waits. The ring
+   * goes round the question the person stays on: drawn round its one line it stood as a thin
+   * capsule pressed against the words, beside the rule the answer is set in by.
+   */
   function focusOutcome() {
     const line = card.value?.querySelector<HTMLElement>('.request-state')
-    if (line) moveFocus(line)
-    else focus()
+    if (!line) {
+      focus()
+      return
+    }
+    moveFocus(card.value, { preventScroll: true })
+    line.scrollIntoView({ block: 'nearest' })
   }
   /**
    * Brings the question into view, at its first line under what the scroller keeps over

@@ -176,6 +176,11 @@ checkouts are therefore distinguishable even at the same version.
   chosen with the keys does, instead of sending the next Tab to the top of the page. In the
   filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
+- **A question that has ended is ringed as a whole, not round one line.** After a send or a
+  decline focus went to the line saying how it ended and drew a thin capsule round it, pressed
+  against the words and the rule of the answer. Focus now stays on the question itself,
+  described by that line, and the ring goes round the question as it does round a thread
+  that folds. A question is now named by its author and time, as a comment's thread is.
 - **A review keeps one column of edges.** A group's heading put its chevron a few pixels
   into the column and its title further in than anything else; the title now starts where
   the rows do and the chevron ends the line after the count, pointing down while folded and

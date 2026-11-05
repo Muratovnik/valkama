@@ -194,7 +194,7 @@ describe('changing an answer', () => {
     await flushPromises()
     expect(wrapper.find('input').exists()).toBe(false)
     expect(wrapper.get('.request-state').text()).toMatch(/changed ·/u)
-    expect(document.activeElement).toBe(wrapper.get('.request-state').element)
+    expect(document.activeElement).toBe(wrapper.get('.request-card').element)
     expect(wrapper.emitted('update:draft')?.at(-1)).toEqual([EMPTY_DRAFT])
     // What was replaced is behind its press, and says who said it and what.
     expect(wrapper.text()).not.toContain('Keep, ')
@@ -368,6 +368,6 @@ describe('changing an answer', () => {
     await press(wrapper, 'Save change')
     await flushPromises()
     expect(changeInputRequestAnswer).toHaveBeenCalledOnce()
-    expect(document.activeElement).toBe(changing.get('.request-state').element)
+    expect(document.activeElement).toBe(changing.element)
   })
 })

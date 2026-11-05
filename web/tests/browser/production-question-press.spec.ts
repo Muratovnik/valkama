@@ -64,7 +64,7 @@ for (const [upper, lower] of [
       expect(writesTo(requests)).toEqual([UPPER])
       await expect(next.getByRole('radio')).toHaveCount(lower + 1)
       // Nor did it take the keyboard away from how the upper question ended.
-      await expect(top.locator('.request-state')).toBeFocused()
+      await expect(top).toBeFocused()
     })
   }
 }

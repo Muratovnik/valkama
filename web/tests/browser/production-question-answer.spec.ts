@@ -106,7 +106,7 @@ test('Tab goes from your own option straight into its text, and Shift+Tab straig
   await expect(own).toBeFocused()
   await page.keyboard.press('Tab')
   await page.keyboard.press('Control+Enter')
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   expect(requests.writes[0]?.body).toMatchObject({ answers: {}, own: { route: 'In a week' } })
 })
 
@@ -309,7 +309,7 @@ test('the way into a change, by the keyboard: the same form, and Save off until 
   await expect(save).toBeDisabled()
   await page.keyboard.press('ArrowDown')
   await save.click()
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   expect(requests.writes.at(-1)).toMatchObject({
     action: 'change',
     body: {
@@ -396,7 +396,7 @@ test('a conflict keeps the draft, and Check status lets it go on from the new an
   await expect(card.getByRole('radio', { name: 'Drop them', exact: true })).toBeChecked()
   await expect(save).toBeEnabled()
   await save.click()
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   expect(requests.writes.at(-1)?.body.expected_revision).toBe(4)
 })
 

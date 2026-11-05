@@ -14,8 +14,9 @@
  * changed asks first, with focus on the way back, and Escape from inside is that same Cancel.
  * While the form stands the icon keeps its room, so the time beside it does not move.
  *
- * Folding takes the controls that had focus away, whoever answered, so focus goes to how
- * it ended: the person stays on the question they were in. What is held belongs to the
+ * Folding takes the controls that had focus away, whoever answered, so focus goes to the
+ * question, described by how it ended: the person stays on the question they were in, and
+ * the ring goes round it, as round a thread that folds. What is held belongs to the
  * host, which outlives this while a dialog closes and opens and which the draft guard asks.
  * Folding also lifts what stands below it, so a press that lands here only because of that
  * reaches nothing: it was meant for another question.
@@ -77,6 +78,8 @@ const emit = defineEmits<{
 }>()
 const { t, d } = useI18n()
 const promptId = useId()
+const metaId = useId()
+const outcomeId = useId()
 // A path in a question belongs to that question's task, whichever task is open.
 provideDocumentLinks(() => ({
   space: planningSpaceEntity(props.entry.target.space_ref).resource_id,
@@ -145,6 +148,8 @@ watch(pastDue, async (past) => {
   await nextTick()
   moveFocus(deadlineLine.value)
 })
+/** Once it has ended the question is described by how it ended, which focus then comes to. */
+const describedBy = computed(() => (inForm.value ? undefined : outcomeId))
 const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
@@ -253,6 +258,8 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     class="request-card"
     tabindex="-1"
     :aria-busy="busyMark"
+    :aria-labelledby="metaId"
+    :aria-describedby="describedBy"
   >
     <RequestHeader
       v-if="standalone"
@@ -261,6 +268,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     />
     <EntryHead>
       <MetaLine
+        :id="metaId"
         class="request-meta"
         :when="stamp(request.created_at)"
         >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
@@ -329,6 +337,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     </template>
     <RequestFold
       v-else
+      :outcome-id="outcomeId"
       :request="request"
       :unsent="unsent"
       :unsent-chosen="unsentChosen"

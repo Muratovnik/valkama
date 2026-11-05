@@ -46,7 +46,7 @@ test('a choice is only a choice until Send, then folds under the question and le
   await expect(card.getByRole('radio')).toHaveCount(0)
   await expect(card).toContainText(ROUTE_ASKED)
   await expect(card.locator('.request-option.is-chosen')).toContainText('Move them')
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   expect(requests.writes).toHaveLength(1)
   expect(requests.writes[0]?.action).toBe('answer')
   expect(requests.writes[0]?.body.answers).toEqual({ route: 'move' })
@@ -78,7 +78,7 @@ test('the options are a radio group by the keyboard, and Tab reaches Send', asyn
   await page.keyboard.press('Tab')
   await expect(send(card)).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   expect(requests.writes[0]?.body.answers).toEqual({ route: 'move' })
 })
 
@@ -291,7 +291,7 @@ test('an answer from another window folds it and keeps the note without pretendi
   await expect(card.getByRole('radio')).toHaveCount(0)
   const reply = card.locator('.request-reply')
   // The field the person was writing in has gone; the keyboard stays on the question.
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   await expect(reply.locator('.request-option.is-chosen')).toContainText('Keep the comments')
   await expect(reply).toContainText('claude')
   await expect(reply).not.toContainText('What I was writing')

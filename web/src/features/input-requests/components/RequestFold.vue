@@ -5,9 +5,9 @@
  * what was chosen set apart, because an answer read without its options says neither what
  * was weighed nor what was left. A question declined or closed says so on one quiet line.
  *
- * Only that first line of the reply is a status, and it is what focus comes to. Everything
- * under it is there to be read on, and a live region around twelve options would read all
- * of them out each time an answer arrived.
+ * Only that first line of the reply is a status, and it describes the question focus comes
+ * to (`outcomeId`). Everything under it is there to be read on, and a live region around
+ * twelve options would read all of them out each time an answer arrived.
  *
  * A question answered row by row reads as a summary instead (`RequestSummary`): how its points
  * were decided, with every row behind a press on a review that would run to a screen and more.
@@ -32,6 +32,8 @@ import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
 
 const props = defineProps<{
+  /** The id of the line that says how the question ended, which describes the question. */
+  outcomeId: string
   request: InputRequestEntry['request']
   /** What was still being written when the question closed. */
   unsent: string
@@ -91,9 +93,9 @@ const closing = computed(() => {
       class="request-reply"
     >
       <MetaLine
+        :id="outcomeId"
         class="request-reply-meta request-state"
         role="status"
-        tabindex="-1"
         :when="answerTime"
         >{{ replier }}</MetaLine
       >
@@ -125,9 +127,9 @@ const closing = computed(() => {
     </div>
     <p
       v-else
+      :id="outcomeId"
       class="request-closed request-state"
       role="status"
-      tabindex="-1"
     >
       {{ closing }}<template v-if="when"> · {{ when }}</template>
     </p>
@@ -190,13 +192,6 @@ const closing = computed(() => {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-}
-
-/* The app moves focus to how a question ended and rings it (`moveFocus`); a press here
-   rings nothing. These words run to both edges of the line, so the ring stands clear of them. */
-.request-state:focus-visible {
-  border-radius: var(--radius-control);
-  outline-offset: var(--space-1);
 }
 
 .request-unsent {

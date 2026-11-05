@@ -40,7 +40,8 @@ test('a press rings nothing it lands on: a button, how a question ended, its she
   page,
 }) => {
   const { card, drawer } = await openQuestion(page, [asked(), answered])
-  const outcome = card.filter({ hasText: 'Already answered' }).locator('.request-state')
+  const ended = card.filter({ hasText: 'Already answered' })
+  const outcome = ended.locator('.request-state')
   const sheet = card.filter({ hasText: 'Where should the comments go?' })
   const { comment, frame } = composer(page, drawer)
   // Each takes focus from the press, so the absent ring is not an absent focus.
@@ -49,8 +50,8 @@ test('a press rings nothing it lands on: a button, how a question ended, its she
   await expect(tab).toBeFocused()
   expect(await outline(tab)).toBe('none')
   await outcome.click()
-  await expect(outcome).toBeFocused()
-  expect(await outline(outcome)).toBe('none')
+  await expect(ended).toBeFocused()
+  expect(await outline(ended)).toBe('none')
   await sheet.locator('.request-meta').click()
   await expect(sheet).toBeFocused()
   expect(await outline(sheet)).toBe('none')
@@ -80,17 +81,37 @@ test('the keyboard rings what it reaches, and a field answers it with its edge a
   expect(await edge(frame)).toBe(await focusColour(page))
 })
 
-test('focus the app moves after a press is ringed, since it is the one sign of where it went', async ({
-  page,
-}) => {
-  const { card } = await openQuestion(page, [asked()])
-  await card.getByRole('radio', { name: 'Move them', exact: true }).click()
-  await send(card).click()
-  // The question folds under the pointer, and focus goes to how it ended.
-  const outcome = card.locator('.request-state')
-  await expect(outcome).toBeFocused()
-  expect(await outline(outcome)).toBe('solid')
-})
+/** What inside `scope` draws an outline of its own, by its classes. */
+const ringedInside = (scope: Locator) =>
+  scope.evaluate((root) =>
+    [...root.querySelectorAll('*')]
+      .filter((node) => getComputedStyle(node).outlineStyle !== 'none')
+      .map((node) => node.className.toString()),
+  )
+
+for (const width of [1280, 390]) {
+  test(`focus the app moves after a press is ringed around the question it stays on, at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const { card } = await openQuestion(page, [asked()])
+    await card.getByRole('radio', { name: 'Move them', exact: true }).click()
+    await send(card).click()
+    // The question folds under the pointer, and focus stays on it, described by how it ended:
+    // a ring drawn round that one line of words stood as a thin capsule pressed against them.
+    await expect(card.locator('.request-state')).toContainText('You answered')
+    await expect(card).toBeFocused()
+    expect(await outline(card)).toBe('solid')
+    expect(await ringedInside(card)).toEqual([])
+    await expect(card).toHaveAttribute('aria-describedby', /.+/u)
+    const description = await card.evaluate(
+      (node) =>
+        document.querySelector(`[id="${node.getAttribute('aria-describedby') ?? ''}"]`)
+          ?.textContent,
+    )
+    expect(description).toContain('You answered')
+  })
+}
 
 test('in the list a press on a heading rings nothing, and answering rings the next one', async ({
   page,

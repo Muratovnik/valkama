@@ -235,7 +235,7 @@ test('the keys take the same two steps, and Escape goes back without closing the
   await page.keyboard.press('Enter')
   await page.keyboard.press('Tab')
   await page.keyboard.press('Enter')
-  await expect(top.locator('.request-state')).toBeFocused()
+  await expect(top).toBeFocused()
   expect(writesTo(requests)).toEqual([UPPER])
   // With nothing being asked, Escape is the card's again.
   await page.keyboard.press('Escape')
@@ -276,7 +276,7 @@ test('an answer arriving from elsewhere ends the step along with the question', 
   await expect(back(top)).toBeVisible()
   requests.settle(UPPER, answeredElsewhere)
   await stream.signal('agents')
-  await expect(top.locator('.request-state')).toBeFocused()
+  await expect(top).toBeFocused()
   await expect(back(top)).toHaveCount(0)
   await expect(decline(top)).toHaveCount(0)
   await expect(top.getByRole('radio')).toHaveCount(0)

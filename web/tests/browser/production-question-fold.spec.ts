@@ -121,7 +121,7 @@ test('an option label is inline markdown as written words are, and never a block
   await expect(several.locator('.request-answer').last().locator('strong')).toHaveText('v2')
 })
 
-test('the ring on how a question ended stands clear of its words and moves none of them', async ({
+test('the ring stands round a question that ended and moves none of its words', async ({
   page,
 }) => {
   const { card, requests } = await openQuestion(page, [asked()])
@@ -136,10 +136,11 @@ test('the ring on how a question ended stands clear of its words and moves none 
   await decline.click()
   await decline.click()
   const state = card.locator('.request-state')
-  await expect(state).toBeFocused()
-  await expect(state).toHaveCSS('outline-offset', '4px')
+  await expect(card).toBeFocused()
+  await expect(card).toHaveCSS('outline-style', 'solid')
+  await expect(state).toHaveCSS('outline-style', 'none')
   const held = await state.boundingBox()
-  await state.blur()
+  await card.blur()
   expect(await state.boundingBox()).toEqual(held)
 })
 
@@ -160,7 +161,7 @@ test('while a write is out the buttons read as busy, and the keyboard stays on t
   await expect(send(card)).toBeFocused()
   await page.keyboard.press('Enter')
   answers[0]?.()
-  await expect(card.locator('.request-state')).toBeFocused()
+  await expect(card).toBeFocused()
   expect(requests.writes).toHaveLength(1)
 })
 

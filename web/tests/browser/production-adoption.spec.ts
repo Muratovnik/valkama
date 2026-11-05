@@ -174,11 +174,11 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await page.keyboard.press('Enter')
   await expect(dialog.locator('.request-state')).toContainText('You answered')
   await expect(dialog.locator('.request-option.is-chosen')).toContainText('No')
-  // Nothing is left to answer: focus stays on the card just answered, on how it
-  // ended, with its ring showing, rather than on the count line at the top.
-  const outcome = dialog.locator('.request-state')
-  await expect(outcome).toBeFocused()
-  await expect(outcome).toHaveCSS('outline-style', 'solid')
+  // Nothing is left to answer: focus stays on the card just answered, described by how
+  // it ended, with its ring showing, rather than on the count line at the top.
+  const answered = dialog.locator('.request-card')
+  await expect(answered).toBeFocused()
+  await expect(answered).toHaveCSS('outline-style', 'solid')
   await expect(
     dialog.getByText('Waiting for an answer: 0 — the questions below have closed.'),
   ).toBeVisible()
