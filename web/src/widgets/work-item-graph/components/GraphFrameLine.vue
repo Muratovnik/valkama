@@ -37,6 +37,7 @@ const {
 
 /** An epic says it is one; an item that grew children says it is an item. */
 const kindGlyph = computed(() => (epic?.kind === 'epic' ? 'kind-epic' : 'parent'))
+const kindInk = computed(() => (epic?.kind === 'epic' ? 'epic' : undefined))
 /** The epic's state, said once it has moved, as a board's lane says it. */
 const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : false))
 </script>
@@ -49,6 +50,7 @@ const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : f
     <VIcon
       v-if="epic && !overview"
       class="graph-frame-kind"
+      :data-kind="kindInk"
       :name="kindGlyph"
       :size="14"
     />
@@ -98,6 +100,7 @@ const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : f
 
 .graph-frame-kind {
   flex: 0 0 auto;
+  color: var(--color-kind-ink, currentcolor);
 }
 
 .graph-frame-reference {

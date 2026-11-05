@@ -14,7 +14,9 @@
  * it, and the filter token a click adds. The rules are data, one row per facet
  * and one cell per surface, so a surface never re-derives them. Colour is
  * never named here: a mark carries the `uiSystem` pair, and the component
- * that draws it asks `uiSystem` for the tone.
+ * that draws it asks `uiSystem` for the tone. A kind says what an item is rather
+ * than how it stands, so it has no tone: its mark carries the kind as its `ink`,
+ * and its colour is the custom property the owner can set.
  */
 
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -134,8 +136,8 @@ interface FacetRule {
  * §3.2, cell for cell.
  */
 const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRule>>>> = {
-  // Kind carries no colour. A plain task is the norm, so it has no glyph and
-  // only the card names it in words.
+  // Kind carries no tone, only its own ink. A plain task is the norm, so it has
+  // no glyph and only the card names it in words.
   kind: {
     tile: { form: 'glyph', only: ['bug', 'epic', 'improvement'], plain: true },
     list: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
@@ -249,6 +251,8 @@ export interface FacetMark {
   tone: SemanticStatePair
   /** The facet's value: a kind, a priority, a category, `ready`/`waiting`, a label. */
   value: string
+  /** The kind whose own colour this mark's glyph and word are drawn in. */
+  ink?: WorkItemBrief['kind']
   /**
    * Shorter words the form draws in place of `text`, which stays the name and
    * the hover text; absent, the form draws `text`.
@@ -264,6 +268,11 @@ const KIND_GLYPHS: Record<WorkItemBrief['kind'], IconName | null> = {
   bug: 'kind-bug',
   epic: 'kind-epic',
   improvement: 'kind-improvement',
+}
+
+/** The glyph of a kind wherever one is named apart from a mark; a plain task has none. */
+export function kindGlyph(kind: WorkItemBrief['kind']): IconName | null {
+  return KIND_GLYPHS[kind]
 }
 
 const PRIORITY_GLYPHS: Record<WorkItemBrief['priority'], IconName | null> = {
@@ -360,6 +369,7 @@ function kindMark(item: FacetSubject, { form, plain }: FacetRule): FacetMark {
     glyph: KIND_GLYPHS[item.kind],
     text: { key: `workItem.kind.${item.kind}` },
     tone: PLAIN,
+    ink: item.kind,
     filter: plain ? null : { facet: 'kind', value: item.kind },
     quiet: false,
   }

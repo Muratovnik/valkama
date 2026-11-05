@@ -132,6 +132,7 @@ function press() {
     >
       <VIcon
         class="write-reason-glyph"
+        data-kind="epic"
         name="kind-epic"
         :size="14"
         :stroke-width="2"
@@ -183,7 +184,7 @@ function press() {
 
 .write-reason-glyph {
   flex: 0 0 auto;
-  color: var(--color-text-tertiary);
+  color: var(--color-kind-ink, var(--color-text-tertiary));
 
   .write-reason[data-tone='danger'] & {
     color: var(--color-danger);

@@ -31,6 +31,7 @@ interface Drawn {
 /** A control as it was painted, with the box its words take. */
 async function drawn(page: Page, control: Locator): Promise<Drawn> {
   await page.mouse.move(0, 0)
+  await control.scrollIntoViewIfNeeded()
   const { height, width, x, y } = (await control.boundingBox()) ?? {
     height: 0,
     width: 0,

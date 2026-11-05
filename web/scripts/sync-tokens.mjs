@@ -149,6 +149,25 @@ const MIRRORS = [
     ],
   },
   {
+    // A colour field resolves no custom property, and the hint asks about one ground.
+    file: 'web/src/shared/lib/kindColors.ts',
+    sites: [
+      {
+        anchor: /const DEFAULT_KIND_COLORS: Record<WorkItemKind, string> = \{([^}]*)\}/,
+        replace: (tokens, source) =>
+          keyedLiterals(
+            bodyOf(source, 'DEFAULT_KIND_COLORS'),
+            tokenMap(source, 'KIND_TOKENS'),
+            tokens,
+          ),
+      },
+      {
+        anchor: /const LIGHTEST_MARK_GROUND = '([^']*)'/,
+        replace: (tokens) => value(tokens, '--color-tooltip-surface', 'the lightest mark ground'),
+      },
+    ],
+  },
+  {
     // The tile the mark stands on is a primitive step on purpose. It is not the
     // chrome: an OS surface has to keep a neutral ground when the application's
     // own chrome takes a tint, so it names the ramp rather than a zone.

@@ -177,6 +177,15 @@ checkouts are therefore distinguishable even at the same version.
 - **A card on a graph zoomed far out no longer shows three unexplained dots.** Its number
   stands whole inside the block at any length, and what an agent is doing on it is in the
   card's tooltip and accessible name, on its lines and in its frame's count.
+### Added
+
+- **Task types have colours, and you can change them.** A type's icon and word are now
+  purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
+  task, on the board, in the list, on the card, in search, on the hover card, on the
+  graph and in the filter menu; the colour of a state does not change. Settings →
+  General → Task type colors picks another colour per type, applies it at once, says
+  when one is hard to read and lets you keep it, and resets one type or all. The choice
+  is kept on the device, so a browser and the desktop app each remember their own.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

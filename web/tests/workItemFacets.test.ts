@@ -65,7 +65,7 @@ describe('kind', () => {
     }
   })
 
-  test('kind carries no colour and a click on it filters by it', () => {
+  test('kind carries no state tone, only its own ink, and a click on it filters by it', () => {
     for (const kind of KINDS) {
       const mark = only(facetMarks('kind', 'card', item({ kind })))
       assert.equal(semanticStatePresentation(mark.tone).tone, 'neutral', kind)

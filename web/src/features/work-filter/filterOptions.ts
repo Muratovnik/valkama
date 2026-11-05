@@ -35,6 +35,8 @@ export interface FilterOption {
   token: WorkFilterToken
   /** A count beside the word, where one says something: how many are held. */
   detail?: string
+  /** The kind this value is, whose colour its word takes. */
+  kind?: string
 }
 
 /** A way the labels picked can combine, offered in the head of their group. */
@@ -185,7 +187,8 @@ export function filterGroups(input: {
       name: t(`workItem.filter.facet.${facet}`),
       options: values.map((value) => {
         const token = { facet, value } as WorkFilterToken
-        return { key: tokenKey(token), token, text: tokenValue(token, t) }
+        const kind = facet === 'kind' ? { kind: value } : {}
+        return { key: tokenKey(token), token, text: tokenValue(token, t), ...kind }
       }),
       ...choicesOf(facet, values, t),
     }

@@ -89,6 +89,7 @@ const textFieldOwners = new Set([
  */
 const colorOwners = new Set([
   'app/styles/tokens.css',
+  'shared/lib/kindColors.ts',
   'shared/lib/uiSystem.ts',
   'widgets/analytics-dashboard/utils/chartOptions.ts',
   'app/App.vue',
@@ -139,6 +140,12 @@ const AREA_DECLARATION =
 
 const SOURCE_RULES = [
   {
+    // A card that took its kind's colour would argue with the state the card speaks for.
+    when: ({ interfaceCopy }) =>
+      /(?:^|[{;])\s*background(?:-color|-image)?\s*:[^;{}]*--color-kind-/m.test(interfaceCopy),
+    message: "a kind's colour draws its glyph and its word, never a surface",
+  },
+  {
     component: true,
     when: ({ markup }) => /<select\b/i.test(markup),
     message: 'product selections must use the shared custom control',
@@ -182,7 +189,7 @@ const SOURCE_RULES = [
     owners: textFieldOwners,
     when: ({ markup }) =>
       /<textarea\b/i.test(markup) ||
-      /<input\b(?![^>]*\btype\s*=\s*["'](?:checkbox|radio|search)["'])/i.test(markup),
+      /<input\b(?![^>]*\btype\s*=\s*["'](?:checkbox|color|radio|search)["'])/i.test(markup),
     message: 'a text field belongs to VTextInput',
   },
   {

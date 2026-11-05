@@ -26,7 +26,7 @@ defineProps<{
       <strong
         :id="labelId"
         class="settings-row-label"
-        >{{ label }}</strong
+        ><slot name="label">{{ label }}</slot></strong
       >
       <small
         v-if="hint"

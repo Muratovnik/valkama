@@ -148,6 +148,7 @@ const menuGroups = computed(() =>
       key: option.key,
       text: option.text,
       detail: option.detail,
+      kind: option.kind,
       selected: picked(filter.value, option),
     })),
     choices: group.choices?.map((choice) => ({

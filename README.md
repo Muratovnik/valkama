@@ -25,6 +25,11 @@ directory, and the MCP server only exists while a client is talking to it.
   Execution tab is off by default; turn it on under Settings → General → Interface.
 - **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their
   exact store and space; unavailable sources and truncated results stay visible.
+- **Colours for task types.** Epics are purple by default, bugs rose, improvements
+  turquoise and tasks grey-blue, on a type's icon and word only: state colours stay as
+  they are. Change them under Settings → General → Task type colors; a change applies at
+  once. The choice is kept in `localStorage`, on the device, so a browser and the desktop
+  app each remember their own.
 - **Questions and decisions** in the task's discussion and a shared inbox. Agents
   create typed requests; the owner answers, in their own words if they prefer, or
   declines the exact request, and can change an answer while the task is open.

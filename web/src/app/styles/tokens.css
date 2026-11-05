@@ -109,6 +109,19 @@
   /* The categorical ramp for slices that mean a name rather than a state. */
   --color-cyan-400: #7fb4d3;
 
+  /* The four hues of a work item's kind. Each has to clear 4.5:1 on the lightest
+     ground a mark stands on, the hover card's, and keep clear of the meaning hues
+     above and of each other under protanopia, deuteranopia and tritanopia: so the
+     violet is the epic loot's purple lifted (its canonical #a335ee stands at 1.93:1
+     there), the rose leaves the coral to `danger`, the turquoise leaves the green
+     to `success` and gets its distance in lightness, which is what a teal and a
+     pink have left under deuteranopia, and the slate leaves the blue to `info`.
+     tests/kindColors.test.ts holds all of it. */
+  --color-violet-300: #cfa0ff;
+  --color-rose-300: #ff9db5;
+  --color-turquoise-300: #7defdc;
+  --color-steel-300: #b4c6e0;
+
   /* Near-neutral graphite for the left and top chrome. Each navigation step
      has a two-point channel spread, retaining a subtle cold undertone without
      the stronger blue cast of the previous ramp. The workspace remains on its
@@ -348,10 +361,11 @@
      much it matters, and nothing else: in progress and anything else moving is
      `info`, finished and healthy is `success`, a decision waiting or a high
      priority is `warning`, stopped or urgent is `danger`. Everything ordinary —
-     backlog, the queue, medium priority, a plain task, work that can simply be
-     taken — is neutral. A colour that appears on every card is a colour nobody
-     reads, and the green that used to mark ordinary backlog as workable was
-     exactly that. `uiSystem.ts` assigns these; nothing else does. */
+     backlog, the queue, medium priority, work that can simply be taken — is
+     neutral. A colour that appears on every card is a colour nobody reads, and the
+     green that used to mark ordinary backlog as workable was exactly that.
+     `uiSystem.ts` assigns these; nothing else does. A kind is not among them: it
+     has its own four below, which say what an item is. */
   --color-accent: var(--color-blue-500);
   --color-action-primary: var(--color-gray-100);
 
@@ -366,6 +380,14 @@
   --color-warning: var(--color-amber-500);
   --color-focus-ring: var(--color-blue-500);
   --color-text-on-action: var(--color-gray-1000);
+
+  /* What a kind's glyph and word are drawn in, and nothing else: never a card, a
+     frame or a column, which stay the state's to speak on. These are the defaults;
+     the owner's choice lands on the document's root over them (`kindColors.ts`). */
+  --color-kind-bug: var(--color-rose-300);
+  --color-kind-epic: var(--color-violet-300);
+  --color-kind-improvement: var(--color-turquoise-300);
+  --color-kind-task: var(--color-steel-300);
 
   /* Controls are fills, so the control tier lives above every static ground:
      the grounds are 900/850/750 and a resting control is 700, hovered 650.

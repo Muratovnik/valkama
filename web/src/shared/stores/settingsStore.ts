@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
+import { watch } from 'vue'
 
 import { useStorage } from '@vueuse/core'
 
+import { applyKindColors } from '@/shared/lib/kindColors.ts'
 import { DEFAULT_SETTINGS, mergeSettings } from '@/shared/lib/settings'
 import type { PlatformSettings } from '@/shared/lib/settings'
 
@@ -24,5 +26,16 @@ export const useSettingsStore = defineStore('settings', () => {
   )
   // Written back at once, so what a build before this one stored is read once.
   settings.value = mergeSettings(settings.value)
+  // At once and on the document, so a mark drawn next already has it, whichever window chose.
+  // The shell asks for this store as it sets up, before it draws anything, so the first
+  // glyph on a page has the owner's colour; a browser spec watches for that first glyph.
+  watch(
+    () => settings.value.kindColors,
+    (colors) => applyKindColors(colors),
+    {
+      flush: 'sync',
+      immediate: true,
+    },
+  )
   return { settings }
 })

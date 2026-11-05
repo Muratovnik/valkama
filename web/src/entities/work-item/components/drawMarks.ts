@@ -10,6 +10,7 @@
  *
  * A glyph is coloured by its tone and the word beside it stays in the quiet
  * ink: the hue says how much a fact asks, the glyph says which fact it is. A
+ * kind has no tone: both its glyph and its word take the kind's own colour. A
  * glyph shown alone keeps its word as the accessible name and the hover text;
  * a word shown alone, under a heading that names the fact, takes the tone.
  *
@@ -138,6 +139,7 @@ function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolea
     'type': filters ? 'button' : undefined,
     'data-facet': mark.facet,
     'data-tone': semanticStatePresentation(mark.tone).tone,
+    'data-kind': mark.ink,
     'data-active': active || undefined,
     'aria-label': name,
     'title': name ?? (glyphOnly || foldable || mark.short ? whole : undefined),

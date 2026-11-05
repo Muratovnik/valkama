@@ -1,5 +1,7 @@
 /* The copy of the Settings page itself; its groups with their own file keep their words there. */
 
+import { kindColorMessages } from '@/shared/i18n/kindColorMessages.ts'
+
 export const settingsMessages = {
   en: {
     settings: {
@@ -23,6 +25,7 @@ export const settingsMessages = {
         on: 'On',
         off: 'Off',
       },
+      kindColors: kindColorMessages.en,
       searchOptions: 'Search options',
       noOptions: 'No matching options',
       diagnostics: {
@@ -53,6 +56,7 @@ export const settingsMessages = {
         on: 'Включена',
         off: 'Выключена',
       },
+      kindColors: kindColorMessages.ru,
       searchOptions: 'Поиск по вариантам',
       noOptions: 'Подходящих вариантов нет',
       diagnostics: {

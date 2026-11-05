@@ -25,6 +25,10 @@ colors:
   danger: "#f99a8f"
   success: "#7bd6a1"
   warning: "#d9b06a"
+  kind-bug: "#ff9db5"
+  kind-epic: "#cfa0ff"
+  kind-improvement: "#7defdc"
+  kind-task: "#b4c6e0"
 
 typography:
   scale:
@@ -237,11 +241,12 @@ chrome.
   | `success` (green) | finished, healthy | done |
   | `warning` (amber) | a decision waiting, or high priority | review, a stale claim, high |
   | `danger` (red) | stopped, or urgent | blocked, urgent |
-  | `neutral` | nothing to act on | backlog, the queue, low and medium priority, a plain task, workable |
+  | `neutral` | nothing to act on | backlog, the queue, low and medium priority, workable |
 
   Hue says how much it asks of the reader and shape says which fact it is, so a
-  state and a priority that share a hue never share a shape. Kind carries no
-  colour. A colour that appears on every card is a colour nobody reads: in
+  state and a priority that share a hue never share a shape. A kind is not on
+  this table: it says what an item is, so it has a colour of its own below and
+  no tone. A colour that appears on every card is a colour nobody reads: in
   progress used to be the green of done, the queue the blue of focus, and
   workable — the ordinary condition of open backlog — a green line on every
   second card, which made it the loudest colour on the board and the one that
@@ -250,6 +255,20 @@ chrome.
   both, and `uiSystem.test.ts` holds the meanings.
 - Color is never the only state signal. Every status has a stable text label
   and uses the shared semantic-state component.
+- A kind's colour names the kind and never argues with a state. It draws the kind's
+  glyph and word and nothing else: a card, a column, a frame and the zoomed-out
+  graph node stay the state's to speak on. Its hues keep out of the state's way: an
+  epic is the epic loot's purple lifted until it reads (`#a335ee` stands at 1.93:1 on
+  the hover card), a bug is rose because the coral beside it is blocked, an improvement
+  turquoise because green is done, a task a grey-blue because blue is in progress. Each
+  default holds 4.5:1 on every ground a mark stands on, the hover card being the
+  lightest, and the four stay apart under protanopia, deuteranopia and tritanopia;
+  `kindColors.test.ts` holds both, and the glyph and the word carry the kind regardless.
+  `check:ui-system` refuses one on a background. There is one way to it: the facet
+  registry names a mark's kind, an element says it with `data-kind`, `shell.css` turns
+  that into `--color-kind-ink`, and what draws the kind reads that. Nothing else names a kind's colour. The owner's choice lands on the
+  document's root over `--color-kind-*`, before anything is drawn. A forced palette
+  takes all four back for its own ink.
 - A meaning colour may occupy a mark or an edge, never a surface. A dot, a glyph,
   the text itself, or a 3px inline-start marker carries the state; a tinted
   panel spends a whole surface on what its own sentence already says, and a
@@ -1086,7 +1105,7 @@ for about as long as a normal read and no more: a chain that answers later moves
 card once to its place, unless the reader has moved on. So nothing appears in one place
 and then jumps to another without a reason to. The bar has one height: on
 its left the item
-in one tertiary line — the kind (glyph and word), the reference (it copies itself),
+in one tertiary line — the kind (glyph and word, in its own colour), the reference (it copies itself),
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
@@ -1334,7 +1353,11 @@ not installed here, are omitted rather than displayed as unusable choices; one
 already chosen stays shown, with what it comes to beside it. Windows notifications
 holds the switch, the events, how much a notification's text reveals, a readiness row
 that says what Windows will do with one and how to change it, and a trial that sends
-a real notification; turning the switch off keeps the events chosen.
+a real notification; turning the switch off keeps the events chosen. Task type colors
+holds a row per type: its glyph and word in the colour they have now, the platform's
+colour field, the value in words and a reset, with one reset for all under them. A
+colour under 3:1 on the hover card is said beside its field in a quiet line and stays
+chosen. A plain task has no glyph anywhere, so its row is its word.
 
 ## Accessibility
 

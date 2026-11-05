@@ -95,7 +95,12 @@ test('settings stored with the notify fields of older builds read cleanly and lo
     notify: { itemCompleted: false, agentWaiting: true },
     openers: { claude: { kind: 'terminal', command: '' } },
   })
-  assert.deepEqual(Object.keys(merged).toSorted(), ['editor', 'executionTab', 'sessions'])
+  assert.deepEqual(Object.keys(merged).toSorted(), [
+    'editor',
+    'executionTab',
+    'kindColors',
+    'sessions',
+  ])
   assert.equal(merged.sessions.claude.fallback, 'terminal')
 })
 

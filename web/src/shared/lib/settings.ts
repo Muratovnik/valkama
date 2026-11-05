@@ -1,6 +1,6 @@
 /**
- * The owner's local preferences: opening sessions and files, and whether a card
- * offers its Execution tab.
+ * The owner's local preferences: opening sessions and files, whether a card offers
+ * its Execution tab, and the colours of the work item kinds.
  *
  * A session opens where it was last open; the server decides that. What the owner
  * sets here is only what the rule falls back to, per client family, and an
@@ -13,6 +13,8 @@
 
 import { EDITORS } from '@/shared/api/openPlanModel.ts'
 import type { Editor, OpenPlace } from '@/shared/api/openPlanModel.ts'
+import { readKindColors } from '@/shared/lib/kindColors.ts'
+import type { KindColors } from '@/shared/lib/kindColors.ts'
 
 /** Sessions are set per client family; a client Valkama cannot resume is `other`. */
 export const SESSION_FAMILIES = ['claude', 'codex', 'other'] as const
@@ -32,6 +34,8 @@ interface SessionOpening {
 export interface PlatformSettings {
   editor: Editor
   executionTab: boolean
+  /** Only what the owner chose; a kind not here takes the stylesheet's default. */
+  kindColors: KindColors
   sessions: Record<SessionFamily, SessionOpening>
 }
 
@@ -51,6 +55,7 @@ const DEFAULT_OPENING: SessionOpening = { fallback: 'vscode', always: '', comman
 export const DEFAULT_SETTINGS: PlatformSettings = {
   editor: 'vscode',
   executionTab: false,
+  kindColors: {},
   sessions: {
     claude: { ...DEFAULT_OPENING },
     codex: { ...DEFAULT_OPENING },
@@ -124,7 +129,12 @@ export function mergeSettings(raw: unknown): PlatformSettings {
   }
   const editor = EDITORS.includes(source.editor as Editor) ? (source.editor as Editor) : 'vscode'
   // Only what this setting itself stored turns it on, so every older shape reads as off.
-  return { editor, executionTab: source.executionTab === true, sessions }
+  return {
+    editor,
+    executionTab: source.executionTab === true,
+    kindColors: readKindColors(source.kindColors),
+    sessions,
+  }
 }
 
 /** Which family's settings cover this session's client string. */

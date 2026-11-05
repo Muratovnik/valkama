@@ -116,3 +116,30 @@
     /* stylelint-enable declaration-no-important */
   }
 }
+
+/* The one place a kind becomes its colour. An element that says `data-kind` holds its
+   colour as `--color-kind-ink`, for whatever of it draws the kind to read: its glyph,
+   its word, and never its ground. */
+[data-kind='bug'] {
+  --color-kind-ink: var(--color-kind-bug);
+}
+
+[data-kind='epic'] {
+  --color-kind-ink: var(--color-kind-epic);
+}
+
+[data-kind='improvement'] {
+  --color-kind-ink: var(--color-kind-improvement);
+}
+
+[data-kind='task'] {
+  --color-kind-ink: var(--color-kind-task);
+}
+
+/* A forced palette replaces a word's colour by itself, but not the colour a glyph's
+   stroke takes from it: the system's ink has to be said. */
+@media (forced-colors: active) {
+  [data-kind] {
+    --color-kind-ink: CanvasText;
+  }
+}

@@ -59,6 +59,12 @@ describe('FacetMarks', () => {
     expect(tone({ kind: 'epic' }, 'kind')).toBe('neutral')
   })
 
+  it('names the kind on its mark, which is what its colour hangs on, and on no other', () => {
+    const wrapper = marks({ item: boardItem(1, 'backlog', { kind: 'bug', priority: 'urgent' }) })
+    expect(wrapper.get('[data-facet="kind"]').attributes('data-kind')).toBe('bug')
+    expect(wrapper.get('[data-facet="priority"]').attributes('data-kind')).toBeUndefined()
+  })
+
   it('prints nothing on a tile for an ordinary workable task', () => {
     const wrapper = marks({ item: boardItem(1, 'backlog') })
     expect(wrapper.text()).toBe('')

@@ -22,7 +22,14 @@ import VIcon from '@/shared/ui/VIcon.vue'
 interface OptionGroup {
   id: string
   name: string
-  options: readonly { key: string; selected: boolean; text: string; detail?: string }[]
+  options: readonly {
+    key: string
+    selected: boolean
+    text: string
+    detail?: string
+    /** The option names a work item kind, and its word takes that kind's colour. */
+    kind?: string
+  }[]
   choices?: readonly {
     key: string
     name: string
@@ -127,7 +134,11 @@ const highlighted = (place: number) => place === props.highlight || undefined
           name="check"
           :size="14"
         />
-        <span class="option-text">{{ entry.option.text }}</span>
+        <span
+          class="option-text"
+          :data-kind="entry.option.kind"
+          >{{ entry.option.text }}</span
+        >
         <span
           v-if="entry.option.detail"
           class="option-detail"
@@ -250,6 +261,10 @@ const highlighted = (place: number) => place === props.highlight || undefined
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  &[data-kind] {
+    color: var(--color-kind-ink);
+  }
 }
 
 .option-detail {

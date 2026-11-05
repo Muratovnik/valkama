@@ -35,7 +35,7 @@ test('a thrown switch is not painted the hue of finished work', async ({ page })
   expect(on.track).not.toBe(off.track)
 })
 
-test('a facet mark paints its glyph in the tone the state owner gave it, and a kind in none', async ({
+test('a facet mark paints its glyph in the tone the state owner gave it, and a kind in its own colour', async ({
   page,
 }) => {
   await page.goto('/tests/browser/harness.html?lang=ru&surface=marks')
@@ -54,7 +54,7 @@ test('a facet mark paints its glyph in the tone the state owner gave it, and a k
         const result = {
           glyph: getComputedStyle(node).color,
           danger: token('--color-danger'),
-          tertiary: token('--color-text-tertiary'),
+          improvement: token('--color-kind-improvement'),
         }
         probe.remove()
         return result
@@ -62,7 +62,7 @@ test('a facet mark paints its glyph in the tone the state owner gave it, and a k
   const urgent = await paint('[data-facet="priority"] .facet-glyph')
   expect(urgent.glyph).toBe(urgent.danger)
   const kind = await paint('[data-facet="kind"] .facet-glyph')
-  expect(kind.glyph).toBe(kind.tertiary)
+  expect(kind.glyph).toBe(kind.improvement)
   // A label chip stands on its lifted face, not on a recess cut into the card.
   const chip = await card
     .locator('.label-chip .chip-face')

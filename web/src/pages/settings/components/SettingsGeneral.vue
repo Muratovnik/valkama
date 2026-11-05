@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import SettingsAlerts from '@/pages/settings/components/SettingsAlerts.vue'
 import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
+import SettingsKindColors from '@/pages/settings/components/SettingsKindColors.vue'
 import SettingsOpening from '@/pages/settings/components/SettingsOpening.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 
@@ -66,6 +67,8 @@ function emitLocale(value: string) {
           />
         </SettingsRow>
       </SettingsGroup>
+
+      <SettingsKindColors class="settings-general-group" />
 
       <SettingsAlerts
         class="settings-general-group"

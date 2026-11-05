@@ -240,8 +240,7 @@
   text-overflow: clip;
 }
 
-/* A glyph is tertiary ink unless its tone says more. Kind never does: a type
-   is not a state, and a coloured kind would read as one more alarm. */
+/* A glyph is tertiary ink unless its tone says more. */
 .facet-glyph {
   flex: 0 0 auto;
   color: var(--color-text-tertiary);
@@ -261,6 +260,12 @@
   .facet-mark[data-tone='danger'] & {
     color: var(--color-danger);
   }
+}
+
+/* A kind is what an item is, not how it stands, so it has no tone: its glyph and its
+   word take the kind's own colour, and nothing around them does. */
+.facet-mark[data-kind] :is(.facet-glyph, .facet-word) {
+  color: var(--color-kind-ink);
 }
 
 /* The box is what a pointer hits and the face is what is drawn: a button keeps

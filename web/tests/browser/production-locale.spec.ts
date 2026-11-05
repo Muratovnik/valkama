@@ -45,6 +45,17 @@ test('Russian production shell localizes Settings without runtime failures', asy
   expect(failures).toEqual([])
 })
 
+test('Russian Settings names the task type colours and each colour field by its type', async ({
+  page,
+}) => {
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await expect(page.getByRole('heading', { name: 'Цвета типов задач', exact: true })).toBeVisible()
+  for (const word of ['Дефект', 'Эпик', 'Улучшение', 'Задача'])
+    await expect(page.getByLabel(`Цвет типа «${word}»`, { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Сбросить все цвета', exact: true })).toBeDisabled()
+})
+
 test('Russian Planning portfolio presents an unbound project through typed localized state', async ({
   page,
 }) => {
