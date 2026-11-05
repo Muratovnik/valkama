@@ -15,15 +15,19 @@
  * a refusal says so in a line of its own; the card only grows downwards, so it
  * does not jump sideways under the pointer when the item arrives.
  *
- * The card is pure: it draws what it is given. Where it floats, when it opens
- * and what a screen reader hears belong to the reference that shows it; the card
- * itself is hidden from assistive technology, which hears the same facts as the
- * reference's description (`useWorkItemPreviewWords().describe`).
+ * Its number copies itself and the icon beside it copies the item's address, as in a card's
+ * head and with the head's words. Beyond those it draws what it is given. Where it floats, when
+ * it opens and what a screen reader hears belong to the reference that shows it: the facts are
+ * hidden from assistive technology, which hears them as the reference's description
+ * (`useWorkItemPreviewWords().describe`), and only the two controls and what they did are read.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { drawMarks } from '@/entities/work-item/components/drawMarks.ts'
+import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
+import WorkItemCopyButtons from '@/entities/work-item/components/WorkItemCopyButtons.vue'
+import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCopy.ts'
 import { useWorkItemPreviewWords } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 import type { WorkItemPreviewSubject } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 
@@ -45,26 +49,45 @@ const when = computed(() => (props.item ? preview.when(props.item) : null))
 /** What the card holds: the item, or why there is none yet. */
 const read = computed(() => (props.item ? 'item' : (props.failure ?? 'loading')))
 const note = computed(() => preview.note(props))
+const copied = useWorkItemCopy(() => props.reference)
 </script>
 
 <template>
   <div
     class="work-item-preview"
-    aria-hidden="true"
     :data-read="read"
   >
     <p class="preview-head">
-      <span class="preview-reference">{{ reference }}</span>
-      <component
-        :is="drawMarks(head, { surface: 'preview', words: preview.words })"
+      <span class="preview-reference">
+        <WorkItemCopyButtons
+          :reference="reference"
+          :copy-link="copied.copyLink"
+          :copy-reference="copied.copyReference"
+        />
+      </span>
+      <span
         v-if="head.length"
+        class="preview-head-marks"
+        aria-hidden="true"
+      >
+        <component :is="drawMarks(head, { surface: 'preview', words: preview.words })" />
+      </span>
+      <IdentityNote
+        :text="copied.note.value"
+        :failed="copied.failed.value"
       />
     </p>
     <template v-if="item">
-      <p class="preview-title">{{ item.title }}</p>
+      <p
+        class="preview-title"
+        aria-hidden="true"
+      >
+        {{ item.title }}
+      </p>
       <p
         v-if="facts.length || stale"
         class="preview-facts"
+        aria-hidden="true"
       >
         <component
           :is="drawMarks(facts, { surface: 'preview', words: preview.words })"
@@ -80,6 +103,7 @@ const note = computed(() => preview.note(props))
       <p
         v-if="when"
         class="preview-when"
+        aria-hidden="true"
       >
         <template v-if="project"
           ><span class="preview-project">{{ project }}</span> ·
@@ -90,6 +114,7 @@ const note = computed(() => preview.note(props))
     <p
       v-else
       class="preview-note"
+      aria-hidden="true"
     >
       {{ note }}
     </p>
@@ -120,7 +145,14 @@ const note = computed(() => preview.note(props))
 }
 
 .preview-reference {
+  display: inline-flex;
+  align-items: center;
   white-space: nowrap;
+}
+
+/* Hidden as one from assistive technology, and laid out as what it holds. */
+.preview-head-marks {
+  display: contents;
 }
 
 /* The whole title, however long: the card is where it is read in full. A title

@@ -17,8 +17,22 @@
  *   this reference, and the card stays closed. Only a Tab opens it from the keyboard.
  * - A surface opening over the card closes it: `Ctrl+K` does not move the pointer, so
  *   the reference would never hear it leave.
- * - A press inside the card does not take focus: the card is read, and focus leaving
- *   an overlay's surface would let the next Tab out from behind its backdrop.
+ * - A press inside the card leaves focus where it was: focus leaving an overlay's surface
+ *   would let the next Tab out from behind its backdrop. A browser moves focus as a press
+ *   starts a selection, and refusing the press refused the selection too, so a press on text
+ *   goes through and focus goes back: when the press ends with nothing selected, otherwise
+ *   at the next Tab or as the card closes, since a text field taking focus would clear what
+ *   the reader just selected. A press on a control is refused, so no focus moves at all.
+ * - A selection holds the card up. While the press that makes it is down the card does not
+ *   close, wherever the pointer goes, and once made it stays until the reader's own press
+ *   elsewhere, Escape or a scroll: a card closing under a pointer on its way to nothing would
+ *   take the selection with it.
+ * - The pointer on the card keeps it, whatever reference lies under it. The library closes a
+ *   card for standing over another reference, and that one then took the card from under the
+ *   pointer, so a card was out of reach wherever text went on below the reference. The rule
+ *   runs as the pointer moves on the card, and nothing else that closes a card does.
+ * - Tab goes from the reference through the card's controls and on from the reference, since
+ *   the card is portalled away from it and the document's own order would never reach them.
  *
  * A preview that has to read waits for its answer a moment before it shows, so a
  * quick answer is never preceded by a line saying it is on its way.
@@ -80,6 +94,38 @@ let scrolling = false
 let reading: AbortController | null = null
 /** The card is being held back for a read. */
 let waiting = false
+/** A press that began on the card's text is still down: it may be a selection being made. */
+let pressing = false
+/** The card holds a selection the reader made. */
+let pinned = false
+/** Where focus stood before a press on the card's text took it away. */
+let focusBefore: HTMLElement | null = null
+/** A pointer move on the card is on its way through the page. */
+let movingOnCard = false
+
+const cardElement = () => document.querySelector<HTMLElement>('.reference-preview')
+const inCard = (target: EventTarget | null) =>
+  target instanceof Node && cardElement()?.contains(target) === true
+const onControl = (target: EventTarget | null) =>
+  target instanceof Element && target.closest('button') !== null
+
+function selectionInCard() {
+  const selection = document.getSelection()
+  return Boolean(selection && !selection.isCollapsed && inCard(selection.anchorNode))
+}
+
+function giveFocusBack() {
+  const back = focusBefore
+  focusBefore = null
+  if (back?.isConnected) back.focus({ preventScroll: true })
+}
+
+/** Close what the reader's own act closes, whatever held the card up. */
+function dismiss() {
+  pinned = false
+  pressing = false
+  root?.onClose()
+}
 
 function stopReading() {
   reading?.abort()
@@ -118,6 +164,11 @@ function request(next: boolean) {
   if (!next) {
     // A Tab scrolls the reference it lands on into view, and that is no reason to close.
     if (scrolling && heldByFocus) return
+    if (movingOnCard || ((pressing || pinned) && !scrolling)) return
+    pressing = false
+    pinned = false
+    giveFocusBack()
+    if (inCard(document.activeElement)) anchor?.focus({ preventScroll: true })
     stopReading()
     heldByFocus = false
     open.value = false
@@ -129,6 +180,35 @@ function request(next: boolean) {
   if (preview) show(anchor, preview)
 }
 
+/** From the reference into the card's controls, and out of them from the reference again. */
+function tabThroughCard(event: KeyboardEvent) {
+  const controls = [...(cardElement()?.querySelectorAll<HTMLElement>('button') ?? [])]
+  const at = controls.indexOf(document.activeElement as HTMLElement)
+  const step = event.shiftKey ? -1 : 1
+  if (at < 0) {
+    if (focusBefore) giveFocusBack()
+    else if (document.activeElement === anchor && !event.shiftKey && heldByFocus) {
+      event.preventDefault()
+      controls[0]?.focus()
+    }
+    return
+  }
+  const next = controls[at + step]
+  if (next) {
+    event.preventDefault()
+    next.focus()
+    return
+  }
+  // Back on the reference: Shift+Tab stops there, and Tab goes on from it as the browser moves it.
+  if (event.shiftKey) event.preventDefault()
+  anchor?.focus()
+}
+
+/** A press on a control moves no focus and clears no selection. */
+function pressInCard(event: MouseEvent) {
+  if (onControl(event.target)) event.preventDefault()
+}
+
 function leave() {
   hovered = null
   root?.onTriggerLeave()
@@ -137,11 +217,23 @@ function leave() {
   if (open.value) root?.onClose()
 }
 
+// Either side of the library's listener on the card, as for a scroll below.
+useEventListener(
+  window,
+  'pointermove',
+  (event: PointerEvent) => {
+    movingOnCard = inCard(event.target)
+  },
+  { capture: true },
+)
+useEventListener(window, 'pointermove', () => {
+  movingOnCard = false
+})
 useEventListener(
   document,
   'pointermove',
   (event: PointerEvent) => {
-    if (event.pointerType === 'touch') return
+    if (event.pointerType === 'touch' || pressing || pinned) return
     const element = previewAnchorOf(event.target)
     if (element === hovered) return
     if (hovered) leave()
@@ -167,10 +259,40 @@ useEventListener(
   'pointerdown',
   (event: PointerEvent) => {
     tabbing = false
+    if (inCard(event.target)) {
+      if (onControl(event.target)) return
+      pressing = true
+      const focused = document.activeElement
+      if (!focusBefore && focused instanceof HTMLElement && focused !== document.body)
+        focusBefore = inCard(focused) ? null : focused
+      return
+    }
+    // Their own press elsewhere takes focus for itself, and any selection with it.
+    focusBefore = null
+    if (pinned) dismiss()
     if (previewAnchorOf(event.target)) root?.onClose()
   },
   { capture: true },
 )
+useEventListener(
+  window,
+  ['pointerup', 'pointercancel'],
+  (event: PointerEvent) => {
+    if (!pressing) return
+    pressing = false
+    pinned = selectionInCard()
+    if (pinned) return
+    giveFocusBack()
+    // Nothing selected, and the library heard the pointer leave while the press held the card.
+    if (!inCard(document.elementFromPoint(event.clientX, event.clientY))) root?.onClose()
+  },
+  { capture: true },
+)
+useEventListener(document, 'selectionchange', () => {
+  if (!pinned || pressing || selectionInCard()) return
+  pinned = false
+  giveFocusBack()
+})
 useEventListener(
   document,
   'click',
@@ -204,7 +326,15 @@ useEventListener(document, 'focusin', (event: FocusEvent) => {
 })
 useEventListener(document, 'focusout', (event: FocusEvent) => {
   const element = previewAnchorOf(event.target)
-  if (element && element === anchor) root?.onClose()
+  if (element && element === anchor && !inCard(event.relatedTarget)) root?.onClose()
+  // Focus in the card is held there by the keyboard, and goes with it.
+  else if (
+    inCard(event.target) &&
+    event.relatedTarget !== null &&
+    event.relatedTarget !== anchor &&
+    !inCard(event.relatedTarget)
+  )
+    dismiss()
 })
 // Either side of the library's own listener, which mounts with the card on the window and
 // closes it on any scroll: the event goes through the window before it reaches the document.
@@ -228,21 +358,22 @@ useEventListener(
   () => (open.value ? window : null),
   'keydown',
   (event: KeyboardEvent) => {
+    if (event.key === 'Tab') tabThroughCard(event)
     if (event.key !== 'Escape' || event.isComposing) return
     event.preventDefault()
     event.stopPropagation()
-    root?.onClose()
+    dismiss()
   },
   { capture: true },
 )
 
-watch(overlayTop, () => root?.onClose())
+watch(overlayTop, dismiss)
 
 const stopHearing = onPreviewAnchorGone((element) => {
   if (element === hovered) hovered = null
   if (element !== anchor && element !== drawn.value?.element) return
   if (element === anchor) anchor = null
-  root?.onClose()
+  dismiss()
 })
 onBeforeUnmount(() => {
   stopHearing()
@@ -281,7 +412,7 @@ watch([drawn, open], ([shown, isOpen], [before]) => {
           :collision-padding="8"
           :aria-label="description"
           hide-when-detached
-          @mousedown.prevent
+          @mousedown="pressInCard"
         >
           <Drawn />
         </TooltipContent>

@@ -150,10 +150,15 @@ describe('WorkItemPreview', () => {
     expect(wrapper.find('.preview-title').exists()).toBe(false)
   })
 
-  it('is hidden from assistive technology and brings no hover text of its own', () => {
+  it('hides its facts from assistive technology and brings hover text only to its controls', () => {
     const wrapper = card({ item: { ...CLAIMED, priority: 'urgent' }, waitingOn: 'MAIN-12' })
-    expect(wrapper.attributes('aria-hidden')).toBe('true')
-    expect(wrapper.findAll('[title]')).toHaveLength(0)
+    for (const line of ['.preview-head-marks', '.preview-title', '.preview-facts', '.preview-when'])
+      expect(wrapper.get(line).attributes('aria-hidden'), line).toBe('true')
+    expect(wrapper.attributes('aria-hidden')).toBeUndefined()
+    expect(wrapper.findAll('[title]').map((node) => node.element.tagName)).toEqual([
+      'BUTTON',
+      'BUTTON',
+    ])
   })
 
   it('speaks in Russian with the same words as the board', () => {

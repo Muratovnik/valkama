@@ -86,7 +86,9 @@ test('a Tab shows the card at once and describes the reference; leaving takes it
   expect(opened.description).toContain('Steps: 1 of 3')
   await expect(link).toHaveAttribute('aria-describedby', /.+/u)
 
-  // On to the next reference, whose card it becomes.
+  // Through the card's two controls and on to the next reference, whose card it becomes.
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await expect(shown).toContainText('MAIN-13')
   await expect(link).not.toHaveAttribute('aria-describedby')

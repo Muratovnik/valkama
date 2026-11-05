@@ -8,11 +8,10 @@
  * reference under the title, «Обновлено» and «Источник» as two cells of a fact
  * grid below the writes, which put the state half way down the drawer.
  *
- * The reference copies itself, and the link beside it copies the item's short
- * address, `/open/<number>` on this origin, which opens the card wherever it is
- * followed: the desktop app has no address bar to take it from. Each says what
- * happened at the end of the line, by the one rule `IdentityNote` keeps for both.
- * The note for the link names no number: the reference stands right before it.
+ * The reference copies itself and the link beside it copies the item's address
+ * (`useWorkItemCopy`). Each says what happened at the end of the line, by the one rule
+ * `IdentityNote` keeps for both. The note for the link names no number: the reference
+ * stands right before it.
  *
  * Nothing on the line is ever cut: a date shortened to «04 нояб.,…» is no date.
  * Short of room, things step aside whole, in this order: the date, which stands in
@@ -29,15 +28,15 @@
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useResizeObserver, useTimeoutFn } from '@vueuse/core'
-
-import IdentityNote from '@/widgets/work-item-inspector/components/IdentityNote.vue'
+import { useResizeObserver } from '@vueuse/core'
 
 import { useDocumentLinks } from '@/entities/project-document/documentLinks.ts'
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
+import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
+import WorkItemCopyButtons from '@/entities/work-item/components/WorkItemCopyButtons.vue'
+import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCopy.ts'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
 import { sourceDocument } from '@/shared/lib/textReferences.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -63,40 +62,12 @@ const sourceBusy = computed(() => sourceLink.value?.busy || undefined)
 const sourceGlyph = computed(() =>
   sourceLink.value?.copies && !sourceLink.value.busy ? 'copy' : 'document',
 )
-const copyNote = ref('')
-const copyFailed = ref(false)
-/** Long enough to read the longest note twice; then the line is the item's again. */
-const NOTE_SHOWN_MS = 5000
-const { start: expireNote } = useTimeoutFn(
-  () => {
-    copyNote.value = ''
-  },
-  NOTE_SHOWN_MS,
-  { immediate: false },
-)
-
-/** Put `text` on the clipboard and say beside the line whether it got there. */
-async function copy(text: string, done: string, failed: string) {
-  const words = { reference: props.reference }
-  try {
-    await navigator.clipboard.writeText(text)
-    copyFailed.value = false
-    copyNote.value = t(done, words)
-  } catch {
-    copyFailed.value = true
-    copyNote.value = t(failed, words)
-  }
-  expireNote()
-}
-
-const copyReference = () =>
-  copy(props.reference, 'workItem.head.referenceCopied', 'workItem.head.referenceCopyFailed')
-const copyLink = () =>
-  copy(
-    workItemLinkAddress(location.origin, props.reference),
-    'workItem.head.linkCopied',
-    'workItem.head.linkCopyFailed',
-  )
+const {
+  copyLink,
+  copyReference,
+  failed: copyFailed,
+  note: copyNote,
+} = useWorkItemCopy(() => props.reference)
 
 function pressSource() {
   copyNote.value = ''
@@ -158,27 +129,11 @@ const updated = computed(() => {
       />
     </span>
     <span class="identity-fact">
-      <button
-        class="head-reference"
-        type="button"
-        :title="t('workItem.head.copyReference', { reference })"
-        :aria-label="t('workItem.head.copyReference', { reference })"
-        @click="copyReference"
-      >
-        {{ reference }}
-      </button>
-      <button
-        class="identity-link"
-        type="button"
-        :title="t('workItem.head.copyLink', { reference })"
-        :aria-label="t('workItem.head.copyLink', { reference })"
-        @click="copyLink"
-      >
-        <VIcon
-          name="link"
-          :size="14"
-        />
-      </button>
+      <WorkItemCopyButtons
+        :reference="reference"
+        :copy-link="copyLink"
+        :copy-reference="copyReference"
+      />
     </span>
     <span
       v-if="updated && dateShown"
@@ -239,11 +194,12 @@ const updated = computed(() => {
   margin-inline-end: var(--space-2);
 }
 
-.head-reference,
-.identity-link,
 .identity-source {
   display: inline-flex;
+  flex: none;
+  justify-content: center;
   align-items: center;
+  min-inline-size: var(--size-control-inline);
   min-block-size: var(--size-control-inline);
   padding: 0;
   border: 0;
@@ -261,23 +217,6 @@ const updated = computed(() => {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
-}
-
-.head-reference {
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.identity-link,
-.identity-source {
-  flex: none;
-  justify-content: center;
-  min-inline-size: var(--size-control-inline);
-}
-
-/* The link belongs to the reference it copies, a step apart so the two rings never touch. */
-.identity-link {
-  margin-inline-start: var(--space-1);
 }
 
 /* A phone-wide drawer keeps who the item is and leaves when it changed to the

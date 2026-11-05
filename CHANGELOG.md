@@ -209,6 +209,12 @@ checkouts are therefore distinguishable even at the same version.
 - **A card on a graph zoomed far out no longer shows three unexplained dots.** Its number
   stands whole inside the block at any length, and what an agent is doing on it is in the
   card's tooltip and accessible name, on its lines and in its frame's count.
+- **The card a number shows copies and can be selected.** It offers the number and a link to
+  the item as a card's head does, with the same icons and the same note when a copy is made or
+  refused, and Tab reaches both from the number. Its text can be selected with the pointer, which
+  a refused press used to prevent, and a selection keeps the card up until you press elsewhere
+  or press Escape, even if the drag ended outside it. A card standing over another number stays
+  as the pointer reaches it, where it used to give way to that number's card.
 - **A frame on a graph zoomed out says what its number counts.** Its header showed three
   dots and «5» with no word; it now says «5 working» at every zoom, on the reference's line
   where there is room and on the line under it where a fold leaves that free. Where neither

@@ -59,13 +59,13 @@ test('a title of 200 letters with no space wraps inside the card at 390px', asyn
   expect(Math.round(lines)).toBeGreaterThan(5)
 })
 
-test('the card is hidden from assistive technology and brings no hover text of its own', async ({
+test('its facts are hidden from assistive technology, and only its controls have hover text', async ({
   page,
 }) => {
   await page.goto('/tests/browser/harness.html?lang=ru&surface=preview')
   const previews = page.locator('.work-item-preview')
   await expect(previews).toHaveCount(STATES.length)
-  for (const preview of await previews.all())
-    await expect(preview).toHaveAttribute('aria-hidden', 'true')
-  await expect(page.locator('.preview-harness [title]')).toHaveCount(0)
+  for (const title of await page.locator('.work-item-preview .preview-title').all())
+    await expect(title).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.locator('.preview-harness [title]:not(button)')).toHaveCount(0)
 })

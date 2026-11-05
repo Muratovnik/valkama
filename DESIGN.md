@@ -749,7 +749,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **A reference's card:** `ReferencePreview` owns the one card per window shown
   for a work item's number in free text, half a second after the pointer rests on
   it or at once on Tab: number and state on a line, the title, the holder and the
-  steps. It only reads. Nothing in it takes focus, a press on the number still
+  steps. Its number copies itself and the icon beside it copies the item's address, as in a
+  card's head and with the head's note; Tab goes from the reference through those two and on
+  from the reference. Its text can be selected: focus goes back to where it stood when the
+  press ends with nothing selected and otherwise at the next Tab, and a selection holds the
+  card up until a press elsewhere, Escape or a scroll. The pointer on the card keeps it
+  whatever reference lies under it. A press on the reference still
   opens the item, and Escape closes the card and nothing under it. A card from the
   pointer closes when what holds the reference scrolls. A card from Tab stays,
   because the browser's own scroll to the focused number would close it, and is
