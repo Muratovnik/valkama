@@ -25,11 +25,10 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
-import RequestActions from '@/features/input-requests/components/RequestActions.vue'
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
+import RequestFoot from '@/features/input-requests/components/RequestFoot.vue'
 import RequestHeader from '@/features/input-requests/components/RequestHeader.vue'
-import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
@@ -51,7 +50,6 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
-import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
 import EntryHead from '@/shared/ui/EntryHead.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -85,10 +83,9 @@ provideDocumentLinks(() => ({
 const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
 const { focus, focusOutcome, holdsFocus, reveal } = useRequestFocus(card)
-const errorLine = ref<HTMLElement | null>(null)
 const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
-const actions = ref<InstanceType<typeof RequestActions> | null>(null)
+const foot = ref<InstanceType<typeof RequestFoot> | null>(null)
 
 const {
   busy,
@@ -114,7 +111,7 @@ const {
   itemClosed: () => props.itemClosed,
   failed: async () => {
     await nextTick()
-    moveFocus(errorLine.value)
+    foot.value?.focusError()
   },
   refuse: async (field) => {
     await answerFields.value?.focusField(field)
@@ -156,8 +153,16 @@ const sendDisabled = computed(() =>
     ? !changeable.value || requiresRefresh.value || unchanged.value
     : !writable.value || requiresRefresh.value,
 )
-const noting = computed(() => answerFields.value?.noteOpen ?? false)
-const noteWritten = computed(() => answerFields.value?.noteWritten ?? false)
+/** The press of the comment on the question, which stands in the foot while there is a form. */
+const noteToggle = computed(() =>
+  inForm.value && supported.value
+    ? {
+        disabled: fieldsDisabled.value,
+        open: answerFields.value?.noteOpen ?? false,
+        written: answerFields.value?.noteWritten ?? false,
+      }
+    : null,
+)
 const pressNote = () => answerFields.value?.pressNote()
 /** Why an answered question offers no change, where that is something to know. */
 const changeFact = computed(() => {
@@ -177,7 +182,7 @@ const unsentChosen = computed(() =>
 )
 const change = useAnswerChange({
   busy,
-  focusCancel: () => actions.value?.focusWayOut(),
+  focusCancel: () => foot.value?.focusWayOut(),
   focusChange: () =>
     card.value?.querySelector<HTMLElement>('.request-change')?.focus({ preventScroll: true }),
   forget,
@@ -220,7 +225,7 @@ useEventListener(card, 'keydown', (event: KeyboardEvent) => {
   else if (changing.value) change.cancel()
   else {
     stepBack()
-    actions.value?.focusWayOut()
+    foot.value?.focusWayOut()
   }
 })
 
@@ -333,56 +338,29 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     >
       {{ changeFact }}
     </p>
-    <footer
+    <RequestFoot
       v-if="hasFoot"
-      class="request-foot"
-    >
-      <ConfirmStrip
-        v-if="askingCancel"
-        class="request-confirm"
-        tone="danger"
-        :cancel-label="t('requests.keepChanging')"
-        :confirm-label="t('requests.discardChange')"
-        :message="t('requests.cancelAsked')"
-        @cancel="change.keep"
-        @confirm="change.end"
-      />
-      <RequestActions
-        v-show="!askingCancel"
-        ref="actions"
-        :busy="busy"
-        :changing="changing"
-        :declining="declining"
-        :disabled="sendDisabled"
-        :dismissable="standalone && !inForm"
-        :refreshable="canRefresh"
-        :standalone="standalone"
-        :waiting="waiting"
-        @dismiss="emit('dismiss', entry)"
-        @onward="pressOnward"
-        @open="emit('select', entry.target)"
-        @refresh="refresh"
-        @way-out="pressWayOut"
-      >
-        <RequestNoteToggle
-          v-if="inForm && supported"
-          :disabled="fieldsDisabled"
-          :open="noting"
-          :title="t('requests.questionNote')"
-          :written="noteWritten"
-          @press="pressNote"
-        />
-      </RequestActions>
-      <p
-        v-if="error"
-        ref="errorLine"
-        class="request-error"
-        role="alert"
-        tabindex="-1"
-      >
-        {{ errorText }}
-      </p>
-    </footer>
+      ref="foot"
+      :asking-cancel="askingCancel"
+      :busy="busy"
+      :changing="changing"
+      :declining="declining"
+      :disabled="sendDisabled"
+      :dismissable="standalone && !inForm"
+      :error="errorText"
+      :note="noteToggle"
+      :refreshable="canRefresh"
+      :standalone="standalone"
+      :waiting="waiting"
+      @discard="change.end"
+      @dismiss="emit('dismiss', entry)"
+      @keep="change.keep"
+      @note="pressNote"
+      @onward="pressOnward"
+      @open="emit('select', entry.target)"
+      @refresh="refresh"
+      @way-out="pressWayOut"
+    />
   </article>
 </template>
 
@@ -399,11 +377,11 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
   scroll-margin-top: var(--space-4);
 }
 
-/* The app moves focus to these, to the next question and to why a write did not go
-   through or no longer can, and rings them as it does (`moveFocus`): it is the one sign of
-   where the reader was taken. A press on one takes focus too, and rings nothing. The ring
-   itself is the base one; here it only stands clear of the words. */
-:is(.request-card, .request-error, .request-deadline):focus-visible {
+/* The app moves focus to these, to the next question and to why a write no longer can go
+   through, and rings them as it does (`moveFocus`): it is the one sign of where the reader
+   was taken. A press on one takes focus too, and rings nothing. The ring itself is the base
+   one; here it only stands clear of the words. */
+:is(.request-card, .request-deadline):focus-visible {
   border-radius: var(--radius-control);
   outline-offset: var(--space-1);
 }
@@ -426,28 +404,5 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 
 .request-prompt {
   font: var(--font-editor);
-}
-
-/* What `RequestActions` asks lies against this, and takes no room in it unless a note is open. */
-.request-foot {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  align-items: center;
-  min-width: 0;
-  container-type: inline-size;
-}
-
-.request-confirm {
-  flex: 1 1 100%;
-}
-
-.request-error {
-  flex: 1 1 100%;
-  min-width: 0;
-  margin: 0;
-  color: var(--color-danger);
-  font: var(--font-detail);
 }
 </style>
