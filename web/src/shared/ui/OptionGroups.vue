@@ -167,6 +167,11 @@ const highlighted = (place: number) => place === props.highlight || undefined
   box-shadow: 0 14px 34px var(--color-shadow);
 }
 
+/* A row the arrows reach stops short of a head waiting at the lower edge, too. */
+.option-groups:has(.option-choices) {
+  scroll-padding-bottom: calc(var(--size-control-inline) + var(--space-1));
+}
+
 .option-group + .option-group {
   margin-top: var(--space-1);
 }
