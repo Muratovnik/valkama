@@ -11,7 +11,8 @@
  * The reference copies itself and the link beside it copies the item's address
  * (`useWorkItemCopy`). Each says what happened at the end of the line, by the one rule
  * `IdentityNote` keeps for both. The note for the link names no number: the reference
- * stands right before it.
+ * stands right before it. Where the item can be pinned the pin stands after the link
+ * (`InspectorPin`), and never steps aside: it is an action, not a fact.
  *
  * Nothing on the line is ever cut: a date shortened to «04 нояб.,…» is no date.
  * Short of room, things step aside whole, in this order: the date, which stands in
@@ -30,6 +31,8 @@ import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
 
+import InspectorPin from '@/widgets/work-item-inspector/components/InspectorPin.vue'
+
 import { useDocumentLinks } from '@/entities/project-document/documentLinks.ts'
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
@@ -46,6 +49,8 @@ const props = defineProps<{
   item: WorkItem | null
   reference: string
   resourceRef: PlanningSpaceEntityRef
+  /** The item is in the primary store, whose items a person can pin. */
+  pinnable?: boolean
 }>()
 
 const { t, d } = useI18n()
@@ -133,6 +138,10 @@ const updated = computed(() => {
         :reference="reference"
         :copy-link="copyLink"
         :copy-reference="copyReference"
+      />
+      <InspectorPin
+        v-if="pinnable"
+        :reference="reference"
       />
     </span>
     <span

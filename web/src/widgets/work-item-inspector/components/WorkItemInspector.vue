@@ -309,6 +309,7 @@ defineExpose({ close, openFrom })
         :item="item"
         :reference="reference"
         :resource-ref="resourceRef"
+        :pinnable="writable"
       />
     </template>
 
