@@ -119,7 +119,10 @@ function updateOpen(value: boolean) {
           :name="selected.icon"
         />
         <span class="choice-value">
-          <SelectValue :placeholder="placeholder">
+          <SelectValue
+            class="choice-value-content"
+            :placeholder="placeholder"
+          >
             <!-- A host may draw the chosen value its own way — a state with
                  its dot — and the list below still names every option. -->
             <slot
@@ -249,11 +252,9 @@ function updateOpen(value: boolean) {
   }
 }
 
-/* The icon is the option's identity — the workspace, the board — and it carries
-   more of the trigger than the caption does, so it is drawn at the size that
-   makes the control read as one object rather than as a caption with a mark
-   beside it. The trigger and the list item are the same control and take the
-   same size; two numbers here would be the same drift the ramp exists to end. */
+/* The icon is the option's identity, so it carries more of the trigger than the caption does:
+   the control reads as one object. The trigger and the list item are the same control and take
+   the same size; two numbers here would be the same drift the ramp exists to end. */
 .choice-trigger.has-icon {
   grid-template-columns: 24px minmax(0, 1fr) 18px;
 }
@@ -266,9 +267,8 @@ function updateOpen(value: boolean) {
   padding: 0 var(--space-2) 0 var(--space-3);
 }
 
-/* In a table's heading the trigger says what its neighbours say, in their font and
-   with the least around it, because the name is what has to fit: at a phone's width
-   a compact trigger's 46px left «Обновлено» 56 of the 77 it needs. */
+/* In a table's heading the trigger says what its neighbours say, in their font and with the
+   least around it: at a phone's width a compact trigger's 46px left «Обновлено» 56 of its 77. */
 .choice-select.size-heading .choice-trigger {
   grid-template-columns: minmax(0, 1fr) 14px;
   gap: var(--space-1);
@@ -285,11 +285,9 @@ function updateOpen(value: boolean) {
   }
 }
 
-/* A host standing on another ramp — the chrome — names its two fills through
-   `--color-choice-trigger-fill` and `--color-choice-trigger-fill-hover` rather than
-   restyling this trigger's states from outside, which is how a disabled
-   trigger in the chrome came to light up on hover: the host's rule had no
-   `:not(:disabled)` in it, because the state belongs here. */
+/* A host on another ramp, the chrome, names its two fills through `--color-choice-trigger-fill`
+   and `--color-choice-trigger-fill-hover` rather than restyling these states from outside, which
+   lit up a disabled trigger on hover: the host's rule had no `:not(:disabled)` in it. */
 .choice-trigger:hover:not(:disabled),
 .choice-trigger[data-state='open'] {
   background: var(--color-choice-trigger-fill-hover, var(--color-surface-active));
@@ -324,15 +322,16 @@ function updateOpen(value: boolean) {
 }
 
 .choice-value {
-  display: grid;
-
-  /* A grid track is min-content wide unless told otherwise, so the label and
-     its description held the trigger open past its own box and the ellipsis
-     never got the chance to appear. */
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-hair);
   min-width: 0;
   overflow: hidden;
+}
+
+/* What the host draws stands in a box and not on a line of text, where an inline box hangs from
+   the line's baseline: a state's word stood 0.75px under the facts beside the trigger. The track
+   is told its width, or a long label holds the trigger open and no ellipsis ever appears. */
+.choice-value-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .choice-title {

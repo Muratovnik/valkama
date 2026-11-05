@@ -23,6 +23,8 @@ const CARD = serializePlatformRoute({
 
 /** The room a mark may stand off the middle of the letters beside it. */
 const TOLERANCE = 1
+/** Under half a pixel, so that two words of one line never round to two rows of pixels. */
+const BASELINE_ROOM = 0.25
 
 interface TextMeasure {
   /** The text's baseline, from the top of its own run plus the font's ascent. */
@@ -267,6 +269,52 @@ for (const locale of ['ru', 'en'] as const) {
         for (const { cuts, text } of words) expect(cuts, `the letters of “${text}”`).toEqual([])
       })
     }
+  }
+}
+
+/** The baseline of each word of the first row of facts, by the line of the row it wrapped to. */
+function factBaselines(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas').getContext('2d')
+    if (!canvas) throw new Error('no canvas')
+    const lines = new Map<number, { baseline: number; text: string }[]>()
+    for (const fact of document.querySelectorAll('.drawer .card-facts > *')) {
+      const word = fact.querySelector('.state-label, .facet-word:not(.facet-word-hidden)')
+      if (!word) throw new Error(`no word in ${fact.className}`)
+      const range = document.createRange()
+      range.selectNodeContents(word)
+      const style = getComputedStyle(word)
+      canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+      const baseline =
+        range.getBoundingClientRect().top + canvas.measureText('H').fontBoundingBoxAscent
+      const line = fact.getBoundingClientRect().top
+      const row = [...lines.keys()].find((top) => Math.abs(top - line) < 12) ?? line
+      lines.set(row, [
+        ...(lines.get(row) ?? []),
+        { baseline, text: word.textContent?.trim() ?? '' },
+      ])
+    }
+    return [...lines.values()]
+  })
+}
+
+for (const locale of ['ru', 'en'] as const) {
+  for (const width of [1280, 390]) {
+    test(`the words of one line of facts share a baseline, ${locale} at ${width}px`, async ({
+      page,
+    }) => {
+      await openCard(page, locale, width, FULL_HEAD)
+      const lines = await factBaselines(page)
+      console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
+      // State, question, priority and epic, however a phone's row wraps them.
+      expect(lines.flat()).toHaveLength(4)
+      for (const [first, ...rest] of lines)
+        for (const other of rest)
+          expect(
+            Math.abs(other.baseline - first.baseline),
+            `“${other.text}” against “${first.text}”`,
+          ).toBeLessThanOrEqual(BASELINE_ROOM)
+    })
   }
 }
 
