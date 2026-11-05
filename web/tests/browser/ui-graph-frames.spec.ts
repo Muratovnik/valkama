@@ -30,8 +30,8 @@ async function longHeader(page: Page) {
     const head = frame.querySelector<HTMLElement>('.graph-frame-head')?.getBoundingClientRect()
     const counts = [...frame.querySelectorAll<HTMLElement>('.graph-frame-count')]
     return {
-      titleCut: title !== null && title.scrollWidth > title.clientWidth,
-      ellipsis: title === null ? '' : getComputedStyle(title).textOverflow,
+      titleCut: title !== null && title.scrollHeight > title.clientHeight,
+      clamp: title === null ? '' : getComputedStyle(title).webkitLineClamp,
       countsWhole: counts.every((count) => count.scrollWidth <= count.clientWidth),
       countsInside: counts.every((count) => {
         const box = count.getBoundingClientRect()
@@ -48,7 +48,7 @@ for (const [width, lang] of [
   [390, 'en'],
   [390, 'ru'],
 ] as const) {
-  test(`a frame cuts its title and none of its counts at ${width}px in ${lang}`, async ({
+  test(`a frame keeps its title to two lines and cuts none of its counts at ${width}px in ${lang}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 800 })
@@ -56,8 +56,7 @@ for (const [width, lang] of [
     await settled(page)
     const header = await longHeader(page)
     expect(header).toMatchObject({
-      titleCut: true,
-      ellipsis: 'ellipsis',
+      clamp: '2',
       countsWhole: true,
       countsInside: true,
     })

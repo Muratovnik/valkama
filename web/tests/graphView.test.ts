@@ -4,6 +4,7 @@ import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
 import {
+  FRAME_HEADER,
   MARGIN,
   NO_EPIC_FRAME,
   NODE_HEIGHT,
@@ -247,7 +248,8 @@ test('small disconnected chains stay compact with consistent card geometry', asy
     edges: [edge(1, 2), edge(3, 4)],
   })
   assert.ok(placed.width < 4 * NODE_WIDTH + 200)
-  assert.ok(placed.height < 4 * NODE_HEIGHT)
+  // The frame's header aside, two rows of cards and the air round them.
+  assert.ok(placed.height - FRAME_HEADER < 3.5 * NODE_HEIGHT)
   assert.ok(NODE_HEIGHT >= 100)
   assertClearGeometry(placed)
 })

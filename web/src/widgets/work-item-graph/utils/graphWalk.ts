@@ -59,10 +59,10 @@ export function isGraphWalkKey(key: string): key is GraphWalkKey {
   return key in DIRECTIONS || key === 'Home' || key === 'End'
 }
 
-/** A frame's header: all of it when folded, its top row when open. */
+/** A frame's header, one height folded or open. */
 export function headerBox(frame: PlacedFrame): Box {
   const { x, y, width } = frame
-  return { x, y, width, height: frame.folded ? frame.height : FRAME_HEADER }
+  return { x, y, width, height: FRAME_HEADER }
 }
 
 /**

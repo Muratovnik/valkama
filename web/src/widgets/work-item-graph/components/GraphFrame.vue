@@ -6,11 +6,15 @@
  * The frame is ground a step above the field and its cards a step above it, so
  * it is told by tone and draws no line. Its header is one row of two controls,
  * each one button with one action as a card is: the chevron folds or unfolds
- * it, the rest opens the epic's card. The rest names the epic, its state once
- * it has moved, and how its work stands in words, a number beside each word
- * rather than inside it; the 3px edge under the row is the same count drawn.
- * Only the title gives way when the row is short: the counts are never cut, and
- * take the row under the name before they would be.
+ * it, the rest opens the epic's card. The rest reads as a card on the field
+ * does: the reference line with the state once it has moved, two lines of title,
+ * then how the work stands in words; the 3px edge under it is the same count
+ * drawn.
+ *
+ * The header is one height and one arrangement whether the frame is folded or
+ * open (`FRAME_HEADER`), so folding moves nothing in it. Each line keeps its
+ * place whatever the others hold; only counts that take a third line take it
+ * from the title's second.
  *
  * The work under no epic is a frame too, with no epic to open. A frame inside
  * a frame is a well cut into it, a step below. Zoomed out past reading, the
@@ -20,11 +24,13 @@
  * by: `frame:<id>:fold` and `frame:<id>`.
  */
 import { computed } from 'vue'
-import { Translation, useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n'
 
 import { Handle, Position } from '@vue-flow/core'
 
+import GraphFrameCounts from '@/widgets/work-item-graph/components/GraphFrameCounts.vue'
 import GraphFrameProgress from '@/widgets/work-item-graph/components/GraphFrameProgress.vue'
+import { countedGroups } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import { FRAME_HEADER, NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { foldIsTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
@@ -88,19 +94,12 @@ const chevron = computed(() => (frame.folded ? 'chevron-right' : 'chevron-down')
 const kindGlyph = computed(() => (isEpic.value ? 'kind-epic' : 'parent'))
 const title = computed(() => epic.value?.title ?? t('graph.frame.noEpic'))
 
-/** The groups under way or stopped, in the edge's order; a zero is not written. */
-const counts = computed(() =>
-  (['review', 'active', 'blocked'] as const)
-    .filter((group) => frame.progress[group] > 0)
-    .map((group) => ({ group, count: frame.progress[group] })),
-)
-
 /** What a reader hears for the open target: the same facts the header shows. */
 const openLabel = computed(() => {
   const kind = isEpic.value ? 'epic' : 'parent'
   const head = named.value ? t(`graph.frame.${kind}`, named.value) : t('graph.frame.noEpic')
   const done = t('graph.frame.doneOf', { done: frame.progress.done, total: frame.progress.total })
-  const groups = counts.value.map(({ group, count }) => {
+  const groups = countedGroups(frame.progress).map(({ group, count }) => {
     const word = t(`graph.frame.${group}`, count)
     return `${count} ${word}`
   })
@@ -126,19 +125,10 @@ const closedEpic = computed(() => epic.value?.state.is_terminal ?? false)
 
 /** A frame inside a frame is a well cut into the one it stands in. */
 const nested = computed(() => frame.parentId !== null)
-const headStyle = computed(() => (frame.folded ? undefined : { height: `${FRAME_HEADER}px` }))
+const headStyle = { height: `${FRAME_HEADER}px` }
 
 function tabIndex(target: string): number {
   return tabStop === target ? 0 : -1
-}
-
-/**
- * A count's word, after a space: the gap beside the number is drawn, and the
- * space is what copied text and a reader of the plain row get.
- */
-function countWord(group: (typeof counts.value)[number]['group'], count: number): string {
-  const word = t(`graph.frame.${group}`, count)
-  return ` ${word}`
 }
 
 const workingWord = computed(() => {
@@ -184,9 +174,9 @@ function onOpenBlur() {
       :style="headStyle"
     >
       <button
+        v-if="foldShown"
         class="graph-frame-fold"
         type="button"
-        :class="{ concealed: !foldShown }"
         :aria-label="foldLabel"
         :aria-expanded="!frame.folded"
         :data-walk-target="foldTarget"
@@ -211,12 +201,9 @@ function onOpenBlur() {
         @focus="onOpenFocus"
         @blur="onOpenBlur"
       >
-        <span
-          class="graph-frame-name"
-          :title="title"
-        >
+        <span class="graph-frame-line">
           <VIcon
-            v-if="epic"
+            v-if="epic && !overview"
             class="graph-frame-kind"
             :name="kindGlyph"
             :size="14"
@@ -224,65 +211,48 @@ function onOpenBlur() {
           <span
             v-if="epic"
             class="graph-frame-reference"
+            :title="epic.reference"
             >{{ epic.reference }}</span
           >
-          <span class="graph-frame-title">{{ title }}</span>
-        </span>
-        <SemanticState
-          v-if="epic && stateShown && !overview"
-          class="graph-frame-state"
-          dimension="work-item-state"
-          :class="{ closed: closedEpic }"
-          :state="epic.state.category"
-          :label="epic.state.name"
-        />
-        <template v-if="!overview">
-          <Translation
-            class="graph-frame-count"
-            keypath="graph.frame.doneOf"
-            tag="span"
-          >
-            <template #done>
-              <CountBadge
-                placement="inline"
-                :limit="WHOLE"
-                :value="frame.progress.done"
-              />
-            </template>
-            <template #total>
-              <CountBadge
-                placement="inline"
-                :limit="WHOLE"
-                :value="frame.progress.total"
-              />
-            </template>
-          </Translation>
           <span
-            v-for="{ group, count } in counts"
-            :key="group"
-            class="graph-frame-count"
-            :data-group="group"
+            v-else
+            class="graph-frame-title"
+            >{{ title }}</span
+          >
+          <SemanticState
+            v-if="epic && stateShown && !overview"
+            class="graph-frame-state"
+            dimension="work-item-state"
+            :class="{ closed: closedEpic }"
+            :state="epic.state.category"
+            :label="epic.state.name"
+          />
+          <span
+            v-if="working"
+            class="graph-frame-count graph-frame-working"
+            ><span
+              class="work-dots"
+              aria-hidden="true"
+              :class="{ still }"
+              ><i /><i /><i /></span
             ><CountBadge
               placement="inline"
               :limit="WHOLE"
-              :value="count"
-            />{{ countWord(group, count) }}</span
+              :value="working"
+            /><template v-if="!overview">{{ workingWord }}</template></span
           >
+        </span>
+        <template v-if="!overview">
+          <span class="graph-frame-name">
+            <span
+              v-if="epic"
+              class="graph-frame-title"
+              :title="title"
+              >{{ title }}</span
+            >
+          </span>
+          <GraphFrameCounts :progress="frame.progress" />
         </template>
-        <span
-          v-if="working"
-          class="graph-frame-count graph-frame-working"
-          ><span
-            class="work-dots"
-            aria-hidden="true"
-            :class="{ still }"
-            ><i /><i /><i /></span
-          ><CountBadge
-            placement="inline"
-            :limit="WHOLE"
-            :value="working"
-          /><template v-if="!overview">{{ workingWord }}</template></span
-        >
       </component>
       <GraphFrameProgress
         class="graph-frame-progress"
@@ -313,23 +283,18 @@ function onOpenBlur() {
   }
 }
 
-/* The header is the row and the edge under it. Folded, it is the whole frame.
-   The edge keeps a gap above it, so counts wrapped to a second line never sit
-   on it. */
+/* One arrangement folded or open: the fold's column, the lines beside it, and
+   the edge across the foot. The fold's column stays where a frame has no fold,
+   so frames standing together keep their text in one line. */
 .graph-frame-head {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: var(--space-1);
-  align-items: center;
-  padding: 0 var(--space-3) var(--space-2) var(--space-1);
+  padding: var(--space-2);
   color: var(--color-text-muted);
   font: var(--font-line);
   pointer-events: auto;
-
-  .graph-frame.folded & {
-    height: 100%;
-  }
 }
 
 .graph-frame-fold,
@@ -359,49 +324,42 @@ function onOpenBlur() {
   }
 }
 
+/* The whole column is the target, and its chevron stands on the reference line. */
 .graph-frame-fold {
   display: grid;
-  place-items: center;
+  grid-column: 1;
+  place-items: start center;
   align-self: stretch;
-  width: 28px;
 }
 
-/* The name gives way first, and the counts take the row under it before any
-   of them is cut. */
 .graph-frame-open {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-2);
-  align-content: center;
-  align-items: center;
+  flex-direction: column;
+  grid-column: 2;
+  gap: var(--space-half);
   align-self: stretch;
+  min-height: 0;
   padding: 0 var(--space-1);
 }
 
-.graph-frame-name {
+/* As a card's first line: the state gives way first, then the reference. */
+.graph-frame-line {
   display: flex;
-  flex: 1 1 0;
-  gap: var(--space-1);
+  flex: 0 0 auto;
+  gap: var(--space-2);
   align-items: center;
-  min-width: 80px;
-  color: var(--color-text);
-  overflow: hidden;
+  min-width: 0;
+  font: var(--font-detail);
 }
 
 .graph-frame-kind {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
 }
 
 .graph-frame-reference {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.graph-frame-title {
+  flex: 0 1 auto;
   min-width: 0;
-  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -409,18 +367,51 @@ function onOpenBlur() {
 
 /* A closed epic still holding open work says so, quietly. */
 .graph-frame-state {
-  flex: 0 0 auto;
+  flex: 0 1000 auto;
+  min-width: 0;
+  min-height: 0;
 
   &.closed {
     opacity: 0.7;
   }
 }
 
-.graph-frame-count {
+/* Two lines of title always stand reserved, so the counts under it keep their
+   place whatever it holds. Only counts that take a third line take the title's
+   second, and then its first line ends in the ellipsis. */
+.graph-frame-name {
+  flex: 0 1 2lh;
+  min-height: 0;
+  font: var(--font-row-title);
+  container-type: size;
+}
+
+.graph-frame-title {
+  display: -webkit-box;
+  min-width: 0;
+  color: var(--color-text);
+  font: var(--font-row-title);
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@container (height < 30px) {
+  .graph-frame-title {
+    -webkit-line-clamp: 1;
+  }
+}
+
+/* The work moving under the frame, in the hue of work under way, at the far end
+   of the line: for a folded frame the one sign of it. */
+.graph-frame-working {
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-1);
-  align-items: baseline;
+  align-items: center;
+  margin-inline-start: auto;
+  color: var(--color-info);
   white-space: nowrap;
 }
 
@@ -432,18 +423,14 @@ function onOpenBlur() {
    the field, as a zoomed-out card's is, over a thicker edge. The work under no
    epic has no reference, and keeps its name instead, and its fold, the one
    button its header has (`foldIsTarget`). */
-.graph-frame-fold.concealed {
-  visibility: hidden;
-}
-
 .graph-frame.overview {
-  .graph-frame-kind,
-  .graph-frame-reference + .graph-frame-title {
-    display: none;
+  .graph-frame-open {
+    justify-content: center;
   }
 
   .graph-frame-reference,
   .graph-frame-title {
+    max-width: calc(100% / 2.2);
     color: var(--color-text);
     font: var(--font-drawer-title);
     font-weight: 700;
@@ -462,24 +449,6 @@ function onOpenBlur() {
     transform: scale(2.2);
     transform-origin: right center;
   }
-}
-
-/* Folded, the work moving inside is the one sign of it, so it rides the name's
-   row, and the counts take the two rows under it. */
-.graph-frame.folded {
-  .graph-frame-name {
-    order: -2;
-  }
-
-  .graph-frame-working {
-    order: -1;
-  }
-}
-
-/* The work moving under the frame, in the hue of work under way. */
-.graph-frame-working {
-  align-items: center;
-  color: var(--color-info);
 }
 
 /* A forced palette clears the ground, so the frame is outlined instead. */

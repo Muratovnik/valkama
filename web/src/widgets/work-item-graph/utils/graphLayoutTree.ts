@@ -22,7 +22,6 @@ import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api'
 
 import type { FrameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import {
-  FOLDED_HEIGHT,
   FOLDED_WIDTH,
   FRAME_HEADER,
   FRAME_PADDING,
@@ -71,7 +70,7 @@ export const FRAME_OPTIONS: Readonly<Record<string, string>> = {
   ...HIERARCHY_OPTIONS,
   'elk.padding': `[top=${FRAME_HEADER},left=${FRAME_PADDING},bottom=${FRAME_PADDING},right=${FRAME_PADDING}]`,
   'elk.nodeSize.constraints': 'MINIMUM_SIZE',
-  'elk.nodeSize.minimum': `(${FOLDED_WIDTH}, ${FOLDED_HEIGHT})`,
+  'elk.nodeSize.minimum': `(${FOLDED_WIDTH}, ${FRAME_HEADER})`,
 }
 
 /** A card and the air round it, as a block packs it. */
@@ -107,7 +106,7 @@ const card = (id: string): ElkNode => ({ id, width: NODE_WIDTH, height: NODE_HEI
 
 /** The ELK node of one frame, with the frames standing in it. */
 function frameNode(frame: Frame, nested: Map<string, Frame[]>, touched: Set<string>): ElkNode {
-  if (frame.folded) return { id: frame.id, width: FOLDED_WIDTH, height: FOLDED_HEIGHT }
+  if (frame.folded) return { id: frame.id, width: FOLDED_WIDTH, height: FRAME_HEADER }
   const linked = frame.cards.filter((item) => touched.has(item.work_item_id))
   const loose = frame.cards.filter((item) => !touched.has(item.work_item_id))
   const inner = (nested.get(frame.id) ?? []).map((child) => frameNode(child, nested, touched))
@@ -121,7 +120,7 @@ function frameNode(frame: Frame, nested: Map<string, Frame[]>, touched: Set<stri
   }
   return children.length
     ? { id: frame.id, layoutOptions: { ...FRAME_OPTIONS }, children }
-    : { id: frame.id, width: FOLDED_WIDTH, height: FOLDED_HEIGHT }
+    : { id: frame.id, width: FOLDED_WIDTH, height: FRAME_HEADER }
 }
 
 /** The top-level frame each drawn frame and card stands in. */

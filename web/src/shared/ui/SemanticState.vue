@@ -52,9 +52,13 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
    `--color-state-label`: on a ground lighter than the ladder's, a tone that reads
    as a dot is too dark for words, and the dot alone keeps saying it. Its box is trimmed to
    the letters (`text-box`), so the dot centres on their middle rather than on the em box,
-   which stood about a pixel high. */
+   which stood about a pixel high. A narrow column cuts the word short sideways only: the trimmed
+   box is one x-height tall, and `overflow: hidden` would cut every capital and descender at it. */
 .state-label {
+  min-width: 0;
   color: var(--color-state-label, currentcolor);
+  overflow: clip visible;
+  text-overflow: ellipsis;
   text-box: trim-both ex alphabetic;
 }
 

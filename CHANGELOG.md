@@ -134,6 +134,13 @@ checkouts are therefore distinguishable even at the same version.
   on the question; a comment an older answer has on that field stays to read and change.
 - **The field of your own option has no caption over it.** The row right above it says what it
   is, and a screen reader hears the field named for the question it answers.
+### Fixed
+
+- **An epic's header on the graph no longer moves when it folds or opens.** The two views
+  had two heights, so the text and the progress edge stood in different places in each.
+  The header is now one height, the height of a card, folded or open.
+- **An epic's title has room on the graph.** It stands on its own two lines under the
+  reference and the state, as a card's does, instead of the 80 pixels left beside them.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

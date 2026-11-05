@@ -3,7 +3,14 @@
  * layout produces one. Built from the broad space, so its cards and counts are
  * the ones the layout's own tests use.
  */
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  FOLDED_WIDTH,
+  FRAME_HEADER,
+  FRAME_PADDING,
+  NO_EPIC_FRAME,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { FrameProgress, PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
@@ -45,8 +52,7 @@ function frame(
  * A laid-out field to draw before the layout produces one: the epic with the
  * long title open round its two open cards, the largest epic and the work under
  * none folded, a line inside the open frame and one folded onto the largest
- * epic's frame, which stands for two links. Header 56, padding 16, card 264×112,
- * folded frame 288×72, as the layout sizes them.
+ * epic's frame, which stands for two links, all as the layout sizes them.
  */
 export function placedSample(): GraphLayout {
   const { epics, model } = broadSpace()
@@ -58,18 +64,23 @@ export function placedSample(): GraphLayout {
   const cards = under(long).filter((item) => !item.state.is_terminal)
   const targets = under(largest).filter((item) => !item.state.is_terminal)
   const [first, second] = cards
+  /** Where the open frame's cards stand, and how tall the frame is round them. */
+  const cardY = FRAME_HEADER + FRAME_PADDING
+  const cardMiddle = cardY + NODE_HEIGHT / 2
+  const openHeight = cardY + NODE_HEIGHT + FRAME_PADDING
+  const folded = { folded: true, x: 680, width: FOLDED_WIDTH, height: FRAME_HEADER }
   return {
     frames: [
-      frame(long, under(long), { folded: false, x: 0, y: 0, width: 600, height: 200 }),
-      frame(largest, under(largest), { folded: true, x: 680, y: 0, width: 288, height: 72 }),
-      frame(null, loose, { folded: true, x: 680, y: 128, width: 288, height: 72 }),
+      frame(long, under(long), { folded: false, x: 0, y: 0, width: 600, height: openHeight }),
+      frame(largest, under(largest), { ...folded, y: 0 }),
+      frame(null, loose, { ...folded, y: FRAME_HEADER + 56 }),
     ],
     nodes: [first, second].map((item, index) => ({
       ...item,
-      x: 16 + index * 304,
-      y: 72,
-      width: 264,
-      height: 112,
+      x: FRAME_PADDING + index * 304,
+      y: cardY,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
       frameId: long.work_item_id,
     })),
     edges: [
@@ -80,8 +91,8 @@ export function placedSample(): GraphLayout {
         kind: 'blocks',
         links: [{ from: first.work_item_id, to: second.work_item_id }],
         points: [
-          { x: 280, y: 128 },
-          { x: 320, y: 128 },
+          { x: 280, y: cardMiddle },
+          { x: 320, y: cardMiddle },
         ],
       },
       {
@@ -93,14 +104,14 @@ export function placedSample(): GraphLayout {
           .slice(0, 2)
           .map((target) => ({ from: second.work_item_id, to: target.work_item_id })),
         points: [
-          { x: 584, y: 128 },
-          { x: 632, y: 128 },
-          { x: 632, y: 36 },
-          { x: 680, y: 36 },
+          { x: 584, y: cardMiddle },
+          { x: 632, y: cardMiddle },
+          { x: 632, y: FRAME_HEADER / 2 },
+          { x: 680, y: FRAME_HEADER / 2 },
         ],
       },
     ],
     width: 968,
-    height: 200,
+    height: openHeight,
   }
 }

@@ -167,6 +167,13 @@ function frameCandidates(
   return candidates
 }
 
+/** The groups a header counts beside what is done, under way or stopped; a zero is not written. */
+export function countedGroups(progress: FrameProgress) {
+  return (['review', 'active', 'blocked'] as const)
+    .filter((group) => progress[group] > 0)
+    .map((group) => ({ group, count: progress[group] }))
+}
+
 type End = { at: string; inside: string[] }
 
 /**

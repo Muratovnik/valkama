@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
 import {
+  FRAME_HEADER,
   NO_EPIC_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
@@ -109,12 +110,12 @@ function frame(
 const framed = walkTargets({
   frames: [
     frame('E', { x: 0, y: 0, width: 640, height: 200 }),
-    frame('G', { x: 700, y: 0, width: 288, height: 72 }, true),
-    frame(NO_EPIC_FRAME, { x: 700, y: 120, width: 288, height: 72 }, true),
+    frame('G', { x: 700, y: 0, width: 288, height: FRAME_HEADER }, true),
+    frame(NO_EPIC_FRAME, { x: 700, y: 160, width: 288, height: FRAME_HEADER }, true),
   ],
   nodes: [
-    { ...at('P', 0, 0), x: 16, y: 72, frameId: 'E' },
-    { ...at('Q', 0, 0), x: 360, y: 72, frameId: 'E' },
+    { ...at('P', 0, 0), x: 16, y: FRAME_HEADER + 16, frameId: 'E' },
+    { ...at('Q', 0, 0), x: 360, y: FRAME_HEADER + 16, frameId: 'E' },
   ],
 })
 
@@ -136,10 +137,10 @@ test('a frame header has a fold and an open target, and the work under none only
 test('the centre of a header target is the centre of its own box, not of a card', () => {
   const folded = framed.find((target) => target.id === frameTarget('G'))
   assert.ok(folded)
-  assert.deepEqual(nodeCentre(folded), { x: 700 + 44 + (288 - 44) / 2, y: 36 })
+  assert.deepEqual(nodeCentre(folded), { x: 700 + 44 + (288 - 44) / 2, y: FRAME_HEADER / 2 })
   const open = framed.find((target) => target.id === foldTarget('E'))
   assert.ok(open)
-  assert.deepEqual(nodeCentre(open), { x: 22, y: 28 })
+  assert.deepEqual(nodeCentre(open), { x: 22, y: FRAME_HEADER / 2 })
 })
 
 test('from a card the arrows reach its frame header, and along the header from fold to open', () => {
@@ -159,7 +160,7 @@ test("Home goes to the first target as the field is read: the first frame's fold
 // the right of its fold, further than the first card under the fold.
 const wide = walkTargets({
   frames: [frame('W', { x: 0, y: 0, width: 1248, height: 948 })],
-  nodes: [{ ...at('R', 0, 0), x: 16, y: 72, frameId: 'W' }],
+  nodes: [{ ...at('R', 0, 0), x: 16, y: FRAME_HEADER + 16, frameId: 'W' }],
 })
 
 test('along a header the arrows go from fold to open and back, however wide the header', () => {
@@ -173,9 +174,9 @@ test('zoomed out to the overview, an epic header has no fold target, and the wor
   const graph = {
     frames: [
       frame('E', { x: 0, y: 0, width: 640, height: 200 }),
-      frame(NO_EPIC_FRAME, { x: 700, y: 0, width: 288, height: 72 }, true),
+      frame(NO_EPIC_FRAME, { x: 700, y: 0, width: 288, height: FRAME_HEADER }, true),
     ],
-    nodes: [{ ...at('P', 0, 0), x: 16, y: 72, frameId: 'E' }],
+    nodes: [{ ...at('P', 0, 0), x: 16, y: FRAME_HEADER + 16, frameId: 'E' }],
   }
   // The work under none has no other button in its header: it keeps its fold,
   // or a field of it alone would take no focus at all.
