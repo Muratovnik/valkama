@@ -24,6 +24,7 @@ import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
+import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -191,6 +192,38 @@ test('a failed read says so on the tab and reads again on request', async ({ pag
   await failure.getByRole('button', { name: 'Retry' }).click()
   await expect(section.locator('.work-usage')).toBeVisible()
   await expect(section.getByRole('alert')).toHaveCount(0)
+})
+
+test('a later read that fails keeps the numbers, says so and reads again on request', async ({
+  page,
+}) => {
+  await serve(page, richUsage())
+  const stream = await installStreamDouble(page)
+  await page.clock.install()
+  await page.goto(CARD)
+  const section = await openAgents(page)
+  await expect(section.locator('.work-usage')).toBeVisible()
+
+  await page.unroute('**/api/planning/work-item/usage?*')
+  await page.route('**/api/planning/work-item/usage?*', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+  )
+  await page.clock.fastForward('05:00')
+  await stream.signal('agents')
+  const failure = section.getByRole('alert')
+  await expect(failure).toContainText('Could not read how much work this took.')
+  await expect(section.locator('.work-usage')).toBeVisible()
+
+  await page.unroute('**/api/planning/work-item/usage?*')
+  await page.route('**/api/planning/work-item/usage?*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(usageAnswer(richUsage())),
+    }),
+  )
+  await failure.getByRole('button', { name: 'Retry' }).click()
+  await expect(section.getByRole('alert')).toHaveCount(0)
+  await expect(section.locator('.work-usage')).toBeVisible()
 })
 
 /**

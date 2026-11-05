@@ -191,21 +191,7 @@ const models = computed(() =>
     </div>
   </section>
   <p
-    v-else-if="failed"
-    class="work-usage-failed"
-    role="alert"
-  >
-    <span>{{ t('workItem.usage.failed') }}</span>
-    <VButton
-      variant="ghost"
-      size="inline"
-      @click="retry"
-    >
-      {{ t('platform.actions.retry') }}
-    </VButton>
-  </p>
-  <p
-    v-if="runsFailed && !failed"
+    v-if="failed || runsFailed"
     class="work-usage-failed"
     role="alert"
   >
