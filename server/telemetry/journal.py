@@ -25,6 +25,8 @@ from .journal_values import (
     _journal_timestamp,
     _merge_token_counts,
     _token_delta,
+    claude_request,
+    codex_cumulative,
     parse_time,
 )
 
@@ -279,9 +281,8 @@ class LocalJournalUsageProvider:
                     payload = row.get("payload")
                     if not isinstance(payload, dict):
                         continue
-                    token = payload.get("token_count")
-                    cumulative = token.get("total_token_usage") if isinstance(token, dict) else None
-                    if not isinstance(cumulative, dict):
+                    cumulative = codex_cumulative(payload)
+                    if cumulative is None:
                         continue
                     stamp = _journal_timestamp(row, payload)
                     if stamp is None:
@@ -409,7 +410,10 @@ class LocalJournalUsageProvider:
                         row = json.loads(line)
                     except (TypeError, ValueError):
                         continue
-                    if not isinstance(row, dict) or row.get("type") != "assistant":
+                    if not isinstance(row, dict):
+                        continue
+                    message = claude_request(row)
+                    if message is None:
                         continue
                     if (
                         row.get("isSidechain")
@@ -417,9 +421,6 @@ class LocalJournalUsageProvider:
                         or row.get("agent_id")
                         or row.get("agentId")
                     ):
-                        continue
-                    message = row.get("message")
-                    if not isinstance(message, dict) or not message.get("id"):
                         continue
                     cost = cls._number(row.get("cost_usd"))
                     if cost is None:

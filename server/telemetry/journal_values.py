@@ -52,6 +52,36 @@ def _journal_timestamp(
     return None
 
 
+def claude_request(row: Mapping[str, object]) -> dict | None:
+    """The message of a Claude assistant record that names its request, or None.
+
+    One request is written as many records, one per content block, all under the
+    same `message.id`, and only the last holds its final usage.
+    """
+
+    if row.get("type") != "assistant":
+        return None
+    message = row.get("message")
+    if not isinstance(message, dict) or not message.get("id"):
+        return None
+    return message
+
+
+def codex_cumulative(payload: Mapping[str, object]) -> Mapping[str, object] | None:
+    """The cumulative counters a Codex rollout payload carries, or None when it has none.
+
+    A rollout keeps them under `info` of a payload whose `type` is `token_count`,
+    and `info` is null before the first response. Rollouts of an earlier format
+    named the object `token_count` itself.
+    """
+
+    holder = payload.get("info") if payload.get("type") == "token_count" else None
+    if holder is None:
+        holder = payload.get("token_count")
+    cumulative = holder.get("total_token_usage") if isinstance(holder, Mapping) else None
+    return cumulative if isinstance(cumulative, Mapping) else None
+
+
 def _merge_token_counts(target: dict[str, int | float], values: Mapping[str, object]) -> None:
     for key, value in values.items():
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:

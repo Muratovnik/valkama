@@ -114,6 +114,44 @@ class JournalTests(unittest.TestCase):
             self.assertIsNone(usage["cost"])
             self.assertEqual("unknown", usage["cost_quality"])
 
+    def test_codex_token_counts_are_read_where_a_rollout_puts_them(self) -> None:
+        """A rollout carries the counters under `info` of a `token_count` event, not by that name."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            rollout = os.path.join(directory, "rollout.jsonl")
+            with open(rollout, "w", encoding="utf-8", newline="\n") as handle:
+                for stamp, total in (
+                    ("2026-01-01T00:00:00Z", {"input_tokens": 10, "output_tokens": 1}),
+                    ("2026-01-01T00:00:05Z", {"input_tokens": 25, "output_tokens": 4}),
+                ):
+                    handle.write(
+                        json.dumps(
+                            {
+                                "timestamp": stamp,
+                                "type": "event_msg",
+                                "payload": {
+                                    "type": "token_count",
+                                    "info": {"total_token_usage": total},
+                                },
+                            }
+                        )
+                        + "\n"
+                    )
+                # What a client writes before its first response: no counters yet.
+                handle.write(
+                    json.dumps(
+                        {
+                            "timestamp": "2026-01-01T00:00:06Z",
+                            "type": "event_msg",
+                            "payload": {"type": "token_count", "info": None},
+                        }
+                    )
+                    + "\n"
+                )
+            read = analytics.LocalJournalUsageProvider._codex_usage(pathlib.Path(rollout))
+        self.assertTrue(read["observed"])
+        self.assertEqual({"input_tokens": 25, "output_tokens": 4}, read["tokens"])
+
     def test_codex_rollout_session_meta_identity_is_exact_and_observed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             session_id = "123e4567-e89b-12d3-a456-426614174000"
