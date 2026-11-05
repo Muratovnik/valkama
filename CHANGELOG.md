@@ -113,8 +113,6 @@ checkouts are therefore distinguishable even at the same version.
   window, where the button turns off; a filter, a fold or a larger window that leaves the camera
   further out brings it up to that zoom.
 
-### Fixed
-
 - **Changing the space keeps the view you were in.** The board, the list or the graph, and the
   board's grouping by epic, stay as they were when you pick another project, go through all
   projects or open a project from there. A filter, an open card and a chain stay with the space
