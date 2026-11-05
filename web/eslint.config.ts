@@ -57,12 +57,10 @@ const TYPE_MEMBER_ORDER = {
  * Removing an entry is the ratchet. Raising a number is not a move.
  */
 const LINE_DEBT = {
-  'src/shared/i18n/locales/en.ts': 1150,
-  'src/shared/i18n/locales/ru.ts': 1149,
-  'tests/platformApi.test.ts': 476,
-  'tests/uiSystemGuard.test.ts': 480,
+  'src/shared/i18n/locales/en.ts': 1092,
+  'src/shared/i18n/locales/ru.ts': 1091,
+  'tests/uiSystemGuard.test.ts': 475,
   'stylelint-order-preset.js': 416,
-  'tests/graphView.test.ts': 406,
 }
 
 export default ts.config(

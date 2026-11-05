@@ -5,7 +5,8 @@
  * same header instead, and the camera stays where the zoom put it.
  *
  * Served the broad synthetic space; the zoom is the wheel's or the «Zoom out»
- * button's, pressed without taking focus as a pointer user's would not.
+ * button's. A real press of the button takes focus itself, so here its click is
+ * dispatched: what is under test is focus left on the fold when the zoom changes.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
