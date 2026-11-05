@@ -61,6 +61,20 @@ checkouts are therefore distinguishable even at the same version.
   `answer` holds only the fields under a point, with `under` and `of`, and the points with
   a comment or an own variant; a notice sums a review up by its verdicts. See
   [Questions and decisions](docs/connection-contract.md#questions-and-decisions).
+- **One small frame says where work is going on now, across every space.** A stream
+  opened with `GET /api/events?view=planning` carries it as `event: live` beside the
+  space's read model, and `view=live` is a stream with only that event, for a page that
+  has no space stream. Each row is an item at work, held, waiting or silent for over a
+  day, a pinned item, or the parent of one, with its live subagents counted, its workflow
+  state, and since when a silent one is silent. Agents at work on no item are counted
+  per space by the folder their session was opened in, as a caption that binds nothing.
+  The frame is sent when it changed and no more than every two seconds, and it reads the
+  primary store only. See [the connection contract](docs/connection-contract.md#the-live-work-frame).
+- **A person can pin an item.** `POST /api/planning/work-item/pin` pins an item or
+  removes its pin and answers with the frame. A pin lives in the store, so the browser
+  and the desktop app show the same ones; it is no change to the item, writes no
+  history and is told to no agent. It outlives the item's close, moves to the survivor
+  of a merge, goes with a deleted item, and an export carries it as `planning.pins`.
 
 ### Changed
 
