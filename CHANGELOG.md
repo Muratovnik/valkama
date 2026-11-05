@@ -98,6 +98,9 @@ checkouts are therefore distinguishable even at the same version.
   one lane its name was a filter that narrowed nothing. The key and the filter now appear
   only when there is a second state or lane, and the map, the figures and the list stand
   clearly apart.
+- **The rows of a chain line up across its groups.** Each row sized its own columns, so a
+  waiting mark or a holder began at a different place in every group. The rows now share one
+  set of columns, and a long holder is cut short with its whole name in its tooltip.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

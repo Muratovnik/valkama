@@ -148,6 +148,11 @@ function holder(group: ChainGroup, member: ChainMember): string | null {
   return !isDone(group) && member.claim_ref ? holderName(member.claim_ref) : null
 }
 
+/** The whole holder for the tooltip of a name cut short; absent, not empty, when nobody holds it. */
+function holderTitle(group: ChainGroup, member: ChainMember): string | undefined {
+  return holder(group, member) ?? undefined
+}
+
 /**
  * An unheld item's state, unless the heading above already names the one state
  * the whole group is in. A closed one says how it ended on the same terms.
@@ -215,6 +220,7 @@ defineExpose({ restoreView, reveal, view })
           <li
             v-for="member in shown(group)"
             :key="member.work_item_id"
+            class="chain-item"
           >
             <button
               class="chain-row"
@@ -246,6 +252,7 @@ defineExpose({ restoreView, reveal, view })
               <span
                 v-if="holder(group, member)"
                 class="chain-row-detail chain-row-holder"
+                :title="holderTitle(group, member)"
                 >{{ holder(group, member) }}</span
               >
               <span
@@ -273,21 +280,26 @@ defineExpose({ restoreView, reveal, view })
 </template>
 
 <style scoped>
+/* One column set for the whole list: groups and rows subgrid it. */
 .chain-members {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--space-4) var(--space-3);
   min-width: 0;
   container: chain-members / inline-size;
 }
 
 .chain-group {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  row-gap: var(--space-1);
   min-width: 0;
 }
 
 .chain-group-title {
   display: flex;
+  grid-column: 1 / -1;
   gap: var(--space-2);
   align-items: center;
   margin: 0;
@@ -297,17 +309,26 @@ defineExpose({ restoreView, reveal, view })
 
 .chain-rows {
   display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   padding: 0;
   margin: 0;
   list-style: none;
+}
+
+.chain-item {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
 }
 
 /* One line per member: its reference, as much of its title as fits, and who
    holds it (or its state) at the end. */
 .chain-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  gap: var(--space-3);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  row-gap: var(--space-3);
   align-items: baseline;
   width: 100%;
   min-height: var(--size-control-inline);
@@ -382,11 +403,13 @@ defineExpose({ restoreView, reveal, view })
 }
 
 .chain-more {
+  grid-column: 1 / -1;
   justify-self: start;
 }
 
 .chain-done-toggle {
   display: inline-flex;
+  grid-column: 1 / -1;
   gap: var(--space-1);
   justify-self: start;
   align-items: center;
