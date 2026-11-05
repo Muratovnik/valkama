@@ -21,6 +21,14 @@
  * it as they reach its tab; where showing one starts work that takes a while (`manual`),
  * they move focus only, and Enter or Space shows it. A filter or a view of the same content
  * stays a radio group: picking one changes a value and no panel takes the tab's name.
+ *
+ * A radio group may hold no value yet, as a point of a review nobody has decided (`null`): no
+ * segment is pressed, Tab stops on the first and chooses nothing, and an arrow or a press is
+ * what chooses. A segment can say more about itself to a reader (`describedBy`), as Accept does
+ * when choosing it opens a field below.
+ *
+ * A host that gives the row a line of its own makes it its line's width with a class on the
+ * tag, and shares that width among the segments by `--segmented-option-grow`.
  */
 import { computed } from 'vue'
 
@@ -32,8 +40,14 @@ import type { TabIds } from '@/shared/ui/tabIds.ts'
 const props = withDefaults(
   defineProps<{
     label: string
-    modelValue: T
-    options: readonly { label: string; value: T; disabled?: boolean; title?: string }[]
+    modelValue: T | null
+    options: readonly {
+      label: string
+      value: T
+      describedBy?: string
+      disabled?: boolean
+      title?: string
+    }[]
     /** Whether the arrows show a tab's panel as they reach it, or Enter does. */
     activation?: 'automatic' | 'manual'
     /** `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. */
@@ -141,6 +155,7 @@ function move(event: KeyboardEvent) {
       :tabindex="tabStop(option)"
       :disabled="option.disabled"
       :title="option.title"
+      :aria-describedby="option.describedBy"
       @click="select(option)"
       @keydown="move"
     >
@@ -180,6 +195,7 @@ function move(event: KeyboardEvent) {
    row is already shorter than a form row. Both sizes subtract the same inset,
    so a track keeps its exact declared height whichever it is. */
 .segmented-option {
+  flex-grow: var(--segmented-option-grow, 0);
   min-height: calc(var(--size-control-height) - 2 * var(--space-half));
   padding: 0 var(--space-5);
   border: 0;

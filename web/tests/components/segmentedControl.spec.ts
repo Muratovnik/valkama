@@ -32,13 +32,13 @@ function pressOn(target: Element | null, key: string) {
   target?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
 }
 
-function render(start = 'board') {
+function render(start: string | null = 'board', options: typeof OPTIONS = OPTIONS) {
   const chosen = ref(start)
   const draw = () =>
     h(SegmentedControl<string>, {
       'label': 'View',
       'modelValue': chosen.value,
-      'options': OPTIONS,
+      'options': options,
       'onUpdate:modelValue': (value: string) => (chosen.value = value),
     })
   const Host = defineComponent(() => draw)
@@ -93,6 +93,34 @@ describe('SegmentedControl', () => {
     expect([focusedText(), chosen.value]).toEqual(['Chain', 'chain'])
     await press('Home')
     expect([focusedText(), chosen.value]).toEqual(['Board', 'board'])
+  })
+
+  it('holds no value: nothing is pressed, and Tab stops on the first and chooses nothing', async () => {
+    const { chosen, press, segment, wrapper } = render(null, [
+      { value: 'later', label: 'Later', disabled: true },
+      ...OPTIONS,
+    ])
+    expect(wrapper.findAll('[aria-checked="true"]')).toHaveLength(0)
+    expect(wrapper.findAll('[tabindex="0"]').map((node) => node.text())).toEqual(['Board'])
+    ;(segment('Board').element as HTMLElement).focus()
+    expect(chosen.value).toBeNull()
+    await press('ArrowRight')
+    expect([focusedText(), chosen.value]).toEqual(['Graph', 'graph'])
+  })
+
+  it('a press on a segment chooses it when none was chosen', async () => {
+    const { chosen, segment } = render(null)
+    await segment('Chain').trigger('click')
+    expect(chosen.value).toBe('chain')
+  })
+
+  it('a segment says what it opens to a reader, by the element the host names', () => {
+    const options = OPTIONS.map((option) =>
+      option.value === 'graph' ? { ...option, describedBy: 'graph-note' } : option,
+    )
+    const { segment } = render(null, options)
+    expect(segment('Graph').attributes('aria-describedby')).toBe('graph-note')
+    expect(segment('Board').attributes('aria-describedby')).toBeUndefined()
   })
 
   it('leaves a key with a modifier, and every other key, to the page', async () => {
