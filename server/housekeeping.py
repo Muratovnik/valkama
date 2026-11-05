@@ -28,6 +28,11 @@ bound, and a transcript of hundreds of megabytes copied and flushed before
 `start_sweep` runs it on its own connection in a background thread, where
 nobody waits for it. A process that ends first leaves at most a `*.partial`,
 which a later sweep removes, and the copy stays owed.
+
+`start_pulse` says this process is alive once a minute (`telemetry.liveness`), beside
+the store rather than in it, until the surface that started it ends. Both surfaces
+start it: an on-demand listener loads no server until its first connection, and an
+agent at work has an MCP process, so one of them runs whenever work can be observed.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ from dataclasses import dataclass, field
 from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
+from .telemetry import liveness
 
 #: The whole budget of what runs before the first request. A client gives an
 #: MCP server some seconds to start (Codex ten by default), and interpreter
@@ -53,6 +59,8 @@ START_UP_SECONDS = 3.0
 START_UP_BUSY_MS = 250
 #: The background sweep's thread, by name, so a test or a diagnosis can find it.
 SWEEP_THREAD = "valkama-transcript-sweep"
+#: The tick's thread, by name.
+PULSE_THREAD = "valkama-liveness-tick"
 
 
 @dataclass
@@ -186,6 +194,36 @@ def start_sweep(conn: sqlite3.Connection, report: Callable[[str], None]) -> thre
     )
     thread.start()
     return thread
+
+
+def start_pulse(report: Callable[[str], None]) -> threading.Event:
+    """Tick in the background until the event this returns is set.
+
+    A failed tick says so once per distinct failure and the thread goes on: the
+    next one may well land, and nothing here is worth a surface.
+    """
+
+    stop = threading.Event()
+    thread = threading.Thread(
+        target=_pulse, args=(store.db_path(), stop, report), name=PULSE_THREAD, daemon=True
+    )
+    thread.start()
+    return stop
+
+
+def _pulse(path: str, stop: threading.Event, report: Callable[[str], None]) -> None:
+    said = ""
+    while True:
+        try:
+            liveness.tick(path, time.time())
+            said = ""
+        except (sqlite3.Error, OSError) as error:
+            text = _describe(error)
+            if text != said:
+                report(f"liveness tick failed: {text}")
+                said = text
+        if stop.wait(liveness.TICK_SECONDS):
+            return
 
 
 def _sweep(path: str, root: str, report: Callable[[str], None]) -> None:

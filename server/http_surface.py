@@ -1448,6 +1448,7 @@ def serve_main(
         kwargs={"alerts": server.server_port == configuration.listener_port()},
         daemon=True,
     ).start()
+    pulse = housekeeping.start_pulse(lambda line: print(line, file=sys.stderr))  # noqa: T201
     # Handler reads only this immutable startup capture. The mutable dist tree
     # can be rebuilt for the next process without changing this listener.
     server.runtime_snapshot = runtime_snapshot
@@ -1461,4 +1462,5 @@ def serve_main(
             server.process_request(*waiting)
         server.serve_forever()
     finally:
+        pulse.set()
         server.server_close()
