@@ -10,6 +10,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **The skill keeps Valkama calls apart in Claude Code's auto mode.** It tells the
+  agent to send them in a response of their own: the hook that adds the session to a
+  call makes auto mode withdraw its review of a call that runs after it in that
+  response, and answering `allow` from the hook does not prevent that. See
+  [the hook contract](docs/hook-contract.md).
+
 ### Fixed
 
 - The release check runs `npm ci` in `web` and `desktop` before anything else, so it
