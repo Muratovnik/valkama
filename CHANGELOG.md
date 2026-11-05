@@ -43,6 +43,13 @@ checkouts are therefore distinguishable even at the same version.
   comment and question written. A call that names both `comment` and `comments` is
   refused, and so is one that asks a question and closes the item, which would end the
   question unanswered. A refused entry's shape now names its `step` too.
+- **A list in the discussion becomes steps of the task in one action.** A comment, a reply
+  or a work report that holds a list carries a «Make steps» icon on an open task. It opens
+  the points as boxes, every one ticked but a point the task has as a step already, one that
+  repeats a point above, or one longer than a step can be, each said beside it; the count
+  says how many steps the task will hold of its 100. The chosen points join the checklist
+  through the same write as any change of it, so whoever holds the task hears that its
+  steps changed, and they are ordinary steps from then on.
 
 ### Changed
 

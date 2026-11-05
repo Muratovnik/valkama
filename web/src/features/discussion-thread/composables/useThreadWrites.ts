@@ -1,13 +1,17 @@
 import { ref, watch } from 'vue'
 
-import { replyInThread, resolveThread } from '@/shared/api/planningApi.ts'
+import { checklistWith } from '@/features/discussion-thread/utils/stepPoints.ts'
+
+import { replyInThread, resolveThread, setWorkItemChecklist } from '@/shared/api/planningApi.ts'
+import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 type Submit = (operation: () => Promise<unknown>, accepted?: () => void) => Promise<void>
 
 export type ThreadParent = { reply_to: number } | { reply_to_request: string }
 
 /**
- * What a person writes in a thread: a reply, the mark, its removal.
+ * What a person writes in a thread: a reply, the mark, its removal, and points of an entry's
+ * list made steps of the item.
  *
  * `submit` is the host's: it owns whether a write is under way, why the last one failed
  * and what follows one that went through. A reply that also marks is two writes in a row,
@@ -58,5 +62,21 @@ export function useThreadWrites(identity: () => string, submit: Submit) {
   /** The mark a reply did not get, tried again. */
   const markAgain = (root: number, accepted: () => void) => submit(() => markBlank(root), accepted)
 
-  return { markAgain, reopen, reply, resolve, unmarked }
+  /** The item's steps as read, then the points; the revision read refuses a list changed since. */
+  const addSteps = (
+    card: Pick<WorkItem, 'checklist' | 'revision'>,
+    points: string[],
+    accepted: () => void,
+  ) =>
+    submit(
+      () =>
+        setWorkItemChecklist({
+          id: identity(),
+          items: checklistWith(card.checklist, points),
+          expected_revision: card.revision,
+        }),
+      accepted,
+    )
+
+  return { addSteps, markAgain, reopen, reply, resolve, unmarked }
 }

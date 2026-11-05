@@ -51,6 +51,34 @@ function writeReply(item: WorkItem, body: Record<string, unknown>) {
   }
 }
 
+type SentStep = string | { id: string; text: string }
+
+/**
+ * The checklist write as the server takes it: a step sent by id is that step, with its claim
+ * and tick, and a text is a new step.
+ */
+function setChecklist(item: WorkItem, body: Record<string, unknown>) {
+  const fresh = (text: string, index: number) => ({
+    id: `00000000-0000-4000-8000-${String(900 + item.checklist.length + index).padStart(12, '0')}`,
+    text,
+    done: false,
+    claimed_by: '',
+    done_by: '',
+  })
+  item.checklist = (body.items as SentStep[]).map((step, index) => {
+    if (typeof step === 'string') return fresh(step, index)
+    const old = item.checklist.find((entry) => entry.id === step.id)
+    return old ? { ...old, text: step.text } : fresh(step.text, index)
+  })
+}
+
+function selectSummary(item: WorkItem, body: Record<string, unknown>) {
+  const entry = item.comments.find((entry) => entry.id === body.comment_id)
+  if (!entry?.report) throw new Error('Expected a saved report')
+  item.summary = entry.report
+  item.summary_comment_id = entry.id
+}
+
 const isThreadWrite = (path: string, body: Record<string, unknown>) =>
   path.endsWith('/comment/resolve') ||
   body.reply_to !== undefined ||
@@ -119,13 +147,10 @@ export async function installDiscussionBackend(page: Page) {
         })
       }
       item.state = { ...doneState }
-    } else if (path.endsWith('/update')) item.description = String(body.description)
-    else if (path.endsWith('/summary/select')) {
-      const entry = item.comments.find((entry) => entry.id === body.comment_id)
-      if (!entry?.report) throw new Error('Expected a saved report')
-      item.summary = entry.report
-      item.summary_comment_id = entry.id
-    } else {
+    } else if (path.endsWith('/checklist')) setChecklist(item, body)
+    else if (path.endsWith('/update')) item.description = String(body.description)
+    else if (path.endsWith('/summary/select')) selectSummary(item, body)
+    else {
       const report =
         (body.report as { done: string; next: string; why?: string } | undefined) ?? null
       const saved = {

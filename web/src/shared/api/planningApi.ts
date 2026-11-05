@@ -270,6 +270,19 @@ export async function tickChecklistStep(input: {
   return validateWorkItemRecord(await write('/api/planning/work-item/checklist/tick', { ...input }))
 }
 
+/**
+ * Set an item's steps. A step it has goes back by its `id` and keeps its claim and tick; a
+ * plain text is a new step. A step left out is dropped, so adding is the old list and more.
+ */
+export async function setWorkItemChecklist(input: {
+  expected_revision: number
+  id: string
+  items: readonly ({ id: string; text: string } | string)[]
+  author?: string
+}): Promise<WorkItem> {
+  return validateWorkItemRecord(await write('/api/planning/work-item/checklist', { ...input }))
+}
+
 export async function linkWorkItems(input: {
   id: string
   kind: string

@@ -7,9 +7,10 @@ import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useIns
 import { useThreadWrites } from '@/features/discussion-thread/composables/useThreadWrites.ts'
 import type { ThreadParent } from '@/features/discussion-thread/composables/useThreadWrites.ts'
 
+import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 
-export type ThreadForm = 'reply' | 'resolve'
+export type ThreadForm = 'reply' | 'resolve' | 'steps'
 
 type ThreadForms = ReturnType<typeof useThreadForms>
 
@@ -35,6 +36,9 @@ export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${
  * A thread has as many ways into its reply as it has entries and only one form. So a form
  * left comes back to the icon that opened it, and an icon pressed while its thread's form
  * stands open takes focus to that form instead of leaving it on the icon.
+ *
+ * Making steps of a list is a form of the thread too, under the entry whose list it is,
+ * root or reply; once the steps are written it gives way to a line saying how many.
  */
 export function useThreadForms(identity: () => string, changed: () => void) {
   const { pending, error, submit } = useInspectorMutation(identity, changed)
@@ -43,6 +47,9 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   const replies = ref<Record<string, string>>({})
   const decisions = ref<Record<string, string>>({})
   const marks = ref<Record<string, boolean>>({})
+  /** The entry whose list the open steps form is for, and the one the last steps went from. */
+  const stepsOf = ref<number | null>(null)
+  const added = ref<{ count: number; entry: number } | null>(null)
   /** The thread the last failed write belongs to, and which of its controls made it. */
   const failedAt = ref<{ form: ThreadForm | 'reopen'; key: string } | null>(null)
   /** Threads marked while the unresolved view stands: they stay until the view changes. */
@@ -62,6 +69,8 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     replies.value = {}
     decisions.value = {}
     marks.value = {}
+    stepsOf.value = null
+    added.value = null
     failedAt.value = null
     held.value = new Set()
     expanded.value = new Set()
@@ -76,11 +85,17 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   const isOpen = (key: string, form?: ThreadForm) =>
     open.value?.key === key && (form === undefined || open.value.form === form)
 
-  function show(key: string, form: ThreadForm, press?: Event) {
+  const stepsOpen = (key: string, entry: number) => isOpen(key, 'steps') && stepsOf.value === entry
+
+  /** `entry` is the comment whose list a steps form takes its points from. */
+  function show(key: string, form: ThreadForm, press?: Event, entry: number | null = null) {
     failedAt.value = null
+    added.value = null
     opener = press?.currentTarget instanceof HTMLElement ? press.currentTarget : null
-    if (open.value?.key === key && open.value.form === form) reachedAgain.value += 1
+    if (open.value?.key === key && open.value.form === form && stepsOf.value === entry)
+      reachedAgain.value += 1
     else open.value = { form, key }
+    stepsOf.value = entry
   }
   async function hide(back: ThreadForm) {
     const key = open.value?.key
@@ -88,7 +103,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     failedAt.value = null
     if (!key) return
     await nextTick()
-    const first = anchored(back === 'reply' ? replyAnchor(key) : resolveAnchor(key))
+    const first = anchored(back === 'resolve' ? resolveAnchor(key) : replyAnchor(key))
     ;(opener?.isConnected ? opener : first)?.focus()
     opener = null
   }
@@ -99,7 +114,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     if (current.form === 'reply') {
       replies.value[current.key] = ''
       marks.value[current.key] = false
-    } else decisions.value[current.key] = ''
+    } else if (current.form === 'resolve') decisions.value[current.key] = ''
     void hide(current.form)
   }
 
@@ -155,11 +170,24 @@ export function useThreadForms(identity: () => string, changed: () => void) {
       if (!writes.unmarked.value.has(root)) moveFocus(anchored(entryAnchor(root)))
     })
   }
+  function sendSteps(
+    key: string,
+    entry: number,
+    card: Pick<WorkItem, 'checklist' | 'revision'>,
+    points: string[],
+  ) {
+    failedAt.value = { form: 'steps', key }
+    void writes.addSteps(card, points, () => {
+      void hide('steps')
+      added.value = { count: points.length, entry }
+    })
+  }
   function toggle(key: string) {
     if (!expanded.value.delete(key)) expanded.value.add(key)
   }
 
   return {
+    added,
     cancel,
     decisions,
     errorAt,
@@ -175,8 +203,10 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     sendReopen,
     sendReply,
     sendResolve,
+    sendSteps,
     settleFocus,
     show,
+    stepsOpen,
     toggle,
     unmarked: writes.unmarked,
   }

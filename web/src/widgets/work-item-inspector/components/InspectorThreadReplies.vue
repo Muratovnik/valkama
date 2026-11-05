@@ -13,6 +13,8 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorEntrySteps from '@/widgets/work-item-inspector/components/InspectorEntrySteps.vue'
+import InspectorStepsAction from '@/widgets/work-item-inspector/components/InspectorStepsAction.vue'
 import type { ThreadComment } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import {
   injectThreadForms,
@@ -155,6 +157,11 @@ function retryMark() {
             v-if="canReply"
             #actions
           >
+            <InspectorStepsAction
+              :busy="busy"
+              :entry="reply"
+              :thread-key="threadKey"
+            />
             <EntryAction
               icon="reply"
               :disabled="busy"
@@ -167,6 +174,11 @@ function retryMark() {
           class="reply-text"
           :text="reply.body"
           :lines="6"
+        />
+        <InspectorEntrySteps
+          :busy="busy"
+          :entry="reply"
+          :thread-key="threadKey"
         />
       </li>
     </ol>

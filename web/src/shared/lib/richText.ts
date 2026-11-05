@@ -58,6 +58,11 @@ export type RichInline =
 export interface RichListItem {
   checked: boolean | null
   children: RichBlock[]
+  /**
+   * The item's own Markdown, as written after its marker and task box and without the
+   * lists nested in it: what a point of the list says, for a step to say it again.
+   */
+  source: string
 }
 
 export type RichAlign = 'center' | 'left' | 'right' | null
@@ -293,12 +298,15 @@ function link(
 }
 
 function listItem(item: Tokens.ListItem, reading: DocumentReading | null): RichListItem {
+  const own = item.tokens.filter((token) => token.type !== 'checkbox')
   return {
     checked: item.task ? Boolean(item.checked) : null,
-    children: blocks(
-      item.tokens.filter((token) => token.type !== 'checkbox'),
-      reading,
-    ),
+    children: blocks(own, reading),
+    source: own
+      .filter((token) => token.type !== 'list')
+      .map((token) => token.raw)
+      .join('')
+      .trim(),
   }
 }
 

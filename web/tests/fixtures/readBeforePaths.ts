@@ -85,9 +85,16 @@ function link(token: Tokens.Image | Tokens.Link, inLink: boolean): RichInline[] 
 }
 
 function listItem(item: Tokens.ListItem): RichListItem {
+  const own = item.tokens.filter((token) => token.type !== 'checkbox')
   return {
     checked: item.task ? Boolean(item.checked) : null,
-    children: blocks(item.tokens.filter((token) => token.type !== 'checkbox')),
+    children: blocks(own),
+    // The item's own Markdown, which paths never touched: its words as written, no lists.
+    source: own
+      .filter((token) => token.type !== 'list')
+      .map((token) => token.raw)
+      .join('')
+      .trim(),
   }
 }
 

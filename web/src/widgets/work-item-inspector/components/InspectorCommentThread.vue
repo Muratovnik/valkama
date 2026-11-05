@@ -9,13 +9,16 @@
  * whoever marked it, so focus goes to the article, the element that stays.
  *
  * What can be done to the root stands on its head as icons, read from the right: the mark,
- * replying, and on a report making it the outcome, so the first two never move. The mark's
+ * replying, making steps of its list where it has one, and on a report making it the
+ * outcome, so the first two never move. The mark's
  * icon names what a press will do, and the line of the mark says how the thread stands.
  */
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorEntrySteps from '@/widgets/work-item-inspector/components/InspectorEntrySteps.vue'
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
+import InspectorStepsAction from '@/widgets/work-item-inspector/components/InspectorStepsAction.vue'
 import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
 import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
 import type { ThreadRow } from '@/widgets/work-item-inspector/utils/threadRows.ts'
@@ -244,6 +247,11 @@ function sendMark() {
             :label="t('workItem.makeOutcome')"
             @click="emit('select', root.id)"
           />
+          <InspectorStepsAction
+            :busy="busy"
+            :entry="root"
+            :thread-key="key"
+          />
           <EntryAction
             :id="replyId"
             icon="reply"
@@ -300,6 +308,11 @@ function sendMark() {
       >
         {{ reopenError }}
       </p>
+      <InspectorEntrySteps
+        :busy="busy"
+        :entry="root"
+        :thread-key="key"
+      />
       <ResolveForm
         v-if="resolving"
         v-model:text="decision"

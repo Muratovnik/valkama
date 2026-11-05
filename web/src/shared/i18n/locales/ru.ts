@@ -3,6 +3,7 @@
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
+import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
@@ -36,6 +37,7 @@ export const ru = {
   time: timeMessages.ru.time,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   threads: discussionThreadMessages.ru.threads,
+  commentSteps: commentStepsMessages.ru.commentSteps,
   finder: globalFinderMessages.ru.finder,
   requests: inputRequestMessages.ru.requests,
   editor: richTextMessages.ru.editor,

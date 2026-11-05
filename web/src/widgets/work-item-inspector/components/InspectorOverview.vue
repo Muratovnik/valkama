@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
 import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
+import { provideCardSteps } from '@/widgets/work-item-inspector/utils/entrySteps.ts'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
@@ -87,6 +88,11 @@ async function revealChecklist() {
   checklistSection.value?.scrollIntoView({ block: 'start' })
   moveFocus(checklistHead.value?.$el as HTMLElement | undefined, { preventScroll: true })
 }
+provideCardSteps({
+  item: () => props.item,
+  refresh: () => emit('refresh'),
+  reveal: () => void revealChecklist(),
+})
 
 // A closed item is neither blocked nor waiting on a next step: both read as
 // live instructions, and on a Done card they were stale ones.
