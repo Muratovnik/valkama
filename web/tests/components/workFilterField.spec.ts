@@ -83,7 +83,7 @@ describe('the Work filter field', () => {
     const groups = wrapper
       .findAll('[role="listbox"] [role="group"] .option-group-name')
       .map((name) => name.text())
-    expect(groups).toEqual(['Quick filters', 'State', 'Kind', 'Priority', 'Label', 'Holder'])
+    expect(groups).toEqual(['Quick filters', 'State', 'Kind', 'Label', 'Priority', 'Holder'])
     // Labels by how many items carry them; holders by the name the claim gives.
     expect(options(wrapper)).toEqual(expect.arrayContaining(['ui', 'agent', 'claude']))
     expect(options(wrapper).indexOf('ui')).toBeLessThan(options(wrapper).indexOf('agent'))

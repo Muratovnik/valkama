@@ -338,6 +338,25 @@ test('on a phone the menu stands under the bar and inside the screen', async ({ 
   expect(overflow).toBe(0)
 })
 
+for (const height of [900, 720]) {
+  test(`how labels combine is in sight as the menu opens, nothing scrolled, ${height}px tall`, async ({
+    page,
+  }) => {
+    await board(page, 1280, height)
+    await field(page).click()
+    const list = menu(page)
+    await expect(list).toBeVisible()
+    expect(await list.evaluate((node) => node.scrollTop)).toBe(0)
+    const listBox = await boxOf(list)
+    const choices = list.getByRole('group', { name: 'Label', exact: true }).getByRole('option', {
+      name: /^Labels: /u,
+    })
+    await expect(choices).toHaveCount(2)
+    const choiceBox = await boxOf(choices.first())
+    expect(choiceBox.y + choiceBox.height).toBeLessThanOrEqual(listBox.y + listBox.height)
+  })
+}
+
 test('a long list of labels scrolls under a head that stays, and the arrows stay clear of it', async ({
   page,
 }) => {

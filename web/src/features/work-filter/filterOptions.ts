@@ -58,8 +58,12 @@ export interface FilterGroup {
   choices?: FilterChoice[]
 }
 
-/** The menu's facets, in the order a reader narrows by them. */
-const GROUP_ORDER: readonly ValueFacet[] = ['category', 'kind', 'priority', 'labels', 'holder']
+/**
+ * The menu's facets, in the order a reader narrows by them. Labels follow the state and the
+ * kind, the two every space has and a reader starts from, and come ahead of the priority so
+ * that how they combine stands in sight as the menu opens.
+ */
+const GROUP_ORDER: readonly ValueFacet[] = ['category', 'kind', 'labels', 'priority', 'holder']
 
 /** The word for a token's value, in the reader's language. */
 function tokenValue(token: WorkFilterToken, t: Translate): string {
