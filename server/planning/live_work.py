@@ -19,6 +19,8 @@ An item takes its state from the sessions behind it:
 | at work, and a live subagent of it wrote to this item since that subagent last started | `working` |
 | at work, and a live subagent of it holds an open step of this item | `working` |
 | at work, and the label of a live subagent of it names this item by its number | `working` |
+| at work, and a live subagent of it with no write and no step was given this item's number first in its packet | `working` |
+| at work, and a live subagent of it with no other sign is under a session holding this item and no other | `working` |
 | at work, and none of those | `held` |
 | otherwise: the turn ended, it waits for a person, or it was opened with no prompt | `waiting` |
 
@@ -29,12 +31,15 @@ the active ones heard from within `LIVE_QUIET`, since only such a session can be
 at work.
 
 A prompt comes with every notice that wakes a coordinator, so its own window says
-little about a subagent working for an hour. What places a live subagent is what
-it did itself, strongest first: it wrote to the item since it last started, it
-holds an open step, or the label its launch gave it names the item's number, as
-`mentions` reads a number in an agent's prose. Its parent's holds place it on
-nothing: `agents` may say a subagent stands on each item its parent held when it
-started and how many those were, but as a reason to move they would move them all.
+little about a subagent working for an hour. What places a live subagent is `ladder`'s
+order, the one usage is counted by, strongest first: it wrote to the item since it last
+started, it holds an open step, the packet it was given or the label its launch gave it
+names the item's number, as `mentions` reads a number in an agent's prose, or else its
+parent holds this one item. A parent holding several places it on none: `agents` may say
+a subagent stands on each item its parent held when it started and how many those were,
+but as a reason to move they would move them all. The packet's number comes from the
+usage reader's pass over the subagent's transcript, so it arrives up to a pass late, and
+until then that subagent has only its lower signs.
 
 A session is at work when its last lifecycle event is a `prompt`, so a turn is
 running, or when it has a live subagent: a subagent row of it that is `active`,
@@ -79,17 +84,18 @@ at work for a day and `quiet` after it, since only a check of the process could
 tell more. A subagent that fell moves its items for up to `SUBAGENT_SILENT` more,
 and one in a single step that writes nothing for longer stops moving until it
 writes. A long turn that writes nothing moves nothing: its items read `held`
-until its first write, and so do a coordinator's while a subagent of it works
-having written nothing, held no step and been given a label with no number. A
+until its first write, and so do those of a coordinator holding several while a subagent
+of it works having written nothing, held no step and been given no number. A
 label says what its launch meant and not what the subagent does, so one that names
 an item it only reads moves that item. A link moves only its source item, the one
 its call names. A session that is not at work puts nothing in the map for an item
 it only wrote to.
 
 The map is five reads, whatever the number of items, and the status of one file
-for each live subagent started longer ago than `SUBAGENT_SILENT`. A store an earlier
-build wrote may lack what they ask for, and then the map is empty rather than an
-error.
+for each live subagent started longer ago than `SUBAGENT_SILENT`. A live subagent with
+no write of its own adds the two reads of `_lower_signs` and, when its label has a
+number no listed item answers to, one more for that number. A store an earlier build
+wrote may lack what they ask for, and then the map is empty rather than an error.
 """
 
 from __future__ import annotations
@@ -101,8 +107,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .. import sessions
-from ..hooks import normalize
-from . import agents, calls, leases, mentions
+from . import agents, calls, ladder, leases
 
 #: How long a live session may stay silent before it reads `quiet`.
 LIVE_QUIET = timedelta(hours=24)
@@ -132,8 +137,9 @@ _HOLDS_EVERYTHING = (
     " + (SELECT COUNT(*) FROM pragma_table_info('execution_events')"
     "    WHERE name IN ('agent_id', 'work_item_id', 'source'))"
     " + (SELECT COUNT(*) FROM pragma_table_info('executions') WHERE name = 'status')"
+    " + (SELECT COUNT(*) FROM pragma_table_info('usage_runs') WHERE name = 'packet_item')"
 )
-_COLUMNS_ASKED = 9
+_COLUMNS_ASKED = 10
 
 #: The session of each confirmed call that took a claim on one of these items.
 _CLAIMS = (
@@ -154,9 +160,11 @@ _SESSIONS = (
     " UNION SELECT id FROM sessions"
     "  WHERE status = 'active' AND parent_session_id = '' AND last_seen >= ?2)"
     " SELECT id, '' AS parent, '' AS agent_id, '' AS label, status, last_seen,"
-    " transcript_path FROM sessions WHERE id IN (SELECT id FROM top)"
+    " transcript_path, NULL AS packet_item FROM sessions WHERE id IN (SELECT id FROM top)"
     " UNION ALL"
-    " SELECT id, parent_session_id, agent_id, label, status, last_seen, '' FROM sessions"
+    " SELECT id, parent_session_id, agent_id, label, status, last_seen, '',"
+    " (SELECT u.packet_item FROM usage_runs u WHERE u.session_id = parent_session_id"
+    "  AND u.agent_id = sessions.agent_id) FROM sessions"
     " WHERE parent_session_id != '' AND status = 'active'"
     " AND parent_session_id IN (SELECT id FROM top)"
 )
@@ -202,6 +210,14 @@ _LIFECYCLE = (
     " ORDER BY happened"
 )
 
+#: Every item these sessions' confirmed calls claimed and still hold, in any space.
+_HOLDS = (
+    "SELECT c.session_id, w.work_item_id FROM work_items w"
+    " JOIN execution_events c ON c.id = w.claim_call_id"
+    " WHERE w.claim_ref != '' AND c.identity_state = ?"
+    " AND c.session_id IN (SELECT value FROM json_each(?))"
+)
+
 #: The items an attempt is running on.
 _ATTEMPTS = (
     "SELECT DISTINCT work_item_id FROM executions"
@@ -226,12 +242,22 @@ class _Lifecycle:
 
 
 @dataclass(frozen=True)
+class _Unwritten:
+    """What is known of a live subagent that has written nothing since it started."""
+
+    packet_item: str | None
+    label: str
+
+
+@dataclass(frozen=True)
 class _SeenOn:
     """What a session is seen doing, whether or not it is at work."""
 
     items: set[str]
     #: Its live subagents, each spelled as a holder's label spells it.
     agents: set[str]
+    #: Those with no write of their own, and what their launch said of them.
+    unwritten: dict[str, _Unwritten] = field(default_factory=dict)
 
 
 def _behind(
@@ -279,9 +305,9 @@ def _named_by(label: str, references: Mapping[str, str]) -> set[str]:
     """The items a subagent's label names by number. A number its cut ran through names none."""
 
     return {
-        references[found.reference]
-        for found in mentions.scan(label, mentions.ScanState(), final=True)
-        if found.reference in references and label[found.end :] != normalize.LABEL_CUT
+        references[reference]
+        for reference in ladder.named_references(label)
+        if reference in references
     }
 
 
@@ -330,20 +356,64 @@ def _states(
     for session, read in _lifecycle(conn, awake).items():
         items = set(read.written)
         running: set[str] = set()
+        unwritten: dict[str, _Unwritten] = {}
         for row in subagents.get(session, []):
             # A subagent started in the second its session started counts, as a
             # claim and a launch in one second do in `agents`.
             if str(row["last_seen"])[:_SECOND] >= read.started and _runs(
                 row, session, transcripts[session], now
             ):
-                agent = str(row["agent_id"])
+                agent, label = str(row["agent_id"]), str(row["label"] or "")
                 running.add(calls.label_id(agent))
-                items |= read.by_agent.get(agent, set())
-                items |= _named_by(str(row["label"] or ""), references)
-        seen_on[session] = _SeenOn(items, running)
+                written = read.by_agent.get(agent, set())
+                items |= written | _named_by(label, references)
+                if not written:
+                    packet = row["packet_item"]
+                    unwritten[calls.label_id(agent)] = _Unwritten(
+                        str(packet) if packet else None, label
+                    )
+        seen_on[session] = _SeenOn(items, running, unwritten)
         if read.last_kind == "prompt" or running:
             live[session] = {"state": WORKING}
     return live, seen_on
+
+
+def _lower_signs(
+    conn: sqlite3.Connection, states: Mapping[str, dict], seen_on: Mapping[str, _SeenOn]
+) -> set[str]:
+    """What subagents with no write of their own stand on, by the rest of `ladder`'s order.
+
+    A step it holds, wherever that is, leaves nothing to add: `live_work` moves a listed
+    one, and an unlisted one still says this subagent is on it and not on its parent's.
+    """
+
+    asked = {
+        session: seen.unwritten
+        for session, seen in seen_on.items()
+        if seen.unwritten and states[session]["state"] == WORKING
+    }
+    if not asked:
+        return set()
+    holds: dict[str, set[str]] = {session: set() for session in asked}
+    for row in conn.execute(_HOLDS, (calls.CONFIRMED, json.dumps(sorted(asked)))):
+        holds[str(row["session_id"])].add(str(row["work_item_id"]))
+    on_a_step: set[tuple[str, str]] = set()
+    for holder, item in ladder.held_steps(conn).items():
+        ids = calls.holder_ids(holder)
+        if ids is not None and ids[0] in holds:
+            holds[ids[0]].add(item)
+            if ids[1] is not None:
+                on_a_step.add((ids[0], ids[1]))
+    found: set[str] = set()
+    for session, unwritten in asked.items():
+        for agent, known in unwritten.items():
+            if (session, agent) in on_a_step:
+                continue
+            if known.packet_item is not None:
+                found.add(known.packet_item)
+            elif ladder.first_named_item(conn, known.label) is None and len(holds[session]) == 1:
+                found |= holds[session]
+    return found
 
 
 def _stronger(first: dict | None, second: dict) -> dict:
@@ -387,6 +457,8 @@ def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, d
         if states[session]["state"] == WORKING:
             for identity in seen.items & mapped:
                 found[identity] = {"state": WORKING}
+    for identity in _lower_signs(conn, states, seen_on) & mapped:
+        found[identity] = {"state": WORKING}
     for row in conn.execute(_ATTEMPTS, (identities,)):
         found[str(row["work_item_id"])] = {"state": WORKING}
     # In the items' order, so an unchanged map is an unchanged frame of the stream.

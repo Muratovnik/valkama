@@ -8,8 +8,9 @@ prompt, or with a subagent running since it really last started, is at work; any
 other is `waiting`, and a compacted context is no such start or event. A session
 at work makes an item `working` only when it wrote there since its last prompt,
 itself or through a subagent, or when a live subagent of it wrote there since that
-subagent last started, holds an open step there or names it by number in its
-label; its other items are `held`. A live subagent is an active row started since
+subagent last started, holds an open step there, names it by number in its label or
+first in its packet, or has no such sign and the session holds that item and no other;
+its other items are `held`. A live subagent is an active row started since
 the session really started, not silent past `SUBAGENT_SILENT` by its transcript.
 
 Every case reads `planning_payload`, so the key is checked where views take it.
@@ -432,9 +433,9 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         ),
         HELD,
     ),
-    ("a waiting session with a subagent started since", None, _subagent(True), HELD),
+    ("a waiting session with a subagent started since", None, _subagent(True), WORKING),
     ("a waiting session with a subagent from before a restart", None, _subagent(False), WAITING),
-    ("a subagent across a compaction", None, _subagent_across("compact"), HELD),
+    ("a subagent across a compaction", None, _subagent_across("compact"), WORKING),
     ("a subagent across a startup", None, _subagent_across("startup"), WAITING),
     ("a subagent across a resume", None, _subagent_across("resume"), WAITING),
     ("a subagent across a clear", None, _subagent_across("clear"), WAITING),
@@ -442,7 +443,7 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     ("a subagent across a start with no source", None, _subagent_across(None), WAITING),
     ("a turn across a compaction", None, _compacted_in_a_turn, HELD),
     ("a turn over, then a compaction", None, _compacted_after_a_turn, WAITING),
-    ("a subagent started again since a restart", None, _started_again_since_a_restart, HELD),
+    ("a subagent started again since a restart", None, _started_again_since_a_restart, WORKING),
     ("a step a subagent holds", ["step"], _step_held_by_a_subagent(stopped=False), WORKING),
     ("a step a stopped subagent left", ["step"], _step_held_by_a_subagent(stopped=True), HELD),
     ("an attempt running with no session", None, _attempt("running"), WORKING),
@@ -608,7 +609,7 @@ class SubagentWorkTests(LiveWorkCase):
 
     def test_what_a_subagent_wrote_stops_moving_when_it_stops(self) -> None:
         reference = self.item()
-        session = self.coordinator(reference)
+        session = self.coordinator(reference, self.item())
         self.subagent(session, "a1")
         self.subagent(session, "a2")
         self.comment(reference, session, "a1")
@@ -618,7 +619,7 @@ class SubagentWorkTests(LiveWorkCase):
 
     def test_a_write_counts_from_the_subagents_last_start(self) -> None:
         reference = self.item()
-        session = self.coordinator(reference)
+        session = self.coordinator(reference, self.item())
         self.subagent(session, "a1")
         self.comment(reference, session, "a1")
         self.hook(session, "subagent-stop", ago(minutes=2), agent="a1")
@@ -648,7 +649,8 @@ class SubagentWorkTests(LiveWorkCase):
     def test_a_label_names_an_item_only_by_its_exact_number(self) -> None:
         item = self.item()
         self.assertEqual("LW-1", item)
-        session = self.coordinator(item)
+        # Holding a second item, so holding this one alone does not move it.
+        session = self.coordinator(item, self.item())
         for index, label in enumerate(
             (
                 "the longer number LW-12",
@@ -699,6 +701,82 @@ class SubagentWorkTests(LiveWorkCase):
             (self.state_of(written), self.state_of(stepped), self.state_of(named)),
         )
         self.assertEqual([HELD] * 14, [self.state_of(reference) for reference in others])
+
+
+class LowerSignTests(SubagentWorkTests):
+    """A subagent with no write, step or label number, by the rest of the ladder."""
+
+    def packet(self, session: str, agent: str, reference: str) -> None:
+        """What the usage reader found in that subagent's packet."""
+
+        self.conn.execute(
+            "INSERT INTO usage_runs(session_id, agent_id, client, path, packet_item)"
+            " VALUES (?, ?, 'claude', 'x', ?)",
+            (session, agent, self.identity(reference)),
+        )
+
+    def test_it_moves_the_one_item_its_parent_holds(self) -> None:
+        reference = self.item()
+        session = self.coordinator(reference)
+        self.assertEqual(WAITING, self.state_of(reference))
+        self.subagent(session, "a1", "tests")
+        self.assertEqual(WORKING, self.state_of(reference))
+        self.hook(session, "subagent-stop", ago(seconds=1), agent="a1")
+        self.assertEqual(WAITING, self.state_of(reference))
+
+    def test_two_items_held_move_neither(self) -> None:
+        first, second = self.item(), self.item()
+        session = self.coordinator(first, second)
+        self.subagent(session, "a1", "tests")
+        self.assertEqual((HELD, HELD), (self.state_of(first), self.state_of(second)))
+
+    def test_an_item_held_in_another_space_counts_as_one_more(self) -> None:
+        here = self.item()
+        service.create_planning_space(self.conn, project_id="far", name="Far", key="FAR")
+        there = service.create_work_item(self.conn, space="FAR", title="Far")
+        session = self.coordinator(here)
+        self.claim(str(there["reference"]), session)
+        self.subagent(session, "a1", "tests")
+        self.assertEqual(HELD, self.state_of(here))
+
+    def test_the_first_number_of_its_packet_moves_that_item_whatever_the_parent_holds(self) -> None:
+        first, second, third = self.item(), self.item(), self.item()
+        session = self.coordinator(first, second, third)
+        self.subagent(session, "a1", "tests")
+        self.packet(session, "a1", second)
+        self.assertEqual(
+            (HELD, WORKING, HELD),
+            (self.state_of(first), self.state_of(second), self.state_of(third)),
+        )
+
+    def test_a_packet_on_another_item_leaves_the_parents_only_item_still(self) -> None:
+        held, other = self.item(), self.item()
+        session = self.coordinator(held)
+        self.subagent(session, "a1", "tests")
+        self.packet(session, "a1", other)
+        self.assertEqual((HELD, WORKING), (self.state_of(held), self.state_of(other)))
+
+    def test_a_label_on_another_space_leaves_the_parents_only_item_still(self) -> None:
+        held = self.item()
+        service.create_planning_space(self.conn, project_id="far", name="Far", key="FAR")
+        there = service.create_work_item(self.conn, space="FAR", title="Far")
+        session = self.coordinator(held)
+        self.subagent(session, "a1", f"build {there['reference']}")
+        self.assertEqual(HELD, self.state_of(held))
+
+    def test_a_write_elsewhere_leaves_the_parents_only_item_still(self) -> None:
+        held, other = self.item(), self.item()
+        session = self.coordinator(held)
+        self.subagent(session, "a1", "tests")
+        self.comment(other, session, "a1")
+        self.assertEqual((HELD, WORKING), (self.state_of(held), self.state_of(other)))
+
+    def test_its_own_step_elsewhere_leaves_the_parents_only_item_still(self) -> None:
+        held, stepped = self.item(), self.item(["step"])
+        session = self.coordinator(held)
+        self.subagent(session, "a1", "tests")
+        self.hold_step(stepped, session, agent="a1")
+        self.assertEqual((HELD, WORKING), (self.state_of(held), self.state_of(stepped)))
 
 
 class SilentSubagentTests(LiveWorkCase):
@@ -804,6 +882,7 @@ class StoreAgeTests(unittest.TestCase):
             " identity_state TEXT, occurred_at TEXT, received_at TEXT, work_item_id TEXT,"
             " source TEXT);"
             "CREATE TABLE executions(work_item_id TEXT, status TEXT);"
+            "CREATE TABLE usage_runs(session_id TEXT, agent_id TEXT, packet_item TEXT);"
             "INSERT INTO work_items(work_item_id, claim_ref) VALUES ('w', '');"
         )
         conn.execute("INSERT INTO executions VALUES ('w', 'running')")

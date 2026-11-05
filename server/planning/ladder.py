@@ -73,11 +73,16 @@ def first_named_item(conn: sqlite3.Connection, text: str) -> str | None:
 
 
 def held_steps(conn: sqlite3.Connection) -> dict[str, str]:
-    """Who holds an open step now, by holder label, and of which item."""
+    """Who holds an open step now, by holder label, and of which item.
+
+    Closing an item ends its step claims, so only open items are asked.
+    """
 
     held: dict[str, str] = {}
     for row in conn.execute(
-        "SELECT work_item_id, checklist FROM work_items WHERE checklist LIKE '%(session %'"
+        "SELECT w.work_item_id, w.checklist FROM work_items w"
+        " JOIN workflow_states s ON s.state_id = w.state_id"
+        " WHERE s.is_terminal = 0 AND w.checklist LIKE '%(session %'"
     ):
         for step in json.loads(row[1]):
             holder = step.get("claimed_by")
