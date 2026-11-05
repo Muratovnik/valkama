@@ -288,7 +288,6 @@ export const APP_REFUSALS = [
   'invalid-step',
   'not-installed',
   'launch-failed',
-  'window-not-confirmed',
   'no-folder',
   'no-command',
 ] as const

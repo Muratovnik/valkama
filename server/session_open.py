@@ -672,10 +672,10 @@ def _place_plan(
             "source": how if route.place == place else "fallback",
             "missed": planner.missed[0] if planner.missed else "",
         }
-        # A link sent straight after a window opens can reach the window before it,
-        # so two steps take two actions until that race was seen not to happen.
-        unattended = ask.surface == "desktop" and url_schemes.WINDOW_THEN_LINK in ask.seen
-        one_action = not leading and (len(route.steps) == 1 or unattended)
+        # The app waits for the window before it sends the link, and a link that still
+        # outruns it costs one more press. A browser may refuse a second outside program
+        # on one press, so each step there is the person's own.
+        one_action = not leading and (len(route.steps) == 1 or ask.surface == "desktop")
         return answer(state, [*leading, *route.steps, *offered], opens, one_action)
     if offered:
         # Nowhere to look at it says nothing against the offer, and an explanation after

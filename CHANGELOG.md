@@ -41,6 +41,11 @@ checkouts are therefore distinguishable even at the same version.
   and sessions already recorded are read right from where their transcript is kept.
   The window, the terminal and the command to copy all use that one folder, and the
   copied command now starts with `cd` into it.
+- In the app, a session from VS Code or another editor opens with one press and no
+  dialog: the window, a short pause, then the conversation. If the editor was not
+  running, the conversation follows once its window has had time to appear. In the
+  rare case that the conversation reaches the window too early and starts empty,
+  pressing again opens the right one. The browser still takes two presses.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

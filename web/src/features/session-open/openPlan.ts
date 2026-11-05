@@ -6,10 +6,10 @@
  * chooses a place by client. In the desktop app the page names only the target
  * and the owner's places, and the app reads the plan and runs it. A browser reads
  * the plan itself, follows its links and copies its commands. A browser may refuse a
- * second launch of an outside program until the person acts again, and the app's
- * link must not outrun the window it follows, so a plan that is not `one_action`
- * takes one action per click on either surface: the first runs now and the next
- * waits.
+ * second launch of an outside program until the person acts again, so a plan that is
+ * not `one_action` takes one action per click: the first runs now and the next waits.
+ * The app's plan to a window and a link in it is one action, and the app holds the link
+ * back for the window.
  *
  * Every outcome names a closed code, the server's, the app's or this module's,
  * and the words for each are in the dictionaries; an error's own text never

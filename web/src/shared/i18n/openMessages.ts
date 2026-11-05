@@ -136,8 +136,6 @@ export const openMessages = {
         'invalid-plan': 'The Valkama app refused a plan it could not check.',
         'invalid-step': 'That step is no longer in the plan; open it again.',
         'launch-failed': 'The program did not start.',
-        'window-not-confirmed':
-          'The project window did not confirm it opened. When it is there, open the session in it.',
       },
       archived: 'A copy is kept in Valkama.',
       pathRefused: {
@@ -322,8 +320,6 @@ export const openMessages = {
         'invalid-plan': 'Приложение Valkama отклонило план, который не смогло проверить.',
         'invalid-step': 'Этого шага в плане уже нет; откройте заново.',
         'launch-failed': 'Программа не запустилась.',
-        'window-not-confirmed':
-          'Окно проекта не подтвердило, что открылось. Когда оно появится, откройте сессию в нём.',
       },
       archived: 'Копия хранится в Valkama.',
       pathRefused: {

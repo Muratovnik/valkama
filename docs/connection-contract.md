@@ -1622,7 +1622,9 @@ answer.
   over because it is not installed.
 - `state` is `live`, `ended`, `gone`, `headless` or `none`.
 - `one_action` says one click may run every step. Otherwise each step takes its own
-  action from the person.
+  action from the person. In the app a window and the link in it are one action: it
+  waits for the editor to start the window, pauses and sends the link. In a browser
+  they are two, because a browser may refuse a second outside program on one press.
 
 | Step | Fields | Who carries it out |
 | --- | --- | --- |
@@ -1666,13 +1668,15 @@ Which schemes are installed comes from the Windows classes the shell itself
 resolves a scheme through. A key that carries `URL Protocol` counts, unless its
 `shell\open\command` names a program that no longer exists.
 
-Five routes and behaviours are undocumented or could not be settled by reading,
+Four routes and behaviours are undocumented or could not be settled by reading,
 and each stays off in `url_schemes.SEEN_LIVE` until it has been watched working:
-a link landing in the window just opened, `claude://code/continue`, `/resume`
-through `claude-cli://`, the extension's "still open somewhere else" notice holding
-its input, and `vscode://openai.chatgpt/local/<id>`. Until then the plan takes the
-documented way round: two actions, `desktop-resume`, a command to copy, only the
-explanation, and the Codex app. Every client detail a plan depends on is listed in
+`claude://code/continue`, `/resume` through `claude-cli://`, the extension's "still
+open somewhere else" notice holding its input, and
+`vscode://openai.chatgpt/local/<id>`. Until then the plan takes the documented way
+round: `desktop-resume`, a command to copy, only the explanation, and the Codex app.
+A link landing in the window just opened is not on this list. Its window cannot be
+waited for any better than a pause, a miss costs one more press, and so the app
+takes it as a matter of course. Every client detail a plan depends on is listed in
 [What a client update can change](hook-contract.md#what-a-client-update-can-change).
 
 ### Server identity

@@ -49,7 +49,6 @@ const REFUSALS = Object.freeze([
   'invalid-step',
   'not-installed',
   'launch-failed',
-  'window-not-confirmed',
   'no-folder',
   'no-command',
 ])
@@ -73,10 +72,20 @@ const MAX_LINK = 4096
 const MAX_COMMAND = 400
 const MAX_TEXT = 1024
 const MAX_COPIED = 400
-/** How long after a window opens before a link is sent, so it reaches that window. */
-const PAUSE_MS = 300
-/** A running editor's second instance exits once the window is open; a first one never does. */
-const WINDOW_WAIT_MS = 15000
+/**
+ * How long after a window opens before a link is sent, so it reaches that window. No editor
+ * command waits for a window to be ready: `--wait` is about files being closed, and a link
+ * takes no window. A link goes to the window the editor holds active and waits there for
+ * that window to load, so this has only to cover the focus reaching a window that was
+ * already open, which takes the system a moment. A miss starts an empty conversation in the
+ * window before it, and pressing again cures that, since the right window is open by then.
+ */
+const PAUSE_MS = 500
+/**
+ * A running editor's second instance exits once its window is open. A first one stays for as
+ * long as the editor does, so past this the editor is taken to be starting with that window.
+ */
+const WINDOW_WAIT_MS = 5000
 
 class Refusal extends Error {
   constructor(reason, detail = {}) {
@@ -255,8 +264,8 @@ function childEnvironment(env) {
 }
 
 /**
- * Start one program. With `waitMs` it resolves once the program exits, or with
- * `exited: false` when it is still running then; without, once it has started.
+ * Start one program. With `waitMs` it resolves once the program exits, or after that long
+ * if it is still running; without, once it has started.
  */
 function launch(context, file, args, { cwd, hidden = false, waitMs = 0 }) {
   return new Promise((resolve, reject) => {
@@ -284,10 +293,10 @@ function launch(context, file, args, { cwd, hidden = false, waitMs = 0 }) {
     }
     child.once('error', (error) => settle(reject, error))
     child.once('spawn', () => {
-      if (!waitMs) settle(resolve, { exited: false })
-      else timer = setTimeout(() => settle(resolve, { exited: false }), waitMs)
+      if (!waitMs) settle(resolve)
+      else timer = setTimeout(() => settle(resolve), waitMs)
     })
-    if (waitMs) child.once('exit', () => settle(resolve, { exited: true }))
+    if (waitMs) child.once('exit', () => settle(resolve))
   })
 }
 
@@ -305,12 +314,8 @@ async function runStep(step, context, linkFollows) {
     const editor = context.editorExecutable(step.ide)
     if (!editor) throw new Refusal('not-installed', { host: step.ide })
     const waitMs = linkFollows ? context.windowWaitMs : 0
-    const started = await launch(context, editor, [step.folder], { cwd: step.folder, waitMs })
-    if (!linkFollows) return
-    // The link goes to the window in focus: sent before the window is there, it
-    // starts an empty conversation in another one, so nothing is sent unconfirmed.
-    if (!started.exited) throw new Refusal('window-not-confirmed')
-    await context.sleep(PAUSE_MS)
+    await launch(context, editor, [step.folder], { cwd: step.folder, waitMs })
+    if (linkFollows) await context.sleep(PAUSE_MS)
     return
   }
   if (step.kind === 'open-file') {
@@ -515,11 +520,7 @@ async function openSessionRequest(options) {
     try {
       await runStep(step, context, index + 1 < end && steps[index + 1].kind === 'open-link')
     } catch (failure) {
-      if (failure instanceof Refusal) {
-        // A window that did not confirm still leaves the link for the person to send.
-        const next = failure.reason === 'window-not-confirmed' ? nextOf(index + 1) : null
-        return refused(failure.reason, { ...failure.detail, next, plan })
-      }
+      if (failure instanceof Refusal) return refused(failure.reason, { ...failure.detail, plan })
       context.log('open-session-failed', { step: step.kind, error: failure?.message })
       return refused('launch-failed', { plan })
     }

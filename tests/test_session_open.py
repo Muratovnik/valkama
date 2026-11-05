@@ -49,7 +49,6 @@ EVERYTHING = Installed(
 )
 ALL_SEEN = frozenset(
     {
-        url_schemes.WINDOW_THEN_LINK,
         url_schemes.DESKTOP_CONTINUE,
         url_schemes.CLI_RESUME_LINK,
         url_schemes.ELSEWHERE_NOTICE,
@@ -443,10 +442,30 @@ class WithoutWhatWasNotSeenTests(PlanCase):
     def test_nothing_is_taken_as_seen_until_it_has_been(self) -> None:
         self.assertEqual(frozenset(), url_schemes.SEEN_LIVE)
 
-    def test_a_window_race_not_seen_settled_leaves_two_actions_in_the_app(self) -> None:
+    def test_the_app_takes_the_window_and_the_link_as_one_action_with_nothing_seen(self) -> None:
         self.session(opened_in="ide", opened_host="vscode")
-        plan = self.plan(seen=self.seen_without(url_schemes.WINDOW_THEN_LINK))
+        plan = self.plan(seen=url_schemes.SEEN_LIVE)
         self.assertEqual(self.window_then_link(), plan["steps"])
+        self.assertTrue(plan["one_action"])
+
+    def test_a_browser_takes_them_as_two_with_nothing_seen(self) -> None:
+        self.session(opened_in="ide", opened_host="vscode")
+        plan = self.plan(surface="browser", seen=url_schemes.SEEN_LIVE)
+        self.assertEqual(["focus-folder", "open-link"], kinds(plan))
+        self.assertFalse(plan["one_action"])
+
+    def test_what_a_live_session_elsewhere_says_still_comes_before_any_action(self) -> None:
+        self.session(opened_in="app", opened_host="claude-desktop", status="active")
+        plan = self.plan(seen=url_schemes.SEEN_LIVE, always="vscode")
+        self.assertEqual(["explain"], kinds(plan))
+        self.assertEqual("live-elsewhere", plan["steps"][0]["reason"])
+        self.assertFalse(plan["one_action"])
+
+    def test_a_session_in_an_editors_terminal_says_so_before_any_action(self) -> None:
+        self.session(opened_in="ide-terminal", opened_host="vscode", status="active")
+        plan = self.plan(seen=url_schemes.SEEN_LIVE)
+        self.assertEqual(["explain"], kinds(plan))
+        self.assertEqual("live-in-terminal", plan["steps"][0]["reason"])
         self.assertFalse(plan["one_action"])
 
     def test_the_desktop_link_not_seen_working_gives_the_documented_command(self) -> None:

@@ -228,12 +228,31 @@ test('one action runs window, the second instance exiting, a pause, then the lin
   assert.equal(started.options.env.PATH, 'C:\\Windows')
 })
 
-test('a window that is not confirmed gets no link, which is left for the person', async () => {
+test('an editor that was not running keeps its first instance, and the link still follows', async () => {
   const box = machine({ plans: plan([FOCUS, LINK], { one_action: true }), exits: false })
   const result = await openSessionRequest(box.options({ request: { session: ID }, windowWaitMs: 30 }))
-  assert.equal(result.ok, false)
-  assert.equal(result.reason, 'window-not-confirmed')
-  assert.equal(result.next, 1)
+  assert.equal(result.ok, true)
+  assert.equal(result.mode, 'opened')
+  assert.equal(result.next, null)
+  const order = effects(box.timeline).map((entry) =>
+    typeof entry === 'string' ? entry : `spawn ${entry.spawn}`,
+  )
+  assert.deepEqual(order, [`spawn ${CODE}`, `sleep ${PAUSE_MS}`, `link ${EXTENSION_LINK}`])
+})
+
+test('the link waits out the window, and no longer than the wait', async () => {
+  const box = machine({ plans: plan([FOCUS, LINK], { one_action: true }), exits: false })
+  const began = Date.now()
+  await openSessionRequest(box.options({ request: { session: ID }, windowWaitMs: 200 }))
+  const waited = Date.now() - began
+  assert.ok(waited >= 190 && waited < 2000, `waited ${waited} ms`)
+})
+
+test('a window that cannot start sends no link', async () => {
+  const box = machine({ plans: plan([FOCUS, LINK], { one_action: true }), spawnError: 'ENOENT' })
+  const result = await openSessionRequest(box.options({ request: { session: ID } }))
+  assert.equal(result.reason, 'launch-failed')
+  assert.equal(result.next, null)
   assert.ok(!box.timeline.some((entry) => String(entry).startsWith('link')))
 })
 

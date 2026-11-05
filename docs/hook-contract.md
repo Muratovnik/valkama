@@ -860,7 +860,7 @@ empty conversation.
 | The last `entrypoint` in a Claude Code transcript, and `payload.originator` on the first line of a Codex rollout | the open plan, for a session recorded before places were | the session is not placed |
 | `<config>/sessions/<pid>.json` of Claude Code, its `sessionId` and `pid` only | the desktop app, at a click, to see whether the process runs | the session's row decides whether it runs |
 | `CLAUDE_PID` and `CLAUDE_CODE_SESSION_ID` | [the watcher](#the-watcher) | a watcher whose client is gone, or that runs for another session, is ended by the session's end or its `timeout` alone |
-| `claude://code/continue?session=<id>`, `claude-cli://open?cwd=<folder>&q=/resume <id>`, `vscode://openai.chatgpt/local/<id>`, a link landing in the window just opened, and the extension's "still open somewhere else" notice holding its input | the open plan, only once each has been watched working and named in `url_schemes.SEEN_LIVE`, which no build names yet | nothing: until then the plan takes the way round described in [What a click opens](connection-contract.md#what-a-click-opens) |
+| `claude://code/continue?session=<id>`, `claude-cli://open?cwd=<folder>&q=/resume <id>`, `vscode://openai.chatgpt/local/<id>` and the extension's "still open somewhere else" notice holding its input | the open plan, only once each has been watched working and named in `url_schemes.SEEN_LIVE`, which no build names yet | nothing: until then the plan takes the way round described in [What a click opens](connection-contract.md#what-a-click-opens) |
 
 As far as reading the clients' documentation could settle, the four variables,
 Claude Code's session files and the two routes `claude://code/continue` and

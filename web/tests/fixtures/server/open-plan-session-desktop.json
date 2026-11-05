@@ -19,7 +19,7 @@
     "source": "recorded",
     "missed": ""
   },
-  "one_action": false,
+  "one_action": true,
   "steps": [
     {
       "kind": "focus-folder",

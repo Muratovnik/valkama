@@ -42,8 +42,6 @@ _EXTENSIONS = (CLAUDE_EXTENSION, CODEX_EXTENSION)
 #: Routes and client behaviour no client documents, or that reading could not settle.
 #: Each name stays out of `SEEN_LIVE` until it has been watched working on the client
 #: versions the release names; until then the planner takes the documented way round.
-WINDOW_THEN_LINK = "window-then-link"
-"""A link sent after the folder's window opened lands in that window."""
 DESKTOP_CONTINUE = "desktop-continue"
 """`claude://code/continue` opens that very session, not Desktop's start page."""
 CLI_RESUME_LINK = "cli-resume-link"
