@@ -20,7 +20,7 @@ import { executorSchema } from '@/shared/api/executorModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
-const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
+export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
 const PLANNING_API = 'valkama-planning-api' as const
 
 export const STATE_CATEGORIES = [

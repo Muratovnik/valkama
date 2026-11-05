@@ -510,6 +510,10 @@ chrome.
   space the layout already holds — never as a line pushed into the flow, which
   is how a status above the graph moved the field 43px on every refresh, and
   never by putting "Loading…" in place of a list it is reading again.
+- A first read of what a view shows, a space opened or switched to, takes the stage under
+  the view's bar and never the bar: the controls that say how the work is looked at are the
+  operator's, not the data's, and a switch of space that took them away for the length of
+  a read read as the view being lost. What the bar counts it says only once it has read it.
 - Interface copy leads with the useful action, state, or cause. Do not append
   self-justifying capability disclaimers, restate the inverse state, or use
   vague quality claims. Name a concrete boundary only where it changes the

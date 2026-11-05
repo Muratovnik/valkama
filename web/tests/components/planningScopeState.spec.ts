@@ -85,9 +85,9 @@ function route(space: PlanningSpaceRef, open = false): PlatformRoute {
 }
 
 const workspace = {
-  props: ['model', 'stale', 'writable'],
+  props: ['model', 'reading', 'stale', 'writable'],
   template:
-    '<div class="workspace-probe" :data-stale="stale"><span v-for="item in model.work_items" :key="item.reference">{{ item.title }}</span><button v-if="writable" class="write-probe">Write</button></div>',
+    '<div class="workspace-probe" :data-stale="stale" :data-reading="reading"><span v-for="item in model.work_items" :key="item.reference">{{ item.title }}</span><button v-if="writable" class="write-probe">Write</button></div>',
 }
 const inspector = {
   props: ['resourceRef'],
@@ -177,7 +177,7 @@ describe('Planning exact resource lifecycle', () => {
     wrapper.unmount()
   })
 
-  it('isolates a changed store before loading and does not retain old actions after failure', async () => {
+  it('isolates a changed store while it loads and does not retain old actions after failure', async () => {
     vi.mocked(fetchPlanning).mockResolvedValueOnce(model('Primary item'))
     const wrapper = surface(true)
     await flushPromises()
@@ -186,7 +186,9 @@ describe('Planning exact resource lifecycle', () => {
     vi.mocked(fetchPlanning).mockReturnValueOnce(next.promise)
     await wrapper.setProps({ route: route(attachedSpaceRef, true) })
     expect(fetchPlanning).toHaveBeenLastCalledWith({ project: projectId, ...attachedSpaceRef })
-    expect(wrapper.find('.workspace-probe').exists()).toBe(false)
+    // The views stand while the next store is read, and hold nothing of the one they left.
+    expect(wrapper.get('.workspace-probe').attributes('data-reading')).toBe('true')
+    expect(wrapper.get('.workspace-probe').text()).toBe('')
     expect(wrapper.find('.inspector-probe').exists()).toBe(false)
     expect(wrapper.find('.write-probe').exists()).toBe(false)
     next.reject(new Error('Attached unavailable'))

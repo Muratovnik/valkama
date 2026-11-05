@@ -21,6 +21,10 @@
  * The route also holds how the space is looked at: the view, the chain every
  * view is narrowed to, whether the board is grouped by epic, and the filter,
  * which the workspace owns and writes back within the manifest's bound.
+ *
+ * So the bar over the views stands while a space is read, first or after a switch,
+ * and only the stage under it waits. It used to give way to a page that said
+ * «Loading», which took the view away for as long as the read ran.
  */
 import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -41,6 +45,7 @@ import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
+import { readingModel } from '@/pages/planning/utils/readingModel.ts'
 
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
@@ -313,7 +318,15 @@ watch(
   { immediate: true },
 )
 
-const writable = computed(() => primaryStore.value && model.value !== null)
+/**
+ * A bound space is being read and nothing of it is drawn yet. Nothing of the space it
+ * replaces is drawn either: the views read a space with nothing in it.
+ */
+const reading = computed(
+  () =>
+    model.value === null && planning.value.status === 'loading' && boundSpace.value !== undefined,
+)
+const writable = computed(() => primaryStore.value && (model.value !== null || reading.value))
 
 onBeforeUnmount(() => {
   resource.value = cancelResource(resource.value)
@@ -417,12 +430,13 @@ defineExpose({ refresh, selectedId })
   />
 
   <div
-    v-else-if="model"
+    v-else-if="model || reading"
     class="planning-workspace-shell"
   >
     <PlanningWorkspace
       ref="workspace"
-      :model="shownModel ?? model"
+      :model="shownModel ?? model ?? readingModel"
+      :reading="!model"
       :route-state="route.state"
       :state-bytes="stateBytes"
       :chain="chainScope"
@@ -452,12 +466,12 @@ defineExpose({ refresh, selectedId })
 
     <PlanningCardDrawer
       :content-key="openIdentity"
-      :open="Boolean(open && boundSpaceResourceRef)"
+      :open="Boolean(open && boundSpaceResourceRef && model)"
       :label="openRecord?.title || open || ''"
       @close="closePanel"
     >
       <WorkItemInspector
-        v-if="open && boundSpaceResourceRef"
+        v-if="open && boundSpaceResourceRef && model"
         ref="card"
         :key="openIdentity"
         :reference="open"

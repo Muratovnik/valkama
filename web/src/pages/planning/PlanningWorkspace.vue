@@ -35,8 +35,10 @@ import { filterTokens } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
+import { uiLoading } from '@/shared/api/platformUiState.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
+import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -63,6 +65,8 @@ const props = defineProps<{
   graphFocus?: number
   /** How the board is grouped: not at all, or into one lane per epic. */
   grouping?: BoardGrouping
+  /** The space is being read: the bar stands, and the stage says so in place of a view. */
+  reading?: boolean
   selectedId?: string | null
 }>()
 
@@ -207,6 +211,10 @@ const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping
  */
 const barExclusion = computed(() => census.exclusion.value)
 
+/** A view takes the stage once its space is read and a chain the route names is too. */
+const staged = computed(() => !props.reading && !props.chainPending)
+const READING = uiLoading()
+
 /** A mark pressed outside the views — the card beside them — reaches the same filter. */
 defineExpose({ toggleFilter })
 </script>
@@ -218,6 +226,7 @@ defineExpose({ toggleFilter })
   >
     <PlanningWorkspaceBar
       :busy="stale"
+      :reading="reading"
       :categories="categories"
       :chain="chipReference"
       :counts="counts"
@@ -243,8 +252,14 @@ defineExpose({ toggleFilter })
       @retry="emit('retry-chain')"
     />
     <div class="workspace-stage">
+      <PlatformStatePanel
+        v-if="reading"
+        class="workspace-reading"
+        :state="READING"
+        compact
+      />
       <p
-        v-if="chainPending"
+        v-else-if="chainPending"
         class="workspace-note"
         role="status"
       >
@@ -260,7 +275,7 @@ defineExpose({ toggleFilter })
         >
       </DataEmptyState>
       <WorkItemBoard
-        v-if="!chainPending && stageView === 'kanban' && model.workflow"
+        v-if="staged && stageView === 'kanban' && model.workflow"
         v-show="matchedItems.length || !filtered"
         :workflow="model.workflow"
         :items="visibleItems"
@@ -278,7 +293,7 @@ defineExpose({ toggleFilter })
         @place="(move) => emit('place', move)"
       />
       <WorkItemList
-        v-else-if="!chainPending && stageView === 'list'"
+        v-else-if="staged && stageView === 'list'"
         v-show="matchedItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
@@ -287,7 +302,7 @@ defineExpose({ toggleFilter })
         @open="(reference) => emit('open', reference)"
       />
       <WorkItemGraph
-        v-else-if="!chainPending && stageView === 'graph'"
+        v-else-if="staged && stageView === 'graph'"
         v-show="matchedItems.length || !filtered"
         :scope-kind="graphScopeKind"
         :space="model.planning_space?.planning_space_id ?? ''"
@@ -331,6 +346,11 @@ defineExpose({ toggleFilter })
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* The space being read says so where its work will start, not in the middle of the stage. */
+.workspace-reading {
+  align-self: start;
 }
 
 /* A line of text about the stage: the chain still being read. */

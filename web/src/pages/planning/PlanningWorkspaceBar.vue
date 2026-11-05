@@ -64,6 +64,8 @@ const props = defineProps<{
   stored: boolean
   view: PlanningViewMode
   writable: boolean
+  /** The space is being read, so the bar has nothing to count yet and says no number. */
+  reading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -91,7 +93,9 @@ function pickView(mode: string) {
  * Absent rather than `false`: the counts are not busy between refreshes, and
  * `aria-busy="false"` is a claim about a state the row is not in.
  */
-const countsBusy = computed(() => (props.busy ? true : undefined))
+const countsBusy = computed(() => (props.busy || props.reading ? true : undefined))
+/** The held preset's count, which a space still being read does not have. */
+const heldCount = computed(() => (props.reading ? null : props.counts.held))
 
 const grouped = computed(() => props.grouping === 'epic')
 function toggleGrouping() {
@@ -184,7 +188,7 @@ function removeChip(token: WorkFilterToken) {
         v-model:filter="filter"
         class="workspace-filter"
         :categories="categories"
-        :held="counts.held"
+        :held="heldCount"
         :items="items"
         @chips="focusChips"
       />
@@ -221,7 +225,10 @@ function removeChip(token: WorkFilterToken) {
         role="status"
         :aria-busy="countsBusy"
       >
-        <span class="workspace-fact">{{ countsText }}</span
+        <span
+          v-if="!reading"
+          class="workspace-fact"
+          >{{ countsText }}</span
         ><span
           v-if="closedText"
           class="workspace-closed"
@@ -323,9 +330,11 @@ function removeChip(token: WorkFilterToken) {
   }
 }
 
-/* The facts and the way out of the filter, as one line of words. */
+/* The facts and the way out of the filter, as one line of words. A line tall while the
+   space is read and there is no fact yet, so the bar does not move when one arrives. */
 .workspace-figures {
   min-width: 0;
+  min-block-size: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-count);

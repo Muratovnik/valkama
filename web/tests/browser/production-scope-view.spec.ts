@@ -80,8 +80,8 @@ function directory(url: URL) {
   }
 }
 
-/** Two projects, each with a space of its own. */
-async function serveTwoProjects(page: Page) {
+/** Two projects, each with a space of its own; `held` keeps the second's read until it is let go. */
+async function serveTwoProjects(page: Page, held?: Promise<unknown>) {
   await installBackend(page)
   await page.route(
     (url) => url.pathname === '/api/platform/context',
@@ -111,6 +111,7 @@ async function serveTwoProjects(page: Page) {
   await page.route('**/api/planning?*', async (route) => {
     const query = new URL(route.request().url()).searchParams
     if (query.get('project') === SECOND) {
+      await held
       const space = { ...planningSpace, key: SECOND_KEY, name: SECOND_TITLE }
       await route.fulfill({
         contentType: 'application/json',
@@ -203,6 +204,59 @@ test('the board’s grouping stays from one project to another', async ({ page }
   )
   expect(addressState(page)).toEqual({ group: 'epic' })
 })
+
+/** The view the bar says is chosen, by its segments or, on a phone, by its menu. */
+const viewShown = (page: Page) =>
+  page
+    .locator(
+      '.workspace-view-segments [aria-checked="true"], .workspace-view-menu [role="combobox"]',
+    )
+    .filter({ visible: true })
+
+for (const [view, width] of [
+  ['kanban', 1280],
+  ['list', 1280],
+  ['graph', 1280],
+  ['kanban', 390],
+  ['graph', 390],
+] as const) {
+  test(`while the next space is read the bar stays as it was and the ${view}'s place says it is reading, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 })
+    let answer: (() => void) | undefined
+    const held = new Promise<void>((done) => {
+      answer = done
+    })
+    await serveTwoProjects(page, held)
+    await page.goto(firstProject({ view, group: 'epic' }))
+    const bar = page.locator('.workspace-head')
+    await expect(page.locator('.workspace-stage > :not(.workspace-reading)').first()).toBeVisible()
+    const before = await bar.boundingBox()
+
+    await chooseScope(page, SECOND_TITLE)
+    await inSecond(page)
+    // The same bar, where it was, with the view, the grouping on the board and the filter.
+    await expect(bar).toBeVisible()
+    expect(await bar.boundingBox()).toEqual(before)
+    const reading = page.locator('.workspace-stage .workspace-reading')
+    await expect(reading).toHaveAttribute('aria-busy', 'true')
+    await expect(viewShown(page)).toContainText(
+      { kanban: 'Kanban', list: 'List', graph: 'Graph' }[view],
+    )
+    await expect(page.getByRole('combobox', { name: 'Filter work' })).toBeVisible()
+    await expect(bar.locator('.workspace-action')).toBeVisible()
+    // Nothing of the space it left is drawn under it, and no count stands for the next one.
+    await expect(page.locator('.work-item-tile, .work-item-list, .graph')).toHaveCount(0)
+    await expect(bar.locator('.workspace-figures')).toHaveText('')
+    await expect(bar.locator('.filter-preset .count-badge')).toHaveCount(0)
+
+    answer?.()
+    await expect(reading).toHaveCount(0)
+    expect(await bar.boundingBox()).toEqual(before)
+    await expect(bar.locator('.workspace-figures')).toContainText('0 open of 0')
+  })
+}
 
 test('the board stays the board, with nothing in the address', async ({ page }) => {
   await serveTwoProjects(page)

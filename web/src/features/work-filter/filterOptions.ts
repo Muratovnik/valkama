@@ -163,8 +163,8 @@ export function filterGroups(input: {
   categories: readonly StateCategory[]
   /** Values in the filter that the work no longer carries stay removable here. */
   filter: WorkFilter
-  /** How many open items are held: the «Назначено» preset's count. */
-  held: number
+  /** How many open items are held: the «Назначено» preset's count; none while it is unknown. */
+  held: number | null
   items: readonly WorkItemBrief[]
   t: Translate
 }): FilterGroup[] {
@@ -178,7 +178,7 @@ export function filterGroups(input: {
         key: tokenKey(token),
         token,
         text: t(preset.label),
-        ...(token.facet === 'held' ? { detail: String(input.held) } : {}),
+        ...(token.facet === 'held' && input.held !== null ? { detail: String(input.held) } : {}),
       }
     }),
   }

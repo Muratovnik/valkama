@@ -56,8 +56,8 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 const props = defineProps<{
   /** The states the workflow has, by category: what the state facet offers. */
   categories: readonly WorkItemBrief['state']['category'][]
-  /** Open items somebody holds: the «Назначено» preset's count. */
-  held: number
+  /** Open items somebody holds: the «Назначено» preset's count; none while it is unknown. */
+  held: number | null
   /** The work the bar counts, whose labels and holders the menu offers. */
   items: readonly WorkItemBrief[]
 }>()

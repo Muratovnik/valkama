@@ -19,8 +19,8 @@ import CountBadge from '@/shared/ui/CountBadge.vue'
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
 
 const props = defineProps<{
-  /** Open items somebody holds: the «Назначено» preset's count. */
-  held: number
+  /** Open items somebody holds: the «Назначено» preset's count; none while it is unknown. */
+  held: number | null
 }>()
 
 const filter = defineModel<WorkFilter>('filter', { required: true })
