@@ -167,6 +167,23 @@ for (const locale of ['ru', 'en'] as const) {
   }
 }
 
+test('the state word is cut short sideways only, so its trimmed box cuts no letter', async ({
+  page,
+}) => {
+  await openCard(page, 'ru', 1280)
+  const label = page.locator('.drawer .card-state .state-label')
+  const box = await label.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      // Trimmed to the letters, so capitals and descenders stand outside the box.
+      trimmed: element.getBoundingClientRect().height < Number.parseFloat(style.lineHeight),
+      overflowY: style.overflowY,
+      textOverflow: style.textOverflow,
+    }
+  })
+  expect(box).toEqual({ trimmed: true, overflowY: 'visible', textOverflow: 'ellipsis' })
+})
+
 test.describe('enlarged crops for the owner to see', () => {
   test.use({ deviceScaleFactor: 3 })
 

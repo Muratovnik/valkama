@@ -8,6 +8,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { boardId } from '../fixtures/board.ts'
+import { field as filterField, menu as valuesMenu } from './filterPage.ts'
 import {
   colorOf,
   contrastOf,
@@ -48,8 +49,8 @@ async function openSettings(page: Page) {
 }
 
 const filterMenu = async (page: Page) => {
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
-  return page.getByRole('listbox', { name: /filter/i })
+  await filterField(page).click()
+  return valuesMenu(page)
 }
 
 test('the defaults are on the tile, the list, the card and the graph, and paint no surface', async ({

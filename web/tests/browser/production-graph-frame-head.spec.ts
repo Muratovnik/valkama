@@ -262,7 +262,7 @@ test('work the view hides is still counted, and is offered once the view can dra
 
 test('a filter that finds nothing in an epic draws no «no tasks» for it', async ({ page }) => {
   await openField(page)
-  await page.getByPlaceholder('Номер или название').fill(LIVE_REFERENCE)
+  await page.getByPlaceholder('Номер, название, метка…').fill(LIVE_REFERENCE)
   await expect(page.locator('.graph-flow .flow-node-card')).toHaveCount(1)
   await expect(page.getByText('Нет задач', { exact: true })).toHaveCount(0)
   // The frame the filter found its card in still counts its whole epic.
@@ -379,7 +379,7 @@ test('a folded epic says what it hides, counted by the epic and not by a filter'
     /· 66 открытых внутри$/u,
   )
   // A filter opens the frame it found work in; folded again, it counts the epic.
-  await page.getByPlaceholder('Номер или название').fill('MAIN-225')
+  await page.getByPlaceholder('Номер, название, метка…').fill('MAIN-225')
   await expect(page.locator('.graph-frame')).toHaveCount(1)
   await toggleAndSettle(page, CROWDED)
   await expect(frame).toHaveClass(/folded/u)
