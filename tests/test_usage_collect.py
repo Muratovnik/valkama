@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import os
+import threading
+import time
 import unittest
 from unittest import mock
 
+from server import housekeeping
 from server.telemetry import usage_collect
 from tests.usage_fixtures import HOUR, Case
 
@@ -234,6 +237,49 @@ class ReadingTests(Case):
         self.read()
         self.assertEqual(50.0, self.seconds())
         self.assertEqual(os.path.getsize(run.path), self.run_row()["read_offset"])
+
+
+class BackgroundThreadTests(Case):
+    def quick(self) -> None:
+        for name, value in (("USAGE_START_SECONDS", 0.0), ("USAGE_PAUSE_SECONDS", 0.01)):
+            patch = mock.patch.object(housekeeping, name, value)
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def test_the_thread_reads_a_transcript_into_rows(self) -> None:
+        self.quick()
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.end_turn(30)
+        stop = housekeeping.start_usage(self.said.append)
+        self.addCleanup(stop.set)
+        deadline = time.monotonic() + 20
+        while not self.segments() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        stop.set()
+        self.assertEqual(30.0, self.seconds())
+        self.assertEqual([], self.said)
+
+    def test_a_pass_that_fails_is_said_once_and_the_next_one_runs(self) -> None:
+        self.quick()
+        passes: list[int] = []
+        healthy = threading.Event()
+
+        def run_pass(_self: object, _report: object, _seconds: float = 1.0) -> bool:
+            passes.append(1)
+            if len(passes) < 3:
+                raise RuntimeError("a defect nobody foresaw")
+            healthy.set()
+            return False
+
+        with mock.patch.object(usage_collect.Collector, "run_pass", run_pass):
+            stop = housekeeping.start_usage(self.said.append)
+            self.addCleanup(stop.set)
+            self.assertTrue(healthy.wait(20), "the thread did not go on")
+            stop.set()
+        self.assertEqual(1, len(self.said))
+        self.assertIn("a defect nobody foresaw", self.said[0])
 
 
 if __name__ == "__main__":

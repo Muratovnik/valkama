@@ -270,7 +270,7 @@ def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
                     collector = usage_collect.Collector(conn, path)
                 backlog = collector.run_pass(report)
                 said = ""
-            except (ingest.UnwritableError, sqlite3.Error, OSError) as error:
+            except Exception as error:  # noqa: BLE001 -- a background thread has nobody to raise to
                 text = _describe(error)
                 if text != said:
                     report(f"usage reader did not finish a pass: {text}")

@@ -9,6 +9,9 @@ The gap between neighbouring records counts as work, except:
 | `external` | after `system/api_error` until the next reply, and a model wait over `MODEL_WAIT_LIMIT_SECONDS` |
 | `gap` | what lies in a hole between liveness intervals, and everything between the last record of a run that fell (a prompt arrives with a tool call unanswered) and the next one: nothing is built on a run's end |
 
+Time with no tick to read has no `gap` of its own but the limit of `liveness`, so a client
+closed while a reply was due reads as `external` there. It stays out of the work either way.
+
 A script counts: the gap from a tool call to its result does, and so does a background
 command from its start to its notice, even when the turn ended meanwhile. That second
 one is only known at the notice, and a command may end without one, as a server killed

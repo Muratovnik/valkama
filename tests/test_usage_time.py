@@ -20,7 +20,7 @@ class PowerCutTests(Case):
         run = self.session()
         run.prompt(0)
         run.reply(10, tools=(("t1", "Bash"),))
-        # Power fails five minutes into the script; the owner resumes the next day.
+        # Power fails five minutes into the script; someone resumes the next day.
         self.ticks((0, 300), (20 * HOUR, 20 * HOUR + 120))
         run.prompt(20 * HOUR + 60)
         run.end_turn(20 * HOUR + 70)
