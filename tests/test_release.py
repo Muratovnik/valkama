@@ -65,6 +65,17 @@ def _script(directory: Path, name: str) -> Path:
     return path
 
 
+def link_directory(link: Path, target: Path) -> None:
+    """A junction on Windows, which takes no privilege, and a symbolic link elsewhere."""
+
+    if sys.platform == "win32":
+        import _winapi
+
+        _winapi.CreateJunction(str(target), str(link))
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
 class FakeEnvironment:
     """An interpreter's environment on disk: its executable, its scripts, its installs."""
 
@@ -186,25 +197,110 @@ class ReleaseToolchainTests(unittest.TestCase):
         run.assert_not_called()
         version.assert_not_called()
 
-    def test_check_runs_each_python_stage_from_the_interpreters_environment(self) -> None:
-        interpreter = self.environment.interpreter()
+    def checked_commands(self, checkout: Path) -> list:
+        """Every stage `check` ran in `checkout`, none of them for real."""
+
+        (self.root / "local" / "Temp").mkdir(parents=True, exist_ok=True)
         with (
+            mock.patch.object(release, "ROOT", checkout),
             mock.patch.object(release.subprocess, "run") as run,
+            mock.patch.object(release, "version"),
             mock.patch.object(release, "require_version"),
             mock.patch.object(release.sys, "stdout", io.StringIO()),
             mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.root / "local")}),
         ):
-            (self.root / "local" / "Temp").mkdir(parents=True)
-            release.check(interpreter, PINS)
+            release.check(self.environment.interpreter(), PINS)
+        return run.call_args_list
+
+    def test_check_runs_each_python_stage_from_the_interpreters_environment(self) -> None:
+        calls = self.checked_commands(self.root / "checkout")
         inside = (str(self.environment.executable), str(self.environment.scripts))
-        python_stages = [call for call in run.call_args_list if call.args[0][0] != release.NPM]
+        python_stages = [call for call in calls if call.args[0][0] != release.NPM]
         self.assertEqual(9, len(python_stages))
-        for call in run.call_args_list:
+        for call in calls:
             command = call.args[0]
             if command[0] != release.NPM:
                 self.assertTrue(command[0].startswith(inside), command)
             path = call.kwargs["env"]["PATH"].split(os.pathsep)
             self.assertEqual(str(self.environment.scripts), path[0], command)
+
+    # -- the modules the npm stages run on ------------------------------------
+
+    def test_check_installs_from_each_lockfile_before_any_stage_uses_it(self) -> None:
+        checkout = self.root / "checkout"
+        calls = self.checked_commands(checkout)
+
+        stages = [(call.args[0], call.kwargs["cwd"]) for call in calls]
+        npm = [(command[1:], cwd) for command, cwd in stages if command[0] == release.NPM]
+        self.assertEqual(
+            [
+                (("ci",), checkout / "web"),
+                (("ci",), checkout / "desktop"),
+                (("test",), checkout / "web"),
+                (("run", "typecheck"), checkout / "web"),
+                (("run", "build"), checkout / "web"),
+                (("test",), checkout / "desktop"),
+            ],
+            npm,
+        )
+        # Ahead of the Python stages too: a release once ran 1102 s and then failed here.
+        self.assertEqual([release.NPM, release.NPM], [command[0] for command, _ in stages[:2]])
+
+    def test_a_failed_install_stops_the_check_before_any_other_stage(self) -> None:
+        failure = release.subprocess.CalledProcessError(1, "npm ci")
+        checkout = self.root / "checkout"
+        with (
+            mock.patch.object(release, "ROOT", checkout),
+            mock.patch.object(release.subprocess, "run", side_effect=failure) as run,
+            mock.patch.object(release, "version"),
+            mock.patch.object(release, "require_version"),
+            mock.patch.object(release.sys, "stdout", io.StringIO()),
+            self.assertRaises(release.subprocess.CalledProcessError),
+        ):
+            release.check(self.environment.interpreter(), PINS)
+        run.assert_called_once()
+
+    def test_check_refuses_modules_linked_from_elsewhere_before_any_stage_runs(self) -> None:
+        # `npm ci` through the link would empty the other checkout's modules.
+        checkout = self.root / "worktree"
+        for package in ("web", "desktop"):
+            with self.subTest(package=package):
+                shared = self.root / "main" / package / "node_modules"
+                shared.mkdir(parents=True)
+                (shared / "dependency").mkdir()
+                (checkout / package).mkdir(parents=True)
+                link_directory(checkout / package / "node_modules", shared)
+                with (
+                    mock.patch.object(release, "ROOT", checkout),
+                    mock.patch.object(release.subprocess, "run") as run,
+                    self.assertRaises(release.ToolchainError) as refused,
+                ):
+                    release.check(self.environment.interpreter(), PINS)
+                run.assert_not_called()
+                self.assertIn(str(checkout / package / "node_modules"), str(refused.exception))
+                self.assertIn(str(shared.resolve()), str(refused.exception))
+                self.assertIn("Remove the link", str(refused.exception))
+                self.assertTrue((shared / "dependency").is_dir())
+                (checkout / package / "node_modules").unlink()
+
+    def test_modules_are_linked_only_when_they_are_somewhere_else(self) -> None:
+        package = self.root / "package"
+        package.mkdir()
+        self.assertIsNone(release.linked_modules(package), "none at all")
+
+        (package / "node_modules").mkdir()
+        self.assertIsNone(release.linked_modules(package), "a directory of its own")
+
+        # A link above the package moves nothing out of it.
+        linked_parent = self.root / "linked-parent"
+        link_directory(linked_parent, package)
+        self.assertIsNone(release.linked_modules(linked_parent), "through a link above it")
+
+        (package / "node_modules").rmdir()
+        shared = self.root / "other-checkout"
+        shared.mkdir()
+        link_directory(package / "node_modules", shared)
+        self.assertEqual(shared.resolve(), release.linked_modules(package))
 
     # -- the pins -------------------------------------------------------------
 

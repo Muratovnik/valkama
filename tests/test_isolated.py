@@ -25,6 +25,7 @@ from unittest import mock
 
 from tests import isolated
 from tests.test_mcp_front import alive, wait_until
+from tests.test_release import link_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMAND = str(ROOT / "tests" / "isolated.py")
@@ -381,6 +382,330 @@ class GateTests(Workspace):
         self.assertEqual(1, code)
         self.assertIn("run stop first", said)
         self.assertTrue(self.home.exists())
+
+
+def locked_entry(name: str, version: str, **flags: object) -> dict:
+    """An entry as `package-lock.json` holds one, with npm's bookkeeping beside the pins."""
+
+    return {
+        "version": version,
+        "resolved": f"https://registry.npmjs.org/{name}/-/{name}-{version}.tgz",
+        "integrity": f"sha512-{name}-{version}",
+        "license": "MIT",
+        **flags,
+    }
+
+
+class ModulesCase(Workspace):
+    """A package directory holding the two files npm writes, as npm lays them out.
+
+    The shape is taken from real trees after `npm ci` with npm 11 on Windows: the
+    hidden lockfile has no root entry and leaves out optional packages this
+    platform has no use for, including ones that declare no platform themselves
+    because only a skipped binary needs them.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.package = self.root / "checkout" / "web"
+        self.package.mkdir(parents=True)
+        self.locked = {
+            "": {"name": "valkama-web", "dependencies": {"github-slugger": "2.0.0"}},
+            "node_modules/github-slugger": locked_entry("github-slugger", "2.0.0"),
+            "node_modules/vite": locked_entry("vite", "8.3.5", dev=True),
+            "node_modules/typescript": locked_entry("typescript", "6.0.3", dev=True),
+            "node_modules/@esbuild/linux-x64": locked_entry(
+                "linux-x64", "0.25.0", optional=True, os=["linux"], cpu=["x64"]
+            ),
+            "node_modules/@emnapi/core": locked_entry("core", "1.5.0", optional=True),
+        }
+        self.installed = {
+            name: dict(entry)
+            for name, entry in self.locked.items()
+            if name and not entry.get("optional")
+        }
+
+    def write(self, lockfile: object = None, hidden: object = None) -> None:
+        (self.package / "node_modules").mkdir(exist_ok=True)
+        (self.package / "package-lock.json").write_text(
+            json.dumps(lockfile or {"lockfileVersion": 3, "packages": self.locked}),
+            encoding="utf-8",
+        )
+        (self.package / "node_modules" / ".package-lock.json").write_text(
+            json.dumps(hidden or {"lockfileVersion": 3, "packages": self.installed}),
+            encoding="utf-8",
+        )
+
+
+class ModulesComparisonTests(ModulesCase):
+    def assert_refused_here(self, *naming: str) -> str:
+        refusal = isolated.modules_refusal(self.package)
+        assert refusal is not None
+        self.assertIn(f"npm ci is needed in {self.package}", refusal)
+        for text in naming:
+            self.assertIn(text, refusal)
+        return refusal
+
+    def test_a_tree_npm_installed_from_this_lockfile_matches(self) -> None:
+        self.write()
+
+        self.assertIsNone(isolated.modules_refusal(self.package))
+
+    def test_bookkeeping_that_pins_nothing_is_not_a_difference(self) -> None:
+        # A release bumps the version at the top and in the root entry, and nothing
+        # installed changes; npm may also work out an entry's flags anew.
+        self.installed["node_modules/vite"].update(dev=False, peer=True, license="other")
+        self.write(hidden={"name": "valkama-web", "version": "0.0.1", "packages": self.installed})
+
+        self.assertIsNone(isolated.modules_refusal(self.package))
+
+    def test_each_pinned_field_decides_on_its_own(self) -> None:
+        for field in ("version", "resolved", "integrity"):
+            with self.subTest(field=field):
+                installed = {name: dict(entry) for name, entry in self.installed.items()}
+                installed["node_modules/vite"][field] = "something else"
+                self.write(hidden={"packages": installed})
+
+                self.assert_refused_here("vite")
+
+    def test_modules_older_than_the_lockfile_are_refused_naming_both_versions(self) -> None:
+        self.installed["node_modules/vite"] = locked_entry("vite", "7.3.6", dev=True)
+        self.write()
+
+        self.assert_refused_here("vite is 7.3.6, locked 8.3.5")
+
+    def test_a_package_a_merged_commit_added_is_refused(self) -> None:
+        del self.installed["node_modules/github-slugger"]
+        self.write()
+
+        self.assert_refused_here("github-slugger is not installed")
+
+    def test_only_an_optional_package_may_be_left_out(self) -> None:
+        # `devOptional` is needed by a dev dependency as well, so npm installs it.
+        self.locked["node_modules/oxlint"] = locked_entry("oxlint", "1.0.0", devOptional=True)
+        self.write()
+
+        self.assert_refused_here("oxlint is not installed")
+
+    def test_a_package_the_lockfile_dropped_is_refused(self) -> None:
+        self.installed["node_modules/gone"] = locked_entry("gone", "1.0.0")
+        self.write()
+
+        self.assert_refused_here("gone is not in the lockfile")
+
+    def test_a_long_list_of_differences_is_cut_and_counted(self) -> None:
+        self.write(hidden={"packages": {"node_modules/other": locked_entry("other", "1.0.0")}})
+
+        self.assert_refused_here("; and 1 more")
+
+    def test_a_checkout_with_no_modules_is_refused(self) -> None:
+        self.assert_refused_here("no node_modules")
+
+    def test_an_install_that_did_not_finish_is_refused(self) -> None:
+        # `npm ci` empties the directory first and writes this file last.
+        (self.package / "node_modules" / "vite").mkdir(parents=True)
+
+        self.assert_refused_here("no .package-lock.json")
+
+    def test_a_comparison_that_cannot_be_made_is_not_a_pass(self) -> None:
+        good = json.dumps({"packages": {"node_modules/a": locked_entry("a", "1.0.0")}}).encode()
+        unusable = {
+            "not JSON": b"{",
+            "not UTF-8": b'{"packages": "\xff"}',
+            "a list": b"[]",
+            "no packages": b'{"lockfileVersion": 1, "dependencies": {}}',
+            "empty packages": b'{"packages": {}}',
+            "packages of another type": b'{"packages": []}',
+            "an entry of another type": b'{"packages": {"node_modules/a": "1.0.0"}}',
+            "an entry pinning nothing": b'{"packages": {"node_modules/a": {"dev": true}}}',
+        }
+        (self.package / "node_modules").mkdir()
+        lockfile = self.package / "package-lock.json"
+        hidden = self.package / "node_modules" / ".package-lock.json"
+        lockfile.write_bytes(good)
+        hidden.write_bytes(good)
+        self.assertIsNone(isolated.modules_refusal(self.package), "the control must match")
+
+        for name, content in unusable.items():
+            for broken, whole in ((lockfile, hidden), (hidden, lockfile)):
+                with self.subTest(file=broken.name, content=name):
+                    whole.write_bytes(good)
+                    broken.write_bytes(content)
+
+                    self.assert_refused_here("could not be compared")
+
+    def test_a_missing_lockfile_is_not_a_pass(self) -> None:
+        self.write()
+        (self.package / "package-lock.json").unlink()
+
+        self.assert_refused_here("could not be compared")
+
+    def test_a_linked_tree_is_compared_with_this_checkouts_lockfile(self) -> None:
+        shared = self.root / "main" / "web" / "node_modules"
+        shared.mkdir(parents=True)
+        (shared / ".package-lock.json").write_text(
+            json.dumps({"packages": self.installed}), encoding="utf-8"
+        )
+        link_directory(self.package / "node_modules", shared)
+        (self.package / "package-lock.json").write_text(
+            json.dumps({"packages": self.locked}), encoding="utf-8"
+        )
+
+        self.assertIsNone(isolated.modules_refusal(self.package))
+
+        self.locked["node_modules/vite"] = locked_entry("vite", "9.0.0", dev=True)
+        (self.package / "package-lock.json").write_text(
+            json.dumps({"packages": self.locked}), encoding="utf-8"
+        )
+
+        # The plain advice would empty the other checkout's modules.
+        self.assert_refused_here("vite is 8.3.5, locked 9.0.0", "remove the link", str(shared))
+
+    def test_a_link_whose_target_went_is_refused_and_named(self) -> None:
+        shared = self.root / "main" / "node_modules"
+        shared.mkdir(parents=True)
+        link_directory(self.package / "node_modules", shared)
+        shared.rmdir()
+
+        self.assert_refused_here("no node_modules", "remove the link")
+
+
+class ModulesStepTests(ModulesCase):
+    def run_with_steps(self, *steps: isolated.Step) -> tuple[int, str]:
+        """The command, in a checkout of this test's, with `npm` standing for Python."""
+
+        checkout = self.package.parent
+        (checkout / "requirements-dev.txt").write_text("", encoding="utf-8")
+        with (
+            mock.patch.object(isolated, "ROOT", checkout),
+            mock.patch.object(isolated, "GATE_STEPS", steps),
+            mock.patch.object(isolated.release, "NPM", sys.executable),
+            mock.patch.object(isolated.release, "require_toolchain", return_value={}),
+        ):
+            return quietly(isolated.main, ["gates", "--out", str(self.out)])
+
+    STEPS = (
+        isolated.Step("first", "python", 'python -c "print(1)"'),
+        isolated.Step("web-test", "web", """npm -c "open('ran', 'w').close()" """, "web"),
+        isolated.Step("last", "python", 'python -c "print(2)"'),
+    )
+
+    def test_a_refused_step_does_not_start_and_is_not_reported_as_a_red_one(self) -> None:
+        self.installed["node_modules/vite"] = locked_entry("vite", "7.3.6", dev=True)
+        self.write()
+
+        code, said = self.run_with_steps(*self.STEPS)
+
+        self.assertEqual(1, code)
+        self.assertFalse((self.package / "ran").exists())
+        self.assertRegex(said, r"web-test +refused +npm ci is needed in .*vite is 7\.3\.6")
+        self.assertNotRegex(said, r"web-test +exit=")
+        self.assertNotIn("failed:", said)
+        self.assertIn("not run, because npm ci is needed first: web-test", said)
+        self.assertNotIn("steps passed", said)
+        self.assertIn("first          exit=0", said)
+        self.assertIn("last           exit=0", said)
+        log = (self.out / isolated.LOGS / "web-test.log").read_text(encoding="utf-8")
+        self.assertIn("vite is 7.3.6", log)
+        summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
+        self.assertIn("web-test", summary)
+        self.assertIn("refused", summary)
+
+    def test_the_refusal_is_said_before_the_first_step_runs(self) -> None:
+        code, said = self.run_with_steps(*self.STEPS)
+
+        self.assertEqual(1, code)
+        self.assertLess(said.index("will be refused"), said.index("first          exit=0"))
+
+    def test_a_step_on_modules_that_match_runs(self) -> None:
+        self.write()
+
+        code, said = self.run_with_steps(*self.STEPS)
+
+        self.assertEqual(0, code, said)
+        self.assertTrue((self.package / "ran").exists())
+        self.assertRegex(said, r"web-test +exit=0")
+        self.assertNotIn("refused", said)
+        self.assertIn("all 3 steps passed", said)
+
+    def test_a_refusal_and_a_failure_are_both_said_and_kept_apart(self) -> None:
+        code, said = self.run_with_steps(
+            isolated.Step("broken", "python", 'python -c "raise SystemExit(3)"'), self.STEPS[1]
+        )
+
+        self.assertEqual(1, code)
+        self.assertIn("failed: broken\n", said)
+        self.assertIn("not run, because npm ci is needed first: web-test\n", said)
+
+    def test_modules_that_go_while_the_steps_before_ran_refuse_the_step(self) -> None:
+        self.write()
+        run = isolated.Run(
+            "web-test",
+            [sys.executable, "-c", "open('ran', 'w').close()"],
+            self.package,
+            needs_modules=True,
+        )
+        replaced = self.run_python(
+            "other-session",
+            f"import os; os.remove({str(self.package / 'node_modules/.package-lock.json')!r})",
+        )
+
+        code, said = quietly(isolated.run_gates, [replaced, run], self.out, os.environ)
+
+        self.assertEqual(1, code)
+        self.assertFalse((self.package / "ran").exists())
+        self.assertIn("refused", said)
+
+    def test_every_npm_step_of_the_list_is_held_to_its_modules_and_no_other_is(self) -> None:
+        self.assertEqual(
+            {"web-test", "web-typecheck", "web-build", "desktop-test"},
+            {step.name for step in isolated.GATE_STEPS if step.needs_modules},
+        )
+
+    def test_the_python_half_does_not_read_the_modules(self) -> None:
+        run = self.run_python("only", "print(1)")
+        with mock.patch.object(isolated, "modules_refusal") as refusal:
+            code, _ = quietly(isolated.run_gates, [run], self.out, os.environ)
+
+        self.assertEqual(0, code)
+        refusal.assert_not_called()
+
+
+class StepOutputTests(Workspace):
+    #: "Ошибка: файл" in CP866, the code page of `cmd.exe` on a Russian Windows.
+    OEM_BYTES = b"\x8e\xe8\xa8\xa1\xaa\xa0: \xe4\xa0\xa9\xab"
+
+    def tail_of(self, content: bytes) -> str:
+        log = self.out / "step.log"
+        log.write_bytes(content)
+        return isolated._tail(log)
+
+    def test_a_line_from_the_console_is_read_in_the_consoles_code_page(self) -> None:
+        with mock.patch.object(isolated, "_CONSOLE_CODEC", "cp866"):
+            self.assertEqual("Ошибка: файл", self.tail_of(self.OEM_BYTES))
+
+    def test_each_line_of_a_log_is_read_in_its_own_encoding(self) -> None:
+        with mock.patch.object(isolated, "_CONSOLE_CODEC", "cp866"):
+            tail = self.tail_of("✓ готово\r\n".encode() + self.OEM_BYTES + b"\r\n")
+
+        self.assertEqual("✓ готово | Ошибка: файл", tail)
+
+    def test_a_tail_cut_inside_a_character_is_not_taken_for_the_console(self) -> None:
+        # Each line is 1401 bytes, so the 4096-byte window starts inside a character.
+        line = "я" * 700 + "\n"
+        tail = self.tail_of(line.encode() * 10)
+
+        self.assertEqual({"я", " ", "|"}, set(tail))
+
+    @unittest.skipUnless(sys.platform == "win32", "cmd.exe is what writes in the code page")
+    def test_what_cmd_says_about_a_missing_tool_reads_as_text(self) -> None:
+        run = isolated.Run("tool", ["cmd.exe", "/d", "/c", "no-such-tool-here"], ROOT)
+
+        code, said = quietly(isolated.run_gates, [run], self.out, os.environ)
+
+        self.assertEqual(1, code)
+        self.assertIn("no-such-tool-here", said)
+        self.assertNotIn("�", said)
 
 
 class SupervisorTests(Workspace):

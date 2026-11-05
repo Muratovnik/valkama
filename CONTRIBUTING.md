@@ -80,7 +80,10 @@ outside the tracked tree; it has no default:
 ```
 
 The gates write one log per step under `logs/` and `gates.txt` in the result
-directory; the exit code is non-zero if any step failed or none ran. The server
+directory; the exit code is non-zero if any step failed or none ran. They install
+nothing: an npm step on a `node_modules` that is missing or differs from its
+`package-lock.json` is refused rather than run, the refusal says where `npm ci` is
+needed, and the exit code is non-zero then too. The server
 writes to `logs/serve.log`. A store copy holds your real data, so it goes with
 the profile when the server stops or dies. It stays on disk while the server is
 running, however long that is: run `stop` when you are done.
@@ -174,7 +177,6 @@ with the project's virtual environment, not whatever `python` comes first on
 ```powershell
 uv venv .venv --python 3.11              # or: python -m venv .venv
 uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
-cd web; npm ci; cd ../desktop; npm ci; cd ..
 .venv/Scripts/python .github/relkit.pyz release prepare <version>
 ```
 
@@ -185,7 +187,10 @@ first on `PATH` for each stage — and never a same-named tool found elsewhere o
 `PATH`. Before the first stage it verifies that every package
 `requirements-dev.txt` pins is installed there at that version, and refuses at
 once, naming the interpreter, each missing or mismatched package and what to
-run, when one is not. `build` needs npm and no Python tool, and `smoke` runs the
+run, when one is not. It then runs `npm ci` in `web` and `desktop`, so it verifies
+what the lockfiles pin and needs the network or an npm cache; it refuses a
+`node_modules` that is a link, because `npm ci` through a link empties its target.
+`build` needs npm and no Python tool, and `smoke` runs the
 server, which needs only the standard library. The web build that `check` runs
 rewrites `web/dist`; commit it only when `web/src` changed.
 

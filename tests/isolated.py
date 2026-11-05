@@ -23,6 +23,10 @@ Each rule here is a way a hand-written wrapper went wrong:
   pipeline or `execFileSync` waiting for as long as it runs.
 - A failed step decides the result whatever ran after it, and a run in which
   nothing ran is a failure.
+- An npm step runs only on the modules its lockfile pins. On any others it failed
+  in a way that read as a defect in the code: `Cannot find module`, or a tool that
+  is not a command. Nothing here installs; the step is refused, the refusal says
+  where `npm ci` is needed, and a comparison that could not be made is a refusal.
 - The result directory has no default, so a script cannot keep writing into the
   directory of the task it was first written for.
 
@@ -76,6 +80,15 @@ STOP_SECONDS = 30.0
 REMOVE_SECONDS = 10.0
 POLL_SECONDS = 0.1
 
+#: What a lockfile entry pins. The rest of an entry is npm's bookkeeping about the
+#: tree, and the top of the file carries the package's own version, which a release
+#: bumps with nothing installed changing.
+_PINNED = ("version", "resolved", "integrity")
+_SHOWN_DIFFERENCES = 3
+#: The code page `cmd.exe` writes in. A step has a console of its own, made with
+#: `_NO_WINDOW`, so this is the system's default and not that of the caller's console.
+_CONSOLE_CODEC = "oem" if sys.platform == "win32" else "utf-8"
+
 #: What the server says once it holds its port. It binds port 0 and names the
 #: one it got, so no other process can take the port between a check and the bind.
 _LISTENING = re.compile(rb"Valkama on http://127\.0\.0\.1:(\d+)/")
@@ -97,6 +110,10 @@ class Step:
     group: str
     command: str
     directory: str = "."
+
+    @property
+    def needs_modules(self) -> bool:
+        return self.command.startswith("npm ")
 
 
 #: The list in `AGENTS.md`, in its order; `tests/test_isolated.py` compares them.
@@ -137,6 +154,7 @@ class Run(NamedTuple):
     name: str
     argv: list[str]
     cwd: Path
+    needs_modules: bool = False
 
 
 def _say(line: str) -> None:
@@ -232,16 +250,112 @@ def remove_tree(path: Path) -> bool:
             return True
 
 
+# --- the installed modules ---------------------------------------------------
+
+
+def _packages(lockfile: Path) -> dict[str, dict]:
+    """A lockfile's `packages`, or ValueError when it holds nothing to compare."""
+
+    data = json.loads(lockfile.read_text(encoding="utf-8"))
+    packages = data.get("packages") if isinstance(data, dict) else None
+    if not isinstance(packages, dict) or not packages:
+        raise ValueError(f"{lockfile} lists no packages")
+    for name, entry in packages.items():
+        if not isinstance(entry, dict) or (name and not any(pin in entry for pin in _PINNED)):
+            raise ValueError(f"{lockfile} pins nothing for {name!r}")
+    return packages
+
+
+def _differences(locked: Mapping[str, dict], installed: Mapping[str, dict]) -> list[str]:
+    """How the hidden lockfile npm wrote differs from what the lockfile pins.
+
+    The root entry `""` is in the lockfile alone. A package npm left out is in the
+    lockfile alone too, and that is no difference when it is optional: on one
+    platform npm skips the binaries of all the others and whatever only they need.
+    """
+
+    found = []
+    for name, entry in locked.items():
+        if not name:
+            continue
+        short = name.removeprefix("node_modules/")
+        have = installed.get(name)
+        if have is None:
+            if not entry.get("optional"):
+                found.append(f"{short} is not installed")
+        elif have.get("version") != entry.get("version"):
+            found.append(f"{short} is {have.get('version')}, locked {entry.get('version')}")
+        elif any(have.get(pin) != entry.get(pin) for pin in _PINNED):
+            found.append(f"{short} {have.get('version')} came from another source than locked")
+    found += [
+        f"{name.removeprefix('node_modules/')} is not in the lockfile"
+        for name in installed
+        if name not in locked
+    ]
+    return found
+
+
+def _modules_problem(package: Path) -> str | None:
+    modules = package / "node_modules"
+    if not modules.is_dir():
+        return "it has no node_modules"
+    if not (modules / ".package-lock.json").is_file():
+        return "its node_modules has no .package-lock.json, so no install finished there"
+    try:
+        found = _differences(
+            _packages(package / "package-lock.json"),
+            _packages(modules / ".package-lock.json"),
+        )
+    except (OSError, ValueError) as error:
+        return f"its modules could not be compared with its lockfile: {error}"
+    if not found:
+        return None
+    more = len(found) - _SHOWN_DIFFERENCES
+    return "; ".join(found[:_SHOWN_DIFFERENCES]) + (f"; and {more} more" if more > 0 else "")
+
+
+def modules_refusal(package: Path) -> str | None:
+    """Why no npm step may run in `package`, or None when it holds what its lockfile pins."""
+
+    problem = _modules_problem(package)
+    if problem is None:
+        return None
+    refusal = f"npm ci is needed in {package}: {problem}"
+    target = release.linked_modules(package)
+    if target is not None:
+        refusal += (
+            f"; remove the link {package / 'node_modules'} first,"
+            f" because npm ci through it empties {target}"
+        )
+    return refusal
+
+
 # --- gates -------------------------------------------------------------------
 
 
+def _log_line(raw: bytes) -> str:
+    """One line of a step's log, in the encoding it was written in.
+
+    One log holds two: UTF-8 from node, and the console's code page from `cmd.exe`,
+    which starts every npm step. For a person reading a summary and for nothing
+    else, so a lossy decode costs nothing; the log keeps the bytes the tool wrote.
+    """
+
+    try:
+        return raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return raw.decode(_CONSOLE_CODEC, errors="replace")
+
+
 def _tail(log: Path) -> str:
+    start = max(0, log.stat().st_size - 4096)
     with log.open("rb") as handle:
-        handle.seek(max(0, log.stat().st_size - 4096))
-        # For a person reading a summary and for nothing else, so a lossy decode
-        # costs nothing; the log keeps the bytes the tool wrote.
-        text = handle.read().decode("utf-8", errors="replace")
-    return " | ".join(line.strip() for line in text.splitlines()[-3:])
+        handle.seek(start)
+        lines = handle.read().splitlines()
+    # The first line of a window that starts inside the file may start inside a character.
+    if start and len(lines) > 1:
+        lines = lines[1:]
+    return " | ".join(_log_line(line).strip() for line in lines[-3:])
 
 
 def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
@@ -263,11 +377,15 @@ def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
 
 
 def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) -> int:
-    """Run every step; the result is 0 only when at least one ran and none failed."""
+    """Run every step; the result is 0 only when at least one ran and none failed or was refused.
+
+    The modules are read again at each step, because another session's `npm ci`
+    may have replaced them while the steps before it ran.
+    """
 
     logs = out / LOGS
     logs.mkdir(parents=True, exist_ok=True)
-    failed = []
+    failed, refused = [], []
     with (out / SUMMARY).open("w", encoding="utf-8", newline="\n") as summary:
 
         def report(line: str) -> None:
@@ -277,6 +395,12 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
 
         for run in runs:
             log = logs / f"{run.name}.log"
+            refusal = modules_refusal(run.cwd) if run.needs_modules else None
+            if refusal is not None:
+                refused.append(run.name)
+                log.write_text(f"{refusal}\n", encoding="utf-8", newline="\n")
+                report(f"{run.name:<14} refused  {refusal}")
+                continue
             code = _run_step(run, log, environment)
             if code != 0:
                 failed.append(run.name)
@@ -286,6 +410,9 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
             return 1
         if failed:
             report(f"failed: {', '.join(failed)}")
+        if refused:
+            report(f"not run, because npm ci is needed first: {', '.join(refused)}")
+        if failed or refused:
             return 1
         report(f"all {len(runs)} steps passed")
     return 0
@@ -334,7 +461,15 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     environment = release.tool_environment(interpreter, isolated_environment(home))
     head = processes.run_text(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"])
     _say(f"root: {ROOT}  head: {head.stdout.strip()}")
-    runs = [Run(step.name, _argv(step.command, tools), ROOT / step.directory) for step in steps]
+    runs = [
+        Run(step.name, _argv(step.command, tools), ROOT / step.directory, step.needs_modules)
+        for step in steps
+    ]
+    # Said before the first step, because the Python half takes minutes to reach them.
+    for package in dict.fromkeys(run.cwd for run in runs if run.needs_modules):
+        refusal = modules_refusal(package)
+        if refusal is not None:
+            _say(f"the npm steps here will be refused. {refusal}")
     return run_gates(runs, out, environment)
 
 

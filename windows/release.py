@@ -1,6 +1,9 @@
 """Build and verify the source and Windows desktop release pair.
 
-Release Kit runs build and smoke from a committed, Git-free source snapshot.
+Release Kit runs build and smoke from a committed, Git-free source snapshot, and
+check in the working tree of the main checkout, with whatever ignored
+`node_modules` that holds. So check reinstalls both npm packages from their
+lockfiles first: what it verifies is what the lockfile pins.
 The desktop installer is a window for the source service, not a bundled server.
 
 Release Kit runs every command here with its own interpreter as `{python}`, so
@@ -30,6 +33,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 NPM = "npm.cmd" if sys.platform == "win32" else "npm"
+#: The directories holding an npm package the gates run.
+NPM_PACKAGES = ("web", "desktop")
 SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
@@ -40,7 +45,7 @@ _SCRIPT_SUFFIXES = (".exe",) if sys.platform == "win32" else ("",)
 
 
 class ToolchainError(RuntimeError):
-    """The interpreter running the check lacks a pinned tool; nothing has run yet."""
+    """This environment cannot run the check, and the message says why; nothing has run yet."""
 
 
 @dataclass(frozen=True)
@@ -212,6 +217,19 @@ def run(
     return result.stdout
 
 
+def linked_modules(package: Path) -> Path | None:
+    """Where the `node_modules` of `package` really is, when that is somewhere else.
+
+    A worktree often links its modules to another checkout's. `npm ci` through
+    such a link empties the target and then replaces the link with a directory of
+    its own, so every checkout sharing the target loses its modules. Paths are
+    compared because `Path.is_symlink` does not see a Windows junction on 3.11.
+    """
+
+    target = (package / "node_modules").resolve()
+    return None if target == package.resolve() / "node_modules" else target
+
+
 def version() -> str:
     return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
@@ -264,15 +282,26 @@ def check(interpreter: Interpreter | None = None, requirements: str | None = Non
 
     The toolchain is verified against the pins before anything else, so a
     wrong interpreter is refused in one message instead of one stage at a time.
+    `npm ci` runs ahead of the Python stages, though only the npm stages need it:
+    a registry that cannot be reached then costs a minute and not the whole suite.
     """
 
     interpreter = interpreter or running_interpreter()
     if requirements is None:
         requirements = REQUIREMENTS.read_text(encoding="utf-8")
     tools = require_toolchain(interpreter, pins(requirements))
+    for package in NPM_PACKAGES:
+        target = linked_modules(ROOT / package)
+        if target is not None:
+            raise ToolchainError(
+                f"release check: {ROOT / package / 'node_modules'} is a link to {target}, and"
+                " npm ci through a link empties its target for every checkout sharing it."
+                " Remove the link and run the check again."
+            )
     require_version(version())
     base = tool_environment(interpreter, os.environ)
     stages: list[tuple[str, tuple[str, ...], Path]] = [
+        *(("npm", (NPM, "ci"), ROOT / package) for package in NPM_PACKAGES),
         ("ruff", (*tools["ruff"], "check", "."), ROOT),
         ("ruff", (*tools["ruff"], "format", "--check", "."), ROOT),
         ("typos", tools["typos"], ROOT),

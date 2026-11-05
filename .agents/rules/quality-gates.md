@@ -41,6 +41,27 @@ Use it instead of a wrapper of your own, and `serve --out DIR` with
 It does not move `TEMP`, which is what keeps the suite's renames from failing
 with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
 
+An npm gate on modules its lockfile does not pin fails in a way that reads as a
+defect in the code, so neither runner lets that happen, each in its own way.
+`windows/release.py check` runs `npm ci` in `web` and `desktop` ahead of every
+stage, because Release Kit runs it in the main checkout's working tree and a
+release must verify what the lockfile pins. `tests/isolated.py gates` installs
+nothing: before each npm step it compares `node_modules/.package-lock.json` with
+`package-lock.json` and refuses that step, saying where `npm ci` is needed, on a
+missing tree, a difference or a comparison it could not make. A refused step does
+not start and the run does not pass. Two entries match when `version`, `resolved`
+and `integrity` agree; the rest of an entry and the top of the file are npm's
+bookkeeping. The hidden file has no root entry and leaves out optional packages
+this platform skips, so only an entry marked `optional` may be missing from it.
+
+`npm ci` through a linked `node_modules` empties the link's target and then
+replaces the link with a directory, so a worktree linking the main checkout's
+modules would strip them from every checkout sharing them. `check` refuses a link,
+and a gate's refusal says to remove it first. `gates` still reads through a link,
+so a worktree may share modules as long as they match its own lockfile. The other
+side of sharing: a release's `npm ci` in the main checkout replaces what those
+worktrees run on while it lasts.
+
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
 mypy checks the modules that are already clean and names the rest in
