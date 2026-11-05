@@ -22,7 +22,9 @@ const CARD = serializePlatformRoute({
 async function openAlerts(page: Page) {
   await page.goto(SETTINGS)
   await expect(page.getByRole('heading', { name: 'Windows notifications' })).toBeVisible()
-  await expect(page.getByRole('switch')).toBeVisible()
+  await expect(
+    page.getByRole('switch', { name: 'Notify me when an agent is waiting for me' }),
+  ).toBeVisible()
 }
 
 const readiness = (page: Page) => page.locator('.settings-alerts-readiness')
@@ -153,9 +155,9 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.setViewportSize({ width: 1280, height: 900 })
     await openAlerts(page)
 
-    const toggle = page.getByRole('switch')
+    const toggle = page.getByRole('switch', { name: 'Notify me when an agent is waiting for me' })
     const paint = () =>
-      page.locator('.toggle-switch').evaluate((node) => {
+      toggle.evaluate((node) => {
         const track = getComputedStyle(node.querySelector('.toggle-track') as Element)
         const knob = getComputedStyle(node.querySelector('.toggle-knob') as Element)
         return {
