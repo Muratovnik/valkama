@@ -168,6 +168,9 @@ checkouts are therefore distinguishable even at the same version.
 - **A subagent that fell stops moving the graph.** Its record stays active with no end, so a
   subagent whose transcript has gone unwritten for two hours no longer counts as running. A
   page left open learns of it within a minute, even when nothing else is written.
+- **The moving mark on a graph line has one length and one speed.** It used to be a share of
+  the line, so long lines carried long, fast marks and short lines tiny slow ones. A very long
+  line now carries the next mark on the way instead of hurrying one.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
