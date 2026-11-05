@@ -170,6 +170,18 @@ describe('accepting a point with steps', () => {
     expect(ticked(wrapper)).toEqual(['dirty', 'managed', 'click', 'mutant'])
   })
 
+  it('names the count beside the point as what describes its steps', async () => {
+    const wrapper = card()
+    await decide(wrapper, 'P5 ', 'Accept')
+    await wrapper.get('input[value="p5a"]').setValue(false)
+    const steps = present(
+      wrapper.findAll('fieldset').find((group) => group.text().includes('Do not name')),
+      'steps',
+    )
+    const said = steps.attributes('aria-describedby') ?? ''
+    expect(wrapper.get(`[id="${said}"]`).text()).toBe('4 of 5')
+  })
+
   it('a way under Accept is chosen with its recommended option', async () => {
     const wrapper = card()
     await decide(wrapper, 'P13 ', 'Accept')

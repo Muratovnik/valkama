@@ -13,7 +13,7 @@
  *
  * Every other field is the one a plain question has (`RequestField`).
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
@@ -109,6 +109,11 @@ function opensOn(field: InputRequestField) {
   )
   return opened ? plainText(opened.label) : ''
 }
+const uid = useId()
+const countIdOf = (parent: string) => `${uid}-${parent}-count`
+/** The steps of a point are described by how many of them are ticked, which stands on the point. */
+const describedBy = (field: InputRequestField) =>
+  field.under && field.type === 'multi_choice' ? countIdOf(field.under.field) : undefined
 /** How many steps are ticked under a point, while they show. */
 function countOn(field: InputRequestField) {
   const steps = childrenOf(props.fields, field.id).find(
@@ -190,6 +195,7 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
           :ref="(row) => (controls[field.id] = row as { focus: () => void } | null)"
           v-model:preview="preview"
           :count="countOn(field)"
+          :count-id="countIdOf(field.id)"
           :disabled="disabled"
           :error="fieldError(field)"
           :field="field"
@@ -210,6 +216,7 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
           :ref="(control) => (controls[shown.id] = control as { focus: () => void } | null)"
           v-model:preview="preview"
           :class="{ 'request-review-under': shown.under }"
+          :described-by="describedBy(shown)"
           :field="shown"
           :model-value="draft.answers[shown.id]"
           :note="draft.fieldNotes[shown.id]"

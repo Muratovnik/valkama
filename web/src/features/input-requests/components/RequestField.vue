@@ -66,6 +66,8 @@ const props = withDefaults(
   defineProps<{
     disabled: boolean
     field: InputRequestField
+    /** What else describes the group, by id: the count of a point's steps. */
+    describedBy?: string
     /** Why the value was refused; empty while it stands. */
     error?: string
     modelValue?: string | boolean | string[]
@@ -83,6 +85,7 @@ const props = withDefaults(
     suggest?: EditorSuggest
   }>(),
   {
+    describedBy: undefined,
     error: '',
     modelValue: undefined,
     note: '',
@@ -122,6 +125,9 @@ const rows = computed<readonly InputRequestOption[]>(() => [
 ])
 const views = computed(() => descriptionViews(options.value))
 const errorId = computed(() => (props.error ? `${id}-error` : undefined))
+const groupDescription = computed(
+  () => [errorId.value, props.describedBy].filter(Boolean).join(' ') || undefined,
+)
 const invalidMark = computed(() => (props.error ? 'true' : undefined))
 /** A single answer is a radiogroup, which is where `aria-invalid` is defined; ticks are a group. */
 const groupRole = computed(() => (isMulti.value ? undefined : 'radiogroup'))
@@ -241,7 +247,7 @@ defineExpose({ focus })
       :role="groupRole"
       :aria-labelledby="groupName"
       :aria-invalid="groupInvalid"
-      :aria-describedby="errorId"
+      :aria-describedby="groupDescription"
       :disabled="disabled"
     >
       <legend class="request-legend">

@@ -51,6 +51,8 @@ const props = withDefaults(
     field: InputRequestField
     /** How many of the steps under it are ticked, of how many. */
     count?: { chosen: number; total: number } | null
+    /** The id that count stands under, which the steps name as what describes them. */
+    countId?: string
     /** Why the row was refused; empty while it stands. */
     error?: string
     note?: string
@@ -64,6 +66,7 @@ const props = withDefaults(
   }>(),
   {
     count: null,
+    countId: undefined,
     error: '',
     note: '',
     opens: '',
@@ -80,7 +83,6 @@ const { t } = useI18n()
 const id = useId()
 const labelId = `${id}-label`
 const opensId = `${id}-opens`
-const countId = `${id}-count`
 const errorId = `${id}-error`
 const detailId = `${id}-detail`
 
