@@ -210,20 +210,21 @@ class ReadingTests(Case):
         run.prompt(0)
         run.end_turn(30)
         other = usage_collect.Collector(self.reader, self.store_path)
-        real = usage_collect._read_lines
+        real = usage_collect.Collector._steps
         raced: list[bool] = []
 
-        def read_and_lose(path: str, offset: int, limit: int) -> tuple[list[bytes], int, bool]:
-            found = real(path, offset, limit)
+        def lose_while_parsing(collector: object, *arguments: object) -> list:
+            # Parsing runs outside the transaction, so this is when another reader can win.
             if not raced:
                 raced.append(True)
                 other.run_pass(self.said.append, 30.0)
-            return found
+            return real(collector, *arguments)
 
-        with mock.patch.object(usage_collect, "_read_lines", read_and_lose):
+        with mock.patch.object(usage_collect.Collector, "_steps", lose_while_parsing):
             self.read()
         self.assertEqual(30.0, self.seconds())
         self.assertEqual(5, self.tokens("output_tokens"))
+        self.assertEqual(1, len(self.segments()))
 
     def test_only_a_chunk_is_read_at_a_time(self) -> None:
         run = self.session()
