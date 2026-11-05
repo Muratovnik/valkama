@@ -28,6 +28,17 @@ checkouts are therefore distinguishable even at the same version.
   differs from its lockfile, says in which directory `npm ci` is needed, and no longer
   reports this as a failed step. Console messages in a step's summary are read in the
   console's code page instead of coming out garbled.
+- **The filter opens in its own field.** The «Filter» button is gone: a press in the field
+  or `/` opens the menu of values at once, all groups in sight and the picked ones marked,
+  and the empty field says it searches and filters. Tab and focus coming back from a card,
+  a dialog or another window leave the menu closed; ↓ opens it. With no value left to
+  offer, as in a search by number, the menu steps aside and the work stays in sight.
+- **Labels combine as you say.** The label group's head offers «all» and «any»: with «all»
+  each label narrows the work, as before, and with «any» one of them will do. Every view
+  and the counts follow, a word between the chips says which it is, a label pressed on a
+  tile or in a card joins in the reading in force, and Reset takes it out. Only «any» is
+  written into the address, so links made before read as they did.
+
 ### Fixed
 
 - **A click on a notification about a question goes to the question.** It used to open

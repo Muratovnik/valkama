@@ -161,7 +161,7 @@ test('Russian Work bar keeps its controls on one row and folds the presets at na
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
   const presets = page.getByRole('group', { name: 'Быстрые фильтры' })
-  const trigger = page.getByRole('button', { name: 'Фильтр', exact: true })
+  const field = page.getByRole('combobox', { name: 'Фильтр работы' })
 
   for (const [width, height] of [
     [1440, 900],
@@ -181,7 +181,7 @@ test('Russian Work bar keeps its controls on one row and folds the presets at na
   await page.setViewportSize({ width: 1024, height: 768 })
   // Where the row cannot hold them, the presets are the menu's first group.
   await expect(presets).toBeHidden()
-  await trigger.click()
+  await field.click()
   await expect(page.getByRole('group', { name: 'Быстрые фильтры' })).toBeVisible()
   await page.getByRole('option', { name: 'В работе' }).click()
   await page.keyboard.press('Escape')

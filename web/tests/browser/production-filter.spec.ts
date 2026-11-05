@@ -52,7 +52,7 @@ for (const width of [1440, 1024]) {
     expect(geometry.oneLine, 'one row of controls').toBe(true)
     expect(geometry.height).toBeLessThanOrEqual(84)
     // The field has room for its whole hint here.
-    await expect(field(page)).toHaveAttribute('placeholder', 'Reference or title')
+    await expect(field(page)).toHaveAttribute('placeholder', 'Reference, title, label…')
     // The one primary action ends the row.
     expect(geometry.last).toContain('workspace-action')
     // A filter does not make the bar taller.
@@ -89,7 +89,7 @@ test('the grouped board says its epics as rows on the counts line, where a phone
 
 test('a filter survives a reload and Back, because the address holds it', async ({ page }) => {
   await open(page)
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await field(page).click()
   await page.getByRole('option', { name: 'phase-1' }).click()
   await page.keyboard.press('Escape')
   await field(page).fill('MAIN-26')
@@ -119,7 +119,7 @@ test('a preset and the menu make the same filter', async ({ page }) => {
   await page.getByRole('button', { name: 'Assigned' }).click()
   await expect.poll(() => addressState(page)).toEqual({})
 
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await field(page).click()
   await page.getByRole('option', { name: /^Assigned/u }).click()
   await expect.poll(() => addressState(page)).toEqual(fromPreset)
   await expect(page.getByRole('button', { name: /^Assigned/u })).toHaveAttribute(
@@ -146,10 +146,11 @@ test('the bar’s keyboard: `/`, ↓ and Enter, Escape one step at a time, ← a
   await expect(field(page)).toHaveValue('')
 
   // Escape: the menu, then the text, then the field — and never the page behind.
-  await page.keyboard.type('MAIN')
+  await page.keyboard.type('phase')
+  await expect(field(page)).toHaveAttribute('aria-expanded', 'true')
   await page.keyboard.press('Escape')
   await expect(field(page)).toHaveAttribute('aria-expanded', 'false')
-  await expect(field(page)).toHaveValue('MAIN')
+  await expect(field(page)).toHaveValue('phase')
   await page.keyboard.press('Escape')
   await expect(field(page)).toHaveValue('')
   await expect(field(page)).toBeFocused()
@@ -233,7 +234,7 @@ test('on a phone the view, the filter and the action share the first line', asyn
   expect(Math.max(...first.map((box) => box.top))).toBeLessThan(
     Math.min(...first.map((box) => box.bottom)),
   )
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await field(page).click()
   await page.getByRole('option', { name: 'phase-1' }).click()
   await page.keyboard.press('Escape')
   await expect(chips(page)).toHaveText(['Label: phase-1'])
@@ -244,9 +245,9 @@ test('on a phone the field’s hint fits it, and the grouping says its word unti
   page,
 }) => {
   await open(page, 390, 844)
-  // The whole hint was cut to «Reference or t»; the short one fits, and the
+  // The whole hint was cut to half a word; the short one fits, and the
   // field's name stays whole.
-  await expect(field(page)).toHaveAttribute('placeholder', 'Search')
+  await expect(field(page)).toHaveAttribute('placeholder', 'Search, filter')
   await expect(field(page)).toHaveAccessibleName('Filter work')
   const hint = await field(page).evaluate((input: HTMLInputElement) => {
     const style = getComputedStyle(input)

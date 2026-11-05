@@ -75,7 +75,7 @@ export async function serve(page: Page, refuse: { message: string | null } = { m
   return writes
 }
 
-function boardRoute(state: Record<string, string> = {}) {
+export function boardRoute(state: Record<string, string> = {}) {
   return serializePlatformRoute({
     module_id: 'planning',
     scope: projectScope,

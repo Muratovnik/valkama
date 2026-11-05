@@ -1,5 +1,5 @@
 /**
- * What the «Фильтр» menu offers and what a picked token is called.
+ * What the filter's menu offers and what a picked token is called.
  *
  * The values come from the work the bar counts — the labels and holders that
  * are actually there, the states the workflow has — so the menu never offers
@@ -11,7 +11,11 @@ import {
   hasToken,
   WORK_FILTER_PRESETS,
 } from '@/entities/work-item/utils/workFilter.ts'
-import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+import type {
+  LabelsMatch,
+  WorkFilter,
+  WorkFilterToken,
+} from '@/entities/work-item/utils/workFilter.ts'
 
 import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -33,10 +37,23 @@ export interface FilterOption {
   detail?: string
 }
 
+/** A way the labels picked can combine, offered in the head of their group. */
+interface FilterChoice {
+  key: string
+  match: LabelsMatch
+  /** What a screen reader says of it, which the short word beside the group's name is not. */
+  name: string
+  text: string
+  /** What it does, for the pointer resting on the short word. */
+  title: string
+}
+
 export interface FilterGroup {
   id: FilterGroupId
   name: string
   options: FilterOption[]
+  /** Offered ahead of the values, and walked ahead of them. */
+  choices?: FilterChoice[]
 }
 
 /** The menu's facets, in the order a reader narrows by them. */
@@ -76,6 +93,22 @@ export function tokenName(token: WorkFilterToken, t: Translate): string {
 export function tokenKey(token: WorkFilterToken): string {
   return 'value' in token ? `${token.facet}:${token.value}` : token.facet
 }
+
+const LABELS_MATCHES: readonly LabelsMatch[] = ['all', 'any']
+
+function labelsChoices(t: Translate): FilterChoice[] {
+  return LABELS_MATCHES.map((match) => ({
+    key: `labelsMatch:${match}`,
+    match,
+    name: t(`workItem.filter.labelsMatch.${match}.name`),
+    text: t(`workItem.filter.labelsMatch.${match}.text`),
+    title: t(`workItem.filter.labelsMatch.${match}.title`),
+  }))
+}
+
+/** The choice is there as soon as there are two labels to combine, whichever are picked. */
+const choicesOf = (facet: ValueFacet, values: readonly string[], t: Translate) =>
+  facet === 'labels' && values.length > 1 ? { choices: labelsChoices(t) } : {}
 
 /** Values by how many items carry them, then by name: the common ones first. */
 function byUse(values: readonly string[]): string[] {
@@ -154,6 +187,7 @@ export function filterGroups(input: {
         const token = { facet, value } as WorkFilterToken
         return { key: tokenKey(token), token, text: tokenValue(token, t) }
       }),
+      ...choicesOf(facet, values, t),
     }
   })
   return [presets, ...groups].filter((group) => group.options.length)
@@ -162,7 +196,8 @@ export function filterGroups(input: {
 /**
  * The groups narrowed to what the typed text names: a value whose word holds
  * it, or every value of a facet whose name does («приор» offers the
- * priorities).
+ * priorities). A group narrowed to some of its values leaves its choices out,
+ * so ↓ and Enter take the value found rather than a choice nobody typed.
  */
 export function narrowGroups(groups: readonly FilterGroup[], text: string): FilterGroup[] {
   const needle = text.trim().toLocaleLowerCase()
@@ -172,7 +207,8 @@ export function narrowGroups(groups: readonly FilterGroup[], text: string): Filt
       group.name.toLocaleLowerCase().includes(needle)
         ? group
         : {
-            ...group,
+            id: group.id,
+            name: group.name,
             options: group.options.filter((option) =>
               option.text.toLocaleLowerCase().includes(needle),
             ),

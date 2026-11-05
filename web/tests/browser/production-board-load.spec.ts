@@ -358,7 +358,7 @@ test('a closed filter menu draws none of its options', async ({ page }) => {
   // A space's labels made the closed menu a list of hundreds of rows, built
   // before the first tile could show.
   await expect(menu.locator('[role="option"]')).toHaveCount(0)
-  await page.locator('.filter-trigger').click()
+  await page.getByRole('combobox', { name: 'Filter work' }).click()
   await expect(menu.locator('[role="option"]', { hasText: 'agent-packets' })).toBeVisible()
 })
 

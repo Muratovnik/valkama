@@ -27,8 +27,10 @@ export interface WorkFilter {
   holder?: string[]
   /** Any of these kinds. */
   kind?: WorkItemKind[]
-  /** Every one of these labels: each label picked narrows further. */
+  /** Every one of these labels, each narrowing further, or any one under `labelsMatch`. */
   labels?: string[]
+  /** One of the labels will do. Absent, every one of them has to be on the item. */
+  labelsMatch?: 'any'
   /** Any of these priorities. */
   priority?: WorkItemPriority[]
   /** Startable right now, as the server answers it. */
@@ -45,6 +47,9 @@ export type WorkFilterToken =
   | { facet: 'labels'; value: string }
   | { facet: 'holder'; value: string }
 
+/** How the labels picked combine, as a reader chooses it. */
+export type LabelsMatch = 'all' | 'any'
+
 type ListFacet = 'category' | 'kind' | 'priority' | 'labels' | 'holder'
 type FlagFacet = 'ready' | 'held'
 
@@ -57,11 +62,20 @@ export function isWorkFilterEmpty(filter: WorkFilter): boolean {
   return filterTokens(filter).length === 0 && filter.text.trim() === ''
 }
 
+/** Whether an item carries the labels picked, as the filter says they combine. */
+function labelsHold(item: WorkItemBrief, filter: WorkFilter): boolean {
+  const labels = filter.labels ?? []
+  if (!labels.length) return true
+  return filter.labelsMatch === 'any'
+    ? labels.some((label) => item.labels.includes(label))
+    : labels.every((label) => item.labels.includes(label))
+}
+
 /**
  * Whether an item passes: every facet present must hold (AND across facets),
  * any one value of a facet will do (OR within it), except labels, where each
  * label picked must be on the item (AND), because a click on a second label
- * is read as "and this one too".
+ * is read as "and this one too", until the reader says any one will do.
  */
 export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): boolean {
   const text = filter.text.trim().toLocaleLowerCase()
@@ -76,7 +90,7 @@ export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): bool
   if (filter.category?.length && !filter.category.includes(item.state.category)) return false
   if (filter.kind?.length && !filter.kind.includes(item.kind)) return false
   if (filter.priority?.length && !filter.priority.includes(item.priority)) return false
-  if (filter.labels?.some((label) => !item.labels.includes(label))) return false
+  if (!labelsHold(item, filter)) return false
   if (
     filter.holder?.length &&
     (item.claim_ref === '' || !filter.holder.includes(actorName(item.claim_ref)))
@@ -127,6 +141,14 @@ export function removeToken(filter: WorkFilter, token: WorkFilterToken): WorkFil
 /** What a click on a filterable mark does: add it, or take it out again. */
 export function toggleToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
   return hasToken(filter, token) ? removeToken(filter, token) : addToken(filter, token)
+}
+
+/** A new filter that reads its labels this way; all is the absence of the field. */
+export function setLabelsMatch(filter: WorkFilter, match: LabelsMatch): WorkFilter {
+  const next: WorkFilter = { ...filter }
+  if (match === 'any') next.labelsMatch = 'any'
+  else delete next.labelsMatch
+  return next
 }
 
 /**
@@ -194,6 +216,14 @@ type RouteState = Record<string, string | number | boolean>
 const escapeValue = (value: string) => value.replaceAll('%', '%25').replaceAll(',', '%2C')
 const unescapeValue = (value: string) => value.replaceAll('%2C', ',').replaceAll('%25', '%')
 
+/**
+ * What `labels` starts with when any one of them will do; all writes nothing, so a link made
+ * before the labels could combine reads as it did. It rides that key rather than one of its
+ * own because the manifest the route is validated against names the keys. No label can be
+ * written this way, since each `%` of a label is written `%25`.
+ */
+const LABELS_ANY = '%any'
+
 const VALID_VALUES: Record<ListFacet, ((value: string) => boolean) | null> = {
   category: (value) => (STATE_CATEGORIES as readonly string[]).includes(value),
   kind: (value) => (WORK_ITEM_KINDS as readonly string[]).includes(value),
@@ -215,8 +245,13 @@ export function readWorkFilter(state: RouteState | undefined): WorkFilter {
   if (state[WORK_FILTER_STATE_KEYS.ready] === true) filter.ready = true
   if (state[WORK_FILTER_STATE_KEYS.held] === true) filter.held = true
   for (const facet of LIST_FACETS) {
-    const raw = state[WORK_FILTER_STATE_KEYS[facet]]
-    if (typeof raw !== 'string' || raw === '') continue
+    let raw = state[WORK_FILTER_STATE_KEYS[facet]]
+    if (typeof raw !== 'string') continue
+    if (facet === 'labels' && (raw === LABELS_ANY || raw.startsWith(`${LABELS_ANY},`))) {
+      filter.labelsMatch = 'any'
+      raw = raw.slice(LABELS_ANY.length + 1)
+    }
+    if (raw === '') continue
     const valid = VALID_VALUES[facet]
     const values = [...new Set(raw.split(',').map((value) => unescapeValue(value)))].filter(
       (value) => value !== '' && (valid === null || valid(value)),
@@ -259,10 +294,11 @@ function encodeFilter(filter: WorkFilter): { complete: boolean; entries: RouteSt
   if (filter.held) entries[WORK_FILTER_STATE_KEYS.held] = true
   for (const facet of LIST_FACETS) {
     const values = filter[facet] ?? []
-    if (!values.length) continue
-    const { kept, value } = joinWithin(values, ROUTE_STATE_VALUE_CHARS)
+    const mark = facet === 'labels' && filter.labelsMatch === 'any' ? `${LABELS_ANY},` : ''
+    const { kept, value } = joinWithin(values, ROUTE_STATE_VALUE_CHARS - mark.length)
     if (kept < values.length) complete = false
-    if (kept) entries[WORK_FILTER_STATE_KEYS[facet]] = value
+    if (kept) entries[WORK_FILTER_STATE_KEYS[facet]] = `${mark}${value}`
+    else if (mark) entries[WORK_FILTER_STATE_KEYS[facet]] = LABELS_ANY
   }
   return { complete, entries }
 }

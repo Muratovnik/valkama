@@ -5,8 +5,14 @@
  *
  * It never takes focus. The field keeps the caret, so typing goes on narrowing
  * the list, and names the highlighted row through `aria-activedescendant`; a
- * pointer press here is kept from stealing the caret for the same reason. The
- * host places it: this draws the surface, not where it stands.
+ * pointer press anywhere on it, a group's name included, is kept from stealing
+ * the caret for the same reason. The host places it: this draws the surface, not
+ * where it stands.
+ *
+ * A group may offer choices about the group itself in its head, which stays in
+ * sight while its values scroll. A list holds options and nothing else, and a
+ * second focus would take the caret from the field, so they are options too: the
+ * arrows reach them first in the group, and each says in its own name what it is.
  */
 import { computed } from 'vue'
 
@@ -17,11 +23,16 @@ interface OptionGroup {
   id: string
   name: string
   options: readonly { key: string; selected: boolean; text: string; detail?: string }[]
+  choices?: readonly {
+    key: string
+    name: string
+    selected: boolean
+    text: string
+    title: string
+  }[]
 }
 
 const props = defineProps<{
-  /** Said in place of the list when no group has an option left. */
-  empty: string
   groups: readonly OptionGroup[]
   /** The highlighted option by its place in reading order; -1 for none. */
   highlight: number
@@ -42,11 +53,10 @@ const rows = computed(() => {
   return props.groups.map((group) => ({
     group,
     headingId: `${props.id}-group-${group.id}`,
+    choices: (group.choices ?? []).map((option) => ({ option, place: place++ })),
     options: group.options.map((option) => ({ option, place: place++ })),
   }))
 })
-
-const none = computed(() => rows.value.every((row) => !row.options.length))
 
 /** Absent rather than false: the attribute is what the style reads. */
 const highlighted = (place: number) => place === props.highlight || undefined
@@ -59,6 +69,7 @@ const highlighted = (place: number) => place === props.highlight || undefined
     role="listbox"
     aria-multiselectable="true"
     :aria-label="label"
+    @pointerdown.prevent
   >
     <div
       v-for="row in rows"
@@ -67,12 +78,36 @@ const highlighted = (place: number) => place === props.highlight || undefined
       role="group"
       :aria-labelledby="row.headingId"
     >
-      <div
-        :id="row.headingId"
-        class="option-group-name"
-        role="presentation"
-      >
-        {{ row.group.name }}
+      <div class="option-group-head">
+        <div
+          :id="row.headingId"
+          class="option-group-name"
+          role="presentation"
+        >
+          {{ row.group.name }}
+        </div>
+        <div
+          v-if="row.choices.length"
+          class="option-choices"
+        >
+          <div
+            v-for="entry in row.choices"
+            :id="optionId(entry.place)"
+            :key="entry.option.key"
+            class="option-choice"
+            role="option"
+            tabindex="-1"
+            :aria-label="entry.option.name"
+            :aria-selected="entry.option.selected"
+            :data-highlighted="highlighted(entry.place)"
+            :title="entry.option.title"
+            @pointermove="emit('update:highlight', entry.place)"
+            @click="emit('choose', entry.option.key)"
+            @keydown.enter="emit('choose', entry.option.key)"
+          >
+            {{ entry.option.text }}
+          </div>
+        </div>
       </div>
       <div
         v-for="entry in row.options"
@@ -83,7 +118,6 @@ const highlighted = (place: number) => place === props.highlight || undefined
         tabindex="-1"
         :aria-selected="entry.option.selected"
         :data-highlighted="highlighted(entry.place)"
-        @pointerdown.prevent
         @pointermove="emit('update:highlight', entry.place)"
         @click="emit('choose', entry.option.key)"
         @keydown.enter="emit('choose', entry.option.key)"
@@ -101,12 +135,6 @@ const highlighted = (place: number) => place === props.highlight || undefined
         >
       </div>
     </div>
-    <p
-      v-if="none"
-      class="option-empty"
-    >
-      {{ empty }}
-    </p>
   </div>
 </template>
 
@@ -119,6 +147,7 @@ const highlighted = (place: number) => place === props.highlight || undefined
   background: var(--color-surface);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scroll-padding-top: calc(var(--size-control-inline) + var(--space-1));
   border-radius: var(--radius-control);
   box-shadow: 0 14px 34px var(--color-shadow);
 }
@@ -127,10 +156,64 @@ const highlighted = (place: number) => place === props.highlight || undefined
   margin-top: var(--space-1);
 }
 
+/* It stays in sight while its group scrolls under it, up to the surface's edge. */
+.option-group-head {
+  position: sticky;
+  top: calc(-1 * var(--space-1));
+  z-index: 1;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-surface);
+}
+
 .option-group-name {
   padding: var(--space-1) var(--space-2) var(--space-half);
   color: var(--color-text-tertiary);
   font: var(--font-label);
+}
+
+/* A pressed segment's look, as a choice among two is: a track and its chosen word. */
+.option-choices {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-half);
+  padding: var(--space-half);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-control);
+}
+
+.option-choice {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--size-control-inline) - 2 * var(--space-half));
+  padding: 0 var(--space-2);
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  border-radius: calc(var(--radius-control) - var(--space-half));
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  &[aria-selected='true'] {
+    color: var(--color-text);
+    font-weight: 600;
+    background: var(--color-surface-active);
+
+    @media (forced-colors: active) {
+      color: HighlightText;
+      background: Highlight;
+      forced-color-adjust: none;
+    }
+  }
+
+  &[data-highlighted] {
+    outline: 1px solid var(--color-focus-ring);
+    outline-offset: -1px;
+  }
 }
 
 .option-row {
@@ -173,12 +256,5 @@ const highlighted = (place: number) => place === props.highlight || undefined
   flex: 0 0 auto;
   color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
-}
-
-.option-empty {
-  padding: var(--space-2);
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 </style>

@@ -777,9 +777,17 @@ with no check to make room for. The presets fold into the menu where the row can
 hold them beside a usable filter. A usable filter is as wide as a phone's, 108px
 with the longest words: where the row cannot hold the grouping's word beside that,
 the word rides the counts' line instead of becoming a glyph, and where the view's
-segments and the words of the menu and the action cannot either, the bar takes its
-phone form. The filter's hint is whole where it fits and one word where it would be
-cut. On a phone the grouping gives its word up to the reset while a filter is on, so
+segments and the action cannot either, the bar takes its phone form. The filter's
+hint names both things it does, and is whole where it fits and short where it would
+be cut. The field is the way into the filter's menu, with no button of its own: a
+press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
+itself does not, since Tab passes through to what the menu would cover. Typing
+narrows the menu, and with no value left it draws nothing, so a search by number
+keeps the work in sight. A group's head stays in sight while its values scroll, and
+the label group's head says how the labels picked combine, «all» or «any», where the
+space has two to combine. The arrows reach that choice as they reach a value, because
+a list has one focus and it stays in the field. The chips say the same in a word
+between two labels. On a phone the grouping gives its word up to the reset while a filter is on, so
 the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and
@@ -816,7 +824,7 @@ the open target, stretched over the whole sheet, so the sheet opens wherever it
 is clicked and stays one Tab stop; the chips lie above it as filter buttons out
 of the Tab order. The priority and kind glyphs are read, not pressed, as on a
 graph node: each spends its 14px and no 28px pointer box, the two keep the
-line's own small gap, and the list, the card and the «Фильтр» menu filter by
+line's own small gap, and the list, the card and the filter's menu filter by
 them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's

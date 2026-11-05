@@ -183,7 +183,12 @@ const graphBranch = computed(() => {
 
 /** What the items are narrowed by: the graph frames a new narrowing afresh, and only then. */
 const graphFilter = computed(() =>
-  JSON.stringify([filterTokens(filter.value), filter.value.text.trim().toLocaleLowerCase()]),
+  JSON.stringify([
+    filterTokens(filter.value),
+    filter.value.text.trim().toLocaleLowerCase(),
+    // How labels combine narrows nothing until there are two to combine.
+    (filter.value.labels?.length ?? 0) > 1 ? filter.value.labelsMatch : undefined,
+  ]),
 )
 
 /** The whole space, or exactly one chain with the links the chain endpoint named. */

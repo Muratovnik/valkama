@@ -7,8 +7,11 @@
  * the text no room. Each is a Tab stop; the field's caret also reaches the
  * last one with ←, the arrows move between them, and → past the last one, or
  * Escape, goes back to the text.
+ *
+ * The labels say how they combine, in the word between two of them, so the
+ * filter reads whole without its menu open.
  */
-import { computed, nextTick, useTemplateRef } from 'vue'
+import { computed, nextTick, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { tokenKey, tokenName } from '@/features/work-filter/filterOptions.ts'
@@ -18,6 +21,8 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
+  /** One of the labels will do, rather than every one of them. */
+  labelsAny: boolean
   tokens: readonly WorkFilterToken[]
 }>()
 
@@ -28,20 +33,29 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const id = useId()
 
-const chips = computed(() =>
-  props.tokens.map((token) => {
+const chips = computed(() => {
+  const firstLabel = props.tokens.findIndex((token) => token.facet === 'labels')
+  const word = t(`workItem.filter.labelsMatch.${props.labelsAny ? 'any' : 'all'}.join`)
+  return props.tokens.map((token, index) => {
     const name = tokenName(token, t)
+    // The word before it, from the second label on, which also describes the chip.
+    const join = token.facet === 'labels' && index > firstLabel ? word : undefined
+    const joinId = `${id}-join-${index}`
     return {
       key: tokenKey(token),
       name,
+      join,
+      joinId,
+      describedBy: join && joinId,
       // Absent rather than false: the attribute is what the style reads.
       preset: token.facet === 'ready' || token.facet === 'held' || undefined,
       removeName: t('workItem.filter.remove', { name }),
       token,
     }
-  }),
-)
+  })
+})
 
 const list = useTemplateRef<HTMLElement>('list')
 
@@ -113,9 +127,16 @@ defineExpose({ focusLast })
       class="filter-chip-item"
       :data-preset="chip.preset"
     >
+      <span
+        v-if="chip.join"
+        :id="chip.joinId"
+        class="filter-chip-join"
+        >{{ chip.join }}</span
+      >
       <button
         class="filter-chip"
         type="button"
+        :aria-describedby="chip.describedBy"
         :aria-label="chip.removeName"
         :title="chip.removeName"
         @click="remove(index)"
@@ -150,6 +171,13 @@ defineExpose({ focusLast })
 .filter-chip-item {
   display: flex;
   flex: 0 0 auto;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.filter-chip-join {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 /* The label chip's look — control fill, muted ink — one step up, because it

@@ -46,6 +46,27 @@ describe('the filter and the address', () => {
     expect(filter.filter.value).toEqual({ text: 'MAIN', ready: true, labels: ['ui'] })
   })
 
+  test('a change of how labels combine is a change of the address, and Reset takes it out', async () => {
+    const { answer, filter, writes } = harness({ labels: 'ui,board' })
+    filter.set({ ...filter.filter.value, labelsMatch: 'any' })
+    expect(writes).toEqual([{ labels: '%any,ui,board' }])
+    await answer()
+    expect(filter.filter.value.labelsMatch).toBe('any')
+    filter.reset()
+    expect(writes.at(-1)).toEqual({})
+    expect(filter.filter.value.labelsMatch).toBeUndefined()
+  })
+
+  test('Back to a link that says any adopts it', async () => {
+    const { filter, navigate } = harness()
+    await navigate({ labels: '%any,ui,board' })
+    expect(filter.filter.value).toEqual({
+      text: '',
+      labels: ['ui', 'board'],
+      labelsMatch: 'any',
+    })
+  })
+
   test('a change shows at once and is written with the other keys kept', () => {
     const { filter, writes } = harness({ view: 'list', group: 'epic' })
     filter.set({ text: '', labels: ['ui'] })

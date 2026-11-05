@@ -1,6 +1,6 @@
 /**
  * The Work filter: one field of text and facet chips, its two presets, the
- * menu of facet values, and the counts that answer it.
+ * menu of facet values it opens, and the counts that answer it.
  *
  * The counts answer the filter instead of describing the population: «319
  * открытых из 1267» with nothing picked, «42 из 319 открытых» once something
@@ -16,14 +16,25 @@ export const workFilterMessages = {
   en: {
     filter: {
       label: 'Filter work',
-      placeholder: 'Reference or title',
+      placeholder: 'Reference, title, label…',
       // Where the field is too narrow for the whole hint, a phone's bar.
-      placeholderShort: 'Search',
+      placeholderShort: 'Search, filter',
       clearText: 'Clear the text',
-      menu: 'Filter',
-      menuNamed: 'Filter: {count} picked',
       menuLabel: 'Facets to filter by',
-      noOptions: 'No value matches “{text}”',
+      labelsMatch: {
+        all: {
+          text: 'all',
+          name: 'Labels: all of those picked',
+          title: 'Work that carries every label picked',
+          join: 'and',
+        },
+        any: {
+          text: 'any',
+          name: 'Labels: any of those picked',
+          title: 'Work that carries at least one of the labels picked',
+          join: 'or',
+        },
+      },
       presets: 'Quick filters',
       tokens: 'Picked facets',
       facet: {
@@ -48,13 +59,24 @@ export const workFilterMessages = {
   ru: {
     filter: {
       label: 'Фильтр работы',
-      placeholder: 'Номер или название',
-      placeholderShort: 'Поиск',
+      placeholder: 'Номер, название, метка…',
+      placeholderShort: 'Поиск, фильтр',
       clearText: 'Очистить текст',
-      menu: 'Фильтр',
-      menuNamed: 'Фильтр: выбрано {count}',
       menuLabel: 'Признаки для фильтра',
-      noOptions: 'Ни одно значение не подходит к «{text}»',
+      labelsMatch: {
+        all: {
+          text: 'все',
+          name: 'Метки: все отмеченные',
+          title: 'Задачи, на которых есть каждая отмеченная метка',
+          join: 'и',
+        },
+        any: {
+          text: 'любая',
+          name: 'Метки: любая из отмеченных',
+          title: 'Задачи, на которых есть хотя бы одна из отмеченных меток',
+          join: 'или',
+        },
+      },
       presets: 'Быстрые фильтры',
       tokens: 'Выбранные признаки',
       facet: {

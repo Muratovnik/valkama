@@ -57,7 +57,7 @@ describe('the Work filter field', () => {
     const fromPreset = lastFilter(preset)
 
     const menu = field()
-    await menu.get('.filter-trigger').trigger('click')
+    await input(menu).trigger('click')
     await menu.findAll('[role="option"]')[0]?.trigger('click')
     const fromMenu = lastFilter(menu)
 
@@ -67,7 +67,7 @@ describe('the Work filter field', () => {
     expect(fromMenu).toEqual(fromMark)
 
     const label = field()
-    await label.get('.filter-trigger').trigger('click')
+    await input(label).trigger('click')
     const ui = label.findAll('[role="option"]').find((option) => option.text() === 'ui')
     await ui?.trigger('click')
     expect(lastFilter(label)).toEqual(
@@ -78,7 +78,7 @@ describe('the Work filter field', () => {
   it('offers each facet’s values under its name, the held count on its preset', async () => {
     const wrapper = field()
     expect(wrapper.get('.filter-preset:last-child').text()).toBe('Assigned 7')
-    await wrapper.get('.filter-trigger').trigger('click')
+    await input(wrapper).trigger('click')
     expect(input(wrapper).attributes('aria-expanded')).toBe('true')
     const groups = wrapper
       .findAll('[role="listbox"] [role="group"] .option-group-name')
@@ -105,8 +105,17 @@ describe('the Work filter field', () => {
     expect(lastFilter(wrapper)).toEqual({ text: '', priority: ['high'] })
   })
 
+  it('leaves the labels’ choice out of a list narrowed to some of them', async () => {
+    const wrapper = field()
+    await input(wrapper).setValue('agen')
+    expect(options(wrapper)).toEqual(['agent'])
+    // The facet's own name offers all of it, and the choice is part of that.
+    await input(wrapper).setValue('label')
+    expect(options(wrapper)).toEqual(['all', 'any', 'ui', 'agent'])
+  })
+
   it('takes one step per Escape and keeps the press from what is behind it', async () => {
-    const wrapper = field({ text: 'MAIN' })
+    const wrapper = field({ text: 'ui' })
     const behind = vi.fn()
     const escapeBehind = (event: KeyboardEvent) => event.key === 'Escape' && behind()
     document.addEventListener('keydown', escapeBehind)
@@ -117,7 +126,7 @@ describe('the Work filter field', () => {
 
     await input(wrapper).trigger('keydown', { key: 'Escape' })
     expect(input(wrapper).attributes('aria-expanded')).toBe('false')
-    expect(element.value).toBe('MAIN')
+    expect(element.value).toBe('ui')
 
     await input(wrapper).trigger('keydown', { key: 'Escape' })
     expect(element.value).toBe('')

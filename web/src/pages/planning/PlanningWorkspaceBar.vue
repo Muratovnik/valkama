@@ -8,7 +8,7 @@
  * field narrows it, so the two are not read as one set of filters. It is the same
  * pressed control as its neighbours, and where the row cannot hold its word beside
  * a field the phone's 108px wide, the word rides the line under it. The filter is one
- * field — text and facet chips — with its two presets and its menu, because
+ * field — text and facet chips — with its two presets and the menu it opens, because
  * the five queue segments that stood beside a search were two controls for one
  * population, and two of them repeated columns the board already draws.
  *
@@ -128,6 +128,7 @@ const rowsText = computed(() => {
 })
 
 const tokens = computed(() => filterTokens(filter.value))
+const labelsAny = computed(() => filter.value.labelsMatch === 'any')
 /** Where focus goes when the last chip on the narrow line is taken out. */
 const field = useTemplateRef<{ focus: () => void }>('field')
 function focusField() {
@@ -209,6 +210,7 @@ function removeChip(token: WorkFilterToken) {
       <div class="workspace-chips">
         <WorkFilterChips
           ref="chips"
+          :labels-any="labelsAny"
           :tokens="tokens"
           @leave="focusField"
           @remove="removeChip"
@@ -359,9 +361,8 @@ function removeChip(token: WorkFilterToken) {
   }
 }
 
-/* The board, where the row cannot hold the grouping's word beside a field as wide
-   as a phone's (207 + 98 + 108 + 96 + 145 and four gaps, with the longest words):
-   the word rides the counts' line, and the field takes what it left. */
+/* The board, where the row keeps the grouping's word off it: the word rides the
+   counts' line, and the field takes what it left. */
 @container workspace (width > 624px) and (width < 736px) {
   .workspace-head:has(.workspace-grouping) {
     flex-flow: row wrap;
@@ -395,10 +396,7 @@ function removeChip(token: WorkFilterToken) {
 }
 
 /* A phone: the view becomes a menu and the action its sign, so the view, the
-   filter and the action hold the first line. It starts where the view's segments,
-   the words of the filter's menu and the action would leave the field less than it
-   holds here (207 + 96 + 145 and three gaps, with the longest words). The two rows
-   give up their own
+   filter and the action hold the first line. The two rows give up their own
    boxes and wrap as one: the picked facets, the counts and the grouping
    switch share the second line instead of each taking one. */
 @container workspace (width <= 624px) {

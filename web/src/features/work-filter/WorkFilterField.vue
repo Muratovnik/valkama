@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * The one filter over the Work views: free text and facet chips in one field,
- * the two presets beside it, and the «Фильтр» menu of facet values.
+ * the two presets beside it, and the menu of facet values it opens.
  *
  * Three ways in, one model out. A chip clicked on a tile, a value picked from
  * the menu and a preset pressed all produce the same `WorkFilterToken`, so a
@@ -11,11 +11,18 @@
  * The chips are the host's to place (`WorkFilterChips`); the field asks for
  * them with its `chips` event.
  *
- * The keyboard: `/` anywhere outside a text field comes here; ↓ opens the menu
- * and moves through it; Enter picks the highlighted value; Escape closes the
- * menu, then clears the text, then leaves the field — one step per press; ←
- * from the start of the text reaches the chips, and Backspace there takes the
- * last one out.
+ * The menu opens to what a person did: a press in the field, `/`, ↓ or a letter
+ * typed, and never because focus arrived. Tab passes through on its way to what
+ * lies behind the menu, and focus also comes back here on its own, when a card
+ * closes or the window returns; so nothing here listens for focus at all. Typing
+ * narrows the menu, and with no value left to offer it draws nothing, which leaves
+ * the work in sight for a search by number.
+ *
+ * The keyboard: `/` anywhere outside a text field comes here and opens the menu;
+ * ↓ opens it and moves through it; Enter picks the highlighted value; Escape
+ * closes the menu, then clears the text, then leaves the field — one step per
+ * press; ← from the start of the text reaches the chips, and Backspace there
+ * takes the last one out.
  *
  * The menu is drawn in place rather than portalled, under the nearest
  * positioned ancestor: this root where there is room, the bar on a phone.
@@ -28,13 +35,18 @@ import { useEventListener } from '@vueuse/core'
 import { filterGroups, narrowGroups, picked } from '@/features/work-filter/filterOptions.ts'
 import WorkFilterPresets from '@/features/work-filter/WorkFilterPresets.vue'
 
-import { filterTokens, removeToken, toggleToken } from '@/entities/work-item/utils/workFilter.ts'
+import {
+  filterTokens,
+  removeToken,
+  setLabelsMatch,
+  toggleToken,
+} from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { optionGroupItemId } from '@/shared/ui/choiceControls.ts'
-import CountBadge from '@/shared/ui/CountBadge.vue'
 import OptionGroups from '@/shared/ui/OptionGroups.vue'
+import { isStrayPress } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -64,12 +76,6 @@ const input = computed(() => text.value?.control() ?? null)
 const menuId = useId()
 
 const tokens = computed(() => filterTokens(filter.value))
-const pickedCount = computed(() => tokens.value.length)
-const triggerName = computed(() =>
-  pickedCount.value
-    ? t('workItem.filter.menuNamed', { count: pickedCount.value })
-    : t('workItem.filter.menu'),
-)
 
 // ---------------------------------------------------------------------------
 // The text and the chips.
@@ -79,7 +85,15 @@ function setText(text: string) {
   filter.value = { ...filter.value, text }
 }
 
+/** A letter typed is a search of the menu too, so it opens the menu if it was closed. */
+function type(text: string) {
+  setText(text)
+  if (text.trim() && !open.value) openMenu(false)
+}
+
+/** With the text gone the whole list is on offer, so it stays open only if it was in sight. */
 function clearText() {
+  if (!shown.value) closeMenu()
   setText('')
   input.value?.focus()
 }
@@ -115,8 +129,12 @@ const groups = computed(() =>
     filter.value.text,
   ),
 )
-/** The options in reading order, which is the order the arrows walk. */
-const options = computed(() => groups.value.flatMap((group) => group.options))
+/** What the menu offers in reading order, which is the order the arrows walk. */
+const entries = computed(() =>
+  groups.value.flatMap((group) => [...(group.choices ?? []), ...group.options]),
+)
+/** With nothing to offer, the menu is no empty frame over the work a search found. */
+const shown = computed(() => open.value && entries.value.length > 0)
 /**
  * The groups as the list draws them: each value's word and whether it is in.
  * A closed menu draws none of them. A space's labels made it a list of some
@@ -132,22 +150,28 @@ const menuGroups = computed(() =>
       detail: option.detail,
       selected: picked(filter.value, option),
     })),
+    choices: group.choices?.map((choice) => ({
+      key: choice.key,
+      name: choice.name,
+      text: choice.text,
+      title: choice.title,
+      selected: (filter.value.labelsMatch ?? 'all') === choice.match,
+    })),
   })),
 )
-const typed = computed(() => filter.value.text.trim())
 const activeOption = computed(() =>
-  open.value && highlight.value >= 0 ? optionGroupItemId(menuId, highlight.value) : undefined,
+  shown.value && highlight.value >= 0 ? optionGroupItemId(menuId, highlight.value) : undefined,
 )
 const completion = computed(() => ({
   controls: menuId,
   activeDescendant: activeOption.value,
-  expanded: open.value,
+  expanded: shown.value,
 }))
 
 // A narrower list keeps the highlight on a row that still exists. A closed
 // menu has no highlight, so its rows are not worked out to keep one.
 watch(
-  () => (open.value ? options.value.length : 0),
+  () => (open.value ? entries.value.length : 0),
   (length) => {
     if (highlight.value >= length) highlight.value = length - 1
   },
@@ -155,7 +179,7 @@ watch(
 
 function openMenu(first: boolean) {
   open.value = true
-  highlight.value = first && options.value.length ? 0 : -1
+  highlight.value = first && entries.value.length ? 0 : -1
 }
 
 function closeMenu() {
@@ -163,32 +187,50 @@ function closeMenu() {
   highlight.value = -1
 }
 
-function toggleMenu() {
-  if (open.value) closeMenu()
-  else openMenu(false)
-  focusText()
+/** A press in the field opens the menu and leaves an open one as it is. */
+function press(event: MouseEvent) {
+  if (!open.value && !isStrayPress(event)) openMenu(false)
 }
 
-function move(step: 1 | -1) {
-  const count = options.value.length
-  if (!count) return
-  highlight.value =
-    highlight.value < 0 && step < 0 ? count - 1 : (highlight.value + step + count) % count
+/** Brings the highlighted row into the list's sight, once it is drawn. */
+function reveal() {
   const id = optionGroupItemId(menuId, highlight.value)
   void nextTick(() =>
     root.value?.querySelector(`[id="${id}"]`)?.scrollIntoView({ block: 'nearest' }),
   )
 }
 
+function move(step: 1 | -1) {
+  const count = entries.value.length
+  if (!count) return
+  highlight.value =
+    highlight.value < 0 && step < 0 ? count - 1 : (highlight.value + step + count) % count
+  reveal()
+}
+
 /**
  * Pick a value: in it goes, or out if it was in. Text typed to find the value
- * was a search of the menu, not of the work, so it goes with the pick.
+ * was a search of the menu, not of the work, so it goes with the pick, and the
+ * highlight stays on that value as the list grows back around it. How the labels
+ * combine is no value: the text stays.
  */
 function choose(key: string) {
-  const option = options.value.find((entry) => entry.key === key)
-  if (!option) return
-  const next = toggleToken(filter.value, option.token)
-  filter.value = filter.value.text ? { ...next, text: '' } : next
+  const entry = entries.value.find((candidate) => candidate.key === key)
+  if (!entry) return
+  if ('match' in entry) {
+    filter.value = setLabelsMatch(filter.value, entry.match)
+    return
+  }
+  const next = toggleToken(filter.value, entry.token)
+  if (!filter.value.text) {
+    filter.value = next
+    return
+  }
+  filter.value = { ...next, text: '' }
+  void nextTick(() => {
+    highlight.value = entries.value.findIndex((candidate) => candidate.key === key)
+    reveal()
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -210,9 +252,9 @@ function menuKey(event: KeyboardEvent): boolean {
     move(-1)
     return true
   }
-  const option = options.value[highlight.value]
-  if (event.key !== 'Enter' || !option) return false
-  choose(option.key)
+  const entry = entries.value[highlight.value]
+  if (event.key !== 'Enter' || !entry) return false
+  choose(entry.key)
   return true
 }
 
@@ -221,8 +263,10 @@ function menuKey(event: KeyboardEvent): boolean {
  * then leaves the field.
  */
 function escape(field: HTMLInputElement) {
-  if (open.value) closeMenu()
-  else if (field.value) setText('')
+  const inSight = shown.value
+  closeMenu()
+  if (inSight) return
+  if (field.value) setText('')
   else field.blur()
 }
 
@@ -272,6 +316,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   event.preventDefault()
   field.focus()
   field.select()
+  openMenu(false)
 })
 
 // The menu closes when focus or a pointer leaves the filter.
@@ -306,7 +351,8 @@ defineExpose({ focus: focusText })
         :model-value="filter.text"
         :completion="completion"
         hide-label
-        @update:model-value="setText"
+        @click="press"
+        @update:model-value="type"
         @keydown="keydown"
       />
       <VButton
@@ -326,36 +372,14 @@ defineExpose({ focus: focusText })
     <WorkFilterPresets
       v-model:filter="filter"
       :held="held"
+      @focusin="closeMenu"
     />
 
-    <button
-      class="filter-trigger"
-      type="button"
-      aria-haspopup="listbox"
-      :aria-expanded="open"
-      :aria-controls="menuId"
-      :aria-label="triggerName"
-      :title="triggerName"
-      @click="toggleMenu"
-    >
-      <VIcon
-        name="filters"
-        :size="16"
-      />
-      <span class="filter-trigger-text">{{ t('workItem.filter.menu') }}</span>
-      <CountBadge
-        v-if="pickedCount"
-        placement="inline"
-        :value="pickedCount"
-      />
-    </button>
-
     <OptionGroups
-      v-show="open"
+      v-show="shown"
       :id="menuId"
       v-model:highlight="highlight"
       class="filter-menu"
-      :empty="t('workItem.filter.noOptions', { text: typed })"
       :groups="menuGroups"
       :label="t('workItem.filter.menuLabel')"
       @choose="choose"
@@ -398,51 +422,10 @@ defineExpose({ focus: focusText })
   width: min(24rem, 100%);
 }
 
-/* The trigger is a compact control, the height of the view switch beside
-   it, and holds the chosen segment's fill while its menu is open. */
-.filter-trigger {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: var(--space-1);
-  align-items: center;
-  min-height: var(--size-control-height-compact);
-  padding: 0 var(--space-3);
-  border: 0;
-  color: var(--color-text-muted);
-  font: var(--font-control);
-  white-space: nowrap;
-  background: var(--color-control-surface);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-text);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
-  &[aria-expanded='true'] {
-    color: var(--color-text);
-    background: var(--color-surface-active);
-  }
-}
-
-/* A phone: the trigger is its icon and its count, and the root steps aside so
-   the menu spans the bar under the row. */
+/* A phone: the root steps aside so the menu spans the bar under the row. */
 @container workspace (width <= 624px) {
   .work-filter {
     position: static;
-  }
-
-  .filter-trigger-text {
-    display: none;
-  }
-
-  .filter-trigger {
-    padding: 0 var(--space-2);
   }
 
   .filter-menu {

@@ -27,7 +27,7 @@
  * A one-line field whose room changes with the row it rides — the Work bar's
  * filter is 81px of text on a phone — may name a `shortPlaceholder`. The field
  * measures its whole placeholder against its own text box and shows the short
- * one where the whole one would be cut: «Номер или і» said less than «Поиск».
+ * one where the whole one would be cut: half a hint says less than a short one.
  */
 import { computed, ref, useTemplateRef } from 'vue'
 

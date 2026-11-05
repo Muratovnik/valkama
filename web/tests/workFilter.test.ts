@@ -17,6 +17,7 @@ import {
   readWorkFilter,
   removeToken,
   ROUTE_STATE_VALUE_CHARS,
+  setLabelsMatch,
   togglePreset,
   toggleToken,
   WORK_FILTER_PRESETS,
@@ -79,6 +80,25 @@ describe('which items pass', () => {
   test('each label picked narrows further', () => {
     assert.deepEqual(passing(items, { text: '', labels: ['ui'] }), [1, 2])
     assert.deepEqual(passing(items, { text: '', labels: ['ui', 'board'] }), [1])
+  })
+
+  test('read as any, one of the labels picked will do', () => {
+    const any: WorkFilter = { text: '', labels: ['ui', 'board'], labelsMatch: 'any' }
+    assert.deepEqual(passing(items, any), [1, 2, 3])
+    // A second label widens now, where it narrowed before; item 4 carries neither.
+    assert.deepEqual(passing(items, { ...any, labels: ['ui'] }), [1, 2])
+  })
+
+  test('read as any, the other facets and the text still have to hold', () => {
+    const any: WorkFilter = { text: '', labels: ['ui', 'board'], labelsMatch: 'any' }
+    assert.deepEqual(passing(items, { ...any, kind: ['bug'] }), [1, 3])
+    assert.deepEqual(passing(items, { ...any, text: 'tile' }), [1])
+  })
+
+  test('how labels combine lets everything through while no label is picked', () => {
+    const any: WorkFilter = { text: '', labelsMatch: 'any' }
+    assert.deepEqual(passing(items, any), [1, 2, 3, 4])
+    assert.equal(isWorkFilterEmpty(any), true)
   })
 
   test('the text matches the reference or the title, in any case', () => {
@@ -166,8 +186,95 @@ const route = (state: Record<string, string | number | boolean>) =>
 const wide = (prefix: string) =>
   Array.from({ length: 8 }, (_, index) => `${prefix}${index}${'看'.repeat(26)}`)
 
+describe('how labels combine', () => {
+  const picked: WorkFilter = { text: '', labels: ['ui', 'board'] }
+
+  test('the choice is a new filter, and all is the absence of the field', () => {
+    const any = setLabelsMatch(picked, 'any')
+    assert.deepEqual(any, { ...picked, labelsMatch: 'any' })
+    assert.deepEqual(picked, { text: '', labels: ['ui', 'board'] })
+    assert.deepEqual(setLabelsMatch(any, 'all'), picked)
+    assert.equal('labelsMatch' in setLabelsMatch(any, 'all'), false)
+  })
+
+  test('a mark clicked or taken out keeps the choice', () => {
+    const any = setLabelsMatch(picked, 'any')
+    const token = { facet: 'labels', value: 'agent' } as const
+    assert.equal(toggleToken(any, token).labelsMatch, 'any')
+    assert.deepEqual(toggleToken(any, token).labels, ['ui', 'board', 'agent'])
+    assert.equal(removeToken(any, { facet: 'labels', value: 'ui' }).labelsMatch, 'any')
+    assert.equal(addToken(any, { facet: 'ready' }).labelsMatch, 'any')
+  })
+})
+
 describe('the route state', () => {
   const MAX = 2048
+
+  test('a link made before the labels could combine reads as it always did', () => {
+    assert.deepEqual(readWorkFilter({ labels: 'ui,board' }), {
+      text: '',
+      labels: ['ui', 'board'],
+    })
+    // And writes the same value again: all is not in the address at all.
+    const { state } = writeWorkFilter(undefined, { text: '', labels: ['ui', 'board'] }, MAX)
+    assert.deepEqual(state, { labels: 'ui,board' })
+  })
+
+  test('any lives in the address and reads back through a real route', () => {
+    const filter: WorkFilter = { text: '', labels: ['ui', 'board'], labelsMatch: 'any' }
+    const { complete, state } = writeWorkFilter({ view: 'kanban' }, filter, MAX)
+    assert.equal(complete, true)
+    assert.equal(state[WORK_FILTER_STATE_KEYS.labels], '%any,ui,board')
+    assert.deepEqual(readWorkFilter(route(state)), filter)
+  })
+
+  test('any with no label picked yet survives a reload too', () => {
+    const filter: WorkFilter = { text: '', labelsMatch: 'any' }
+    const { state } = writeWorkFilter(undefined, filter, MAX)
+    assert.deepEqual(readWorkFilter(route(state)), filter)
+  })
+
+  test('a label spelled like the mark stays a label, in either reading', () => {
+    for (const labelsMatch of [undefined, 'any'] as const) {
+      const filter: WorkFilter = {
+        text: '',
+        labels: ['%any', 'ui'],
+        ...(labelsMatch ? { labelsMatch } : {}),
+      }
+      const { state } = writeWorkFilter(undefined, filter, MAX)
+      assert.deepEqual(readWorkFilter(route(state)), filter)
+    }
+    // A hand-edited word that only starts like the mark is a label, not a reading.
+    assert.deepEqual(readWorkFilter({ labels: '%anything,ui' }), {
+      text: '',
+      labels: ['%anything', 'ui'],
+    })
+  })
+
+  test('the mark counts towards the 240 characters of a value', () => {
+    const labels = Array.from({ length: 20 }, (_, index) => `label-${index}-${'x'.repeat(12)}`)
+    const { complete, state } = writeWorkFilter(
+      undefined,
+      { text: '', labels, labelsMatch: 'any' },
+      4096,
+    )
+    assert.equal(complete, false)
+    assert.ok(String(state[WORK_FILTER_STATE_KEYS.labels]).length <= ROUTE_STATE_VALUE_CHARS)
+    assert.equal(readWorkFilter(route(state)).labelsMatch, 'any')
+  })
+
+  test('over the manifest’s bound the last labels go and the reading stays', () => {
+    const labels = Array.from({ length: 30 }, (_, index) => `l${index}`)
+    const { complete, state } = writeWorkFilter(
+      undefined,
+      { text: '', labels, labelsMatch: 'any' },
+      64,
+    )
+    assert.equal(complete, false)
+    const read = readWorkFilter(state)
+    assert.equal(read.labelsMatch, 'any')
+    assert.ok((read.labels?.length ?? 0) < labels.length)
+  })
 
   test('a filter written into the state reads back the same through a real route', () => {
     const filter: WorkFilter = {
@@ -208,12 +315,18 @@ describe('the route state', () => {
   test.prop([
     fc.uniqueArray(fc.string({ minLength: 1, maxLength: 64 }), { maxLength: 6 }),
     fc.string({ maxLength: 40 }),
-  ])('any labels and text the state can hold come back as they went in', (labels, text) => {
-    const filter: WorkFilter = { text, ...(labels.length ? { labels } : {}) }
+    fc.boolean(),
+  ])('any labels and text the state can hold come back as they went in', (labels, text, any) => {
+    const filter: WorkFilter = {
+      text,
+      ...(labels.length ? { labels } : {}),
+      ...(any ? { labelsMatch: 'any' as const } : {}),
+    }
     const { complete, state } = writeWorkFilter(undefined, filter, 4096)
     if (!complete) return
     const read = readWorkFilter(route(state))
     assert.deepEqual(read.labels ?? [], labels)
+    assert.equal(read.labelsMatch, any ? 'any' : undefined)
     assert.equal(read.text, text.trim() ? text : '')
   })
 

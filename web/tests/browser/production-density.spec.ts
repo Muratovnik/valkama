@@ -210,7 +210,6 @@ const allOneRow = async (page: Page) =>
       '.workspace-grouping',
       'input[role="combobox"]',
       '.filter-preset',
-      '.filter-trigger',
       '.workspace-action',
     ].map((selector) => {
       const box = row.querySelector(selector)?.getBoundingClientRect()
@@ -256,7 +255,7 @@ test('the grouping is the control its neighbours are, and reads as how the view 
 const barControls = (page: Page) =>
   page
     .locator(
-      '.workspace-view-segments, .workspace-view-menu, .workspace-grouping, .filter-box, .filter-preset, .filter-trigger, .workspace-action',
+      '.workspace-view-segments, .workspace-view-menu, .workspace-grouping, .filter-box, .filter-preset, .workspace-action',
     )
     .evaluateAll((controls) =>
       controls
@@ -295,8 +294,7 @@ for (const width of [1680, 1440, 1260, 1024, 996, 960, 900, 760, 700, 390]) {
   })
 }
 
-// What a preset's press itself does. The filter turning on still gives «Filter» its
-// count, as any way of turning it on does.
+// What a preset's press itself does.
 test('a press on a preset does not change its size, and is more than a tone', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
