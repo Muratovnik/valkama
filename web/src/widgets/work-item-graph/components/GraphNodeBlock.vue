@@ -34,7 +34,7 @@ const {
   still?: boolean
 }>()
 
-/** Only a turn running moves, and only while the field's motion runs. */
+/** Only work an agent is seen on moves, and only while the field's motion runs. */
 const resting = computed(() => still || live?.state !== 'working')
 </script>
 

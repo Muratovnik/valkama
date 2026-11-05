@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
  * What an agent's session behind a card is doing now: the product's three
- * working dots and a word. The dots pulse only for a turn running while the
- * field's motion runs; an item the session holds while its turn is about other
- * work, a session that waits and one fallen silent hold them still, and so
- * does a paused field. The word carries the state, so no colour
- * has to.
+ * working dots and a word. The dots pulse only for an item an agent is seen
+ * working on while the field's motion runs; an item the session holds while it is
+ * about other work, a session that waits and one fallen silent hold them still, and
+ * so does a paused field. The word carries the state, so no colour has to.
  */
 import { computed } from 'vue'
 

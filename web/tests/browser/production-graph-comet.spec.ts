@@ -85,6 +85,62 @@ test('a comet has one length and one speed on lines of different lengths', async
   expect(Math.max(...speeds) - Math.min(...speeds)).toBeLessThan(1)
 })
 
+/** The camera's zoom, and how wide the browser draws a comet's stroke on screen. */
+const onScreen = (page: Page) =>
+  page.evaluate(() => {
+    const view = document.querySelector<HTMLElement>('.vue-flow__transformationpane')
+    const zoom = Number(/scale\(([\d.]+)\)/u.exec(view?.style.transform ?? '')?.[1])
+    const comet = document.querySelector('.graph-comet')
+    if (!comet) throw new Error('a comet is drawn')
+    return { zoom, width: Number.parseFloat(getComputedStyle(comet).strokeWidth) * zoom }
+  })
+
+test('zoomed out, a comet shrinks along its line with the field and stays visible', async ({
+  page,
+}) => {
+  await serveWorking(page)
+  await opened(page)
+  const [before] = await comets(page)
+  const near = await onScreen(page)
+  expect(near.width / near.zoom).toBeCloseTo(2.4, 1)
+  await page.mouse.move(750, 500)
+  await page.keyboard.down('Control')
+  for (let step = 0; step < 12; step += 1) await page.mouse.wheel(0, 240)
+  await page.keyboard.up('Control')
+  await expect
+    .poll(async () => {
+      const { zoom } = await onScreen(page)
+      return zoom
+    })
+    .toBeLessThan(near.zoom / 4)
+  const [after] = await comets(page)
+  expect(after.dash).toBe(before.dash)
+  expect(after.seconds).toBe(before.seconds)
+  const far = await onScreen(page)
+  expect(far.width).toBeCloseTo(1.5, 1)
+})
+
+test('a card with work on it pulses and its lines run; one with no lines pulses alone', async ({
+  page,
+}) => {
+  await serveWorking(page)
+  await opened(page)
+  const cards = page.locator('.flow-node-card').filter({
+    has: page.locator('.graph-live[data-live="working"]'),
+  })
+  await expect(cards.first()).toContainText('working')
+  const dots = await cards
+    .first()
+    .locator('.work-dots i')
+    .first()
+    .evaluate((dot) => dot.getAnimations().length)
+  expect(dots).toBeGreaterThan(0)
+  const kinds = await page
+    .locator('.vue-flow__edge:has(.graph-comet)')
+    .evaluateAll((edges) => edges.map((edge) => edge.classList.contains('blocks')))
+  expect(new Set(kinds)).toEqual(new Set([true, false]))
+})
+
 test('a comet enters at the start, leaves into the arrow, and begins again unseen', async ({
   page,
 }) => {

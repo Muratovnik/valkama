@@ -3,9 +3,11 @@
  * `reduced` because the system asked for less motion.
  *
  * Only an item an agent is working on right now moves: one its running turn
- * wrote to, or one a step of its subagent holds. The session's other items
- * stand still «held», a session that finished its turn and waits for a person
- * stands still with the word «waiting», and one silent for a day stands still
+ * wrote to, or one a live subagent of its session wrote to, holds a step of or
+ * was launched to work on by its number. The session's other items stand still
+ * «held», while it has a turn running or a subagent alive; a session that
+ * finished its turn and waits for a person, with no subagent alive, stands still
+ * with the word «waiting», and one silent for a day stands still
  * with the time it fell silent: motion that also meant holding or idling would
  * stop telling work from waiting.
  *
@@ -34,7 +36,7 @@ const STORAGE_KEY = 'valkama-graph-motion'
  */
 const QUIET_DAY = { month: 'short', day: '2-digit' } as const
 
-/** Whether an item's live work is the kind that moves: worked on in a turn running now. */
+/** Whether an item's live work is the kind that moves: an agent is seen working on it now. */
 export function movesOn(live: LiveWork | undefined): boolean {
   return live?.state === 'working'
 }

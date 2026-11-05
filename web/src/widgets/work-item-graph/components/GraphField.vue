@@ -107,6 +107,9 @@ const emit = defineEmits<{
 
 <style scoped>
 .graph-flow {
+  /* The camera says how much a comet's stroke grows against a field zoomed far out. */
+  --graph-comet-stroke-scale: 1;
+
   width: 100%;
   height: 100%;
   min-height: 360px;

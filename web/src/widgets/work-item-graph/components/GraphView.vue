@@ -154,7 +154,7 @@ const cardAt = (id: string) => [cardById.value.get(id)].filter((node) => node !=
 const frameAt = (id: string) => [frameById.value.get(id)].filter((frame) => frame !== undefined)
 
 /**
- * The items whose live work moves: worked on in a turn running now. A line runs when one
+ * The items whose live work moves: an agent is seen working on them now. A line runs when one
  * of its links reaches one, and a frame counts those under it. It stays the whole space's
  * set: a drawn line folded onto a frame reaches items no card shows.
  */
@@ -207,21 +207,30 @@ function chipFor(node: PlacedNode): string | undefined {
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
-const { anchorId, far, fitted, fitOptions, holdFrame, overview, onFlowInit, reveal } =
-  useGraphCamera({
-    branch: () => branchFrame.value,
-    flowId: GRAPH_FLOW_ID,
-    placed,
-    rootId: () => (inChain.value ? props.epicId : null),
-    selectedId: () => props.selectedId ?? null,
-    scopes: [
-      () => props.space,
-      () => props.scopeKind,
-      () => props.epicId,
-      () => props.branch?.reference,
-    ],
-    narrowings: [() => props.filter, showDone],
-  })
+const {
+  anchorId,
+  cometStrokeScale,
+  far,
+  fitted,
+  fitOptions,
+  holdFrame,
+  overview,
+  onFlowInit,
+  reveal,
+} = useGraphCamera({
+  branch: () => branchFrame.value,
+  flowId: GRAPH_FLOW_ID,
+  placed,
+  rootId: () => (inChain.value ? props.epicId : null),
+  selectedId: () => props.selectedId ?? null,
+  scopes: [
+    () => props.space,
+    () => props.scopeKind,
+    () => props.epicId,
+    () => props.branch?.reference,
+  ],
+  narrowings: [() => props.filter, showDone],
+})
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
 const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
@@ -407,6 +416,7 @@ function onFieldPointerLeave() {
         :edges="flowEdges"
         :settled="fitted"
         :motion="motion"
+        :style="{ '--graph-comet-stroke-scale': cometStrokeScale }"
         @init="onFlowInit"
         @node-enter="onNodeEnter"
         @node-leave="onNodeLeave"

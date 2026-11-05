@@ -49,6 +49,14 @@ const OVERVIEW_ZOOM = 0.5
 const FAR_ZOOM = 0.25
 
 /**
+ * Below this zoom a comet's stroke would thin under a pixel and a half on screen, and the
+ * work on a line would stop showing with no sign that it had. The field's lines may fade
+ * out there and it may not, so the stroke keeps that width while the dash shrinks with
+ * the field, which leaves a dot moving along the line at the farthest zoom.
+ */
+const COMET_STROKE_HOLDS_ZOOM = 0.625
+
+/**
  * The last camera a field stood at, and the scope it stood on. Module-level on
  * purpose: one field is drawn at a time, and it unmounts whenever the operator
  * switches to the board or the list, which would otherwise forget the camera
@@ -182,8 +190,13 @@ export function useGraphCamera(input: CameraInput) {
   /** Zoomed out past reading: cards are blocks and headers bands, their folds hidden. */
   const overview = computed(() => (viewport?.value.zoom ?? 1) < OVERVIEW_ZOOM)
   const far = computed(() => (viewport?.value.zoom ?? 1) < FAR_ZOOM)
+  /** Unchanged above the zoom that matters, so zooming there restyles nothing. */
+  const cometStrokeScale = computed(() =>
+    Math.max(1, COMET_STROKE_HOLDS_ZOOM / (viewport?.value.zoom ?? 1)),
+  )
 
   return {
+    cometStrokeScale,
     fitted,
     /**
      * The target the keyboard enters the field on: once the camera is placed,

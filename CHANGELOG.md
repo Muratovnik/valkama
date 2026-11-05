@@ -171,6 +171,9 @@ checkouts are therefore distinguishable even at the same version.
 - **The moving mark on a graph line has one length and one speed.** It used to be a share of
   the line, so long lines carried long, fast marks and short lines tiny slow ones. A very long
   line now carries the next mark on the way instead of hurrying one.
+- **The moving mark stays visible on a graph zoomed far out.** Its stroke used to thin below
+  a pixel with the lines it runs on; it now keeps a pixel and a half while its length shrinks
+  with the field.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

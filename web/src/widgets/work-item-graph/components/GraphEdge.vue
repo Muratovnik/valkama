@@ -11,7 +11,8 @@
  * which would run over the whole line and say «context» with the dash this field
  * already spends on it. Paused or under reduced motion there is no comet at all —
  * a frozen one would be a dot stuck at the arrow — and the line itself is held
- * wider instead.
+ * wider instead. Zoomed far out its stroke stops thinning (`--graph-comet-stroke-scale`,
+ * which the camera declares), so it never fades out with the lines it runs on.
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
 
@@ -81,7 +82,7 @@ const cometStyle = computed(() => {
   stroke: var(--color-info);
   stroke-dasharray: var(--comet-dash);
   stroke-linecap: round;
-  stroke-width: 2.4;
+  stroke-width: calc(2.4px * var(--graph-comet-stroke-scale, 1));
   animation: graph-comet var(--comet-pass) linear infinite;
   pointer-events: none;
 }
