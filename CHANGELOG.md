@@ -21,6 +21,12 @@ checkouts are therefore distinguishable even at the same version.
   command text is kept, and existing transcripts are read too. The cost is an estimate, not
   a bill. A background command counts as work for three hours from its start at most, so a
   server left running is not read as a script someone waited for.
+- **A card says how much work its item took.** A quiet line under the card's facts gives
+  the working time, the estimated cost at API prices and the tokens processed anew; an epic's
+  line takes in its items, and each item of its chain shows its share. The «Agents» tab
+  shows the whole with what each number means, the tokens by kind and by model, each
+  agent's share, the session's own run, and each session's total with what it did for no
+  task. Estimates, missing prices and missing data are said as such, never as zero.
 - **Task types have colours, and you can change them.** A type's icon and word are now
   purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
   task, on the board, in the list, on the card, in search, on the hover card, on the
