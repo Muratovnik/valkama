@@ -228,6 +228,13 @@ const updated = computed(() => {
   align-items: center;
 }
 
+/* A bare date is a text box of its own, trimmed to the letters as the state's label is, so the
+   plan anchor's icon centres on the same middle as the reference beside it. */
+.identity-updated {
+  display: block;
+  text-box: trim-both ex alphabetic;
+}
+
 .identity-fact + .identity-fact::before {
   content: '·';
   margin-inline-end: var(--space-2);

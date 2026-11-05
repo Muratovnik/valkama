@@ -50,9 +50,12 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
 
 /* The word takes the tone with the dot, unless the host says otherwise through
    `--color-state-label`: on a ground lighter than the ladder's, a tone that reads
-   as a dot is too dark for words, and the dot alone keeps saying it. */
+   as a dot is too dark for words, and the dot alone keeps saying it. Its box is trimmed to
+   the letters (`text-box`), so the dot centres on their middle rather than on the em box,
+   which stood about a pixel high. */
 .state-label {
   color: var(--color-state-label, currentcolor);
+  text-box: trim-both ex alphabetic;
 }
 
 /* The badge variant keeps a ground so a state can sit in a dense column, but

@@ -131,6 +131,12 @@
   .facet-mark[data-active] & {
     color: var(--color-text);
   }
+
+  /* On a card the word stands on its letters, which the glyphs and dots beside it centre on (see
+     SemanticState). Other surfaces keep the box they had. */
+  .facet-marks[data-surface='card'] & {
+    text-box: trim-both ex alphabetic;
+  }
 }
 
 /* One line, whatever the room: the run does not wrap, and inside a mark the

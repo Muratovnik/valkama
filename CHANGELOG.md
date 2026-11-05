@@ -72,6 +72,10 @@ checkouts are therefore distinguishable even at the same version.
 - **The head's one action is bare text.** «Взять», «Забрать себе» and «Отпустить» carry no
   fill until the pointer is on them. A claim keeps the text ink and a takeover or a release
   reads in the quieter one, so the claim still comes first.
+- **The identity line over a card's title and its state button align on their letters.** The
+  texts of each line share one baseline, and the dot, the chevron and the icons stand on the
+  middle of the lowercase letters beside them. A monospaced reference no longer sits a pixel
+  above its neighbours.
 - **«Что дальше» on a card is now «Следующий шаг · 3 из 9».** A quiet line says it is a step
   and where it stands in the list, the step's words follow it, and «Все шаги» goes to the
   checklist with focus on it. The only step has neither the count nor the way to itself.
