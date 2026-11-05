@@ -205,6 +205,8 @@ test('a line that holds a reference is as tall as a line of plain text', async (
   })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  // The panel slides in from past the screen's edge, where a hit test finds nothing.
+  await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
   const entry = page.locator('.drawer .thread-entry').filter({ hasText: 'Plain line one' })
   // The first paragraph holds the reference in its second of three lines; the
   // second is three lines of plain text, the control.
