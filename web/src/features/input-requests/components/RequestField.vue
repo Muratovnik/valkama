@@ -336,12 +336,13 @@ defineExpose({ focus })
   font: var(--font-field-label);
 }
 
-/* Sized by the type and centred on the first line by its height, however the label wraps. */
+/* Sized by the type and centred on the first line by its height, however the label wraps. Its
+   margin is the step to the words, which the row's column has only where a control stands. */
 .request-option-input {
-  flex: none;
   inline-size: var(--font-size-interface);
   block-size: var(--font-size-interface);
-  margin: 0;
+  margin-block: 0;
+  margin-inline: 0 var(--space-2);
   font: inherit;
   translate: 0 calc((1lh - var(--font-size-interface)) / 2);
 }

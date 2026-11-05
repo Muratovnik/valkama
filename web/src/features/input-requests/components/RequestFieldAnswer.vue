@@ -2,7 +2,8 @@
 /**
  * One field of an answered question: everything it offered, with what was chosen set apart,
  * so the answer can be read against what it was chosen from. The rows are the form's own
- * (`RequestOption`), folded by the same press, with no control in them.
+ * (`RequestOption`), folded by the same press, with no control in them and no room kept for
+ * one: their words start at the row's inset, on what was chosen and on what was passed over.
  *
  * The list is a list and not disabled radios, which a screen reader cannot walk with arrows.
  * Colour is not what says which was chosen: the row says it in a word, which is also what is
@@ -23,7 +24,6 @@ import { descriptionViews } from '@/features/input-requests/utils/optionDescript
 
 import type { InputAnswers, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import RichText from '@/shared/ui/RichText.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   /** Set off by its words alone, where the question has this one text field to read. */
@@ -104,15 +104,7 @@ function toggle(option: string) {
             :option="option"
             :view="viewOf(option.id)"
             @update:open="toggle(option.id)"
-          >
-            <span class="request-answer-mark">
-              <VIcon
-                v-if="isChosen(option.id)"
-                name="check"
-                :size="14"
-              />
-            </span>
-          </RequestOption>
+          />
         </li>
         <li v-if="own">
           <RequestOption
@@ -120,12 +112,6 @@ function toggle(option: string) {
             :option="ownOption"
             chosen
           >
-            <span class="request-answer-mark">
-              <VIcon
-                name="check"
-                :size="14"
-              />
-            </span>
             <template #below>
               <RichText :source="own" />
             </template>
@@ -175,16 +161,6 @@ function toggle(option: string) {
   padding: 0;
   margin: 0;
   list-style: none;
-}
-
-/* In the room a form's control takes, so the rows read the same with it gone. */
-.request-answer-mark {
-  display: inline-flex;
-  flex: none;
-  justify-content: center;
-  align-items: center;
-  inline-size: var(--font-size-interface);
-  block-size: 1lh;
 }
 
 .request-answer-none {

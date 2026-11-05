@@ -7,6 +7,11 @@
  * all of it is one press, up to its toggle and to what the toggle opened, which stand
  * outside the label because they are pressed for themselves. Answered, there is no control
  * and no press: only the toggle is left (`pressable` false).
+ *
+ * One column holds the words, and what the toggle opened and what the host puts under the row
+ * stand in that same column, so nothing has to work out where the words are. A control takes
+ * the column before it, which has no width where there is no control. The column ends where
+ * the excerpt ends, short of the toggle, so opening only adds lines to what was being read.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -68,6 +73,7 @@ const describedBy = computed(() => {
         :described-by="describedBy"
       />
       <RequestOptionText
+        class="request-option-words"
         :chosen="chosen"
         :description-id="descriptionId"
         :label-id="labelId"
@@ -114,8 +120,7 @@ const describedBy = computed(() => {
 /* A row is all one press, up to its toggle and to what the toggle opened. */
 .request-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--space-2);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   min-width: 0;
   background: var(--color-control-surface);
@@ -136,9 +141,10 @@ const describedBy = computed(() => {
 }
 
 .request-option-line {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / 3;
+  align-items: start;
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   font: var(--font-editor);
@@ -148,20 +154,26 @@ const describedBy = computed(() => {
   }
 }
 
+.request-option-words {
+  grid-column: 2;
+}
+
 .request-option-toggle {
   margin-block-start: var(--space-half);
-  margin-inline-end: var(--space-half);
+  margin-inline: var(--space-2) var(--space-half);
 
   &[aria-expanded='true'] .request-option-glyph {
     rotate: 180deg;
   }
 }
 
-/* Under the row's text, at the same inset, across the room the toggle stood in. */
+/* In the words' column, and over the row's lower inset up to the step between the row's own
+   lines: the first line of what opened stands where the excerpt's did. The row's inset is
+   under it instead, and the press on the row stays whole while the row is closed. */
 :is(.request-option-detail, .request-option-below) {
-  grid-column: 1 / -1;
-  padding: 0 var(--space-3) var(--space-3)
-    calc(var(--space-3) + var(--space-2) + var(--font-size-interface));
+  grid-column: 2;
+  padding: 0 var(--space-3) var(--space-2) 0;
+  margin-block-start: calc(var(--space-half) - var(--space-2));
 }
 
 .request-option-detail {

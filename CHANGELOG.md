@@ -117,6 +117,13 @@ checkouts are therefore distinguishable even at the same version.
   tile, the next click on any tile was lost, and so was Enter on one. A click right after a
   drop is no longer taken for the drop, and the release itself still opens nothing. A press
   with a hand's small shake in it is now a click rather than a drag of a pixel or two.
+### Fixed
+
+- **An answered question keeps no empty room before its options.** Their words start at the
+  row's inset, the same with a selection and without one. The selected option is told by its
+  ground and the word «selected», so the tick beside it is gone.
+- **Opening an option's description only adds lines under it.** In the form and in an answered
+  question its first line stays where the excerpt stood, at the same width and in the same type.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
