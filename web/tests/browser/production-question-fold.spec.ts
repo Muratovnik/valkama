@@ -80,7 +80,7 @@ test('the card says "you" only of a write this interface made, whatever the writ
   ).toContainText('user')
 })
 
-test('an option label stays the text it was in the form, while written words are markdown', async ({
+test('an option label is inline markdown as written words are, and never a block', async ({
   page,
 }) => {
   const label = '**stars** and _under_ a_b_c `code`'
@@ -105,15 +105,18 @@ test('an option label stays the text it was in the form, while written words are
     }),
   ])
   const one = card.filter({ hasText: 'One field' }).locator('.request-reply')
-  await expect(one.locator('.request-option')).toContainText(label)
-  await expect(one.locator('.request-option').locator('strong, code')).toHaveCount(0)
-  await expect(one.locator('em')).toHaveText('note')
+  // A label an agent writes with code in it reads as code, as a description does.
+  await expect(one.locator('.request-option')).toContainText('stars and under a_b_c code')
+  await expect(one.locator('.request-option strong')).toHaveText('stars')
+  await expect(one.locator('.request-option em')).toHaveText('under')
+  await expect(one.locator('.request-option code')).toHaveText('code')
+  await expect(one.locator('.request-reply-note em')).toHaveText('note')
   const several = card.filter({ hasText: 'Several fields' }).locator('.request-reply')
   const chosen = several.locator('.request-option.is-chosen')
   await expect(chosen.nth(0)).toContainText('1. not a list')
   await expect(several.locator('ol')).toHaveCount(0)
-  await expect(chosen.nth(1)).toContainText('**a**')
-  await expect(chosen.nth(2)).toContainText('_b_')
+  await expect(chosen.nth(1).locator('strong')).toHaveText('a')
+  await expect(chosen.nth(2).locator('em')).toHaveText('b')
   await expect(chosen.nth(3)).toContainText('Yes')
   await expect(several.locator('.request-answer').last().locator('strong')).toHaveText('v2')
 })
