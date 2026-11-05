@@ -65,6 +65,12 @@ def lifecycle(
     return record
 
 
+def numbered_uid(round_: int, step: int) -> str:
+    """An event's own id in a test that delivers several rounds of events to one store."""
+
+    return f"00000000-0000-4000-8{round_:03x}-{step:012x}"
+
+
 class StoreCase(unittest.TestCase):
     """A throwaway store at the current schema, and the spool beside it."""
 
@@ -371,6 +377,94 @@ class IngestTests(StoreCase):
         row = self.session()
         assert row is not None
         self.assertEqual("blocked", row["attention"])
+
+    def test_a_compaction_leaves_what_the_session_waits_for(self) -> None:
+        # Nothing reached the person: the turn is still over, and it still waits for them.
+        for round_, (event, attention) in enumerate(
+            (("stop", "waiting"), ("notification", "blocked"))
+        ):
+            with self.subTest(event=event):
+                session = f"waits-{event}"
+                self.write(
+                    lifecycle(
+                        event="session-start",
+                        session_id=session,
+                        uid=numbered_uid(round_, 0),
+                        source="startup",
+                    ),
+                    lifecycle(
+                        event=event,
+                        session_id=session,
+                        uid=numbered_uid(round_, 1),
+                        at="2026-10-31T10:01:00.000Z",
+                    ),
+                )
+                self.conn.execute("UPDATE sessions SET attention_seen = 1 WHERE id = ?", (session,))
+                self.conn.commit()
+                self.write(
+                    lifecycle(
+                        event="session-start",
+                        session_id=session,
+                        uid=numbered_uid(round_, 2),
+                        at="2026-10-31T10:02:00.000Z",
+                        source="compact",
+                    )
+                )
+                row = self.session(session)
+                assert row is not None
+                self.assertEqual(
+                    ("active", attention, 1),
+                    (row["status"], row["attention"], row["attention_seen"]),
+                )
+
+    def test_a_prompt_after_a_compaction_ends_the_wait(self) -> None:
+        self.write(
+            lifecycle(event="stop", uid=UID_A, at="2026-10-31T10:01:00.000Z"),
+            lifecycle(
+                event="session-start", uid=UID_B, at="2026-10-31T10:02:00.000Z", source="compact"
+            ),
+            lifecycle(event="user-prompt-submit", uid=UID_C, at="2026-10-31T10:03:00.000Z"),
+        )
+        row = self.session()
+        assert row is not None
+        self.assertEqual("", row["attention"])
+
+    def test_a_real_start_clears_what_the_session_waited_for(self) -> None:
+        for round_, source in enumerate(("startup", "resume", "clear", "fork", None)):
+            with self.subTest(source=source):
+                session = f"starts-{source}"
+                named = {} if source is None else {"source": source}
+                self.write(
+                    lifecycle(
+                        event="stop",
+                        session_id=session,
+                        uid=numbered_uid(round_, 0),
+                        at="2026-10-31T10:01:00.000Z",
+                    ),
+                    lifecycle(
+                        event="session-start",
+                        session_id=session,
+                        uid=numbered_uid(round_, 1),
+                        at="2026-10-31T10:02:00.000Z",
+                        **named,
+                    ),
+                )
+                row = self.session(session)
+                assert row is not None
+                self.assertEqual("", row["attention"])
+
+    def test_a_compaction_still_brings_an_ended_session_back(self) -> None:
+        # The client that compacts is running, whatever the row last heard, and an ended
+        # session's own mark says nothing of a person being waited for.
+        self.write(
+            lifecycle(event="session-end", uid=UID_A, at="2026-10-31T10:01:00.000Z"),
+            lifecycle(
+                event="session-start", uid=UID_B, at="2026-10-31T10:02:00.000Z", source="compact"
+            ),
+        )
+        row = self.session()
+        assert row is not None
+        self.assertEqual(("active", "", None), (row["status"], row["attention"], row["ended_at"]))
 
     def test_the_same_event_twice_is_one_row_and_one_transition(self) -> None:
         start = lifecycle(event="session-start", at="2026-10-31T10:00:00.000Z")

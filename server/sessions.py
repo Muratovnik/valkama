@@ -447,9 +447,15 @@ def resume(conn: sqlite3.Connection, session_id: str, *, at: str) -> bool:
 #: What a lifecycle transition does to a session row. A terminal status stays
 #: until an explicit start: a late end, turn or notification cannot downgrade a
 #: `failed` session or bring an ended one back, and only a live session can be
-#: waiting or blocked.
+#: waiting or blocked. A compaction (`COMPACTED_START`) shows the client is running,
+#: and it answers nothing: what a live session waits for from a person still stands.
 _TRANSITIONS = {
     "start": "status = 'active', ended_at = NULL, attention = '', attention_seen = 0, client = ?",
+    "compacted": (
+        "attention = CASE WHEN status = 'active' THEN attention ELSE '' END,"
+        " attention_seen = CASE WHEN status = 'active' THEN attention_seen ELSE 0 END,"
+        " status = 'active', ended_at = NULL, client = ?"
+    ),
     "end": (
         "ended_at = CASE WHEN status = 'failed' THEN ended_at ELSE ? END,"
         " attention = CASE WHEN status = 'failed' THEN 'failed' ELSE 'ended' END,"
@@ -479,7 +485,7 @@ def transition(
 
     if name not in _TRANSITIONS:
         raise ValueError(f"unknown session transition {name!r}")
-    if name == "start":
+    if name in ("start", "compacted"):
         parameters: tuple[str, ...] = (client,)
     elif name == "end":
         parameters = (_second(at),)

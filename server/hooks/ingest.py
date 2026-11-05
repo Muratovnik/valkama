@@ -52,7 +52,7 @@ _SUBAGENT_KINDS = frozenset({"subagent_start", "subagent_stop"})
 #: documentation: a compaction, and `/clear` in the same process. `cwd` then says where
 #: the shell has got to. `startup`, `resume` and `fork` are starts of a process or of a
 #: new session, whose `cwd` is where that happened.
-_SAME_RUN_SOURCES = frozenset({"compact", "clear"})
+_SAME_RUN_SOURCES = frozenset({sessions.COMPACTED_START, "clear"})
 
 
 class UnwritableError(Exception):
@@ -199,6 +199,8 @@ def _apply_to_sessions(conn: sqlite3.Connection, event: HookEvent) -> None:
     elif event.kind in _SUBAGENT_KINDS:
         return  # a subagent event that names no subagent says nothing about the parent's state
     name = _TRANSITIONS.get(event.kind)
+    if event.kind == "session_start" and event.source == sessions.COMPACTED_START:
+        name = "compacted"
     if name is not None and current:
         sessions.transition(conn, target, name, at=event.occurred_at, client=event.client)
 

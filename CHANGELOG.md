@@ -84,6 +84,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A compacted context no longer hides that a session is waiting for you.** A session that
+  had finished its turn or asked for attention lost that mark when its context was compacted
+  while idle. The mark now stays until you answer.
 - **A click on a notification about a question goes to the question.** It used to open
   the card at its top and leave the question to be found further down. The card now
   brings the waiting question into view with the keyboard on its first field, however it
