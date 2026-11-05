@@ -1,3 +1,5 @@
+import { posix } from 'node:path'
+
 /**
  * The component boundary rule: which files may leave their own component.
  *
@@ -55,10 +57,32 @@ function escapeKinds(source) {
   return [...kinds].join(' and ')
 }
 
+/**
+ * Stylesheets a component scopes to itself with `<style scoped src>`.
+ *
+ * Such a file is the component's own block kept beside it, so a reach written
+ * there is the component's reach. Every other `.css` file is global: there is
+ * no scope for `:deep()` to escape, and the rules that own those files read it.
+ */
+function scopedSheets(sources) {
+  const sheets = new Set()
+  for (const { file, source } of sources) {
+    if (!file.endsWith('.vue')) continue
+    const directory = posix.dirname(file)
+    for (const tag of source.matchAll(/<style\b[^>]*>/g)) {
+      const src = /\bsrc="([^"]+)"/.exec(tag[0])
+      if (src && /\bscoped\b/.test(tag[0])) sheets.add(posix.join(directory, src[1]))
+    }
+  }
+  return sheets
+}
+
 export function scanScopeEscapes(sources) {
   const violations = []
+  const sheets = scopedSheets(sources)
   for (const { file, source } of sources) {
-    if (!file.endsWith('.vue') || scopeEscapeOwners.has(file)) continue
+    const scoped = file.endsWith('.vue') || sheets.has(file)
+    if (!scoped || scopeEscapeOwners.has(file)) continue
     if (!hasScopeEscape(source)) continue
     violations.push(
       `${file}: ${escapeKinds(source)} styles an element this component does not render; ` +

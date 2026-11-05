@@ -87,6 +87,20 @@ test('the declared owners are files that still exist and still reach', () => {
 test('a stylesheet outside a component is not the subject', () => {
   // `:deep()` in a plain `.css` file is meaningless rather than dangerous: there
   // is no scope for it to escape. The rule reads `.vue` and leaves the global
-  // stylesheets to the rules that own them.
+  // stylesheets to the rules that own them; only a sheet a component scopes is read.
   assert.deepEqual(scanScopeEscapes([{ file: 'app/styles/shell.css', source: ':deep(.a) {}' }]), [])
+})
+
+test('a stylesheet a component scopes to itself is held to the same list', () => {
+  // `<style scoped src>` makes the file the component's own block, so the hatch is the same reach.
+  const sheet = { file: 'future/parts/host.css', source: '.a :deep(.b) { color: red; }' }
+  const scoped = {
+    file: 'future/Host.vue',
+    source: '<style scoped src="./parts/host.css"></style>',
+  }
+  const found = scanScopeEscapes([scoped, sheet])
+  assert.equal(found.length, 1)
+  assert.match(found[0] ?? '', /^future\/parts\/host\.css: :deep\(\) styles/)
+  const global = { file: 'future/Host.vue', source: '<style src="./parts/host.css"></style>' }
+  assert.deepEqual(scanScopeEscapes([global, sheet]), [])
 })
