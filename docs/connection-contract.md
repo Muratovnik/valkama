@@ -700,6 +700,77 @@ them: active members, then members in review, then ready ones, then the rest,
 each group in the order of work. The rows are paged like a list: at most `limit` per answer, 50
 by default and at most 200, with `truncated` and `next_offset`.
 
+### How much work an item took
+
+A server listening for connections reads the clients' transcripts in the background
+into usage rows: how long an agent actually worked, on which item, with which model,
+and what its requests spent. A live item's numbers are about a minute old, and history
+fills in at a second of reading every six. No message or command text is stored.
+
+The time between two neighbouring records of one transcript counts as work, except:
+
+| Left out as | When |
+| --- | --- |
+| `human` | a turn ended and the next thing is a person's prompt; a question to a person, from its call to its answer; a permission request until the call goes on |
+| `subagent` | a coordinator waiting for a subagent, whose own transcript carries that time. A subagent with no transcript of its own leaves it with the coordinator, as work |
+| `external` | after an API error until the next reply, and a wait for the model over 600 s |
+| `gap` | what falls outside the server's liveness intervals, and everything between the last record of a run that fell and the next one |
+
+Waiting for a script counts, including a background command from its start to its
+notice, even when the turn ended meanwhile. A background command that never sends a
+notice counts only up to the end of its turn.
+
+A server ticks once a minute. Ticks no more than 180 s apart make one liveness interval
+in a file beside the store, `<store>.liveness`: a gap in them means the machine was off
+or asleep or no server ran, so no work was observed. Time from before the first tick
+has no such record. It is marked `estimated`, and each gap in it counts for 900 s at most.
+
+Every stretch of work and every token goes to at most one item, by the first of these
+signals that answers:
+
+| Signal | Who | What it means |
+| --- | --- | --- |
+| `next_write` | any | the agent's next write in the same turn names the item |
+| `last_write` | any | the last write in the same turn named it |
+| `earlier_write` | any | a turn with no write: the agent's last write before it named it |
+| `held_step` | subagent | it holds an open step of the item |
+| `packet_number` | subagent | the first item number in its first prompt names the item |
+| `label_number` | subagent | the first item number in its launch description does |
+| `single_hold` | any | the session holds this item and no other |
+
+What none of them places has no item and stands as a line of its own in a session's
+read. A stretch of a turn still running reads under the item the rule gives so far, and
+a later write in that turn moves it there.
+
+`GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|epic`
+reads one item, or with `chain` or `epic` the item with the members
+[its chain](#reading-a-chain-of-work) has in that scope. `GET
+/api/planning/session/usage?session_id=<id>` reads one session with its subagents. Each
+answers with `interface_version` and `usage`:
+
+| Field | What it holds |
+| --- | --- |
+| `elapsed_seconds` | the union of the rows: two agents working one hour side by side on one item took one hour. Between items an overlap is real parallel work, so items may add up to more than their session or epic |
+| `agent_seconds` | the sum of the rows: those two agents spent two hours. This one always adds up |
+| `tokens` | `input`, `cached_read`, `cache_write_5m`, `cache_write_1h`, `output` and `reasoning`, each `null` when no request reported that kind. `input` excludes the cache at both clients. `reasoning` is the part of `output` spent on reasoning. `cache_write_5m` holds a client's shorter cache retention and `cache_write_1h` its longer |
+| `estimated_api_cost_usd` | what the requests would cost at public API prices, per request, since a price depends on a request's size; `null` when no request has a known price |
+| `cost_basis` | what that number is: an estimate, and not a bill, since a subscription pays differently |
+| `unpriced_models` | models that spent tokens and have no known price. They add nothing to the cost, so a cost is as complete as this list says |
+| `agents` | by run: `session_id`, `agent_id` (`null` for the session's own), `seconds`, `tokens`, `estimated_api_cost_usd` |
+| `models` | `model`, `seconds`, `tokens`, `estimated_api_cost_usd`. A model only called on the side has no seconds of its own |
+| `signals` | `signal` (`null` for no item), `seconds` and `share` of the time |
+| `quality` | `observed`, `estimated`, `mixed`, or `null` when no time was counted; `estimated_seconds` says how much |
+| `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
+
+An item's read adds `work_item_id`, `reference`, `title` and `scope`. A session's adds
+`session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and
+`gap` in seconds) and `runs`, one per transcript: `agent_id`, `client`, `status`
+(`reading`, or `missing`, `truncated` or `unreadable` for one that cannot be read now),
+`first_at`, `last_at`, `read_at` and its own `excluded`. For any run, work and
+`excluded` add up to its span. A session not read yet reads empty rather than unknown.
+
+The tools an agent calls do not carry these numbers: they would cost it context.
+
 ### Several changes in one call
 
 `apply_work_item_changes` applies several writes to one item in one call, all or

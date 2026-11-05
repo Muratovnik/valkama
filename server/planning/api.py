@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from .. import query_params
-from . import calls, chain, migration, model, read_model, requests, service, views
+from . import calls, chain, migration, model, read_model, requests, service, usage, views
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
@@ -281,6 +281,24 @@ def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dic
     }
 
 
+def _item_usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """What work on one item took; `scope` `epic` or `chain` takes in what it grew into."""
+
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "usage": usage.for_item(conn, _required(parameters, "id"), _first(parameters, "scope")),
+    }
+
+
+def _session_usage(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """What one session took, by item, with what no item took as a line of its own."""
+
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "usage": usage.for_session(conn, _required(parameters, "session_id")),
+    }
+
+
 def _search(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": PLANNING_API_INTERFACE,
@@ -327,6 +345,8 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     # keys on exact paths and a segment would need a second matching rule.
     "/api/planning/work-item": _work_item,
     "/api/planning/work-item/chain": _chain,
+    "/api/planning/work-item/usage": _item_usage,
+    "/api/planning/session/usage": _session_usage,
     "/api/planning/search": _search,
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,
