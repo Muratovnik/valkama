@@ -8,15 +8,18 @@ import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { useTabIds } from '@/shared/ui/tabIds.ts'
 
-export type InspectorSection = 'activity' | 'execution' | 'memory' | 'overview' | 'relations'
+export type InspectorSection =
+  'activity' | 'agents' | 'execution' | 'memory' | 'overview' | 'relations'
 
 /**
  * Which section of a card is shown, the strip that chooses it, and the body's
  * scroll that follows the choice.
  *
  * Execution exists only for an item of the primary store, and only once the owner
- * has turned its tab on, so the strip offers it only then, and a card that stops
- * offering it steps off it. The setting is read before the card draws anything.
+ * has turned its tab on, and Agents only while the item has any, so the strip offers each
+ * only then, and a card that stops offering one steps off it. The setting is read before the
+ * card draws anything; the agents are not known until the read has answered, which a card
+ * coming back by Back to that tab has to wait for before it can say the tab is gone.
  *
  * A section shows the moment it is chosen, which is what lets the arrows choose as they
  * move: what one reads is read with the card, as its attempts are, and Memory's source
@@ -26,10 +29,13 @@ export function useInspectorSections(
   writable: () => boolean,
   scrollToStart: () => void,
   projectId: () => string,
+  /** How many agents the card's read names; null until it has answered. */
+  agents: () => number | null,
 ) {
   const { t } = useI18n()
   const { settings } = storeToRefs(useSettingsStore())
   const offersExecution = computed(() => writable() && settings.value.executionTab)
+  const agentCount = computed(agents)
   const section = ref<InspectorSection>('overview')
   provideMemorySource(projectId)
 
@@ -39,6 +45,14 @@ export function useInspectorSections(
 
   const sections = computed<ChoiceOption[]>(() => [
     { value: 'overview' as const, label: t('workItem.overview') },
+    ...(agentCount.value
+      ? [
+          {
+            value: 'agents' as const,
+            label: t('workItem.agents.tab', { count: agentCount.value }),
+          },
+        ]
+      : []),
     ...(offersExecution.value
       ? [{ value: 'execution' as const, label: t('workItem.section.execution') }]
       : []),
@@ -47,11 +61,13 @@ export function useInspectorSections(
     { value: 'activity' as const, label: t('workItem.activity') },
   ])
 
-  /** Off Execution once the card no longer offers it. */
+  /** Off a section once the card no longer offers it. */
   function leaveUnoffered() {
-    if (!offersExecution.value && section.value === 'execution') section.value = 'overview'
+    const executionGone = section.value === 'execution' && !offersExecution.value
+    const agentsGone = section.value === 'agents' && agentCount.value === 0
+    if (executionGone || agentsGone) section.value = 'overview'
   }
-  watch(offersExecution, leaveUnoffered)
+  watch([offersExecution, agentCount], leaveUnoffered)
 
   /**
    * The strip's model: any section name it offers, read back as one. A card coming back

@@ -1,9 +1,7 @@
+import type { Executor } from '@/shared/api/executorModel.ts'
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { agoWords, spanWords } from '@/shared/lib/timeSpan.ts'
 import type { SpanWords } from '@/shared/lib/timeSpan.ts'
-
-/** How many rows a folded list shows: a parent can have dozens of agents on one item. */
-export const AGENTS_SHOWN = 3
 
 /** Enough of an agent's id to tell it from its siblings and to find it in a holder. */
 const SHORT_ID = 8
@@ -36,6 +34,37 @@ interface AgentFacts {
   quiet: string
   shortId: string
   started: AgentMoment
+}
+
+interface AgentGroup {
+  agents: WorkItemAgent[]
+  /** What a press on the parent reaches; null where nothing opens it. */
+  executor: Executor | null
+  /** The parent session, as much of it as tells it from its siblings beside its whole id. */
+  session: string
+  shortSession: string
+}
+
+/**
+ * The rows under the parent session each of them opens, in the order the read gives them:
+ * the parent of the newest row first, and the rows of one parent as they came. A row with
+ * no way to a session still stands with its parent, which it names on its own.
+ */
+export function agentsByParent(agents: readonly WorkItemAgent[]): AgentGroup[] {
+  const groups = new Map<string, AgentGroup>()
+  for (const agent of agents) {
+    const session = agent.executor?.session || agent.session_id
+    const group = groups.get(session) ?? {
+      agents: [],
+      executor: null,
+      session,
+      shortSession: session.slice(0, SHORT_ID),
+    }
+    group.agents.push(agent)
+    if (agent.executor?.session) group.executor = agent.executor
+    groups.set(session, group)
+  }
+  return [...groups.values()]
 }
 
 function shortMoment(date: Date, today: Date, words: TimeWords): string {

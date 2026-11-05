@@ -72,6 +72,11 @@ checkouts are therefore distinguishable even at the same version.
 - **«Что дальше» on a card is now «Следующий шаг · 3 из 9».** A quiet line says it is a step
   and where it stands in the list, the step's words follow it, and «Все шаги» goes to the
   checklist with focus on it. The only step has neither the count nor the way to itself.
+- **A card's agents have a tab of their own, «Агенты 44», after «Обзор».** The block no longer
+  stands on the first screen of an open or a closed item, and a card without agents offers
+  no such tab. Every row stands at once, newest first, with no «Показать все», and rows stand
+  under their parent session, whose «Открыть родительскую сессию» stands once at their head
+  instead of in each row.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

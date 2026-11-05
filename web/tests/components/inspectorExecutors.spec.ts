@@ -156,7 +156,7 @@ describe('an agent on the card', () => {
 
   function agents(listed: WorkItemAgent[]) {
     return mount(InspectorAgents, {
-      props: { agents: listed, identity: 'item' },
+      props: { agents: listed },
       global: { plugins: plugins() },
     })
   }

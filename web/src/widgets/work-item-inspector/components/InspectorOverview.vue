@@ -2,7 +2,6 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
 import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
@@ -194,14 +193,6 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
         />
       </p>
     </div>
-    <!-- Who is on the work leads an open item. On a closed one the list is history
-         and stands under the outcome, or it would stand over everything the card
-         is opened for, with no next step above it. -->
-    <InspectorAgents
-      v-if="item.agents?.length && !item.state.is_terminal"
-      :agents="item.agents"
-      :identity="item.work_item_id"
-    />
     <!-- What the item is made of, which its host reads and owns. -->
     <slot name="composition" />
 
@@ -304,11 +295,6 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
     </section>
 
     <InspectorSummary :item="item" />
-    <InspectorAgents
-      v-if="item.agents?.length && item.state.is_terminal"
-      :agents="item.agents"
-      :identity="item.work_item_id"
-    />
     <InspectorDiscussion
       ref="discussion"
       :item="item"

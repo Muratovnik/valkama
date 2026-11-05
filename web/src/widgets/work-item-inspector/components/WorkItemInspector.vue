@@ -35,6 +35,7 @@ import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
+import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorBack from '@/widgets/work-item-inspector/components/InspectorBack.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
@@ -115,11 +116,6 @@ const { t } = useI18n()
 const busy = ref(false)
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
 const facts = ref<InstanceType<typeof InspectorFacts> | null>(null)
-const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections(
-  () => props.writable,
-  () => frame.value?.scrollToContent(),
-  () => props.projectId,
-)
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 /** Whether a question on the card waits for its answer, and what they are; the discussion knows. */
 const questionWaits = ref(false)
@@ -141,6 +137,13 @@ const {
   () => props.reference,
   () => ({ project: props.projectId, resource: props.resourceRef }),
   (failure) => failureText(failure, 'workItem.loadFailed'),
+)
+
+const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections(
+  () => props.writable,
+  () => frame.value?.scrollToContent(),
+  () => props.projectId,
+  () => (pending.value ? null : (item.value?.agents?.length ?? 0)),
 )
 
 async function load() {
@@ -451,6 +454,10 @@ defineExpose({ close, openFrom })
               :writable="writable && !busy"
               @changed="reloaded"
               @open="openFrom"
+            />
+            <InspectorAgents
+              v-else-if="section === 'agents'"
+              :agents="payload.agents ?? []"
             />
             <InspectorExecution
               v-else-if="section === 'execution'"

@@ -87,26 +87,39 @@ async function openCard(
   await page.goto(CARD)
   const holder = page.locator('.drawer .card-holder')
   await expect(holder.locator(missing ? '.open-action-still' : 'button.open-action')).toBeVisible()
-  await page.locator('.drawer .agents-more').click()
   return { lost }
 }
 
-/** What each agent row is: its button's name, or the words that stand instead of one. */
-const agentRows = (page: Page) =>
-  page.locator('.drawer .agents .agent').evaluateAll((rows) =>
-    rows.map((row) => {
-      const button = row.querySelector('button.open-action')
+/** The card's Agents tab, in the language it is open in, and the rows under it. */
+async function showAgents(page: Page) {
+  const tab = page
+    .locator('.drawer .inspector-tabs')
+    .getByRole('tab', { name: /^(?:Agents|Агенты) /u })
+  await tab.click()
+  await expect(page.locator('.drawer .agents')).toBeVisible()
+}
+
+/**
+ * What the head of each parent's rows is: its button's name, or the words that stand instead
+ * of one. Each agent here has a parent of its own, so there is a head for each.
+ */
+const agentHeads = (page: Page) =>
+  page.locator('.drawer .agents .agent-group').evaluateAll((groups) =>
+    groups.map((group) => {
+      const button = group.querySelector('button.open-action')
       return button
         ? button.getAttribute('aria-label')
-        : (row.querySelector('.open-action-still')?.textContent?.trim() ?? '')
+        : (group.querySelector('.open-action-still')?.textContent?.trim() ?? '')
     }),
   )
 
-test('every agent row is called by its action and its parent session’s state', async ({ page }) => {
+test('every parent’s head is called by its action and its session’s state', async ({ page }) => {
   await openCard(page)
+  await showAgents(page)
   await expect(page.locator('.drawer .agents .agent')).toHaveCount(8)
+  await expect(page.locator('.drawer .agents .agent button.open-action')).toHaveCount(0)
   await expect
-    .poll(() => agentRows(page))
+    .poll(() => agentHeads(page))
     .toEqual([
       'Open the parent session in VS Code',
       'Open the parent session in Claude Desktop',
@@ -119,16 +132,20 @@ test('every agent row is called by its action and its parent session’s state',
     ])
 })
 
-test('in Russian an agent row is called by its action too, running or set', async ({ page }) => {
+test('in Russian a parent’s head is called by its action too, running or set', async ({ page }) => {
   await openCard(page, { locale: 'ru' })
+  await showAgents(page)
   await expect
-    .poll(() => agentRows(page))
+    .poll(() => agentHeads(page))
     .toContain('Открыть родительскую сессию — она идёт в терминале: что можно сделать')
-  for (const name of await agentRows(page)) expect(name).not.toMatch(/Сессия Открыть/u)
+  for (const name of await agentHeads(page)) expect(name).not.toMatch(/Сессия Открыть/u)
 })
 
-test('under "always open in" an agent row says the setting chose the place', async ({ page }) => {
+test('under "always open in" a parent’s head says the setting chose the place', async ({
+  page,
+}) => {
   await openCard(page, { locale: 'ru', always: 'cursor' })
+  await showAgents(page)
   await expect(page.locator('.drawer .agents button.open-action').first()).toHaveAttribute(
     'aria-label',
     'Открыть родительскую сессию в Cursor — по настройке',
@@ -139,8 +156,9 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   page,
 }) => {
   const { lost } = await openCard(page)
+  await showAgents(page)
   const head = page.locator('.drawer .card-holder')
-  const firstAgent = page.locator('.drawer .agents .agent').first()
+  const firstAgent = page.locator('.drawer .agents .agent-group').first()
   await expect(firstAgent.locator('button.open-action')).toContainText('VS Code · running')
   lost.add(IN_VSCODE)
 
@@ -154,7 +172,7 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   await expect(firstAgent.locator('.open-action-still')).toContainText('session gone')
   await expect(firstAgent.locator('button.open-action')).toHaveCount(0)
   // Another session's row is left as it was.
-  await expect(page.locator('.drawer .agents .agent').nth(1)).toContainText('Claude Desktop')
+  await expect(page.locator('.drawer .agents .agent-group').nth(1)).toContainText('Claude Desktop')
   // Focus stays on the holder, now on the way to why it opens nothing.
   await expect(head.locator('.open-action-why')).toBeFocused()
   await page.keyboard.press('Enter')
@@ -223,10 +241,12 @@ for (const [locale, agentSpan, silentSpan] of [
 ] as const)
   test(`a span of two units stays on one line at 390px, in ${locale}`, async ({ page }) => {
     await openCard(page, { clock: '2026-08-16T07:30:00Z', locale, width: 390 })
+    await showAgents(page)
     const agent = page.locator('.drawer .agents .agent').first()
     await expect(agent).toContainText(agentSpan)
     expect(await linesOf(agent, agentSpan)).toBe(1)
 
+    await page.locator('.drawer .inspector-tabs').getByRole('tab').first().click()
     await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
     const panel = page.locator('.open-panel')
     await expect(panel).toContainText(silentSpan)
@@ -259,6 +279,7 @@ for (const [locale, said, parent] of [
     page,
   }) => {
     await openCard(page, { locale, missing: 'vscode', width: 1500 })
+    await showAgents(page)
     const drawer = page.locator('.drawer')
     await expect(drawer.getByText(said, { exact: false })).toHaveCount(1)
     // The holder, six agents and five steps whose sessions have not ended for good.
@@ -266,7 +287,7 @@ for (const [locale, said, parent] of [
       drawer.locator(`.open-action-still .open-action-why[aria-label="${said}."]`),
     ).toHaveCount(12)
     // What a session alone is stays said in its row.
-    expect(await agentRows(page)).toEqual([
+    expect(await agentHeads(page)).toEqual([
       parent,
       parent,
       parent,
@@ -280,10 +301,11 @@ for (const [locale, said, parent] of [
 
 /**
  * How far the glyph of each session's why stands from the end of the words before it, or,
- * where those words leave it no room, from the start of the line it begins.
+ * where those words leave it no room, from the start of the line it begins. Only what the
+ * section on show holds: Overview keeps its place in the page while another is up.
  */
 const whyGaps = (page: Page) =>
-  page.locator('.drawer .open-action-still').evaluateAll((all) =>
+  page.locator('.drawer .open-action-still:visible').evaluateAll((all) =>
     all.map((still) => {
       const glyph = still.querySelector('.open-action-why svg')?.getBoundingClientRect()
       const walker = document.createTreeWalker(still, NodeFilter.SHOW_TEXT)
@@ -308,8 +330,13 @@ for (const locale of ['en', 'ru'] as const)
       page,
     }) => {
       await openCard(page, { locale, missing: 'vscode', width })
-      const gaps = await whyGaps(page)
-      expect(gaps.length).toBeGreaterThan(10)
+      const onOverview = await whyGaps(page)
+      await showAgents(page)
+      const onAgents = await whyGaps(page)
+      // The holder and five steps, then the holder again and six parents.
+      expect(onOverview.length).toBeGreaterThan(5)
+      expect(onAgents.length).toBeGreaterThan(5)
+      const gaps = [...onOverview, ...onAgents]
       expect(gaps.filter((gap) => !(gap >= 0 && gap <= 12))).toEqual([])
     })
 

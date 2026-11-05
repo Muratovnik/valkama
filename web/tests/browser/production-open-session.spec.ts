@@ -89,6 +89,8 @@ test('the keyboard reaches the holder, the steps and the agents, in reading orde
   await tabTo(page, head)
   const step = page.locator('.step-holder button.open-action').first()
   await tabTo(page, step)
+  // The agents stand on their own tab, and the keyboard goes on from it into the panel.
+  await page.locator('.drawer .inspector-tabs').getByRole('tab', { name: 'Agents 3' }).click()
   const agents = page.locator('.drawer .agents button.open-action')
   await expect(agents).toHaveCount(2)
   await tabTo(page, agents.first())
@@ -100,6 +102,7 @@ test('a session with one action opens on Enter or Space, and the result is said'
   page,
 }) => {
   await openCard(page)
+  await page.locator('.drawer .inspector-tabs').getByRole('tab', { name: 'Agents 3' }).click()
   const desktop = page.locator('.drawer .agents button.open-action').nth(1)
   await desktop.focus()
   await page.keyboard.press('Enter')
@@ -246,21 +249,26 @@ for (const locale of ['en', 'ru'] as const)
     }
   })
 
+/** Where the words of a target stand, which a button's inset does not move. */
+const wordsOf = (target: Locator) =>
+  target.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    const { left, right } = range.getBoundingClientRect()
+    return { left, right }
+  })
+
 for (const locale of ['en', 'ru'] as const)
   test(`the last holder of finished work stands as far from its label as a holder does, in ${locale}`, async ({
     page,
   }) => {
     await openCard(page, { closed: true, locale })
-    const room = await page.locator('.drawer .card-holder').evaluate((holder) => {
-      const words = (node: Element | null) => {
-        const range = document.createRange()
-        if (node) range.selectNodeContents(node)
-        return range.getBoundingClientRect()
-      }
-      const label = words(holder.querySelector('.card-holder-label'))
-      return words(holder.querySelector('.open-action-name')).left - label.right
-    })
-    expect(room).toBeCloseTo(8, 0)
+    // The drawer has stopped sliding in, so the two readings below share one place.
+    await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
+    const holder = page.locator('.drawer .card-holder')
+    const name = await wordsOf(holder.locator('.open-action-name'))
+    const label = await wordsOf(holder.locator('.card-holder-label'))
+    expect(name.left - label.right).toBeCloseTo(8, 0)
   })
 
 test('the card with its holders passes the accessibility rules, panel open or not', async ({

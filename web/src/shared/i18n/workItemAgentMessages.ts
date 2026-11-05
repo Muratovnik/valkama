@@ -1,7 +1,7 @@
 export const workItemAgentMessages = {
   en: {
     agents: {
-      heading: 'Agents',
+      tab: 'Agents {count}',
       holdsStep: 'Holds step:',
       started: 'Started',
       ended: 'ended',
@@ -12,13 +12,11 @@ export const workItemAgentMessages = {
       linkClaim: "by the coordinator's claim",
       linkAmbiguous:
         'ambiguous: the coordinator held {count} item | ambiguous: the coordinator held {count} items',
-      showAll: 'Show all · {count}',
-      showFewer: 'Show fewer',
     },
   },
   ru: {
     agents: {
-      heading: 'Агенты',
+      tab: 'Агенты {count}',
       holdsStep: 'Держит шаг:',
       started: 'Запущен',
       ended: 'завершён',
@@ -29,8 +27,6 @@ export const workItemAgentMessages = {
       linkClaim: 'по захвату координатора',
       linkAmbiguous:
         'неоднозначно: координатор держал {count}\u{A0}задачу | неоднозначно: координатор держал {count}\u{A0}задачи | неоднозначно: координатор держал {count}\u{A0}задач',
-      showAll: 'Показать все · {count}',
-      showFewer: 'Свернуть',
     },
   },
 }

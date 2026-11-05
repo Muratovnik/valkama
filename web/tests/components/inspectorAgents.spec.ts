@@ -13,7 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import { agentsByParent } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
+import type { Executor } from '@/shared/api/executorModel.ts'
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
@@ -59,7 +61,7 @@ function mountAgents(agents: WorkItemAgent[], locale: 'en' | 'ru' = 'en') {
   return mount(InspectorAgents, {
     attachTo: document.body,
     global: { plugins: [i18n] },
-    props: { agents, identity: 'item' },
+    props: { agents },
   })
 }
 
@@ -200,7 +202,7 @@ describe('a row', () => {
   })
 })
 
-describe('a long list', () => {
+describe('the whole list', () => {
   const many = Array.from({ length: 94 }, (_, index) =>
     agent({ agent_id: `agent-${String(index).padStart(3, '0')}` }),
   )
@@ -209,52 +211,104 @@ describe('a long list', () => {
     document.body.replaceChildren()
   })
 
-  it('shows the first rows in the order given and counts them all', () => {
+  it('shows every row at once, in the order given, with no toggle', () => {
     const wrapper = mountAgents(many)
+    const ids = wrapper.findAll('.agent-source .agent-id').map((id) => id.attributes('title'))
+    expect(ids).toEqual(many.map((row) => row.agent_id))
+    expect(wrapper.findAll('button')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('Show all')
+  })
+
+  it('has no heading of its own, which the tab already is', () => {
+    const wrapper = mountAgents(many.slice(0, 2))
+    expect(wrapper.find('h3').exists()).toBe(false)
+    expect(wrapper.find('.section-header-count').exists()).toBe(false)
+  })
+
+  it('follows a live read, the newest row first', async () => {
+    const wrapper = mountAgents(many.slice(0, 2))
+    await wrapper.setProps({ agents: [agent({ agent_id: 'the-newest' }), ...many.slice(0, 2)] })
     expect(wrapper.findAll('.agent')).toHaveLength(3)
-    expect(wrapper.findAll('.agent-source .agent-id').map((id) => id.text())).toEqual([
-      'agent-00',
-      'agent-00',
-      'agent-00',
+    expect(wrapper.get('.agent-source .agent-id').attributes('title')).toBe('the-newest')
+  })
+})
+
+function executorOf(session: string): Executor {
+  return {
+    session,
+    agent: null,
+    family: 'claude',
+    state: 'live',
+    opened_in: 'ide',
+    opened_host: 'vscode',
+  }
+}
+const NOBODY: Executor = {
+  session: null,
+  agent: null,
+  family: '',
+  state: 'none',
+  opened_in: '',
+  opened_host: '',
+}
+
+const ofParent = (id: string, session: string, executor: Executor | undefined) =>
+  agent({ agent_id: id, session_id: session, executor })
+const names = (groups: ReturnType<typeof agentsByParent>) =>
+  groups.map((group) => group.agents.map((row) => row.agent_id))
+
+describe('rows of one parent', () => {
+  it('stand under the parent of the newest row first, and in the order they came', () => {
+    const groups = agentsByParent([
+      ofParent('a', 'one', executorOf('one')),
+      ofParent('b', 'two', executorOf('two')),
+      ofParent('c', 'one', executorOf('one')),
     ])
-    expect(wrapper.get('.section-header-count').text()).toBe('94')
-    expect(wrapper.get('.agents-more').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.get('.agents-more').text()).toBe('Show all · 94')
+    expect(names(groups)).toEqual([['a', 'c'], ['b']])
+    expect(groups.map((group) => group.session)).toEqual(['one', 'two'])
+    expect(groups[0].executor?.session).toBe('one')
   })
 
-  it('opens onto the first row it revealed and closes back onto the toggle', async () => {
-    const wrapper = mountAgents(many)
-    await wrapper.get('.agents-more').trigger('click')
-    await nextTick()
-    const rows = wrapper.findAll('.agent')
-    expect(rows).toHaveLength(94)
-    expect(document.activeElement).toBe(rows[3].element)
-    expect(wrapper.get('.agents-more').attributes('aria-expanded')).toBe('true')
-    expect(wrapper.get('.agents-more').attributes('aria-controls')).toBe(
-      wrapper.get('.agent-list').attributes('id'),
-    )
-    await wrapper.get('.agents-more').trigger('click')
-    await nextTick()
-    expect(wrapper.findAll('.agent')).toHaveLength(3)
-    expect(document.activeElement).toBe(wrapper.get('.agents-more').element)
+  it('take the session a press reaches, over the one the row was recorded under', () => {
+    const groups = agentsByParent([
+      ofParent('a', 'recorded', executorOf('reached')),
+      ofParent('b', 'reached', executorOf('reached')),
+    ])
+    expect(names(groups)).toEqual([['a', 'b']])
+    expect(groups[0].session).toBe('reached')
   })
 
-  it('stays open through a live read and folds for another item', async () => {
-    const wrapper = mountAgents(many)
-    await wrapper.get('.agents-more').trigger('click')
-    await wrapper.setProps({ agents: [...many] })
-    expect(wrapper.findAll('.agent')).toHaveLength(94)
-    await wrapper.setProps({ identity: 'another' })
-    expect(wrapper.findAll('.agent')).toHaveLength(3)
+  it('with nothing to open still stand together, under no way to it', () => {
+    const groups = agentsByParent([
+      ofParent('a', 'one', NOBODY),
+      ofParent('b', 'one', undefined),
+      ofParent('c', 'two', NOBODY),
+    ])
+    expect(names(groups)).toEqual([['a', 'b'], ['c']])
+    expect(groups.map((group) => group.executor)).toEqual([null, null])
   })
 
-  it('a list one row past the fold stands whole, with no toggle for one row', () => {
-    for (const count of [3, 4]) {
-      const wrapper = mountAgents(many.slice(0, count))
-      expect(wrapper.findAll('.agent')).toHaveLength(count)
-      expect(wrapper.find('.agents-more').exists()).toBe(false)
-    }
-    expect(mountAgents(many.slice(0, 5)).findAll('.agent')).toHaveLength(3)
+  it('a row that can reach the parent gives the way to the rows that cannot', () => {
+    const groups = agentsByParent([
+      ofParent('a', 'one', NOBODY),
+      ofParent('b', 'one', executorOf('one')),
+    ])
+    expect(names(groups)).toEqual([['a', 'b']])
+    expect(groups[0].executor?.session).toBe('one')
+  })
+
+  it('have nothing to tell apart when there is one parent, and say which when there are two', () => {
+    const one = mountAgents([ofParent('a', 'first-session', executorOf('first-session'))])
+    expect(one.find('.agent-group-id').exists()).toBe(false)
+    const two = mountAgents([
+      ofParent('a', 'first-session', executorOf('first-session')),
+      ofParent('b', 'second-session', executorOf('second-session')),
+    ])
+    expect(two.findAll('.agent-group-id').map((id) => id.text())).toEqual(['first-se', 'second-s'])
+    expect(two.findAll('.agent-group-id').map((id) => id.attributes('title'))).toEqual([
+      'first-session',
+      'second-session',
+    ])
   })
 })
 
@@ -271,31 +325,14 @@ function overview(agents: WorkItemAgent[] | undefined, closed = false) {
   })
 }
 
-/** Whether the first thing stands before the second in the card's reading order. */
-function standsBefore(wrapper: ReturnType<typeof overview>, first: string, second: string) {
-  const position = wrapper.get(first).element.compareDocumentPosition(wrapper.get(second).element)
-  return Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING)
-}
-
-describe('on the card', () => {
-  it('has no section without agents', () => {
-    expect(overview(undefined).find('.agents').exists()).toBe(false)
-    expect(overview([]).find('.agents').exists()).toBe(false)
-    expect(overview(undefined).text()).not.toContain('Agents')
-  })
-
-  it('has the section with one', () => {
-    expect(overview([agent()]).get('.agents').text()).toContain('Agents')
-  })
-
-  it('stands over the description of an open item', () => {
-    expect(standsBefore(overview([agent()]), '.agents', '.description-section')).toBe(true)
-  })
-
-  it('stands once, under the outcome, on a closed item', () => {
-    const wrapper = overview([agent()], true)
-    expect(wrapper.findAll('.agents')).toHaveLength(1)
-    expect(standsBefore(wrapper, '.description-section', '.outcome')).toBe(true)
-    expect(standsBefore(wrapper, '.outcome', '.agents')).toBe(true)
+describe('on Overview', () => {
+  it.each([
+    { case: 'an open item', closed: false },
+    { case: 'a closed item', closed: true },
+  ])('says nothing of them on $case', ({ closed }) => {
+    const wrapper = overview([agent()], closed)
+    expect(wrapper.find('.agents').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Check the export')
+    expect(wrapper.text()).not.toContain('Agents')
   })
 })

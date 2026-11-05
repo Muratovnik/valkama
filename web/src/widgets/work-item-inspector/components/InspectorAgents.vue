@@ -11,45 +11,27 @@
  * The link is read out to the reader rather than resolved for them: a coordinator
  * holding several items puts its agent on every one of them, and the row says so.
  *
- * A disclosure as the chain's lists are: the most recent first, the rest behind a
- * toggle that puts focus on the first row it revealed and takes it back on closing,
- * in view each time.
+ * This is what the card's Agents tab shows. The tab names and counts them, so this has no
+ * heading of its own, and every row stands at once, newest first: a parent can leave dozens on
+ * one item, and they are what the tab is opened for. The rows stand under the parent session they all open, whose way
+ * back stands once at their head: in each row it was the same button down the whole list. Two
+ * parents' heads can read alike, so where there are two each says which session it is.
  */
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { agentFacts, AGENTS_SHOWN } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
+import { agentFacts, agentsByParent } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import type { TimeWords } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
 import OpenAction from '@/features/session-open/OpenAction.vue'
 
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
-import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import RichText from '@/shared/ui/RichText.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
-import VButton from '@/shared/ui/VButton.vue'
 
-const props = defineProps<{
-  agents: readonly WorkItemAgent[]
-  /** The item's id: another item's card starts folded. */
-  identity: string
-}>()
+const props = defineProps<{ agents: readonly WorkItemAgent[] }>()
 
 const { t, d } = useI18n()
-
-const expanded = ref(false)
-watch(
-  () => props.identity,
-  () => {
-    expanded.value = false
-  },
-)
-/** One row behind a toggle saves nothing and costs a press: it stands with the rest. */
-const long = computed(() => props.agents.length > AGENTS_SHOWN + 1)
-const shown = computed(() =>
-  expanded.value || !long.value ? props.agents : props.agents.slice(0, AGENTS_SHOWN),
-)
 
 /**
  * What «3 minutes ago» is measured from. It moves on its own only while a row
@@ -93,169 +75,159 @@ function linkWords(agent: WorkItemAgent): string {
     : t('workItem.agents.linkClaim')
 }
 
-const rows = computed(() =>
-  shown.value.map((agent) => ({
-    agent,
-    facts: agentFacts(agent, now.value, words.value),
-    link: linkWords(agent),
+const groups = computed(() =>
+  agentsByParent(props.agents).map((group) => ({
+    ...group,
+    rows: group.agents.map((agent) => ({
+      agent,
+      facts: agentFacts(agent, now.value, words.value),
+      link: linkWords(agent),
+    })),
   })),
 )
-
-const toggleLabel = computed(() =>
-  expanded.value
-    ? t('workItem.agents.showFewer')
-    : t('workItem.agents.showAll', { count: props.agents.length }),
-)
-
-const listId = useId()
-const list = ref<HTMLElement | null>(null)
-const toggler = ref<InstanceType<typeof VButton> | null>(null)
-
-async function toggle() {
-  const opening = !expanded.value
-  expanded.value = opening
-  await nextTick()
-  const target = opening
-    ? list.value?.querySelectorAll<HTMLElement>('.agent')[AGENTS_SHOWN]
-    : (toggler.value?.$el as HTMLElement | undefined)
-  // The first row revealed is where the press took the reader, so it is ringed; closing
-  // leaves focus on the toggle that was pressed, which a press does not ring.
-  if (opening) moveFocus(target, { preventScroll: true })
-  else target?.focus({ preventScroll: true })
-  // The toggle keeps its element while the list shrinks above it, so focusing it
-  // again scrolls nothing; it is brought back into view here.
-  target?.scrollIntoView({ block: 'nearest' })
-}
 </script>
 
 <template>
-  <section class="agents">
-    <SectionHeader
-      :title="t('workItem.agents.heading')"
-      :count="agents.length"
-    />
-    <ul
-      :id="listId"
-      ref="list"
-      class="agent-list"
+  <div class="agents">
+    <div
+      v-for="group in groups"
+      :key="group.session"
+      class="agent-group"
     >
-      <li
-        v-for="{ agent, facts, link } in rows"
-        :key="`${agent.session_id}:${agent.agent_id}`"
-        class="agent"
-        tabindex="-1"
+      <div
+        v-if="group.executor?.session"
+        class="agent-group-head"
       >
-        <RichText
-          v-if="agent.label"
-          class="agent-name"
-          :source="agent.label"
-          inline
-        />
-        <span
-          v-else
-          class="agent-name"
-          :class="{ 'agent-id': !agent.agent_type }"
-          >{{ agent.agent_type || facts.shortId }}</span
-        >
-        <p
-          v-for="step in agent.steps"
-          :key="step.id"
-          class="agent-step"
-        >
-          {{ t('workItem.agents.holdsStep') }}
-          <RichText
-            :source="step.text"
-            inline
-          />
-        </p>
-        <p class="agent-times">
-          <span class="agent-fact">
-            {{ t('workItem.agents.started') }}
-            <time
-              :datetime="facts.started.at"
-              :title="facts.started.full"
-              >{{ facts.started.text }}</time
-            ><template v-if="facts.quiet">, {{ facts.quiet }}</template>
-          </span>
-          <span
-            v-if="facts.ended"
-            class="agent-fact"
-          >
-            {{ t('workItem.agents.ended') }}
-            <time
-              :datetime="facts.ended.at"
-              :title="facts.ended.full"
-              >{{ facts.ended.text }}</time
-            >
-          </span>
-          <span
-            v-else-if="facts.activity"
-            class="agent-fact"
-          >
-            {{ t('workItem.agents.lastActivity') }}
-            <time
-              :datetime="facts.activity.at"
-              :title="facts.activity.full"
-              >{{ facts.activity.text }}</time
-            >, {{ facts.ago }}
-          </span>
-          <span
-            v-else
-            class="agent-fact"
-            >{{ t('workItem.agents.noSignal') }}</span
-          >
-          <span
-            v-if="facts.elapsed"
-            class="agent-fact"
-            >{{ t('workItem.agents.fromStart', { time: facts.elapsed }) }}</span
-          >
-        </p>
-        <p class="agent-source">
-          <span
-            v-if="agent.label && agent.agent_type"
-            class="agent-fact"
-            >{{ agent.agent_type }}</span
-          >
-          <span
-            v-if="agent.label || agent.agent_type"
-            class="agent-fact"
-            ><span
-              class="agent-id"
-              :title="agent.agent_id"
-              >{{ facts.shortId }}</span
-            ></span
-          >
-          <span class="agent-fact">{{ link }}</span>
-        </p>
         <OpenAction
-          v-if="agent.executor?.session"
-          class="agent-open"
-          :session="agent.executor.session"
-          :executor="agent.executor"
+          :session="group.executor.session"
+          :executor="group.executor"
           :action="t('open.action.parent')"
           :detail="t('open.hint.parent')"
         />
-      </li>
-    </ul>
-    <VButton
-      v-if="long"
-      ref="toggler"
-      class="agents-more"
-      variant="text"
-      size="inline"
-      :aria-controls="listId"
-      :aria-expanded="expanded"
-      @click="toggle"
-    >
-      {{ toggleLabel }}
-    </VButton>
-  </section>
+        <span
+          v-if="groups.length > 1"
+          class="agent-group-id agent-id"
+          :title="group.session"
+          >{{ group.shortSession }}</span
+        >
+      </div>
+      <ul class="agent-list">
+        <li
+          v-for="{ agent, facts, link } in group.rows"
+          :key="`${agent.session_id}:${agent.agent_id}`"
+          class="agent"
+        >
+          <RichText
+            v-if="agent.label"
+            class="agent-name"
+            :source="agent.label"
+            inline
+          />
+          <span
+            v-else
+            class="agent-name"
+            :class="{ 'agent-id': !agent.agent_type }"
+            >{{ agent.agent_type || facts.shortId }}</span
+          >
+          <p
+            v-for="step in agent.steps"
+            :key="step.id"
+            class="agent-step"
+          >
+            {{ t('workItem.agents.holdsStep') }}
+            <RichText
+              :source="step.text"
+              inline
+            />
+          </p>
+          <p class="agent-times">
+            <span class="agent-fact">
+              {{ t('workItem.agents.started') }}
+              <time
+                :datetime="facts.started.at"
+                :title="facts.started.full"
+                >{{ facts.started.text }}</time
+              ><template v-if="facts.quiet">, {{ facts.quiet }}</template>
+            </span>
+            <span
+              v-if="facts.ended"
+              class="agent-fact"
+            >
+              {{ t('workItem.agents.ended') }}
+              <time
+                :datetime="facts.ended.at"
+                :title="facts.ended.full"
+                >{{ facts.ended.text }}</time
+              >
+            </span>
+            <span
+              v-else-if="facts.activity"
+              class="agent-fact"
+            >
+              {{ t('workItem.agents.lastActivity') }}
+              <time
+                :datetime="facts.activity.at"
+                :title="facts.activity.full"
+                >{{ facts.activity.text }}</time
+              >, {{ facts.ago }}
+            </span>
+            <span
+              v-else
+              class="agent-fact"
+              >{{ t('workItem.agents.noSignal') }}</span
+            >
+            <span
+              v-if="facts.elapsed"
+              class="agent-fact"
+              >{{ t('workItem.agents.fromStart', { time: facts.elapsed }) }}</span
+            >
+          </p>
+          <p class="agent-source">
+            <span
+              v-if="agent.label && agent.agent_type"
+              class="agent-fact"
+              >{{ agent.agent_type }}</span
+            >
+            <span
+              v-if="agent.label || agent.agent_type"
+              class="agent-fact"
+              ><span
+                class="agent-id"
+                :title="agent.agent_id"
+                >{{ facts.shortId }}</span
+              ></span
+            >
+            <span class="agent-fact">{{ link }}</span>
+          </p>
+        </li>
+      </ul>
+    </div>
+  </div>
 </template>
 
 <style scoped>
 .agents {
   display: grid;
+  gap: var(--space-8);
+}
+
+.agent-group {
+  display: grid;
   gap: var(--space-heading-content);
+  min-width: 0;
+}
+
+.agent-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.agent-group-id {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-dense);
 }
 
 .agent-list {
@@ -272,14 +244,6 @@ async function toggle() {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
-
-  /* Brought into view, a row stops short of the edge by more than its ring reaches. */
-  scroll-margin-block: var(--space-2);
-
-  &:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: var(--space-1);
-  }
 }
 
 .agent-name {
@@ -335,18 +299,5 @@ async function toggle() {
 
 .agent-id {
   font-family: var(--font-family-mono);
-}
-
-/* Its own line, under the facts: on a phone it would break their line anywhere else. */
-.agent-open {
-  justify-self: start;
-}
-
-/* The rest of the list, as a chain's lists open theirs: bare, its words where the rows
-   start, the margin taking back the inset its fill keeps under the pointer. */
-.agents-more {
-  justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
-  scroll-margin-block: var(--space-2);
 }
 </style>

@@ -1035,7 +1035,7 @@ item the session holds while it works on others stands still with «у сесс�
 coordinator holding many items does not move them all on every turn, and the items
 of a session whose turn ended and that waits for a person stand still with «ждёт»:
 motion that also meant holding or waiting would no longer tell work from rest. The
-words say what the session's events show, as a card's «Agents» section does, and
+words say what the session's events show, as a card's «Agents» tab does, and
 never that a process was seen alive. A frame counts the items under it that move,
 so a folded one still shows the work inside it moving. The key names the live line,
 and the strip offers the switch that stops it, only while something on the field moves: a
@@ -1124,8 +1124,8 @@ words as a description reads, with no heading over one sentence. «Все шаг
 that line goes to the checklist and puts focus on its heading; the only step has neither
 the number nor a way to itself.
 A section of a card that holds nothing and offers nothing is absent, rather than a
-heading and a sentence saying so on the first screen: «Agents» and «Checklist» stand
-only while they have something in them, and a step arriving with the live stream's next
+heading and a sentence saying so on the first screen: the «Agents» tab and «Checklist»
+stand only while they have something in them, and a step arriving with the live stream's next
 frame brings its section back with no reload.
 A question has no section of its own: it stands in the discussion and reads as a
 comment does, its author, its time and its prompt as markdown, with its fields under
@@ -1251,8 +1251,14 @@ them. A closed task says to reopen it instead of offering the icon. An
 answer arriving from elsewhere folds it the same way, and a note still in the form stays in
 view, saying it was not sent, until the person leaves. While a question waits, the card's
 facts carry a mark that brings it into view under the tabs from any section.
-A card's «Agents» section stands under the next step of an open item and under the
-outcome of a closed one, where the list is history with no next step above it. A row is one record held together by air: what the agent was
+A card's agents have a tab of their own, right after «Overview», which names and counts
+them («Agents 44») and which the card offers only while it has some; a card that stops
+offering it steps to Overview on the read that says so, a card opened from it opens on
+Overview as any other does, and Back returns to it if it is still offered. On the first
+screen a parent's dozens of rows stood between the next step and the description. Every row
+stands at once, newest first, under the parent session it opens: that session's way back
+stands once at the head of its rows, because in each row it was the same button down the
+whole list, and two parents' heads, which can read alike, say which session each is. A row is one record held together by air: what the agent was
 started for (or, for an agent named before that was recorded, its type or its short
 id), the step it holds, its times, then its type, id and how it is known to be here.
 It says what the record shows and never that an agent is working, because a session
@@ -1261,14 +1267,12 @@ a recorded end, and «no sign of it since» for an agent that gave none since it
 start, instead of a span of no length. It offers no estimate of what remains, which
 Valkama does not know. An agent started while its coordinator held several items
 stands on each of them and its row says how many; the interface does not pick one.
-Past four rows the list folds to the three with the newest activity, behind the
-same toggle as a chain's lists, because a parent can leave dozens on one item; four
-stand whole, since a toggle for one row costs more than the row. An open card reads
+An open card reads
 the list again on the stream's own `agents` event, which leaves the board and the
 graph as they are. A wrapped line of facts starts without a dot, because the dot
 stands in the room each fact's margin takes from the line, which the line clips.
-A holder with a session behind them is the way to it, in the card's head, on its steps
-and in «Agents», and in an attempt, a link and the session dialog the same button does
+A holder with a session behind them is the way to it, in the card's head and on its
+steps, as a parent is at the head of its rows in «Agents», and in an attempt, a link and the session dialog the same button does
 it: the holder's name, which gives way, and where the session opens, which does not. A
 terminal has its glyph and no product has a logo; a running session says so («Терминал ·
 идёт»), and while the owner's "always open in" decides, the place says that too

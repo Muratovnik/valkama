@@ -6,12 +6,7 @@
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { installBackend } from './backend.ts'
 import { openCard } from './editorPage.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
 import { asked, openQuestion, routeField } from './questionBackend.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
@@ -78,38 +73,6 @@ test('earlier answers open from a bare line in the answer’s column', async ({ 
   expect(earlier.ground).toBe(BARE)
   const column = await startOf(card.locator('.request-reply-meta'))
   expect(Math.abs(earlier.words - column)).toBeLessThanOrEqual(1)
-})
-
-test('the rest of a card’s agents opens from a bare line where the rows start', async ({
-  page,
-}) => {
-  const agents = Array.from({ length: 6 }, (_, index) => ({
-    agent_id: `agent${String(index).padStart(11, '0')}`,
-    session_id: '6f1c2a8e-0000-4000-8000-000000000001',
-    agent_type: 'general-purpose',
-    label: `Agent task ${index}`,
-    started_at: '2026-08-13T08:00:00Z',
-    last_activity_at: `2026-08-13T08:2${index}:00Z`,
-    ended_at: null,
-    steps: [],
-    link: 'claim',
-    coordinator_items: 1,
-  }))
-  await installBackend(page, { agents: () => agents })
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: projectScope,
-      entity: planningWorkItemEntity(workItemRef),
-    }),
-  )
-  await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
-  const section = page.locator('.drawer .agents')
-  const more = await look(section.getByRole('button', { name: 'Show all · 6' }))
-  expect(more.ground).toBe(BARE)
-  expect(
-    Math.abs(more.words - (await startOf(section.locator('.agent').first()))),
-  ).toBeLessThanOrEqual(1)
 })
 
 test('the threads a view hides come back from a bare line after the words that count them', async ({
