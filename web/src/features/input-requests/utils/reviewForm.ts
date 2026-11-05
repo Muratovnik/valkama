@@ -35,7 +35,7 @@ export function isReview(fields: Fields): boolean {
 }
 
 /** The fields under one, in their order. */
-function childrenOf(fields: Fields, parent: string): InputRequestField[] {
+export function childrenOf(fields: Fields, parent: string): InputRequestField[] {
   return fields.filter((field) => field.under?.field === parent)
 }
 
@@ -63,7 +63,7 @@ function isDecided(field: InputRequestField, draft: RequestDraft): boolean {
 }
 
 /** The verdicts on screen: a hidden one is neither decided nor undecided. */
-function shownVerdicts(fields: Fields, answers: InputAnswers): InputRequestField[] {
+export function shownVerdicts(fields: Fields, answers: InputAnswers): InputRequestField[] {
   return fields.filter((field) => field.type === 'verdict' && isShown(field, answers))
 }
 

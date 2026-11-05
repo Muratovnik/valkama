@@ -72,7 +72,10 @@ useEventListener(window, ['pointerup', 'pointercancel'], pressOver, { capture: t
 // press itself causes when it takes focus.
 useEventListener(window, 'blur', pressOver)
 
-/** Whatever is scrolled into view comes to rest under the tabs, not behind them. */
+/**
+ * Whatever is scrolled into view comes to rest under the tabs, not behind them, and whatever
+ * the content keeps stuck at the top of the scroller stands under them too (`--size-stuck-top`).
+ */
 const tabsHeight = ref(0)
 useResizeObserver(tabs, (entries) => {
   tabsHeight.value = entries[0]?.borderBoxSize[0]?.blockSize ?? 0
@@ -81,7 +84,10 @@ useResizeObserver(tabs, (entries) => {
 watch(tabs, (element) => (tabsHeight.value = element?.getBoundingClientRect().height ?? 0), {
   flush: 'post',
 })
-const scrollPadding = computed(() => ({ scrollPaddingBlockStart: `${tabsHeight.value}px` }))
+const scrollPadding = computed(() => ({
+  'scrollPaddingBlockStart': `${tabsHeight.value}px`,
+  '--size-stuck-top': `${tabsHeight.value}px`,
+}))
 
 /** Where the tabs stick: from here down they stand at the scroller's top. */
 function stuckFrom() {
@@ -380,6 +386,8 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
    and the first `scrollIntoView` scrolled the drawer and left a blank band
    under the body. */
 .drawer-frame-body {
+  --size-stuck-top: 0;
+
   position: relative;
   min-height: 0;
   overflow-y: auto;

@@ -33,18 +33,19 @@ import { useAnswerChange } from '@/features/input-requests/composables/useAnswer
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useStepAttention } from '@/features/input-requests/composables/useStepAttention.ts'
+import { useUncoveredFocus } from '@/features/input-requests/composables/useUncoveredFocus.ts'
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
 import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
 import {
-  editField,
   EMPTY_DRAFT,
   hasDraft,
+  stillRefused,
 } from '@/features/input-requests/utils/validateAnswers.ts'
-import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import { provideDocumentLinks } from '@/entities/project-document/documentLinks.ts'
 
-import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
@@ -82,6 +83,7 @@ provideDocumentLinks(() => ({
 }))
 const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
+useUncoveredFocus(card)
 const { focus, focusOutcome, holdsFocus, reveal } = useRequestFocus(card)
 const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
@@ -233,11 +235,10 @@ useEventListener(card, 'keydown', (event: KeyboardEvent) => {
  * Choosing or writing means answering after all, and Send must be Send again by the time it
  * is pressed: while the asking stands, the same place declines for good.
  */
-function edit(field: InputRequestField, change: FieldEdit) {
+function edit(next: RequestDraft) {
   stepBack()
-  emit('update:draft', editField(props.draft, field.id, change))
-  // A comment answers nothing, so it leaves what was refused for being empty refused.
-  if (change.note === undefined) refused.value = refused.value.filter((id) => id !== field.id)
+  refused.value = stillRefused(refused.value, props.draft, next)
+  emit('update:draft', next)
 }
 function writeNote(note: string) {
   stepBack()
@@ -351,6 +352,8 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       :note="noteToggle"
       :refreshable="canRefresh"
       :standalone="standalone"
+      :stuck="answerFields?.structured ?? false"
+      :undecided="answerFields?.undecided ?? 0"
       :waiting="waiting"
       @discard="change.end"
       @dismiss="emit('dismiss', entry)"

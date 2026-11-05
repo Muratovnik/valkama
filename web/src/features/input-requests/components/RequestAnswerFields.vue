@@ -7,15 +7,21 @@
  * Text is markdown, and the fields share one Write | Preview choice: several text
  * answers are one answer being written, and a choice per field would let them disagree
  * about which view is showing. The card owns what was refused and what Ctrl+Enter
- * sends; this owns the view and where focus goes.
+ * sends; this owns the view and where focus goes. Each edit is handed up as the whole draft
+ * it makes, because one press may change several fields: accepting a point fills its steps.
+ *
+ * A question with a verdict, a group or a field under another is answered row by row
+ * (`RequestReview`); its foot then stays in sight under it, and says what is undecided.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
 import RequestNote from '@/features/input-requests/components/RequestNote.vue'
+import RequestReview from '@/features/input-requests/components/RequestReview.vue'
 import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
-import { chosenOwn } from '@/features/input-requests/utils/validateAnswers.ts'
+import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
+import { chosenOwn, editField } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
@@ -37,7 +43,7 @@ const props = withDefaults(
   { suggest: undefined },
 )
 const emit = defineEmits<{
-  edit: [field: InputRequestField, edit: FieldEdit]
+  edit: [draft: RequestDraft]
   note: [value: string]
   submit: []
 }>()
@@ -56,6 +62,13 @@ const {
 )
 
 const several = computed(() => props.fields.length > 1)
+const structured = computed(() => isStructured(props.fields))
+/** The fields drawn one under another, as a question without rows has them. */
+const plainFields = computed(() => (structured.value ? [] : props.fields))
+const review = ref<InstanceType<typeof RequestReview> | null>(null)
+const undecided = computed(() => review.value?.undecided ?? 0)
+const edit = (field: InputRequestField, change: FieldEdit) =>
+  emit('edit', editField(props.draft, field.id, change))
 const isOwnChosen = (field: InputRequestField) => props.draft.ownChosen.includes(field.id)
 /** An own variant chosen and left empty, which is said on its own editor. */
 function ownRefused(field: InputRequestField) {
@@ -71,17 +84,34 @@ function fieldError(field: InputRequestField) {
 }
 /** Take focus to one field; a text answer can only be fixed where it is written. */
 async function focusField(id: string) {
+  if (review.value) {
+    await review.value.focusField(id)
+    return
+  }
   previewing.value = false
   await nextTick()
   controls[id]?.focus()
 }
-defineExpose({ focusField, noteOpen, noteWritten, pressNote })
+defineExpose({ focusField, noteOpen, noteWritten, pressNote, structured, undecided })
 </script>
 
 <template>
   <div class="request-fields">
+    <RequestReview
+      v-if="structured"
+      ref="review"
+      v-model:preview="previewing"
+      :disabled="disabled"
+      :draft="draft"
+      :fields="fields"
+      :prompt-id="promptId"
+      :refused="refused"
+      :suggest="suggest"
+      @edit="emit('edit', $event)"
+      @submit="emit('submit')"
+    />
     <RequestField
-      v-for="field in fields"
+      v-for="field in plainFields"
       :key="field.id"
       :ref="(control) => (controls[field.id] = control as { focus: () => void } | null)"
       v-model:preview="previewing"
@@ -96,7 +126,7 @@ defineExpose({ focusField, noteOpen, noteWritten, pressNote })
       :prompt-id="promptId"
       :several="several"
       :suggest="suggest"
-      @edit="emit('edit', field, $event)"
+      @edit="edit(field, $event)"
       @submit="emit('submit')"
     />
     <RequestNote

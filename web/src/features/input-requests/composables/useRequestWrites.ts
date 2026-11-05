@@ -17,7 +17,7 @@ import {
 } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 
-const SUPPORTED_FIELDS = new Set(['boolean', 'choice', 'multi_choice', 'text'])
+const SUPPORTED_FIELDS = new Set(['boolean', 'choice', 'multi_choice', 'text', 'verdict'])
 
 type Action = 'answer' | 'change' | 'decline'
 type Checked = ReturnType<typeof checkAnswers>

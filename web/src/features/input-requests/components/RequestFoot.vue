@@ -2,8 +2,13 @@
 /**
  * The foot of a question: what it can do (`RequestActions`), the asking before a change is
  * thrown away, and why the last write did not go through.
+ *
+ * A form answered row by row is long, so its foot stays in sight at the bottom edge of the
+ * panel that scrolls it while any of the form is (`stuck`), with Send and the comment on the
+ * question under the hand. Over it stands how many points are still undecided: the question
+ * can be sent so, and the agent reads them as undecided, which is said before and not after.
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestActions from '@/features/input-requests/components/RequestActions.vue'
@@ -12,7 +17,7 @@ import RequestNoteToggle from '@/features/input-requests/components/RequestNoteT
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 
-defineProps<{
+const props = defineProps<{
   /** Throwing away a change was asked, and the next word decides. */
   askingCancel: boolean
   busy: boolean
@@ -26,6 +31,10 @@ defineProps<{
   note: { disabled: boolean; open: boolean; written: boolean } | null
   refreshable: boolean
   standalone: boolean
+  /** The form is long enough to keep this in sight while it scrolls. */
+  stuck: boolean
+  /** Points of a review shown with no decision. */
+  undecided: number
   waiting: boolean
 }>()
 const emit = defineEmits<{
@@ -39,6 +48,8 @@ const emit = defineEmits<{
   'way-out': []
 }>()
 const { t } = useI18n()
+/** Which edge of the scrolling panel it keeps to, for what moves focus clear of it. */
+const edge = computed(() => (props.stuck ? 'end' : undefined))
 const actions = ref<InstanceType<typeof RequestActions> | null>(null)
 const errorLine = ref<HTMLElement | null>(null)
 
@@ -49,7 +60,17 @@ defineExpose({
 </script>
 
 <template>
-  <footer class="request-foot">
+  <footer
+    class="request-foot"
+    :class="{ 'is-stuck': stuck }"
+    :data-stuck-edge="edge"
+  >
+    <p
+      v-if="undecided"
+      class="request-undecided"
+    >
+      {{ t('requests.review.undecidedNote', { n: undecided }) }}
+    </p>
     <ConfirmStrip
       v-if="askingCancel"
       class="request-confirm"
@@ -108,6 +129,30 @@ defineExpose({
   align-items: center;
   min-width: 0;
   container-type: inline-size;
+}
+
+/* At the panel's lower edge while the form above it scrolls, on the question's own ground, so
+   that what passes under it is covered and not read through. Its padding is the gap the card
+   keeps between its rows, carried with it. */
+.request-foot.is-stuck {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 1;
+  padding-block: var(--space-2) var(--space-3);
+  margin-block-end: calc(-1 * var(--space-3));
+  background: var(--color-surface-sheet);
+
+  /* A forced palette clears that ground, and with it the edge of what stays put. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+  }
+}
+
+.request-undecided {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .request-confirm {

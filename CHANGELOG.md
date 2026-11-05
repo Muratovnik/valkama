@@ -75,6 +75,16 @@ checkouts are therefore distinguishable even at the same version.
   and the desktop app show the same ones; it is no change to the item, writes no
   history and is told to no agent. It outlives the item's close, moves to the survivor
   of a merge, goes with a deleted item, and an export carries it as `planning.pins`.
+- **A review is answered row by row in the thread where it was asked.** A question with
+  verdicts shows each point with «Accept | Later | Reject», none chosen until you choose,
+  its points under their group headings with how many are decided, and the steps or the way
+  of a point right under it once you accept it, filled with what the agent recommends the
+  first time. «Accept recommended» decides every point still undecided as recommended and
+  leaves what you chose. An own variant and a comment stand beside each point. The count
+  and that button stay at the top of the panel and the comment, «Don't answer» and «Send»
+  at its bottom while the form is in view, without covering what has focus. Over «Send» the
+  form says how many points are undecided; the agent reads those as undecided, and a
+  required one stops the send. A question with none of this looks and works as before.
 
 ### Changed
 

@@ -115,6 +115,24 @@ export function editField(draft: RequestDraft, field: string, edit: FieldEdit): 
   }
 }
 
+/**
+ * What the last send refused that an edit has not touched. A field whose value or own variant
+ * changed is being put right, and its message goes; a comment answers nothing, so it leaves a
+ * refusal standing.
+ */
+export function stillRefused(
+  refused: readonly string[],
+  before: RequestDraft,
+  after: RequestDraft,
+): string[] {
+  return refused.filter(
+    (id) =>
+      before.answers[id] === after.answers[id] &&
+      before.own[id] === after.own[id] &&
+      before.ownChosen.includes(id) === after.ownChosen.includes(id),
+  )
+}
+
 interface CheckedAnswers {
   fieldNotes: Record<string, string>
   own: Record<string, string>
