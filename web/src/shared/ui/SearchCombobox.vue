@@ -16,11 +16,12 @@
  *
  * The box draws what `VTextInput` draws — one fill, one hairline, one radius, the same edge
  * on hover and focus, doubled when refused — so the two read as one kind of field side by
- * side; a press anywhere on it is a press on the field. A chip is the board filter's, one
- * step above the field's fill, with a transparent edge for a forced palette to draw where
- * it clears every fill, and the highlighted row keeps an edge there for the same reason.
+ * side; a press anywhere on it is a press on the field. The chips are `SearchComboboxChips`'s,
+ * and the highlighted row keeps an edge in a forced palette, where it clears every fill.
  * The popup is ChoiceSelect's surface at the field's own width, so it never reaches past
- * the dialog the field stands in; a long title wraps inside it.
+ * the dialog the field stands in. A long option wraps inside it at a space, a hyphen or
+ * after a `/` (`slashBreaks.ts`): an epic's option is its title, and a label is as often
+ * a path of words such as `area/web`, so every option breaks the way a title does.
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
 
@@ -35,6 +36,8 @@ import {
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { choiceToken, freshToken, searchChoices, tokenValue } from '@/shared/ui/searchChoices.ts'
+import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VField from '@/shared/ui/VField.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -221,30 +224,13 @@ function pressBox(event: MouseEvent) {
         :class="{ disabled, invalid: error }"
         @click="pressBox"
       >
-        <ul
+        <SearchComboboxChips
           v-if="chips.length"
-          class="combo-chips"
-        >
-          <li
-            v-for="(chip, index) in chips"
-            :key="chip.value"
-            class="combo-chip"
-          >
-            <span class="combo-chip-name">{{ chip.label }}</span>
-            <button
-              class="combo-chip-remove"
-              type="button"
-              :aria-label="removeLabel(chip.label)"
-              :disabled="disabled"
-              @click="remove(index)"
-            >
-              <VIcon
-                name="close"
-                :size="14"
-              />
-            </button>
-          </li>
-        </ul>
+          :chips="chips"
+          :disabled="disabled"
+          :remove-label="removeLabel"
+          @remove="remove"
+        />
         <ComboboxInput
           :id="controlId"
           ref="field"
@@ -288,7 +274,10 @@ function pressBox(event: MouseEvent) {
             >
               <div class="combo-option">
                 <span class="combo-value">
-                  <strong class="combo-title">{{ option.label }}</strong>
+                  <strong
+                    v-slash-breaks="option.label"
+                    class="combo-title"
+                  />
                   <small
                     v-if="option.description"
                     class="combo-note"
@@ -361,51 +350,6 @@ function pressBox(event: MouseEvent) {
     background: var(--color-control-disabled-surface);
     border-color: var(--color-rule);
     cursor: not-allowed;
-  }
-}
-
-.combo-chips {
-  display: contents;
-}
-
-.combo-chip {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-  min-width: 0;
-  max-width: 22ch;
-  min-height: var(--size-control-inline);
-  padding: 0 var(--space-1) 0 var(--space-2);
-  border: 1px solid transparent;
-  font: var(--font-detail);
-  background: var(--color-surface-active);
-  border-radius: var(--radius-control);
-}
-
-.combo-chip-name {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.combo-chip-remove {
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  color: var(--color-text-muted);
-  background: transparent;
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    color: var(--color-text);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 1px;
   }
 }
 
