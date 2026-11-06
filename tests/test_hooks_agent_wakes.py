@@ -34,7 +34,17 @@ import unittest
 from unittest import mock
 
 from server.hooks import notify
-from tests.test_hooks_agent_notices import AS_A, AS_B, COMMENT, FROM_AGENTS, A, B, Harness
+from tests.test_hooks_agent_notices import (
+    AS_A,
+    AS_B,
+    AS_CHILD,
+    CHILD,
+    COMMENT,
+    FROM_AGENTS,
+    A,
+    B,
+    Harness,
+)
 
 A_CHILD = "019a3c2e-3333-7c11-9e0f-2f4b6d8a1c3e"
 AS_A_CHILD = {"sessionId": A, "threadId": A_CHILD}
@@ -368,6 +378,43 @@ class BlockerTests(Wakes):
         self.assertIn(f"on {self.blocker}, now Cancelled", told)
         self.assertIn(f"on {self.blocker}, now Backlog", told)
         self.assertNotIn("blocker_closed", told)
+
+    def test_a_persons_close_told_at_stop_is_not_told_again_once_undone(self) -> None:
+        self.comment(AS_A, self.held, "Waiting chatter, marker WC-1")
+        self.person(TRANSITION, id=self.blocker, state="cancelled", force=True)
+        at_stop = self.stop(B) or ""
+        self.move_as(AS_A, "backlog")
+        told = self.hook(session=B)
+        assert told is not None, "the reopen is news"
+        self.assertNotIn("now Cancelled", told, "the close was told at the Stop")
+        self.assertIn(f"on {self.blocker}, now Backlog", told)
+        self.assertRegex(at_stop, rf"- blocker_closed at \S+ on {self.blocker}, now Cancelled")
+        self.assertIn("marker WC-1", at_stop, "what waited is told with the close")
+        self.assertNotIn("marker WC-1", told)
+
+    def test_a_persons_close_undone_before_a_read_is_told_once_at_the_next_call(self) -> None:
+        self.comment(AS_A, self.held, "Waiting chatter, marker WC-2")
+        self.person(TRANSITION, id=self.blocker, state="cancelled", force=True)
+        self.person(TRANSITION, id=self.blocker, state="backlog", force=True)
+        self.assertIsNone(self.stop(B), "an undone close wakes nobody")
+        told = self.hook(session=B)
+        assert told is not None
+        self.assertIn(f"on {self.blocker}, now Cancelled", told)
+        self.assertIn(f"on {self.blocker}, now Backlog", told)
+        self.assertIsNone(self.hook(session=B), "once")
+
+    def test_a_persons_close_continues_a_holding_subagents_turn(self) -> None:
+        held = self.item("Held by the subagent")
+        self.agent("claim_work_item", AS_CHILD, id=held)
+        self.agent("link_work_items", AS_A, id=self.blocker, other=held, kind="blocks")
+        for agent in (CHILD, None):
+            self.hook(agent)
+            self.hook(agent, event="stop")
+        self.person(TRANSITION, id=self.blocker, state="cancelled", force=True)
+        at_stop = self.hook(CHILD, event="stop")
+        assert at_stop is not None, "a person's act continues a subagent's turn"
+        self.assertRegex(at_stop, rf"- blocker_closed at \S+ on {self.blocker}, now Cancelled")
+        self.assertNotIn("now Cancelled", self.hook(CHILD) or "", "once")
 
     def test_the_holders_own_session_changing_it_tells_nobody(self) -> None:
         self.agent("claim_work_item", AS_B, id=self.blocker)

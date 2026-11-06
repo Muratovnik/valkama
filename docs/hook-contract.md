@@ -739,7 +739,12 @@ place; `PostToolUse` and `UserPromptSubmit` read and move both. Had one place
 served both, a `Stop` would have moved it past news it may not tell, and that news
 would never arrive. When a `Stop` or the watcher reads an item and leaves such news
 untold, the item's mark says it waits, so the next tool call reads
-that item again though nothing on it has changed since. A file with both places is
+that item again though nothing on it has changed since. A blocker's state, a
+person's close included, is read from the other sessions' place: a close reads as a
+change once a later transition undoes it, so read from the person's place it would
+be told again then. A person's close found at a `Stop`, a subagent's included, is
+told there with the other sessions' news that waits, and moves that place past
+both, as a wake does. A file with both places is
 headed `v3`. A `v2` or `v1` file reads with the agents' place where the person's
 place is and nothing waiting, and a build from before `v3` reads a `v3` file as
 empty, which tells the current news once more.

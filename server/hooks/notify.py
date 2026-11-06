@@ -708,10 +708,14 @@ def collect(
                 if _wakes(entry) and entry["call"] > through
             ]
             # A person's news wakes the session anyway; only without it is this a wake.
-            person = any(read[0] for _s, _m, read in reads if read)
+            # A person's blocker close is read with other sessions' news, and is the
+            # person's news all the same: it continues a subagent's turn too, and what
+            # waits with it is told with it, as with any wake.
+            closed = any(entry.get("via") != "agent" for entry in waking)
+            person = closed or any(read[0] for _s, _m, read in reads if read)
             if wake and not agents and waking and not person and len(wakes) >= MOST_WAKES:
                 held, through = held + len(waking), newest
-            elif wake and not agents and waking:
+            elif not agents and waking and (wake or closed):
                 tell, woke = True, not person
                 reads = [
                     (
@@ -814,19 +818,15 @@ def _read(
     if listens == ALL and not (holds or (mark is not None and mark[2])):
         spoken += _followed(conn, item, heard, newest, session_id, agent_id)
     if holds and signature[3]:
-        # A blocker's state: a person's close is the person's news and wakes, the rest of a
-        # person's changes wait with other sessions' news for a tool call; another
-        # session's are its own, and only a close among them wakes.
-        for call, entry in person_events.blocker_changes(conn, item, min(after, heard)):
+        # A blocker's state, a person's or another session's, is read from the one place
+        # other sessions' news is: a close reads as a change once a later transition
+        # undoes it, so a close read from another place would be told again then. Only
+        # a close wakes; a person's is the person's news in the notice, and through a
+        # mute too.
+        for call, entry in person_events.blocker_changes(conn, item, heard):
             if call > newest:
                 continue
-            if entry["via"] != "agent":
-                if entry["kind"] == "blocker_closed":
-                    if person and call > after:
-                        told.append(entry)
-                elif call > heard:
-                    spoken.append(_at_call(entry, call))
-            elif call > heard and listens != MUTED and entry["session"] != session_id:
+            if entry["via"] != "agent" or (listens != MUTED and entry["session"] != session_id):
                 spoken.append(_at_call(entry, call))
     spoken.sort(key=lambda entry: entry["call"])
     return told, spoken, after, heard
