@@ -51,7 +51,7 @@ const lines = computed(() => [props.holder, props.detail].filter(Boolean).join('
    height whether it can be pressed or not. */
 .executor-link-name {
   min-width: 0;
-  padding: calc(var(--space-1) - var(--space-hair)) 0 var(--space-1) var(--space-2);
+  padding: calc(var(--space-1) - var(--space-hair)) 0 var(--space-1) var(--space-fill-inset);
   overflow-wrap: anywhere;
   white-space: normal;
 }

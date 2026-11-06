@@ -563,6 +563,15 @@ chrome.
   its neighbours up with a 5px status dot or the bottom edge of a 13px icon
   rather than with the text beside it. Baseline is for a row that is text and
   nothing else.
+- What a block in a column draws first stands on the column's edge. A row or a bare
+  inline control whose fill keeps an inset under the pointer, `--space-fill-inset`, stands
+  that inset outside the column as a negative margin, so its words start where the heading
+  over it does and the fill reaches past the edge; a mark in a target larger than itself
+  stands on the edge and the target reaches outward. Inside a panel with a surface of its
+  own, a menu, the headings take the rows' inset instead. A chain's rows once stood 8px in
+  from their headings, a session 8px in from its label and a step's box 6px in from the
+  checklist's heading, three edges in one column. `production-card-list-edges.spec.ts`
+  measures them.
 - Vertical rhythm inside a component is one `gap` declared by the container,
   never a margin per child. Three regions of a card each setting their own
   margin is how the card came to read tighter at the top than at the bottom

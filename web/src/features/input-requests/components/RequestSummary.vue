@@ -213,7 +213,7 @@ function wordOf(field: InputRequestField) {
 /* Reading, not acting: bare, its words where the summary's start. */
 .request-summary-toggle {
   justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .request-summary-rows,

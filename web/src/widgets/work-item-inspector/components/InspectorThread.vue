@@ -379,6 +379,6 @@ defineExpose({ revealQuestion })
 /* Bringing back what the view hides is reading: bare, its words one gap after the count,
    the margin taking back the inset its fill keeps under the pointer. */
 .thread-hidden-show {
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 </style>

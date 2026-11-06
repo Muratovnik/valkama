@@ -174,7 +174,7 @@ withDefaults(
   &.size-inline {
     gap: var(--space-1);
     min-height: var(--size-control-inline);
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-fill-inset);
     font-size: var(--font-size-dense);
   }
 

@@ -54,6 +54,13 @@
      keeps two edges; the review's opened parts stood at 16px beside 12px replies and rows. */
   --space-set-in: var(--space-3);
 
+  /* The room a bare row's or an inline control's fill keeps around its words under the
+     pointer. In an open column the same amount stands outside it, as a negative margin, so
+     the words start on the column's edge where the heading over them does and the fill
+     reaches past it: carried only inside, it put a chain's rows 8px in from their headings
+     and a session 8px in from its label. One value for both halves, so they cannot part. */
+  --space-fill-inset: var(--space-2);
+
   /* Section rhythm is wider; label/value and heading/content stay at 8px/12px. */
   --space-section: var(--space-9);
 

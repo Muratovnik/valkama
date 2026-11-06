@@ -115,7 +115,7 @@ function who({ by_person: person, answered_by: by }: Request['history'][number])
    the margin taking back the inset its fill keeps under the pointer. */
 .request-history-toggle {
   justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .request-history-list {

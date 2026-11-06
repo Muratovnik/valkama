@@ -222,7 +222,7 @@ function retryMark() {
    with the actions above it rather than one more chip among them. */
 .replies-toggle {
   justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .replies {

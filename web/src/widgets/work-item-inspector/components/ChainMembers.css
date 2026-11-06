@@ -15,14 +15,21 @@
   min-width: 0;
 }
 
+/* A group's dot stands in the slot of the folded Done's chevron, so every name starts at one
+   edge: with its own gap a 7px dot put them 5px left of «Done». */
 .chain-group-title {
   display: flex;
   grid-column: 1 / -1;
-  gap: var(--space-2);
+  gap: var(--space-1);
   align-items: center;
   margin: 0;
   color: var(--color-text);
   font: var(--font-group-heading);
+}
+
+.chain-group-mark {
+  justify-content: center;
+  inline-size: 16px;
 }
 
 .chain-rows {
@@ -40,8 +47,8 @@
   grid-column: 1 / -1;
 }
 
-/* One line per member: its reference, as much of its title as fits, and who
-   holds it (or its state) at the end. */
+/* One line per member: its reference, as much of its title as fits, and who holds it (or
+   its state) at the end, on the list's two edges, its fill's inset standing outside them. */
 .chain-row {
   display: grid;
   grid-template-columns: subgrid;
@@ -49,9 +56,9 @@
   row-gap: var(--space-3);
   align-content: center;
   align-items: baseline;
-  width: 100%;
   min-height: var(--size-control-inline);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-fill-inset);
+  margin-inline: calc(-1 * var(--space-fill-inset));
   border: 0;
   color: var(--color-text);
   font: var(--font-line);
@@ -172,6 +179,7 @@
 .chain-more {
   grid-column: 1 / -1;
   justify-self: start;
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .chain-done-toggle {

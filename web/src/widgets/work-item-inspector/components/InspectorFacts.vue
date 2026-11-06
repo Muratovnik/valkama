@@ -352,7 +352,7 @@ defineExpose({ actionCell })
 .card-holder-link {
   --color-open-action-name: var(--color-text);
 
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .card-holder-name {

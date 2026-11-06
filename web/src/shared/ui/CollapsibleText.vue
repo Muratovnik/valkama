@@ -191,6 +191,6 @@ const toggleLabel = computed(() =>
    pointer. */
 .collapsible-toggle {
   justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 </style>

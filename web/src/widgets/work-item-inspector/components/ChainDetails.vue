@@ -75,7 +75,7 @@ const controls = computed(() => (open.value ? bodyId : undefined))
 /* Its chevron stands on the section's edge, as a heading's first letter does. */
 .chain-details-toggle {
   justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .chain-details-body {

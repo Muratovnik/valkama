@@ -207,6 +207,7 @@ defineExpose({ restoreView, reveal, view })
         class="chain-group-title"
       >
         <SemanticState
+          class="chain-group-mark"
           variant="dot"
           dimension="work-item-chain-group"
           aria-hidden="true"
