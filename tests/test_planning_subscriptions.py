@@ -84,10 +84,10 @@ class WriteTests(Harness):
         self.assertEqual([], before["subscribers"])
         self.assertEqual(subscriptions.FOLLOWING, self.subscribe(True))
         self.assertEqual(subscriptions.FOLLOWING, self.subscribe(True, SUBAGENT))
-        [mine, childs] = self.followers()
+        [mine, child] = self.followers()
         self.assertEqual(
             ({"session": SESSION, "client": "codex", "agent": None}, CHILD),
-            ({key: mine[key] for key in ("session", "client", "agent")}, childs["agent"]),
+            ({key: mine[key] for key in ("session", "client", "agent")}, child["agent"]),
         )
         self.assertRegex(mine["since"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
         after = service.get_work_item(self.conn, self.ref)
