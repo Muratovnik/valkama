@@ -131,8 +131,12 @@ checkouts are therefore distinguishable even at the same version.
   lines takes that many, and the counts stand right under it, with no empty band between
   them; the layout leaves each header the room it is drawn at. The chevron leads the
   reference line, and the title, the counts, what a fold hides and the progress edge start
-  at one left edge, the one the frame's cards start at. Zoomed out, a band's grown words
-  stay inside the shorter header, and far out the frame's ground still opens its epic.
+  at one left edge, the one the frame's cards start at. The chevron is a 28px target at the
+  scale the graph opens at, 44px under a finger or on a phone, reaching into the air round
+  the frame rather than growing the header, and its focus ring and the epic's each go round
+  their own control only. Zoomed out, a band's grown words stay inside the shorter header,
+  an epic with no room for «3 working» shows «••• 3» instead of nothing, with the whole phrase
+  on hover, and far out the frame's ground still opens its epic.
 - **A question holds up to 40 fields instead of 12.** The 64 KiB the fields of one
   question fit in are unchanged.
 - **`question_changed` says what changed, row by row,** as `changed: p12 later→accept;
@@ -156,9 +160,10 @@ checkouts are therefore distinguishable even at the same version.
 ### Fixed
 
 - A card's sections on a narrow window say that there are more of them: the row fades
-  out at each end that has sections past it, and only there, so a phone, which shows no
-  scrollbar, no longer ends the row at a cut word. A section reached with the keyboard
-  stops clear of the fade, and a row that fits draws none.
+  out at each end where a section is cut, and only there, so a phone, which shows no
+  scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the
+  keyboard stops clear of the fade, one already in sight stays where it is, and a row that
+  fits draws none.
 - **A choice made with the mouse leaves no focus ring behind.** Opening a dropdown with a
   click ringed the option under the pointer, and choosing one ringed the dropdown itself,
   as if it had been reached with Tab. Focus the interface places after a click now stands
