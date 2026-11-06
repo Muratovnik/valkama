@@ -50,8 +50,10 @@ with the C scanner `json` itself is built on, opens the store read-only, and
 when nothing changed on the session's items answers after two indexed queries.
 `person_events` and the configuration module load only when something changed
 or a configuration file exists. Who wrote a thread's root is read only for an item
-that changed, and only for what it has to tell or address. Whether the recipient
-follows or muted an item is two more columns of the second query, read by key.
+that changed, and only for what it has to tell or address. The items the
+recipient follows join the first query through the subscriptions' index by
+session, and whether it follows or muted an item is two more columns of the
+second query, read by key.
 """
 
 from __future__ import annotations
@@ -324,9 +326,12 @@ def recipient_key(session_id: str, agent_id: str | None) -> str:
 # --- what is new ----------------------------------------------------------------
 
 _SCOPE = (
-    "SELECT work_item_id, MAX(CASE WHEN agent_id IS ? THEN id END), MIN(id) FROM execution_events"
+    "SELECT work_item_id, MAX(own), MIN(id) FROM (SELECT work_item_id,"
+    " CASE WHEN agent_id IS ? THEN id END AS own, id FROM execution_events"
     " WHERE session_id = ? AND kind = 'planning_write' AND identity_state = 'confirmed'"
-    " AND work_item_id IS NOT NULL{agent} GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
+    " AND work_item_id IS NOT NULL{agent} UNION ALL SELECT work_item_id, NULL, call_id"
+    " FROM work_item_subscriptions WHERE session_id = ? AND follows = 1{follower})"
+    " GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
 )
 _ITEMS = (
     "SELECT w.work_item_id, s.key, w.number, w.title, w.claim_ref, w.checklist, w.revision,"
@@ -354,18 +359,21 @@ MUTED = "muted"
 def _in_scope(
     conn: sqlite3.Connection, session_id: str, agent_id: str | None
 ) -> list[tuple] | None:
-    """Every item this recipient wrote to, whether it holds each now and how it listens.
+    """Every item this recipient wrote to or follows, whether it holds each now and how it listens.
 
     The session's own confirmed write calls name every item it could hold, a
     claim and a step claim being such calls, and every thread it started and
-    question it asked. Only those items are read, by their key, and an item is
-    held while a holder label on it is this recipient's.
+    question it asked. Its subscriptions name the rest: a merge moves a row to the
+    survivor while the call that wrote it still names the item merged, so the rows
+    are read by the session's index, an orchestrator's for every agent of its
+    session and a subagent's for itself. Only those items are read, by their key,
+    and an item is held while a holder label on it is this recipient's.
 
     Each comes with where its news starts the first time: this recipient's own
     last write on it, or for an orchestrator whose subagent did all the writing,
-    the session's first. A subscription writes a call on its item, so a followed
-    item is among them. An orchestrator follows what any agent of its session
-    subscribed to; a mute is only its writer's. How many of the item's blockers
+    the session's first; for an item it only follows, the call that subscribed.
+    An orchestrator follows what any agent of its session subscribed to; a mute
+    is only its writer's. How many of the item's blockers
     are closed is part of what changes it, counted by the links' index on the item
     blocked and only where a holder label may be this recipient's: a blocker's close
     is told to the holder alone.
@@ -377,8 +385,16 @@ def _in_scope(
 
     import _sqlite3
 
-    query = _SCOPE.format(agent=" AND agent_id = ?" if agent_id else "", most=MOST_ITEMS)
-    parameters = (agent_id, session_id, agent_id) if agent_id else (None, session_id)
+    query = _SCOPE.format(
+        agent=" AND agent_id = ?" if agent_id else "",
+        follower=" AND agent_id = ?" if agent_id else "",
+        most=MOST_ITEMS,
+    )
+    parameters = (
+        (agent_id, session_id, agent_id, session_id, agent_id)
+        if agent_id
+        else (None, session_id, session_id)
+    )
     try:
         scope = {
             str(row[0]): int(row[1] if row[1] is not None else row[2])

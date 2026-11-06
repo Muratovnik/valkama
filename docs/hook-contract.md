@@ -477,9 +477,11 @@ the same rules as a person's act and beside the mentions above:
   person's block, another session's in this one. A close by the holder's own
   session is told to nobody, and a reopened blocker is not closed.
 
-A subscription writes a call on its item, so the item is among those the
-recipient wrote to, and is read like any other. A subscription that lapsed with
-its session, and was removed, tells nothing more.
+A subscribed item is read like one the recipient wrote to, from the call that
+subscribed. A merge carries the subscription to the survivor, which the
+subscriber's own calls never named, so the subscriber hears the merge there and
+whatever follows on the survivor. A subscription that lapsed with its session, and
+was removed, tells nothing more.
 
 ### When it is told
 
@@ -750,10 +752,10 @@ item is read then; the same file and the same two queries answer otherwise. An i
 whose mark says a mention waits is read again at the next tool call, and only that
 item.
 
-Other sessions' news adds no query to a call with nothing new. Whether the
-recipient subscribed to an item or muted it is two `EXISTS` columns of the second
-query, read through the subscriptions' key, and a subscribed item is one the
-recipient wrote to already. A changed item costs two reads more, its comments and
+Other sessions' news adds no query to a call with nothing new. The items the
+recipient follows join the first query, read through the subscriptions' index by
+session (`work_item_subscriptions_session`), and whether it subscribed to an item
+or muted it is two `EXISTS` columns of the second, read through their key. A changed item costs two reads more, its comments and
 its events through other agents' calls, by the item's indexes. Measured in-process
 on Windows against a store of 1500 items and 201 000 events, a session that wrote
 to 200 items, holds 20 and follows 50, 300 calls with nothing new each, interleaved:
@@ -796,8 +798,9 @@ news waits for the upgrade.
   unless it [asks for that session](#when-another-sessions-news-wakes): a reply it
   awaited, a comment that awaits its reply within a day, a blocker closed. Agents
   that ask one another back and forth wake each other at most six times an hour.
-- A session that holds more than 200 items is told about the 200 it wrote to
-  last, and hears replies and answers only on those.
+- A session that holds or follows more than 200 items is told about the 200 it
+  wrote to or subscribed to last, and hears replies and answers only on those: a
+  subscribed item is inside that window as a held one is.
 - A thread or a question that a merge moved keeps its author's call, but that
   author reads the item it wrote to, not the survivor. Only the survivor's holders
   are sure to hear what follows there.

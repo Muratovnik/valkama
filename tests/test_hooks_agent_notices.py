@@ -37,6 +37,9 @@ A = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 AS_B = {"sessionId": B}
 AS_CHILD = {"sessionId": B, "threadId": CHILD}
 AS_A = {"sessionId": A}
+#: A session that neither holds nor follows anything here, as a merge's author.
+THIRD = "019a3c2e-4444-7c11-9e0f-2f4b6d8a1c3e"
+AS_THIRD = {"sessionId": THIRD}
 FROM_AGENTS = "Valkama notice from agents, not from a person:"
 COMMENT = "/api/planning/work-item/comment"
 
@@ -245,6 +248,26 @@ class WhoListensTests(Harness):
         self.assertIn("you hold, follow or started threads on.", child)
         self.assertIn("For the subagent's item", self.hook() or "")
 
+    def test_a_subscription_a_third_session_merged_away_is_heard_on_the_survivor(self) -> None:
+        survivor = self.item("Survivor")
+        self.conn.commit()
+        self.assertEqual("following", self.subscribe(AS_B, self.followed, True))
+        self.subscribe(AS_CHILD, self.followed, True)
+        for agent in (None, CHILD):
+            self.assertIsNone(self.hook(agent), f"nothing yet: {agent}")
+        self.agent("merge_work_items", AS_THIRD, id=survivor, items=[self.followed])
+        merged = self.hook()
+        assert merged is not None, "the merge is news on the survivor B now follows"
+        self.assertIn(f"{survivor} «Survivor»:", merged)
+        self.assertIn(f"by session {THIRD}", merged)
+        self.assertIsNotNone(self.hook(CHILD), "and its subagent hears its own carried row")
+        self.comment(AS_A, survivor, "On the survivor, marker S-1")
+        for agent in (None, CHILD):
+            told = self.hook(agent)
+            assert told is not None, f"the survivor is followed: {agent}"
+            self.assertIn(f"{survivor} «Survivor»:", told)
+            self.assertIn("marker S-1", told)
+
     def test_a_reply_in_bs_thread_reaches_b_where_it_holds_nothing(self) -> None:
         root = self.comment(AS_B, self.followed, "My question to whoever works this")
         self.assertIsNone(self.hook())
@@ -322,6 +345,10 @@ class CostTests(Harness):
         plan = " ".join(str(row[3]) for row in self.conn.execute("EXPLAIN QUERY PLAN " + seen[1]))
         self.assertNotIn("SCAN u", plan, "the subscriptions are read by their key")
         self.assertIn("work_item_subscriptions", plan)
+        scope = " ".join(str(row[3]) for row in self.conn.execute("EXPLAIN QUERY PLAN " + seen[0]))
+        self.assertIn("work_item_subscriptions_session", scope, "and the session's rows by its")
+        self.assertNotIn("SCAN work_item_subscriptions", scope)
+        self.assertNotIn("SCAN execution_events", scope)
 
 
 if __name__ == "__main__":

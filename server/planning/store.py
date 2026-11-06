@@ -245,6 +245,10 @@ CREATE TABLE IF NOT EXISTS work_item_subscriptions(
     created_at TEXT NOT NULL DEFAULT {_NOW},
     PRIMARY KEY(work_item_id, session_id, agent_id)
 );
+-- What a session follows, read from the session: a client hook asks on every tool
+-- call, and a merge moves a row to an item the session's own calls never named.
+CREATE INDEX IF NOT EXISTS work_item_subscriptions_session
+    ON work_item_subscriptions(session_id, agent_id);
 
 """
 

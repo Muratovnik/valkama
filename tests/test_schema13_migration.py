@@ -84,6 +84,11 @@ class SchemaThirteenTests(unittest.TestCase):
             "what blocks an item is read from the item blocked",
         )
         self.assertEqual(
+            ["session_id", "agent_id"],
+            [row[2] for row in conn.execute("PRAGMA index_info(work_item_subscriptions_session)")],
+            "what a session follows is read from the session",
+        )
+        self.assertEqual(
             [],
             conn.execute(f"SELECT id FROM work_item_comments WHERE {AWAITS} <> 0").fetchall(),
         )
