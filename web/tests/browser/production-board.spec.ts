@@ -15,6 +15,8 @@ import type { Locator } from '@playwright/test'
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
 import { cell, centre, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
+import { overlaps } from './laneHeadGeometry.ts'
+import { readHeading } from './laneHeadRows.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -83,6 +85,19 @@ for (const [width, oneRow] of [
       ),
       `the actions share a line at ${width}px`,
     ).toBeLessThanOrEqual(2)
+    // Sharing a line is not lying over it: each action's glyph, as drawn, against each piece of
+    // text on its line, with the pointer on the heading so that they are up.
+    const heading = head.locator('.lane-head')
+    await heading.hover({ position: { x: 4, y: 4 } })
+    const { parts } = await readHeading(heading)
+    const glyphs = parts.filter(({ member }) => member === 'action')
+    const under = parts.filter(
+      ({ box, member }) => member !== 'action' && glyphs.some((glyph) => overlaps(glyph.box, box)),
+    )
+    expect(
+      under.map(({ member }) => member),
+      `the actions lie over nothing at ${width}px`,
+    ).toEqual([])
     // An icon action rests bare, as an entry's do, and takes a fill under the pointer.
     const laneAction = head.locator('.lane-actions button').first()
     const restFill = await laneAction.evaluate(
