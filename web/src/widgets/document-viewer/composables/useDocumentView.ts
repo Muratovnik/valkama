@@ -11,10 +11,9 @@ import { computed, nextTick, ref, shallowRef } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
-import { useFocusRight } from '@/widgets/document-viewer/composables/useFocusRight.ts'
-
 import { DocumentRefusal, readDocument } from '@/shared/api/documentApi.ts'
 import type { ProjectDocument } from '@/shared/api/documentApi.ts'
+import { latestFocusRight } from '@/shared/lib/focusRight.ts'
 import { inlineWords, parseRichDocument } from '@/shared/lib/richText.ts'
 import type { RichDocument } from '@/shared/lib/richText.ts'
 
@@ -137,7 +136,16 @@ export function useDocumentView() {
   let openedFrom: HTMLElement | null = null
   /** Each read is numbered, so an answer that arrives after a newer request is dropped. */
   let reading = 0
-  const focusRight = useFocusRight()
+  /**
+   * Whether the document may move focus now: every move that would take focus from where it
+   * stands asks it. The right is given as a read the person began starts, an opening or a step
+   * inside the document, and lasts until the read has landed or they move focus themselves,
+   * back to the link included. A read the window's return began is given none, so it takes
+   * focus from nothing that holds it: a person typing in the card lost the letters that
+   * followed when a refused file turned readable while they were away. A change of host
+   * because the window changed width is nobody's move, so what follows it follows no input.
+   */
+  const focusRight = latestFocusRight()
 
   const toSuffix = (suffix: string) => {
     placement.value = { kind: 'suffix', serial: placement.value.serial + 1, suffix }

@@ -17,12 +17,17 @@
  * This is the one record of the last input, and `moveFocus` reads it too: a press of a mouse,
  * pen or finger (`pointerdown`, whatever its `pointerType`) or a key other than a bare modifier.
  * A pointer moving over the page is neither, so a write that ends after a round trip still
- * answers the input that started it.
+ * answers the input that started it. The inputs are counted as well, for `focusRight` to tell
+ * whether one came after a given moment.
  */
 let lastInput: 'key' | 'pointer' | null = null
+let inputs = 0
 
 /** Whether a press of the pointer, and not a key, was the last input. */
 export const pressedLast = (): boolean => lastInput === 'pointer'
+
+/** How many presses and keys the page has had, as a mark to compare a later count with. */
+export const inputCount = (): number => inputs
 
 /**
  * The input types a reader types into, as the WICG `:focus-visible` polyfill lists them for
@@ -54,19 +59,33 @@ export function takesTyping(node: Element): boolean {
 /** A key held for a press or another key is not a use of the keyboard on its own. */
 const MODIFIERS = new Set(['Alt', 'AltGraph', 'CapsLock', 'Control', 'Meta', 'Shift'])
 
+let listening = false
+
+function record(input: 'key' | 'pointer') {
+  lastInput = input
+  inputs += 1
+}
+
+/** Starts the record of the last input; once, however often it is asked. */
+export function recordInput(): void {
+  if (listening) return
+  listening = true
+  document.addEventListener('pointerdown', () => record('pointer'), { capture: true })
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (!MODIFIERS.has(event.key)) record('key')
+    },
+    { capture: true },
+  )
+}
+
 let installed = false
 
 export function quietFocusAfterPress(): void {
   if (installed) return
   installed = true
-  document.addEventListener('pointerdown', () => (lastInput = 'pointer'), { capture: true })
-  document.addEventListener(
-    'keydown',
-    (event) => {
-      if (!MODIFIERS.has(event.key)) lastInput = 'key'
-    },
-    { capture: true },
-  )
+  recordInput()
   for (const prototype of [HTMLElement.prototype, SVGElement.prototype]) {
     const focus = Object.getOwnPropertyDescriptor(prototype, 'focus')?.value as unknown
     if (typeof focus !== 'function') continue

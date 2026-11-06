@@ -6,12 +6,12 @@
  * close the card behind a document still open.
  *
  * It acts only on focus the viewer had and lost to nothing, so it takes it from nobody. A
- * move that would take focus from where the reader stands asks `useFocusRight`.
+ * move that would take focus from where the reader stands asks the viewer's `focusRight`.
  */
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { Ref } from 'vue'
 
-import { focusOnNothing } from '@/widgets/document-viewer/composables/useFocusRight.ts'
+import { focusOnNothing } from '@/shared/lib/focusRight.ts'
 
 export function useFocusKeeper(root: Ref<HTMLElement | null>, landing: () => void) {
   let held: Element | null = null
