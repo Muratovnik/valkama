@@ -496,6 +496,10 @@ checkouts are therefore distinguishable even at the same version.
   has room the mark gives way whole rather than as dots or a bare number, and the header's
   hover text and accessible name say it. The number now takes the size and colour of its
   word close up too.
+- **On a short window the graph's zoom buttons stay in sight and answer a click.** The graph
+  kept a height of its own and ran over them where the window left it less, so «Fit whole
+  graph» was hidden and a click on it opened a card; the graph now takes the room left
+  above them.
 - An answer given in the interface now reaches the agent: a person answering, changing,
   declining or withdrawing a question never produced a notice, a `from_person` line or the
   `person_spoke` refusal, because the interface answers through a route those reads did not

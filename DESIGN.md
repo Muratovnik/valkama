@@ -998,7 +998,8 @@ column does and a group of states by the group's own word, never by a
 workflow key. The graph's key stands in the field's own strip above the flow,
 not in the bar, and keeps the place of a state a switch can add, so no switch
 moves the bar or the field; the camera controls stand in the strip below. Neither
-lies on the flow, so no framing and no pan puts a node under either. In a
+lies on the flow, so no framing and no pan puts a node under either, and the field is as
+tall as the room the two strips leave it, however short the window. In a
 phone-wide workspace the bar is one row — the filter or the chip and a «Graph
 options» button that opens the switch and the key under it — the frontier count
 takes the key's place in the upper strip, and the camera controls

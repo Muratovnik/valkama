@@ -120,9 +120,11 @@ const PRESS_SLOP = 4
   /* The camera says how much a comet's stroke grows against a field zoomed far out. */
   --graph-comet-stroke-scale: 1;
 
+  /* As tall as the row the canvas leaves it between its strips (`GraphView`), at any window.
+     A floor of its own kept it 360px tall in a shorter row, where it ran over the camera's
+     strip and took the presses meant for its buttons. */
   width: 100%;
   height: 100%;
-  min-height: 360px;
   background: var(--color-surface-recess);
   overflow: hidden;
 
@@ -205,14 +207,6 @@ const PRESS_SLOP = 4
 
 :deep(.vue-flow__edge.graph-edge.recessed) {
   opacity: 0.16;
-}
-
-@container workspace (width <= 586px) {
-  /* The field is whatever the column leaves it. A floor taller than that would
-     run the flow out of its box, and the camera controls with it. */
-  .graph-flow {
-    min-height: 0;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
