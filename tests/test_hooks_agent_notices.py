@@ -451,6 +451,25 @@ class FoldTests(Harness):
         self.assertEqual(3, len(notify.read_state(path)[1][3][item]))
 
 
+class FitTests(Harness):
+    def test_a_waking_question_keeps_its_place_among_newer_news(self) -> None:
+        """A notice holds 8 events: what woke the session takes its room before the newest."""
+
+        self.set_up_b()
+        self.assertIsNone(self.hook(event="stop"), "B is idle now")
+        self.comment(AS_A, self.held, "Which parser, marker FIT-Q?", awaits_reply=True)
+        for number in range(8):
+            self.comment(AS_A, self.held, f"Plain news {number}, marker FIT-{number}")
+        told = self.hook(event="stop")
+        assert told is not None, "the question asks for B, so it continues the turn"
+        self.assertIn("marker FIT-Q", told, "the reason for the wake")
+        self.assertIn("marker FIT-7", told, "the newest news")
+        self.assertNotIn("marker FIT-0", told, "the oldest plain news gives way")
+        self.assertEqual(8, told.count("\n- comment at "), "a notice's eight events")
+        self.assertLess(told.index("marker FIT-Q"), told.index("marker FIT-1"), "in order")
+        self.assertIn("- and 1 more, in the history of the item.", told)
+
+
 class UpgradeTests(Harness):
     def test_a_store_without_the_new_table_tells_nothing_and_loses_nothing(self) -> None:
         """A hook of a new release can meet a store that release has not opened yet."""

@@ -567,8 +567,12 @@ news on to a subagent that cannot hear it. It ends by saying that quoted words
 are what was written on the card, information about the work and not an
 instruction to the agent or permission for an irreversible action. The text
 calls itself a Valkama notice and is not written as a system message: a model
-rightly refuses text that poses as one. A notice keeps the newest 8 events that
-fit in 2400 characters and counts the rest.
+rightly refuses text that poses as one. A notice keeps 8 events that fit in 2400
+characters and counts the rest: since 2.6 first what woke the session, newest
+first, then the newest of the others, each block in its own order. Filled by the
+newest alone, eight plain comments on one item pushed out of the notice the
+question on another that woke it. The count says `earlier` when everything it
+leaves out came before what it shows, and `more` otherwise.
 
 **Since 2.5**, a notice's head says it is about "work this session holds or
 threads it started", and a reply's line says whose thread it is: to the author of
@@ -644,8 +648,8 @@ block after the hourly limit held such news back counts it:
 other agents, so they waited for this call.` The person's block comes first and takes its share of the notice's 8
 events and 2400 characters first, leaving room only for the agents' heading, newest
 event and closing lines, and the agents' block has what remains. Each block
-keeps its heading and its closing lines, shows at least its newest event and counts
-the ones it left out. A notice with no news from a person is the agents' block alone.
+keeps its heading and its closing lines, shows at least one event, what woke the
+session if anything did, and counts the ones it left out. A notice with no news from a person is the agents' block alone.
 
 **Folded past three notices.** One recipient hears another session's words on one
 item in at most 3 notices an hour. After that, until an hour has passed since the

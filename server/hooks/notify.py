@@ -1151,25 +1151,44 @@ def _agents_block(
 def _fit(
     first: str, events: list[tuple[str, str, dict]], last: list[str], most: int, characters: int
 ) -> tuple[str, int]:
-    """A block with the newest events that fit, at least one, and how many it shows."""
+    """A block with the events that fit, at least one, in their order, and how many it shows.
 
-    shown: list[tuple[str, str, dict]] = []
-    for event in reversed(events):
-        trial = [event, *shown]
-        if shown and (
-            len(trial) > most
-            or len(_compose(first, trial, len(events) - len(trial), last)) > characters
-        ):
+    What woke the session takes the room first, newest first, then the newest of the
+    rest: filled by the newest alone, eight plain comments on one item pushed the
+    question that woke the session on another out of the notice that it woke.
+    """
+
+    order = sorted(range(len(events)), key=lambda at: (not _wakes(events[at][2]), -at))
+    chosen: list[int] = []
+    for at in order:
+        trial = sorted([*chosen, at])
+        if chosen and (len(trial) > most or len(_block(first, events, trial, last)) > characters):
             break
-        shown = trial
-    return _compose(first, shown, len(events) - len(shown), last), len(shown)
+        chosen = trial
+    return _block(first, events, chosen, last), len(chosen)
+
+
+def _block(first: str, events: list[tuple[str, str, dict]], chosen: list[int], last: list[str]):
+    """The block that shows `chosen` of `events`, saying how many it leaves to the history:
+    `earlier` when all of them came before what it shows, else `more`."""
+
+    left = [at for at in range(len(events)) if at not in chosen]
+    older = not left or not chosen or max(left) < min(chosen)
+    return _compose(first, [events[at] for at in chosen], len(left), last, older=older)
 
 
 def _bounded(text: str) -> str:
     return text if len(text) <= MOST_CHARACTERS else text[: MOST_CHARACTERS - 1] + "…"
 
 
-def _compose(first: str, shown: list[tuple[str, str, dict]], left: int, last: list[str]) -> str:
+def _compose(
+    first: str,
+    shown: list[tuple[str, str, dict]],
+    left: int,
+    last: list[str],
+    *,
+    older: bool = True,
+) -> str:
     lines = [first]
     current = None
     for reference, title, entry in shown:
@@ -1187,7 +1206,7 @@ def _compose(first: str, shown: list[tuple[str, str, dict]], left: int, last: li
         line = f"- {entry['kind']} at {entry['at']}{_where(entry)}{_flags(entry)}"
         lines.append(line + (f": {_quote(said)}" if said else ""))
     if left:
-        lines.append(f"- and {left} earlier, in the history of the item.")
+        lines.append(f"- and {left} {'earlier' if older else 'more'}, in the history of the item.")
     return "\n".join([*lines, *last])
 
 
