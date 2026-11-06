@@ -187,13 +187,16 @@ checkouts are therefore distinguishable even at the same version.
   work under their epic: three running dots while an agent works on one, still dots while
   its session holds it and works elsewhere, a ring while it waits for a person, and how
   many agents are on it. An item silent for over a day and a pinned one with no work stand
-  muted, and a pinned item that has closed says its state. The order does not jump, a row
-  whose work ended stays muted for 20 seconds and longer while the pointer or focus is on
-  it, and the groups you fold stay folded on this device. A row opens its card, in its own
-  space if it is another one, without changing the view. The pin on a row, or beside the
-  link in the card's head, keeps an item in the list until you remove it. On a phone the
-  rail's list button, with the number of items at work, opens the same list in a panel.
-  A tab keeps one connection for it, on a board, in Settings and in the portfolio alike.
+  muted, and a pinned item that has closed says its state. An epic at work shows its sign
+  where its tasks show theirs, and the titles of one level start at one edge however long
+  their numbers are. The order does not jump, a row whose work ended stays muted for 20
+  seconds and longer while the pointer or focus is on it, and the groups you fold stay
+  folded on this device. A row opens its card, in its own space if it is another one,
+  without changing the view. The pin, which comes up at the end of a row without covering
+  its title or its count, or the one beside the link in the card's head, keeps an item in
+  the list until you remove it. On a phone the rail's list button, with the number of
+  items at work, opens the same list in a panel, where every fold is a finger's size. A
+  tab keeps one connection for it, on a board, in Settings and in the portfolio alike.
 
 ### Changed
 
