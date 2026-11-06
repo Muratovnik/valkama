@@ -132,10 +132,11 @@ input:is([type='checkbox'], [type='radio']) {
 }
 
 /* The one focus ring, on whatever holds focus, drawn only where the browser says focus
-   should be seen: after the keyboard, or where the app moved it and asked (`moveFocus`).
-   A press of the pointer rings nothing, not even an element only the app focuses after it
-   (`pressFocus`, since a press that prevents its own focus left that to chance): rings on
-   `:focus` showed around headings and answers nobody had tabbed to. A component may move
+   should be seen: after the keyboard, including where the app moved focus after a key
+   (`moveFocus`). A press of the pointer rings nothing, not even an element only the app
+   focuses after it, nor where the app moved focus in answer to the press (`pressFocus`,
+   since a press that prevents its own focus left that to chance): rings on `:focus` showed
+   around headings and answers nobody had tabbed to. A component may move
    this ring clear of its words or draw focus its own way, and does that on
    `:focus-visible` too; a field shows focus by its own edge (`VTextInput`). */
 :focus-visible {
@@ -145,10 +146,11 @@ input:is([type='checkbox'], [type='radio']) {
 
 /* Words the app moves focus to and keeps it on, because taking it to the whole they stand in
    would send the next Tab to the start of a long form: why a write or a read did not go
-   through, a reply just written, a list's heading. The ring stands clear of the words and
-   turns at a control's corner. A control's own radius at that distance closed one line into
-   a capsule round the words, and the recipe stood copied in six components. Words that only
-   say something about a question describe the question, which takes the focus instead. */
+   through, a reply just written, a list's heading. After a key the ring stands clear of the
+   words and turns at a control's corner. A control's own radius at that distance closed one
+   line into a capsule round the words, and the recipe stood copied in six components. Words
+   that only say something about a question describe the question, which takes the focus
+   instead. */
 .focus-landing:focus-visible {
   border-radius: calc(var(--radius-control) - var(--space-1));
   outline-offset: var(--space-1);

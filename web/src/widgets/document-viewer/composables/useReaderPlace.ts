@@ -12,6 +12,7 @@ import type {
   ReaderPlace,
 } from '@/widgets/document-viewer/composables/useDocumentView.ts'
 
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { RichDocument } from '@/shared/lib/richText.ts'
 import { suffixTarget } from '@/shared/lib/textReferences.ts'
 
@@ -124,10 +125,13 @@ export function useReaderPlace(options: {
     return nth === -1 ? null : { block, nth }
   }
 
-  /** Focus back on a control the reader left by; false when the text no longer has it. */
+  /**
+   * Focus back on a control the reader left by, ringed as the way back was asked for
+   * (`moveFocus`); false when the text no longer has it.
+   */
   function focusLink(link: HeldLink): boolean {
     const control = controlsOf(text.value?.box(link.block))[link.nth]
-    control?.focus({ preventScroll: true, focusVisible: true })
+    moveFocus(control, { preventScroll: true })
     return control !== undefined && document.activeElement === control
   }
 

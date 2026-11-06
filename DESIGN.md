@@ -1499,8 +1499,11 @@ doubled by text or shape and is never the only carrier of a state.
 
 The focus ring is drawn on `:focus-visible` alone: where the keyboard put focus,
 and where the interface moved it in answer to something — how a question ended,
-the next question, why a send failed — which asks for the ring whatever was used
-before (`moveFocus`). A press of the pointer rings nothing it lands on, including
+the next question, why a send failed — when a key started it (`moveFocus`), so a
+keyboard user still sees where focus went. After a press of a mouse, pen or finger
+the interface moves focus just the same, for a screen reader and the next Tab, and
+draws no ring: the last press or key decides, and a pointer passing over the page
+does not. A press of the pointer rings nothing it lands on, including
 an element only the interface focuses. The interface takes focus to a whole and not to a line
 of words that only says something about it: how a question ended, its passed deadline and its
 title in the list of everything waiting describe or name the question, which takes the focus

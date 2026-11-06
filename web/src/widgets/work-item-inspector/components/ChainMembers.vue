@@ -93,8 +93,8 @@ async function toggle(group: ChainGroup) {
   const target = opening
     ? within(group)?.querySelectorAll<HTMLElement>('.chain-row')[LIMIT]
     : within(group)?.querySelector<HTMLElement>('.chain-more')
-  // The first row revealed is where the press took the reader, so it is ringed; closing
-  // leaves focus on the toggle that was pressed, which a press does not ring.
+  // The first row revealed is where the press took the reader, so it is ringed after a key;
+  // closing leaves focus on the toggle that was pressed, which a pointer's press does not ring.
   if (opening) moveFocus(target, { preventScroll: true })
   else target?.focus({ preventScroll: true })
   target?.scrollIntoView({ block: 'nearest' })

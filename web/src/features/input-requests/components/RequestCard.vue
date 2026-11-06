@@ -16,9 +16,9 @@
  *
  * Folding takes the controls that had focus away, whoever answered, so focus goes to the
  * question, described by how it ended: the person stays on the question they were in, and
- * the ring goes round it, as round a thread that folds. A deadline passing does the same,
- * with the question described by its deadline, and so does the list moving on to the next
- * question, which its title names. What is held belongs to the
+ * after a key the ring goes round it, as round a thread that folds. A deadline passing does
+ * the same, with the question described by its deadline, and so does the list moving on to
+ * the next question, which its title names. What is held belongs to the
  * host, which outlives this while a dialog closes and opens and which the draft guard asks.
  * Folding also lifts what stands below it, so a press that lands here only because of that
  * reaches nothing: it was meant for another question.
@@ -389,9 +389,10 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
   scroll-margin-top: var(--space-4);
 }
 
-/* The app moves focus here, to the question it stays on, and rings it as it does
-   (`moveFocus`): it is the one sign of where the reader was taken. A press here takes focus
-   too, and rings nothing. The ring is the base one, round the sheet's own corner. */
+/* The app moves focus here, to the question it stays on, and after a key rings it as it
+   does (`moveFocus`): it is the one sign of where the reader was taken. After a press, and on
+   a press here, it takes focus and rings nothing. The ring is the base one, round the sheet's
+   own corner. */
 .request-card:focus-visible {
   border-radius: var(--radius-card);
   outline-offset: var(--space-half);

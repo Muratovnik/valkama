@@ -10,9 +10,17 @@
  * ringed after a click.
  * Nothing in the library takes a ring's say, so the say is given where every such focus
  * passes: a `focus()` naming no `focusVisible` after a press, and before the next key,
- * names it false. `moveFocus` names it true and keeps its ring; after a key nothing changes.
+ * names it false. After a key nothing changes.
+ *
+ * This is the one record of the last input, and `moveFocus` reads it too: a press of a mouse,
+ * pen or finger (`pointerdown`, whatever its `pointerType`) or a key other than a bare modifier.
+ * A pointer moving over the page is neither, so a write that ends after a round trip still
+ * answers the input that started it.
  */
 let lastInput: 'key' | 'pointer' | null = null
+
+/** Whether a press of the pointer, and not a key, was the last input. */
+export const pressedLast = (): boolean => lastInput === 'pointer'
 
 /** A key held for a press or another key is not a use of the keyboard on its own. */
 const MODIFIERS = new Set(['Alt', 'AltGraph', 'CapsLock', 'Control', 'Meta', 'Shift'])
@@ -34,7 +42,7 @@ export function quietFocusAfterPress(): void {
     const focus = Object.getOwnPropertyDescriptor(prototype, 'focus')?.value as unknown
     if (typeof focus !== 'function') continue
     prototype.focus = function (this: HTMLOrSVGElement, options?: FocusOptions) {
-      const quiet = lastInput === 'pointer' && options?.focusVisible === undefined
+      const quiet = pressedLast() && options?.focusVisible === undefined
       Reflect.apply(focus, this, [quiet ? { ...options, focusVisible: false } : options])
     }
   }

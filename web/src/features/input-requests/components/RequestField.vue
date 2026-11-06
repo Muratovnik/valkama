@@ -186,7 +186,7 @@ const toggleStop = (option: string) => (standing.value === option ? 0 : -1)
 const radioStop = (option: string) =>
   chosenOption.value || standing.value === option ? undefined : -1
 
-/** Moves focus, ringed, to what is to be fixed: the own variant's text, or the group. */
+/** Moves focus, ringed after a key, to what is to be fixed: the own variant's text or the group. */
 function focus() {
   const text = editor.value ?? (props.ownError ? ownEditor.value : null)
   if (text) {

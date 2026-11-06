@@ -159,10 +159,10 @@ function blocksFor(shown: RichDocument, suffix: string): { first: number; marks:
 
 /**
  * Focus follows the reader, while `focusRight` says it may. A block a link sent them to is an
- * answer to the press, which asks for the ring; the head of a document just opened is only
- * where reading starts, and the input that opened it decides. A page opened by an address or
- * a reload answers nothing: focus waits on what it is read with, unringed, where the keys
- * that scroll work.
+ * answer to the press, ringed when a key made it (`moveFocus`); the head of a document just
+ * opened is only where reading starts, and the input that opened it decides. A page opened by
+ * an address or a reload answers nothing: focus waits on what it is read with, unringed, where
+ * the keys that scroll work.
  */
 function land(box: HTMLElement | null) {
   if (props.page && !pageWasTouched()) scroller.value?.focus({ preventScroll: true })

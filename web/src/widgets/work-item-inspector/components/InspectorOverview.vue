@@ -80,7 +80,7 @@ function askOutcome(move: StateMove) {
 
 /**
  * After the flush: pressed from another section, Overview has not been shown yet. Focus
- * goes with the view, to the heading of the list, ringed wherever the press came from:
+ * goes with the view, to the heading of the list, ringed when a key pressed (`moveFocus`):
  * what was pressed stays far above, and the next Tab should start from the list.
  */
 async function revealChecklist() {

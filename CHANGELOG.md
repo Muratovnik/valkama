@@ -141,6 +141,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **No focus ring after you act with the mouse or a finger.** When you send a reply, open a
+  thread's replies, jump to the checklist, fail a send or go back to a link with the mouse or
+  by touch, focus still moves to the reply, the list or the reason, so a screen reader and the
+  next Tab go on from there, but no ring is drawn round it. The same action from the keyboard
+  still rings where focus went.
 - **An epic's header on the graph is as tall as its title.** A title of one, two or three
   lines takes that many, and the counts stand right under it, with no empty band between
   them; the layout leaves each header the room it is drawn at. The chevron leads the
