@@ -364,7 +364,7 @@ test('a long holder is cut short, keeps its whole name in its tooltip, and takes
   await section.screenshot(shot(info.outputPath('chain-columns-long-holder.png')))
 })
 
-test('a row highlights its full width, and a click on its empty cell opens the task', async ({
+test('a row highlights its full width and its inset past each edge, and a click on its empty cell opens the task', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 1000 })
@@ -372,10 +372,23 @@ test('a row highlights its full width, and a click on its empty cell opens the t
   await serve(page, chain())
   const section = await openCard(page)
   const row = section.locator('.chain-row[data-reference="MAIN-1134"]')
-  const list = await section.locator('.chain-rows').first().boundingBox()
   await row.hover()
   const rowBox = await row.boundingBox()
-  expect(Math.abs((rowBox?.width ?? 0) - (list?.width ?? 0))).toBeLessThanOrEqual(1)
+  // The fill keeps its inset outside the list, so the row's words stand on the list's edges.
+  // Read in one frame with the list, since the drawer may still be sliding in.
+  const reach = await row.evaluate((node) => {
+    const list = node.closest('.chain-rows')?.getBoundingClientRect()
+    const fill = node.getBoundingClientRect()
+    const inset = Number.parseFloat(getComputedStyle(node).getPropertyValue('--space-fill-inset'))
+    return {
+      inset,
+      start: (list?.left ?? 0) - fill.left,
+      end: fill.right - (list?.right ?? 0),
+    }
+  })
+  expect(reach.inset).toBeGreaterThan(0)
+  expect(Math.abs(reach.start - reach.inset)).toBeLessThanOrEqual(1)
+  expect(Math.abs(reach.end - reach.inset)).toBeLessThanOrEqual(1)
   expect(await row.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
     'rgba(0, 0, 0, 0)',
   )
