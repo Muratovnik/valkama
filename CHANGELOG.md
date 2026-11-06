@@ -188,9 +188,14 @@ checkouts are therefore distinguishable even at the same version.
   first and the primary button ends the line.
   The question asked before written words are dropped, under a reply, in this form or
   while an answer is changed, now puts its buttons at the end of its line too, keeps them
-  together on a phone, and starts its words on the form's own edge.
+  together on a phone, and starts its words on the form's own edge. So does the question
+  asked before a refused move is carried through anyway, which stood inside the refusal on a
+  ground of the same grey, 12px in from its words, and on a phone in Russian put «Перевести
+  принудительно» on a line under «Отмена».
   «Mark the thread resolved» under a reply takes a press across a line as tall as an
-  action's, not only across its words.
+  action's, not only across its words. The icons at the end of an entry's name and date, a
+  review's point and a field's label stand on its first line when it wraps, not up to 14px
+  under it.
 - **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
   mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
   next with «23:47»; the time now moves to the next line whole.
