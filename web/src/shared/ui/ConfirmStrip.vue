@@ -8,9 +8,16 @@
  * with either answer. Focus lands on the way back, so a reflexive Enter keeps
  * the work instead of discarding it, and Escape answers it the same way rather
  * than closing whatever surface the strip stands in.
+ *
+ * It lies a step above the ground it stands on, as a block of the sheet's tone. On a sheet, whose
+ * tone that already is, the block could not be told from the sheet and its inset read as a third
+ * left edge, so there it draws neither and its words start on the sheet's own edge. It reads which
+ * of the two it stands on once it is in place, so no host has to say so: a flag each host had to
+ * remember was left off one of them.
  */
 import { onMounted, onUnmounted, ref, useId } from 'vue'
 
+import { levelWithGround } from '@/shared/lib/ground.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -18,20 +25,16 @@ const props = withDefaults(
     cancelLabel: string
     confirmLabel: string
     message: string
-    /**
-     * It stands on a sheet, whose ground is the strip's own: there it draws no ground, which
-     * could not be told from the sheet's, and no inset, which read as a third left edge.
-     */
-    onSheet?: boolean
     /** `danger` when going ahead destroys something, such as an unsaved draft. */
     tone?: 'danger' | 'primary'
   }>(),
-  { onSheet: false, tone: 'primary' },
+  { tone: 'primary' },
 )
 
 const emit = defineEmits<{ cancel: []; confirm: [] }>()
 const id = useId()
 const strip = ref<HTMLElement | null>(null)
+const onSheet = ref(false)
 // Whatever asked the question, read before the strip takes focus: the answer
 // hands focus back to it instead of dropping it on the page body, where a
 // keyboard reader has to start the surface over. A trigger that should get it
@@ -40,6 +43,7 @@ const active = document.activeElement
 const opener = active instanceof HTMLElement && active !== document.body ? active : null
 
 onMounted(() => {
+  if (strip.value) onSheet.value = levelWithGround(strip.value)
   strip.value?.querySelector<HTMLButtonElement>('.confirm-cancel')?.focus()
 })
 
@@ -54,7 +58,7 @@ onUnmounted(() => {
     ref="strip"
     class="confirm-strip"
     role="group"
-    :class="{ 'on-sheet': props.onSheet }"
+    :class="{ 'on-sheet': onSheet }"
     :aria-labelledby="id"
   >
     <p
@@ -92,7 +96,7 @@ onUnmounted(() => {
   border-radius: var(--radius-card);
 }
 
-/* On a sheet of its own ground: the words and buttons on the column's edge. */
+/* On a sheet of its own tone: the words and buttons on the sheet's edge. */
 .confirm-strip.on-sheet {
   padding: 0;
   background: none;

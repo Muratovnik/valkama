@@ -107,7 +107,6 @@ defineExpose({ focus: () => editor.value?.focusAtTop() })
       :message="t('threads.dropReply')"
       :cancel-label="t('threads.keepReply')"
       :confirm-label="t('threads.confirmDrop')"
-      on-sheet
       @cancel="asking = false"
       @confirm="emit('cancel')"
     />

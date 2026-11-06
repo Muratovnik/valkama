@@ -106,7 +106,6 @@ const { asking, cancel } = useAskedCancel(
       :message="t('threads.dropDecision')"
       :cancel-label="t('threads.keepReply')"
       :confirm-label="t('threads.confirmDrop')"
-      on-sheet
       @cancel="asking = false"
       @confirm="emit('cancel')"
     />

@@ -78,7 +78,6 @@ defineExpose({
       :cancel-label="t('requests.keepChanging')"
       :confirm-label="t('requests.discardChange')"
       :message="t('requests.cancelAsked')"
-      on-sheet
       @cancel="emit('keep')"
       @confirm="emit('discard')"
     />

@@ -200,7 +200,12 @@ chrome.
   failed reads its fill from `--color-state-panel-surface`, which falls back to the
   sheet; a host lying on the workspace panel itself — the Work module's frame, every
   project's work, installation health, the shell's recovery, a task's link — names
-  the ground there instead, because the sheet stood two steps up, 1.41 to the panel. A rung that names the
+  the ground there instead, because the sheet stood two steps up, 1.41 to the panel.
+  A question asked in place (`ConfirmStrip`) is a block of the sheet's tone where it
+  stands on a ground; on a sheet, whose tone that already is, it draws no ground and
+  no inset and its words start on the sheet's edge. The strip reads which of the two
+  it stands on, since a flag every host had to set was left off a refusal, where it
+  drew a block nobody could see and a third left edge. A rung that names the
   same palette step as another rung is a duplicate and fails
   `designTokens.test.ts`, which reads the rungs out of the palette; a role names
   the rung it stands on (`--color-surface-hover` is the resting control's rung,
