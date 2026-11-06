@@ -301,3 +301,35 @@ for (const locale of ['ru', 'en'] as const)
       await expect(thread('Who owns the importer').locator('.meta-after')).toHaveCount(1)
     })
   }
+
+/**
+ * A question in a thread someone resolved, and a reply in it that asked as well, with nobody
+ * answering either: resolving the thread ended the wait, as it ends it for the wakes.
+ */
+const resolvedAsking = () => [
+  root(43, 'Is the cache still needed?', {
+    author: ASKER,
+    awaits_reply: true,
+    answered: false,
+    resolution: { at: '2026-08-13T11:00:00Z', by: 'user', by_person: true, text: 'Dropped' },
+  }),
+  reply(44, 43, 'Does the nightly job still read it?', {
+    author: ASKER,
+    awaits_reply: true,
+    answered: false,
+  }),
+]
+
+for (const locale of ['ru', 'en'] as const)
+  test(`${locale}: a resolved thread says nothing waits, folded or open`, async ({ page }) => {
+    const { drawer, thread } = await openAsked(page, locale, 1280, resolvedAsking())
+    const resolved = thread('Is the cache still needed')
+    await expect(resolved).toHaveClass(/is-folded/)
+    await expect(resolved.locator('.meta-after')).toHaveCount(0)
+    await resolved.getByRole('button', { name: WORDS[locale].expand, exact: true }).click()
+    await expect(resolved.locator('.thread-meta')).toBeVisible()
+    await expect(resolved.locator('.reply').filter({ hasText: 'nightly job' })).toBeVisible()
+    await expect(resolved.locator('.meta-after')).toHaveCount(0)
+    // The questions in open threads still say they wait.
+    await expect(drawer.locator('.meta-after')).toHaveCount(3)
+  })

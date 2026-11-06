@@ -183,8 +183,10 @@ export function isUnresolved(row: ThreadRow, kept: ReadonlySet<string>) {
 }
 
 /**
- * Whether an entry asked and still waits for its reply: it said so with `awaits_reply`, and the
- * read does not yet say another session or a person has `answered` in its thread.
+ * Whether an entry asked and still waits for its reply: it said so with `awaits_reply`, the
+ * read does not yet say another session or a person has `answered` in its thread, and its
+ * thread is not resolved. A resolved thread ends the wait, as it ends it for the wakes. A root
+ * carries its thread's mark; a reply is told it.
  */
-export const waitsForReply = (entry: ThreadComment) =>
-  entry.awaits_reply === true && entry.answered !== true
+export const waitsForReply = (entry: ThreadComment, resolved = entry.resolution !== null) =>
+  !resolved && entry.awaits_reply === true && entry.answered !== true

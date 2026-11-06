@@ -44,12 +44,14 @@ const props = withDefaults(
     threadKey: string
     /** A write on the card is under way, so nothing can be asked of it yet. */
     busy?: boolean
+    /** The thread is resolved, which ends any wait for a reply in it. */
+    resolved?: boolean
     suggest?: InstanceType<typeof MarkdownEditor>['$props']['suggest']
     /** This card can be written on. A thread with no `parent` still takes no reply. */
     writable?: boolean
     when: (value: string | null) => string
   }>(),
-  { busy: false, suggest: undefined, writable: false },
+  { busy: false, resolved: false, suggest: undefined, writable: false },
 )
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
@@ -111,7 +113,7 @@ function sessionOf(reply: ThreadComment) {
   return reply.by_person === true ? '' : actorSession(reply.author)
 }
 function waitingOf(reply: ThreadComment) {
-  return waitsForReply(reply) ? t('threads.awaitsReply') : ''
+  return waitsForReply(reply, props.resolved) ? t('threads.awaitsReply') : ''
 }
 function send() {
   if (props.parent) sendReply(props.threadKey, props.parent, props.root)

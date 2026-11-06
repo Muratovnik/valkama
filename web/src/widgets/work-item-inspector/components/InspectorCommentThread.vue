@@ -312,6 +312,7 @@ function sendMark() {
         :busy="busy"
         :can-mark="canMark"
         :parent="parent"
+        :resolved="Boolean(mark)"
         :replies="row.replies"
         :root="root.id"
         :suggest="suggest"
