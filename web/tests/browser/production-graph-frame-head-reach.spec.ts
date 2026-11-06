@@ -305,7 +305,7 @@ async function expectRings(page: Page, head: Locator, state: string) {
   await page.mouse.move(...centre(drawn.words[0].box))
   await painted(page)
   expect(await ringStyle(open), `${state}: the epic hovered`).toEqual([])
-  expect(
+  expect.soft(
     await movedSince(page, drawn.fold, [await picture(page, drawn.fold), chevronAtRest], false),
     `${state}: the chevron under the epic's face`,
   ).toEqual([])
