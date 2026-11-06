@@ -134,6 +134,33 @@ test('in the list a press on a heading rings nothing, and answering rings the ne
   await expect(next).toHaveAccessibleName(title)
 })
 
+/** How far the top of `card`, ring and all, stands below the top of the box that scrolls it. */
+const topInView = (card: Locator) =>
+  card.evaluate((node) => {
+    let box = node.parentElement
+    while (
+      box &&
+      !(box.scrollHeight > box.clientHeight && getComputedStyle(box).overflowY !== 'visible')
+    )
+      box = box.parentElement
+    const ring = Number.parseFloat(getComputedStyle(node).outlineOffset) + 2
+    return node.getBoundingClientRect().top - ring - (box?.getBoundingClientRect().top ?? 0)
+  })
+
+test('in the list the next question above comes into view from its top edge, ring and all', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 600 })
+  const opened = await openQuestion(page, pair(20, 2))
+  const { next, top } = await inTheList(page, opened)
+  await next.getByRole('radio', { name: 'Choice 1', exact: true }).click()
+  await send(next).click()
+  // The question still waiting is the one above, out of sight under the list's top edge.
+  await expect(top).toBeFocused()
+  expect(await outline(top)).toBe('solid')
+  expect(await topInView(top)).toBeGreaterThanOrEqual(0)
+})
+
 /** How the ring stands round what holds it: its air from the box and the round of its corners. */
 const ringOf = (target: Locator) =>
   target.evaluate((node) => {
@@ -173,7 +200,17 @@ test('why a write or a read failed is ringed clear of its words, at a control co
     route.fulfill({ status: 500, json: {} }),
   )
   await dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' }).click()
-  await expectLineRing(dialog.locator('.request-toolbar .request-error'))
+  const failed = dialog.locator('.request-toolbar .request-error')
+  await expectLineRing(failed)
+  // Across the line up to the refresh, as a failed send is: round the words alone it stood as a chip.
+  const refresh = await dialog.locator('.request-toolbar').getByRole('button').boundingBox()
+  const line = await failed.boundingBox()
+  const gap = await dialog
+    .locator('.request-toolbar')
+    .evaluate((node) => Number.parseFloat(getComputedStyle(node).columnGap))
+  expect(
+    Math.abs((refresh?.x ?? 0) - gap - ((line?.x ?? 0) + (line?.width ?? 0))),
+  ).toBeLessThanOrEqual(1)
 
   opened.requests.failNext(503)
   await card.getByRole('radio', { name: 'Move them', exact: true }).click()

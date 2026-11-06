@@ -9,17 +9,22 @@ import { revealFrame } from '@/shared/lib/revealFrame.ts'
  * The app takes focus to the question as a whole, and never to one of its lines of words: a
  * ring drawn round one line stood as a thin capsule pressed against the words. The line that
  * says why focus came (how the question ended, its deadline, its title in the list) names or
- * describes the question instead, and is what is brought into view.
+ * describes the question instead.
  */
 export function useRequestFocus(card: Ref<HTMLElement | null>) {
-  /** Moves focus to the question and brings `line` into view, or the question where it has none. */
+  /** Moves focus to the question and brings `line`, which says why, into view. */
   function focusOn(line: HTMLElement | null | undefined) {
     moveFocus(card.value, { preventScroll: true })
-    ;(line ?? card.value)?.scrollIntoView({ block: 'nearest' })
+    line?.scrollIntoView({ block: 'nearest' })
   }
-  /** Moves focus to this question, with its title in view where it has one. */
+  /**
+   * Moves focus to this question and brings it to the top of the view, its ring and the title
+   * under it in sight. Brought only as far as its title, the question stood with its top edge
+   * and the line over the title cut off under the edge of the list.
+   */
   function focus() {
-    focusOn(card.value?.querySelector<HTMLElement>('.request-title'))
+    moveFocus(card.value, { preventScroll: true })
+    card.value?.scrollIntoView({ block: 'start' })
   }
   /** Moves focus to the question, with how it ended in view; as `focus` while it still waits. */
   function focusOutcome() {

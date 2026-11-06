@@ -266,7 +266,10 @@ defineExpose({ holdsFocus })
   font: var(--font-note);
 }
 
+/* Across the line up to the refresh, so that the ring focus brings stands round the line as it
+   does round a failed send, and not round the words alone like a chip. */
 .request-error {
+  flex: 1 1 auto;
   color: var(--color-danger);
 }
 
