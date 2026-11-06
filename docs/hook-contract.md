@@ -534,7 +534,7 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
 
 | What | Wakes | For how long |
 | --- | --- | --- |
-| the first reply in a thread after a comment the session wrote with [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply), by another session or a person | the session that asked, its subagent's question included | until it is answered or the thread is resolved; later replies are told at the next tool call |
+| the first reply in a thread after a comment the session wrote with [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply), by another session or a person | the session that asked, its subagent's question included | while the thread is not resolved: the wait follows the thread's resolved mark, so a reopened thread waits again; the first reply ends the wait, and one written under the mark wakes nobody; later replies are told at the next tool call |
 | a comment with `awaits_reply`, on an item or naming it in `mentions` | the holders of that item, the claim's and the steps' | for 24 hours after it was written; older, it is told at the next tool call |
 | a [blocker closed](#another-agent-sessions-news) by another session or a person | the holders of the item it blocked | once per close |
 

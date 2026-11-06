@@ -176,7 +176,10 @@ checkouts are therefore distinguishable even at the same version.
   a person's acts are always quoted. The hook's `.marks` files are now headed `v4`. The
   card names the sessions that follow an item under its holder, «Subscribed», as their
   claims would name them, and a comment that asked says «no reply yet» after its time
-  until another session or you reply in its thread, or the thread is resolved. See
+  until another session or you reply in its thread. A resolved thread waits for nothing,
+  neither on the card nor for the hooks: a reply written then wakes nobody, and once the
+  thread is reopened a question still unanswered waits again and its reply wakes the
+  session that asked. See
   [Subscriptions](docs/connection-contract.md#subscriptions),
   [another agent session's news](docs/hook-contract.md#another-agent-sessions-news) and
   [when it wakes](docs/hook-contract.md#when-another-sessions-news-wakes).

@@ -262,10 +262,12 @@ _QUESTION_THREAD_ROWS = (
     " LEFT JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.reply_to_request = ? ORDER BY m.id"
 )
-#: The calls that set a root's resolved mark, `<id>` or `<id>: <decision>` in the event.
+#: The calls that set a root's resolved mark, `<id>` or `<id>: <decision>` in the event,
+#: and those that removed it, `<id>`, in order: whether each set it.
 _THREAD_MARKS = (
-    "SELECT call_id FROM work_item_events WHERE work_item_id = ? AND action = 'comment_resolved'"
-    " AND (detail = ? OR detail LIKE ?) ORDER BY id"
+    "SELECT call_id, action = 'comment_resolved' FROM work_item_events WHERE work_item_id = ?"
+    " AND action IN ('comment_resolved', 'comment_reopened') AND (detail = ? OR detail LIKE ?)"
+    " ORDER BY id"
 )
 
 
@@ -281,10 +283,13 @@ def awaited(
 
     The recipient waits from a comment its own call wrote with `awaits_reply`: its
     session for an orchestrator, itself for a subagent. A wait ends at the first
-    later reply by a person or by another confirmed session, which is the answer,
-    and at a resolved mark on the thread; the recipient's own session never answers
-    it. Every comment after the first wait is addressed to the recipient. Empty when
-    it never waited in this thread, which is one query for a thread nobody waits in.
+    later reply by a person or by another confirmed session; the recipient's own
+    session never answers it. That reply is the awaited answer unless the thread
+    carried its resolved mark when it was written: the wait follows the mark, so a
+    resolved thread waits for nothing and a reopened one waits again, and a reply
+    under the mark ends the wait as no answer. Every comment after the first wait is
+    addressed to the recipient. Empty when it never waited in this thread, which is
+    one query for a thread nobody waits in.
     """
 
     root, question = entry.get("reply_to"), entry.get("reply_to_request")
@@ -298,7 +303,7 @@ def awaited(
         return {}
     marks = (
         [
-            int(row[0])
+            (int(row[0]), bool(row[1]))
             for row in conn.execute(_THREAD_MARKS, (work_item_id, str(root), f"{root}: %"))
             if row[0] is not None
         ]
@@ -306,23 +311,31 @@ def awaited(
         else []
     )
     found: dict[int, bool] = {}
-    since: int | None = None
-    started = False
+    waiting = started = False
     for row in rows:
         call = int(row[1] or 0)
-        if since is not None and any(since < mark < call for mark in marks):
-            since = None
         if _wrote(row, session_id, agent_id):
             if row[2]:
-                since, started = call, True
+                waiting = started = True
             continue
         if not started:
             continue
         answers = _answers(row, session_id)
-        found[int(row[0])] = answers and since is not None
+        found[int(row[0])] = answers and waiting and not _marked(marks, call)
         if answers:
-            since = None
+            waiting = False
     return found
+
+
+def _marked(marks: list[tuple[int, bool]], call: int) -> bool:
+    """Whether a thread carried its resolved mark when `call` wrote in it: the last
+    mark set or removed by an earlier call says."""
+
+    state = False
+    for mark, resolved in marks:
+        if mark < call:
+            state = resolved
+    return state
 
 
 def _wrote(row: tuple, session_id: str, agent_id: str | None) -> bool:

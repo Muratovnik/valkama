@@ -46,6 +46,7 @@ from tests.test_hooks_agent_notices import (
     Harness,
 )
 
+RESOLVE = "/api/planning/work-item/comment/resolve"
 A_CHILD = "019a3c2e-3333-7c11-9e0f-2f4b6d8a1c3e"
 AS_A_CHILD = {"sessionId": A, "threadId": A_CHILD}
 #: Another subagent of B, beside `CHILD`.
@@ -180,6 +181,69 @@ class AskerTests(Wakes):
         self.reply(AS_B, root, "C-2")
         self.assertIsNone(self.stop(A), "the wait ended when the thread was resolved")
         self.assertIn("marker C-2", self.hook(session=A) or "", "told at the next tool call")
+
+    def mark(self, root: int, *, reopen: bool = False) -> None:
+        """A person sets the thread's resolved mark, or removes it, and both sessions hear it."""
+
+        decision: dict = {"reopen": True} if reopen else {"resolution": "Settled"}
+        self.person(RESOLVE, id=self.held, comment_id=root, **decision)
+        self.settle()
+
+    def root(self, root: int) -> dict:
+        thread = self.agent("get_work_item", AS_B, id=self.held, thread=root)["comments"]
+        return next(entry for entry in thread if entry["id"] == root)
+
+    def test_a_reopened_thread_waits_again_and_its_reply_wakes_once(self) -> None:
+        """The wait follows the mark: the card shows it again, and the hook wakes for it."""
+
+        root = self.ask()
+        self.settle()
+        self.mark(root)
+        self.mark(root, reopen=True)
+        shown = self.root(root)
+        self.assertEqual(
+            (True, False, None), (shown["awaits_reply"], shown["answered"], shown["resolution"])
+        )
+        self.reply(AS_B, root, "RO-1")
+        told = self.stop(A)
+        assert told is not None, "the reply in the reopened thread continues the turn"
+        self.assertRegex(told, rf"in your thread #{root} \(the reply awaited\)")
+        self.assertIn("marker RO-1", told)
+        self.assertIsNone(self.stop(A), "once")
+        self.reply(AS_B, root, "RO-2")
+        self.assertIsNone(self.stop(A), "a later reply does not continue a turn")
+
+    def test_a_reply_under_the_mark_ends_the_wait_and_a_reopen_does_not_restart_it(self) -> None:
+        root = self.ask()
+        self.settle()
+        self.mark(root)
+        self.reply(AS_B, root, "RU-1")
+        self.assertIsNone(self.stop(A), "a resolved thread waits for nothing")
+        told = self.hook(session=A)
+        assert told is not None, "the reply is told at the next tool call"
+        self.assertIn("marker RU-1", told)
+        self.assertNotIn("the reply awaited", told)
+        self.mark(root, reopen=True)
+        shown = self.root(root)
+        self.assertEqual(
+            (True, None), (shown["answered"], shown["resolution"]), "no mark on the card"
+        )
+        self.reply(AS_B, root, "RU-2")
+        self.assertIsNone(self.stop(A), "the reply under the mark ended the wait")
+        self.assertNotIn("the reply awaited", self.hook(session=A) or "")
+
+    def test_a_thread_resolved_again_after_a_reopen_waits_for_nothing(self) -> None:
+        root = self.ask()
+        self.settle()
+        self.mark(root)
+        self.mark(root, reopen=True)
+        self.mark(root)
+        self.reply(AS_B, root, "RR-1")
+        self.assertIsNone(self.stop(A), "resolved again, the thread waits for nothing")
+        told = self.hook(session=A)
+        assert told is not None
+        self.assertIn("marker RR-1", told)
+        self.assertNotIn("the reply awaited", told)
 
     def test_a_subagents_question_wakes_its_orchestrator_never_the_subagent(self) -> None:
         root = self.ask(AS_A_CHILD)

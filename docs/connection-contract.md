@@ -462,8 +462,11 @@ A comment that waits says so in every read, with whether it has been answered:
 
 `answered` turns true with the first later reply in the same thread written by a
 person, or by a confirmed session other than the one whose call wrote the comment;
-a reply from the asker's own session, its subagents included, is not an answer. A
-comment that does not wait carries neither key. The flag writes no event and
+a reply from the asker's own session, its subagents included, is not an answer.
+The thread's resolved mark does not change `answered`, but the wait follows it: a
+comment in a resolved thread does not wait, and once the thread is reopened an
+unanswered one waits again. A reply written while the thread is resolved answers it
+without waking the asker. A comment that does not wait carries neither key. The flag writes no event and
 changes no revision, as a comment does not. What it makes the client hooks do, wake
 the holders of the item and of the items named in `mentions` and then the asker
 with the answer, each once, is in the

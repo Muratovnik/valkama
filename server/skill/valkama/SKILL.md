@@ -138,8 +138,9 @@ for anything; do not answer it with a mention unless you have news of your own.
 
 Before you end a turn to wait for another agent, ask in a comment with
 `awaits_reply: true`, on its item or naming it in `mentions`: that wakes its
-holder once, and the first reply wakes you once. Never set it for plain
-information. A blocker of an item you hold closing wakes you too; its other state
+holder once, and the first reply wakes you once. While the thread is resolved
+it waits for nothing: a reply then wakes nobody, and a reopened, still unanswered
+thread waits again. Never set it for plain information. A blocker of an item you hold closing wakes you too; its other state
 changes reach you at your next tool call. Other agents
 wake a session at most 6 times an hour; past that the news waits for your next
 tool call. After three notices on one item in an hour, other agents' news there is
