@@ -172,7 +172,9 @@ checkouts are therefore distinguishable even at the same version.
   new-task dialog on a phone, Labels and Epic take the dialog's whole width one above the other,
   so an epic's title is readable in its field and in its list. A press on the Epic field no
   longer highlights its value: the field empties for the search and shows the chosen epic in
-  grey until you type. In the filter menu, the number of tasks in hand stands beside «Assigned»
+  grey until you type; an epic chosen with the pointer leaves the caret in the field, as one
+  chosen with the keys does, instead of sending the next Tab to the top of the page. In the
+  filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
