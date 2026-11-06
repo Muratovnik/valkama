@@ -14,7 +14,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { openBoard, serve } from './boardPage.ts'
+import { boardRoute, openBoard, serve } from './boardPage.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
 
@@ -128,3 +128,54 @@ for (const locale of ['en-US', 'ru-RU'])
         }
       })
     })
+
+/**
+ * Every heading of a board opened at `width` while its font is held back, as drawn once the font
+ * has come in, and as drawn once the width has moved and come back. Whether the font had come in
+ * before the headings were read is said too: one already in proves nothing.
+ */
+async function afterTheFont(page: Page, width: number) {
+  let release: (() => void) | undefined
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/*.woff2', async (route) => {
+    await held
+    await route.continue()
+  })
+  await page.setViewportSize({ width, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await installBackend(page)
+  await serve(page)
+  await serveWide(page)
+  // A font held back holds the page's load event back with it.
+  await page.goto(boardRoute({ group: 'epic' }), { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.lane-head').first()).toBeVisible()
+  const board = page.locator('.work-item-lanes')
+  await board.evaluate(drawnHeads, ['start', PARTS] as [string, string[]])
+  const early = await page.evaluate(() => document.fonts.check('500 14px "Inter Variable"'))
+  release?.()
+  await page.evaluate(() => document.fonts.ready)
+  const swapped = await board.evaluate(drawnHeads, ['start', PARTS] as [string, string[]])
+  await readAt(page, width + 3, 'start')
+  return { early, fresh: await readAt(page, width, 'start'), swapped }
+}
+
+for (const finger of [false, true])
+  test.describe(`ru-RU, ${finger ? 'where only a finger presses' : 'with a pointer'}`, () => {
+    test.use(finger ? { locale: 'ru-RU', hasTouch: true, isMobile: true } : { locale: 'ru-RU' })
+
+    test('a lane heading laid out before its font came in is laid out again once it has', async ({
+      context,
+    }) => {
+      // MAIN-401 changes its place at these widths in the fallback font, MAIN-491 and MAIN-493 at
+      // the last two.
+      for (const width of [384, 388, 392, 408, 412, 416]) {
+        const page = await context.newPage()
+        const { early, fresh, swapped } = await afterTheFont(page, width)
+        expect(early, `${width}px: the font came in before the headings were read`).toBe(false)
+        expect(swapped, `${width}px: drawn once the font came in`).toEqual(fresh)
+        await page.close()
+      }
+    })
+  })

@@ -10,7 +10,7 @@
 import { onMounted, ref, watch } from 'vue'
 import type { Ref, WatchSource } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import { layoutOf } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
 import type { LaneLayout } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
@@ -77,6 +77,13 @@ export function useLaneActionsPlace(parts: LaneHeadParts, content: WatchSource) 
   }
 
   useResizeObserver([head, tail, toggle], read)
+  // A font that comes in after the heading was read changes every width read without always
+  // resizing the boxes watched: a heading read in the fallback kept a place the font undid.
+  useEventListener(
+    typeof document !== 'undefined' && 'fonts' in document ? document.fonts : undefined,
+    'loadingdone',
+    read,
+  )
   watch(content, read, { flush: 'post' })
   onMounted(read)
 
