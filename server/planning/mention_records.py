@@ -9,8 +9,13 @@ belongs to the comment's item, so the record moves no window on the item it
 names, as the far end of a link does not.
 
 Who hears it is decided where every other event is told, from the call row: a
-person's mention is a person's act on the item named (`person_events`), and the
+person's mention is a person's act on the item named (`person_events`), another
+agent's reaches the holders through the hook alone (`hooks.notify`), and the
 answer here only says who will hear it.
+
+Agents telling one another could keep each other talking, so an agent's call
+names fewer items than the interface, and one session names one item only a few
+times an hour; the hook adds that such a mention never wakes anybody.
 """
 
 from __future__ import annotations
@@ -21,9 +26,20 @@ from . import calls, model, read_model
 
 #: The most items one comment names: a person may tell every item at work at once.
 MAX_MENTIONS = 20
+#: The most an agent's comment names: every other call than the interface's.
+MAX_AGENT_MENTIONS = 5
+#: How often one session may name one item within the hour.
+MAX_PER_HOUR = 3
 NO_HOLDER = "nobody yet: no holder, it stays on the item"
 CLOSED = "nobody: closed"
 UNPROVED = "nobody: this call proved no session"
+
+#: The mentions of an item one session's confirmed calls wrote within the last hour.
+_THIS_HOUR = (
+    "SELECT COUNT(*) FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.action = 'mentioned' AND c.session_id = ?"
+    " AND c.identity_state = ? AND e.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 hour')"
+)
 
 
 def targets(conn: sqlite3.Connection, source: sqlite3.Row, value: object) -> list[sqlite3.Row]:
@@ -33,20 +49,38 @@ def targets(conn: sqlite3.Connection, source: sqlite3.Row, value: object) -> lis
         return []
     if not isinstance(value, list):
         raise model.PlanningError("mentions must be a list of work items")
-    if len(value) > MAX_MENTIONS:
-        raise model.PlanningError(f"mentions holds at most {MAX_MENTIONS} items")
+    identity = calls.current()
+    person = identity is not None and identity.source == calls.BROWSER
+    most = MAX_MENTIONS if person else MAX_AGENT_MENTIONS
+    if len(value) > most:
+        raise model.PlanningError(f"mentions holds at most {most} items")
+    # Only a session that was proved is counted: one that was not tells nobody anyway.
+    session = (
+        identity.session_id
+        if identity is not None and identity.state == calls.CONFIRMED and not person
+        else None
+    )
     found: list[sqlite3.Row] = []
     seen: set[str] = set()
     for entry in value:
         row = read_model.item_row(conn, entry)
-        identity = str(row["work_item_id"])
-        if identity == str(source["work_item_id"]):
+        named = str(row["work_item_id"])
+        if named == str(source["work_item_id"]):
             raise model.PlanningError("an item does not mention itself")
-        if identity in seen:
+        if named in seen:
             raise model.PlanningError(f"mentions names {read_model.reference(conn, row)} twice")
-        seen.add(identity)
+        if session is not None and _this_hour(conn, named, session) >= MAX_PER_HOUR:
+            raise model.MentionLimitError(
+                f"{read_model.reference(conn, row)} was mentioned {MAX_PER_HOUR} times in the"
+                " last hour by this session; write once there, or wait"
+            )
+        seen.add(named)
         found.append(row)
     return found
+
+
+def _this_hour(conn: sqlite3.Connection, work_item_id: str, session_id: str) -> int:
+    return int(conn.execute(_THIS_HOUR, (work_item_id, session_id, calls.CONFIRMED)).fetchone()[0])
 
 
 def record(

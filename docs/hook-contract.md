@@ -521,7 +521,8 @@ permission for an irreversible action. Do not answer with a mention unless you h
 A subagent's heading says "work you hold". A mention a session's own conversation
 wrote, with no agent, reads `by session <id>`; an id is written as a holder label
 writes it. The person's block comes first and takes its share of the notice's 8
-events and 2400 characters first, and the agents' block has what remains. Each block
+events and 2400 characters first, leaving room only for the agents' heading, newest
+event and closing lines, and the agents' block has what remains. Each block
 keeps its heading and its closing lines, shows at least its newest event and counts
 the ones it left out. A notice with no news from a person is the agents' block alone.
 

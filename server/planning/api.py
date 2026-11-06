@@ -134,6 +134,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
         return 404, {"error": {"code": "not_found", "message": str(error)}}
     if isinstance(error, model.WorkflowGuardError):
         return 409, {"error": {"code": "workflow_guard", "message": str(error)}}
+    if isinstance(error, model.MentionLimitError):
+        return 429, {"error": {"code": "mention_limit", "message": str(error)}}
     if isinstance(error, model.StoreSchemaError):
         return 409, {"error": {"code": model.STORE_SCHEMA_MISMATCH, "message": str(error)}}
     if isinstance(error, migration.MigrationRefused):

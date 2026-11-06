@@ -1614,7 +1614,8 @@ written:
 The hour counts the mentions of that item whose confirmed call names the same
 session, its subagents included. A call with no session, the interface's or an
 unconfirmed one, is not counted, and an unconfirmed call tells nobody either. A
-closed item can be mentioned: the record is written and nobody is told.
+closed item can be mentioned: the record is written and nobody is told. Over HTTP,
+`mention_limit` answers 429.
 
 **What is written.** Each item named gets one history event, `mentioned`, whose
 detail is the comment's id, under the call that wrote the comment. That call

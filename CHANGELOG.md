@@ -104,16 +104,26 @@ checkouts are therefore distinguishable even at the same version.
   [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
 - **A comment can tell the work on other items.** A number in a comment's text stays a
   link and tells nobody. `POST /api/planning/work-item/comment`, `comment_work_item`,
-  `report_work_item` and the batch's `comment` and `comments` take `mentions`, up to 20
-  items, on a root or a reply; naming the comment's own item, an item twice or a missing
-  one is refused. Each item named keeps a `mentioned` event pointing to the comment, and the
-  answer says per item who holds it and, in `told`, why nobody will hear it. A person's
+  `report_work_item` and the batch's `comment` and `comments` take `mentions`, on a root
+  or a reply: up to 20 items from the interface and 5 from an agent, and one session names
+  one item at most 3 times an hour, the fourth refused with `mention_limit` (429 over
+  HTTP). Naming the comment's own item, an item twice or a missing one is refused. Each
+  item named keeps a `mentioned` event pointing to the comment, and the answer says per
+  item who holds it and, in `told`, why nobody will hear it. A person's
   mention is a person's act on the item named: its holders hear it in `from_person` and in
   the hook's notice («mentioned … from MAIN-12 #61»), an idle holder is woken, and a close
-  is refused with `person_spoke` until an agent writes there. Every comment now carries the
-  items it named in `mentions`, and the read of an item carries the comments that named
-  it, the newest 5 for `get_work_item` and 50 over HTTP, with `mentions_total`. See
-  [Mentions](docs/connection-contract.md#mentions).
+  is refused with `person_spoke` until an agent writes there. Another agent's mention
+  reaches the holders, never the agent that wrote it, in a block of the notice of its own
+  («Valkama notice from agents, not from a person»), and only at their next tool call or
+  prompt: it never wakes a session, never continues a turn at `Stop`, and is in neither
+  `from_person` nor `person_spoke`. The hook's `.marks` files are now headed `v3`, with a
+  second place per item for agents' mentions; a `v2` or `v1` file is read without telling
+  its news again, and an earlier build reads a `v3` file as empty, which tells the current
+  news once more. Every comment now carries the items it named in `mentions`, and the
+  read of an item carries the comments that named it, the newest 5 for `get_work_item`
+  and 50 over HTTP, with `mentions_total`. See
+  [Mentions](docs/connection-contract.md#mentions) and
+  [who is told](docs/hook-contract.md#who-is-told).
 
 ### Changed
 

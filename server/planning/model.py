@@ -144,6 +144,14 @@ class WorkflowGuardError(PlanningError):
     """A transition the workflow does not permit, or permits only with force."""
 
 
+class MentionLimitError(PlanningError):
+    """A session named one item in `mentions` as often as an hour allows.
+
+    Its own code: the request is well formed and would be accepted later, or as
+    one comment on that item instead.
+    """
+
+
 class RevisionConflictError(PlanningError):
     """Someone else wrote this item since the caller read it."""
 

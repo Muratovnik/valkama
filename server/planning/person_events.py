@@ -28,7 +28,9 @@ column, an edit of nothing but `rank`, from reading as somebody speaking.
 A client hook keeps its own place instead (`since_call`): it tells the agents of
 one session, and an item's window ends at any agent's write, so a subagent's tick
 would end it before the session's orchestrator was told. The hook remembers the
-last call it has read for each item and asks for what came after that.
+last call it has read for each item and asks for what came after that. The same
+hook reads another agent's mentions of an item apart (`agent_mentions_since`):
+they are told to the holders, and never as a person's.
 
 Nothing here is imported at module level past `sqlite3`: a client hook calls this
 on a read-only connection of its own, in a process that starts for one tool call,
@@ -185,6 +187,38 @@ def since_call(
         else []
     )
     return _window(conn, work_item_id, after, edits)
+
+
+#: Another agent's mentions of an item: the speaker is the call's proved session and
+#: agent, never the `author` it signed, and an unproved call names nobody.
+_AGENT_MENTIONS = (
+    "SELECT e.call_id, e.detail, e.created_at, c.session_id, c.agent_id"
+    " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.call_id > ? AND e.action = 'mentioned'"
+    " AND c.identity_state = 'confirmed' AND c.identity_source NOT IN (?,?)"
+    " AND c.session_id IS NOT NULL ORDER BY e.id"
+)
+
+
+def agent_mentions_since(
+    conn: sqlite3.Connection, work_item_id: str, after: int
+) -> list[tuple[int, dict]]:
+    """Agents' mentions of one item whose call came after `after`, oldest first, with the call.
+
+    Not a person's act, so `_window` never reads them and they are in neither
+    `from_person` nor the `person_spoke` guard: a client hook tells them apart.
+    Each entry is a `mentioned` one with `via: "agent"`, and `session` and `agent`,
+    the speaker as its call row names it, so a hook can leave the speaker out.
+    """
+
+    found = []
+    for row in conn.execute(_AGENT_MENTIONS, (work_item_id, after, BROWSER, VALKAMA)).fetchall():
+        entry = _mentioned(conn, str(row[2]), int(row[1]))
+        entry["via"] = "agent"
+        entry["session"] = str(row[3])
+        entry["agent"] = None if row[4] is None else str(row[4])
+        found.append((int(row[0]), entry))
+    return found
 
 
 def author_of(

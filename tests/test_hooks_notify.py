@@ -474,7 +474,8 @@ class AddressedTests(Harness):
         path = os.path.join(self.state(), SESSION + ".marks")
         marks = notify.read_marks(path)
         lines = [
-            f"{item} {mark} {sig[0]} {sig[1]} {sig[2]}" for item, (mark, sig, _) in marks.items()
+            f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]}"
+            for item, mark in marks.items()
         ]
         with open(path, "wb") as handle:
             handle.write(("\n".join(["v1", *lines]) + "\n").encode("ascii"))

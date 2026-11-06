@@ -39,7 +39,9 @@ is ready. `comment_work_item` answers with `work_item`, `comment_count`,
 both null for a new root, and `list_request_id` when it carried a `list`, as
 `report_work_item` and `set_work_item_summary` do. A comment or a report that named
 other items in `mentions` adds `mentions`: per item its `reference`, `holders` and,
-when nobody will hear it, `told`. `resolve_work_item_comment` answers with `work_item`,
+when nobody will hear it, `told`. A call names at most 5 items, and a session names
+one item at most 3 times an hour: the fourth is refused with `mention_limit`, which
+names the item. `resolve_work_item_comment` answers with `work_item`,
 `comment_id` and `resolution`, the root's mark as it now stands.
 
 Any write to an item also answers with `from_person` when a person acted on it

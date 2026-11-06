@@ -173,11 +173,12 @@ _LIST = {
 #: The other items a comment tells, beside what its text links.
 _MENTIONS = {
     "type": "array",
-    "maxItems": mention_records.MAX_MENTIONS,
+    "maxItems": mention_records.MAX_AGENT_MENTIONS,
     "items": {"type": "string"},
-    "description": "Other items to tell, by reference: each one's holders hear this comment, and"
-    " it stays on the item for whoever takes it. A number in the body tells nobody. The"
-    " answer says who will hear each.",
+    "description": "Other items to tell, by reference: each one's holders hear this comment at"
+    " their next tool call, and it stays on the item for whoever takes it. A number in the body"
+    f" tells nobody. A session names one item at most {mention_records.MAX_PER_HOUR} times an"
+    " hour. The answer says who will hear each.",
 }
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
