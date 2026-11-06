@@ -74,9 +74,12 @@ onMounted(() => {
 })
 // After a render that changed what the line says: a new time (another language, a date shown
 // another way), a new state or a new name. The render that placing causes through `ownLine`
-// says the same, and so does a parent's render that changed nothing here.
+// says the same, and so does a parent's render that changed nothing here. A mark that goes away
+// forgets where it stood, so the same words coming back are placed in that render, not a frame
+// later with the place they had before the width changed.
 onUpdated(() => {
-  if (props.after && saying() !== placedFor) place()
+  if (!props.after) placedFor = ''
+  else if (saying() !== placedFor) place()
 })
 // Placed in the next frame: changing the line inside the observer's own callback would size it
 // again in the same frame, which the observer reports as a loop.
