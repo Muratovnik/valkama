@@ -15,8 +15,9 @@
   min-width: 0;
 }
 
-/* A group's dot stands in the slot of the folded Done's chevron, so every name starts at one
-   edge: with its own gap a 7px dot put them 5px left of «Done». */
+/* A group's dot and the folded Done's chevron share one 16px slot, so every name starts at one
+   edge. The dot stands on the slot's start edge, a mark in a larger target: centred, it sat
+   4.5px in. */
 .chain-group-title {
   display: flex;
   grid-column: 1 / -1;
@@ -28,7 +29,7 @@
 }
 
 .chain-group-mark {
-  justify-content: center;
+  justify-content: start;
   inline-size: 16px;
 }
 
@@ -205,5 +206,17 @@
     border-radius: var(--radius-status);
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
+  }
+}
+
+/* The folded chevron's glyph starts 9 of its 24 units in (m9 18 6-6-6-6) and the open one 6
+   (m6 9 6 6 6-6): at the 16px icon size, --space-4, 6px and 4px. Its box stands that far
+   outside the edge, and the end margin gives the same back, so «Done» keeps the place the open
+   groups' names have. */
+.chain-done-mark {
+  margin-inline: calc(var(--space-4) * -9 / 24) calc(var(--space-4) * 9 / 24);
+
+  &.is-open {
+    margin-inline: calc(var(--space-4) * -6 / 24) calc(var(--space-4) * 6 / 24);
   }
 }

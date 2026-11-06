@@ -197,6 +197,8 @@ defineExpose({ restoreView, reveal, view })
         @click="doneOpen = !doneOpen"
       >
         <VIcon
+          class="chain-done-mark"
+          :class="{ 'is-open': doneOpen }"
           :name="doneIcon"
           :size="16"
         />

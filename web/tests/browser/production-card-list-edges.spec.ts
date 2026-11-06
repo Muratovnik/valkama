@@ -48,12 +48,12 @@ function wordsLeft(locator: Locator): Promise<number[]> {
   )
 }
 
-/** Each element's box: its left edge and its centre. */
+/** Each element's box: its left edge and its width. */
 function boxes(locator: Locator) {
   return locator.evaluateAll((nodes) =>
     nodes.map((node) => {
       const box = node.getBoundingClientRect()
-      return { left: box.left, centre: box.left + box.width / 2, width: box.width }
+      return { left: box.left, width: box.width }
     }),
   )
 }
@@ -97,13 +97,42 @@ const members = [
   mapMember('MAIN-131', 'done', workItemRef.reference, { title: LONG }),
 ]
 
+/** The card's chain as a card opens it: Done folded. */
 async function openChain(page: Page, width: number) {
   await openCard(page, width, {}, () => serve(page, chainOf(ROOT, members)))
   const list = page.locator('.drawer section.chain .chain-members')
   await expect(list.locator('.chain-row')).toHaveCount(8 + 2)
-  await list.locator('.chain-done-toggle').click()
-  await expect(list.locator('.chain-row')).toHaveCount(8 + 2 + 2)
   return list
+}
+
+/**
+ * Every heading's marks on the edge the rows start at, the folded Done among them: each group's
+ * dot and the Done chevron drawn where they stand, each slot on the edge, and every name after
+ * them at one edge. The chevron is a different glyph folded and open, so both states are read.
+ */
+async function expectHeadingsOnEdge(list: Locator, edge: number) {
+  const headings = list.locator('.chain-group-title, .chain-done-toggle')
+  await expect(headings).toHaveCount(4)
+  // The folded Done's slot is its toggle's box: the chevron inside it stands outside the box
+  // by design, so its own box is not the slot.
+  const slots = await boxes(list.locator('.chain-group-title > :first-child, .chain-done-toggle'))
+  expect(slots).toHaveLength(4)
+  expectOneEdge(
+    slots.map((slot) => slot.left),
+    edge,
+  )
+  // The visible marks, not their slots: a dot drawn inside a larger slot, or a chevron's icon
+  // with padding, starts further in than the slot does.
+  const dots = await boxes(list.locator('.chain-group-title .state-dot'))
+  const [chevron] = await boxes(list.locator('.chain-done-toggle svg path'))
+  expect(dots).toHaveLength(3)
+  expect(chevron).toBeDefined()
+  expectOneEdge(
+    dots.map((dot) => dot.left),
+    edge,
+  )
+  expectOneEdge([chevron?.left ?? Number.NaN], edge)
+  expect(spread(await wordsLeft(headings))).toBeLessThanOrEqual(ONE_EDGE)
 }
 
 for (const width of [1280, 390]) {
@@ -118,6 +147,13 @@ for (const width of [1280, 390]) {
       return up?.getBoundingClientRect().left ?? 0
     })
 
+    // Folded, as a card opens: the heads, Done's chevron in its folded glyph.
+    await expectHeadingsOnEdge(list, edge)
+
+    // Open: Done's rows join the list and its chevron takes the open glyph.
+    await list.locator('.chain-done-toggle').click()
+    await expect(list.locator('.chain-row')).toHaveCount(8 + 2 + 2)
+
     // Every row's words on the column's edge, its fill reaching outside it and not cut.
     const rows = list.locator('.chain-row')
     expectOneEdge(await wordsLeft(rows), edge)
@@ -125,22 +161,7 @@ for (const width of [1280, 390]) {
       expect(fill.left).toBeLessThan(edge)
       expect(fill.left).toBeGreaterThanOrEqual(scrollerLeft)
     }
-
-    // Every heading, the folded Done among them: its mark's slot on the edge, a dot and a
-    // chevron on one centre, and every group's name at one edge after them.
-    const headings = list.locator('.chain-group-title, .chain-done-toggle')
-    await expect(headings).toHaveCount(4)
-    const slots = await boxes(
-      list.locator('.chain-group-title > :first-child, .chain-done-toggle > :first-child'),
-    )
-    expect(slots).toHaveLength(4)
-    expectOneEdge(
-      slots.map((slot) => slot.left),
-      edge,
-    )
-    const marks = await boxes(list.locator('.chain-group-title .state-dot, .chain-done-toggle svg'))
-    expect(spread(marks.map((mark) => mark.centre))).toBeLessThanOrEqual(ONE_EDGE)
-    expect(spread(await wordsLeft(headings))).toBeLessThanOrEqual(ONE_EDGE)
+    await expectHeadingsOnEdge(list, edge)
 
     // The way to the rest of a long group reads as the list's own end.
     expectOneEdge(await wordsLeft(list.locator('.chain-more')), edge)
