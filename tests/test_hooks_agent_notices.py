@@ -470,6 +470,46 @@ class FitTests(Harness):
         self.assertIn("- and 1 more, in the history of the item.", told)
 
 
+class LapseTests(Harness):
+    """A subscription that lapsed with its session tells nothing, swept or not yet."""
+
+    def lapse(self, change: str) -> tuple[str, str]:
+        self.subscribe(AS_CHILD, self.followed, True)
+        self.assertIsNone(self.hook())
+        self.assertIsNone(self.hook(CHILD))
+        self.conn.execute(f"UPDATE sessions SET {change} WHERE id = ?", (B,))
+        self.conn.commit()
+        self.listed = service.get_work_item(self.conn, self.followed)["subscribers"]
+        self.comment(AS_A, self.followed, "After the lapse, marker LP-1")
+        return self.hook(CHILD) or "", self.hook() or ""
+
+    def test_a_lapsed_subscription_is_not_told_before_the_sweep(self) -> None:
+        for case, change in {
+            "ended past its grace": "status = 'ended',"
+            " ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-13 hours')",
+            "failed": "status = 'failed', ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
+            "silent past the lease": "last_seen = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-15 days')",
+        }.items():
+            with self.subTest(case):
+                self.setUp()
+                self.assertEqual(("", ""), self.lapse(change))
+                self.assertEqual([], self.listed, "the card lists nobody either")
+
+    def test_a_session_back_within_its_grace_still_hears_what_it_follows(self) -> None:
+        child, orchestrator = self.lapse(
+            "status = 'ended', ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 hours')"
+        )
+        self.assertIn("marker LP-1", child)
+        self.assertIn("marker LP-1", orchestrator)
+        self.assertEqual([CHILD], [entry["agent"] for entry in self.listed])
+
+    def test_the_hook_reads_the_lease_periods_the_planning_rule_has(self) -> None:
+        from server.planning import leases
+
+        self.assertEqual(leases.LEASE_PERIOD.total_seconds(), notify.LEASE_SECONDS)
+        self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
+
+
 class UpgradeTests(Harness):
     def test_a_store_without_the_new_table_tells_nothing_and_loses_nothing(self) -> None:
         """A hook of a new release can meet a store that release has not opened yet."""

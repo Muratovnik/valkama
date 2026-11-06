@@ -339,18 +339,31 @@ _SCOPE = (
     " CASE WHEN agent_id IS ? THEN id END AS own, id FROM execution_events"
     " WHERE session_id = ? AND kind = 'planning_write' AND identity_state = 'confirmed'"
     " AND work_item_id IS NOT NULL{agent} UNION ALL SELECT work_item_id, NULL, call_id"
-    " FROM work_item_subscriptions WHERE session_id = ? AND follows = 1{follower})"
-    " GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
+    " FROM work_item_subscriptions WHERE session_id = ? AND follows = 1{follower}"
+    " AND {stands}) GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
 )
+#: Whether the recipient's session still stands behind what it subscribed, by the rule a
+#: claim lapses by (`planning.leases`): a row, not failed, seen within the lease period,
+#: or ended within its grace. Every row of the recipient is its own session's, so one
+#: test of that session answers for all of them, inside the queries the hook makes anyway.
+_STANDS = (
+    "EXISTS (SELECT 1 FROM sessions v WHERE v.id = ? AND ((v.status NOT IN ('ended', 'failed')"
+    " AND substr(v.last_seen, 1, 19) >= ?) OR (v.status = 'ended'"
+    " AND substr(v.ended_at, 1, 19) > ?)))"
+)
+#: `leases.LEASE_PERIOD` and `leases.ENDED_GRACE` in seconds, held equal by a test: the
+#: hook does not import the planning package to read two numbers.
+LEASE_SECONDS = 14 * 24 * 3600
+ENDED_GRACE_SECONDS = 12 * 3600
 _ITEMS = (
     "SELECT w.work_item_id, s.key, w.number, w.title, w.claim_ref, w.checklist, w.revision,"
     " (SELECT MAX(e.id) FROM work_item_events e WHERE e.work_item_id = w.work_item_id),"
     " (SELECT MAX(m.id) FROM work_item_comments m WHERE m.work_item_id = w.work_item_id),"
     " instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0,"
     " EXISTS (SELECT 1 FROM work_item_subscriptions u WHERE u.work_item_id = w.work_item_id"
-    " AND u.session_id = ? AND u.follows = 1{agent}),"
+    " AND u.session_id = ? AND u.follows = 1{agent}) AND {stands},"
     " EXISTS (SELECT 1 FROM work_item_subscriptions u WHERE u.work_item_id = w.work_item_id"
-    " AND u.session_id = ? AND u.agent_id = ? AND u.follows = 0),"
+    " AND u.session_id = ? AND u.agent_id = ? AND u.follows = 0) AND {stands},"
     " CASE WHEN instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0 THEN"
     " (SELECT MAX((SELECT MAX(e.id) FROM work_item_events e WHERE e.work_item_id = l.from_id))"
     " FROM work_item_links l WHERE l.to_id = w.work_item_id AND l.kind = 'blocks') ELSE 0 END"
@@ -381,7 +394,8 @@ def _in_scope(
     last write on it, or for an orchestrator whose subagent did all the writing,
     the session's first; for an item it only follows, the call that subscribed.
     An orchestrator follows what any agent of its session subscribed to; a mute
-    is only its writer's. The newest event of the item's blockers is part of what
+    is only its writer's. A subscription or mute counts while its session stands
+    by the lease's rule (`_STANDS`), so a lapsed one is gone before the sweep. The newest event of the item's blockers is part of what
     changes it, read by the links' index on the item blocked and each blocker's
     events' index, and only where a holder label may be this recipient's: a
     blocker's state is told to the holder alone.
@@ -397,11 +411,18 @@ def _in_scope(
         agent=" AND agent_id = ?" if agent_id else "",
         follower=" AND agent_id = ?" if agent_id else "",
         most=MOST_ITEMS,
+        stands=_STANDS,
+    )
+    now = time.time()
+    stands = (
+        session_id,
+        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - LEASE_SECONDS)),
+        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - ENDED_GRACE_SECONDS)),
     )
     parameters = (
-        (agent_id, session_id, agent_id, session_id, agent_id)
+        (agent_id, session_id, agent_id, session_id, agent_id, *stands)
         if agent_id
-        else (None, session_id, session_id)
+        else (None, session_id, session_id, *stands)
     )
     try:
         scope = {
@@ -414,9 +435,22 @@ def _in_scope(
         followers = (session_id, agent_id) if agent_id else (session_id,)
         rows = conn.execute(
             _ITEMS.format(
-                items=",".join("?" * len(scope)), agent=" AND u.agent_id = ?" if agent_id else ""
+                items=",".join("?" * len(scope)),
+                agent=" AND u.agent_id = ?" if agent_id else "",
+                stands=_STANDS,
             ),
-            (suffix, suffix, *followers, session_id, agent_id or "", suffix, suffix, *scope),
+            (
+                suffix,
+                suffix,
+                *followers,
+                *stands,
+                session_id,
+                agent_id or "",
+                *stands,
+                suffix,
+                suffix,
+                *scope,
+            ),
         ).fetchall()
     except _sqlite3.OperationalError:
         return None
