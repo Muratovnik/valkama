@@ -125,6 +125,8 @@ const stillName = computed(() => props.name ?? (marked.value ? props.action : un
 const placeLit = computed(() => props.variant !== 'primary')
 /** An action's words are never cut; a holder's name is, with the whole of it in the tooltip. */
 const nameWhole = computed(() => props.name === undefined)
+/** A bare button stands its words at its fill's inset, which words standing beside it match. */
+const textInset = computed(() => props.variant === 'text')
 /** What stands beside the name: the place, its state and that a setting chose it. */
 const marks = computed(() =>
   [view.value.text, view.value.state, view.value.setting ? t('open.mark.setting') : '']
@@ -242,7 +244,7 @@ function finished(outcome: Outcome) {
     <span
       v-else
       class="open-action-still"
-      :class="{ named: !nameWhole }"
+      :class="{ 'named': !nameWhole, 'text-inset': textInset }"
       :title="standing"
     >
       <span class="open-action-words">
@@ -402,8 +404,11 @@ function finished(outcome: Outcome) {
   }
 }
 
-/* A holder's words start where a pressable holder's do, beside them on a card. */
-.open-action-still.named {
-  padding-inline-start: var(--space-2);
+/* A holder's words start where a pressable holder's are drawn, beside them on a card: a bare
+   button's words stand at its fill's inset, so these take that inset too; a ghost or a primary
+   draws its ground first, at its edge, and so these start at the edge. Taking the bare inset
+   beside a ground put a session that cannot be opened 8px in from its label in Relations. */
+.open-action-still.named.text-inset {
+  padding-inline-start: var(--space-fill-inset);
 }
 </style>
