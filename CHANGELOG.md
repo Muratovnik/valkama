@@ -165,6 +165,15 @@ checkouts are therefore distinguishable even at the same version.
 - In Settings, Readiness is named on the line of its state rather than half way down
   beside the button under it, and a task type's colour swatch stands as tall as its
   Reset.
+- **Dialogs, the task finder and the new-task fields line up.** A dialog's title and its
+  close button now stand on one line, with no extra space under the title, and the same holds
+  for the Back, action and close buttons of a document's head. In the task finder a result's
+  number stands on the first line of a two-line title instead of between its lines. In the
+  new-task dialog on a phone, Labels and Epic take the dialog's whole width one above the other,
+  so an epic's title is readable in its field and in its list. A press on the Epic field no
+  longer highlights its value: the field empties for the search and shows the chosen epic in
+  grey until you type. In the filter menu, the number of tasks in hand stands beside «Assigned»
+  instead of at the menu's far edge.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
