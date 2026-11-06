@@ -54,8 +54,10 @@ function place() {
 }
 
 onMounted(() => {
+  if (!props.after) return
   place()
-  void document.fonts.ready.then(place)
+  // Placed again once the fonts are in, where the document loads them: a test's may not.
+  if ('fonts' in document) void document.fonts.ready.then(place)
 })
 watch([() => props.when, () => props.after], place, { flush: 'post' })
 // Placed in the next frame: changing the line inside the observer's own callback would size it
@@ -118,16 +120,13 @@ useResizeObserver(
 .meta-after {
   --separator: 0.85em;
 
-  position: relative;
   flex: none;
-  padding-inline-start: var(--separator);
   margin-inline-start: calc(-1 * var(--space-2));
   white-space: nowrap;
 
   &::before {
     content: '·' / '';
-    position: absolute;
-    inset-inline-start: 0;
+    display: inline-block;
     width: var(--separator);
     text-align: center;
   }
