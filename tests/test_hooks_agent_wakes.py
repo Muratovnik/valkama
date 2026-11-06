@@ -6,8 +6,10 @@ told at its next tool call. The comment that asks wakes, once, the holders of th
 item it is written on and of the items it names in `mentions`, for a day after it
 was written; a subscriber hears it at its next tool call. A blocker of an item
 reaching a terminal state wakes that item's holder once, closed by a person or by
-another session; closed by the holder's own session, it tells nobody. A wake is the
-watcher
+another session; closed by the holder's own session, it tells nobody. Other agents
+wake one session at most 6 times an hour; past that, what would have woken it is
+told at its next tool call with a line saying how many such events waited, and a
+person's news is neither counted nor held back. A wake is the watcher
 exiting 2 for an idle session, or
 a `Stop` notice that continues the turn once; a session's own writes, its own
 subagents' included, never wake it, and a subagent is never woken itself: its
@@ -332,6 +334,73 @@ class BlockerTests(Wakes):
         )
         self.assertIsNone(self.hook(session=B), "read once more from its place: nothing new")
         self.assertTrue(notify.read_marks(path), "and counted now")
+
+    def marks_path(self) -> str:
+        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
+
+
+class BudgetTests(Wakes):
+    def asked_and_continued(self, number: int) -> str | None:
+        self.ask(marker=number)
+        return self.stop(B)
+
+    def ask(self, meta: object = AS_A, ref: str | None = None, **extra: object) -> int:
+        marker = extra.pop("marker", "")
+        return self.comment(
+            meta, ref or self.held, f"Question {marker}, marker Q-1?", awaits_reply=True, **extra
+        )
+
+    def test_the_seventh_wake_within_the_hour_is_told_passively_with_the_count(self) -> None:
+        for number in range(1, 7):
+            told = self.asked_and_continued(number)
+            assert told is not None, f"wake {number} of 6 continues the turn"
+            self.assertIn(f"Question {number},", told)
+        self.assertIsNone(self.asked_and_continued(7), "the seventh does not")
+        self.assertEqual((0, ""), self.watch_as(B), "nor does the watcher wake for it")
+        self.ask(marker=8)
+        self.assertIsNone(self.stop(B), "nor for the eighth")
+        told = self.hook(session=B)
+        assert told is not None, "both are told at the next tool call"
+        self.assertIn("Question 7,", told)
+        self.assertIn("Question 8,", told)
+        self.assertIn(
+            "2 events here would have woken this session, past the limit of 6 wakes an hour"
+            " by other agents, so they waited for this call.",
+            told,
+        )
+        self.comment(AS_A, self.held, "Plain news, marker L-1")
+        later = self.hook(session=B)
+        assert later is not None
+        self.assertNotIn("would have woken", later, "the count is said once")
+
+    def test_a_persons_news_is_not_counted_and_still_wakes_past_the_limit(self) -> None:
+        for number in range(1, 7):
+            self.assertIsNotNone(self.asked_and_continued(number))
+        self.person(COMMENT, id=self.held, body="A person, marker P-9")
+        status, text = self.watch_as(B, alive=None)
+        self.assertEqual(notify.WAKE_STATUS, status)
+        self.assertIn("marker P-9", text)
+
+    def test_a_wake_held_back_does_not_wake_later_and_an_hour_on_a_new_one_does(self) -> None:
+        for number in range(1, 7):
+            self.assertIsNotNone(self.asked_and_continued(number))
+        self.assertIsNone(self.asked_and_continued(7))
+        later = time.time() + notify.WAKE_WINDOW_SECONDS + 1
+        with mock.patch.object(notify.time, "time", return_value=later):
+            self.comment(AS_A, self.held, "Plain news after the hour, marker L-2")
+            self.assertIsNone(self.stop(B), "what the limit held back never wakes")
+            told = self.asked_and_continued(8)
+            assert told is not None, "an hour on, a new question wakes again"
+            self.assertIn("Question 7,", told, "and what waited comes with it")
+            self.assertIn("Question 8,", told)
+
+    def test_a_damaged_place_wakes_at_most_once_more_and_never_loops(self) -> None:
+        self.assertIsNotNone(self.asked_and_continued(1))
+        with open(self.marks_path(), "wb") as handle:
+            handle.write(b"\x00\xffnot marks")
+        repeated = [self.stop(B) for _ in range(3)]
+        self.assertLessEqual(len([told for told in repeated if told is not None]), 1, repeated)
+        self.assertIsNone(repeated[-1])
 
     def marks_path(self) -> str:
         return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
