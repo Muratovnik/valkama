@@ -61,8 +61,7 @@ const chainLabel = computed(() =>
 const toggle = ref<HTMLElement | null>(null)
 const tail = ref<HTMLElement | null>(null)
 const actions = ref<HTMLElement | null>(null)
-const room = ref<HTMLElement | null>(null)
-const { place } = useLaneActionsPlace({ actions, room, tail, toggle }, () => [
+const { place } = useLaneActionsPlace({ actions, tail, toggle }, () => [
   props.left,
   props.right,
   counts.value,
@@ -173,7 +172,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       </span>
       <span
         v-if="props.lane.epic"
-        ref="room"
         class="lane-room"
       />
     </span>
