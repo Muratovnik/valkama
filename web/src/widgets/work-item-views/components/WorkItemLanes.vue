@@ -36,6 +36,7 @@ import type { StackLanding } from '@/widgets/work-item-views/components/WorkItem
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
 import { useColumnsInView } from '@/widgets/work-item-views/composables/useColumnsInView.ts'
 import { useLandedCells } from '@/widgets/work-item-views/composables/useLandedCells.ts'
+import { useLaneClearance } from '@/widgets/work-item-views/composables/useLaneClearance.ts'
 import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCollapse.ts'
 import { outOfSight } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardLane, HeldIn } from '@/widgets/work-item-views/utils/boardLanes.ts'
@@ -85,6 +86,7 @@ const { columnWidth, measured, visibleWidth } = useColumnFit(
 )
 
 const inView = useColumnsInView(scroller, measured, () => props.states.length)
+useLaneClearance(scroller)
 
 /**
  * The lane a tile is being dragged in, if any. Every cell stands as tall as its
@@ -174,9 +176,6 @@ function away(lane: BoardLane, side: 'left' | 'right'): string {
   return elsewhere.value.get(lane.id)?.[side] ?? ''
 }
 
-/** Some lane names work out of sight, so some heading may stand two rows tall. */
-const anyAway = computed(() => elsewhere.value.size > 0)
-
 function drag(lane: BoardLane, active: boolean) {
   draggingLane.value = active ? lane.id : null
   emit('dragging', active)
@@ -200,7 +199,7 @@ function laneGroup(lane: BoardLane): string {
   <div
     ref="scroller"
     class="work-item-lanes"
-    :class="{ dragging, away: anyAway }"
+    :class="{ dragging }"
     :style="{
       '--column-count': props.states.length,
       '--column-width': columnWidth,
@@ -305,11 +304,8 @@ function laneGroup(lane: BoardLane): string {
   /* One track list for the header row and every lane. */
   --lane-tracks: repeat(var(--column-count), var(--column-width));
 
-  /* The row of state names, and how tall a lane heading held under it while
-     its lane passes stands: one compact control each, two rows for a heading
-     that wraps on a narrow board. */
+  /* The row of state names: one compact control. */
   --lanes-head-block: var(--size-control-height-compact);
-  --lane-head-block: var(--size-control-height-compact);
 
   height: 100%;
   min-height: 0;
@@ -317,10 +313,14 @@ function laneGroup(lane: BoardLane): string {
   overscroll-behavior: contain;
 
   /* A tile focused or brought into view stops below the sticky row of state
-     names and the lane heading held under it rather than under them, and
-     short of the bottom edge by more than its focus ring reaches — or, while
-     the board shows its shared-order line there, above that line. */
-  scroll-padding-block: calc(var(--lanes-head-block) + var(--lane-head-block) + var(--space-2))
+     names and a lane heading of one row held under it, and short of the bottom
+     edge by more than its focus ring reaches — or, while the board shows its
+     shared-order line there, above that line. A heading of more rows is as tall
+     as its words make it, so the lane's own heading is read for the rest
+     (`useLaneClearance`). */
+  scroll-padding-block: calc(
+      var(--lanes-head-block) + var(--size-control-height-compact) + var(--space-2)
+    )
     var(--board-note-reach, var(--space-2));
   scroll-snap-type: x proximity;
   container: board-lanes / inline-size;
@@ -395,20 +395,6 @@ function laneGroup(lane: BoardLane): string {
   &.open {
     padding-top: var(--space-6);
     contain-intrinsic-size: auto 480px;
-  }
-}
-
-/* A heading of two rows — a narrow board's, or one naming work out of sight —
-   stands that tall under the state names, so a tile brought into view stops
-   below both. The scroller cannot query itself, so the workspace it fills is
-   asked for the narrow case. */
-.work-item-lanes.away {
-  --lane-head-block: calc(var(--size-control-height-compact) * 2 + var(--space-1));
-}
-
-@container workspace (width <= 600px) {
-  .work-item-lanes {
-    --lane-head-block: calc(var(--size-control-height-compact) * 2 + var(--space-1));
   }
 }
 

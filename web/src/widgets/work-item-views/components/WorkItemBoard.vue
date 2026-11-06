@@ -25,6 +25,7 @@ import WorkItemColumn from '@/widgets/work-item-views/components/WorkItemColumn.
 import WorkItemLanes from '@/widgets/work-item-views/components/WorkItemLanes.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
+import { clearOfHeading } from '@/widgets/work-item-views/composables/useLaneClearance.ts'
 import { terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
@@ -167,6 +168,7 @@ watch(
     // and focusing it again would scroll nothing; it is brought into view here.
     button?.focus({ preventScroll: true })
     button?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    if (button) clearOfHeading(button)
   },
   { flush: 'post' },
 )

@@ -26,6 +26,7 @@ import { useI18n } from 'vue-i18n'
 
 import WorkItemStack from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import { clearOfHeading } from '@/widgets/work-item-views/composables/useLaneClearance.ts'
 import { drawnInCell } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
@@ -99,6 +100,7 @@ async function flip() {
     // it again scrolls nothing; it is brought back into view here.
     button?.focus({ preventScroll: true })
     button?.scrollIntoView({ block: 'nearest' })
+    if (button) clearOfHeading(button)
     return
   }
   whole.value = true

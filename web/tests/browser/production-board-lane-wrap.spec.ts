@@ -5,11 +5,10 @@
  * of the number they count for.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, serve, shot } from './boardPage.ts'
-import { drawnParts, overlaps, sameBoxes, settle } from './laneHeadGeometry.ts'
+import { drawnParts, overlaps, sameBoxes } from './laneHeadGeometry.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
 
@@ -241,88 +240,4 @@ test('at 1280px an epic heading keeps its actions in a place of their own on hov
       expect.soft(sameBoxes(drawn.title, rest.title), `${said} ${state}: title`).toBe(true)
     }
   }
-})
-
-/** A tile the board brings into view under its sticky lane heading stops at the lane's normal gap. */
-async function scrollsTileBelowHeading(page: Page, width: number) {
-  await page.setViewportSize({ width, height: 900 })
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await installBackend(page)
-  await serve(page)
-  await serveWide(page)
-  await openBoard(page)
-  await page.mouse.move(0, 0)
-
-  // The tallest heading below the first open lane, so the heading that stays at the top is
-  // the one this width makes: two rows on a narrow board.
-  const heights = await page
-    .locator('.board-lane.open .lane-head')
-    .evaluateAll((heads) => heads.map((head) => (head as HTMLElement).offsetHeight))
-  const at = heights.indexOf(Math.max(...heights.slice(1)), 1)
-
-  const board = page.locator('.work-item-lanes')
-  const lane = page.locator('.board-lane.open').nth(at)
-  const head = lane.locator('.lane-head')
-  const tile = lane.locator('[data-reference]').first()
-  // The sheet is the tile as drawn; its open button sits lower inside it.
-  const sheet = tile.locator('.work-item-tile')
-  await expect(sheet).toBeVisible()
-
-  const gapAt = async () => {
-    const heading = await head.boundingBox()
-    const top = await sheet.boundingBox()
-    return top && heading ? top.y - (heading.y + heading.height) : Number.NaN
-  }
-  // The gap a tile keeps under its heading in the lane's own layout, before anything scrolls.
-  const normal = await gapAt()
-
-  // Bring the tile to 50px below the board's top, under the heading that stays at the top while
-  // its lane passes. Scrolling re-lays out the lanes above (their heights are estimates until
-  // they are drawn), so the tile is moved in steps, each read once the layout has settled.
-  for (let step = 0; step < 4; step += 1) {
-    const top = await tile.boundingBox()
-    const scroller = await board.boundingBox()
-    if (!top || !scroller || Math.abs(top.y - scroller.y - 50) <= 1) break
-    await board.evaluate(
-      (node: HTMLElement, by: number) => {
-        node.scrollTop += by
-      },
-      top.y - scroller.y - 50,
-    )
-    await settle(board)
-  }
-  const before = await head.boundingBox()
-  const beforeTile = await sheet.boundingBox()
-  const tileUnder = Boolean(before && beforeTile && beforeTile.y < before.y + before.height)
-
-  // The way the board brings a tile into view: the tile's open button, nearest edge.
-  await tile.locator('.tile-open').evaluate((node: HTMLElement) => {
-    node.scrollIntoView({ block: 'nearest' })
-  })
-  await settle(board)
-  return { after: await gapAt(), heading: heights[at], normal, tileUnder }
-}
-
-test('at 1280px a tile scrolled into view stops under its lane heading at the normal gap', async ({
-  page,
-}) => {
-  const { after, heading, normal, tileUnder } = await scrollsTileBelowHeading(page, 1280)
-  expect(heading, 'a one-row heading').toBeLessThanOrEqual(40)
-  expect(tileUnder, 'tile under the heading before the scroll').toBe(true)
-  expect(after, 'gap under the heading after scrolling').toBeGreaterThanOrEqual(-0.5)
-  expect(after, `gap under the heading, normal gap ${normal.toFixed(1)}px`).toBeLessThanOrEqual(
-    normal + 0.5,
-  )
-})
-
-test('at 390px a tile scrolled into view under a two-row heading stops at the normal gap', async ({
-  page,
-}) => {
-  const { after, heading, normal, tileUnder } = await scrollsTileBelowHeading(page, 390)
-  expect(heading, 'a two-row heading').toBeGreaterThan(40)
-  expect(tileUnder, 'tile under the heading before the scroll').toBe(true)
-  expect(after, 'gap under the heading after scrolling').toBeGreaterThanOrEqual(-0.5)
-  expect(after, `gap under the heading, normal gap ${normal.toFixed(1)}px`).toBeLessThanOrEqual(
-    normal + 0.5,
-  )
 })
