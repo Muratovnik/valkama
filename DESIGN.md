@@ -702,12 +702,18 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   zero-width space with empty alternative text (`content: '\200B' / ''`). The break
   is not text: the title's text, a selection's copy and the accessible name Chromium
   computes are the title as written, character for character. A `<wbr>` is not used:
-  Chromium names an element with a space at each one («loading/ empty/ error»). Every
-  surface that draws a work item's title draws it through the directive: the list,
-  the tile, the graph's card and frame, the card's head, the reference's card, the
-  finder, a card's links, the picker of related work and the branch tip. It is a
-  directive because a component instance in every tile and row is a cost the board's
-  budget refuses. A path in free text breaks after each `/` the same way.
+  Chromium names an element with a space at each one («loading/ empty/ error»). A
+  title that wraps is drawn through the directive, and a word wider than its line
+  breaks inside rather than running past the box (`overflow-wrap: anywhere`). A title
+  held to one line ends in an ellipsis instead and breaks nowhere: a chain's row, an
+  editor's suggestion, the card's pinned title. `check:ui-system` holds this rather
+  than a list of surfaces, which is what the next surface skipped: a template that
+  writes `{{ … title }}` as text is refused unless `title-breaks.mjs` registers why it
+  need not break. A title that reaches a template under another name is drawn
+  through the directive by the control that draws it: every option of
+  `SearchCombobox`, the runs of the card's head, a path in free text.
+  `production-title-surfaces.spec.ts` measures each surface. It is a directive because
+  a component instance in every tile and row is a cost the board's budget refuses.
 - **Free text:** `RichText` owns every text an agent or a person wrote — a
   description, a comment, a report section, a question, an attempt's result, a
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,

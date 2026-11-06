@@ -26,6 +26,7 @@ import {
   scanTypeStyles,
   scanUiSources,
 } from './ui-system/styles.mjs'
+import { scanTitleBreaks, UNBROKEN_TITLES } from './ui-system/title-breaks.mjs'
 import { scanTrimmedWords } from './ui-system/trimmed-word.mjs'
 
 export function scanUiTree(root = defaultSourceRoot) {
@@ -38,6 +39,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const budget = product ? LINE_BUDGET : new Map()
   const sizes = product ? CONTROL_SIZE_BUDGET : new Map()
   const fills = product ? FILL_BUDGET : new Map()
+  const titles = product ? UNBROKEN_TITLES : new Map()
   return [
     ...scanUiSources(sources),
     ...scanSemanticStateOwnership(sources),
@@ -47,6 +49,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanMeaningFills(sources, fills),
     ...scanHiddenRules(sources),
     ...scanTrimmedWords(sources),
+    ...scanTitleBreaks(sources, titles),
     ...scanControlSizes(sources, sizes),
     ...scanScopeEscapes(sources),
     ...scanImportDirection(sources),
