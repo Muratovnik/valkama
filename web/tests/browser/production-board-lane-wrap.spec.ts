@@ -12,6 +12,9 @@ import { drawnParts, overlaps, sameBoxes } from './laneHeadGeometry.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
 
+/** A box's vertical middle. */
+const middle = ({ bottom, top }: { bottom: number; top: number }) => (top + bottom) / 2
+
 interface Row {
   left: number
   parts: string[]
@@ -90,6 +93,8 @@ interface Head {
   clipped: boolean
   drawnBottom: number
   elsewhere: boolean
+  /** Whether the title, whole, and every part after it would fit the heading's first line. */
+  oneLine: boolean
   right: number
   rows: string[][]
 }
@@ -118,6 +123,21 @@ const readHeads = (heads: Element[]) =>
       } else rows.push({ bottom: edge.bottom, parts: [name] })
     }
     const actions = head.querySelector('.lane-actions')
+    // The title's whole width is its text's; the tail's is its parts' and the gaps between them.
+    const range = document.createRange()
+    if (title) range.selectNodeContents(title)
+    const toggle = head.querySelector('.lane-toggle')?.getBoundingClientRect().width ?? 0
+    const tail = head.querySelector('.lane-tail')
+    const after = [...(tail?.children ?? [])]
+      .filter((part) => getComputedStyle(part).position !== 'absolute')
+      .map((part) => part.getBoundingClientRect().width)
+      .filter((one) => one > 0)
+    const tailGap = tail ? Number.parseFloat(getComputedStyle(tail).columnGap) : 0
+    const tailWidth = after.reduce((sum, one) => sum + one, 0) + tailGap * (after.length - 1)
+    const titleWidth =
+      toggle - (title?.getBoundingClientRect().width ?? 0) + range.getBoundingClientRect().width
+    const style = getComputedStyle(head)
+    const inset = Number.parseFloat(style.paddingInlineStart)
     return {
       actions: actions && {
         right: actions.getBoundingClientRect().right,
@@ -127,6 +147,8 @@ const readHeads = (heads: Element[]) =>
       clipped: Boolean(title && title.scrollWidth > title.clientWidth),
       drawnBottom: Math.max(...drawn.map((part) => part.getBoundingClientRect().bottom)),
       elsewhere: head.querySelector('.lane-elsewhere') !== null,
+      oneLine:
+        titleWidth - inset + Number.parseFloat(style.columnGap) + tailWidth <= box.width - inset,
       right: box.right,
       rows: rows.map(({ parts }) => parts),
     } satisfies Head
@@ -153,12 +175,13 @@ test('at 1280px a lane heading wraps only for want of room and keeps no blank ro
     const said = `heading ${index}: ${JSON.stringify(head.rows)}`
     // The lane's actions, out of sight at rest, once wrapped onto a row that showed nothing.
     expect.soft(head.bottom - head.drawnBottom, `${said} keeps a blank band`).toBeLessThanOrEqual(1)
-    // A title cut short is what lets the counts stay; only one shown whole may lack room.
+    // The counts go below a title only where it and they would not fit one line whole: a title
+    // is not cut to keep them beside it.
     const alone = head.rows.slice(1).filter((row) => row.every((part) => counts.has(part)))
     expect
       .soft(
-        head.clipped || alone.length === 0,
-        `${said} puts its counts on a row of their own beside a title shown whole`,
+        alone.length === 0 || !head.oneLine,
+        `${said} puts its counts on a row of their own beside a title they fit beside`,
       )
       .toBe(true)
   }
@@ -223,13 +246,12 @@ test('at 1280px an epic heading keeps its actions in a place of their own on hov
         others.some((other) => overlaps(action, other)) ? [`action ${at}`] : [],
       )
       expect.soft(hits, `${said} ${state}: actions over a title or count`).toEqual([])
-      const onRow = drawn.actions.every(
-        (action) =>
-          Math.abs(
-            (action.top + action.bottom) / 2 - (drawn.toggle.top + drawn.toggle.bottom) / 2,
-          ) <= 2,
+      // They end the last line, or stand beside the title on the first.
+      const last = Math.max(...[...drawn.counts, ...drawn.elsewhere].map((box) => middle(box)))
+      const onRow = drawn.actions.every((action) =>
+        [middle(drawn.toggle), last].some((row) => Math.abs(middle(action) - row) <= 2),
       )
-      expect.soft(onRow, `${said} ${state}: actions leave the first row`).toBe(true)
+      expect.soft(onRow, `${said} ${state}: actions leave the first and the last row`).toBe(true)
       expect
         .soft(Math.abs(drawn.height - rest.height), `${said} ${state}: height`)
         .toBeLessThanOrEqual(0.5)

@@ -17,15 +17,30 @@ export interface Part {
   member: Member
 }
 
+/**
+ * The line the actions end, as the parts of the heading after its title wrap: the room one such
+ * line has, the gap between two parts, the actions' width, and the last part before them — its
+ * width and the parts on its line beside it, by class.
+ */
+export interface Tail {
+  actions: number
+  gap: number
+  last: { beside: string[]; width: number } | null
+  line: number
+}
+
 export interface Reading {
   /** Whether the actions are drawn: they are see-through at rest where a pointer can hover. */
   actionsShown: boolean
-  /** Whether the title, whole, and the actions after it would fit the heading's first line. */
+  /** Whether the title, whole, the toggle's end, the gap its words keep and the actions after it
+   *  fit the heading's first line. */
   besideWhole: boolean
   height: number
   parts: Part[]
   /** The members of each row, top to bottom. */
   rows: Member[][]
+  /** The line the actions end; null where the heading has none. */
+  tail: Tail | null
   /** How many characters of the title are drawn whole, before any ellipsis. */
   titleChars: number
   titleLength: number
@@ -44,8 +59,27 @@ interface Drawn {
   width: number
 }
 
-/** Reads one heading's drawn parts; runs in the page, so it carries everything it uses. */
-const drawnHeading = (head: Element): Drawn => {
+/**
+ * Reads one heading's drawn parts; runs in the page, so it carries everything it uses. `bare`
+ * reads it laid out with the lines after its first starting at its own edge rather than under its
+ * words, and puts it back before anything is painted.
+ */
+const drawnHeading = (head: Element, bare = false): Drawn => {
+  // Bare, the toggle's way back out of the heading's inset and the inset itself are taken off,
+  // and put back, at once: under less motion each change of either is otherwise eased over a
+  // frame, and read in that frame it has not happened yet.
+  const inset = (bare ? [head.querySelector('.lane-toggle'), head] : []).map(
+    (node) => (node as HTMLElement | null)?.style,
+  )
+  const lay = (value: string) => {
+    for (const style of inset) style?.setProperty('transition', 'none', 'important')
+    for (const [at, style] of inset.entries())
+      style?.setProperty(['margin-inline-start', 'padding-inline-start'][at] ?? '', value)
+    // The change is applied before the easing comes back.
+    if (inset.length > 0) getComputedStyle(head).paddingInlineStart.at(0)
+    for (const style of inset) style?.removeProperty('transition')
+  }
+  lay('0px')
   const origin = head.getBoundingClientRect()
   const parts: Part[] = []
   /** Adds what is drawn of `rect`, cut to `within` when given. */
@@ -103,7 +137,8 @@ const drawnHeading = (head: Element): Drawn => {
   const canvas = document.createElement('canvas').getContext('2d')
   if (canvas && title) canvas.font = getComputedStyle(title).font
   const clipped = Boolean(title && title.scrollWidth > title.clientWidth + 0.5)
-  const ellipsis = clipped && canvas ? canvas.measureText('…').width : 0
+  const ellipsis = clipped ? (canvas?.measureText('…').width ?? 0) : 0
+  lay('')
   return {
     actionsShown: actions !== null && Number(getComputedStyle(actions).opacity) > 0,
     height: origin.height,
@@ -114,18 +149,55 @@ const drawnHeading = (head: Element): Drawn => {
   }
 }
 
-/** Whether the title, whole, the gap its words keep and the actions fit the heading's width; runs
- *  in the page. */
-const besideWholeIn = (head: Element): boolean => {
+/**
+ * Whether the title, whole, fits beside the actions, and the line they end; runs in the page. The
+ * title's whole width is its text's, however much of it its box shows.
+ */
+const tailIn = (head: Element): { besideWhole: boolean; tail: Tail | null } => {
   const words = head.querySelector('.lane-words')
   const title = head.querySelector('.lane-title')
+  const toggle = head.querySelector('.lane-toggle')
   const actions = head.querySelector('.lane-actions')
-  if (!words || !title || !actions) return true
-  const origin = head.getBoundingClientRect()
-  const end =
-    words.getBoundingClientRect().right - origin.left + title.scrollWidth - title.clientWidth
+  const tail = head.querySelector('.lane-tail')
+  if (!words || !title || !toggle || !actions || !tail) return { besideWhole: true, tail: null }
+  const width = (element: Element) => element.getBoundingClientRect().width
+  const range = document.createRange()
+  range.selectNodeContents(title)
   const gap = Number.parseFloat(getComputedStyle(words).columnGap)
-  return end + gap + actions.getBoundingClientRect().width <= origin.width + 0.5
+  const reference = head.querySelector('.lane-reference')
+  const wordsEnd =
+    words.getBoundingClientRect().left -
+    head.getBoundingClientRect().left +
+    (reference ? width(reference) + gap : 0) +
+    range.getBoundingClientRect().width
+  const toggleEnd = Number.parseFloat(getComputedStyle(toggle).paddingInlineEnd)
+  const text = [
+    ...head.querySelectorAll('.lane-state:not(.visually-hidden), .lane-counts, .lane-elsewhere'),
+  ]
+  const lastPart = text.at(-1)
+  const box = lastPart?.getBoundingClientRect()
+  const beside = [toggle, ...text.slice(0, -1)].filter((part) => {
+    const other = part.getBoundingClientRect()
+    return box !== undefined && other.top < box.bottom && box.top < other.bottom
+  })
+  return {
+    besideWhole: wordsEnd + toggleEnd + gap + width(actions) <= width(head),
+    tail: {
+      actions: width(actions),
+      gap: Number.parseFloat(getComputedStyle(tail).columnGap),
+      last: box
+        ? {
+            beside: beside.map((part) =>
+              ['lane-toggle', 'lane-state', 'lane-counts', 'lane-elsewhere']
+                .filter((name) => part.classList.contains(name))
+                .join(' '),
+            ),
+            width: box.width,
+          }
+        : null,
+      line: width(tail),
+    },
+  }
 }
 
 /** The members of each row: a part whose middle falls inside a row already found stands on it. */
@@ -166,14 +238,25 @@ function rowsOf(parts: Part[]): Member[][] {
 export async function readHeading(head: Locator): Promise<Reading> {
   const drawn = await head.evaluate(drawnHeading)
   const whole = drawn.letterEnds.findIndex((end) => end > drawn.titleEnd + 0.5)
+  const { besideWhole, tail } = await head.evaluate(tailIn)
   return {
     actionsShown: drawn.actionsShown,
-    besideWhole: await head.evaluate(besideWholeIn),
+    besideWhole,
     height: drawn.height,
     parts: drawn.parts,
     rows: rowsOf(drawn.parts),
     titleChars: whole === -1 ? drawn.letterEnds.length : whole,
     titleLength: drawn.letterEnds.length,
+    tail,
     width: drawn.width,
   }
+}
+
+/**
+ * How many rows the heading would draw were its lines after the first to start at its own edge
+ * rather than under its words.
+ */
+export async function rowsFromTheEdge(head: Locator): Promise<number> {
+  const drawn = await head.evaluate(drawnHeading, true)
+  return rowsOf(drawn.parts).length
 }

@@ -8,44 +8,28 @@
  * heading stands below it at the lane's own gap, however many lines the heading takes.
  *
  * What is measured is what is drawn (`laneHeadRows.ts`), in the built app once its fonts are in,
- * against how the base drew the same heading (`laneHeadBase.ts`). A line more than the base is
- * the cost of one of three things. The base held that line only by laying its actions over the
- * counts or the note. Or beside the title the actions would cut it, so they end the last line and
- * take its last part down with them. Or, in the lane of work under no epic at 320px in Russian,
- * the line under the title starts under the reference, not at the heading's edge, and holds less:
- * that inset is kept, since a line wrapped from the edge stood 4px left of the chevron. Where the
- * heading keeps one line that the base drew as two, its title gives way to keep it so, as it gives
- * way before the counts wrap; nowhere else does it keep fewer letters than the base.
+ * against how the base drew the same heading (`laneHeadBase.ts`), every 10px from 320 to 1440 at
+ * rest and at `WIDTHS` under the pointer and the keyboard too. Each exception is read from the
+ * heading itself, not listed. A line more than the base is the cost of one of three things. The
+ * base held that line only by laying its actions over the counts or the note. Or beside the title
+ * the actions would cut it, so they end the last line, taking its last part down with them. Or the
+ * lines after the first start under the reference rather than at the heading's edge, and the same
+ * heading laid out from its edge takes fewer: that inset is kept, since a line wrapped from the
+ * edge stood 4px left of the chevron. The title keeps at least the letters the base drew,
+ * everywhere: where one line would cut it, the heading takes the base's lines instead.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
-import { baseOf, WIDTHS } from './laneHeadBase.ts'
+import { baseOf, SWEEP, WIDTHS } from './laneHeadBase.ts'
 import type { Drawn } from './laneHeadBase.ts'
 import { overlaps, settle } from './laneHeadGeometry.ts'
-import { readHeading } from './laneHeadRows.ts'
+import { readHeading, rowsFromTheEdge } from './laneHeadRows.ts'
 import type { Part, Reading } from './laneHeadRows.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
-
-/**
- * Where the actions end the heading alone on its last line: the counts that end its text would
- * leave the state alone above them (MAIN-420), or stand alone and with the actions are wider than
- * the line (MAIN-410 in Russian). Beside the title they would leave it 2 of its 15 letters, and
- * the title wins. By locale, lane and width.
- */
-const ALONE = new Set([
-  'en-US MAIN-420 320',
-  'en-US MAIN-420 350',
-  'ru-RU MAIN-420 320',
-  'ru-RU MAIN-420 350',
-  'ru-RU MAIN-410 320',
-])
-
-/** Where the inset under the title costs a line (above). */
-const INSET = new Set(['ru-RU Без эпика 320'])
 
 /**
  * The board as a reader opens it at `width`, its fonts in before anything is measured: the wide
@@ -65,11 +49,13 @@ async function open(page: Page, width: number, wide: boolean) {
 
 const openWide = (page: Page, width: number) => open(page, width, true)
 
+/** The widths where, with only a finger, the keyboard and each action's reach are read too. */
+const TOUCHED = new Set([320, 390, 760, 1280])
+
 const SIDES = ['left', 'top', 'right', 'bottom'] as const
 
-/** What an action lies over. */
+/** What an action lies over. Read at rest too: they come up where they stand. */
 function covered(reading: Reading): string[] {
-  if (!reading.actionsShown) return []
   const actions = reading.parts.filter(({ member }) => member === 'action')
   return reading.parts
     .filter(
@@ -78,12 +64,24 @@ function covered(reading: Reading): string[] {
     .map(({ member }) => `an action covers the ${member}`)
 }
 
-/** A line that holds the state or the actions and nothing else, but where it is named. */
-function alone(reading: Reading, named: boolean): string[] {
+/**
+ * Whether nothing can come down with the actions onto the line they end: beside the title they
+ * would cut it, and the part they follow either cannot share a line with them or, taken down,
+ * would leave the state alone on the line above.
+ */
+function forcedAlone({ besideWhole, tail }: Reading): boolean {
+  const last = tail?.last
+  if (!tail || !last || besideWhole) return false
+  const leaves = last.beside.length === 1 && last.beside[0] === 'lane-state'
+  return leaves || last.width + tail.gap + tail.actions > tail.line
+}
+
+/** A line that holds the state or the actions and nothing else, but where nothing else can. */
+function alone(reading: Reading): string[] {
   return reading.rows.flatMap((row) => {
     if (row.length === 1 && row[0] === 'state') return ['the state stands on a line alone']
     const lone = row.every((member) => member === 'action')
-    return lone && !named ? ['the actions stand on a line alone'] : []
+    return lone && !forcedAlone(reading) ? ['the actions stand on a line alone'] : []
   })
 }
 
@@ -101,41 +99,50 @@ function still(reading: Reading, rest: Reading): boolean {
 }
 
 /** What is wrong with one heading in one state, against its reading at rest. */
-function faults(reading: Reading, rest: Reading, named: boolean): string[] {
+function faults(reading: Reading, rest: Reading): string[] {
   const outside = reading.parts
     .filter(({ box }) => box.left < -0.5 || box.right > reading.width + 0.5)
     .map(({ member }) => `the ${member} runs past the heading`)
   const moved = still(reading, rest) ? [] : ['something moves']
-  return [...new Set([...covered(reading), ...alone(reading, named), ...outside, ...moved])]
+  return [...new Set([...covered(reading), ...alone(reading), ...outside, ...moved])]
 }
 
 /** What one heading at rest gives up against the base: letters of its title, or lines. */
-function againstBase(rest: Reading, base: Drawn | undefined, named: boolean): string[] {
+async function againstBase(head: Locator, rest: Reading, base: Drawn | undefined) {
   if (!base) return ['the base has no reading here']
-  const lines = rest.rows.length
-  const last = rest.rows.at(-1) ?? []
-  // The actions end the last line with the part that came down with them.
-  const tied = last.includes('action') && last.length > 1
-  const extra = lines > base.rows
-  return [
-    ...(rest.titleChars < base.letters && !(lines === 1 && base.rows > 1)
+  const found =
+    rest.titleChars < base.letters
       ? [`the title keeps ${rest.titleChars} letters, the base ${base.letters}`]
-      : []),
-    ...(extra && !(base.covered || (tied && !rest.besideWhole) || named)
-      ? [`${lines} lines, the base ${base.rows}`]
-      : []),
-  ]
+      : []
+  const lines = rest.rows.length
+  if (lines <= base.rows || base.covered) return found
+  // Where beside the title they would cut it, the actions end the last line: one line more.
+  const ending = (rest.rows.at(-1) ?? []).includes('action') && !rest.besideWhole ? 1 : 0
+  const inset = lines - (await rowsFromTheEdge(head))
+  return lines - base.rows <= ending + inset
+    ? found
+    : [...found, `${lines} lines, the base ${base.rows}`]
+}
+
+/**
+ * Waits until the actions have faded in or out, however many frames that takes under load, and
+ * two more for what it draws.
+ */
+async function faded(head: Locator) {
+  await head
+    .locator('.lane-actions')
+    .evaluate((node) => Promise.all(node.getAnimations().map((one) => one.finished)))
+  await settle(head)
 }
 
 /** One heading at rest, under the pointer if one can hover, and with the keyboard on it. */
 async function readStates(page: Page, head: Locator, hover: boolean) {
-  const board = page.locator('.work-item-lanes')
   const rest = await readHeading(head)
   const states: [string, Reading][] = [['at rest', rest]]
   if ((await head.locator('.lane-actions').count()) === 0) return states
   if (hover) {
     await head.hover({ position: { x: 4, y: 4 } })
-    await settle(board)
+    await faded(head)
     states.push(['under the pointer', await readHeading(head)])
     await page.mouse.move(0, 0)
   }
@@ -143,20 +150,25 @@ async function readStates(page: Page, head: Locator, hover: boolean) {
     node.focus({ preventScroll: true })
   })
   await page.keyboard.press('Tab')
-  await settle(board)
+  await faded(head)
   states.push(['with the keyboard on an action', await readHeading(head)])
   await page.locator('body').evaluate(() => {
     ;(document.activeElement as HTMLElement | null)?.blur()
   })
-  await settle(board)
+  await faded(head)
   return states
 }
 
 /**
  * Every heading at `width`, with the board at its first states and scrolled to its middle ones,
- * and what is wrong with each, against itself at rest and against the base.
+ * and what is wrong with each, against itself at rest and against the base: at rest only, or
+ * under the pointer and the keyboard too where `every`.
  */
-async function readWidth(page: Page, width: number, locale: string, hover: boolean) {
+async function readWidth(
+  page: Page,
+  width: number,
+  { every, hover, locale }: { every: boolean; hover: boolean; locale: string },
+) {
   await page.setViewportSize({ width, height: 900 })
   const board = page.locator('.work-item-lanes')
   const found: string[] = []
@@ -172,24 +184,27 @@ async function readWidth(page: Page, width: number, locale: string, hover: boole
       const head = heads.nth(index)
       const name = (await head.locator('.lane-reference, .lane-title').first().textContent()) ?? ''
       const where = `${width}px ${scroll} ${name}`
-      const named = `${locale} ${name} ${width}`
-      const states = await readStates(page, head, hover)
+      const states = every
+        ? await readStates(page, head, hover)
+        : [['at rest', await readHeading(head)] as const]
       const [[, rest]] = states
       for (const [state, reading] of states)
-        found.push(
-          ...faults(reading, rest, ALONE.has(named)).map((one) => `${where} ${state}: ${one}`),
-        )
+        found.push(...faults(reading, rest).map((one) => `${where} ${state}: ${one}`))
       if (!states.every(([, reading], at) => at === 0 || reading.actionsShown))
         found.push(`${where}: an action the pointer or keyboard is on is not up`)
       const base = baseOf(`${locale}|${hover ? 'pointer' : 'touch'}|${scroll}|${name}`, width)
-      found.push(
-        ...againstBase(rest, base, ALONE.has(named) || INSET.has(named)).map(
-          (one) => `${where}: ${one}`,
-        ),
-      )
+      const lost = await againstBase(head, rest, base)
+      found.push(...lost.map((one) => `${where}: ${one}`))
     }
   }
   return found
+}
+
+/** Every heading at `width` where only a finger presses, and at `TOUCHED` its focus and reach. */
+async function readTouch(page: Page, width: number, locale: string) {
+  const every = TOUCHED.has(width)
+  const found = await readWidth(page, width, { every, hover: false, locale })
+  return every ? [...found, ...(await readReach(page, width))] : found
 }
 
 /**
@@ -248,10 +263,13 @@ for (const locale of ['en-US', 'ru-RU']) {
     test('a heading’s actions cover nothing, move nothing and never stand alone', async ({
       page,
     }) => {
-      test.setTimeout(300_000)
+      test.setTimeout(900_000)
       await openWide(page, 1280)
       const found: string[] = []
-      for (const width of WIDTHS) found.push(...(await readWidth(page, width, locale, true)))
+      for (const width of SWEEP)
+        found.push(
+          ...(await readWidth(page, width, { every: WIDTHS.includes(width), hover: true, locale })),
+        )
       expect(found).toEqual([])
     })
   })
@@ -262,14 +280,11 @@ for (const locale of ['en-US', 'ru-RU']) {
     test('a heading keeps its actions up, a finger’s reach apart, covering nothing', async ({
       page,
     }) => {
-      test.setTimeout(240_000)
+      test.setTimeout(900_000)
       await openWide(page, 390)
       await expect.poll(() => page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
       const found: string[] = []
-      for (const width of [320, 390, 760, 1280]) {
-        const lines = await readWidth(page, width, locale, false)
-        found.push(...lines, ...(await readReach(page, width)))
-      }
+      for (const width of SWEEP) found.push(...(await readTouch(page, width, locale)))
       expect(found).toEqual([])
     })
   })

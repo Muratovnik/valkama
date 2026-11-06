@@ -193,10 +193,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   /* The chevron's drawn size, as the template asks `VIcon` for it. */
   --lane-chevron-size: 16px;
 
-  /* What the toggle keeps before the counts wrap: the chevron, the reference and
-     some thirty characters of the title. */
-  --lane-title-floor: 320px;
-
   /* The two actions side by side. Where an icon answers a press across 44px
      (`reach.css`), they stand far enough apart for the two reaches not to meet, and the
      last keeps its reach inside the board, whose edge clipped it. */
@@ -223,9 +219,9 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 }
 
 /* A heading that also says where its work out of sight is would squeeze its
-   title down to a letter, and so would a narrow board: these wrap, the title
-   giving way first down to its floor. Elsewhere the line stays one row, as it
-   always has, and only the title gives way. */
+   title down to a letter, and so would a narrow board: these wrap, and what
+   follows the title goes to the next line rather than cut it. Elsewhere the line
+   stays one row, as it always has, and only the title gives way. */
 .lane-head.away {
   flex-wrap: wrap;
 }
@@ -236,14 +232,16 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   }
 }
 
-/* It wraps by its floor and grows to its words, so the counts follow the title
-   rather than standing at the far end, and a title that fits is never cut. It
-   takes the row's free room a thousand times faster than the tail beside it, and
-   gives room up as fast, so a long title gives way first and the tail only takes
-   what is left once the title has its words. */
+/* As wide as its words, so the counts follow the title rather than standing at
+   the far end. Where the heading wraps, the line breaks before what follows the
+   title once title and tail no longer fit it whole: the title keeps its words, as
+   a line of its own or the whole line, and the tail goes below. A floor that held
+   the tail beside it cut a long title to a third of its words on a wide board.
+   On a line that cannot wrap the title gives way a thousand times faster than the
+   tail, so the tail stays whole. */
 .lane-toggle {
   display: inline-flex;
-  flex: 1000 1000 var(--lane-title-floor);
+  flex: 0 1000 auto;
   gap: var(--space-2);
   align-items: center;
   min-width: 0;

@@ -54,7 +54,7 @@ function wideSpace(model: Model): Model {
   )
   const [template] = model.work_items
   // One title that fits beside its counts and its note of work out of sight, and one
-  // that fits only when it gives way, each with work in the last state.
+  // too long to stand whole beside them, each with work in the last state.
   const titles = [
     'Lane heads keep their counts beside a title shown whole, at every width',
     'Lane heads that shorten a long title before they move its counts and their note of work off the line',
