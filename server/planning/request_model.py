@@ -710,10 +710,28 @@ def difference(descriptors: list[dict], old: dict, new: dict) -> list[str]:
     return rows
 
 
-def change_text(descriptors: list[dict], old: dict, new: dict, *, limit: int) -> str:
-    """`changed: ` and the rows of `difference`, within `limit`: what does not fit is counted."""
+def change_text(
+    descriptors: list[dict], old: dict, new: dict, *, limit: int, listed: bool = False
+) -> str:
+    """`changed: ` and the rows of `difference`, within `limit`: what does not fit is counted.
+
+    A list (`listed`) changed to nothing ticked says so first, `label: not decided`, as its
+    first answer does (`answer_text`): a row of removed ids alone would leave an agent to
+    work out that nothing is left.
+    """
 
     rows = difference(descriptors, old, new)
+    if listed:
+        was = set(_list_undecided(descriptors, split_answers(old))["undecided"])
+        labels = {field["id"]: field["label"] for field in descriptors}
+        rows = [
+            *(
+                f"{labels[identity]}: not decided"
+                for identity in _list_undecided(descriptors, split_answers(new))["undecided"]
+                if identity not in was
+            ),
+            *rows,
+        ]
     head = "changed: "
     for count in range(len(rows), 0, -1):
         left = len(rows) - count

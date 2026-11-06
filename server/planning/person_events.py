@@ -398,7 +398,8 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
         return ""
     from . import request_model
 
-    answer = request_model.answer_text(fields, stored, listed=row[3] is not None)
+    listed = row[3] is not None
+    answer = request_model.answer_text(fields, stored, listed=listed)
     if action == "request_answered":
         return answer
     replaced = conn.execute(
@@ -409,7 +410,7 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
     was = _json(str(replaced[0])) if replaced is not None else None
     if not isinstance(was, dict):
         return answer
-    return request_model.change_text(fields, was, stored, limit=MAX_TEXT)
+    return request_model.change_text(fields, was, stored, limit=MAX_TEXT, listed=listed)
 
 
 def _cut(text: str, limit: int) -> str:

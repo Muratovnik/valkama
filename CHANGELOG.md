@@ -103,7 +103,7 @@ checkouts are therefore distinguishable even at the same version.
   moves a list with its comment, so a report's list stays with the report. A list's
   compact read carries `undecided`, `["items"]` while nothing on it is ticked, so a list
   sent with nothing ticked reads as not decided, and its notice says `<label>: not
-  decided`. See
+  decided`, also when a change unticks everything. See
   [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
 - **A list an agent puts under its comment is ticked right there.** The card shows it under
   the comment's words, inside that comment, and no longer as a question of its own: it adds

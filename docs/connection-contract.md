@@ -2176,7 +2176,8 @@ answers `{"items": []}`: the person has not decided the list, which is neither a
 refusal of every option nor an answer with something missing. The compact form of a
 list says so in `undecided`, `["items"]` while nothing on it is ticked and `[]`
 once something is, in `previous` too, and the notice of that answer reads
-`<label>: not decided`. A person's answer is a
+`<label>: not decided`, as does the notice of a change that unticks everything,
+before the ids it removed. A person's answer is a
 `question_answered` event: the agent that wrote the list and the item's holders
 hear it, as for any question (see
 [the hook contract](hook-contract.md#who-is-told)), and the next agent write

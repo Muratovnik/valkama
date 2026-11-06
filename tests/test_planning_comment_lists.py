@@ -402,11 +402,16 @@ class ReadingTests(Harness):
             [{"field": "items", "value": ["a"], "label": "Widen the check"}], compact["answer"]
         )
         self.assertEqual(["What to take on: Widen the check"], [e["text"] for e in self.told()])
-        self.answer(answered, [], change=True)
+        emptied = self.answer(answered, [], change=True)
         compact = self.compact(listed["request_id"])
         self.assertEqual(["items"], compact["undecided"])
         self.assertEqual([], compact["previous"]["undecided"], "the replaced answer had a tick")
-        self.assertEqual([f"changed: items {MINUS}a"], [e["text"] for e in self.told()])
+        self.assertEqual(
+            [f"changed: What to take on: not decided; items {MINUS}a"],
+            [e["text"] for e in self.told()],
+        )
+        self.answer(emptied, ["b"], change=True)
+        self.assertEqual(["changed: items +b"], [e["text"] for e in self.told()], "decided again")
 
     def test_a_question_keeps_no_undecided_and_an_empty_optional_field_no_row(self) -> None:
         field = {"id": "extra", "label": "Extra", "type": "multi_choice", "required": False}
