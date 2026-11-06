@@ -110,8 +110,15 @@ onMounted(revealShown)
 // the browser clamped it to 0, and the strip left from under the pointer that pressed it.
 watch(shown, () => nextTick(revealShown))
 
+/**
+ * Only the keyboard's focus is brought in as it lands. A press focuses a section on its way
+ * down and chooses it on its way up, and a strip moved in between left another section, or
+ * none, under the pointer, so the press chose nothing; a finger's tap lost its first try the
+ * same way. The section a press picks is brought in once the press is over, as it is shown.
+ */
 function focused(event: FocusEvent) {
-  reveal(event.target as Element | null)
+  const target = event.target
+  if (target instanceof Element && target.matches(':focus-visible')) reveal(target)
 }
 </script>
 

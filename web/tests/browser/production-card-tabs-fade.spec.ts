@@ -166,6 +166,42 @@ test('at 1280px the sections fit and the row draws no mask', async ({ page }) =>
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ mask: 'none' })
 })
 
+/** Where a person presses a section: the middle of what of its drawn words the row shows. */
+function pressPoint(strip: Locator, index: number) {
+  return strip.evaluate((node, at) => {
+    const row = node.getBoundingClientRect()
+    const range = document.createRange()
+    range.selectNodeContents(node.querySelectorAll('button')[at])
+    const words = range.getBoundingClientRect()
+    const left = Math.max(words.left, row.left + 2)
+    const right = Math.min(words.right, row.right - 2)
+    return { x: (left + right) / 2, y: (words.top + words.bottom) / 2, seen: right - left }
+  }, index)
+}
+
+const frames = (strip: Locator) =>
+  strip.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  )
+
+/**
+ * A pointer's press on a section, down and up apart, where a person presses it: never
+ * `locator.click()`, which scrolls the section into view before it presses. The row holds
+ * still between the two, or the press ends on another section, or none, and chooses nothing.
+ */
+async function press(page: Page, strip: Locator, index: number) {
+  const { x, y } = await pressPoint(strip, index)
+  const before = await scrolled(strip)
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await frames(strip)
+  expect(await scrolled(strip), 'the row holds still under a press').toBe(before)
+  await page.mouse.up()
+}
+
+/** A section chosen to set a scene, by no hand the check reads. */
+const choose = (tab: Locator) => tab.evaluate((node) => (node as HTMLElement).click())
+
 /**
  * Pick each section in turn, along the row and back, and read what the pick did: a section
  * whose words were in sight and clear of the fade is not moved, and every section picked
@@ -195,14 +231,89 @@ async function pickEach(strip: Locator, pick: (index: number) => Promise<void>) 
   }
 }
 
+/**
+ * Each section between the ends that the row can place so, its words just clear of the
+ * start's fade and the padding round them under it, with the one chosen before it standing
+ * after it, so that nothing it is drawn with moves its words: reached, it stays where it is.
+ * A row that keeps a section's box clear of the fade, not its words, moves it by that padding.
+ */
+async function pickJustClear(strip: Locator, reach: (index: number) => Promise<void>) {
+  const tabs = strip.getByRole('tab')
+  let placed = 0
+  for (const index of [1, 2, 3]) {
+    await choose(tabs.nth(index + 1))
+    await tabs.nth(index + 1).focus()
+    const reachable = await strip.evaluate((node, at) => {
+      const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade'))
+      const range = document.createRange()
+      range.selectNodeContents(node.querySelectorAll('button')[at])
+      const words = range.getBoundingClientRect()
+      const left = node.scrollLeft + words.left - (node.getBoundingClientRect().left + fade + 2)
+      if (left > node.scrollWidth - node.clientWidth) return false
+      node.scrollLeft = left
+      return true
+    }, index)
+    if (!reachable) continue
+    placed += 1
+    const before = await still(strip)
+    const tab = tabs.nth(index)
+    expect(await wordsUnderFade(strip, tab), 'placed with its words clear').toEqual([])
+    const boxUnder = await strip.evaluate((node, at) => {
+      const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade'))
+      const box = node.querySelectorAll('button')[at].getBoundingClientRect()
+      return box.left < node.getBoundingClientRect().left + fade - 4
+    }, index)
+    expect(boxUnder, 'placed with its padding under the fade').toBe(true)
+    await reach(index)
+    await expect(tab).toHaveAttribute('aria-selected', 'true')
+    expect(await still(strip), `section ${index}, clear of the fade, is not moved`).toBe(before)
+  }
+  expect(placed, 'a section the row could place just clear').toBeGreaterThan(0)
+}
+
+/**
+ * The row at either end, each section with its words in sight pressed: those the fade cuts
+ * at the far end as well as the first and the last. A pointer presses down and up apart, a
+ * finger taps; each chooses the section it lands on. Says which it pressed, and which of
+ * them the fade cut.
+ */
+async function pressEach(page: Page, strip: Locator, touch: boolean) {
+  const pressed: string[] = []
+  for (const end of ['start', 'end'] as const)
+    for (let index = 0; index < 5; index += 1) {
+      const name = await pressAtEnd(page, strip, { end, index, touch })
+      if (name) pressed.push(name)
+    }
+  return pressed
+}
+
+/** One section pressed with the row at one end, another chosen before; null with none in sight. */
+async function pressAtEnd(
+  page: Page,
+  strip: Locator,
+  { end, index, touch }: { end: 'end' | 'start'; index: number; touch: boolean },
+) {
+  const tab = strip.getByRole('tab').nth(index)
+  await choose(strip.getByRole('tab').nth(index === 2 ? 0 : 2))
+  await strip.evaluate((node, left) => node.scrollTo({ left }), end === 'end' ? 1e6 : 0)
+  await still(strip)
+  const { x, y, seen } = await pressPoint(strip, index)
+  if (seen < 6) return null
+  const under = await wordsUnderFade(strip, tab)
+  if (touch) await page.touchscreen.tap(x, y)
+  else await press(page, strip, index)
+  await expect(tab, `${end}: section ${index}`).toHaveAttribute('aria-selected', 'true')
+  return `${end}:${index}${under.length ? ' under the fade' : ''}`
+}
+
 for (const locale of ['ru', 'en'] as const) {
-  test(`a section picked by the pointer at 390px in ${locale} stands clear of the fade and moves only when it did not`, async ({
+  test(`a section pressed at 390px in ${locale} is chosen, stands clear of the fade and moves only when it did not`, async ({
     page,
   }) => {
     const strip = await openCard(page, 390, locale)
-    const tabs = strip.getByRole('tab')
-    await expect(tabs).toHaveCount(5)
-    await pickEach(strip, (index) => tabs.nth(index).click())
+    await expect(strip.getByRole('tab')).toHaveCount(5)
+    await pickEach(strip, (index) => press(page, strip, index))
+    await pickJustClear(strip, (index) => press(page, strip, index))
   })
 
   test(`a section the keyboard reaches at 390px in ${locale} stands clear of the fade and moves only when it did not`, async ({
@@ -219,5 +330,35 @@ for (const locale of ['ru', 'en'] as const) {
       await expect(tabs.nth(index)).toBeFocused()
       at = index
     })
+    await pickJustClear(strip, async (index) => {
+      await page.keyboard.press('ArrowLeft')
+      await expect(tabs.nth(index)).toBeFocused()
+    })
+    // Tabbed back into with the section shown scrolled away, the row brings it in.
+    await page.keyboard.press('End')
+    await expect(tabs.last()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(tabs.last()).not.toBeFocused()
+    await strip.evaluate((node) => node.scrollTo({ left: 0 }))
+    await still(strip)
+    expect(await wordsUnderFade(strip, tabs.last()), 'scrolled away').not.toEqual([])
+    await page.keyboard.press('Shift+Tab')
+    await expect(tabs.last()).toBeFocused()
+    await still(strip)
+    expect(await wordsUnderFade(strip, tabs.last()), 'tabbed back into').toEqual([])
   })
+
+  for (const touch of [false, true])
+    test.describe(`under a ${touch ? 'finger' : 'mouse'}`, () => {
+      test.use({ hasTouch: touch })
+
+      test(`at 390px in ${locale} a ${touch ? 'tap' : 'press'} on a section the fade cuts chooses it`, async ({
+        page,
+      }) => {
+        const strip = await openCard(page, 390, locale)
+        const pressed = await pressEach(page, strip, touch)
+        expect(pressed).toEqual(expect.arrayContaining(['start:0', 'end:4']))
+        expect(pressed.filter((name) => name.endsWith('under the fade')).length).toBeGreaterThan(1)
+      })
+    })
 }
