@@ -73,6 +73,10 @@ const emit = defineEmits<{ 'update:modelValue': [value: Value] }>()
  * Over the dialog, as every list portalled out of one is. Reka lifts its positioning
  * wrapper to the z-index of the element it is given, and that element is not this
  * file's own, so a scoped class never reaches it: the list stood behind the dialog.
+ *
+ * A press on the list leaves the focus in the field, as a key does. An option has tabindex
+ * -1, so a press gave it the focus, and when choosing one closed the list under it the focus
+ * fell to the page: the next Tab started from the top of the document.
  */
 const LAYER = { zIndex: 120 }
 
@@ -271,6 +275,7 @@ function pressBox(event: MouseEvent) {
           :hide-when-detached="true"
           :aria-label="label"
           :style="LAYER"
+          @pointerdown.prevent
         >
           <div class="combo-popup">
             <ComboboxItem

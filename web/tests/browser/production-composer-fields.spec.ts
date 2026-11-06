@@ -165,3 +165,29 @@ test('a pointer opens the epic list over an empty search, the chosen epic standi
   await expect(epic).toHaveValue('No epic')
   await expect(epic).not.toHaveAttribute('placeholder')
 })
+
+test('an epic chosen with the pointer leaves the caret in its field, as one chosen by keys does', async ({
+  page,
+}) => {
+  const { dialog } = await openComposer(page, 1280)
+  const epic = dialog.getByRole('combobox', { name: 'Epic', exact: true })
+  await epic.click()
+  const list = page.getByRole('listbox', { name: 'Epic' })
+  await list.getByRole('option', { name: new RegExp(`^MAIN-12 · ${EPIC_TITLE}`, 'u') }).click()
+  await expect(list).toHaveCount(0)
+  await expect(epic).toHaveValue(`MAIN-12 · ${EPIC_TITLE}`)
+  // The pressed option took the focus and went with the list: it fell to the page, and the
+  // next Tab started from the top of the document.
+  await expect(epic).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(dialog.getByRole('combobox', { name: 'Labels', exact: true })).toBeFocused()
+
+  // Labels, several values: the field keeps the caret after a press too.
+  const labels = dialog.getByRole('combobox', { name: 'Labels', exact: true })
+  await labels.click()
+  await page
+    .getByRole('listbox', { name: 'Labels' })
+    .getByRole('option', { name: 'backend' })
+    .click()
+  await expect(labels).toBeFocused()
+})
