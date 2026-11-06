@@ -525,6 +525,28 @@ class LapseTests(Harness):
         self.assertEqual(leases.ENDED_GRACE.total_seconds(), notify.ENDED_GRACE_SECONDS)
 
 
+class LockTests(Harness):
+    """Parallel tool calls of one recipient run hooks at once: one of them tells."""
+
+    def test_while_another_hook_of_the_recipient_tells_this_one_tells_nothing(self) -> None:
+        self.set_up_b()
+        self.comment(AS_A, self.held, "Parallel tool calls, marker PT-1")
+        before = self.marks()
+        lock = notify._Lock(
+            os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".lock")
+        )
+        self.addCleanup(lock.close)
+        self.assertTrue(lock.take(1))
+        with mock.patch.object(notify, "_LOCK_ATTEMPTS", 2):
+            self.assertIsNone(self.hook(), "the hook that holds the lock tells it")
+        self.assertEqual(before, self.marks(), "and this one moved no place")
+        lock.close()
+        told = self.hook()
+        assert told is not None, "told once the lock is free"
+        self.assertIn("marker PT-1", told)
+        self.assertIsNone(self.hook(), "once")
+
+
 class UpgradeTests(Harness):
     def test_a_store_without_the_new_table_tells_nothing_and_loses_nothing(self) -> None:
         """A hook of a new release can meet a store that release has not opened yet."""

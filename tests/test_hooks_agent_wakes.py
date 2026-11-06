@@ -48,6 +48,8 @@ from tests.test_hooks_agent_notices import (
 
 A_CHILD = "019a3c2e-3333-7c11-9e0f-2f4b6d8a1c3e"
 AS_A_CHILD = {"sessionId": A, "threadId": A_CHILD}
+#: Another subagent of B, beside `CHILD`.
+AS_SIBLING = {"sessionId": B, "threadId": "019a3c2e-8888-7c11-9e0f-2f4b6d8a1c3e"}
 
 
 class Wakes(Harness):
@@ -135,6 +137,18 @@ class AskerTests(Wakes):
         self.assertIn("(the reply awaited)", told)
         self.assertIsNone(self.stop(A))
         self.assertIsNone(self.hook(session=A), "and it is not told again")
+
+    def test_a_sibling_subagents_reply_does_not_end_the_wait(self) -> None:
+        """Its own session never answers it, a subagent beside it no more than itself."""
+
+        root = self.comment(AS_CHILD, self.held, "Which parser, marker SQ-1?", awaits_reply=True)
+        self.assertIsNone(self.hook(CHILD))
+        self.comment(AS_SIBLING, self.held, "A sibling's guess, marker SQ-2", reply_to=root)
+        self.assertIsNone(self.hook(CHILD), "its own session's words are no news")
+        self.reply(AS_A, root, "SQ-3")
+        told = self.hook(CHILD)
+        assert told is not None
+        self.assertRegex(told, rf"by session {A}, in your thread #{root} \(the reply awaited\)")
 
     def test_an_asker_that_is_not_the_roots_author_is_answered_too(self) -> None:
         root = self.comment(AS_B, self.held, "B started this thread")
