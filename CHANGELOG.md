@@ -171,8 +171,8 @@ checkouts are therefore distinguishable even at the same version.
   waits for the next tool call with a line saying how many such events waited. Past
   three notices in an hour quoting other agents on one item, that item's news is one
   line per notice that counts the events, names who wrote them and says to read the
-  item; the reply a session awaited, a blocker that closed and a person's acts are
-  always quoted. The hook's `.marks` files are now headed `v4`.
+  item; the reply a session awaited, a question that wakes it, a blocker that closed and
+  a person's acts are always quoted. The hook's `.marks` files are now headed `v4`.
   In the card, the sessions that follow an item stand under its holder, and a comment still
   waiting for its reply says «waiting for a reply» in its head until another session or
   you reply in its thread. See

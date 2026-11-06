@@ -657,10 +657,10 @@ dropped: the item holds every word.
 MAIN-14 «Widen the check»: 5 events by session 019a…, agent ab12 of session 019b…, the newest at 2026-11-06T11:20:00Z, folded into this line after 3 notices on this item within the hour; read the item with get_work_item for what they say.
 ```
 
-The reply a recipient awaited, a blocker that closed and a person's acts, a
-subscriber's share of them included, are never folded and do not count among the
-three; a comment that awaits the recipient's reply counts and folds like any
-other, and still wakes.
+The reply a recipient awaited, a comment that awaits its reply on work it holds, a
+blocker that closed and a person's acts, a subscriber's share of them included,
+are never folded and do not count among the three: they are what wakes a session,
+so a notice that wakes one always quotes what woke it.
 
 ### The watcher
 

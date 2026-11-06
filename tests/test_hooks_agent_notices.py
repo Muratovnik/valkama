@@ -424,16 +424,20 @@ class FoldTests(Harness):
         self.assertNotIn("marker F-11", told)
         self.assertIn("1 event by session", told)
 
-    def test_a_question_past_the_third_notice_still_wakes_folded(self) -> None:
+    def test_a_question_past_the_third_notice_wakes_with_its_words(self) -> None:
+        """A wake says why it came: the question that woke the session is never folded."""
+
         self.set_up_b()
         self.three_notices()
         self.assertIsNone(self.hook(event="stop"), "B is idle now")
+        self.comment(AS_A, self.held, "Plain news, marker F-13")
         self.comment(AS_A, self.held, "Which parser, marker F-12?", awaits_reply=True)
         told = self.hook(event="stop")
         assert told is not None, "it asks for B, so it continues the turn"
         self.assertIn("This is not an error", told)
+        self.assertIn("marker F-12", told, "the question, quoted")
+        self.assertNotIn("marker F-13", told, "the news beside it still folds")
         self.assertIn(f"{self.held} «Held by B»: 1 event by session {A},", told)
-        self.assertNotIn("marker F-12", told)
 
     def test_the_notices_are_kept_beside_the_wake_budget(self) -> None:
         self.set_up_b()

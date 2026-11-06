@@ -840,8 +840,9 @@ def _fold(
     them each notice gives one `folded` entry instead, counting the events and naming
     who wrote them, so an agent that writes on an item without pause costs its
     reader one line a call. Nothing is dropped: the item holds every word. Never
-    folded: the reply the recipient awaited, a blocker that closed, and a person's
-    news, a subscriber's share of it included.
+    folded: the reply the recipient awaited, a comment that awaits its reply, a
+    blocker that closed, and a person's news, a subscriber's share of it included.
+    What wakes a session is always quoted, so the wake says why it came.
     """
 
     foldable = [entry for entry in entries if _foldable(entry)]
@@ -866,11 +867,7 @@ def _fold(
 
 
 def _foldable(entry: dict) -> bool:
-    return (
-        entry.get("via") == "agent"
-        and not entry.get("answers")
-        and entry["kind"] != "blocker_closed"
-    )
+    return entry.get("via") == "agent" and not _wakes(entry)
 
 
 def _at_call(entry: dict, call: int) -> dict:
