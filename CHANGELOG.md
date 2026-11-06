@@ -350,9 +350,13 @@ checkouts are therefore distinguishable even at the same version.
   Preview» switch, when it moves to a second line, stands at that line's end; and an epic's
   row that wraps starts its counts under the epic's number instead of left of its arrow. On
   a wide board an epic's row keeps its counts beside its title, shortening the title before
-  it wraps, and its «Open» and «Chain» buttons no longer leave a blank band under it; they
-  now keep their own place at the end of the row, so they cover neither the title nor the
-  counts when they come up.
+  it wraps. Its card and chain are now two icons, named when pointed at, that come up at the
+  end of the row's last line, or beside the title when that line is full, so at any width
+  they cover neither the title, the state, the counts nor the note of work out of sight,
+  nothing shifts when they appear, and on a phone the row no longer spends a line on them
+  alone; where nothing can hover they stay up, far enough apart to tap. A tile brought into
+  view under an epic's row from the keyboard, or opened with a press, now stands wholly
+  below the row at the lane's usual gap instead of partly under it.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field

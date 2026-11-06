@@ -948,9 +948,16 @@ tile of its lane is dragged and could land there, and a finished cell's offer of
 its tiles is a line of text. An epic's row is one line: its reference, its title
 and what it holds, and its state only once the epic has moved, since one not
 started is the norm of a board that holds a hundred of them and the word goes on
-being read out. Its card and its chain come up under the pointer and when the
-keyboard reaches them, in place, so the line does not shift; where nothing can
-hover they stay. A pointer's press on the row does not leave them up.
+being read out. Its card and its chain are two icons with their words in
+`title` and `aria-label`, as an entry's actions are, at the end of the line;
+where the row wraps, at the end of its last line, or beside the title when that
+line is full, never on a line of their own. They come up under the pointer and
+when the keyboard reaches them, in a place kept for them, so nothing shifts or
+is covered; where nothing can hover they stay, a finger's reach apart. A
+pointer's press on the row does not leave them up. A tile the board brings into
+view under the row's heading, by the keyboard or by opening it, stands below
+the heading at the gap the lane keeps under it, however many lines the heading
+takes.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
 of the item's latest transition; nothing there is planned, so the manual order
 of the other columns does not apply. A tile does not move within Done, by drag
