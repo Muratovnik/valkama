@@ -1,8 +1,9 @@
 /**
- * A frame's header says what its number of moving work is, in words, at a distance too, as
- * the built app draws it: «2 working» and never three dots and a number with nothing to say
- * what they count. Short of room the mark gives way whole, the header keeps its height, and
- * its name and its hover text still say it.
+ * A frame's header says what its number of moving work is, at a distance too, as the built
+ * app draws it: «2 working», and where a zoomed-out band has no room for the words, the count
+ * beside the working dots, «••• 2». It never gives way whole, since then nothing says work is
+ * running, and never as dots alone or a number cut. The header keeps its height, and its name
+ * and its hover text say the whole phrase.
  *
  * Served the broad synthetic space with half of the work filed under an epic being worked on,
  * and one epic given the longest reference a space can have.
@@ -79,15 +80,15 @@ interface Mark {
   header: number
   /** What the pointer is told on the header. */
   hint: string
-  /** The phrase stands over the reference beside it. */
+  /** The words drawn stand over the reference beside them. */
   overReference: boolean
-  /** The phrase the mark holds, whether or not it is in sight. */
-  phrase: string
-  /** Some of the phrase, and not all of it, is in sight. */
-  phrasePart: boolean
-  /** Every part of the phrase stands inside what the mark shows. */
-  phraseWhole: boolean
   reference: string
+  /** The reference is cut short. */
+  referenceCut: boolean
+  /** What the mark draws in words, read off the text in sight. */
+  shown: string
+  /** The words drawn, read by a Range over them, stand whole inside the mark and the header. */
+  shownWhole: boolean
 }
 
 /** Every frame's mark of moving work, as it is drawn. */
@@ -96,42 +97,40 @@ function marks(page: Page): Promise<Mark[]> {
     frames.map((frame) => {
       const box = (selector: string) => frame.querySelector(selector)?.getBoundingClientRect()
       const shown = box('.graph-frame-working')
-      // What the mark says: its phrase, or all of its text where it has no phrase of its own.
-      const words =
-        frame.querySelector('.working-phrase') ?? frame.querySelector('.graph-frame-working')
-      const phrase = words?.getBoundingClientRect()
-      const dots = box('.work-dots')
-      const reference = box('.graph-frame-reference')
-      if (!shown || !phrase || !dots) throw new Error('a mark has its phrase and its dots')
-      const inside = (part: DOMRect) =>
-        part.left >= shown.left - 0.5 &&
-        part.right <= shown.right + 0.5 &&
-        part.top >= shown.top - 0.5 &&
-        part.bottom <= shown.bottom + 0.5
-      const outside = (part: DOMRect) =>
-        part.right <= shown.left + 0.5 ||
-        part.left >= shown.right - 0.5 ||
-        part.bottom <= shown.top + 0.5 ||
-        part.top >= shown.bottom - 0.5
       const head = frame.querySelector<HTMLElement>('.graph-frame-head')
+      const header = head?.getBoundingClientRect()
+      // The words in sight: the mark's phrase, never the copy it measures and nobody sees.
+      const words = frame.querySelector('.working-phrase:not(.working-whole)')
+      const range = document.createRange()
+      if (words) range.selectNodeContents(words)
+      const drawn = words ? range.getBoundingClientRect() : undefined
+      const dots = box('.work-dots')
+      const reference = frame.querySelector<HTMLElement>('.graph-frame-reference')
+      const named = reference?.getBoundingClientRect()
+      if (!shown || !drawn || !dots || !header) throw new Error('a mark has its words and dots')
+      const within = (part: DOMRect, outer: DOMRect = shown) =>
+        part.width > 0 &&
+        part.left >= outer.left - 0.5 &&
+        part.right <= outer.right + 0.5 &&
+        part.top >= outer.top - 0.5 &&
+        part.bottom <= outer.bottom + 0.5
       const scale = frame.getBoundingClientRect().width / (frame as HTMLElement).offsetWidth
       const crossing =
-        reference !== undefined &&
-        inside(phrase) &&
-        phrase.left < reference.right - 0.5 &&
-        phrase.right > reference.left + 0.5 &&
-        phrase.top < reference.bottom - 0.5 &&
-        phrase.bottom > reference.top + 0.5
+        named !== undefined &&
+        drawn.left < named.right - 0.5 &&
+        drawn.right > named.left + 0.5 &&
+        drawn.top < named.bottom - 0.5 &&
+        drawn.bottom > named.top + 0.5
       return {
-        phrase: words?.textContent?.replaceAll(/\s+/gu, ' ').trim() ?? '',
-        phraseWhole: inside(phrase),
-        phrasePart: !inside(phrase) && !outside(phrase),
-        dots: !outside(dots),
+        shown: words?.textContent?.replaceAll(/\s+/gu, ' ').trim() ?? '',
+        shownWhole: within(drawn) && within(drawn, header),
+        dots: within(dots) && within(dots, header),
         overReference: crossing,
-        header: (head?.getBoundingClientRect().height ?? 0) / scale,
+        referenceCut: reference !== null && reference.scrollWidth > reference.clientWidth + 1,
+        header: header.height / scale,
         frame: (frame as HTMLElement).dataset.frame ?? '',
         hint: frame.querySelector('.graph-frame-open')?.getAttribute('title') ?? '',
-        reference: frame.querySelector('.graph-frame-reference')?.textContent?.trim() ?? '',
+        reference: reference?.textContent?.trim() ?? '',
       }
     }),
   )
@@ -158,13 +157,16 @@ function expectHonest(seen: Mark[], near: Record<string, number>) {
   expect(seen.length).toBeGreaterThan(2)
   for (const mark of seen) {
     const where = `the mark of ${mark.reference || 'the work under no epic'}`
-    expect(mark.phrase, where).toMatch(/^\d+ working$/u)
-    expect(mark.phrasePart, `${where} is cut`).toBe(false)
-    // Dots say nothing without the words beside them.
-    expect(mark.dots && !mark.phraseWhole, `${where} shows its dots alone`).toBe(false)
+    // Whole, or its count beside the dots: never gone, never dots or a number cut.
+    expect(mark.shown, where).toMatch(/^\d+(?: working)?$/u)
+    expect(mark.shownWhole, `${where} says it in sight`).toBe(true)
+    expect(mark.dots, `${where} draws its dots in sight`).toBe(true)
     expect(mark.overReference, `${where} stands over the reference`).toBe(false)
+    // The reference is cut only for a mark already as short as it goes.
+    if (mark.referenceCut) expect(mark.shown, `${where} cut the reference`).toMatch(/^\d+$/u)
     expect(Math.round(mark.header), `${where}: the header's height`).toBe(near[mark.frame])
-    expect(mark.hint, `${where}: the hover text`).toContain(mark.phrase)
+    const count = /^\d+/u.exec(mark.shown)?.[0] ?? ''
+    expect(mark.hint, `${where}: the hover text`).toContain(`${count} working`)
   }
 }
 
@@ -173,7 +175,7 @@ for (const { band, ceiling, height, width } of [
   { band: 'overview', ceiling: 0.4, width: 1500, height: 900 },
   { band: 'far', ceiling: 0.22, width: 760, height: 560 },
 ] as const) {
-  test(`zoomed out (${band}) a frame says what its number counts, or gives way whole`, async ({
+  test(`zoomed out (${band}) every frame with work moving says so, whole or by its count`, async ({
     page,
   }) => {
     await serve(page, width, height)
@@ -183,15 +185,9 @@ for (const { band, ceiling, height, width } of [
     await expect(page.locator('.graph-frame.overview').first()).toBeAttached()
     const seen = await marks(page)
     expectHonest(seen, near)
-    // A frame with room says it whole. The longest reference leaves the mark room only on a
-    // second row, which a band offers where its header is tall enough to hold one at full
-    // size, and never far out; elsewhere the mark gives way whole.
-    expect(seen.filter((mark) => mark.phraseWhole).length).toBeGreaterThan(0)
-    const secondRow = page.locator(
-      `.graph-frame:has(.graph-frame-reference[title="${LONGEST}"]) .graph-frame-band-wraps`,
-    )
-    const wraps = (await secondRow.count()) > 0
-    expect(seen.find((mark) => mark.reference === LONGEST)?.phraseWhole).toBe(wraps)
+    // A frame with room says it whole, and the longest reference leaves its frame the mark.
+    expect(seen.filter((mark) => / working$/u.test(mark.shown)).length).toBeGreaterThan(0)
+    expect(seen.map((mark) => mark.reference)).toContain(LONGEST)
   })
 }
 
@@ -202,8 +198,8 @@ test('close up the mark says its words beside its dots, and names no hover text'
   const seen = await marks(page)
   expect(seen.length).toBeGreaterThan(0)
   for (const mark of seen) {
-    expect(mark.phrase).toMatch(/^\d+ working$/u)
-    expect(mark.phraseWhole && mark.dots).toBe(true)
+    expect(mark.shown).toMatch(/^\d+ working$/u)
+    expect(mark.shownWhole && mark.dots).toBe(true)
     expect(mark.hint).toBe('')
   }
 })

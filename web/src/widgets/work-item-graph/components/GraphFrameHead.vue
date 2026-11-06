@@ -182,13 +182,13 @@ function onOpenBlur() {
     >
       <GraphFrameLine
         v-if="lineShown"
-        :class="{ 'graph-frame-band-wraps': bandWraps }"
         :epic="epic"
         :named="referenceShown"
         :overview="overview"
         :still="still"
         :title="title"
         :working="working"
+        :wraps="bandWraps"
       />
       <span
         v-if="!overview && epic"
@@ -390,10 +390,6 @@ function onOpenBlur() {
     grid-area: 2 / 1;
     height: 12px;
     pointer-events: none;
-  }
-
-  .graph-frame-band-wraps {
-    flex-wrap: wrap;
   }
 }
 </style>

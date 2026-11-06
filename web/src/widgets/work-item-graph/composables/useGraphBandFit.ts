@@ -12,7 +12,7 @@
  *
  * The line's own second row, where what moves under the frame goes when the reference
  * leaves it no room, is offered only by a band with room for it at full size; elsewhere
- * that mark gives way whole, as it does far out.
+ * that mark shortens to its count beside the dots (`GraphFrameLine`), as it does far out.
  */
 import { onMounted, ref, watch } from 'vue'
 import type { Ref } from 'vue'
