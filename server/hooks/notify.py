@@ -1007,8 +1007,17 @@ def _write_quietly(path: str, marks: dict, budget: Budget) -> None:
 YOU = ""
 
 
-def render(news: list[tuple[str, str, list[dict]]], *, orchestrator: bool, wake: bool) -> str:
+def render(
+    news: list[tuple[str, str, list[dict]]],
+    *,
+    orchestrator: bool,
+    wake: bool,
+    busy: bool = False,
+) -> str:
     """One notice: what happened, where, and what to do about it, within a bound.
+
+    `wake` is the watcher's notice, which says the session was idle, or with `busy`
+    that it was at work and made no tool call to carry the news within the grace.
 
     A person's news and another agent's mentions are two blocks, the person's
     first, each with its own heading and closing lines, so an agent's words never
@@ -1033,17 +1042,20 @@ def render(news: list[tuple[str, str, list[dict]]], *, orchestrator: bool, wake:
     ]
     woke = bool(getattr(news, "woke", False))
     held = int(getattr(news, "held", 0))
+    when = ""
+    if wake:
+        when = (
+            f"while this session was busy and made no tool call for {GRACE_SECONDS:g} seconds, "
+            if busy
+            else "while this session was idle, "
+        )
     if not events:
         return _bounded(
             _agents_block(
-                spoken, orchestrator, MOST_EVENTS, MOST_CHARACTERS, idle=wake, woke=woke, held=held
+                spoken, orchestrator, MOST_EVENTS, MOST_CHARACTERS, when=when, woke=woke, held=held
             )[0]
         )
-    head = (
-        "Valkama notice, not an error: while this session was idle, a person"
-        if wake
-        else "Valkama notice: a person"
-    )
+    head = f"Valkama notice, not an error: {when}a person" if wake else "Valkama notice: a person"
     if any(entry.get("followed") for _reference, _title, entry in events):
         whose = (
             "this session holds, follows or started threads on"
@@ -1092,7 +1104,7 @@ def _agents_block(
     most: int,
     characters: int,
     *,
-    idle: bool = False,
+    when: str = "",
     woke: bool = False,
     held: int = 0,
 ) -> tuple[str, int]:
@@ -1100,8 +1112,8 @@ def _agents_block(
 
     News that is all mentions keeps the heading it always had; anything else says
     the work is held, followed or a thread on it started here. Told because it asks
-    for the session, it says what woke the session, and with `idle` that it was idle;
-    after the hourly limit held such news back, how much of it waited.
+    for the session, it says what woke the session, and with `when` what the session
+    was doing then; after the hourly limit held such news back, how much of it waited.
     """
 
     if all(entry["kind"] == "mentioned" for _reference, _title, entry in spoken):
@@ -1114,7 +1126,6 @@ def _agents_block(
             else "you hold, follow or started threads on"
         )
         did = "wrote on"
-    when = "while this session was idle, " if idle else ""
     first = (
         f"Valkama notice from agents, not from a person: {when}another agent {did} work {whose}."
     )
@@ -1416,6 +1427,7 @@ def _watch(environ: Mapping[str, str], state: str, store: str, session_id: str, 
                     continue
                 pending_since = time.monotonic()
             idle = os.path.exists(os.path.join(state, key + ".idle"))
+            # Busy, the news waits the grace for a tool call to carry it, and wakes then.
             if not idle and time.monotonic() - pending_since < GRACE_SECONDS:
                 continue
             news = collect(conn, state, session_id, None, take=True, agents=False, wake=True)
@@ -1424,7 +1436,7 @@ def _watch(environ: Mapping[str, str], state: str, store: str, session_id: str, 
         pending_since = None
         if not news:
             continue  # a tool call carried it first
-        text = render(news, orchestrator=True, wake=True)
+        text = render(news, orchestrator=True, wake=True, busy=not idle)
         sys.stderr.buffer.write(text.encode("utf-8", "replace") + b"\n")
         sys.stderr.buffer.flush()
         return WAKE_STATUS

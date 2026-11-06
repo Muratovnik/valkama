@@ -537,8 +537,12 @@ its orchestrator once when it idles, or continue its turn once at `Stop`:
 
 - **Once.** What woke a session, or continued its turn, is told then and moves the
   place past it, so it never wakes again; all the other sessions' news waiting for
-  the session is told with it. Found while the session is busy, it is told at the
-  next tool call like any other news, and wakes nothing.
+  the session is told with it. Found while the session is busy, it waits 30
+  seconds for a tool call to carry it, as a person's news does; the session's next
+  tool call then tells it and nothing wakes. A busy session that makes no tool call
+  in those 30 seconds is woken by the watcher, Claude Code queues the wake behind
+  the turn under way, and the notice says the session was busy (see
+  [the watcher](#the-watcher)).
 - **At most six an hour.** Watcher wakes and `Stop` continuations made by other
   sessions' news count together, 6 per receiving session in the last hour. Past
   that, the news waits for the next tool call, which says how many events would
@@ -631,7 +635,10 @@ their line, and a blocker's change names the item and the state it reached:
 A block told because it asks for the session, at `Stop` or by the watcher, says
 so: `This is not an error: it came now because another agent's news asks for this
 session (a reply it awaited, a comment that awaits its reply, or a blocker of its
-work closed).` The watcher's heading adds "while this session was idle". The first
+work closed).` The watcher's heading adds "while this session was idle", or, when
+it woke a session at work that made no tool call within the 30 seconds, "while this
+session was busy and made no tool call for 30 seconds", for a person's block as for
+the agents'. The first
 block after the hourly limit held such news back counts it:
 `2 events here would have woken this session, past the limit of 6 wakes an hour by
 other agents, so they waited for this call.` The person's block comes first and takes its share of the notice's 8
@@ -671,8 +678,10 @@ hook at all. `valkama hook claude watch`, registered with `asyncRewake` on
   as UTF-8 and exits 2, which is how Claude Code wakes the session. Claude Code
   shows that as a "Stop hook blocking error", so the notice begins by saying it
   is not one. News found while the session is busy is left for 30 seconds to
-  the next tool call; after that the watcher wakes the session anyway, and
-  Claude Code queues the wake behind the turn under way. A person's news wakes;
+  the next tool call; after that the watcher wakes the session anyway, Claude
+  Code queues the wake behind the turn under way, and the notice's heading says
+  the session was busy and made no tool call for 30 seconds instead of idle. A
+  person's news wakes;
   another agent session's news wakes only when it
   [asks for the session](#when-another-sessions-news-wakes), and is left in place
   for the next tool call otherwise.

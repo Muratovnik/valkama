@@ -196,6 +196,19 @@ class AddresseeTests(Wakes):
         self.assertEqual((0, ""), self.watch_as(A), "A is not woken by its own question")
         self.assertIsNone(self.stop(A))
 
+    def test_busy_with_no_tool_call_past_the_grace_the_watcher_wakes_and_says_so(self) -> None:
+        self.hook(event="user-prompt-submit", session=B)
+        self.ask()
+        status, text = self.watch_as(B, alive=None)
+        self.assertEqual(notify.WAKE_STATUS, status, "no tool call carried it within the grace")
+        self.assertIn(
+            f"while this session was busy and made no tool call for {notify.GRACE_SECONDS:g}"
+            " seconds, another agent wrote on",
+            text,
+        )
+        self.assertNotIn("idle", text)
+        self.assertIsNone(self.hook(session=B), "told once")
+
     def test_at_bs_stop_the_question_continues_the_turn_once(self) -> None:
         self.ask()
         told = self.stop(B)

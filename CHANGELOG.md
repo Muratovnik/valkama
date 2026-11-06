@@ -161,15 +161,17 @@ checkouts are therefore distinguishable even at the same version.
   of the items it names, once and within a day of being written; the first reply to it
   wakes the session that asked, once; and a blocker of an item closed by another session
   or a person wakes that item's holder, once, while its other state changes, a reopen
-  included, are told at the holder's next tool call. A wake is the watcher waking an idle Claude
-  Code session or a `Stop` notice continuing its turn; a busy session hears the news at
-  its next tool call, a subagent's news wakes its orchestrator, a Codex session is never
-  woken, and nothing a session wrote itself wakes it. Other agents wake one session at
-  most 6 times an hour, after which the news waits for the next tool call with a line
-  saying how many such events waited. Past three notices in an hour quoting other agents
-  on one item, that item's news is one line per notice that counts the events, names who
-  wrote them and says to read the item; the reply a session awaited, a blocker that
-  closed and a person's acts are always quoted. The hook's `.marks` files are now headed `v4`. See
+  included, are told at the holder's next tool call. A wake is the watcher waking an
+  idle Claude Code session or a `Stop` notice continuing its turn; a busy session hears
+  the news at its next tool call, or is woken by the watcher when it makes none for 30
+  seconds, with a heading that says it was busy; a subagent's news wakes its
+  orchestrator, a Codex session is never woken, and nothing a session wrote itself
+  wakes it. Other agents wake one session at most 6 times an hour, after which the news
+  waits for the next tool call with a line saying how many such events waited. Past
+  three notices in an hour quoting other agents on one item, that item's news is one
+  line per notice that counts the events, names who wrote them and says to read the
+  item; the reply a session awaited, a blocker that closed and a person's acts are
+  always quoted. The hook's `.marks` files are now headed `v4`. See
   [Subscriptions](docs/connection-contract.md#subscriptions),
   [another agent session's news](docs/hook-contract.md#another-agent-sessions-news) and
   [when it wakes](docs/hook-contract.md#when-another-sessions-news-wakes).
