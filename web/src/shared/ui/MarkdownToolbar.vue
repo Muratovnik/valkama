@@ -100,6 +100,7 @@ const viewOptions = computed(() => [
     </div>
     <SegmentedControl
       v-model="view"
+      class="markdown-view"
       size="inline"
       :label="t('editor.view')"
       :options="viewOptions"
@@ -115,9 +116,14 @@ const viewOptions = computed(() => [
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-half) var(--space-2);
-  justify-content: space-between;
   align-items: center;
   padding: var(--space-1);
+}
+
+/* The switch holds the end of whichever line it is on, as a form's buttons do: alone on the
+   second line it stood at the start, under the bold and italic it has nothing to do with. */
+.markdown-view {
+  margin-inline-start: auto;
 }
 
 /* Under a finger or on a phone-wide screen an icon is a 44px target, drawn bare, as an
