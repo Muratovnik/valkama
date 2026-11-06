@@ -184,9 +184,11 @@ checkouts are therefore distinguishable even at the same version.
 - **Zoomed out, the graph's band for the work under no epic reads cleanly.** «158 inside»
   no longer runs onto the progress edge under it; pointing at the band or reaching its
   chevron with the keyboard lights the chevron alone instead of covering the words and
-  the edge; and its shortened «••• 3» says «3 working» in full on hover and to a screen
-  reader. The first row of frames opens with room above it, so a finger's 44px target on
-  its chevron is no longer cut by the top of the graph.
+  the edge, and the chevron, its light and its focus ring grow with the band's words, as
+  the ring round an epic's band does, so the keyboard's place reads at every zoom; and its
+  shortened «••• 3» says «3 working» in full on hover and to a screen reader. The first row
+  of frames opens with room above it, so a finger's 44px target on its chevron is no longer
+  cut by the top of the graph.
 - **A choice made with the mouse leaves no focus ring behind.** Opening a dropdown with a
   click ringed the option under the pointer, and choosing one ringed the dropdown itself,
   as if it had been reached with Tab. Focus the interface places after a click now stands

@@ -150,7 +150,7 @@ function onOpenBlur() {
   <header
     ref="head"
     class="graph-frame-head nopan"
-    :class="{ far, overview }"
+    :class="{ far, overview, 'inside-leads': overview && !lineShown }"
     :style="headStyle"
   >
     <GraphFrameFold
@@ -271,7 +271,8 @@ function onOpenBlur() {
 
   &:focus-visible {
     background: var(--color-surface-hover);
-    outline: var(--ring) solid var(--color-focus-ring);
+    outline: solid var(--color-focus-ring);
+    outline-width: var(--ring);
     outline-offset: var(--ring-air);
   }
 }
@@ -382,6 +383,17 @@ function onOpenBlur() {
 .graph-frame-head.overview {
   --band-fit: 1;
   --grow: calc(2.2 * var(--band-fit));
+  --inside-grow: var(--grow);
+
+  /* The band's first row and how far it grows: the line's, or what a fold hides where that
+     stands alone. The chevron leads it as tall as it is, and a ring round one of the band's
+     buttons, and its air, keep the share of the words they have at the reading size, 2px
+     of 13: kept at that size, far out the ring was a speck beside them (`GraphFrameFold`). */
+  --lead-grow: var(--grow);
+  --lead-size: calc(var(--font-size-module) * var(--lead-grow));
+  --lead-row: calc(var(--lead-size) * var(--line-height-snug));
+  --ring-air: calc(var(--lead-size) * 0.15);
+  --ring: calc(var(--lead-size) * 0.15);
 
   /* What a fold reaches over: the whole band (`GraphFrameFold`). */
   position: relative;
@@ -390,13 +402,18 @@ function onOpenBlur() {
 
   &.far {
     --grow: calc(3.2 * var(--band-fit));
+    --inside-grow: calc(5 * var(--band-fit));
+  }
+
+  &.inside-leads {
+    --lead-grow: var(--inside-grow);
   }
 
   .graph-frame-open {
     gap: 0;
 
     &.folds {
-      padding-inline-start: calc(16px + var(--space-1));
+      padding-inline-start: calc(var(--lead-row) + var(--space-1) * var(--lead-grow));
 
       & > :first-child {
         padding-inline-start: 0;
@@ -425,16 +442,12 @@ function onOpenBlur() {
   .graph-frame-inside {
     display: block;
     flex: 0 0 auto;
-    max-width: calc(100% / var(--grow));
-    height: calc(1lh * var(--grow));
+    max-width: calc(100% / var(--inside-grow));
+    height: calc(1lh * var(--inside-grow));
     font: var(--font-drawer-title);
     font-weight: 700;
-    transform: scale(var(--grow));
+    transform: scale(var(--inside-grow));
     transform-origin: left top;
-  }
-
-  &.far .graph-frame-inside {
-    --grow: calc(5 * var(--band-fit));
   }
 
   /* Under the button that spans the band, in its one column, not in a column of its own. */

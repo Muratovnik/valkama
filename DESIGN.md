@@ -1071,8 +1071,11 @@ finger or at a phone's width, reaching up and back into the header's padding and
 round the frame and never onto the epic's words, so the header is drawn no taller; each
 button's focus ring goes round its own drawing with air and no further, and the fold's face
 under the pointer covers its chevron alone, zoomed out too, where its target is the whole band
-of the work under no epic: never that band's words or its edge. The field opens with as much
-air above its first row as between two frames, so no edge cuts a fold's target. Below a
+of the work under no epic: never that band's words or its edge. Zoomed out, the chevron is as
+tall as the band's first row and grows with it, and the ring round any of the band's buttons
+keeps the share of its words it has at reading size, so the focus reads as they do. The field
+opens with as much air above its first row as between two frames, so no edge cuts a fold's
+target. Below a
 quarter of full size a header is a few pixels and the frame round it is what the hand
 finds, so the ground of an open frame with an epic opens that epic too and the pointer
 says so. It is the pointer's shortcut: the keyboard has the header's button and no new

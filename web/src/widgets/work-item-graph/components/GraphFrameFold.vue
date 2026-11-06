@@ -15,7 +15,10 @@
  * across its whole band and the air above and below it (`foldIsTarget`), and the fold
  * itself stays the chevron's square, so the face and the ring it draws under the pointer
  * and the keyboard cover the chevron and none of the band's words or its edge. Stretched
- * over the band, with the reach above them, its face had covered all of them.
+ * over the band, with the reach above them, its face had covered all of them. The square
+ * grows with the band's first row, which it leads, and its ring with the band (the header's
+ * `--lead-row` and `--ring`): left at the reading size, far out the ring was 4px across and
+ * under half a pixel wide beside words 12px tall.
  */
 import { computed } from 'vue'
 
@@ -36,6 +39,7 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
     :class="{ overview }"
   >
     <VIcon
+      class="fold-glyph"
       :name="chevron"
       :size="16"
     />
@@ -86,8 +90,9 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
      under the button; the chevron's drawing stands four units in from that edge. */
   &:focus-visible {
     background: var(--color-surface-hover);
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: calc(-1 * var(--space-half));
+    outline: solid var(--color-focus-ring);
+    outline-width: var(--ring, 2px);
+    outline-offset: calc(-1 * var(--ring-air, var(--space-half)));
   }
 
   @media (pointer: coarse) {
@@ -106,6 +111,13 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
    laid over the header (`GraphFrameHead` places it), and the fold keeps the chevron's square. */
 .graph-frame-fold.overview {
   position: static;
+  inline-size: var(--lead-row, 16px);
+  block-size: var(--lead-row, 1lh);
+
+  .fold-glyph {
+    inline-size: 100%;
+    block-size: 100%;
+  }
 
   &::before {
     inset: -36px 0;

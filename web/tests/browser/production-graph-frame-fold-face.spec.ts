@@ -220,21 +220,137 @@ for (const width of [390, 1280]) {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await openBroadField(page, width)
     await settledCamera(page)
-    await expect
-      .poll(async () => {
-        if ((await page.locator('.graph-frame.overview').count()) > 0) return true
-        await zoomOutButton(page).click()
-        await settledCamera(page)
-        return false
-      })
-      .toBe(true)
-    // The keyboard brings the band into sight, and a drag to the field's middle.
-    await page.keyboard.press('Shift')
-    await page.locator(BAND_FOLD).focus()
-    await settledCamera(page)
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-    await toMiddle(page, page.locator(BAND))
-    await settledCamera(page)
+    await zoomOutUntil(page, '.graph-frame.overview')
+    await bandToMiddle(page)
+    await expect(page.locator(BAND)).toBeVisible()
     await expectBand(page, `at ${width}px in the overview`)
   })
+
+  test(`at ${width}px, zoomed out and far out, a band's ring and its fold's chevron and face grow with its words, folded and open`, async ({
+    page,
+  }) => {
+    test.setTimeout(240_000)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openBroadField(page, width)
+    await settledCamera(page)
+    for (const level of ['overview', 'far'] as const) {
+      await zoomOutUntil(page, ZOOMED[level])
+      for (const [state, folded] of [
+        ['folded', true],
+        ['open', false],
+      ] as const) {
+        const where = `at ${width}px, ${level}, ${state}`
+        await bandToMiddle(page)
+        const head = page.locator(BAND)
+        const fold = head.locator('.graph-frame-fold')
+        await expect(fold, where).toHaveAttribute('aria-expanded', String(!folded))
+        await page.keyboard.press('Shift')
+        await fold.focus()
+        await settledCamera(page)
+        await painted(page)
+        await expectGrown(await grownOf(head), `${where}, the fold`)
+        // An epic's band has no fold out here: its one button is the epic's, and rings so.
+        const epic = page.locator(EPIC_BAND).first()
+        await epic.locator('.graph-frame-open').focus()
+        await settledCamera(page)
+        await painted(page)
+        await expectGrown(await grownOf(epic), `${where}, an epic's band`)
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+        // The fold to the middle: an open band runs on past the window either way.
+        await bandToMiddle(page, BAND_FOLD)
+        await expectEveryFace(page, page.locator(BAND), where)
+        // Open it for the next round, and fold it back after.
+        await fold.focus()
+        await page.keyboard.press('Enter')
+        await settledCamera(page)
+      }
+    }
+  })
+}
+
+/** What the field draws at each level out. */
+const ZOOMED = { overview: '.graph-frame.overview', far: '.graph-frame-head.far' }
+
+/** An epic's band, zoomed out: its button spans it, and it has no fold. */
+const EPIC_BAND = '.vue-flow .graph-frame-head.overview:has(.graph-frame-open[data-walk-target])'
+
+/** Press «Zoom out» until the field draws `selector`. */
+async function zoomOutUntil(page: Page, selector: string) {
+  await expect
+    .poll(async () => {
+      if ((await page.locator(selector).count()) > 0) return true
+      await zoomOutButton(page).click()
+      await settledCamera(page)
+      return false
+    })
+    .toBe(true)
+}
+
+/**
+ * The keyboard brings the band of the work under no epic into sight, and a drag puts `middle`,
+ * the band or its fold, in the middle of the field.
+ */
+async function bandToMiddle(page: Page, middle = BAND) {
+  await page.keyboard.press('Shift')
+  await page.locator(BAND_FOLD).focus()
+  await settledCamera(page)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await toMiddle(page, page.locator(middle))
+  await settledCamera(page)
+  await page.mouse.move(0, 0)
+}
+
+/**
+ * On screen: the ring a band's focused button draws, its width, the face (the button's box),
+ * the chevron a fold draws, and the band's first row of words, read by a Range.
+ */
+function grownOf(head: Locator) {
+  return head.evaluate((element) => {
+    const control =
+      element.querySelector<HTMLElement>('.graph-frame-fold') ??
+      (element.querySelector('.graph-frame-open[data-walk-target]') as HTMLElement)
+    const isFold = control.matches('.graph-frame-fold')
+    const scale = element.getBoundingClientRect().height / (element as HTMLElement).offsetHeight
+    const style = getComputedStyle(control)
+    const width = Number.parseFloat(style.outlineWidth)
+    const box = control.getBoundingClientRect()
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let words = 0
+    for (let node = walker.nextNode(); node && !words; node = walker.nextNode()) {
+      if (!node.textContent?.trim() || node.parentElement?.closest('.working-whole')) continue
+      if (isFold && control.contains(node)) continue
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      words = range.getClientRects()[0]?.height ?? 0
+    }
+    const chevron = control.querySelector('svg path, svg polyline')?.getBoundingClientRect()
+    return {
+      focused: control.matches(':focus-visible'),
+      isFold,
+      words,
+      stroke: width * scale,
+      ring: box.height + 2 * (Number.parseFloat(style.outlineOffset) + width) * scale,
+      face: box.height,
+      // Across its longer side: folded it points right, open down.
+      chevron: chevron ? Math.max(chevron.width, chevron.height) : 0,
+    }
+  })
+}
+
+/**
+ * Against the band's first row of words, each in the share it has at the reading size, where
+ * a 13px line is 16px tall and its fold's ring 2px wide round a 13px square, its chevron 8px
+ * across: the ring at least a twelfth of the words' height wide, and of a fold, the ring three
+ * quarters of it, the face nine tenths and the chevron two fifths.
+ */
+async function expectGrown(grown: Awaited<ReturnType<typeof grownOf>>, where: string) {
+  expect(grown.focused, `${where}: focused by the keyboard`).toBe(true)
+  expect(grown.words, `${where}: the band's words`).toBeGreaterThan(0)
+  expect(grown.stroke, `${where}: the ring's width`).toBeGreaterThanOrEqual(grown.words / 12)
+  if (!grown.isFold) return
+  expect(grown.ring, `${where}: the ring round the chevron`).toBeGreaterThanOrEqual(
+    grown.words * 0.75,
+  )
+  expect(grown.face, `${where}: the face`).toBeGreaterThanOrEqual(grown.words * 0.9)
+  expect(grown.chevron, `${where}: the chevron`).toBeGreaterThanOrEqual(grown.words * 0.4)
 }
