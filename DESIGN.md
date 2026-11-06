@@ -562,7 +562,9 @@ chrome.
   box hands its baseline to its first item, so a row aligned by baseline lines
   its neighbours up with a 5px status dot or the bottom edge of a 13px icon
   rather than with the text beside it. Baseline is for a row that is text and
-  nothing else.
+  nothing else. An icon that ends a line of words centres on that line, and on
+  the first line once the words wrap, not on the middle of the block they make:
+  a review group's chevron stood half a line under the title it ends.
 - What a block in a column draws first stands on the column's edge. A row or a bare
   inline control whose fill keeps an inset under the pointer, `--space-fill-inset`, stands
   that inset outside the column as a negative margin, so its words start where the heading
