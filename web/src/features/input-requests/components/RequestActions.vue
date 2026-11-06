@@ -7,10 +7,15 @@
  * meant. Its two answers take the two buttons in their places, each holding room for its
  * other word, so that nothing moves: the way back stands in the very box of the press, and
  * pressing again without moving only goes back. The asking moves nothing and lies on nothing,
- * since nobody should refuse without seeing the end of what will not go: it has its room kept
- * in the buttons' own row, just before the two it asks between, and on a row of its own above
- * them only where that row has no room. Under them it fell out of the window with a foot at the
- * window's edge, and no scroll can bring it back without ending the step.
+ * since nobody should refuse without seeing the end of what will not go: it takes the place of
+ * the way to the task and the read of its status, which a press would end the step on anyway,
+ * and that place is kept as wide as the asking needs on two lines. On a row as narrow as a
+ * phone's that place is the line above the buttons, which those two hold, and which stays the
+ * asking's alone only where neither is offered: the comment's press keeps the line of the
+ * buttons, since it is a glyph with no line of its own. Under them it fell out of the window
+ * with a foot at the window's edge, and no scroll can bring it back without ending the step.
+ * Kept beside the controls as a room of its own, it sent the two to the next line where
+ * everything else fitted.
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
  *
@@ -23,7 +28,8 @@
  * status had joined the row, and Save under Cancel on a phone.
  *
  * What the host puts in the slot stands first in the row: the press of the comment on the
- * question, on the row's left end, as what comes before all of this.
+ * question, on the row's left end, as what comes before all of this. The way to the task and
+ * the read of its status stand after it, at the row's start at every width.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -58,6 +64,10 @@ const root = ref<HTMLElement | null>(null)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
 const asksTwo = computed(() => props.waiting || props.changing)
+/** The words that keep the asking's place while a question waits, unseen. */
+const askingRoom = computed(() => (props.waiting ? t('requests.declineAsked') : undefined))
+/** Something stands before the two answers, or their asking needs the place. */
+const leads = computed(() => props.waiting || props.standalone || props.refreshable)
 const wayOutDisabled = computed(() => !props.changing && props.disabled)
 const wayOut = computed(() => {
   if (props.changing) {
@@ -96,24 +106,27 @@ defineExpose({ focusWayOut })
     class="request-actions"
   >
     <slot />
-    <VButton
-      v-if="standalone"
-      variant="ghost"
-      @click="emit('open')"
-      >{{ t('requests.openTask') }}</VButton
-    >
-    <VButton
-      v-if="refreshable"
-      :aria-disabled="busyMark"
-      @click="emit('refresh')"
-      >{{ t('requests.checkStatus') }}</VButton
-    >
-    <!-- Next to the two answers it asks between. -->
+    <!-- What comes before the two answers, and the place their asking takes. -->
     <div
-      v-if="waiting"
-      class="request-asked-room"
-      :data-room="t('requests.declineAsked')"
+      v-if="leads"
+      class="request-lead"
+      :class="{ 'is-room': waiting, 'is-asking': declining }"
+      :data-room="askingRoom"
     >
+      <div class="request-lead-controls">
+        <VButton
+          v-if="standalone"
+          variant="ghost"
+          @click="emit('open')"
+          >{{ t('requests.openTask') }}</VButton
+        >
+        <VButton
+          v-if="refreshable"
+          :aria-disabled="busyMark"
+          @click="emit('refresh')"
+          >{{ t('requests.checkStatus') }}</VButton
+        >
+      </div>
       <p
         v-if="declining"
         class="request-asked"
@@ -164,23 +177,25 @@ defineExpose({ focusWayOut })
   align-items: center;
 }
 
-/* What the host puts first stands on the row's left end, its glyph on the axis of the radios. */
-:slotted(*) {
-  position: relative;
-  inset-inline-start: calc(
-    var(--space-3) + (var(--font-size-interface) - var(--size-control-inline)) / 2
-  );
-  margin-inline-end: auto;
+/* What the two answers leave of their line, or a line of its own where its controls do not fit
+   beside them. Its controls, the asking and the asking's words unseen stand in one cell, so the
+   place is as tall as the tallest of them. */
+.request-lead {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+
+  > *,
+  &::before {
+    grid-area: 1 / 1;
+  }
 }
 
-/* On the room kept for it, which lies just where it does, so nothing has to move when it comes.
-   Its words, unseen, give it the height they will need. */
-.request-asked-room {
-  position: relative;
-  flex: 1 1 10rem;
-  min-width: 0;
-  font: var(--font-detail);
-  text-align: end;
+/* Wide enough for the asking on two lines, the height of the controls beside it, or on a line of
+   its own; the same in every language, since the words do not set it. */
+.request-lead.is-room {
+  min-inline-size: min(12rem, 100%);
 
   &::before {
     content: attr(data-room);
@@ -188,23 +203,49 @@ defineExpose({ focusWayOut })
   }
 }
 
+/* Its words are laid out at the width the place has and widen nothing, or the asking would
+   move the two to the next line as it came. */
+.request-lead::before,
 .request-asked {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
   margin: 0;
-  color: var(--color-text);
   font: var(--font-detail);
+  text-align: end;
+  contain: inline-size;
 }
 
-/* No room beside the buttons: a row of its own above them, the room kept as it is beside them. */
+.request-asked {
+  color: var(--color-text);
+}
+
+.request-lead-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+/* A press on any of them would end the step, so the asking takes their place while it stands. */
+.request-lead.is-asking .request-lead-controls {
+  visibility: hidden;
+}
+
+/* As narrow as a phone, the place is the line above the buttons, and the comment's press, first
+   in the row, stays on theirs. */
 @container (width <= 30rem) {
-  .request-asked-room {
-    flex: 0 0 100%;
+  .request-lead {
+    flex-basis: 100%;
     order: -1;
   }
+}
+
+/* What the host puts first stands on the row's left end, its glyph on the axis of the radios. */
+:slotted(*) {
+  position: relative;
+  inset-inline-start: calc(
+    var(--space-3) + (var(--font-size-interface) - var(--size-control-inline)) / 2
+  );
+  margin-inline-end: auto;
 }
 
 .request-pair {

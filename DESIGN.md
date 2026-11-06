@@ -1313,9 +1313,14 @@ so that Send is Send again by the time it is pressed. The step lasts only while 
 its question: a press or focus landing outside it ends it, so a page holds one step at most, and
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
 person pressed no longer stands where they left it. What is asked lies on nothing, so that a
-person refuses seeing the end of what will not go, and moves nothing: its room is kept in the
-buttons' row just before the two answers, or on a row of its own above them where that row has
-none.
+person refuses seeing the end of what will not go, and moves nothing: it takes the place of the
+way to the task and Check status, since a press on either would end the step anyway, and that
+place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
+a phone's it is the line above them, which those two hold where they are offered, while the
+comment's press keeps the line of the buttons; only where neither is offered does that line stand
+for the asking alone, as tall as its words. Kept beside the controls as a room of its own, it sent
+the two answers to the next line where everything else fitted. What stands before the answers
+keeps the row's start at every width.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A press following another can still do harm where something is held: folding lifts the next

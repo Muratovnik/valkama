@@ -199,6 +199,10 @@ checkouts are therefore distinguishable even at the same version.
 - **A question's two answers wrap together.** Once «Check status» joined the row after a
   failed send, Send stood alone on the next line under «Don't answer», and changing an answer
   on a phone in Russian put Save under Cancel. The two now go to the next line as one pair.
+  On a wide screen the row no longer drops the two to a second line in Russian, after a
+  failed send or past a deadline, while everything fits on one. On a phone «Open task» and
+  «Check status» keep the start of their own line above the buttons, with no empty strip
+  over them, and «Don't answer» asks its question in their place.
 - **A question that has ended is ringed as a whole, not round one line.** After a send or a
   decline focus went to the line saying how it ended and drew a thin capsule round it, pressed
   against the words and the rule of the answer. Focus now stays on the question itself,
