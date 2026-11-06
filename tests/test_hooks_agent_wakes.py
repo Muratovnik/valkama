@@ -386,6 +386,14 @@ class BlockerTests(Wakes):
 
 
 class BudgetTests(Wakes):
+    def setUp(self) -> None:
+        super().setUp()
+        # These ask on one item many times an hour: what is said of the wake budget is
+        # read here, and folding an item's news past its third notice is `FoldTests`'.
+        patch = mock.patch.object(notify, "MOST_NOTICES", 100)
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def asked_and_continued(self, number: int) -> str | None:
         self.ask(marker=number)
         return self.stop(B)

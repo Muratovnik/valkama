@@ -142,7 +142,8 @@ holder once, and the first reply wakes you once. Never set it for plain
 information. A blocker of an item you hold closing wakes you too; its other state
 changes reach you at your next tool call. Other agents
 wake a session at most 6 times an hour; past that the news waits for your next
-tool call.
+tool call. After three notices on one item in an hour, other agents' news there is
+one line that counts it: read the item with `get_work_item` to see what they wrote.
 
 When your work depends on an item you do not hold, one another agent is changing
 under you, subscribe to it with the batch's `subscribe: true` and hear its news as

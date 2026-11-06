@@ -369,6 +369,84 @@ class WhoListensTests(Harness):
         self.assertIsNone(self.hook())
 
 
+class FoldTests(Harness):
+    """Past three quoting notices on one item in an hour, its news is one line a call."""
+
+    def three_notices(self) -> None:
+        for number in range(1, 4):
+            self.comment(AS_A, self.held, f"News {number}, marker F-{number}")
+            self.assertIn(f"marker F-{number}", self.hook() or "", f"notice {number} quotes")
+
+    def test_the_fourth_notice_on_an_item_counts_its_events_and_names_who_wrote(self) -> None:
+        self.set_up_b()
+        self.three_notices()
+        self.comment(AS_A, self.held, "News 4, marker F-4")
+        self.comment(AS_THIRD, self.held, "News 5, marker F-5")
+        told = self.hook()
+        assert told is not None, "folded, not dropped"
+        self.assertTrue(told.startswith(FROM_AGENTS), told)
+        self.assertNotIn("marker F-4", told)
+        self.assertNotIn("marker F-5", told)
+        self.assertRegex(
+            told,
+            rf"\n{self.held} «Held by B»: 2 events by session {A}, session {THIRD}, the newest"
+            rf" at \S+, folded into this line after 3 notices on this item within the hour;"
+            r" read the item with get_work_item for what they say\.\n",
+        )
+        self.comment(AS_A, self.held, "News 6, marker F-6")
+        again = self.hook()
+        assert again is not None
+        self.assertIn(f"{self.held} «Held by B»: 1 event by session {A},", again)
+        self.comment(AS_A, self.followed, "Another item, marker F-7")
+        self.assertIn("marker F-7", self.hook() or "", "the count is per item")
+
+    def test_an_hour_on_the_item_is_quoted_again(self) -> None:
+        self.set_up_b()
+        self.three_notices()
+        later = time.time() + 3601
+        with mock.patch.object(notify.time, "time", return_value=later):
+            self.comment(AS_A, self.held, "An hour on, marker F-8")
+            self.assertIn("marker F-8", self.hook() or "")
+
+    def test_the_awaited_reply_and_a_persons_words_are_never_folded(self) -> None:
+        self.set_up_b()
+        root = self.comment(AS_B, self.held, "Which one?", awaits_reply=True)
+        self.assertIsNone(self.hook())
+        self.three_notices()
+        self.comment(AS_A, self.held, "This one, marker F-9", reply_to=root)
+        self.person(COMMENT, id=self.held, body="A person, marker F-10")
+        self.comment(AS_A, self.held, "Folded, marker F-11")
+        told = self.hook()
+        assert told is not None
+        self.assertIn("marker F-9", told, "the reply B awaited")
+        self.assertIn("(the reply awaited)", told)
+        self.assertIn("marker F-10", told, "a person's words")
+        self.assertNotIn("marker F-11", told)
+        self.assertIn("1 event by session", told)
+
+    def test_a_question_past_the_third_notice_still_wakes_folded(self) -> None:
+        self.set_up_b()
+        self.three_notices()
+        self.assertIsNone(self.hook(event="stop"), "B is idle now")
+        self.comment(AS_A, self.held, "Which parser, marker F-12?", awaits_reply=True)
+        told = self.hook(event="stop")
+        assert told is not None, "it asks for B, so it continues the turn"
+        self.assertIn("This is not an error", told)
+        self.assertIn(f"{self.held} «Held by B»: 1 event by session {A},", told)
+        self.assertNotIn("marker F-12", told)
+
+    def test_the_notices_are_kept_beside_the_wake_budget(self) -> None:
+        self.set_up_b()
+        self.three_notices()
+        item = str(service.get_work_item(self.conn, self.held)["work_item_id"])
+        lines = self.marks().decode("ascii").splitlines()
+        told = [line.split() for line in lines if line.startswith("@told ")]
+        self.assertEqual([["@told", item]], [line[:2] for line in told], lines)
+        self.assertEqual(3, len(told[0]) - 2, "one time per quoting notice")
+        path = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
+        self.assertEqual(3, len(notify.read_state(path)[1][3][item]))
+
+
 class UpgradeTests(Harness):
     def test_a_store_without_the_new_table_tells_nothing_and_loses_nothing(self) -> None:
         """A hook of a new release can meet a store that release has not opened yet."""

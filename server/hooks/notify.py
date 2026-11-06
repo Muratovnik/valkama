@@ -29,20 +29,22 @@ It reaches the same recipients by the same rules, and beside them a session that
 subscribed to the item (`planning.subscriptions`); a holder that muted the item
 hears none of it while it holds the item, but for the replies to what it asked there
 with `awaits_reply`. A session's own conversation and its subagents are one speaker:
-none of them is told what another of them wrote, a mention included. A `Stop` notice continues the turn and the
-watcher wakes the session, so either would turn agents telling one another into a
-loop that keeps sessions busy; they carry such news only when it asks for the
-session: the reply it awaited, a comment awaiting its reply on work it holds, a
-blocker of that work closed; a blocker's other state changes wait. Each wakes once, at most `MOST_WAKES` an hour; the
-rest waits for the next tool call.
+none of them is told what another of them wrote, a mention included. A `Stop`
+notice continues the turn and the watcher wakes the session, so either would turn
+agents telling one another into a loop that keeps sessions busy; they carry such
+news only when it asks for the session: the reply it awaited, a comment awaiting
+its reply on work it holds, a blocker of that work closed; a blocker's other state
+changes wait. Each wakes once, at most `MOST_WAKES` an hour; the rest waits for the
+next tool call. Past `MOST_NOTICES` notices in an hour quoting other sessions on one
+item, that item's news is one line that counts it.
 
 Where the place is kept. Not in the store: a hook that wrote there would be a
 writer on every tool call. Each recipient has a small file beside the spool,
 `notify/<session>[--<agent>].marks`, holding for every item it wrote to the last
 call it has read, the item's change signature and whether it held the item then,
 and apart from those the last call whose agents' news it read and whether some
-still waits: a `Stop` reads past such news without telling it; and the wakes other
-sessions' news made. Whether it follows the item is read from the store each time,
+still waits: a `Stop` reads past such news without telling it; the wakes other
+sessions' news made; and per item, the notices that quoted it. Whether it follows the item is read from the store each time,
 never kept here. A file that cannot be read is an empty one, so the worst a damaged
 file does is tell the current news once more, and wake once more.
 
@@ -116,6 +118,11 @@ ADDRESSED = frozenset({"reply", "question_answered", "question_changed", "questi
 #: continuations together: past it, what would have woken waits for a tool call.
 MOST_WAKES = 6
 WAKE_WINDOW_SECONDS = 3600.0
+#: How many notices about one item carry other sessions' words to one recipient in
+#: `FOLD_WINDOW_SECONDS`: past them, until the window moves on, that item's news is
+#: one line per notice that counts it and names who wrote it.
+MOST_NOTICES = 3
+FOLD_WINDOW_SECONDS = 3600.0
 #: State files of sessions that ended this long ago are removed.
 STALE_SECONDS = 86400.0
 
@@ -443,10 +450,12 @@ Mark = tuple[int, tuple[int, int, int, int], bool, int, bool]
 
 
 #: The wakes other sessions' news made, as whole seconds of the clock, the newest
-#: hour's; how many events the limit held back since a notice last said so; and
-#: the newest call those were read to, past which nothing held back wakes again.
-Budget = tuple[tuple[int, ...], int, int]
-NO_BUDGET: Budget = ((), 0, 0)
+#: hour's; how many events the limit held back since a notice last said so; the
+#: newest call those were read to, past which nothing held back wakes again; and per
+#: item, the times of the notices that quoted other sessions' news on it, the newest
+#: `FOLD_WINDOW_SECONDS`'.
+Budget = tuple[tuple[int, ...], int, int, dict[str, tuple[int, ...]]]
+NO_BUDGET: Budget = ((), 0, 0, {})
 
 
 def read_marks(path: str) -> dict[str, Mark]:
@@ -465,9 +474,10 @@ def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
     `v4` kept no blockers' event: an item that has a blocker is read once more,
     from its place, which tells nothing again.
 
-    A `v4` file may carry the wake budget in `@wakes` and `@held` lines. Damaged,
-    the whole file reads as empty: the news since the recipient's own last writes
-    is told once more, and wakes at most once more, and the next write is whole.
+    A `v4` file may carry the wake budget in `@wakes` and `@held` lines, and an
+    item's quoting notices in an `@told <item>` line. Damaged, the whole file reads
+    as empty: the news since the recipient's own last writes is told once more, and
+    wakes at most once more, and the next write is whole.
     """
 
     try:
@@ -481,8 +491,15 @@ def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
     marks = {}
     wakes: tuple[int, ...] = ()
     held = through = 0
+    told: dict[str, tuple[int, ...]] = {}
     for line in lines[1:]:
         parts = line.split()
+        if fields == 9 and len(parts) > 2 and parts[0] == "@told":
+            parts = parts[1:]
+            if not all(part.isdigit() for part in parts[1:]):
+                return {}, NO_BUDGET
+            told[parts[0]] = tuple(int(part) for part in parts[1:])
+            continue
         if not all(part.isdigit() for part in parts[1:]):
             return {}, NO_BUDGET
         if fields == 9 and parts and parts[0] == "@wakes":
@@ -502,16 +519,21 @@ def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
         holds = fields == 5 or numbers[4] == 1
         heard, waiting = (numbers[5], numbers[6] == 1) if fields >= 8 else (numbers[0], False)
         marks[parts[0]] = (numbers[0], signature, holds, heard, waiting)
-    return marks, (wakes, held, through)
+    return marks, (wakes, held, through, told)
 
 
 def write_marks(path: str, marks: dict[str, Mark], budget: Budget = NO_BUDGET) -> None:
-    wakes, held, through = budget
+    wakes, held, through, told = budget
     lines = ["v4"]
     if wakes:
         lines.append(" ".join(["@wakes", *(str(at) for at in wakes)]))
     if held or through:
         lines.append(f"@held {held} {through}")
+    lines += [
+        " ".join(["@told", item, *(str(at) for at in times)])
+        for item, times in sorted(told.items())
+        if times and item in marks
+    ]
     lines += [
         f"{item} {mark} {signature[0]} {signature[1]} {signature[2]} {signature[3]}"
         f" {int(held)} {heard} {int(waiting)}"
@@ -625,8 +647,12 @@ def collect(
             return News()  # another hook of this recipient is telling it now
         marks, budget = read_state(marks_path)
         now = int(time.time())
-        wakes, held, through = budget
+        wakes, held, through, quoted = budget
         wakes = tuple(at for at in wakes if now - WAKE_WINDOW_SECONDS < at <= now)
+        quoted = {
+            item: tuple(at for at in times if now - FOLD_WINDOW_SECONDS < at <= now)
+            for item, times in quoted.items()
+        }
         reads: list[tuple[tuple, Mark | None, _Read | None]] = []
         conn.execute("BEGIN")
         try:
@@ -677,6 +703,7 @@ def collect(
             told, spoken, after, heard = read
             waiting = bool(spoken) and not tell
             if tell:
+                spoken, quoted[item] = _fold(spoken, quoted.get(item, ()), now)
                 told = [*told, *spoken]
             if not waiting:
                 heard = max(heard, newest)
@@ -691,7 +718,7 @@ def collect(
         ):
             news.held, held = held, 0
         if take or not news:
-            write_marks(marks_path, updated, (wakes, held, through))
+            write_marks(marks_path, updated, (wakes, held, through, quoted))
         return news
     finally:
         lock.close()
@@ -802,6 +829,48 @@ def _followed(
     for entry in rest:
         entry["followed"] = True
     return rest
+
+
+def _fold(
+    entries: list[dict], times: tuple[int, ...], now: int
+) -> tuple[list[dict], tuple[int, ...]]:
+    """One item's news as told now, and the times of its quoting notices with this one.
+
+    The first `MOST_NOTICES` notices in the window quote other sessions' words; after
+    them each notice gives one `folded` entry instead, counting the events and naming
+    who wrote them, so an agent that writes on an item without pause costs its
+    reader one line a call. Nothing is dropped: the item holds every word. Never
+    folded: the reply the recipient awaited, a blocker that closed, and a person's
+    news, a subscriber's share of it included.
+    """
+
+    foldable = [entry for entry in entries if _foldable(entry)]
+    if not foldable:
+        return entries, times
+    if len(times) < MOST_NOTICES:
+        return entries, (*times, now)
+    speakers: list[tuple[str, str | None]] = []
+    for entry in foldable:
+        if (entry["session"], entry.get("agent")) not in speakers:
+            speakers.append((entry["session"], entry.get("agent")))
+    folded = {
+        "kind": "folded",
+        "via": "agent",
+        "at": foldable[-1]["at"],
+        "call": foldable[-1]["call"],
+        "count": len(foldable),
+        "speakers": speakers,
+    }
+    kept = [entry for entry in entries if not _foldable(entry)]
+    return sorted([*kept, folded], key=lambda entry: entry["call"]), times
+
+
+def _foldable(entry: dict) -> bool:
+    return (
+        entry.get("via") == "agent"
+        and not entry.get("answers")
+        and entry["kind"] != "blocker_closed"
+    )
 
 
 def _at_call(entry: dict, call: int) -> dict:
@@ -1096,11 +1165,15 @@ def _compose(first: str, shown: list[tuple[str, str, dict]], left: int, last: li
     lines = [first]
     current = None
     for reference, title, entry in shown:
+        name = " ".join(title.split())
+        if len(name) > MOST_TITLE:
+            name = name[: MOST_TITLE - 1] + "…"
+        if entry["kind"] == "folded":
+            current = None  # the line names the item itself
+            lines.append(f"{reference} {_quote(name)}: {_folded(entry)}")
+            continue
         if reference != current:
             current = reference
-            name = " ".join(title.split())
-            if len(name) > MOST_TITLE:
-                name = name[: MOST_TITLE - 1] + "…"
             lines.append(f"{reference} {_quote(name)}:")
         said = " ".join(str(entry.get("text", "")).split())
         line = f"- {entry['kind']} at {entry['at']}{_where(entry)}{_flags(entry)}"
@@ -1108,6 +1181,24 @@ def _compose(first: str, shown: list[tuple[str, str, dict]], left: int, last: li
     if left:
         lines.append(f"- and {left} earlier, in the history of the item.")
     return "\n".join([*lines, *last])
+
+
+def _folded(entry: dict) -> str:
+    """The line that stands for an item's news past `MOST_NOTICES` notices in the window."""
+
+    names = [
+        f"agent {label_id(agent)} of session {label_id(session)}"
+        if agent
+        else f"session {label_id(session)}"
+        for session, agent in entry["speakers"]
+    ]
+    shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+    count = entry["count"]
+    return (
+        f"{count} {'event' if count == 1 else 'events'} by {shown}, the newest at"
+        f" {entry['at']}, folded into this line after {MOST_NOTICES} notices on this item"
+        " within the hour; read the item with get_work_item for what they say."
+    )
 
 
 def _flags(entry: dict) -> str:

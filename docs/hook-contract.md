@@ -640,6 +640,21 @@ event and closing lines, and the agents' block has what remains. Each block
 keeps its heading and its closing lines, shows at least its newest event and counts
 the ones it left out. A notice with no news from a person is the agents' block alone.
 
+**Folded past three notices.** One recipient hears another session's words on one
+item in at most 3 notices an hour. After that, until an hour has passed since the
+first of them, each notice that has news of the item gives it one line instead,
+which names the item, counts the events and says who wrote them, and nothing is
+dropped: the item holds every word.
+
+```text
+MAIN-14 «Widen the check»: 5 events by session 019a…, agent ab12 of session 019b…, the newest at 2026-11-06T11:20:00Z, folded into this line after 3 notices on this item within the hour; read the item with get_work_item for what they say.
+```
+
+The reply a recipient awaited, a blocker that closed and a person's acts, a
+subscriber's share of them included, are never folded and do not count among the
+three; a comment that awaits the recipient's reply counts and folds like any
+other, and still wakes.
+
 ### The watcher
 
 An orchestrator waiting for a background subagent, or for the person, runs no
@@ -688,7 +703,7 @@ exists, as `spool/` is:
 
 | File | What it holds |
 | --- | --- |
-| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and its blockers' newest event at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back |
+| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and its blockers' newest event at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back; and per item, the times of the notices in the last hour that quoted other sessions' words on it |
 | `<…>.lock` | held while one hook of that recipient reads and records, so parallel tool calls tell the news once |
 | `<session>.watch` | the watcher's lock |
 | `<session>.idle` | written by a `Stop` that told nothing, removed by `UserPromptSubmit` |
@@ -816,7 +831,9 @@ news waits for the upgrade.
 - Another agent session's news reaches an idle session only at its next prompt,
   unless it [asks for that session](#when-another-sessions-news-wakes): a reply it
   awaited, a comment that awaits its reply within a day, a blocker closed. Agents
-  that ask one another back and forth wake each other at most six times an hour.
+  that ask one another back and forth wake each other at most six times an hour,
+  and an item another agent writes on without pause costs a reader one line a call
+  after its third notice in the hour.
 - A session that holds or follows more than 200 items is told about the 200 it
   wrote to or subscribed to last, and hears replies and answers only on those: a
   subscribed item is inside that window as a held one is.
