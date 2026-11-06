@@ -223,10 +223,12 @@ checkouts are therefore distinguishable even at the same version.
   `loading/empty/error/unavailable` was one word to the browser, and at a phone's width it
   broke wherever the line ran out, leaving «un» on one line and «available» on the next.
   A title now also breaks after each `/`, in the list, on the board, on the graph, at the
-  head of a card, on the hover card, in search, among a card's links and in the picker of
-  related work. A single word wider than the line still breaks inside, rather than
-  running past the edge. A screen reader reads the title, and a copy takes it, as it
-  was written, with no space after a `/`.
+  head of a card, on the hover card, in search, among a card's links, in the picker of
+  related work, on the branch map's tip, and in the epic and label lists of the new-task
+  dialog. A single word wider than the line still breaks inside, rather than running past
+  the edge: on the branch map's tip such a word was cut off at the edge with nothing to
+  say it went on. A screen reader reads the title, and a copy takes it, as it was
+  written, with no space after a `/`.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
