@@ -48,6 +48,8 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
+import { NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
+import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
@@ -72,7 +74,7 @@ const emit = defineEmits<{
   'dismiss': [entry: InputRequestEntry]
   'select': [target: PlanningTarget]
   'update:draft': [draft: RequestDraft]
-  'updated': [entry: InputRequestEntry]
+  'updated': [entry: InputRequestEntry, right: FocusRight]
 }>()
 const { t, d } = useI18n()
 const promptId = useId()
@@ -125,7 +127,7 @@ const {
   settled: async (result, reread, right) => {
     await nextTick()
     right.take(reread ? reveal : focusOutcome)
-    emit('updated', result)
+    emit('updated', result, right)
   },
 })
 
@@ -133,10 +135,15 @@ useStepAttention(card, declining, stepBack)
 
 const waiting = computed(() => request.value.status === 'pending')
 const inForm = computed(() => waiting.value || changing.value)
+/**
+ * The question stopped waiting. The person's own write or read moves focus through its right in
+ * `settled`, so this covers a change from elsewhere only: focus moves when it fell to the page,
+ * where what held it went; a control that stays keeps the focus the person put on it.
+ */
 watch(waiting, async (now) => {
-  if (now || !card.value?.contains(document.activeElement)) return
+  if (now || busy.value || !card.value?.contains(document.activeElement)) return
   await nextTick()
-  focusOutcome()
+  NO_FOCUS_RIGHT.take(focusOutcome)
 })
 /** A deadline disables what had focus, so focus goes to the question, which says why. */
 watch(pastDue, async (past) => {

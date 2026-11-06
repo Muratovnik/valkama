@@ -10,6 +10,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
 import { asked, openQuestion, send } from './questionBackend.ts'
+import { inTheList, pair } from './questionPress.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -107,3 +108,137 @@ test('with nothing moved while a question is answered, focus lands on the questi
   await expect(card.locator('.request-state')).toBeVisible()
   await expect(card).toBeFocused()
 })
+
+/**
+ * A question's answer while the person moves focus to another control of the same question
+ * that the answer leaves in place: the task number over the list's card, the reply icon of the
+ * card. The move is a press, let go off the control so nothing is clicked, or Shift+Tab, and
+ * the answer is sent by a click or by Enter. Without the move, the answer lands as it always did.
+ */
+const WORDS = {
+  en: { list: 'Needs my answer', reply: 'Reply', send: 'Send' },
+  ru: { list: 'Ждут моего ответа', reply: 'Ответить', send: 'Отправить' },
+} as const
+const INPUTS = ['mouse', 'key'] as const
+type Input = (typeof INPUTS)[number]
+/** The outline the answer's landing draws: none after a press, the ring after a key. */
+const RING: Record<Input, string> = { mouse: 'none', key: 'solid' }
+
+const outline = (target: Locator) => target.evaluate((node) => getComputedStyle(node).outlineStyle)
+
+async function sendBy(input: Input, onward: Locator) {
+  if (input === 'mouse') await onward.click()
+  else {
+    await onward.focus()
+    await onward.page().keyboard.press('Enter')
+  }
+  await expect(onward).toHaveAttribute('aria-disabled', 'true')
+}
+
+/** Focus to `target` as the person moves it: Shift+Tab, or a press on it let go off it. */
+async function moveFocusBy(input: Input, page: Page, target: Locator, scope: Locator) {
+  if (input === 'key') {
+    for (let presses = 0; presses < 30; presses += 1) {
+      if (await target.evaluate((node) => node === document.activeElement)) break
+      await page.keyboard.press('Shift+Tab')
+    }
+  } else {
+    await target.hover()
+    await page.mouse.down()
+    const box = await scope.boundingBox()
+    if (!box) throw new Error('The question has no box to let go in')
+    // Inside the card's padding: a release there clicks the card, which does nothing.
+    await page.mouse.move(box.x + 6, box.y + box.height / 2)
+    await page.mouse.up()
+  }
+  await expect(target).toBeFocused()
+}
+
+type Locale = keyof typeof WORDS
+
+async function setUp(page: Page, locale: Locale, width: number) {
+  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.setViewportSize({ width, height: 900 })
+}
+
+/** The answer has landed: its state is in sight and two frames have passed. */
+async function landed(page: Page, state: Locator) {
+  await expect(state).toBeVisible()
+  await settled(page)
+}
+
+/** A card's question answered by `input`, its write held until `letGo` is called. */
+async function heldCard(page: Page, locale: Locale, width: number, input: Input) {
+  await setUp(page, locale, width)
+  const { card, requests } = await openQuestion(page, [asked()])
+  let letGo = doNothing
+  requests.holdWrites(new Promise<void>((done) => (letGo = done)))
+  await card.getByRole('radio', { name: 'Move them', exact: true }).click()
+  await sendBy(input, card.locator('.request-onward'))
+  const reply = card
+    .locator('.entry-head')
+    .getByRole('button', { name: WORDS[locale].reply, exact: true })
+  return { card, letGo: () => letGo(), reply }
+}
+
+/** Two questions in the list, the upper one answered by `input` with its write held. */
+async function heldList(page: Page, locale: Locale, width: number, input: Input) {
+  await setUp(page, locale, width)
+  const opened = await openQuestion(page, pair(2, 2))
+  const { next, top } = await inTheList(page, opened, WORDS[locale].list)
+  let letGo = doNothing
+  opened.requests.holdWrites(new Promise<void>((done) => (letGo = done)))
+  await top.getByRole('radio', { name: 'Choice 1', exact: true }).click()
+  await sendBy(input, top.locator('.request-onward'))
+  const number = top
+    .locator('.request-context')
+    .getByRole('link', { name: 'MAIN-264', exact: true })
+  return { letGo: () => letGo(), next, number, top }
+}
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1280, 390])
+    for (const input of INPUTS) {
+      const where = `after ${input}, in ${locale} at ${width}`
+
+      test(`in the card, focus moved to the reply icon stays there, ${where}`, async ({ page }) => {
+        const { card, letGo, reply } = await heldCard(page, locale, width, input)
+        await moveFocusBy(input, page, reply, card)
+        letGo()
+        await landed(page, card.locator('.request-state'))
+        await expect(reply).toBeFocused()
+        await expect(card).not.toBeFocused()
+      })
+
+      test(`in the card, with no move the answer lands on the question, ${where}`, async ({
+        page,
+      }) => {
+        const { card, letGo } = await heldCard(page, locale, width, input)
+        letGo()
+        await landed(page, card.locator('.request-state'))
+        await expect(card).toBeFocused()
+        expect(await outline(card)).toBe(RING[input])
+      })
+
+      test(`in the list, focus moved to the task number stays there, ${where}`, async ({
+        page,
+      }) => {
+        const { letGo, next, number, top } = await heldList(page, locale, width, input)
+        await moveFocusBy(input, page, number, top)
+        letGo()
+        await landed(page, top.locator('.request-state'))
+        await expect(number).toBeFocused()
+        await expect(next).not.toBeFocused()
+      })
+
+      test(`in the list, with no move the answer moves on to the next question, ${where}`, async ({
+        page,
+      }) => {
+        const { letGo, next, top } = await heldList(page, locale, width, input)
+        letGo()
+        await landed(page, top.locator('.request-state'))
+        await expect(next).toBeFocused()
+        expect(await outline(next)).toBe(RING[input])
+      })
+    }

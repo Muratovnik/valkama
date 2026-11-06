@@ -13,7 +13,8 @@
  * It went to the count line at the top once, which scrolled a long list away
  * from the card the reader was in. It moves on only from the question focus is
  * in: a reader who went elsewhere while the answer was out stays there, as the
- * question itself leaves them (`grantFocus`).
+ * question itself leaves them (`grantFocus`), and a reader who moved it to another control of the
+ * same question while the answer was out stays on that control.
  *
  * A refresh the reader asked for that fails puts focus on the sentence saying
  * so, unless they have moved focus since they asked; one the poll started leaves
@@ -35,6 +36,7 @@ import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequ
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { grantFocus, NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
+import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -148,7 +150,11 @@ function holdsFocus(entry: InputRequestEntry) {
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
 }
-async function updated(entry: InputRequestEntry) {
+/**
+ * Moves focus on from the question once its answer has landed, under the answer's own right: a
+ * person who has moved focus since the answer began keeps it where they put it.
+ */
+async function updated(entry: InputRequestEntry, right: FocusRight) {
   emit('updated', entry)
   const key = requestIdentity(entry)
   // A form still open keeps the keyboard, and a changed answer is still this question's.
@@ -156,15 +162,17 @@ async function updated(entry: InputRequestEntry) {
   if (!cards[key]?.holdsFocus()) return
   await nextTick()
   if (entry.request.answer_version > 1) {
-    cards[key]?.focusOutcome()
+    right.take(() => cards[key]?.focusOutcome())
     return
   }
   const at = props.entries.findIndex((candidate) => requestIdentity(candidate) === key)
   const next = [...props.entries.slice(at + 1), ...props.entries.slice(0, Math.max(at, 0))].find(
     (candidate) => candidate.request.status === 'pending',
   )
-  if (next) cards[requestIdentity(next)]?.focus()
-  else cards[key]?.focusOutcome()
+  right.take(() => {
+    if (next) cards[requestIdentity(next)]?.focus()
+    else cards[key]?.focusOutcome()
+  })
 }
 defineExpose({ holdsFocus })
 </script>

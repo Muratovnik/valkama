@@ -242,8 +242,10 @@ checkouts are therefore distinguishable even at the same version.
 - Focus stays where you put it while an action waits on the server. A reply sent, then a click
   into the comment field before the answer came, used to take focus to the new reply, and what
   was typed next went nowhere; now the field keeps focus and the letters. The same holds for an
-  answered question, the list of everything waiting moving on, a refresh, a mark of a thread
-  and the steps of opening a session. With focus left where it was, it lands as before.
+  answered question, where focus you moved to its task number or its reply icon while the answer
+  was out stays there and the list of everything waiting does not move on from it. It holds for
+  the list moving on, a refresh, a mark of a thread and the steps of opening a session too. With
+  focus left where it was, it lands as before.
 - An agent's session id stays whole in the head of a comment, a reply and a question. On a
   phone the head of a reply broke it after its hyphen, «kolo 019a2b3c-» over «4d5e»; the
   line now breaks between the name and the id, as between any two words. The head prints the
