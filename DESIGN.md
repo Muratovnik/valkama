@@ -1533,7 +1533,10 @@ by its ground alone â€” a tile, a column, a sheet, a chip or a toggle at rest â€
 bounds with that ground, so it draws its edge in the palette's ink instead. A surface draws a
 1px `CanvasText` border, because what is laid out inside it cannot cover a border: the
 workspace panel's edge drawn as an outline inside it was lost under the board's own opaque
-ground. A control draws a `ButtonText` outline inside itself, where it takes no room.
+ground. A control draws a `ButtonText` outline inside itself, where it takes no room. The
+keyboard's ring stands apart from such an edge, never on it, where in the same ink it only
+thickened the line: a control's ring 2px outside it, and a tile's, which its column would
+clip outside, 2px inside its edge in `Highlight`.
 
 Russian and English are equal layout cases, not a base language and a
 translation: a rule that only holds while the shorter string is on screen does

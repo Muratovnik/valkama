@@ -264,10 +264,17 @@ const describedBy = computed(() => {
   /* The ring is drawn around the sheet, inside it. A tile fills the width of a
      column that clips its overflow, so a ring drawn outside lost both its sides
      there, and its top or bottom too wherever a scroll left the tile against
-     the edge. */
+     the edge. In a forced palette the edge stays and the ring stands 2px inside
+     it in the colour of what is chosen: on the edge, in the edge's ink, it only
+     made the line thicker. */
   &:has(.tile-open:focus-visible) {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: -2px;
+
+    @media (forced-colors: active) {
+      outline-color: Highlight;
+      outline-offset: -5px;
+    }
   }
 
   &.finished .tile-open {
