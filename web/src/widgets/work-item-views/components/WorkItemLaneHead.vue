@@ -58,15 +58,18 @@ const chainLabel = computed(() =>
   t('workItem.lanes.showChain', { reference: props.lane.epic?.reference ?? '' }),
 )
 
+const toggle = ref<HTMLElement | null>(null)
 const tail = ref<HTMLElement | null>(null)
 const actions = ref<HTMLElement | null>(null)
 const room = ref<HTMLElement | null>(null)
-const { crowded } = useLaneActionsPlace(tail, actions, room, () => [
+const { place } = useLaneActionsPlace({ actions, room, tail, toggle }, () => [
   props.left,
   props.right,
   counts.value,
   stateShown.value,
 ])
+const crowded = computed(() => place.value === 'beside')
+const tied = computed(() => place.value === 'tied')
 
 // The spaces live in the strings: a template trims the space before a tag
 // closes, which ran «To the right:» into the count for a screen reader.
@@ -79,9 +82,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 <template>
   <header
     class="lane-head"
-    :class="{ acting: props.lane.epic, away, crowded }"
+    :class="{ acting: props.lane.epic, away, crowded, tied }"
   >
     <button
+      ref="toggle"
       class="lane-toggle"
       type="button"
       :aria-expanded="props.open"
@@ -129,6 +133,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         ><span class="visually-hidden">{{ rightLead }}</span
         >{{ props.right }}<span aria-hidden="true">{{ TO_RIGHT }}</span></span
       >
+      <span
+        v-if="tied"
+        class="lane-break"
+      />
       <span
         v-if="props.lane.epic"
         ref="actions"
@@ -315,7 +323,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   min-width: 0;
   margin-block-start: calc(-1 * var(--space-1));
 
-  > :not(.lane-room) {
+  > :not(.lane-room, .lane-break) {
     margin-block-start: var(--space-1);
   }
 
@@ -400,6 +408,22 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
     block-size: var(--size-control-height-compact);
     margin: 0;
   }
+}
+
+/* Where the title would not stay whole beside the actions, the part that ends the
+   heading's text comes down with them onto a line of their own: a break of no height
+   ends the line above. The order puts the break before that part whatever it is, and
+   changes nothing while there is no break. */
+.lane-break {
+  flex-basis: 100%;
+  order: 1;
+  height: 0;
+}
+
+.lane-tail > :has(+ .lane-break),
+.lane-actions,
+.lane-room {
+  order: 2;
 }
 
 /* The actions' place in the lines while they stand beside the title. */
