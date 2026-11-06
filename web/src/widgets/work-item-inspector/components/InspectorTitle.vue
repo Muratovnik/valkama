@@ -7,7 +7,7 @@ import { computed } from 'vue'
 
 import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
 
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = defineProps<{ title: string }>()
 const runs = computed(() => titleRuns(props.title))
@@ -22,9 +22,9 @@ const runs = computed(() => titleRuns(props.title))
       v-if="run.whole"
       class="head-title-reference"
       >{{ run.text }}</span
-    ><SlashBreaks
+    ><span
       v-else
-      :text="run.text"
+      v-slash-breaks="run.text"
     />
   </template>
 </template>

@@ -13,7 +13,7 @@ import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = defineProps<{
   group: ChainGroup
@@ -45,7 +45,10 @@ const meta = computed(() => {
         :label="member.state.name"
       />
     </span>
-    <span class="branch-tip-title"><SlashBreaks :text="member.title" /></span>
+    <span
+      v-slash-breaks="member.title"
+      class="branch-tip-title"
+    />
     <span class="branch-tip-meta">{{ meta }}</span>
   </div>
 </template>

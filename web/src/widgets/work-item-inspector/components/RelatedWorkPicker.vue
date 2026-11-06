@@ -10,7 +10,7 @@ import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -254,7 +254,7 @@ function close() {
             />
             <span class="result-copy">
               <span class="result-title"
-                >{{ candidate.reference }} · <SlashBreaks :text="candidate.title"
+                >{{ candidate.reference }} · <span v-slash-breaks="candidate.title"
               /></span>
               <span class="result-meta"
                 >{{ candidate.state.name

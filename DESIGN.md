@@ -697,11 +697,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   word only when that one word is wider than its line. A browser offers no break
   after a `/`, so `loading/empty/error/unavailable` was one word to it, wider than a
   phone's line, and `overflow-wrap: anywhere` broke it where the line ran out:
-  «un» above «available». `SlashBreaks` puts a `<wbr>` after each `/`, which adds no
-  character to what is read, copied or named, and every surface that draws a work
-  item's title draws it through it: the list, the tile, the graph's card and frame,
-  the card's head, the reference's card, the finder, a card's links, the picker of
-  related work and the branch tip. A path in free text breaks the same way.
+  «un» above «available». The `v-slash-breaks` directive (`slashBreaks.ts`) puts a
+  `<wbr>` after each `/`, which adds no character to what is read, copied or named,
+  and every surface that draws a work item's title draws it through it: the list,
+  the tile, the graph's card and frame, the card's head, the reference's card, the
+  finder, a card's links, the picker of related work and the branch tip. It is a
+  directive because a component instance in every tile and row is a cost the board's
+  budget refuses. A path in free text breaks after each `/` from the same split.
 - **Free text:** `RichText` owns every text an agent or a person wrote — a
   description, a comment, a report section, a question, an attempt's result, a
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,

@@ -50,7 +50,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -201,7 +201,10 @@ const describedBy = computed(() => {
       @keydown="emit('keydown', $event)"
     >
       <span class="visually-hidden">{{ `${props.item.reference} ` }}</span>
-      <strong class="tile-title"><SlashBreaks :text="props.item.title" /></strong>
+      <strong
+        v-slash-breaks="props.item.title"
+        class="tile-title"
+      />
     </button>
     <component
       :is="

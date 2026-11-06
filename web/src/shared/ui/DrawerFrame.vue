@@ -4,7 +4,6 @@ import { computed, ref, watch } from 'vue'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import { useScrolledPast } from '@/shared/lib/useScrolledPast.ts'
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -222,7 +221,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
           ref="name"
           class="drawer-frame-name"
         >
-          <slot name="title"><SlashBreaks :text="title" /></slot>
+          <slot name="title">{{ title }}</slot>
         </h2>
         <div
           v-if="$slots.facts"

@@ -23,7 +23,7 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const {
   node,
@@ -206,10 +206,10 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         >
       </span>
       <span
+        v-slash-breaks="node.title"
         class="flow-node-title"
         :title="node.title"
-        ><SlashBreaks :text="node.title"
-      /></span>
+      />
       <span
         v-if="holder || asksAttention || live"
         class="flow-node-owner"

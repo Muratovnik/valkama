@@ -16,7 +16,7 @@ import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const {
@@ -65,9 +65,9 @@ const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : f
       >
       <span
         v-else
+        v-slash-breaks="title"
         class="graph-frame-title"
-        ><SlashBreaks :text="title"
-      /></span>
+      />
     </template>
     <SemanticState
       v-if="epic && stateShown && !overview"
