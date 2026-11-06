@@ -29,8 +29,9 @@ A client hook keeps its own place instead (`since_call`): it tells the agents of
 one session, and an item's window ends at any agent's write, so a subagent's tick
 would end it before the session's orchestrator was told. The hook remembers the
 last call it has read for each item and asks for what came after that. The same
-hook reads another agent's mentions of an item apart (`agent_mentions_since`):
-they are told to the holders, and never as a person's.
+hook reads what other agents wrote apart (`agents_since`), from the same rows and
+into the same entries: it is told to the holders and followers, and never as a
+person's.
 
 Nothing here is imported at module level past `sqlite3`: a client hook calls this
 on a read-only connection of its own, in a process that starts for one tool call,
@@ -189,36 +190,58 @@ def since_call(
     return _window(conn, work_item_id, after, edits)
 
 
-#: Another agent's mentions of an item: the speaker is the call's proved session and
-#: agent, never the `author` it signed, and an unproved call names nobody.
-_AGENT_MENTIONS = (
-    "SELECT e.call_id, e.detail, e.created_at, c.session_id, c.agent_id"
+#: What other agents wrote on an item: the speaker is the call's proved session and
+#: agent, never the `author` it signed, and an unproved call names nobody. The same
+#: rows `_window` reads for a person, through an agent's call instead.
+_AGENT_COMMENTS = (
+    "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request,"
+    " c.session_id, c.agent_id FROM work_item_comments m"
+    " JOIN execution_events c ON c.id = m.call_id"
+    " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_state = 'confirmed'"
+    " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
+)
+_AGENT_EVENTS = (
+    "SELECT e.id, e.action, e.detail, e.created_at, e.call_id, c.session_id, c.agent_id"
     " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
-    " WHERE e.work_item_id = ? AND e.call_id > ? AND e.action = 'mentioned'"
-    " AND c.identity_state = 'confirmed' AND c.identity_source NOT IN (?,?)"
-    " AND c.session_id IS NOT NULL ORDER BY e.id"
+    " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_state = 'confirmed'"
+    " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY e.id"
 )
 
 
-def agent_mentions_since(
-    conn: sqlite3.Connection, work_item_id: str, after: int
-) -> list[tuple[int, dict]]:
-    """Agents' mentions of one item whose call came after `after`, oldest first, with the call.
+def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> list[tuple[int, dict]]:
+    """What agents wrote on one item through calls after `after`, oldest first, with the call.
 
-    Not a person's act, so `_window` never reads them and they are in neither
-    `from_person` nor the `person_spoke` guard: a client hook tells them apart.
-    Each entry is a `mentioned` one with `via: "agent"`, and `session` and `agent`,
-    the speaker as its call row names it, so a hook can leave the speaker out.
+    The kinds a person's act is told by, and the same entries: a comment, a reply,
+    a report, every event `KINDS` names, a mention of this item written on another.
+    No agent's act is a person's, so `_window` never reads these and they are in
+    neither `from_person` nor the `person_spoke` guard: a client hook tells them
+    apart. Each entry has `via: "agent"`, and `session` and `agent`, the speaker as
+    its call row names it, so the hook can leave out the recipient's own words and
+    always says whose these are. Who is told is the hook's to decide.
     """
 
-    found = []
-    for row in conn.execute(_AGENT_MENTIONS, (work_item_id, after, BROWSER, VALKAMA)).fetchall():
-        entry = _mentioned(conn, str(row[2]), int(row[1]))
-        entry["via"] = "agent"
-        entry["session"] = str(row[3])
-        entry["agent"] = None if row[4] is None else str(row[4])
-        found.append((int(row[0]), entry))
-    return found
+    found: list[tuple[tuple[int, int, int], dict]] = []
+    bound = (work_item_id, after, BROWSER, VALKAMA)
+    reports: set[int] = set()
+    for row in conn.execute(_AGENT_COMMENTS, bound).fetchall():
+        if row[2]:
+            reports.add(int(row[4]))
+        found.append(((int(row[4]), 1, int(row[0])), _spoken(_comment_entry(row), row[7], row[8])))
+    for row in conn.execute(_AGENT_EVENTS, bound).fetchall():
+        action = str(row[1])
+        if action not in KINDS or (action == "summarized" and int(row[4]) in reports):
+            continue
+        found.append(
+            ((int(row[4]), 2, int(row[0])), _spoken(_event_entry(conn, row), row[5], row[6]))
+        )
+    return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
+
+
+def _spoken(entry: dict, session: object, agent: object) -> dict:
+    entry["via"] = "agent"
+    entry["session"] = str(session)
+    entry["agent"] = None if agent is None else str(agent)
+    return entry
 
 
 def author_of(

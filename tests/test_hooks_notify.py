@@ -841,8 +841,9 @@ class StatementsTests(Harness):
         self.says("Plain, on the held item")
         seen = self.statements()
         self.assertTrue([sql for sql in seen if "work_item_comments m" in sql], "control")
+        # Who wrote a root, or asked a question: the lookups `person_events.author_of` makes.
         self.assertFalse(
-            [sql for sql in seen if "c.identity_state = 'confirmed'" in sql],
+            [sql for sql in seen if "WHERE m.id =" in sql or "'request_created'" in sql],
             "no root or question to look up",
         )
 
