@@ -2,13 +2,7 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import {
-  actorName,
-  actorSession,
-  holderName,
-  sessionHolder,
-  splitActor,
-} from '@/shared/lib/actor.ts'
+import { actorName, actorSession, holderName, splitActor } from '@/shared/lib/actor.ts'
 
 test('a session baked into an actor name is split into name and session', () => {
   assert.deepEqual(splitActor('claude-fable (session 1baa03d7)'), {
@@ -77,22 +71,4 @@ test('a holder prints its name and the start of its session, or its name alone',
   assert.equal(holderName('codex:executor'), 'codex:executor')
   // No name before the session: the whole text, never an empty holder.
   assert.equal(holderName('(session 1baa03d7)'), '(session 1baa03d7)')
-})
-
-test('a session that holds nothing is labelled as its claim would be, and prints as its holder', () => {
-  const session = '019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e'
-  // The label the server writes for a claim of that session, which the card already prints.
-  assert.equal(sessionHolder('codex', session, null), `codex (session ${session})`)
-  assert.equal(holderName(sessionHolder('codex', session, null)), 'codex · 019a3c2e-5b7d')
-  assert.equal(
-    holderName(sessionHolder('claude', session, 'a7f3')),
-    'claude agent a7f3 · 019a3c2e-5b7d',
-  )
-  // A client recorded under its handshake's name holds under its family's.
-  assert.equal(sessionHolder('claude-code', session, null), `claude (session ${session})`)
-  assert.equal(sessionHolder('Codex-MCP-Client', session, null), `codex (session ${session})`)
-  assert.equal(sessionHolder('gemini', session, null), `gemini (session ${session})`)
-  // With no client, the session itself, never an empty name.
-  assert.equal(sessionHolder(null, session, null), session)
-  assert.equal(sessionHolder('  ', session, 'a7f3'), session)
 })

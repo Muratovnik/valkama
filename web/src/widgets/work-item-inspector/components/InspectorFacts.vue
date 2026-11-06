@@ -43,7 +43,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { holderName, sessionHolder } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -147,12 +147,13 @@ const holderExecutor = computed(() =>
 )
 
 /**
- * The sessions that follow the item, each labelled as its claim would be and printed as the
- * holder is, a comma after all but the last; the holder's row names its own.
+ * The sessions that follow the item, each by the label the server gives it, which is what a
+ * claim of it records, printed as the holder is, a comma after all but the last; the holder's
+ * row names its own.
  */
 const followers = computed(() => {
   const labels = (props.item.subscribers ?? [])
-    .map(({ client, session, agent }) => sessionHolder(client, session, agent))
+    .map(({ label }) => label)
     .filter((label) => label !== holder.value)
   return labels.map((label, index) => ({
     label,

@@ -97,6 +97,59 @@ class WriteTests(Harness):
             "not a change to the item: no revision, no event",
         )
 
+    def test_a_subscriber_is_labelled_as_the_claim_of_its_session_names_its_holder(self) -> None:
+        """The label is what a claim by the same call records, whatever the handshake said."""
+
+        hook = {"claudecode/toolUseId": "toolu_label"}
+        long_id = "agent-" + "0123456789" * 5
+        cases = {
+            "a session that named another client": (ORCHESTRATOR, {}, "gemini-cli"),
+            "a subagent": (SUBAGENT, {}, "codex"),
+            "an agent id longer than a label carries": (
+                {"sessionId": OTHER, "threadId": long_id},
+                {},
+                "codex",
+            ),
+            "a claude code session": (
+                hook,
+                {"_identity": {"session_id": CHILD, "tool_use_id": "toolu_label"}},
+                "claude-code",
+            ),
+        }
+        labels = {}
+        for case, (meta, extra, client) in cases.items():
+            with self.subTest(case):
+                ref = self.item(case)
+                self.conn.commit()
+                for tool, group in (
+                    ("apply_work_item_changes", {"subscribe": True}),
+                    ("claim_work_item", {}),
+                ):
+                    mcp_surface.run_tool_call(
+                        self.conn,
+                        tool,
+                        {"id": ref, **group, **extra},
+                        meta=meta,
+                        client=mcp_surface._Client(client),
+                    )
+                    self.conn.commit()
+                held = service.get_work_item(self.conn, ref)["claim_ref"]
+                [listed] = self.followers(ref)
+                self.assertEqual(held, listed["label"])
+                self.assertEqual(client, listed["client"], "the handshake's name is kept beside it")
+                labels[case] = listed["label"]
+        self.assertEqual(
+            {
+                "a session that named another client": f"codex (session {SESSION})",
+                "a subagent": f"codex agent {CHILD} (session {SESSION})",
+                "a claude code session": f"claude (session {CHILD})",
+            },
+            {case: label for case, label in labels.items() if "longer" not in case},
+        )
+        long = labels["an agent id longer than a label carries"]
+        self.assertNotIn(long_id, long, "an id a label cannot carry is its digest")
+        self.assertRegex(long, rf"^codex agent [0-9a-f]{{16}} \(session {OTHER}\)$")
+
     def test_asking_again_writes_nothing_and_another_session_stands_apart(self) -> None:
         self.subscribe(True)
         self.conn.execute("UPDATE work_item_subscriptions SET created_at = '2026-01-01T00:00:00Z'")

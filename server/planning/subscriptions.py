@@ -113,7 +113,13 @@ _LISTED = (
 
 
 def subscribers(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
-    """Who follows the item now, oldest first: `session`, `client`, `agent`, `since`.
+    """Who follows the item now, oldest first: `session`, `client`, `agent`, `label`, `since`.
+
+    `label` is the holder a claim of that session, or of that agent of it, records,
+    read from the channel that proved the subscribing call (`calls.channel_holder`)
+    and not from the client its handshake named, so a reader tells the holder among
+    the subscribers by comparing it with `claim_ref`. A row is live only through a
+    confirmed call with a session, which only a channel proves, so none is unlabelled.
 
     A mute is the holder's own matter and is not listed; nor is a lapsed row.
     """
@@ -123,16 +129,24 @@ def subscribers(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
         " ORDER BY u.created_at, u.session_id, u.agent_id",
         (work_item_id,),
     ).fetchall()
-    return [
-        {
-            "session": str(row["follower"]),
-            "client": row["client"],
-            "agent": str(row["follower_agent"]) or None,
-            "since": str(row["since"]),
-        }
-        for row in rows
-        if not _lapsed(row)
-    ]
+    listed = []
+    for row in rows:
+        if _lapsed(row):
+            continue
+        session, agent = str(row["follower"]), str(row["follower_agent"]) or None
+        label = calls.channel_holder(str(row["identity_source"]), session, agent)
+        if label is None:
+            continue
+        listed.append(
+            {
+                "session": session,
+                "client": row["client"],
+                "agent": agent,
+                "label": label,
+                "since": str(row["since"]),
+            }
+        )
+    return listed
 
 
 def expire(conn: sqlite3.Connection) -> int:

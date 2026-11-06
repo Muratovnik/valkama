@@ -58,20 +58,3 @@ export function sessionName(client: string, session: string): string {
   const start = session.slice(0, SESSION_PREFIX)
   return client ? `${client} · ${start}` : start
 }
-
-/** The names a holder label opens with: the channel that proved the session, not its handshake. */
-const HOLDER_FAMILIES = ['claude', 'codex'] as const
-
-/**
- * The label a claim of this session, or of this agent of it, would carry, so a session that
- * holds nothing prints as `holderName` prints its holder: `codex agent 1a2b (session 019a…)`.
- * A client recorded as its handshake named it, `claude-code`, holds as its family, `claude`.
- * With no client to name, the label is the session itself.
- */
-export function sessionHolder(client: string | null, session: string, agent: string | null) {
-  const given = (client ?? '').trim()
-  const name = HOLDER_FAMILIES.find((family) => given.toLowerCase().startsWith(family)) ?? given
-  if (!name) return session
-  const who = agent ? `${name} agent ${agent}` : name
-  return `${who} (session ${session})`
-}

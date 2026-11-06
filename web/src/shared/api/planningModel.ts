@@ -291,11 +291,16 @@ const eventSchema = strictObject({
   identity: eventIdentitySchema,
 })
 
-/** A session that follows the item without holding it, as the call that subscribed proved it. */
+/**
+ * A session that follows the item, as the call that subscribed proved it. `label` is the holder
+ * a claim of that session, or of that agent of it, records: the server's own rule, by the
+ * channel that proved the session, so it is the very text `claim_ref` holds.
+ */
 const subscriberSchema = strictObject({
   session: blankable(200),
   client: callField(),
   agent: callField(),
+  label: holderField(),
   since: boundedText(ISO, 96),
 })
 

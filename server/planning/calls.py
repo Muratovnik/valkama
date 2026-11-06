@@ -302,15 +302,20 @@ def holder(author: str | None) -> str:
     """
 
     identity = current()
-    name = _CHANNEL_NAMES.get(identity.source) if identity is not None else None
-    if (
-        identity is None
-        or name is None
-        or identity.state != CONFIRMED
-        or identity.session_id is None
-    ):
+    if identity is None or identity.state != CONFIRMED or identity.session_id is None:
         return model.actor(author)
-    return holder_label(name, identity.session_id, identity.agent_id)
+    held = channel_holder(identity.source, identity.session_id, identity.agent_id)
+    return held if held is not None else model.actor(author)
+
+
+def channel_holder(source: str, session_id: str, agent_id: str | None = None) -> str | None:
+    """The holder a confirmed session, or an agent of it, holds as through `source`.
+
+    None for a source that names no channel: such a call holds by its `author`.
+    """
+
+    name = _CHANNEL_NAMES.get(source)
+    return holder_label(name, session_id, agent_id) if name is not None else None
 
 
 def holder_label(name: str, session_id: str, agent_id: str | None = None) -> str:

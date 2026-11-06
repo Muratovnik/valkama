@@ -962,11 +962,15 @@ sessions that follow it now, oldest first; a mute and a lapsed one are not liste
 
 ```json
 "subscribers": [{"session": "019a…", "client": "codex", "agent": null,
-                 "since": "2026-11-06T09:00:00Z"}]
+                 "label": "codex (session 019a…)", "since": "2026-11-06T09:00:00Z"}]
 ```
 
 `client` is the client the subscribing call came from, and `agent` the subagent
-that subscribed, or `null` for the session's own conversation.
+that subscribed, or `null` for the session's own conversation. `label` is the
+holder a claim by that session, or by that subagent, records in `claim_ref`: named
+after the channel that proved the session, not after `client`, and with an id too
+long for a label replaced by its digest, as a claim's is. So a reader that compares
+it with `claim_ref` tells which subscriber holds the item.
 
 ### Several changes in one call
 

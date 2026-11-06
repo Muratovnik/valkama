@@ -1,9 +1,10 @@
 /**
  * The sessions that follow an item without holding it, in the built application's card: one
  * line under the holder's, labelled in the holder label's quiet ink, each session printed as
- * the card prints a holder. The line starts on the column the head's other lines start on, a
- * name moves to the next line whole rather than breaking inside itself, and nothing draws a
- * plate or an edge around the plain words. A card nobody follows has no such line.
+ * the card prints a holder, from the label the server gives it, which is the text a claim of
+ * that session records. The line starts on the column the head's other lines start on, a name
+ * moves to the next line whole rather than breaking inside itself, and nothing draws a plate or
+ * an edge around the plain words. A card nobody follows, or only its holder, has no such line.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -27,27 +28,30 @@ const LABEL = { en: 'Subscribed', ru: 'Подписаны' } as const
 const ONE = '019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e'
 const since = '2026-08-13T08:00:00Z'
 
-/** One session's own conversation, as the card's read lists it. */
-const follower = (session: string, client = 'codex', agent: string | null = null) => ({
-  session,
-  client,
-  agent,
-  since,
-})
+/**
+ * A session as the card's read lists it. `label` is written out as the server writes it, from
+ * the channel that proved the session, so a test never derives it from the client's name.
+ */
+const follower = (
+  session: string,
+  label: string,
+  client: string | null = 'codex',
+  agent: string | null = null,
+) => ({ session, client, agent, label, since })
+const ONE_LABEL = `codex (session ${ONE})`
 
 /**
  * Five subagents of Claude Code sessions, whose agent ids are 16 hex digits, so each name is
  * wider than half a phone's line: a phone's line holds one of them, a laptop's two.
  */
-const FIVE = Array.from({ length: 5 }, (_, index) =>
-  follower(
-    `0f1e2d3c-4b5a-4968-8778-${String(index).padStart(12, '0')}`,
-    'claude-code',
-    `a7f3c19e0b2d4e5${index}`,
-  ),
-)
+const FIVE = Array.from({ length: 5 }, (_, index) => {
+  const session = `0f1e2d3c-4b5a-4968-8778-${String(index).padStart(12, '0')}`
+  const agent = `a7f3c19e0b2d4e5${index}`
+  return follower(session, `claude agent ${agent} (session ${session})`, 'claude-code', agent)
+})
 /** A Codex subagent, whose agent id is a whole UUID: wider than a phone's line on its own. */
-const CODEX_AGENT = follower(ONE, 'codex', '019a3c2e-6c8e-7d22-8f1a-3b5c7d9e2f4a')
+const CODEX_ID = '019a3c2e-6c8e-7d22-8f1a-3b5c7d9e2f4a'
+const CODEX_AGENT = follower(ONE, `codex agent ${CODEX_ID} (session ${ONE})`, 'codex', CODEX_ID)
 
 async function openCard(page: Page, locale: 'en' | 'ru', width: number, followers: object[]) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -110,7 +114,7 @@ for (const locale of ['ru', 'en'] as const)
     test(`${at}: one follower stands under the holder, its words on the head's left edge`, async ({
       page,
     }) => {
-      const drawer = await openCard(page, locale, width, [follower(ONE)])
+      const drawer = await openCard(page, locale, width, [follower(ONE, ONE_LABEL)])
       const line = drawer.locator('.card-subscribers')
       await expect(line).toBeVisible()
       const label = line.locator('.card-holder-label')
@@ -118,7 +122,7 @@ for (const locale of ['ru', 'en'] as const)
       const names = line.locator('.card-subscriber')
       // The holder's own spelling: the client, then the start of the session.
       await expect(names).toHaveText(['codex · 019a3c2e-5b7d'])
-      await expect(names.first()).toHaveAttribute('title', `codex (session ${ONE})`)
+      await expect(names.first()).toHaveAttribute('title', ONE_LABEL)
 
       const block = await box(drawer.locator('.card-facts-block'))
       const [holderWords] = await drawnLines(drawer.locator('.card-holder .card-holder-label'))
@@ -180,7 +184,10 @@ for (const locale of ['ru', 'en'] as const)
     // The holder following its own item is already named on the row above.
     for (const [who, followers] of [
       ['nobody follows', []],
-      ['only the holder follows', [follower(IN_VSCODE, 'claude-code')]],
+      [
+        'only the holder follows',
+        [follower(IN_VSCODE, `claude (session ${IN_VSCODE})`, 'claude-code')],
+      ],
     ] as const)
       test(`${at}: where ${who}, there is no line and no room for one`, async ({ page }) => {
         const drawer = await openCard(page, locale, width, [...followers])
@@ -193,16 +200,40 @@ for (const locale of ['ru', 'en'] as const)
       })
   }
 
+/**
+ * The handshake names the client as it likes; the server labels a session by the channel that
+ * proved it, and shortens an id a label cannot carry. The card reads the server's label, so the
+ * holder following its own item, under a client name of its own, is still the holder.
+ */
+test('a subscriber is named by its label, and the holder among them by it too', async ({
+  page,
+}) => {
+  const digest = 'codex agent 3f2a9c4e1b7d6a05 (session 0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e)'
+  const drawer = await openCard(page, 'en', 1280, [
+    follower(IN_VSCODE, `claude (session ${IN_VSCODE})`, 'gemini-cli'),
+    follower(ONE, ONE_LABEL, 'gemini-cli'),
+    follower('0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e', digest, 'codex', 'a'.repeat(60)),
+  ])
+  const names = drawer.locator('.card-subscribers .card-subscriber')
+  await expect(names).toHaveText([
+    'codex · 019a3c2e-5b7d,',
+    'codex agent 3f2a9c4e1b7d6a05 · 0f1e2d3c-4b5a',
+  ])
+  await expect(names.first()).toHaveAttribute('title', ONE_LABEL)
+  await expect(names.last()).toHaveAttribute('title', digest)
+  await expect(drawer.locator('.card-subscribers')).not.toContainText('gemini')
+})
+
 test('on a phone a name wider than the line gives way and stays whole in its tooltip', async ({
   page,
 }) => {
-  const drawer = await openCard(page, 'ru', 390, [CODEX_AGENT, follower(ONE)])
+  const drawer = await openCard(page, 'ru', 390, [CODEX_AGENT, follower(ONE, ONE_LABEL)])
   const names = drawer.locator('.card-subscriber')
   await expect(names).toHaveCount(2)
   const long = names.first()
   await expect(long).toHaveCSS('text-overflow', 'ellipsis')
   expect(await long.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
-  await expect(long).toHaveAttribute('title', `codex agent ${CODEX_AGENT.agent} (session ${ONE})`)
+  await expect(long).toHaveAttribute('title', CODEX_AGENT.label)
   const block = await box(drawer.locator('.card-facts-block'))
   const cut = await box(long)
   expect(cut.x + cut.width).toBeLessThanOrEqual(block.x + block.width + 0.5)
