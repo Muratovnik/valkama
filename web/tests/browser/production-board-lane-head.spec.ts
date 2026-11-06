@@ -2,43 +2,52 @@
  * A lane heading at every width a board takes, in both languages, where a pointer can hover and
  * where only a finger can press, with work out of sight on either side: its card and chain
  * actions cover nothing at rest, under the pointer or with the keyboard on them, and nothing moves
- * when they come up; no line holds the state or the actions alone; a long title keeps a readable
- * share of its line; and a tile the board brings into view under the heading stands below it at
- * the lane's own gap, however many lines the heading takes.
+ * when they come up; no line holds the state alone, nor the actions but where nothing can come
+ * down with them; the title keeps the letters the base drew; the heading takes no more lines than
+ * the base but where one of these needs it; and a tile the board brings into view under the
+ * heading stands below it at the lane's own gap, however many lines the heading takes.
  *
- * What is measured is what is drawn: the letters of the title, the state's dot and word, the
- * counts, each line of a note and each action's glyph (`laneHeadRows.ts`).
+ * What is measured is what is drawn (`laneHeadRows.ts`), in the built app once its fonts are in,
+ * against how the base drew the same heading (`laneHeadBase.ts`). A line more than the base is
+ * the cost of one of three things. The base held that line only by laying its actions over the
+ * counts or the note. Or beside the title the actions would cut it, so they end the last line and
+ * take its last part down with them. Or, in the lane of work under no epic at 320px in Russian,
+ * the line under the title starts under the reference, not at the heading's edge, and holds less:
+ * that inset is kept, since a line wrapped from the edge stood 4px left of the chevron. Where the
+ * heading keeps fewer lines than the base, its title gives way to keep it so, as it gives way
+ * before the counts wrap.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
+import { baseOf, WIDTHS } from './laneHeadBase.ts'
+import type { Drawn } from './laneHeadBase.ts'
 import { overlaps, settle } from './laneHeadGeometry.ts'
 import { readHeading } from './laneHeadRows.ts'
 import type { Part, Reading } from './laneHeadRows.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
 
-/** The widths where a heading's lines change, from the narrowest phone to a wide desktop. */
-const WIDTHS = [320, 350, 390, 430, 480, 530, 560, 600, 680, 760, 900, 1024, 1280, 1440]
-
 /**
- * The least a long title keeps whole, and the most lines its heading takes, where a reader
- * counts them, with work out of sight to the right, in the built app and its fonts. The base
- * drew 15 letters at 320px, 25 at 390px and 68 or more at 1280px, in at most three lines, two
- * and two, only by laying the actions over the counts. Then the actions kept a place of their
- * own and the heading took five lines at 320px, up to five at 390px and two at 1280px. Now
- * beside the title on a full line, the actions cost it letters at 390px instead of a line: 12
- * or 13 of its 25 stay in English. At 1280px a heading the base drew on two lines takes one,
- * and its title gives up its end: 64 letters or more stay.
+ * Where the actions end the heading alone on its last line: the counts that end its text would
+ * leave the state alone above them (MAIN-420), or stand alone and with the actions are wider than
+ * the line (MAIN-410 in Russian). Beside the title they would leave it 2 of its 15 letters, and
+ * the title wins. By locale, lane and width.
  */
-const LONG_TITLES = new Map([
-  [320, { letters: 15, lines: 3 }],
-  [390, { letters: 12, lines: 3 }],
-  [1280, { letters: 64, lines: 1 }],
+const ALONE = new Set([
+  'en-US MAIN-420 320',
+  'en-US MAIN-420 350',
+  'ru-RU MAIN-420 320',
+  'ru-RU MAIN-420 350',
+  'ru-RU MAIN-410 320',
 ])
 
+/** Where the inset under the title costs a line (above). */
+const INSET = new Set(['ru-RU Без эпика 320'])
+
+/** The wide board as a reader opens it at `width`, its fonts in before anything is measured. */
 async function openWide(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
   // The actions fade in; with less motion asked for they are up as soon as they are shown.
@@ -47,6 +56,7 @@ async function openWide(page: Page, width: number) {
   await serve(page)
   await serveWide(page)
   await openBoard(page)
+  await page.evaluate(() => document.fonts.ready)
   await page.mouse.move(0, 0)
 }
 
@@ -63,11 +73,12 @@ function covered(reading: Reading): string[] {
     .map(({ member }) => `an action covers the ${member}`)
 }
 
-/** A line that holds the state or the actions and nothing else. */
-function alone(reading: Reading): string[] {
+/** A line that holds the state or the actions and nothing else, but where it is named. */
+function alone(reading: Reading, named: boolean): string[] {
   return reading.rows.flatMap((row) => {
     if (row.length === 1 && row[0] === 'state') return ['the state stands on a line alone']
-    return row.every((member) => member === 'action') ? ['the actions stand on a line alone'] : []
+    const lone = row.every((member) => member === 'action')
+    return lone && !named ? ['the actions stand on a line alone'] : []
   })
 }
 
@@ -85,12 +96,30 @@ function still(reading: Reading, rest: Reading): boolean {
 }
 
 /** What is wrong with one heading in one state, against its reading at rest. */
-function faults(reading: Reading, rest: Reading): string[] {
+function faults(reading: Reading, rest: Reading, named: boolean): string[] {
   const outside = reading.parts
     .filter(({ box }) => box.left < -0.5 || box.right > reading.width + 0.5)
     .map(({ member }) => `the ${member} runs past the heading`)
   const moved = still(reading, rest) ? [] : ['something moves']
-  return [...new Set([...covered(reading), ...alone(reading), ...outside, ...moved])]
+  return [...new Set([...covered(reading), ...alone(reading, named), ...outside, ...moved])]
+}
+
+/** What one heading at rest gives up against the base: letters of its title, or lines. */
+function againstBase(rest: Reading, base: Drawn | undefined, named: boolean): string[] {
+  if (!base) return ['the base has no reading here']
+  const lines = rest.rows.length
+  const last = rest.rows.at(-1) ?? []
+  // The actions end the last line with the part that came down with them.
+  const tied = last.includes('action') && last.length > 1
+  const extra = lines > base.rows
+  return [
+    ...(rest.titleChars < base.letters && lines >= base.rows
+      ? [`the title keeps ${rest.titleChars} letters, the base ${base.letters}`]
+      : []),
+    ...(extra && !(base.covered || (tied && !rest.besideWhole) || named)
+      ? [`${lines} lines, the base ${base.rows}`]
+      : []),
+  ]
 }
 
 /** One heading at rest, under the pointer if one can hover, and with the keyboard on it. */
@@ -120,9 +149,9 @@ async function readStates(page: Page, head: Locator, hover: boolean) {
 
 /**
  * Every heading at `width`, with the board at its first states and scrolled to its middle ones,
- * and what is wrong with each, with what each long title keeps at rest.
+ * and what is wrong with each, against itself at rest and against the base.
  */
-async function readWidth(page: Page, width: number, hover: boolean) {
+async function readWidth(page: Page, width: number, locale: string, hover: boolean) {
   await page.setViewportSize({ width, height: 900 })
   const board = page.locator('.work-item-lanes')
   const found: string[] = []
@@ -136,31 +165,26 @@ async function readWidth(page: Page, width: number, hover: boolean) {
     const heads = page.locator('.lane-head')
     for (let index = 0; index < (await heads.count()); index += 1) {
       const head = heads.nth(index)
-      const name = await head.locator('.lane-reference, .lane-title').first().textContent()
+      const name = (await head.locator('.lane-reference, .lane-title').first().textContent()) ?? ''
+      const where = `${width}px ${scroll} ${name}`
+      const named = `${locale} ${name} ${width}`
       const states = await readStates(page, head, hover)
       const [[, rest]] = states
       for (const [state, reading] of states)
         found.push(
-          ...faults(reading, rest).map((one) => `${width}px ${scroll} ${name} ${state}: ${one}`),
+          ...faults(reading, rest, ALONE.has(named)).map((one) => `${where} ${state}: ${one}`),
         )
       if (!states.every(([, reading], at) => at === 0 || reading.actionsShown))
-        found.push(
-          `${width}px ${scroll} ${name}: an action the pointer or keyboard is on is not up`,
-        )
-      found.push(...longTitle(width, scroll, name ?? '', rest))
+        found.push(`${where}: an action the pointer or keyboard is on is not up`)
+      const base = baseOf(`${locale}|${hover ? 'pointer' : 'touch'}|${scroll}|${name}`, width)
+      found.push(
+        ...againstBase(rest, base, ALONE.has(named) || INSET.has(named)).map(
+          (one) => `${where}: ${one}`,
+        ),
+      )
     }
   }
   return found
-}
-
-/** What a long title keeps against its least at this width, on the board's first states. */
-function longTitle(width: number, scroll: string, name: string, rest: Reading): string[] {
-  const least = LONG_TITLES.get(width)
-  if (!least || scroll !== 'start' || !['MAIN-401', 'MAIN-493'].includes(name)) return []
-  return [
-    ...(rest.titleChars < least.letters ? [`${width}px ${name}: ${rest.titleChars} letters`] : []),
-    ...(rest.rows.length > least.lines ? [`${width}px ${name}: ${rest.rows.length} lines`] : []),
-  ]
 }
 
 /**
@@ -222,7 +246,7 @@ for (const locale of ['en-US', 'ru-RU']) {
       test.setTimeout(300_000)
       await openWide(page, 1280)
       const found: string[] = []
-      for (const width of WIDTHS) found.push(...(await readWidth(page, width, true)))
+      for (const width of WIDTHS) found.push(...(await readWidth(page, width, locale, true)))
       expect(found).toEqual([])
     })
   })
@@ -238,7 +262,7 @@ for (const locale of ['en-US', 'ru-RU']) {
       await expect.poll(() => page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
       const found: string[] = []
       for (const width of [320, 390, 760, 1280]) {
-        const lines = await readWidth(page, width, false)
+        const lines = await readWidth(page, width, locale, false)
         found.push(...lines, ...(await readReach(page, width)))
       }
       expect(found).toEqual([])
@@ -246,8 +270,14 @@ for (const locale of ['en-US', 'ru-RU']) {
   })
 }
 
-/** A tile the board brings into view under its lane's heading, by the board's own ways. */
-type Way = 'walk' | 'press'
+/**
+ * A tile the board brings into view under its lane's heading, by the board's own ways: the
+ * keyboard walking up to it, or a press on the part of it in view.
+ */
+type Way = 'press' | 'walk'
+
+/** The tile each way brings in. */
+const BROUGHT: Record<Way, string> = { press: 'MAIN-403', walk: 'MAIN-403' }
 
 /** How far below the lane's heading a tile's sheet stands. */
 async function gapUnder(head: Locator, sheet: Locator) {
@@ -270,21 +300,19 @@ async function tuck(page: Page, head: Locator, sheet: Locator, by: number) {
   }
 }
 
-/**
- * Brings MAIN-403 into view one of the board's ways: the keyboard walking up to it from the
- * tile below, or a press on the part of it in view, which opens it.
- */
+/** Brings a tile in one of the board's ways, from MAIN-404 below MAIN-403 or on MAIN-403 itself. */
 async function bring(page: Page, epic: Locator, way: Way) {
-  const tile = epic.locator('li[data-reference="MAIN-403"]')
-  if (way === 'walk') {
-    await epic.locator('li[data-reference="MAIN-404"] .tile-open').evaluate((node: HTMLElement) => {
+  const below = epic.locator('li[data-reference="MAIN-404"] .tile-open')
+  if (way !== 'press') {
+    await below.evaluate((node: HTMLElement) => {
       node.focus({ preventScroll: true })
     })
     await page.keyboard.press('ArrowUp')
-    await expect(tile.locator('.tile-open')).toBeFocused()
+    const tile = epic.locator(`li[data-reference="${BROUGHT[way]}"] .tile-open`)
+    await expect(tile).toBeFocused()
     return
   }
-  const box = await tile.locator('.work-item-tile').boundingBox()
+  const box = await epic.locator('li[data-reference="MAIN-403"] .work-item-tile').boundingBox()
   const heading = await epic.locator('.lane-head').boundingBox()
   if (!box || !heading) throw new Error('the tile is not on screen')
   await page.mouse.click(
@@ -296,12 +324,14 @@ async function bring(page: Page, epic: Locator, way: Way) {
 
 /**
  * Leaves MAIN-403, the second tile of MAIN-401's Backlog, 12px under its lane's heading held at
- * the top, brings it in, and says how far below the heading it then stands, against the gap the
- * lane keeps under its heading where nothing is scrolled.
+ * the top, brings a tile in, and says how far below the heading it then stands, against the gap
+ * the lane keeps under its heading where nothing is scrolled.
  */
 async function bringsTileIn(page: Page, way: Way) {
   const board = page.locator('.work-item-lanes')
-  const epic = page.locator('.board-lane.open').first()
+  const epic = page.locator('.board-lane.open', {
+    has: page.locator('li[data-reference="MAIN-404"]'),
+  })
   const head = epic.locator('.lane-head')
   const sheet = (reference: string) =>
     epic.locator(`li[data-reference="${reference}"] .work-item-tile`)
@@ -313,7 +343,7 @@ async function bringsTileIn(page: Page, way: Way) {
   await settle(board)
   const heading = await head.boundingBox()
   const height = heading?.height ?? Number.NaN
-  return { after: await gapUnder(head, sheet('MAIN-403')), before, height, normal }
+  return { after: await gapUnder(head, sheet(BROUGHT[way])), before, height, normal }
 }
 
 for (const width of [320, 390, 760, 1280])

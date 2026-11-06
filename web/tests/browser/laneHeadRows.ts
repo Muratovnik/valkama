@@ -3,7 +3,8 @@
  * reference's and the title's letters, the state's dot and word, the counts, each note of work
  * out of sight line by line, and each action's glyph or word. Boxes are what is drawn, not the
  * boxes that hold it, and they are relative to the heading's own corner. The members are then
- * sorted into the rows they stand on.
+ * sorted into the rows they stand on, the two actions as one: the glyphs of a lone pair stand at
+ * heights of their own, and would count as rows of their own.
  */
 import type { Locator } from '@playwright/test'
 
@@ -19,6 +20,8 @@ export interface Part {
 export interface Reading {
   /** Whether the actions are drawn: they are see-through at rest where a pointer can hover. */
   actionsShown: boolean
+  /** Whether the title, whole, and the actions after it would fit the heading's first line. */
+  besideWhole: boolean
   height: number
   parts: Part[]
   /** The members of each row, top to bottom. */
@@ -111,10 +114,41 @@ const drawnHeading = (head: Element): Drawn => {
   }
 }
 
+/** Whether the title, whole, the gap its words keep and the actions fit the heading's width; runs
+ *  in the page. */
+const besideWholeIn = (head: Element): boolean => {
+  const words = head.querySelector('.lane-words')
+  const title = head.querySelector('.lane-title')
+  const actions = head.querySelector('.lane-actions')
+  if (!words || !title || !actions) return true
+  const origin = head.getBoundingClientRect()
+  const end =
+    words.getBoundingClientRect().right - origin.left + title.scrollWidth - title.clientWidth
+  const gap = Number.parseFloat(getComputedStyle(words).columnGap)
+  return end + gap + actions.getBoundingClientRect().width <= origin.width + 0.5
+}
+
 /** The members of each row: a part whose middle falls inside a row already found stands on it. */
 function rowsOf(parts: Part[]): Member[][] {
+  const actions = parts.filter(({ member }) => member === 'action').map(({ box }) => box)
+  const merged: Part[] = [
+    ...parts.filter(({ member }) => member !== 'action'),
+    ...(actions.length > 0
+      ? [
+          {
+            member: 'action' as const,
+            box: {
+              bottom: Math.max(...actions.map(({ bottom }) => bottom)),
+              left: Math.min(...actions.map(({ left }) => left)),
+              right: Math.max(...actions.map(({ right }) => right)),
+              top: Math.min(...actions.map(({ top }) => top)),
+            },
+          },
+        ]
+      : []),
+  ]
   const rows: { bottom: number; members: Member[]; top: number }[] = []
-  for (const { box, member } of parts.toSorted((one, two) => one.box.top - two.box.top)) {
+  for (const { box, member } of merged.toSorted((one, two) => one.box.top - two.box.top)) {
     const middle = (box.top + box.bottom) / 2
     const row = rows.find((one) => middle >= one.top - 0.5 && middle <= one.bottom + 0.5)
     if (!row) {
@@ -134,6 +168,7 @@ export async function readHeading(head: Locator): Promise<Reading> {
   const whole = drawn.letterEnds.findIndex((end) => end > drawn.titleEnd + 0.5)
   return {
     actionsShown: drawn.actionsShown,
+    besideWhole: await head.evaluate(besideWholeIn),
     height: drawn.height,
     parts: drawn.parts,
     rows: rowsOf(drawn.parts),
