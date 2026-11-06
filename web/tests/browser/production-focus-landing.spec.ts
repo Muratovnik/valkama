@@ -1,6 +1,6 @@
 /**
  * Where the interface moves focus in answer to an action, in the built app: focus moves there
- * whatever the reader used, and the ring is drawn only when a key started the action. The owner
+ * whatever the reader used, and the ring is drawn only when a key was the last input. The owner
  * chose no ring after a press of a mouse, pen or finger, after one stood round a reply they had
  * just sent with the mouse; a keyboard user still sees where focus went (WCAG 2.4.7).
  */

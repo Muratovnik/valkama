@@ -243,7 +243,7 @@ function retryMark() {
 }
 
 /* A reply takes focus from the press that showed it or the write that made it, and
-   rings as it does when a key started it. Its words run to both edges of the reply, so the
+   rings only when a key was the last input. Its words run to both edges of the reply, so the
    ring stands clear of them (`focus-landing`); at two pixels it lay on the letters. The inset
    before the replies' line is wider than the ring at every width, so the two never cross. */
 .reply {
