@@ -5,10 +5,12 @@
  * of the number they count for.
  */
 import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, serve, shot } from './boardPage.ts'
-import { drawnParts, overlaps, sameBoxes } from './laneHeadGeometry.ts'
+import { drawnParts, overlaps, sameBoxes, settle } from './laneHeadGeometry.ts'
+import { readHeading } from './laneHeadRows.ts'
 import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
 
@@ -263,3 +265,64 @@ test('at 1280px an epic heading keeps its actions in a place of their own on hov
     }
   }
 })
+
+/**
+ * A short title on a phone: where its state fits beside it whole, the base drew the state there
+ * and the counts with the actions on the line below. Held to one part, the state and the counts
+ * below the title once left the actions a third line of their own, an empty band at rest.
+ */
+async function shortTitleRows(page: Page) {
+  const head = page.locator('.lane-head', {
+    has: page.locator('.lane-reference', { hasText: 'MAIN-420' }),
+  })
+  const found: string[] = []
+  let fitting = 0
+  for (let width = 320; width <= 400; width += 2) {
+    await page.setViewportSize({ width, height: 900 })
+    await settle(head)
+    // The toggle drawn with its title whole, the heading's gap and the state, against its width.
+    const fits = await head.evaluate((node) => {
+      const toggle = node.querySelector('.lane-toggle')
+      const title = node.querySelector('.lane-title')
+      const state = node.querySelector('.lane-state')
+      if (!toggle || !title || !state) return false
+      const range = document.createRange()
+      range.selectNodeContents(title)
+      const whole =
+        toggle.getBoundingClientRect().width -
+        title.getBoundingClientRect().width +
+        range.getBoundingClientRect().width
+      const gap = Number.parseFloat(getComputedStyle(node).columnGap)
+      return whole + gap + state.getBoundingClientRect().width <= node.getBoundingClientRect().width
+    })
+    const { rows } = await readHeading(head)
+    const lone = rows.some((row) => row.every((member) => member === 'action'))
+    fitting += fits ? 1 : 0
+    if (fits && (rows.length > 2 || lone))
+      found.push(`${width}px: ${rows.map((row) => row.join(' + ')).join(' / ')}`)
+  }
+  return { fitting, found }
+}
+
+for (const locale of ['en-US', 'ru-RU'])
+  for (const finger of [false, true])
+    test.describe(`${locale}, ${finger ? 'where only a finger presses' : 'with a pointer'}`, () => {
+      test.use(finger ? { locale, hasTouch: true, isMobile: true } : { locale })
+
+      test('a short title keeps its state beside it and its actions with the counts', async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width: 390, height: 900 })
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await installBackend(page)
+        await serve(page)
+        await serveWide(page)
+        await openBoard(page)
+        await page.evaluate(() => document.fonts.ready)
+        await page.mouse.move(0, 0)
+        const { fitting, found } = await shortTitleRows(page)
+        // A walk on which the state never fitted beside the title would prove nothing.
+        expect(fitting).toBeGreaterThan(5)
+        expect(found).toEqual([])
+      })
+    })

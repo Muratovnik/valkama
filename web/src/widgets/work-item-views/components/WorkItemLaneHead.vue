@@ -58,17 +58,20 @@ const chainLabel = computed(() =>
   t('workItem.lanes.showChain', { reference: props.lane.epic?.reference ?? '' }),
 )
 
+const head = ref<HTMLElement | null>(null)
 const toggle = ref<HTMLElement | null>(null)
 const tail = ref<HTMLElement | null>(null)
 const actions = ref<HTMLElement | null>(null)
-const { place } = useLaneActionsPlace({ actions, tail, toggle }, () => [
+const { layout } = useLaneActionsPlace({ actions, head, tail, toggle }, () => [
   props.left,
   props.right,
   counts.value,
   stateShown.value,
 ])
-const crowded = computed(() => place.value === 'beside')
-const tied = computed(() => place.value === 'tied')
+const crowded = computed(() => layout.value.place === 'beside')
+const tied = computed(() => layout.value.place === 'tied')
+// The state on the title's line, apart from the counts: one of the two places below says it.
+const raised = computed(() => layout.value.raised)
 
 // The spaces live in the strings: a template trims the space before a tag
 // closes, which ran «To the right:» into the count for a screen reader.
@@ -80,6 +83,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
 <template>
   <header
+    ref="head"
     class="lane-head"
     :class="{ acting: props.lane.epic, away, crowded, tied }"
   >
@@ -106,12 +110,19 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         <span class="lane-title">{{ title }}</span>
       </span>
     </button>
+    <SemanticState
+      v-if="props.lane.epic && raised"
+      class="lane-state"
+      dimension="work-item-state"
+      :state="props.lane.epic.state.category"
+      :label="props.lane.epic.state.name"
+    />
     <span
       ref="tail"
       class="lane-tail"
     >
       <SemanticState
-        v-if="props.lane.epic"
+        v-if="props.lane.epic && !raised"
         class="lane-state"
         dimension="work-item-state"
         :class="{ 'visually-hidden': !stateShown }"
@@ -306,7 +317,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
 /* The state, the counts, the note of work out of sight and an epic's actions:
    beside the title while they fit there, else on the rows below, where they wrap
-   part by part. Wherever the actions stand, a place of their width is the last
+   part by part. The state leaves them for the title's line where it fits there
+   and the heading takes a line fewer (`useLaneActionsPlace`): under a short title
+   it and the counts left the actions a line of their own, which the state beside
+   the title gives back. Wherever the actions stand, a place of their width is the last
    part, so whether the tail fits beside the title does not depend on where they
    stand. The lines stand apart by their parts' own margin rather than by a gap,
    so the empty place, wrapped onto a line of its own, is a line of no height. */

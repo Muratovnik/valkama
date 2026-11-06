@@ -7,8 +7,8 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { placeOf } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
-import type { LaneLines } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
+import { layoutOf, placeOf } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
+import type { LaneHead, LaneLines } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
 
 const px = (pixels: number) => pixels * 64
 
@@ -62,4 +62,59 @@ test('alone at the end where the last part starts its line or does not fit one w
 test('a part wider than the line stands on a line of its own, and nothing follows it there', () => {
   assert.equal(placeOf({ ...phone, parts: [px(400)], state: -1 }), 'end')
   assert.equal(placeOf({ ...phone, parts: [px(400), px(40)], state: -1 }), 'end')
+})
+
+/** A short title's heading on a phone: the state and the counts below it, 60px left beside it. */
+const short: LaneHead = {
+  actions: px(80),
+  first: px(60),
+  gap: px(12),
+  line: px(292),
+  parts: [px(40), px(200)],
+  state: 0,
+  titleGap: px(8),
+  wraps: true,
+}
+
+test('the state goes up beside a short title where the actions would otherwise stand alone', () => {
+  // Below: 40 + 12 + 200 = 252 leaves no room for 12 + 80, and the counts cannot go down with
+  // them without leaving the state alone, so they would take a third line. With the state beside
+  // the title (12 + 40 <= 60), 200 + 12 + 80 = 292 fills the second line exactly.
+  assert.deepEqual(layoutOf(short), { place: 'end', raised: true })
+  // A pixel more of counts and the state going up saves nothing: the actions stand alone either
+  // way, so it stays with the counts.
+  assert.deepEqual(layoutOf({ ...short, parts: [px(40), px(200) + 1] }), {
+    place: 'end',
+    raised: false,
+  })
+})
+
+test('the state stays with the counts where it does not fit beside the whole title', () => {
+  assert.deepEqual(layoutOf({ ...short, first: px(52) - 1 }), { place: 'end', raised: false })
+  assert.deepEqual(layoutOf({ ...short, first: px(52) }), { place: 'end', raised: true })
+})
+
+test('the state stays with the counts where going up saves no line', () => {
+  // Everything after the title fits one line: 40 + 12 + 100 + 12 + 80 = 244.
+  assert.deepEqual(layoutOf({ ...short, parts: [px(40), px(100)] }), {
+    place: 'end',
+    raised: false,
+  })
+  // On a line that does not wrap the state stays where it is whatever it would save.
+  assert.deepEqual(layoutOf({ ...short, wraps: false }), { place: 'end', raised: false })
+})
+
+test('beside the title the actions need room after a state gone up as well', () => {
+  // A note of 250 cannot end its line with the actions, the title stays whole beside them
+  // (8 + 80 <= 100), so they stand there and the state stays below: going up, it would leave
+  // 100 - 52 = 48, short of them, and the heading would take a line more.
+  const wide = { ...short, first: px(100), parts: [px(40), px(200), px(250)] }
+  assert.deepEqual(layoutOf(wide), { place: 'beside', raised: false })
+})
+
+test('a heading with no state shown has nothing to raise', () => {
+  assert.deepEqual(layoutOf({ ...short, parts: [px(200)], state: -1 }), {
+    place: 'end',
+    raised: false,
+  })
 })
