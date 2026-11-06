@@ -65,6 +65,24 @@ describe('threadGroups', () => {
     const [row] = threadGroups([under], [])
     expect(row).toEqual({ key: 'question-unread', kind: 'detached', replies: [under] })
   })
+
+  it('stands a list in the thread of its comment, and never as a question waiting', () => {
+    const list = asked('l', 1, 'pending')
+    list.request = { ...list.request, comment_id: 1 }
+    const rows = threadGroups([root(1, 1)], [list, asked('q', 2, 'pending')])
+    expect(rows.map((row) => row.kind)).toEqual(['comment', 'question'])
+    expect(rows[0]?.kind === 'comment' && rows[0].list).toBe(list)
+    // The comment's own mark is what the unresolved view counts it by; the list adds nothing.
+    expect(threadCounts(rows)).toEqual({ markable: 1, threads: 2, unresolved: 2 })
+  })
+
+  it('stands a list whose comment this card does not hold as a question, so it is not lost', () => {
+    const list = asked('l', 1, 'pending')
+    list.request = { ...list.request, comment_id: 99 }
+    const rows = threadGroups([root(1, 1)], [list])
+    expect(rows.map((row) => row.key)).toEqual(['comment-1', 'question-l'])
+    expect(rows[0]?.kind === 'comment' && rows[0].list).toBeNull()
+  })
 })
 
 describe('where a thread stands', () => {

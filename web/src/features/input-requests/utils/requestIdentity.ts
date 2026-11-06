@@ -17,3 +17,10 @@ export function requestIdentity(entry: InputRequestEntry): string {
     entry.request.request_id,
   ])
 }
+
+/**
+ * A list an agent put under its comment rather than a question: it stands in that comment and
+ * nobody waits on it, so it is no question waiting for an answer anywhere it is counted.
+ */
+export const isCommentList = (entry: InputRequestEntry) =>
+  entry.request.comment_id !== null && entry.request.comment_id !== undefined

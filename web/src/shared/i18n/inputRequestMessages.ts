@@ -1,3 +1,4 @@
+import { commentListMessages } from '@/shared/i18n/commentListMessages.ts'
 import { inputRequestReviewMessages } from '@/shared/i18n/inputRequestReviewMessages.ts'
 
 export const inputRequestMessages = {
@@ -92,6 +93,7 @@ export const inputRequestMessages = {
       draftKeptChosen: 'Not sent. This is what you had chosen:',
       draftKeptBoth: 'Not sent. This is what you had chosen and written:',
       review: inputRequestReviewMessages.en.review,
+      list: commentListMessages.en.list,
     },
   },
   ru: {
@@ -184,6 +186,7 @@ export const inputRequestMessages = {
       draftKeptChosen: 'Не отправлено. Вот что вы выбрали:',
       draftKeptBoth: 'Не отправлено. Вот что вы выбрали и написали:',
       review: inputRequestReviewMessages.ru.review,
+      list: commentListMessages.ru.list,
     },
   },
 }

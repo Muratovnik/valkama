@@ -10,8 +10,9 @@
  * changed or gone since.
  *
  * A question is the widget that answers it (`RequestCard`), which reads as a comment
- * here. What is selected or written in it lives here, for as long as the card is open,
- * and is a draft: leaving asks first. A note still written when its question closed some
+ * here; a list an agent put under its comment stands in that comment (`CommentList`). What is
+ * selected or written in either lives here, for as long as the card is open, and is a draft:
+ * leaving asks first. A note still written when its question closed some
  * other way stays one, because it is the only copy of what was written.
  *
  * A thread takes its place when it is first seen here and keeps it for as long as the card
@@ -31,6 +32,7 @@ import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorCommentThread from '@/widgets/work-item-inspector/components/InspectorCommentThread.vue'
+import InspectorThreadFlags from '@/widgets/work-item-inspector/components/InspectorThreadFlags.vue'
 import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
 import {
   hasNewReply,
@@ -53,9 +55,10 @@ import {
   useThreadForms,
 } from '@/widgets/work-item-inspector/utils/useThreadForms.ts'
 
+import CommentList from '@/features/input-requests/components/CommentList.vue'
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
-import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
+import { isCommentList, requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -91,6 +94,9 @@ watch(thread, stopStrayPresses, { flush: 'post' })
 
 const drafts = ref<Record<string, RequestDraft>>({})
 const draftFor = (entry: InputRequestEntry) => drafts.value[requestIdentity(entry)] ?? EMPTY_DRAFT
+const keepDraft = (entry: InputRequestEntry | null, draft: RequestDraft) => {
+  if (entry) drafts.value[requestIdentity(entry)] = draft
+}
 // The rule `RequestList` asks by too: a change of the answer counts once it says something new.
 useDraftSource('answer', () =>
   props.questions.some((entry) => holdsDraft(entry.request, draftFor(entry))),
@@ -109,8 +115,9 @@ const kept = ref(new Set<string>())
 watch(
   () => props.questions,
   (entries) => {
-    for (const { request } of entries)
-      if (request.status === 'pending') kept.value.add(request.request_id)
+    for (const entry of entries)
+      if (entry.request.status === 'pending' && !isCommentList(entry))
+        kept.value.add(entry.request.request_id)
   },
   { immediate: true },
 )
@@ -174,8 +181,12 @@ function when(value: string | null) {
 function fresh(row: ThreadRow) {
   return hasNewReply(row, places.value.get(row.key))
 }
-function draftSetAside(row: ThreadRow) {
-  return holdsWords(row.key) && !isOpen(row.key)
+/** Under a question: a reply came in since it took its place, or a draft was set aside. */
+function tailFlags(row: ThreadRow) {
+  return [
+    ...(fresh(row) ? [t('threads.newReply')] : []),
+    ...(holdsWords(row.key) && !isOpen(row.key) ? [t('threads.draft')] : []),
+  ]
 }
 function questionParent(row: Extract<ThreadRow, { kind: 'question' }>) {
   return { reply_to_request: row.entry.request.request_id }
@@ -221,24 +232,10 @@ defineExpose({ revealQuestion })
           </template>
         </RequestCard>
         <div
-          v-if="row.replies.length || isOpen(row.key) || fresh(row) || draftSetAside(row)"
+          v-if="row.replies.length || isOpen(row.key) || tailFlags(row).length"
           class="thread-tail"
         >
-          <div
-            v-if="fresh(row) || draftSetAside(row)"
-            class="thread-tail-flags"
-          >
-            <span
-              v-if="fresh(row)"
-              class="thread-tail-flag"
-              >{{ t('threads.newReply') }}</span
-            >
-            <span
-              v-if="draftSetAside(row)"
-              class="thread-tail-flag"
-              >{{ t('threads.draft') }}</span
-            >
-          </div>
+          <InspectorThreadFlags :flags="tailFlags(row)" />
           <InspectorThreadReplies
             :busy="busy"
             :can-mark="false"
@@ -267,7 +264,21 @@ defineExpose({ revealQuestion })
           :writable="writable"
           @refresh="emit('refresh')"
           @select="emit('select', $event)"
-        />
+        >
+          <template
+            v-if="row.list"
+            #list
+          >
+            <CommentList
+              :entry="row.list"
+              :draft="draftFor(row.list)"
+              :item-closed="item.state.is_terminal"
+              :suggest="suggest"
+              @update:draft="keepDraft(row.list, $event)"
+              @updated="emit('answered', $event)"
+            />
+          </template>
+        </InspectorCommentThread>
       </li>
       <li
         v-else
@@ -345,13 +356,6 @@ defineExpose({ revealQuestion })
     outline: 1px solid;
     outline-offset: -1px;
   }
-}
-
-.thread-tail-flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  align-items: center;
 }
 
 .thread-tail-flag {

@@ -35,6 +35,8 @@ const props = defineProps<{
   open: boolean
   option: InputRequestOption
   view: DescriptionView
+  /** A mark drawn in the control's place says it is chosen, so the word is left to a reader. */
+  quietMark?: boolean
 }>()
 const { t } = useI18n()
 provideReferenceLinks((reference, parent) => (props.live ? parent(reference) : null))
@@ -76,6 +78,7 @@ const label = computed(() => {
       <span
         v-if="chosenMark"
         class="request-option-mark"
+        :class="{ 'visually-hidden': quietMark }"
         >{{ t('requests.chosen') }}</span
       >
     </span>

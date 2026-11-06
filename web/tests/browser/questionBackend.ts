@@ -141,11 +141,14 @@ export async function installQuestions(page: Page, entries: InputRequestEntry[])
       if (url.pathname.endsWith('/requests')) {
         const status = url.searchParams.get('status')
         const reference = url.searchParams.get('reference')
+        // A read of everything waiting leaves out every list under a comment, as the server's does.
         const items = entries
           .filter(
             (entry) =>
               (!status || entry.request.status === status) &&
-              (!reference || entry.request.reference === reference),
+              (reference
+                ? entry.request.reference === reference
+                : (entry.request.comment_id ?? null) === null),
           )
           .sort((a, b) => b.request.created_at.localeCompare(a.request.created_at))
         return route.fulfill({

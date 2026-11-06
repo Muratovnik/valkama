@@ -387,15 +387,4 @@ defineExpose({ focus })
     var(--space-half) + (var(--size-control-height-compact) - var(--size-control-inline)) / 2
   );
 }
-
-/* Sized by the type and centred on the first line by its height, however the label wraps. Its
-   margin is the step to the words, which the row's column has only where a control stands. */
-.request-option-input {
-  inline-size: var(--font-size-interface);
-  block-size: var(--font-size-interface);
-  margin-block: 0;
-  margin-inline: 0 var(--space-2);
-  font: inherit;
-  translate: 0 calc((1lh - var(--font-size-interface)) / 2);
-}
 </style>

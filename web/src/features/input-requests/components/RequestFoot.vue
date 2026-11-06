@@ -17,26 +17,33 @@ import RequestNoteToggle from '@/features/input-requests/components/RequestNoteT
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 
-const props = defineProps<{
-  /** Throwing away a change was asked, and the next word decides. */
-  askingCancel: boolean
-  busy: boolean
-  changing: boolean
-  declining: boolean
-  disabled: boolean
-  dismissable: boolean
-  /** Why the last write did not go through; empty while nothing failed. */
-  error: string
-  /** The comment on the question can be opened from here, and how it stands. */
-  note: { disabled: boolean; open: boolean; written: boolean } | null
-  refreshable: boolean
-  standalone: boolean
-  /** The form is long enough to keep this in sight while it scrolls. */
-  stuck: boolean
-  /** Points of a review shown with no decision. */
-  undecided: number
-  waiting: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** Throwing away a change was asked, and the next word decides. */
+    askingCancel: boolean
+    busy: boolean
+    changing: boolean
+    declining: boolean
+    disabled: boolean
+    dismissable: boolean
+    /** Why the last write did not go through; empty while nothing failed. */
+    error: string
+    /** The comment on the question can be opened from here, how it stands, and what it is on. */
+    note: { disabled: boolean; open: boolean; written: boolean; title?: string } | null
+    refreshable: boolean
+    standalone: boolean
+    /** The form is long enough to keep this in sight while it scrolls. */
+    stuck: boolean
+    /** Points of a review shown with no decision. */
+    undecided: number
+    waiting: boolean
+    /** Somebody waits on the answer, so it can be refused. */
+    declinable?: boolean
+    /** What Send says, where it sends something other than an answer. */
+    sendWord?: string
+  }>(),
+  { declinable: true, sendWord: undefined },
+)
 const emit = defineEmits<{
   'discard': []
   'dismiss': []
@@ -86,10 +93,12 @@ defineExpose({
       ref="actions"
       :busy="busy"
       :changing="changing"
+      :declinable="declinable"
       :declining="declining"
       :disabled="disabled"
       :dismissable="dismissable"
       :refreshable="refreshable"
+      :send-word="sendWord"
       :standalone="standalone"
       :waiting="waiting"
       @dismiss="emit('dismiss')"
@@ -102,7 +111,7 @@ defineExpose({
         v-if="note"
         :disabled="note.disabled"
         :open="note.open"
-        :title="t('requests.questionNote')"
+        :title="note.title ?? t('requests.questionNote')"
         :written="note.written"
         @press="emit('note')"
       />

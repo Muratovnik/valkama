@@ -12,6 +12,11 @@
  * stand in that same column, so nothing has to work out where the words are. A control takes
  * the column before it, which has no width where there is no control. The column ends where
  * the excerpt ends, short of the toggle, so opening only adds lines to what was being read.
+ *
+ * A dense row (`dense`) is a list's under a comment: no ground and no inset at its start, so
+ * its control stands on the edge of the comment's words, and a step less between its lines.
+ * The control says what is ticked, and in an answered list a mark in the control's place does,
+ * so the word on a chosen row is left to a reader.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,6 +34,8 @@ const props = withDefaults(
     chosen: boolean
     option: InputRequestOption
     view: DescriptionView
+    /** A list's row under a comment: no ground, no inset at its start, a step less tall. */
+    dense?: boolean
     /** The whole group is out of use, so a press on the row does nothing. */
     disabled?: boolean
     /** The row takes a press. A form's row; an answered question's rows do not. */
@@ -36,7 +43,7 @@ const props = withDefaults(
     /** Whether its toggle is a tab stop; a form keeps one, on the row the keyboard stands on. */
     toggleStop?: number
   }>(),
-  { disabled: false, pressable: false, toggleStop: undefined },
+  { dense: false, disabled: false, pressable: false, toggleStop: undefined },
 )
 const open = defineModel<boolean>('open', { default: false })
 const { t } = useI18n()
@@ -62,7 +69,7 @@ const describedBy = computed(() => {
 <template>
   <div
     class="request-option"
-    :class="{ 'is-chosen': chosen, 'is-pressable': pressable && !disabled }"
+    :class="{ 'is-chosen': chosen, 'is-dense': dense, 'is-pressable': pressable && !disabled }"
   >
     <component
       :is="lineTag"
@@ -80,6 +87,7 @@ const describedBy = computed(() => {
         :live="!pressable"
         :note-id="noteId"
         :open="open"
+        :quiet-mark="dense"
         :option="option"
         :view="view"
       />
@@ -133,10 +141,17 @@ const describedBy = computed(() => {
 
   /* A forced palette clears the ground, which is all that sets a chosen row apart to the eye. */
   @media (forced-colors: active) {
-    &.is-chosen {
+    &.is-chosen:not(.is-dense) {
       outline: 1px solid CanvasText;
       outline-offset: -1px;
     }
+  }
+
+  /* No ground to set it apart: its control, or the mark in its place, says what is ticked. */
+  &.is-dense,
+  &.is-dense.is-pressable:hover,
+  &.is-dense.is-chosen {
+    background: none;
   }
 }
 
@@ -152,6 +167,21 @@ const describedBy = computed(() => {
   .is-pressable > & {
     cursor: pointer;
   }
+
+  .is-dense > & {
+    padding: var(--space-1) 0;
+  }
+}
+
+/* Sized by the type and centred on the first line by its height, however the label wraps. Its
+   margin is the step to the words, which the row's column has only where a control stands. */
+:slotted(.request-option-input) {
+  inline-size: var(--font-size-interface);
+  block-size: var(--font-size-interface);
+  margin-block: 0;
+  margin-inline: 0 var(--space-2);
+  font: inherit;
+  translate: 0 calc((1lh - var(--font-size-interface)) / 2);
 }
 
 .request-option-words {
@@ -165,6 +195,33 @@ const describedBy = computed(() => {
   &[aria-expanded='true'] .request-option-glyph {
     rotate: 180deg;
   }
+
+  /* A line's height, as the row's words stand: a header's control would make the row taller. */
+  .is-dense > & {
+    --size-control-height-compact: var(--size-control-inline);
+
+    position: relative;
+    margin-block-start: 0;
+    margin-inline-end: 0;
+  }
+}
+
+/* A dense row stands a finger's height short of a tap, so where a finger presses, the press
+   reaches over the rows beside it by as much as it lacks. */
+@media (pointer: coarse) {
+  .is-dense > .request-option-toggle::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--size-control-height-compact) - var(--size-control-target)) / 2);
+  }
+}
+
+@container overlay (width <= 30rem) {
+  .is-dense > .request-option-toggle::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--size-control-height-compact) - var(--size-control-target)) / 2);
+  }
 }
 
 /* In the words' column, and over the row's lower inset up to the step between the row's own
@@ -174,6 +231,11 @@ const describedBy = computed(() => {
   grid-column: 2;
   padding: 0 var(--space-3) var(--space-2) 0;
   margin-block-start: calc(var(--space-half) - var(--space-2));
+
+  .is-dense > & {
+    padding: 0 0 var(--space-1);
+    margin-block-start: calc(var(--space-half) - var(--space-1));
+  }
 }
 
 .request-option-detail {

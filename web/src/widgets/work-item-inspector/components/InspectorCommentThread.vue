@@ -12,6 +12,8 @@
  * replying, making steps of its list where it has one, and on a report making it the
  * outcome, so the first two never move. The mark's
  * icon names what a press will do, and the line of the mark says how the thread stands.
+ *
+ * A list the agent put under the root stands under the root's words (`list`), in this sheet.
  */
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 import InspectorEntrySteps from '@/widgets/work-item-inspector/components/InspectorEntrySteps.vue'
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
 import InspectorStepsAction from '@/widgets/work-item-inspector/components/InspectorStepsAction.vue'
+import InspectorThreadFlags from '@/widgets/work-item-inspector/components/InspectorThreadFlags.vue'
 import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
 import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
 import type { ThreadRow } from '@/widgets/work-item-inspector/utils/threadRows.ts'
@@ -132,9 +135,7 @@ const resolveLabel = computed(() => t(mark.value ? 'threads.reopen' : 'threads.r
 const firstLine = computed(() =>
   plainText(root.value.report ? root.value.report.done : root.value.body),
 )
-const replyCount = computed(() =>
-  props.row.replies.length ? t('threads.replyCount', props.row.replies.length) : '',
-)
+
 /** A reply newer than the mark says the thread was spoken in since someone closed it. */
 const replyAfterMark = computed(() => {
   const given = mark.value
@@ -149,7 +150,11 @@ const flags = computed(() => [
   ...(props.fresh ? [t('threads.newReply')] : []),
   ...(hasDraft(key.value) && !formOpen.value ? [t('threads.draft')] : []),
 ])
-const hasFlags = computed(() => flags.value.length > 0)
+/** Folded, the thread also says how many replies it holds, ahead of the rest. */
+const foldedFlags = computed(() => [
+  ...(props.row.replies.length ? [t('threads.replyCount', props.row.replies.length)] : []),
+  ...flags.value,
+])
 
 watch(
   folded,
@@ -212,22 +217,7 @@ function sendMark() {
         >
         · {{ firstLine }}
       </p>
-      <div
-        v-if="replyCount || hasFlags"
-        class="thread-flags"
-      >
-        <span
-          v-if="replyCount"
-          class="thread-flag"
-          >{{ replyCount }}</span
-        >
-        <span
-          v-for="flag in flags"
-          :key="flag"
-          class="thread-flag"
-          >{{ flag }}</span
-        >
-      </div>
+      <InspectorThreadFlags :flags="foldedFlags" />
     </template>
     <template v-else>
       <EntryHead>
@@ -291,17 +281,8 @@ function sendMark() {
         class="thread-text"
         :text="root.body"
       />
-      <div
-        v-if="hasFlags"
-        class="thread-flags"
-      >
-        <span
-          v-for="flag in flags"
-          :key="flag"
-          class="thread-flag"
-          >{{ flag }}</span
-        >
-      </div>
+      <slot name="list" />
+      <InspectorThreadFlags :flags="flags" />
       <p
         v-if="reopenError"
         class="thread-error"
@@ -371,19 +352,6 @@ function sendMark() {
 
 .thread-text {
   font: var(--font-editor);
-}
-
-.thread-flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  align-items: center;
-  min-width: 0;
-}
-
-.thread-flag {
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 .thread-mark {

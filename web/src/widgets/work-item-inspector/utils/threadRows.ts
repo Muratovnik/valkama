@@ -7,9 +7,19 @@ export type ThreadComment = WorkItem['comments'][number]
  * One thread of the discussion. A reply whose parent this card cannot read stands on its
  * own (`detached`): the questions come as a list that may be cut or fail, and what a
  * reply says is not lost with the question it answers.
+ *
+ * A list an agent put under its comment comes among the questions and stands in that
+ * comment's thread (`list`), never as a question of its own. One whose comment this card
+ * does not hold stands as a question, so what it offers is not lost with the comment.
  */
 export type ThreadRow =
-  | { comment: ThreadComment; key: string; kind: 'comment'; replies: ThreadComment[] }
+  | {
+      comment: ThreadComment
+      key: string
+      kind: 'comment'
+      list: InputRequestEntry | null
+      replies: ThreadComment[]
+    }
   | { entry: InputRequestEntry; key: string; kind: 'question'; replies: ThreadComment[] }
   | { key: string; kind: 'detached'; replies: ThreadComment[] }
 
@@ -51,17 +61,28 @@ export function threadGroups(
     replies.delete(key)
     return under
   }
-  const rows: ThreadRow[] = [
-    ...comments
-      .filter((comment) => isRoot(comment))
-      .map((comment): ThreadRow => {
-        const key = `comment-${comment.id}`
-        return { comment, key, kind: 'comment', replies: take(key) }
-      }),
-    ...questions.map((entry): ThreadRow => {
-      const key = `question-${entry.request.request_id}`
-      return { entry, key, kind: 'question', replies: take(key) }
+  const roots = comments.filter((comment) => isRoot(comment))
+  const held = new Set(roots.map((comment) => comment.id))
+  /** Each list by the comment it stands in, where this card holds that comment. */
+  const lists = new Map(
+    questions.flatMap((entry) => {
+      const under = entry.request.comment_id
+      return typeof under === 'number' && held.has(under) ? [[under, entry] as const] : []
     }),
+  )
+  const placed = new Set(lists.values())
+  const rows: ThreadRow[] = [
+    ...roots.map((comment): ThreadRow => {
+      const key = `comment-${comment.id}`
+      const list = lists.get(comment.id) ?? null
+      return { comment, key, kind: 'comment', list, replies: take(key) }
+    }),
+    ...questions
+      .filter((entry) => !placed.has(entry))
+      .map((entry): ThreadRow => {
+        const key = `question-${entry.request.request_id}`
+        return { entry, key, kind: 'question', replies: take(key) }
+      }),
   ]
   for (const [key, under] of replies) rows.push({ key, kind: 'detached', replies: under })
   return rows

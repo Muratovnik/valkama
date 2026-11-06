@@ -33,25 +33,37 @@
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
+ *
+ * A list under a comment is not declined (`declinable` false): nobody waits on it, so it has
+ * only its way on, in its own words (`sendWord`), until a change of it is open. The row is
+ * the same row: with no asking there is no place kept for it, so what stands before the way on
+ * is only what is offered there, and with nothing offered the way on ends the comment's line.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import VButton from '@/shared/ui/VButton.vue'
 
-const props = defineProps<{
-  busy: boolean
-  /** The form of a change is open. */
-  changing: boolean
-  /** Whether declining was asked for, and the next word on it decides. */
-  declining: boolean
-  disabled: boolean
-  /** It stopped waiting, in a list it can be taken out of. */
-  dismissable: boolean
-  refreshable: boolean
-  standalone: boolean
-  waiting: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    busy: boolean
+    /** The form of a change is open. */
+    changing: boolean
+    /** Whether declining was asked for, and the next word on it decides. */
+    declining: boolean
+    disabled: boolean
+    /** It stopped waiting, in a list it can be taken out of. */
+    dismissable: boolean
+    refreshable: boolean
+    standalone: boolean
+    waiting: boolean
+    /** Somebody waits on the answer, so it can be refused. */
+    declinable?: boolean
+    /** What Send says, where it sends something other than an answer. */
+    sendWord?: string
+  }>(),
+  { declinable: true, sendWord: undefined },
+)
 const emit = defineEmits<{
   'dismiss': []
   'onward': []
@@ -64,10 +76,13 @@ const root = ref<HTMLElement | null>(null)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
 const asksTwo = computed(() => props.waiting || props.changing)
-/** The words that keep the asking's place while a question waits, unseen. */
-const askingRoom = computed(() => (props.waiting ? t('requests.declineAsked') : undefined))
+/** It waits and can be refused, so the step of declining may come and needs its place. */
+const declines = computed(() => props.waiting && props.declinable)
+const offersWayOut = computed(() => props.changing || props.declinable)
+/** The words that keep the asking's place while it can be asked, unseen. */
+const askingRoom = computed(() => (declines.value ? t('requests.declineAsked') : undefined))
 /** Something stands before the two answers, or their asking needs the place. */
-const leads = computed(() => props.waiting || props.standalone || props.refreshable)
+const leads = computed(() => declines.value || props.standalone || props.refreshable)
 const wayOutDisabled = computed(() => !props.changing && props.disabled)
 const wayOut = computed(() => {
   if (props.changing) {
@@ -84,7 +99,7 @@ const onward = computed(() => {
     const word = t('requests.saveChange')
     return { room: word, variant: 'primary' as const, word }
   }
-  const [word, room] = [t('requests.decline'), t('requests.answer')]
+  const [word, room] = [t('requests.decline'), props.sendWord ?? t('requests.answer')]
   return props.declining
     ? { room, variant: 'danger' as const, word }
     : { room: word, variant: 'primary' as const, word: room }
@@ -110,7 +125,7 @@ defineExpose({ focusWayOut })
     <div
       v-if="leads"
       class="request-lead"
-      :class="{ 'is-room': waiting, 'is-asking': declining }"
+      :class="{ 'is-room': declines, 'is-asking': declining }"
       :data-room="askingRoom"
     >
       <div class="request-lead-controls">
@@ -140,6 +155,7 @@ defineExpose({ focusWayOut })
       class="request-pair"
     >
       <VButton
+        v-if="offersWayOut"
         class="request-way-out request-held"
         :aria-disabled="busyMark"
         :data-room="wayOut.room"
@@ -239,11 +255,13 @@ defineExpose({ focusWayOut })
   }
 }
 
-/* What the host puts first stands on the row's left end, its glyph on the axis of the radios. */
+/* What the host puts first stands on the row's left end, its glyph on the axis of the radios,
+   which stand the rows' inset in from it: none where the rows have none (`--request-row-inset`). */
 :slotted(*) {
   position: relative;
   inset-inline-start: calc(
-    var(--space-3) + (var(--font-size-interface) - var(--size-control-inline)) / 2
+    var(--request-row-inset, var(--space-3)) +
+      (var(--font-size-interface) - var(--size-control-inline)) / 2
   );
   margin-inline-end: auto;
 }
