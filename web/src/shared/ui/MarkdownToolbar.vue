@@ -120,9 +120,15 @@ const viewOptions = computed(() => [
   padding: var(--space-1);
 }
 
+/* Under a finger or on a phone-wide screen an icon is a 44px target, drawn bare, as an
+   entry's actions are (`EntryHead`); two pixels apart they have no room to reach into. */
 .markdown-tools {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-half);
+
+  @media (pointer: coarse), (width <= 620px) {
+    --size-control-inline: var(--size-control-target);
+  }
 }
 </style>

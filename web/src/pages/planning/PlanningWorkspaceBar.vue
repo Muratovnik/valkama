@@ -197,6 +197,7 @@ function removeChip(token: WorkFilterToken) {
         class="workspace-action"
         variant="primary"
         :title="t('workItem.create')"
+        reach
         @click="emit('create')"
       >
         <span aria-hidden="true">+</span
@@ -440,6 +441,7 @@ function removeChip(token: WorkFilterToken) {
     margin-inline-start: 0;
   }
 
+  /* The action is its sign alone here, so it reaches as an icon button does (`reach`). */
   .workspace-action-text {
     position: absolute;
     width: 1px;

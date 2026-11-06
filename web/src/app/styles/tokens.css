@@ -544,7 +544,8 @@
      `--size-control-target` is now only the pointer target, and only where there is
      no label to widen the box: an icon button, a tag in a card foot, a 22px
      switch. It is spent on the hit area rather than on the drawing — an icon
-     button paints 40px and answers a click across 44. WCAG 2.5.8 asks 24px at
+     button paints 40px and, under a finger or on a phone-wide screen, answers a
+     press across 44 (`VButton`). WCAG 2.5.8 asks 24px at
      AA and 44 at AAA, so a labelled 40px control clears both by its width. */
   --size-control-height: 40px;
   --size-control-height-compact: 36px;

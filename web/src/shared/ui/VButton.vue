@@ -18,6 +18,12 @@ withDefaults(
     /** A square button holding one icon; its name comes from `aria-label`. */
     icon?: boolean
     /**
+     * The target an icon button has, for a button a narrow host shows as its sign alone,
+     * hiding its words: under a finger or on a phone-wide screen it answers a press across
+     * `--size-control-target` whatever it draws.
+     */
+    reach?: boolean
+    /**
      * `compact` rides a dense header beside the compact controls, as
      * `SegmentedControl` and `ChoiceSelect` do. `inline` rides a line of content — a
      * checklist step, a link row — where a control-height button would make the line
@@ -35,6 +41,7 @@ withDefaults(
     title: undefined,
     size: 'default',
     icon: false,
+    reach: false,
   },
 )
 </script>
@@ -42,7 +49,7 @@ withDefaults(
 <template>
   <button
     class="button"
-    :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon }]"
+    :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon, reach }]"
     :type="type"
     :disabled="disabled"
     :title="title"
@@ -191,6 +198,23 @@ withDefaults(
 
   &.icon-only.size-inline {
     min-width: var(--size-control-inline);
+  }
+
+  /* An icon has no words to widen its box, so under a finger or on a phone-wide screen
+     its target reaches `--size-control-target` past what it draws, and the row it stands
+     in keeps its height: the board's «+» drew 41×36 and answered a press across no more.
+     An inline icon grows its own box there instead (`EntryHead`), because a line of them
+     two pixels apart has no room around each to reach into. The button is the reach's
+     box only here, at the weight of the base rule, so a host that places it keeps its
+     own position. */
+  @media (pointer: coarse), (width <= 620px) {
+    position: relative;
+
+    &:is(.icon-only:not(.size-inline), .reach)::after {
+      content: '';
+      position: absolute;
+      inset: min(0px, calc((100% - var(--size-control-target)) / 2));
+    }
   }
 }
 </style>
