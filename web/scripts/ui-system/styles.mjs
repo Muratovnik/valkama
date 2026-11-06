@@ -154,6 +154,19 @@ const AREA_DECLARATION =
  */
 const MASK_IMAGE = /(?:^|[{;])\s*(?:-webkit-)?mask-image\s*:[^;{}]*/gi
 
+/**
+ * The source as the browser runs it: no style, markup or script comment. A comment cannot
+ * change a verdict either way: one standing between a block's `{` and its `mask-image` hid
+ * the declaration from the pattern above, and one that names a gradient drew none.
+ * A `//` after a colon is a URL's, not a comment.
+ */
+function uncommented(source) {
+  return source
+    .replaceAll(/\/\*[\s\S]*?\*\//g, ' ')
+    .replaceAll(/<!--[\s\S]*?-->/g, ' ')
+    .replaceAll(/(?<![:/\\])\/\/.*$/gm, ' ')
+}
+
 const SOURCE_RULES = [
   {
     // A card that took its kind's colour would argue with the state the card speaks for.
@@ -236,8 +249,8 @@ const SOURCE_RULES = [
     message: 'a disclosure belongs to VDisclosure',
   },
   {
-    when: ({ source }) =>
-      /\b(?:linear|radial|conic)-gradient\s*\(/i.test(source.replaceAll(MASK_IMAGE, '')),
+    when: ({ code }) =>
+      /\b(?:linear|radial|conic)-gradient\s*\(/i.test(code.replaceAll(MASK_IMAGE, '')),
     message: 'gradients are outside the Project Console visual contract',
   },
   {
@@ -401,6 +414,7 @@ export function scanUiSources(sources) {
     const component = file.endsWith('.vue')
     const subject = {
       source,
+      code: uncommented(source),
       markup: source.replaceAll(/<!--[\s\S]*?-->/g, ''),
       interfaceCopy: source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, ''),
     }
