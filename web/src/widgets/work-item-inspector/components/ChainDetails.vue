@@ -29,7 +29,7 @@ const bodyId = useId()
 
 /** One day is no history: nothing to draw, and so nothing to fold. */
 const charted = computed(() => props.series.length > 1)
-const chevron = computed(() => (open.value ? 'chevron-down' : 'chevron-right'))
+const chevron = computed(() => (open.value ? 'disclosure-open' : 'disclosure-closed'))
 /** Absent while the body is not drawn, since it would name nothing. */
 const controls = computed(() => (open.value ? bodyId : undefined))
 </script>
@@ -72,7 +72,9 @@ const controls = computed(() => (open.value ? bodyId : undefined))
   min-width: 0;
 }
 
-/* Its chevron stands on the section's edge, as a heading's first letter does. */
+/* Its chevron stands on the section's edge, as a heading's first letter does: the margin takes
+   back the inset the toggle's fill keeps under the pointer, and the glyph is drawn from its
+   square's edge. */
 .chain-details-toggle {
   justify-self: start;
   margin-inline-start: calc(-1 * var(--space-fill-inset));

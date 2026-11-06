@@ -572,6 +572,14 @@ chrome.
   from their headings, a session 8px in from its label and a step's box 6px in from the
   checklist's heading, three edges in one column. `production-card-list-edges.spec.ts`
   measures them.
+- A disclosure's chevron is the icon layer's `disclosure-closed` and `disclosure-open`: the
+  set's chevron drawn from its square's start edge, so the square stands on the column's
+  edge, the stroke starts there in both states, and the words after the square keep their
+  place. The set's own `chevron-right` and `chevron-down` start 9 and 6 of their 24 units in,
+  and a toggle that stood one on the edge drew its mark 6px in folded and 4px open; making
+  that up with a margin per host put «Chart and pace» and «Done» on two edges, one under the
+  other. `production-card-list-edges.spec.ts` and `production-settings-layout.spec.ts` measure
+  the drawn stroke against the column's first letter, folded and open.
 - Vertical rhythm inside a component is one `gap` declared by the container,
   never a margin per child. Three regions of a card each setting their own
   margin is how the card came to read tighter at the top than at the bottom

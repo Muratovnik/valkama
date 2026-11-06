@@ -46,9 +46,9 @@ describe('a disclosure', () => {
   it('draws the product chevron, turned down while open, beside the words', async () => {
     const wrapper = disclosure()
     const glyph = () => wrapper.get('button svg').classes().join(' ')
-    expect(glyph()).toContain('chevron-right')
+    expect(glyph()).toContain('disclosure-closed')
     await wrapper.get('button').trigger('click')
-    expect(glyph()).toContain('chevron-down')
+    expect(glyph()).toContain('disclosure-open')
     wrapper.unmount()
   })
 

@@ -38,6 +38,7 @@ import {
   CodeXml,
   Copy,
   CornerDownRight,
+  createLucideIcon,
   Database,
   ExternalLink,
   FileText,
@@ -76,6 +77,20 @@ import {
   X,
 } from '@lucide/vue'
 
+/**
+ * A disclosure's chevron, folded and open: the set's own two strokes, moved so that each starts
+ * on its square's start edge. The set draws a chevron inside a 24-unit square with bearings that
+ * differ by direction, the folded one from 9 units in and the open one from 6, so a toggle that
+ * stood the square on its column's edge drew its mark 6px in while folded and 4px in while open,
+ * and each disclosure made that up, or did not, on its own. Drawn from the edge, the mark stands
+ * where a heading's first letter does in both states, and the square keeps its size, so the
+ * words after it do not move. The round caps reach half a stroke past the edge and stay drawn.
+ */
+function disclosureGlyph(name: string, path: string): Component {
+  const drawn = createLucideIcon(name, [['path', { d: path }]])
+  return (props: Record<string, unknown>) => h(drawn, { ...props, overflow: 'visible' })
+}
+
 /** Manifest-owned icon keys. An unknown key intentionally gets one generic glyph. */
 const ICONS: Record<string, Component> = {
   'activity': Activity,
@@ -101,6 +116,9 @@ const ICONS: Record<string, Component> = {
   'copy': Copy,
   'cursor': MousePointer2,
   'database': Database,
+  // What a disclosure draws before its words: shut, and open.
+  'disclosure-closed': disclosureGlyph('disclosure-closed', 'm0 18 6-6-6-6'),
+  'disclosure-open': disclosureGlyph('disclosure-open', 'm0 9 6 6 6-6'),
   'document': FileText,
   // An editor, as a place a session or a file opens in: VS Code and its kin share it, and
   // an agent's own app takes its client's glyph above.

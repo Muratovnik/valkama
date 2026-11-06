@@ -33,7 +33,7 @@ withDefaults(defineProps<{ heading?: 'h3' | 'h4' }>(), { heading: undefined })
 
 const open = defineModel<boolean>('open', { default: false })
 const bodyId = useId()
-const chevron = computed(() => (open.value ? 'chevron-down' : 'chevron-right'))
+const chevron = computed(() => (open.value ? 'disclosure-open' : 'disclosure-closed'))
 </script>
 
 <template>
@@ -90,9 +90,10 @@ const chevron = computed(() => (open.value ? 'chevron-down' : 'chevron-right'))
 }
 
 /* Bare at rest, its chevron where the content it opens starts: the margin takes back the
-   inset the toggle's fill keeps under the pointer. */
+   inset the toggle's fill keeps under the pointer, and the glyph is drawn from its square's
+   edge, folded and open. */
 .disclosure-toggle {
-  margin-inline-start: calc(-1 * var(--space-2));
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
 .disclosure-summary {

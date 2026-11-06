@@ -52,7 +52,7 @@ const LIMIT = 8
 const expanded = reactive<Partial<Record<ChainGroup, boolean>>>({})
 const doneOpen = ref(false)
 
-const doneIcon = computed(() => (doneOpen.value ? 'chevron-down' : 'chevron-right'))
+const doneIcon = computed(() => (doneOpen.value ? 'disclosure-open' : 'disclosure-closed'))
 
 /** Open groups in the card's order, then the folded finished work. */
 const visibleGroups = computed(() => CHAIN_GROUPS.filter((group) => props.groups[group].length > 0))
@@ -197,8 +197,6 @@ defineExpose({ restoreView, reveal, view })
         @click="doneOpen = !doneOpen"
       >
         <VIcon
-          class="chain-done-mark"
-          :class="{ 'is-open': doneOpen }"
           :name="doneIcon"
           :size="16"
         />
