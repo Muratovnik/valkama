@@ -234,9 +234,11 @@ function escape(event: KeyboardEvent) {
 /* The column every level counts from: the start padding of a row at depth 0 and the
    width of the lead its fold stands in. A row of the levels below indents by one step of
    12px a level from the same start (`NavWorkRow`, with the same values), so the folds of
-   all levels stand on one grid and the numbers of one level in one column. */
+   all levels stand on one grid and the numbers of one level in one column. On a phone the
+   lead is a finger wide and the arrow keeps to the room before a row's sign. */
 .nav-tree {
   --nav-tree-lead: 24px;
+  --nav-tree-arrow-end: 0;
 
   display: grid;
   gap: var(--space-half);
@@ -272,7 +274,8 @@ function escape(event: KeyboardEvent) {
   align-items: center;
   inline-size: var(--nav-tree-lead);
   min-block-size: var(--size-control-inline);
-  padding: 0;
+  padding-block: 0;
+  padding-inline: 0 calc(var(--nav-tree-arrow-end));
   border: 0;
   color: var(--color-navigation-text-muted);
   background: none;
@@ -346,7 +349,8 @@ function escape(event: KeyboardEvent) {
 }
 
 .nav-tree-touch {
-  --nav-tree-lead: 28px;
+  --nav-tree-lead: var(--size-control-target);
+  --nav-tree-arrow-end: var(--size-control-inline);
 
   .nav-tree-head,
   .nav-tree-note {

@@ -5,16 +5,19 @@
  *
  * The link is the row: its box is stretched over the whole row, so a press anywhere on
  * it opens the card, and it is an address, so a press with a modifier opens it elsewhere
- * as any link does. A group's head has the fold at its start, a button of its own above
- * the link; an item has its sign there instead, in the same width, so the numbers of a
- * group's items stand in one column under the head's. The number's column is as wide
- * as the list's longest number (`NavWorkTree`), so a level's titles start at one x.
+ * as any link does. The row starts with its lead: an item's sign, and on a group's head
+ * the fold, a button of its own above the link. The lead is one width on every row, so
+ * a level's signs stand in one column and its numbers in the next; the number's column
+ * is as wide as the list's longest number (`NavWorkTree`), so its titles start at one x.
  *
  * The sign: three dots that run while the session works on the item, held still while it
  * holds the item and works on others, a ring while it waits for a person, and nothing for
  * an item silent over a day, pinned with no work, or gone from the frame. Those three are
  * muted, and say why in the row's name and hover text; a pinned item that has closed says
- * its state where the agents' count would stand. A colour is never all that says it.
+ * its state where the agents' count would stand. A colour is never all that says it. An
+ * epic at work says it with its own sign in the same column: on a phone's row the lead
+ * has room for the fold's arrow and the sign side by side, and on the rail, where it has
+ * not, the sign stands at rest and the arrow takes its place under the pointer and focus.
  *
  * The pin is the row's last part, in a column of its own that the rail keeps on every
  * row, so the title's ellipsis and the count stand clear of it, and it comes up under the
@@ -109,6 +112,7 @@ const meta = computed(() => {
 })
 const pinned = computed(() => props.row.pinned)
 const head = computed(() => Boolean(props.fold))
+const headAtWork = computed(() => head.value && sign.value !== null)
 const touch = computed(() => props.size === 'touch')
 const depthStyle = computed(() => ({ '--nav-row-depth': props.depth }))
 
@@ -131,6 +135,7 @@ function press(event: MouseEvent) {
       muted,
       pinned,
       'nav-row-head': head,
+      'nav-row-at-work': headAtWork,
       'nav-row-touch': touch,
       'nav-row-has-pin': pinShown,
     }"
@@ -140,40 +145,42 @@ function press(event: MouseEvent) {
     @focusin="hold(true)"
     @focusout="hold(false)"
   >
-    <button
-      v-if="fold"
-      :id="fold.id"
-      class="nav-row-fold"
-      type="button"
-      :aria-expanded="fold.open"
-      :aria-controls="fold.controls"
-      :aria-label="fold.label"
-      :title="fold.label"
-      @click="emit('fold')"
-    >
-      <VIcon
-        class="nav-row-chevron"
-        name="chevron-right"
-        :size="14"
-      />
-    </button>
-    <span
-      v-else
-      class="nav-row-lead"
-      aria-hidden="true"
-    >
+    <span class="nav-row-lead">
+      <button
+        v-if="fold"
+        :id="fold.id"
+        class="nav-row-fold"
+        type="button"
+        :aria-expanded="fold.open"
+        :aria-controls="fold.controls"
+        :aria-label="fold.label"
+        :title="fold.label"
+        @click="emit('fold')"
+      >
+        <VIcon
+          class="nav-row-chevron"
+          name="chevron-right"
+          :size="14"
+        />
+      </button>
       <span
-        v-if="sign !== null && sign !== 'waiting'"
-        class="work-dots"
-        :class="{ still }"
-        ><i /><i /><i
-      /></span>
-      <VIcon
-        v-else-if="sign !== null"
-        name="live-waiting"
-        :size="10"
-        :stroke-width="2.4"
-      />
+        v-if="sign !== null"
+        class="nav-row-sign"
+        aria-hidden="true"
+      >
+        <span
+          v-if="sign !== 'waiting'"
+          class="work-dots"
+          :class="{ still }"
+          ><i /><i /><i
+        /></span>
+        <VIcon
+          v-else
+          name="live-waiting"
+          :size="10"
+          :stroke-width="2.4"
+        />
+      </span>
     </span>
     <a
       class="nav-row-link"
@@ -192,24 +199,6 @@ function press(event: MouseEvent) {
         >
       </span>
       <span class="nav-row-title">{{ row.title }}</span>
-      <span
-        v-if="fold && sign"
-        class="nav-row-own"
-        aria-hidden="true"
-      >
-        <span
-          v-if="sign !== 'waiting'"
-          class="work-dots"
-          :class="{ still }"
-          ><i /><i /><i
-        /></span>
-        <VIcon
-          v-else
-          name="live-waiting"
-          :size="10"
-          :stroke-width="2.4"
-        />
-      </span>
       <span
         v-if="meta"
         class="nav-row-meta"
@@ -233,12 +222,15 @@ function press(event: MouseEvent) {
 
 <style scoped>
 /* Lead, then the link holding the number, the title and what stands at the end, then the
-   pin on a pinned row, in a column of its own so its room is kept. The lead and the fold
-   are one width at every level and a level indents one step from the same start, so the
-   folds stand on one grid and a level's numbers in one column (`NavWorkTree` keeps the
-   space's head on the same values). */
+   pin in a column of its own where the row has one. The lead is one width at every level
+   and a level indents one step from the same start, so the folds stand on one grid, a
+   level's signs in one column and its numbers in the next (`NavWorkTree` keeps the
+   space's head on the same values). The sign takes the lead's end: all of it on the
+   rail, and on a phone what the fold's arrow leaves. */
 .nav-row {
   --nav-row-lead: 24px;
+  --nav-row-sign: var(--nav-row-lead);
+  --nav-row-arrow-end: 0;
   --nav-row-depth: 0;
 
   position: relative;
@@ -286,20 +278,40 @@ function press(event: MouseEvent) {
   font-weight: 600;
 }
 
-.nav-row-lead,
-.nav-row-fold {
-  display: inline-flex;
-  justify-content: center;
+/* The fold and the sign share the lead's one cell, as tall as the row. */
+.nav-row-lead {
+  display: grid;
+  grid-template-areas: 'lead';
   align-items: center;
+  align-self: stretch;
   inline-size: var(--nav-row-lead);
-  color: var(--color-info);
+
+  > * {
+    grid-area: lead;
+  }
 }
 
+.nav-row-sign {
+  display: inline-flex;
+  justify-content: center;
+  justify-self: end;
+  align-items: center;
+  inline-size: var(--nav-row-sign);
+  color: var(--color-info);
+  pointer-events: none;
+}
+
+/* The arrow stands in what the sign leaves of the lead: all of it on the rail. */
 .nav-row-fold {
   position: relative;
   z-index: 1;
-  min-block-size: var(--size-control-inline);
-  padding: 0;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  align-self: stretch;
+  min-block-size: 0;
+  padding-block: 0;
+  padding-inline: 0 calc(var(--nav-row-arrow-end));
   border: 0;
   color: var(--color-navigation-text-muted);
   background: none;
@@ -324,6 +336,24 @@ function press(event: MouseEvent) {
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
+  }
+}
+
+/* The rail's lead has room for the arrow or the sign, not both: an epic at work shows its
+   sign at rest, and under the pointer and focus the arrow its press folds with. */
+.nav-row-at-work:not(.nav-row-touch) {
+  .nav-row-chevron {
+    visibility: hidden;
+  }
+
+  &:is(:hover, :has(:focus-visible)) {
+    .nav-row-chevron {
+      visibility: visible;
+    }
+
+    .nav-row-sign {
+      visibility: hidden;
+    }
   }
 }
 
@@ -381,12 +411,6 @@ function press(event: MouseEvent) {
   text-overflow: ellipsis;
 }
 
-.nav-row-own {
-  display: inline-flex;
-  flex: none;
-  color: var(--color-info);
-}
-
 .nav-row-meta {
   display: inline-flex;
   flex: none;
@@ -396,18 +420,17 @@ function press(event: MouseEvent) {
   white-space: nowrap;
 }
 
-/* A phone: a finger's row, the reading size, and the pin only where there is one. */
+/* A phone: a finger's row and lead, the reading size, and the pin only where there is
+   one. The lead holds the fold's arrow and, after it, the sign. */
 .nav-row-touch {
-  --nav-row-lead: 28px;
+  --nav-row-lead: var(--size-control-target);
+  --nav-row-sign: var(--size-control-inline);
+  --nav-row-arrow-end: var(--nav-row-sign);
 
   min-height: var(--size-control-target);
 
   .nav-row-link {
     font: var(--font-control);
-  }
-
-  .nav-row-fold {
-    min-block-size: var(--size-control-target);
   }
 }
 
@@ -420,7 +443,7 @@ function press(event: MouseEvent) {
     background: Highlight;
     forced-color-adjust: none;
 
-    :is(.nav-row-lead, .nav-row-fold, .nav-row-number, .nav-row-title, .nav-row-own),
+    :is(.nav-row-sign, .nav-row-fold, .nav-row-number, .nav-row-title),
     :is(.nav-row-meta, .nav-row-pin) {
       color: HighlightText;
     }
