@@ -48,7 +48,6 @@ const chevron = computed(() => (props.open ? 'chevron-down' : 'chevron-right'))
 const toggleLabel = computed(() =>
   t(props.open ? 'workItem.lanes.fold' : 'workItem.lanes.unfold', { lane: title.value }),
 )
-const away = computed(() => props.left !== '' || props.right !== '')
 const stateShown = computed(() => props.lane.epic && printsFacet('state', 'lane', props.lane.epic))
 
 // The spaces live in the strings: a template trims the space before a tag
@@ -60,10 +59,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 </script>
 
 <template>
-  <header
-    class="lane-head"
-    :class="{ away }"
-  >
+  <header class="lane-head">
     <button
       class="lane-toggle"
       type="button"
@@ -133,22 +129,27 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
    and under the row of state names while its lane passes, on the workspace's
    own ground so the tiles go under it rather than through it. It leaves with
    the last of its lane, because a sticky box never leaves its own section.
-   One row while it fits, the title giving way first; on a narrow board the
-   state, counts and actions take a second row instead of squeezing the title
-   down to its reference. A row it wraps onto starts where the heading's words
-   do, under the reference rather than under the chevron: the box is inset by
-   the toggle's inset, the chevron and their gap, and the toggle alone takes
-   that back. Wrapped from the box's own edge, the counts stood 4px left of the
-   chevron and 28px left of the number they count for. */
+   One row while it fits, the title giving way first down to a floor; only
+   where the title would be squeezed past it do the state, counts and work out
+   of sight take a second row. A row it wraps onto starts where the heading's
+   words do, under the reference rather than under the chevron: the box is
+   inset by the toggle's inset, the chevron and their gap, and the toggle alone
+   takes that back. Wrapped from the box's own edge, the counts stood 4px left
+   of the chevron and 28px left of the number they count for. */
 .lane-head {
   /* The chevron's drawn size, as the template asks `VIcon` for it. */
   --lane-chevron-size: 16px;
+
+  /* What the toggle keeps before the counts wrap: the chevron, the reference and
+     some thirty characters of the title. */
+  --lane-title-floor: 320px;
 
   position: sticky;
   top: var(--lanes-head-block);
   left: 0;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   grid-column: 1 / -1;
   gap: var(--space-1) var(--space-3);
   justify-self: start;
@@ -160,12 +161,15 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   background: var(--color-canvas);
 }
 
+/* It wraps by its floor and grows to its words, so the counts follow the title
+   rather than standing at the far end, and a title that fits is never cut. */
 .lane-toggle {
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: 1 1 var(--lane-title-floor);
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
+  max-width: max-content;
   min-height: var(--size-control-height-compact);
   padding: 0 var(--space-2) 0 var(--space-1);
   margin-inline-start: calc(-1 * var(--space-1) - var(--lane-chevron-size) - var(--space-2));
@@ -230,13 +234,20 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   font-variant-numeric: tabular-nums;
 }
 
-/* Out of sight at rest and in place all the same, so the line does not shift when
-   they come up. They stay in the Tab order, and arriving there is what shows them;
-   a press with the pointer leaves focus behind without leaving them up. */
+/* Out of sight at rest, and out of the rows too: hidden, they wrapped onto a row of
+   their own and left a blank band under the heading, or pushed the counts off the
+   title's line. A pointer brings them up at the end of the heading, over its last
+   row, which they do not move. They stay in the Tab order, and arriving there is what
+   shows them; a press with the pointer leaves focus behind without leaving them up. */
 .lane-actions {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
   display: inline-flex;
-  flex: 0 0 auto;
   gap: var(--space-1);
+  align-items: center;
+  min-block-size: min(100%, var(--size-control-height-compact));
+  background: var(--color-canvas);
   opacity: 0;
   transition: opacity var(--duration-quick) var(--ease-out);
 
@@ -244,32 +255,13 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
     opacity: 1;
   }
 
-  /* Nothing can hover here, so they stand. */
+  /* Nothing can hover here, so they stand, at the end of the heading's rows. */
   @media (hover: none) {
+    position: static;
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+    background: none;
     opacity: 1;
-  }
-}
-
-/* A heading that also says where its work out of sight is would squeeze its
-   title down to a letter, so it takes a second row instead. */
-.lane-head.away {
-  flex-wrap: wrap;
-}
-
-@container board-lanes (width <= 560px) {
-  .lane-head {
-    flex-wrap: wrap;
-  }
-
-  /* A row of their own would be a blank one at rest, so a pointer brings them up
-     over the end of the last row; where nothing can hover they keep their row. */
-  @media (hover: hover) {
-    .lane-actions {
-      position: absolute;
-      inset-block-end: 0;
-      inset-inline-end: 0;
-      background: var(--color-canvas);
-    }
   }
 }
 </style>
