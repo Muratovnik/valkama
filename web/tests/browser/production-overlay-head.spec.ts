@@ -46,6 +46,31 @@ const headParts = (head: Locator) =>
     }
   })
 
+/**
+ * The middle of a head's first title line, every control on that row by its name and middle,
+ * and how far the head's content runs on under the title block.
+ */
+const rowAxes = (head: Locator) =>
+  head.evaluate((node) => {
+    const name = node.querySelector('.overlay-header-name')
+    const title = node.querySelector('.overlay-header-title')
+    if (!name || !title) throw new Error('A head without a title')
+    const top = name.getBoundingClientRect().top
+    const line = top + Number.parseFloat(getComputedStyle(name).lineHeight) / 2
+    const controls = [...node.querySelectorAll('button, a[href]')]
+      .filter((each) => !title.contains(each) && each.getBoundingClientRect().top < line)
+      .map((each) => {
+        const { bottom, top: from } = each.getBoundingClientRect()
+        return { name: each.getAttribute('aria-label') ?? '', middle: (from + bottom) / 2 }
+      })
+    const style = getComputedStyle(node)
+    const end =
+      node.getBoundingClientRect().bottom -
+      Number.parseFloat(style.paddingBottom) -
+      Number.parseFloat(style.borderBottomWidth)
+    return { line, controls, under: end - title.getBoundingClientRect().bottom }
+  })
+
 async function namedBesideCard(page: Page, width: number) {
   await page.setViewportSize({ width, height: 900 })
   const { drawer } = await aCardAsking(page, `Read \`${NAMED_PATH}\` first.`)
@@ -105,4 +130,47 @@ test('what a dialog is about stands a step under its title, in the weight of a n
   // The subtitle's step: flush under the title it read as a second line of it.
   expect(below).toBeCloseTo(8, 0)
   await expect(context).toHaveCSS('font-weight', '400')
+  // A title with a line under it still has its way out on its own first line.
+  const { line, controls } = await rowAxes(head)
+  expect(controls).toHaveLength(1)
+  for (const control of controls) expect(control.middle).toBeCloseTo(line, 0)
+})
+
+for (const width of [1280, 390]) {
+  test(`at ${width}px a dialog's title and its way out stand on one line, and nothing pads the head under them`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installBackend(page)
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.getByRole('button', { name: 'New work item' }).click()
+    const dialog = page.getByRole('dialog', { name: 'New work' })
+    await expect(dialog).toHaveCSS('transform', 'none')
+    const { line, controls, under } = await rowAxes(dialog.locator('.overlay-header'))
+    expect(controls).toHaveLength(1)
+    // Laid out at its own 44px the button stood 10px under the title's middle, and the head
+    // kept 21px under the title that it did not keep over it.
+    for (const control of controls) expect(control.middle).toBeCloseTo(line, 0)
+    expect(under).toBeCloseTo(0, 0)
+  })
+}
+
+test('a document head stands Back, its actions and the way out on its title line', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 900 })
+  const { drawer } = await aCardAsking(page, 'Read `docs/plan.md:9` first.')
+  await linkIn(drawer, 'docs/plan.md:9').click()
+  const { pane, title } = paneOf(page)
+  await expect(title).toHaveText('The migration plan')
+  await settled(drawer)
+  await linkIn(pane, 'notes.md').click()
+  await expect(title).toHaveText('The notes')
+  const { line, controls } = await rowAxes(pane.locator('.overlay-header'))
+  const names = controls.map(({ name }) => name)
+  expect(names[0]).toBe('Back to docs/plan.md')
+  expect(names.at(-1)).toBe('Close the document')
+  // Back, the actions between and the way out: all of them, not the first one.
+  expect(names.length).toBeGreaterThan(3)
+  for (const control of controls) expect(control.middle).toBeCloseTo(line, 0)
 })

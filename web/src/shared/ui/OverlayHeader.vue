@@ -48,7 +48,12 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
     class="overlay-header"
     :class="{ 'has-actions': $slots.actions }"
   >
-    <slot name="start" />
+    <div
+      v-if="$slots.start"
+      class="overlay-header-start"
+    >
+      <slot name="start" />
+    </div>
     <div class="overlay-header-title">
       <component
         :is="heading"
@@ -92,13 +97,35 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
 </template>
 
 <style scoped>
+/* `--overlay-header-reach` is how far a 44px control on the title's row stands out past the
+   title's first line, above it and under it. */
 .overlay-header {
+  --overlay-header-reach: calc(
+    (var(--size-control-target) - var(--font-size-module) * var(--line-height-snug)) / 2
+  );
+
   display: flex;
   gap: var(--space-4);
   justify-content: space-between;
   align-items: flex-start;
   padding: var(--space-6);
   border-bottom: 1px solid var(--color-rule);
+}
+
+/* The controls on the title's row stand on its first line, and their hit areas reach into the
+   head's inset instead of making the row taller. Laid out at their own height, the way out stood
+   10px under the middle of a one-line title and left 21px more under the title than over it. */
+.overlay-header-start,
+.overlay-header-actions,
+.overlay-header-close {
+  margin-block: calc(-1 * var(--overlay-header-reach));
+}
+
+.overlay-header-start {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: var(--size-control-target);
 }
 
 .overlay-header-title {
@@ -177,10 +204,12 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
       flex-basis: 0;
     }
 
+    /* A row of their own: nothing to stand on, so no reach into the row above. */
     .overlay-header-actions {
       flex-basis: 100%;
       justify-content: flex-end;
       order: 1;
+      margin-block: 0;
     }
   }
 }
