@@ -150,6 +150,20 @@ class WriteTests(Harness):
         self.assertNotIn(long_id, long, "an id a label cannot carry is its digest")
         self.assertRegex(long, rf"^codex agent [0-9a-f]{{16}} \(session {OTHER}\)$")
 
+    def test_the_tool_says_what_a_mute_lets_through_and_how_long_it_holds(self) -> None:
+        """An agent reads the field's description, not this module: it says what the write does."""
+
+        from server.planning import tools
+
+        [apply] = [tool for tool in tools.TOOLS if tool["name"] == "apply_work_item_changes"]
+        said = " ".join(apply["inputSchema"]["properties"]["subscribe"]["description"].split())
+        for promise in (
+            "a person's acts at its next call",
+            "while it holds it",
+            "the replies to its own awaits_reply",
+        ):
+            self.assertIn(promise, said)
+
     def test_asking_again_writes_nothing_and_another_session_stands_apart(self) -> None:
         self.subscribe(True)
         self.conn.execute("UPDATE work_item_subscriptions SET created_at = '2026-01-01T00:00:00Z'")
