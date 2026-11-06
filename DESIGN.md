@@ -1295,9 +1295,9 @@ words in `title` and `aria-label`. An icon is a 28px target with a fine pointer 
 a finger or on a screen a phone's width, drawn bare either way, so the difference is room
 around the glyph. The words of the line wrap in a column of their own, so no name reaches the
 icons. A comment that asks and still waits for its reply says «· ждёт ответа» after the time,
-as plain words of that line and the last of them, so on a full line they move to the next one
-without the dot rather than move the time; they go once another session or a person replies
-in the thread. Only what shows more of what an entry says keeps its words, because those say how much
+as plain words of that line and the last of them. They stay beside the time only where the
+author keeps the lines it has without them, and otherwise start the next line without the dot;
+the time never moves for them. They go once another session or a person replies in the thread. Only what shows more of what an entry says keeps its words, because those say how much
 is left. Every entry has the one Reply, because threads are one level deep and an answer to a
 reply joins the same root: it opens the one field under the thread's last reply, focus goes
 into the field, and leaving it brings focus back to the icon pressed. Threads open by their

@@ -19,16 +19,56 @@
  * and the room the name leaves goes before the time, so the time ends a line it shares.
  *
  * `after` is a short state of the entry, «ждёт ответа», said after the time, a dot between.
- * It comes last so that it is what moves to the next line when the line is full: written
- * after the name it counted as the name's width, and a short name with it took the time off
- * the first line. A line it starts has no dot: the dot stands in the room its margin takes
- * from the line, which the line clips.
+ * It comes after the time, so the time stands where it stands without it. It stays beside the
+ * time only where the name keeps the lines it has without it; otherwise it starts a line of its
+ * own, with no dot. Flex breaks a line by the name's 14ch basis, not by its words, so left to
+ * the line it kept the time's line and squeezed a long name onto one more line. No CSS asks
+ * how many lines a name takes, so the line tries both places and keeps the one that costs the
+ * name nothing, again whenever its width changes.
  */
-defineProps<{ when: string; after?: string }>()
+import { onMounted, ref, useTemplateRef, watch } from 'vue'
+
+import { useResizeObserver } from '@vueuse/core'
+
+const props = defineProps<{ when: string; after?: string }>()
+
+const line = useTemplateRef<HTMLElement>('line')
+/** The state starts a line of its own rather than follow the time. */
+const ownLine = ref(false)
+
+/** Lay the state out beside the time and on its own line, read the name each way, and choose. */
+function place() {
+  const box = line.value
+  const who = box?.querySelector('.meta-who')
+  const time = box?.querySelector('.meta-when')
+  const mark = box?.querySelector('.meta-after')
+  if (!who || !time || !mark) return
+  mark.classList.remove('own-line')
+  const beside = who.getBoundingClientRect().height
+  const withTime = Math.abs(mark.getBoundingClientRect().top - time.getBoundingClientRect().top) < 1
+  mark.classList.add('own-line')
+  const alone = who.getBoundingClientRect().height
+  const own = !withTime || beside > alone + 0.5
+  mark.classList.toggle('own-line', own)
+  ownLine.value = own
+}
+
+onMounted(() => {
+  place()
+  void document.fonts.ready.then(place)
+})
+watch([() => props.when, () => props.after], place, { flush: 'post' })
+// Placed in the next frame: changing the line inside the observer's own callback would size it
+// again in the same frame, which the observer reports as a loop.
+useResizeObserver(
+  () => (props.after ? line.value : null),
+  () => requestAnimationFrame(place),
+)
 </script>
 
 <template>
   <div
+    ref="line"
     class="meta-line"
     :class="{ 'has-after': after }"
   >
@@ -37,6 +77,7 @@ defineProps<{ when: string; after?: string }>()
     <span
       v-if="after"
       class="meta-after"
+      :class="{ 'own-line': ownLine }"
       >{{ after }}</span
     >
   </div>
@@ -71,11 +112,13 @@ defineProps<{ when: string; after?: string }>()
 }
 
 /* Its dot fills the line's gap before it, so after the time it reads as «12:31 · ждёт
-   ответа», and at the start of a line it stands outside the line, clipped. */
+   ответа». On a line of its own the room and its dot stand before the line, clipped. */
 .meta-after {
+  --separator: var(--space-2);
+
   position: relative;
   flex: none;
-  padding-inline-start: var(--space-2);
+  padding-inline-start: var(--separator);
   margin-inline-start: calc(-1 * var(--space-2));
   white-space: nowrap;
 
@@ -83,8 +126,13 @@ defineProps<{ when: string; after?: string }>()
     content: '·' / '';
     position: absolute;
     inset-inline-start: 0;
-    width: var(--space-2);
+    width: var(--separator);
     text-align: center;
+  }
+
+  &.own-line {
+    flex-basis: 100%;
+    margin-inline-start: calc(-1 * var(--separator));
   }
 }
 </style>
