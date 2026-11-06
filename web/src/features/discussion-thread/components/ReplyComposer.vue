@@ -121,11 +121,14 @@ defineExpose({ focus: () => editor.value?.focusAtTop() })
   min-width: 0;
 }
 
+/* The words take the press as the box does, so the line is the target: as tall as a line of
+   content an action rides, where its words alone stood 17px. */
 .reply-mark {
   display: flex;
   gap: var(--space-2);
   justify-self: start;
   align-items: center;
+  min-block-size: var(--size-control-inline);
   color: var(--color-text-muted);
   font: var(--font-detail);
   cursor: pointer;

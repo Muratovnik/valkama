@@ -189,6 +189,8 @@ checkouts are therefore distinguishable even at the same version.
   The question asked before written words are dropped, under a reply, in this form or
   while an answer is changed, now puts its buttons at the end of its line too, keeps them
   together on a phone, and starts its words on the form's own edge.
+  «Mark the thread resolved» under a reply takes a press across a line as tall as an
+  action's, not only across its words.
 - **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
   mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
   next with «23:47»; the time now moves to the next line whole.
