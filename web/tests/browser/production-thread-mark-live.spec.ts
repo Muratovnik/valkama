@@ -303,3 +303,50 @@ for (const locale of ['ru', 'en'] as const)
     expect(wrong).toEqual([])
     expect(await opened.pageErrors()).toEqual([])
   })
+
+/** Counts the layout reads made of a line with a mark, or of its parts, from the page's start. */
+const countMarkReads = (page: Page) =>
+  page.addInitScript(() => {
+    const counter = { reads: 0 }
+    Object.assign(window, { markReads: counter })
+    const proto = Element.prototype
+    const read = Object.getOwnPropertyDescriptor(proto, 'getBoundingClientRect')?.value as (
+      this: Element,
+    ) => DOMRect
+    proto.getBoundingClientRect = function (this: Element) {
+      if (this.closest('.meta-line')?.querySelector('.meta-after')) counter.reads += 1
+      return read.call(this)
+    }
+  })
+const markReads = (page: Page, reset = false) =>
+  page.evaluate((zero) => {
+    const counter = (window as unknown as { markReads: { reads: number } }).markReads
+    const reads = counter.reads
+    if (zero) counter.reads = 0
+    return reads
+  }, reset)
+
+for (const locale of ['ru', 'en'] as const)
+  test(`${locale}: typing a reply lays out no mark whose line it leaves alone`, async ({
+    page,
+  }) => {
+    await countMarkReads(page)
+    const opened = await openAsked(page, locale, 1280)
+    // The thread whose reply carries a mark: its replies render again with the draft.
+    const thread = opened.thread('Who owns the importer now?')
+    await thread.getByRole('button', { name: WORDS[locale].reply, exact: true }).first().click()
+    await settle(page)
+    await settle(page)
+    expect(
+      await markReads(page, true),
+      'the marks were placed when the card opened',
+    ).toBeGreaterThan(0)
+    const typed = 'a reply typed key by key'
+    await page.keyboard.type(typed, { delay: 10 })
+    await expect(thread.getByRole('textbox')).toHaveValue(typed)
+    await settle(page)
+    await settle(page)
+    expect(await markReads(page), 'layout reads of a marked line while typing').toBe(0)
+    expect(offRule(await placements(page)), 'after typing').toEqual([])
+    expect(await opened.pageErrors()).toEqual([])
+  })

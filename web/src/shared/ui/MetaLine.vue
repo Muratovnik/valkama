@@ -24,14 +24,16 @@
  * own, with no dot. Flex breaks a line by the name's 14ch basis, not by its words, so left to
  * the line it kept the time's line and squeezed a long name onto one more line. No CSS asks
  * how many lines a name takes, so the line tries both places and keeps the one that costs the
- * name nothing, again whenever it is drawn anew and whenever its width changes. Drawn anew
- * covers the name, which arrives through the slot and no prop names: a name renamed shorter on
- * a read left the line's box as it was, and the mark stayed on a line of its own beside room
- * the date had for it.
+ * name nothing, again whenever what the line says changes, whenever its width changes and when
+ * a font face comes in. What it says includes the name, which arrives through the slot and no prop
+ * names: a name renamed shorter on a read left the line's box as it was, and the mark stayed on
+ * a line of its own beside room the date had for it. Only what it says: a reply's line renders
+ * again with each key typed in its thread's draft, and placing it on every render laid the
+ * drawer out twice per mark per key, 60 ms a key on a thread of 200 replies.
  */
 import { onMounted, onUpdated, ref, useTemplateRef } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 const props = defineProps<{ when: string; after?: string }>()
 
@@ -39,13 +41,24 @@ const line = useTemplateRef<HTMLElement>('line')
 /** The state starts a line of its own rather than follow the time. */
 const ownLine = ref(false)
 
+/** What the line said when it was last placed; empty while it has no state to place. */
+let placedFor = ''
+
+/** The time, the state and the name's words: `textContent` reads no layout. */
+function saying() {
+  const name = line.value?.querySelector('.meta-who')?.textContent
+  return JSON.stringify([props.when, props.after, name])
+}
+
 /** Lay the state out beside the time and on its own line, read the name each way, and choose. */
 function place() {
   const box = line.value
   const who = box?.querySelector('.meta-who')
   const time = box?.querySelector('.meta-when')
   const mark = box?.querySelector('.meta-after')
+  placedFor = ''
   if (!who || !time || !mark) return
+  placedFor = saying()
   mark.classList.remove('own-line')
   const beside = who.getBoundingClientRect().height
   const withTime = Math.abs(mark.getBoundingClientRect().top - time.getBoundingClientRect().top) < 1
@@ -57,19 +70,27 @@ function place() {
 }
 
 onMounted(() => {
-  if (!props.after) return
-  place()
-  // Placed again once the fonts are in, where the document loads them: a test's may not.
-  if ('fonts' in document) void document.fonts.ready.then(place)
+  if (props.after) place()
 })
-// After every render: a new time, a new state or a new name. Placing sets `ownLine`, which
-// renders once more and places the same way again, so it settles there.
-onUpdated(place)
+// After a render that changed what the line says: a new time (another language, a date shown
+// another way), a new state or a new name. The render that placing causes through `ownLine`
+// says the same, and so does a parent's render that changed nothing here.
+onUpdated(() => {
+  if (props.after && saying() !== placedFor) place()
+})
 // Placed in the next frame: changing the line inside the observer's own callback would size it
 // again in the same frame, which the observer reports as a loop.
 useResizeObserver(
   () => (props.after ? line.value : null),
   () => requestAnimationFrame(place),
+)
+// Placed again when a face comes in, where the document loads them (a test's may not): one
+// swapped in changes the words' widths, and the line's box need not change its size. A face
+// can come in long after the line was placed, as Cyrillic's does for a name renamed into it.
+useEventListener(
+  () => (props.after && 'fonts' in document ? document.fonts : null),
+  'loadingdone',
+  () => place(),
 )
 </script>
 
