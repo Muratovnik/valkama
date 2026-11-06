@@ -8,6 +8,8 @@ import { useThreadWrites } from '@/features/discussion-thread/composables/useThr
 import type { ThreadParent } from '@/features/discussion-thread/composables/useThreadWrites.ts'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { grantFocus } from '@/shared/lib/focusRight.ts'
+import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 
 export type ThreadForm = 'reply' | 'resolve' | 'steps'
@@ -31,7 +33,9 @@ export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${
  *
  * Focus follows a write. A new reply exists only after the card is read again, so focus
  * waits on the reply button until then; a mark's thread stays one element as it folds, so
- * focus can go straight to it.
+ * focus can go straight to it. Each move asks the right its action was given as it began
+ * (`grantFocus`): a person who has gone on into another field while the write was out stays
+ * there, and loses neither the field nor the letters they type into it.
  *
  * A thread has as many ways into its reply as it has entries and only one form. So a form
  * left comes back to the icon that opened it, and an icon pressed while its thread's form
@@ -58,7 +62,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   const expanded = ref(new Set<string>())
   /** Counts the presses that found their form already open, for the form to take focus. */
   const reachedAgain = ref(0)
-  let owedReply: number | null = null
+  let owedReply: { id: number; right: FocusRight } | null = null
   let opener: HTMLElement | null = null
 
   useDraftSource('reply', () => Object.values(replies.value).some((text) => text.trim()))
@@ -97,15 +101,16 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     else open.value = { form, key }
     stepsOf.value = entry
   }
-  async function hide(back: ThreadForm) {
+  async function hide(back: ThreadForm, right: FocusRight) {
     const key = open.value?.key
     open.value = null
     failedAt.value = null
     if (!key) return
     await nextTick()
     const first = anchored(back === 'resolve' ? resolveAnchor(key) : replyAnchor(key))
-    ;(opener?.isConnected ? opener : first)?.focus()
+    const to = opener?.isConnected ? opener : first
     opener = null
+    right.take(() => to?.focus())
   }
   /** Escape, or Cancel: the words go with it, since asking first is the form's. */
   function cancel() {
@@ -115,16 +120,17 @@ export function useThreadForms(identity: () => string, changed: () => void) {
       replies.value[current.key] = ''
       marks.value[current.key] = false
     } else if (current.form === 'resolve') decisions.value[current.key] = ''
-    void hide(current.form)
+    void hide(current.form, grantFocus())
   }
 
   /** Focus on a reply that has just arrived, when one is owed. */
   function settleFocus() {
     if (owedReply === null) return
-    const target = anchored(writtenAnchor(owedReply))
+    const target = anchored(writtenAnchor(owedReply.id))
     if (!target) return
+    const { right } = owedReply
     owedReply = null
-    moveFocus(target)
+    right.take(() => moveFocus(target))
   }
 
   /** The root's id goes with the parent when the reply is to mark the thread as well. */
@@ -132,14 +138,15 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     const marking = root !== null && marks.value[key] === true
     failedAt.value = { form: 'reply', key }
     if (marking) held.value.add(key)
+    const right = grantFocus()
     void writes.reply(parent, replies.value[key] ?? '', marking ? root : null, (written) => {
       replies.value[key] = ''
       marks.value[key] = false
-      void hide('reply').then(() => {
+      void hide('reply', right).then(() => {
         if (marking && !writes.unmarked.value.has(root)) {
-          moveFocus(anchored(entryAnchor(root)))
+          right.take(() => moveFocus(anchored(entryAnchor(root))))
         } else {
-          owedReply = written
+          owedReply = { id: written, right }
           settleFocus()
         }
       })
@@ -147,27 +154,31 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   }
   function sendResolve(key: string, root: number) {
     failedAt.value = { form: 'resolve', key }
+    const right = grantFocus()
     void writes.resolve(root, decisions.value[key] ?? '', () => {
       decisions.value[key] = ''
       held.value.add(key)
       expanded.value.delete(key)
       open.value = null
       failedAt.value = null
-      void nextTick(() => moveFocus(anchored(entryAnchor(root))))
+      void nextTick(() => right.take(() => moveFocus(anchored(entryAnchor(root)))))
     })
   }
   function sendReopen(key: string, root: number) {
     failedAt.value = { form: 'reopen', key }
-    // The write disables the button that was pressed, which drops focus on the page.
+    // The write disables the button that was pressed, which drops focus on the page: it comes
+    // back there unless the person has taken it somewhere since.
+    const right = grantFocus()
     void writes.reopen(root).then(async () => {
       await nextTick()
-      if (document.activeElement === document.body) anchored(resolveAnchor(key))?.focus()
+      right.take(() => anchored(resolveAnchor(key))?.focus())
     })
   }
   function markAgain(key: string, root: number) {
     held.value.add(key)
+    const right = grantFocus()
     void writes.markAgain(root, () => {
-      if (!writes.unmarked.value.has(root)) moveFocus(anchored(entryAnchor(root)))
+      if (!writes.unmarked.value.has(root)) right.take(() => moveFocus(anchored(entryAnchor(root))))
     })
   }
   function sendSteps(
@@ -177,8 +188,9 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     points: string[],
   ) {
     failedAt.value = { form: 'steps', key }
+    const right = grantFocus()
     void writes.addSteps(card, points, () => {
-      void hide('steps')
+      void hide('steps', right)
       added.value = { count: points.length, entry }
     })
   }
