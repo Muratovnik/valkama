@@ -23,6 +23,7 @@ import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import GraphFrameCounts from '@/widgets/work-item-graph/components/GraphFrameCounts.vue'
+import GraphFrameFold from '@/widgets/work-item-graph/components/GraphFrameFold.vue'
 import GraphFrameLine from '@/widgets/work-item-graph/components/GraphFrameLine.vue'
 import GraphFrameProgress from '@/widgets/work-item-graph/components/GraphFrameProgress.vue'
 import { useGraphBandFit } from '@/widgets/work-item-graph/composables/useGraphBandFit.ts'
@@ -32,7 +33,6 @@ import type { FrameHead } from '@/widgets/work-item-graph/utils/graphGeometry.ts
 import { foldIsTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const {
   frame,
@@ -80,7 +80,6 @@ const foldTarget = computed(() => `frame:${frame.id}:fold`)
 const foldShown = computed(() => foldIsTarget(frame, overview))
 const openTarget = computed(() => `frame:${frame.id}`)
 
-const chevron = computed(() => (frame.folded ? 'chevron-right' : 'chevron-down'))
 const title = computed(() => epic.value?.title ?? t('graph.frame.noEpic'))
 /** Far out the count takes the band, and the reference stays in the button's name. */
 const referenceShown = computed(() => !(far && inside.value))
@@ -150,10 +149,10 @@ function onOpenBlur() {
     :class="{ far, overview }"
     :style="headStyle"
   >
-    <button
+    <GraphFrameFold
       v-if="foldShown"
-      class="graph-frame-fold"
-      type="button"
+      :folded="frame.folded"
+      :overview="overview"
       :aria-label="foldLabel"
       :aria-expanded="!frame.folded"
       :data-walk-target="walked(foldTarget)"
@@ -161,12 +160,7 @@ function onOpenBlur() {
       @click="emit('toggle', frame.id)"
       @focus="emit('focus', foldTarget)"
       @blur="emit('blur', foldTarget)"
-    >
-      <VIcon
-        :name="chevron"
-        :size="16"
-      />
-    </button>
+    />
     <component
       :is="openTag"
       class="graph-frame-open"
@@ -225,6 +219,15 @@ function onOpenBlur() {
 /* One column with the frame's cards: the chevron, the reference line beside it, the
    title and the counts under them, the edge across, and what a fold hides under that. */
 .graph-frame-head {
+  /* The chevron's corner the epic's button leaves to the fold: as wide as the chevron and
+     the air after it, as tall as the reference line (`--font-detail`) and the air under it. */
+  --notch-inline: calc(16px + var(--space-1));
+  --notch-block: calc(var(--font-size-dense) * var(--line-height-snug) + var(--space-half));
+
+  /* A ring's air from what it encloses, and its own width. */
+  --ring-air: var(--space-half);
+  --ring: 2px;
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-1);
@@ -235,9 +238,12 @@ function onOpenBlur() {
   pointer-events: auto;
 }
 
-/* Each as tall as what it holds, and not the row a form's control stands in. */
-.graph-frame-fold,
+/* As tall as what it holds, and not the row a form's control stands in. */
 .graph-frame-open {
+  display: flex;
+  flex-direction: column;
+  grid-area: 1 / 1;
+  gap: var(--space-half);
   min-width: 0;
   min-block-size: 0;
   padding: 0;
@@ -249,7 +255,8 @@ function onOpenBlur() {
   border-radius: var(--radius-status);
 }
 
-.graph-frame-fold,
+/* Its ring stands clear of its words, in the header's padding: on its edge it lay on the
+   first letters and on the counts' last line. */
 .graph-frame-open[data-walk-target] {
   cursor: pointer;
 
@@ -259,37 +266,80 @@ function onOpenBlur() {
 
   &:focus-visible {
     background: var(--color-surface-hover);
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: -2px;
+    outline: var(--ring) solid var(--color-focus-ring);
+    outline-offset: var(--ring-air);
   }
 }
 
-/* The chevron leads the reference line, as tall as that line, and its target runs on
-   into the air above it and before it, which nothing else takes. */
-.graph-frame-fold {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-area: 1 / 1;
-  place-items: center start;
-  place-self: start start;
-  inline-size: 16px;
-  block-size: 1lh;
-  font: var(--font-detail);
+/* Beside a fold, the button's face and ring follow what it draws, the reference line after
+   the chevron and the title and the counts under both, and leave the chevron's corner to the
+   fold: a box's face and ring took the chevron in, as if it were the epic's. */
+.graph-frame-head:not(.overview) .graph-frame-open.folds[data-walk-target] {
+  --ring-out: calc(var(--ring-air) + var(--ring));
 
-  &::before {
+  position: relative;
+  isolation: isolate;
+
+  &:hover,
+  &:focus-visible {
+    background: transparent;
+    outline: none;
+  }
+
+  &::before,
+  &::after {
     content: '';
     position: absolute;
-    inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-1)) 0 calc(-1 * var(--space-4));
+    pointer-events: none;
   }
-}
 
-.graph-frame-open {
-  display: flex;
-  flex-direction: column;
-  grid-area: 1 / 1;
-  gap: var(--space-half);
-  min-width: 0;
+  &::before {
+    inset: 0;
+    z-index: -1;
+    clip-path: polygon(
+      var(--notch-inline) 0,
+      100% 0,
+      100% 100%,
+      0 100%,
+      0 var(--notch-block),
+      var(--notch-inline) var(--notch-block)
+    );
+    border-radius: var(--radius-status);
+  }
+
+  &:is(:hover, :focus-visible)::before {
+    background: var(--color-surface-hover);
+  }
+
+  /* The same outline drawn as a band: the notch's edges, then back round inside it. */
+  &::after {
+    inset: calc(-1 * var(--ring-out));
+    clip-path: polygon(
+      var(--notch-inline) 0,
+      100% 0,
+      100% 100%,
+      0 100%,
+      0 var(--notch-block),
+      var(--notch-inline) var(--notch-block),
+      var(--notch-inline) 0,
+      calc(var(--notch-inline) + var(--ring)) var(--ring),
+      calc(var(--notch-inline) + var(--ring)) calc(var(--notch-block) + var(--ring)),
+      var(--ring) calc(var(--notch-block) + var(--ring)),
+      var(--ring) calc(100% - var(--ring)),
+      calc(100% - var(--ring)) calc(100% - var(--ring)),
+      calc(100% - var(--ring)) var(--ring),
+      calc(var(--notch-inline) + var(--ring)) var(--ring)
+    );
+  }
+
+  &:focus-visible::after {
+    background: var(--color-focus-ring);
+
+    @media (forced-colors: active) {
+      background: Highlight;
+      forced-color-adjust: none;
+    }
+  }
 }
 
 /* The reference line steps aside for the chevron; the lines under it do not. */
@@ -345,29 +395,24 @@ function onOpenBlur() {
         padding-inline-start: 0;
       }
     }
-  }
 
-  .graph-frame-open[data-walk-target],
-  .graph-frame-fold {
-    position: relative;
-    grid-row: 1 / -1;
-    place-self: stretch stretch;
-    inline-size: auto;
-    block-size: auto;
+    &[data-walk-target] {
+      position: relative;
+      grid-row: 1 / -1;
+      place-self: stretch stretch;
+      inline-size: auto;
+      block-size: auto;
 
-    &::before {
-      content: '';
-      position: absolute;
-      inset: calc(-36px - var(--space-2)) calc(-1 * var(--space-4));
+      &::before {
+        content: '';
+        position: absolute;
+        inset: calc(-36px - var(--space-2)) calc(-1 * var(--space-4));
+      }
     }
-  }
 
-  .graph-frame-open:not([data-walk-target]) {
-    pointer-events: none;
-  }
-
-  .graph-frame-fold {
-    place-items: start;
+    &:not([data-walk-target]) {
+      pointer-events: none;
+    }
   }
 
   .graph-frame-inside {

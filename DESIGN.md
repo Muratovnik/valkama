@@ -1061,7 +1061,11 @@ epic's reference grown with the field, as a zoomed-out card's is, with the count
 work moving under it at the far end and a thicker edge beneath; the work under no epic
 keeps its name instead. The header is two buttons with one action each, as a card
 is one: the chevron folds or opens the frame, and the rest opens the epic's card;
-over the work under no epic the rest is plain text, with no epic to open. Below a
+over the work under no epic the rest is plain text, with no epic to open. At the scale
+the field opens at, the chevron is a 28px target under a fine pointer and 44px under a
+finger or at a phone's width, reaching up and back into the header's padding and the air
+round the frame and never onto the epic's words, so the header is drawn no taller; each
+button's focus ring goes round its own drawing with air and no further. Below a
 quarter of full size a header is a few pixels and the frame round it is what the hand
 finds, so the ground of an open frame with an epic opens that epic too and the pointer
 says so. It is the pointer's shortcut: the keyboard has the header's button and no new

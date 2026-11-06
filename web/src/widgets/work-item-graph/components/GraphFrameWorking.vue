@@ -107,7 +107,7 @@ defineExpose({ wholeWidth })
   position: absolute;
   inset-block-start: 0;
   inset-inline-start: 0;
-  visibility: hidden;
   pointer-events: none;
+  visibility: hidden;
 }
 </style>
