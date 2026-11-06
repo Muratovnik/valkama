@@ -212,6 +212,11 @@ checkouts are therefore distinguishable even at the same version.
   fitted beside the name dropped to a line of its own and kept to the end of the words,
   which is where the icons begin, so it stood mid-row under nothing. On its own line the
   time now starts where the name starts; beside the name it still ends the line.
+- **A card's lists start at one edge.** A chain's rows stand on the edge their group
+  headings start at, and the names of open groups line up with «Done»; a session in
+  Relations that cannot be opened starts where its label does; a checklist step's box stands
+  under the heading's first letter. A row's highlight under the pointer reaches a little past
+  the column instead of pushing the words in.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
