@@ -353,6 +353,25 @@ test('a deadline passing while the step stands takes focus to the question, whic
   await expect(asking(top)).toHaveCount(0)
 })
 
+test('a deadline passing after a key takes focus to the question, ringed', async ({ page }) => {
+  const { requests, stream, top } = await inCard(page)
+  requests.settle(UPPER, { expires_at: new Date(Date.now() + 3000).toISOString() })
+  await stream.signal('agents')
+  await expect(top.getByText(/^Answer before/u)).toBeVisible()
+  const choice = top.getByRole('radio', { name: 'Choice 1' })
+  await choice.focus()
+  await page.keyboard.press('Space')
+  await expect(choice).toBeChecked()
+  const line = top.getByText(/The deadline has passed/u)
+  await expect(line).toBeVisible({ timeout: 6000 })
+  await expect(top).toBeFocused()
+  // A key came last, so the ring stands round the question, where focus was taken; the line
+  // that says why describes it and stays bare.
+  await expect(top).toHaveCSS('outline-style', 'solid')
+  await expect(line).toHaveCSS('outline-style', 'none')
+  expect(writesTo(requests)).toEqual([])
+})
+
 type Box = { height: number; width: number; x: number; y: number } | null
 
 /** Whether two boxes share any of the window. */
