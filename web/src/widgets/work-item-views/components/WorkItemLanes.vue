@@ -309,19 +309,22 @@ function laneGroup(lane: BoardLane): string {
 
   height: 100%;
   min-height: 0;
+  padding-inline: var(--space-1);
   overflow: auto;
   overscroll-behavior: contain;
 
   /* A tile focused or brought into view stops below the sticky row of state
-     names and a lane heading of one row held under it, and short of the bottom
-     edge by more than its focus ring reaches — or, while the board shows its
-     shared-order line there, above that line. A heading of more rows is as tall
-     as its words make it, so the lane's own heading is read for the rest
-     (`useLaneClearance`). */
+     names and a lane heading of one row held under it, with the room it keeps
+     above for a ring, and short of the bottom edge by more than its focus ring
+     reaches — or, while the board shows its shared-order line there, above that
+     line. A heading of more rows is as tall as its words make it, so the lane's
+     own heading is read for the rest (`useLaneClearance`). Sideways, a column
+     stops where the tracks start, inside the room kept for the rings. */
   scroll-padding-block: calc(
-      var(--lanes-head-block) + var(--size-control-height-compact) + var(--space-2)
+      var(--lanes-head-block) + var(--size-control-height-compact) + var(--space-1) + var(--space-2)
     )
     var(--board-note-reach, var(--space-2));
+  scroll-padding-inline: var(--space-1);
   scroll-snap-type: x proximity;
   container: board-lanes / inline-size;
 }
@@ -371,13 +374,18 @@ function laneGroup(lane: BoardLane): string {
 
    A lane not yet laid out is reserved its likely height, a folded one its
    heading's: a single guess for both made the scrollbar of a space with a
-   hundred folded lanes half again too long until it had been scrolled through. */
+   hundred folded lanes half again too long until it had been scrolled through.
+
+   A lane draws nothing outside itself (`content-visibility` below), and its heading's
+   rings reach past its tracks at either side and, folded, below: it stands that reach
+   past them and takes it back as margin, so nothing moves. */
 .board-lane {
   display: grid;
   grid-template-columns: var(--lane-tracks);
   grid-column: 1 / -1;
   gap: var(--space-2);
-  padding-top: var(--space-3);
+  padding: var(--space-3) var(--space-1) var(--space-1);
+  margin: 0 calc(-1 * var(--space-1)) calc(-1 * var(--space-1));
   outline: none;
   contain-intrinsic-size: auto calc(var(--size-control-height-compact) + var(--space-3));
 

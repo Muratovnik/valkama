@@ -266,9 +266,13 @@ watch(
      to every lane through this scrollport. */
   contain: paint;
 
-  /* Grouped, the lanes own both scrolls and lay out their own tracks. */
+  /* Grouped, the lanes own both scrolls and lay out their own tracks. A lane heading's
+     buttons stand at the board's edges, and the edge cut their rings: the board stands a
+     ring's reach (2px out, 2px wide: `base.css`) into the gutter at either side, and the
+     lanes take it back as padding. */
   &.grouped {
     display: block;
+    margin-inline: calc(-1 * var(--space-1));
     overflow: hidden;
   }
 

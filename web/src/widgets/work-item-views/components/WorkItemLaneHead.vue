@@ -192,16 +192,16 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 </template>
 
 <style scoped>
-/* Held at the left edge of what is visible, however far the states scroll,
-   and under the row of state names while its lane passes, on the workspace's
-   own ground so the tiles go under it rather than through it. It leaves with
-   the last of its lane, because a sticky box never leaves its own section.
-   One row while it fits, the title giving way first. A row it wraps onto starts
-   where the heading's words do, under the reference rather than under the
-   chevron: the box is inset by the toggle's inset, the chevron and their gap,
-   and the toggle alone takes that back. Wrapped from the box's own edge, the
-   counts stood 4px left of the chevron and 28px left of the number they count
-   for. */
+/* Held at the left edge of what is visible, however far the states scroll, and under the row
+   of state names while its lane passes, on the workspace's own ground so the tiles go under it
+   rather than through it. It leaves with the last of its lane, because a sticky box never leaves
+   its own section. One row while it fits, the title giving way first. A row it wraps onto starts
+   where the heading's words do, under the reference rather than under the chevron: the box is
+   inset by the toggle's inset, the chevron and their gap, and the toggle alone takes that back.
+   Wrapped from the box's own edge, the counts stood 4px left of the chevron.
+   A button's ring reaches 4px past it (`base.css`). The heading keeps that room above the toggle,
+   taken back as margin, so held at the top the ring is not under the row of state names; and its
+   ground covers the room the board keeps at its edges (`WorkItemBoard`), where tiles showed. */
 .lane-head {
   /* The chevron's drawn size, as the template asks `VIcon` for it. */
   --lane-chevron-size: 16px;
@@ -222,9 +222,12 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   align-items: center;
   width: var(--board-visible-width);
   min-width: 0;
-  min-height: var(--size-control-height-compact);
+  min-height: calc(var(--size-control-height-compact) + var(--space-1));
+  padding-block-start: var(--space-1);
   padding-inline-start: calc(var(--space-1) + var(--lane-chevron-size) + var(--space-2));
+  margin-block-start: calc(-1 * var(--space-1));
   background: var(--color-canvas);
+  box-shadow: 0 0 0 var(--space-1) var(--color-canvas);
 
   @media (pointer: coarse), (width <= 620px) {
     --lane-actions-width: calc(var(--size-control-target) * 1.5 + var(--size-control-inline) / 2);
@@ -245,13 +248,11 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   }
 }
 
-/* As wide as its words, so the counts follow the title rather than standing at
-   the far end. Where the heading wraps, the line breaks before what follows the
-   title once title and tail no longer fit it whole: the title keeps its words, as
-   a line of its own or the whole line, and the tail goes below. A floor that held
-   the tail beside it cut a long title to a third of its words on a wide board.
-   On a line that cannot wrap the title gives way a thousand times faster than the
-   tail, so the tail stays whole. */
+/* As wide as its words, so the counts follow the title rather than standing at the far end.
+   Where the heading wraps, the line breaks before what follows the title once title and tail no
+   longer fit it whole: the title keeps its words, as a line of its own or the whole line, and the
+   tail goes below. A floor that held the tail beside it cut a long title to a third of its words
+   on a wide board. On a line that cannot wrap the title gives way a thousand times faster. */
 .lane-toggle {
   display: inline-flex;
   flex: 0 1000 auto;
@@ -424,7 +425,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
   .crowded & {
     position: absolute;
-    inset-block-start: 0;
+    inset-block-start: var(--space-1);
     inset-inline-end: 0;
     block-size: var(--size-control-height-compact);
     margin: 0;

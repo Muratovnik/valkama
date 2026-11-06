@@ -974,7 +974,8 @@ kept for them, so nothing shifts or is covered; where nothing can hover they
 stay, a finger's reach apart. A pointer's press on the row does not leave them
 up, and the keyboard moving along a row held at the top leaves the board where
 it is: the room the board keeps there for that row does not push its own
-buttons out of view. A tile the board brings into
+buttons out of view. Their rings stand whole wherever the row does: it keeps the
+ring's reach above its arrow, and the board keeps it at its edges. A tile the board brings into
 view under the row's heading, by the keyboard, by opening it or by moving the
 tile below into its place, stands below
 the heading at the gap the lane keeps under it, however many lines the heading

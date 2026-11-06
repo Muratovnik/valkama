@@ -358,7 +358,8 @@ checkouts are therefore distinguishable even at the same version.
   own. A window widened or narrowed to a width, or opened before its font arrived, draws the
   row the same either way. Where nothing can hover they stay up, far enough apart to tap, and
   Tab or Shift+Tab along an epic's row held at the top of the board no longer scrolls the
-  board back to the lane's start. A tile brought into view under an epic's row from the
+  board back to the lane's start, and the focus ring around the row's arrow and icons shows
+  whole there and at the board's edges, where the row of state names and the edge cut it. A tile brought into view under an epic's row from the
   keyboard, opened with a press or moved up with Alt+↑, now stands wholly below the row at
   the lane's usual gap instead of partly under it.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
