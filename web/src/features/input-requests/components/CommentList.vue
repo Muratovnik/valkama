@@ -215,7 +215,7 @@ const detailsOf = (option: string) =>
 <template>
   <div
     ref="root"
-    class="comment-list"
+    class="comment-list focus-landing"
     tabindex="-1"
     :aria-busy="busyMark"
     :aria-labelledby="labelId"
@@ -329,7 +329,8 @@ const detailsOf = (option: string) =>
 </template>
 
 <style scoped>
-/* On the comment's words' edge, its rows' boxes and the comment glyph below them included. */
+/* On the comment's words' edge, its rows' boxes and the comment glyph below them included. Its
+   words run to that edge, so its ring stands clear of them by the shared `focus-landing` rule. */
 .comment-list {
   --request-row-inset: 0px;
 
@@ -337,10 +338,6 @@ const detailsOf = (option: string) =>
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
   min-width: 0;
-
-  &:focus-visible {
-    outline-offset: var(--space-half);
-  }
 }
 
 .comment-list-rows {

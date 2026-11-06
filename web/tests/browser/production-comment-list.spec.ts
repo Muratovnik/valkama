@@ -202,6 +202,92 @@ test('a cancelled change to a question asks about the answer', async ({ page }) 
   await expect(card.getByText(WORDS.en.strip.marks.ask, { exact: true })).toHaveCount(0)
 })
 
+/**
+ * The gaps between the ring round a focused list and the first and last words of the list, on
+ * each side. The ring's inner edge stands `outline-offset` outside the box, and the words lie
+ * inside the box, so the gap on a side is how far the words stand from that edge.
+ */
+const ringGaps = (list: Locator) =>
+  list.evaluate((node) => {
+    // A line laid out wider than the box that clips it (a folded description, an ellipsis) is
+    // drawn only as far as that box shows, so each rect is cut to every clipping box between the
+    // text and the list.
+    const shownOf = (text: Node, rect: DOMRect) => {
+      let shown = { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top }
+      for (
+        let parent = text.parentElement;
+        parent && node.contains(parent);
+        parent = parent.parentElement
+      ) {
+        const { overflowX, overflowY } = getComputedStyle(parent)
+        if (overflowX === 'visible' && overflowY === 'visible') continue
+        const frame = parent.getBoundingClientRect()
+        shown = {
+          bottom: Math.min(shown.bottom, frame.bottom),
+          left: Math.max(shown.left, frame.left),
+          right: Math.min(shown.right, frame.right),
+          top: Math.max(shown.top, frame.top),
+        }
+      }
+      return shown
+    }
+    const drawn: { bottom: number; left: number; right: number; top: number }[] = []
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+      if (!text.textContent?.trim()) continue
+      const range = document.createRange()
+      range.selectNodeContents(text)
+      for (const rect of range.getClientRects()) {
+        const shown = shownOf(text, rect)
+        if (shown.right > shown.left && shown.bottom > shown.top) drawn.push(shown)
+      }
+    }
+    const box = node.getBoundingClientRect()
+    const style = getComputedStyle(node)
+    const offset = Number.parseFloat(style.outlineOffset)
+    const space = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--space-1'),
+    )
+    const words = {
+      left: Math.min(...drawn.map((rect) => rect.left)),
+      right: Math.max(...drawn.map((rect) => rect.right)),
+      top: Math.min(...drawn.map((rect) => rect.top)),
+      bottom: Math.max(...drawn.map((rect) => rect.bottom)),
+    }
+    return {
+      style: style.outlineStyle,
+      space,
+      gaps: {
+        top: words.top - (box.top - offset),
+        left: words.left - (box.left - offset),
+        right: box.right + offset - words.right,
+        bottom: box.bottom + offset - words.bottom,
+      },
+    }
+  })
+
+/** A focused list's ring keeps `--space-1` from its words on every side. Half a pixel is rounding. */
+async function expectRingClear(list: Locator) {
+  const ring = await ringGaps(list)
+  expect(ring.style, 'the ring is drawn for the keyboard or a landing').toBe('solid')
+  for (const [side, gap] of Object.entries(ring.gaps))
+    expect
+      .soft(gap, `the ring's gap to the words on the ${side}`)
+      .toBeGreaterThanOrEqual(ring.space - 0.5)
+}
+
+for (const width of [1280, 390]) {
+  test(`a list that takes focus after a send rings clear of its words at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const { list } = await sentList(page, WORDS.en)
+    await expect(list).toBeFocused()
+    await expectRingClear(list)
+  })
+}
+
 /** Within a pixel: a drawn edge is a fraction of one off its box's by antialiasing alone. */
 function expectOn(edges: readonly (number | null)[], at: number, what: string) {
   for (const [index, edge] of edges.entries())
