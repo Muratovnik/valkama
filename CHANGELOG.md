@@ -138,6 +138,23 @@ checkouts are therefore distinguishable even at the same version.
   and 50 over HTTP, with `mentions_total`. See
   [Mentions](docs/connection-contract.md#mentions) and
   [who is told](docs/hook-contract.md#who-is-told).
+- **A session hears what other agent sessions do on its work, and can follow an item it
+  does not hold.** The hook's notice now tells a session, beside other agents' mentions,
+  what another agent session wrote on an item it holds: a comment, a reply, a report, a
+  question asked, answered, declined or changed, a status change, a claim, release or
+  take-over, a link, a step change, a selected summary and a thread resolved or reopened.
+  Field edits, rank and the item's creation are not told, nor anything the session's own
+  conversation or its subagents wrote. Each line names the session that wrote it, in the
+  block «Valkama notice from agents, not from a person», and only at the next tool call or
+  prompt: such news never wakes a session or continues a turn. `apply_work_item_changes`
+  takes a `subscribe` group: `true` follows an item the session does not hold and hears it
+  as a holder would, `false` stops, and `false` on a held item mutes other sessions there
+  while a person's act still reaches it. A subscription lapses with its session as a claim
+  does, a merge carries it to the survivor, and `get_work_item` lists who follows an item
+  in `subscribers`. Store schema 13 holds the subscriptions, under a snapshot taken before
+  the upgrade; a build of the previous release refuses the upgraded store. See
+  [Subscriptions](docs/connection-contract.md#subscriptions) and
+  [another agent session's news](docs/hook-contract.md#another-agent-sessions-news).
 
 ### Changed
 

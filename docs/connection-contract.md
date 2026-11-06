@@ -898,6 +898,49 @@ open row again. A merge gives the survivor the pins of the items merged into it,
 deleted item takes its pin with it, and an export carries the pins as
 `planning.pins`, each `{"reference": "MAIN-20", "work_item_id": "…", "pinned_at": "…"}`.
 
+### Subscriptions
+
+**Since 2.6.** An agent session hears what other sessions write on the items it
+holds (see the [hook contract](hook-contract.md#another-agent-sessions-news)). A
+session that depends on an item it does not hold subscribes to it, and hears that
+item's news as a holder would; it unsubscribes when it no longer needs the item.
+There is no tool of its own: the `subscribe` group of `apply_work_item_changes`
+takes a boolean, and `applied.subscribe` says what now stands:
+
+| Sent | The session holds the item | Writes | `applied.subscribe` |
+| --- | --- | --- | --- |
+| `true` | either way | a subscription | `following` |
+| `false` | yes | a mute: other sessions' news there is not told, a person's still is | `muted` |
+| `false` | no | nothing, and forgets a subscription | `not_following` |
+
+"The session" is the confirmed session and agent of the call, never `author`: a
+subagent's subscription tells that subagent and its orchestrator, and its mute
+silences only itself, while an orchestrator's covers what it hears. A call that
+proved no session, and the interface, are refused with `invalid_request`. Asking
+for what already stands changes nothing. `subscribe` applies right after `claim`,
+so a batch that claims an item and sends `false` mutes it.
+
+A subscription is not a change to the item: no history event, no revision, and
+nobody is told of it. Its call is recorded, naming the item, as every write's is.
+It lapses with its session by the rule a [claim](#claims-are-leases) lapses by:
+its session has no row, failed, ended more than 12 hours ago or has not been seen
+for 14 days. A lapsed subscription or mute reads as gone at once, and the sweep
+that releases lapsed claims when a server starts removes it; a session that comes
+back within its grace finds it standing. A merge gives the survivor the
+subscriptions of the items merged into it, keeping the survivor's own where both
+have one, and a deleted item takes them with it.
+
+Every full record of an item, `get_work_item` and the card's read alike, lists the
+sessions that follow it now, oldest first; a mute and a lapsed one are not listed:
+
+```json
+"subscribers": [{"session": "019a…", "client": "codex", "agent": null,
+                 "since": "2026-11-06T09:00:00Z"}]
+```
+
+`client` is the client the subscribing call came from, and `agent` the subagent
+that subscribed, or `null` for the session's own conversation.
+
 ### Several changes in one call
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
@@ -907,6 +950,7 @@ these groups, and applies them in this order:
 | Group | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
+| `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, priority?, rank?, kind?, parent?, source?}` | `update_work_item` |
 | `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
