@@ -12,6 +12,8 @@
  * stand in that same column, so nothing has to work out where the words are. A control takes
  * the column before it, which has no width where there is no control. The column ends where
  * the excerpt ends, short of the toggle, so opening only adds lines to what was being read.
+ * The toggle stands on the label's first line however it wraps (`LineEnd`): set by a margin,
+ * it stood 1.5px above that line in a dense row.
  *
  * A dense row (`dense`) is a list's under a comment: no ground and no inset at its start, so
  * its control stands on the edge of the comment's words, and a step less between its lines.
@@ -25,6 +27,7 @@ import RequestOptionText from '@/features/input-requests/components/RequestOptio
 import type { DescriptionView } from '@/features/input-requests/utils/optionDescriptions.ts'
 
 import type { InputRequestOption } from '@/shared/api/inputRequestModel.ts'
+import LineEnd from '@/shared/ui/LineEnd.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -92,24 +95,28 @@ const describedBy = computed(() => {
         :view="view"
       />
     </component>
-    <VButton
+    <LineEnd
       v-if="opens"
-      class="request-option-toggle"
-      variant="text"
-      size="compact"
-      :tabindex="toggleStop"
-      :title="toggleLabel"
-      :aria-expanded="open"
-      :aria-label="`${toggleLabel}: ${option.label}`"
-      icon
-      @click="open = !open"
+      class="request-option-end"
     >
-      <VIcon
-        class="request-option-glyph"
-        name="chevron-down"
-        :size="16"
-      />
-    </VButton>
+      <VButton
+        class="request-option-toggle"
+        variant="text"
+        size="compact"
+        :tabindex="toggleStop"
+        :title="toggleLabel"
+        :aria-expanded="open"
+        :aria-label="`${toggleLabel}: ${option.label}`"
+        icon
+        @click="open = !open"
+      >
+        <VIcon
+          class="request-option-glyph"
+          name="chevron-down"
+          :size="16"
+        />
+      </VButton>
+    </LineEnd>
     <RichText
       v-if="option.description && open"
       class="request-option-detail"
@@ -184,12 +191,24 @@ const describedBy = computed(() => {
   translate: 0 calc((1lh - var(--font-size-interface)) / 2);
 }
 
+/* The label's first line and the press that ends it meet (`LineEnd`): the row aligns the two by
+   their first baselines, and the words lend the line theirs, ahead of the control beside them. */
+.request-option-line,
+.request-option-words,
+.request-option-end {
+  align-self: first baseline;
+}
+
 .request-option-words {
   grid-column: 2;
 }
 
+/* The baseline it lends is that of the label's line. */
+.request-option-end {
+  font: var(--font-editor);
+}
+
 .request-option-toggle {
-  margin-block-start: var(--space-half);
   margin-inline: var(--space-2) var(--space-half);
 
   &[aria-expanded='true'] .request-option-glyph {
@@ -197,11 +216,10 @@ const describedBy = computed(() => {
   }
 
   /* A line's height, as the row's words stand: a header's control would make the row taller. */
-  .is-dense > & {
+  .is-dense > .request-option-end > & {
     --size-control-height-compact: var(--size-control-inline);
 
     position: relative;
-    margin-block-start: 0;
     margin-inline-end: 0;
   }
 }
@@ -209,7 +227,7 @@ const describedBy = computed(() => {
 /* A dense row stands a finger's height short of a tap, so where a finger presses, the press
    reaches over the rows beside it by as much as it lacks. */
 @media (pointer: coarse) {
-  .is-dense > .request-option-toggle::before {
+  .is-dense .request-option-toggle::before {
     content: '';
     position: absolute;
     inset: calc((var(--size-control-height-compact) - var(--size-control-target)) / 2);
@@ -217,7 +235,7 @@ const describedBy = computed(() => {
 }
 
 @container overlay (width <= 30rem) {
-  .is-dense > .request-option-toggle::before {
+  .is-dense .request-option-toggle::before {
     content: '';
     position: absolute;
     inset: calc((var(--size-control-height-compact) - var(--size-control-target)) / 2);

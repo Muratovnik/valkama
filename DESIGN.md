@@ -578,7 +578,9 @@ and only fades the end of a strip that scrolls on past it.
   rising above the row, so each target keeps its size; a head of one line is
   centred on its icons as before. Aligned to the block, or started at the top
   in a target taller than the line, an icon stood 4–14px under the first line
-  of an entry's head, a review's point and a field's label.
+  of an entry's head, a review's point and a field's label. An option's press
+  that opens its description ends its label the same way, in a question and in
+  a list under a comment, where a margin had left it 1.5px above the first line.
 - What a block in a column draws first stands on the column's edge. A row or a bare
   inline control whose fill keeps an inset under the pointer, `--space-fill-inset`, stands
   that inset outside the column as a negative margin, so its words start where the heading

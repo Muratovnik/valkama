@@ -1,7 +1,8 @@
 /**
  * Icons that end a line of words, read off the built page in both languages at a laptop's width
  * and a phone's: the heads of a discussion's entries and of a question, the points of a review,
- * the label of a field and a review group's heading. Each icon's strokes are centred on the first
+ * the label of a field and a review group's heading, and the press that opens an option's
+ * description at the end of its label, in a question and in a list under a comment. Each icon's strokes are centred on the first
  * line of the words beside it, however many lines those take and however tall the icon's target
  * is (DESIGN.md), in every state the row has, and each target keeps its size. A head of one line,
  * where the first line is the whole of its words, stays as tall as its icons.
@@ -10,6 +11,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { REVIEW_PROMPT, reviewFields } from '../support/reviewQuestion.ts'
+import { boxes, listEntry, openList } from './commentListBackend.ts'
 import { openCard } from './editorPage.ts'
 import { expectIconsOnFirstLine, expectWrapped } from './lineEnd.ts'
 import { asked, openQuestion, routeField } from './questionBackend.ts'
@@ -48,6 +50,22 @@ function expectTargets(
 
 const heads = (scope: Locator) => scope.locator('.entry-head')
 const HEAD = ['.entry-words', '.entry-actions button svg'] as const
+const OPTION = ['.request-option-words', '.request-option-toggle svg'] as const
+
+/** A description that runs on, so its option shows an excerpt and the press that opens it. */
+const RUNS_ON = 'It runs on.\n\nTo a second paragraph,\n\nand a third.'
+
+/** The list under its comment, its option that folds named at a length that wraps. */
+function longList() {
+  const entry = listEntry()
+  const fields = entry.request.fields.map((field) => ({
+    ...field,
+    options: field.options.map((option) =>
+      option.description ? { ...option, label: LONG } : option,
+    ),
+  }))
+  return listEntry({ fields })
+}
 
 for (const locale of ['en', 'ru'])
   for (const width of [1280, 390]) {
@@ -136,12 +154,17 @@ for (const locale of ['en', 'ru'])
       await expectIconsOnFirstLine(group, ...glyph, `${at} a group folded`)
     })
 
-    test(`${at}: the label of a field with its comment at the end`, async ({ page }) => {
+    test(`${at}: the label of a field with its comment at the end, and its options`, async ({
+      page,
+    }) => {
       await inLocale(page, locale, width)
+      const options = routeField.options.map((option, index) =>
+        index ? option : { ...option, label: LONG, description: RUNS_ON },
+      )
       const { card } = await openQuestion(page, [
         asked({
           fields: [
-            { ...routeField, label: LONG },
+            { ...routeField, label: LONG, options },
             { ...routeField, id: 'second', label: 'Second' },
           ],
         }),
@@ -155,5 +178,33 @@ for (const locale of ['en', 'ru'])
       await note.click()
       await expect(note).toHaveAttribute('aria-expanded', 'true')
       await expectIconsOnFirstLine(legends, ...legend, `${at} a comment open`)
+      // An option's press that opens what it runs on to, at the end of its label.
+      const rows = card.locator('.request-option')
+      const folded = await expectIconsOnFirstLine(rows, ...OPTION, `${at} options`)
+      expectWrapped(folded, `${at} options`)
+      expectTargets(folded, [36], at)
+      await card.locator('.request-option-toggle').first().click()
+      await expectIconsOnFirstLine(rows, ...OPTION, `${at} an option opened`)
+    })
+
+    test(`${at}: the rows of a list under a comment, ticked, opened and sent`, async ({ page }) => {
+      await inLocale(page, locale, width)
+      const { list } = await openList(page, [longList()])
+      const rows = list.locator('.request-option')
+      const toggle = list.locator('.request-option-toggle')
+      const form = await expectIconsOnFirstLine(rows, ...OPTION, `${at} a list`)
+      expectWrapped(form, `${at} a list`)
+      expectTargets(form, [28], at)
+      await toggle.click()
+      await expectIconsOnFirstLine(rows, ...OPTION, `${at} a list, its row opened`)
+      await toggle.click()
+      await boxes(list).first().check()
+      await list.locator('.request-onward').click()
+      await expect(boxes(list)).toHaveCount(0)
+      const sent = await expectIconsOnFirstLine(rows, ...OPTION, `${at} a list sent`)
+      expectWrapped(sent, `${at} a list sent`)
+      expectTargets(sent, [28], at)
+      await toggle.click()
+      await expectIconsOnFirstLine(rows, ...OPTION, `${at} a list sent, its row opened`)
     })
   }
