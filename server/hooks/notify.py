@@ -31,7 +31,7 @@ none of them is told what another of them wrote, a mention included. A `Stop` no
 watcher wakes the session, so either would turn agents telling one another into a
 loop that keeps sessions busy; they carry such news only when it asks for the
 session: the reply it awaited, a comment awaiting its reply on work it holds, a
-blocker of that work closed. Each wakes once, at most `MOST_WAKES` an hour; the
+blocker of that work closed; a blocker's other state changes wait. Each wakes once, at most `MOST_WAKES` an hour; the
 rest waits for the next tool call.
 
 Where the place is kept. Not in the store: a hook that wrote there would be a
@@ -343,9 +343,8 @@ _ITEMS = (
     " EXISTS (SELECT 1 FROM work_item_subscriptions u WHERE u.work_item_id = w.work_item_id"
     " AND u.session_id = ? AND u.agent_id = ? AND u.follows = 0),"
     " CASE WHEN instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0 THEN"
-    " (SELECT COUNT(*) FROM work_item_links l JOIN work_items b ON b.work_item_id = l.from_id"
-    " JOIN workflow_states st ON st.state_id = b.state_id"
-    " WHERE l.to_id = w.work_item_id AND l.kind = 'blocks' AND st.is_terminal = 1) ELSE 0 END"
+    " (SELECT MAX((SELECT MAX(e.id) FROM work_item_events e WHERE e.work_item_id = l.from_id))"
+    " FROM work_item_links l WHERE l.to_id = w.work_item_id AND l.kind = 'blocks') ELSE 0 END"
     " FROM work_items w JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
     " WHERE w.work_item_id IN ({items})"
 )
@@ -373,10 +372,10 @@ def _in_scope(
     last write on it, or for an orchestrator whose subagent did all the writing,
     the session's first; for an item it only follows, the call that subscribed.
     An orchestrator follows what any agent of its session subscribed to; a mute
-    is only its writer's. How many of the item's blockers
-    are closed is part of what changes it, counted by the links' index on the item
-    blocked and only where a holder label may be this recipient's: a blocker's close
-    is told to the holder alone.
+    is only its writer's. The newest event of the item's blockers is part of what
+    changes it, read by the links' index on the item blocked and each blocker's
+    events' index, and only where a holder label may be this recipient's: a
+    blocker's state is told to the holder alone.
 
     None when the store does not have what this build reads yet: a hook of a new
     release can run against a store the first open of that release has not
@@ -436,7 +435,7 @@ def _holds_step(checklist: str, suffix: str) -> bool:
 
 
 #: Per item: the last call read, the signature then (revision, newest event, newest
-#: comment, closed blockers), whether it was held, the last call whose other
+#: comment, the blockers' newest event), whether it was held, the last call whose other
 #: sessions' news was read, and whether some of it still waits.
 Mark = tuple[int, tuple[int, int, int, int], bool, int, bool]
 
@@ -461,8 +460,8 @@ def read_state(path: str) -> tuple[dict[str, Mark], Budget]:
     held items. Read as empty, it would tell every running session old news once.
     A `v1` or `v2` file, from before agents' mentions, has read those as far as
     everything else and has none waiting, for the same reason. A file from before
-    `v4` counted no closed blockers: an item that has some is read once more, from
-    its place, which tells nothing again.
+    `v4` kept no blockers' event: an item that has a blocker is read once more,
+    from its place, which tells nothing again.
 
     A `v4` file may carry the wake budget in `@wakes` and `@held` lines. Damaged,
     the whole file reads as empty: the news since the recipient's own last writes
@@ -748,13 +747,18 @@ def _read(
         muted=listens == MUTED,
     )
     if holds and signature[3]:
-        # A blocker closed: a person's close is the person's news, another session's its own.
-        for call, entry in person_events.blockers_closed(conn, item, min(after, heard)):
+        # A blocker's state: a person's close is the person's news and wakes, the rest of a
+        # person's changes wait with other sessions' news for a tool call; another
+        # session's are its own, and only a close among them wakes.
+        for call, entry in person_events.blocker_changes(conn, item, min(after, heard)):
             if call > newest:
                 continue
             if entry["via"] != "agent":
-                if person and call > after:
-                    told.append(entry)
+                if entry["kind"] == "blocker_closed":
+                    if person and call > after:
+                        told.append(entry)
+                elif call > heard:
+                    spoken.append(_at_call(entry, call))
             elif call > heard and listens != MUTED and entry["session"] != session_id:
                 spoken.append(_at_call(entry, call))
     return told, spoken, after, heard
@@ -1089,7 +1093,7 @@ def _thread(entry: dict) -> str:
     kind = entry["kind"]
     if kind in ("thread_resolved", "thread_reopened"):
         return f" on thread #{entry['comment_id']}"
-    if kind == "blocker_closed":
+    if kind in ("blocker_closed", "blocker_changed"):
         return f" on {entry['blocker']}, now {entry['state']}"
     if kind == "mentioned":
         # The comment that named this item stands on another one, where its thread is.

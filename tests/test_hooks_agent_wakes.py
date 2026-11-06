@@ -316,6 +316,52 @@ class BlockerTests(Wakes):
         self.assertIn("blocker_closed", told)
         self.assertIsNone(self.stop(B), "and then nothing is left to wake for")
 
+    def move_as(self, meta: object, state: str) -> None:
+        self.agent("transition_work_item", meta, id=self.blocker, state=state, force=True)
+
+    def test_every_state_change_is_told_at_the_next_call_and_only_a_close_wakes(self) -> None:
+        self.agent("claim_work_item", AS_A, id=self.blocker)
+        self.assertIsNone(self.stop(B), "a blocker started continues no turn")
+        self.assertEqual((0, ""), self.watch_as(B), "nor wakes")
+        started = self.hook(session=B)
+        assert started is not None, "told at the next tool call"
+        self.assertRegex(started, rf"- blocker_changed at \S+ by session {A}, on {self.blocker}")
+        self.close_as(AS_A)
+        self.assertIn("blocker_closed", self.stop(B) or "", "a close wakes, once")
+        self.move_as(AS_A, "backlog")
+        self.assertIsNone(self.stop(B), "a reopen continues no turn")
+        reopened = self.hook(session=B)
+        assert reopened is not None, "a reopened blocker is heard"
+        self.assertRegex(
+            reopened, rf"- blocker_changed at \S+ by session {A}, on {self.blocker}, now Backlog"
+        )
+
+    def test_a_persons_change_short_of_a_close_waits_for_the_next_call(self) -> None:
+        self.person(TRANSITION, id=self.blocker, state="backlog", force=True)
+        self.assertIsNone(self.stop(B), "a person's change of a blocker continues no turn")
+        self.assertEqual((0, ""), self.watch_as(B), "nor wakes")
+        told = self.hook(session=B)
+        assert told is not None, "and is not lost"
+        self.assertIn("a person acted", told)
+        self.assertRegex(told, rf"- blocker_changed at \S+ on {self.blocker}, now Backlog")
+        self.assertNotIn("by session", told)
+
+    def test_a_close_undone_before_anyone_read_it_wakes_nobody(self) -> None:
+        self.close_as(AS_A)
+        self.move_as(AS_A, "backlog")
+        self.assertIsNone(self.stop(B))
+        told = self.hook(session=B)
+        assert told is not None
+        self.assertIn(f"on {self.blocker}, now Cancelled", told)
+        self.assertIn(f"on {self.blocker}, now Backlog", told)
+        self.assertNotIn("blocker_closed", told)
+
+    def test_the_holders_own_session_changing_it_tells_nobody(self) -> None:
+        self.agent("claim_work_item", AS_B, id=self.blocker)
+        self.move_as(AS_B, "backlog")
+        self.assertIsNone(self.stop(B))
+        self.assertIsNone(self.hook(session=B))
+
     def test_a_place_from_before_blockers_counted_tells_nothing_again(self) -> None:
         self.close_as(AS_A)
         self.assertIsNotNone(self.hook(session=B))

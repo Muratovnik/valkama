@@ -474,10 +474,14 @@ the same rules as a person's act and beside the mentions above:
   [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply) hears
   every later reply in that thread, a person's too, even on an item where it holds
   nothing and in a thread it did not start; a subagent hears those after its own.
-- **A blocker closed.** When an item that `blocks` one a session holds reaches a
-  terminal state, the holders hear `blocker_closed`: a person's close in the
-  person's block, another session's in this one. A close by the holder's own
-  session is told to nobody, and a reopened blocker is not closed.
+- **A blocker's state.** Every state an item that `blocks` one a session holds
+  moves to is told to the holders: `blocker_closed` when it reached a terminal
+  state and is still there, `blocker_changed` for any other state, a reopen
+  included, and for a close another transition undid before it was read. A
+  person's change is in the person's block, another session's in this one; a
+  change by the holder's own session is told to nobody. Only a close wakes (see
+  [when another session's news wakes](#when-another-sessions-news-wakes)): a
+  person's other changes, like another session's, wait for the next tool call.
 
 A subscribed item is read like one the recipient wrote to, from the call that
 subscribed. A merge carries the subscription to the survivor, which the
@@ -604,11 +608,12 @@ on". Words a session's own conversation wrote, with no agent, read
 `by session <id>`; an id is written as a holder label writes it.
 
 A comment that waits for a reply, and the reply that answered a wait, say so on
-their line, and a closed blocker names the item and its state:
+their line, and a blocker's change names the item and the state it reached:
 
 ```text
 - comment at 2026-11-06T09:10:00Z by session 019a… (awaits a reply): «Which parser does the export use?»
 - reply at 2026-11-06T09:30:00Z by session 019b…, in your thread #41 (the reply awaited): «The new one.»
+- blocker_changed at 2026-11-06T09:40:00Z by session 019a…, on MAIN-7, now In progress: «Rewrite the parser»
 - blocker_closed at 2026-11-06T10:00:00Z by session 019a…, on MAIN-7, now Done: «Rewrite the parser»
 ```
 
@@ -672,7 +677,7 @@ exists, as `spool/` is:
 
 | File | What it holds |
 | --- | --- |
-| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and closed blockers at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back |
+| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and its blockers' newest event at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back |
 | `<…>.lock` | held while one hook of that recipient reads and records, so parallel tool calls tell the news once |
 | `<session>.watch` | the watcher's lock |
 | `<session>.idle` | written by a `Stop` that told nothing, removed by `UserPromptSubmit` |
@@ -697,9 +702,9 @@ headed `v3`. A `v2` or `v1` file reads with the agents' place where the person's
 place is and nothing waiting, and a build from before `v3` reads a `v3` file as
 empty, which tells the current news once more.
 
-**Since 2.6** the file is headed `v4`: every item counts its closed blockers, and
-the wake budget is kept in it. A `v3` file reads with no closed blocker counted, so
-an item that has one is read once more from its place, which tells nothing again;
+**Since 2.6** the file is headed `v4`: every item keeps its blockers' newest event,
+and the wake budget is kept in it. A `v3` file reads with none kept, so an item
+that has a blocker is read once more from its place, which tells nothing again;
 a build from before `v4` reads a `v4` file as empty. The one-shot rule needs no
 more than the places: what woke a session is behind its place afterwards. A damaged
 file costs at most one repeat: the news since the recipient's own last writes is
@@ -767,12 +772,13 @@ to 200 items, holds 20 and follows 50, 300 calls with nothing new each, interlea
 | before subscriptions | 2 | 1.69 ms | 2.39 ms |
 | with subscriptions | 2 | 1.85 ms | 2.56 ms |
 
-Waking adds no query either, to a call or to the watcher's poll. How many of an
-item's blockers are closed is one more column of the second query, counted through
-the links' index on the item blocked (`work_item_links_to`) and only for an item a
-holder label may make the recipient's; a blocker's close changes it, so the item
-is read then. Who waits in a thread is read only for a changed item's replies, and
-the blockers that closed only for a held item that has one. The same store with 40
+Waking adds no query either, to a call or to the watcher's poll. The newest event
+of an item's blockers is one more column of the second query, read through the
+links' index on the item blocked (`work_item_links_to`) and each blocker's events'
+index, and only for an item a holder label may make the recipient's; a blocker's
+transition changes it, so the item is read then. Who waits in a thread is read only
+for a changed item's replies, and the blockers' transitions only for a held item
+that has one. The same store with 40
 `blocks` links onto the held items, half from closed items, in another run on a
 busier machine, two runs:
 

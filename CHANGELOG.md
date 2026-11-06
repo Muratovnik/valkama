@@ -159,7 +159,8 @@ checkouts are therefore distinguishable even at the same version.
   session or a person has `answered`. Such a comment wakes the holders of its item and
   of the items it names, once and within a day of being written; the first reply to it
   wakes the session that asked, once; and a blocker of an item closed by another session
-  or a person wakes that item's holder, once. A wake is the watcher waking an idle Claude
+  or a person wakes that item's holder, once, while its other state changes, a reopen
+  included, are told at the holder's next tool call. A wake is the watcher waking an idle Claude
   Code session or a `Stop` notice continuing its turn; a busy session hears the news at
   its next tool call, a subagent's news wakes its orchestrator, a Codex session is never
   woken, and nothing a session wrote itself wakes it. Other agents wake one session at

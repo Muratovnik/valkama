@@ -344,37 +344,43 @@ def _answers(row: tuple, session_id: str) -> bool:
     )
 
 
-#: Each item that blocks this one and is closed now, with the transition that closed
-#: it, the last one, and what that call proved.
-_BLOCKERS_CLOSED = (
-    "SELECT s.key, b.number, b.title, st.name, e.created_at, e.call_id, c.identity_state,"
-    " c.identity_source, c.tool, c.session_id, c.agent_id FROM work_item_links l"
-    " JOIN work_items b ON b.work_item_id = l.from_id"
-    " JOIN workflow_states st ON st.state_id = b.state_id AND st.is_terminal = 1"
-    " JOIN planning_spaces s ON s.planning_space_id = b.planning_space_id"
-    " JOIN work_item_events e ON e.id = (SELECT MAX(t.id) FROM work_item_events t"
+#: Every transition after a call of each item that blocks this one, with the state it
+#: reached, whether it is the blocker's last, and what its call proved. A transition
+#: logs the key of the state it reached, before `: ` and a note when there is one.
+_BLOCKER_CHANGES = (
+    "SELECT s.key, b.number, b.title, COALESCE(st.name, e.detail), e.created_at, e.call_id,"
+    " c.identity_state, c.identity_source, c.tool, c.session_id, c.agent_id,"
+    " COALESCE(st.is_terminal, 0), e.id = (SELECT MAX(t.id) FROM work_item_events t"
     " WHERE t.work_item_id = b.work_item_id AND t.action = 'transitioned')"
+    " FROM work_item_links l JOIN work_items b ON b.work_item_id = l.from_id"
+    " JOIN planning_spaces s ON s.planning_space_id = b.planning_space_id"
+    " JOIN work_item_events e ON e.work_item_id = b.work_item_id AND e.action = 'transitioned'"
     " JOIN execution_events c ON c.id = e.call_id"
-    " WHERE l.to_id = ? AND l.kind = 'blocks' AND e.call_id > ? ORDER BY e.call_id"
+    " LEFT JOIN workflow_states st ON st.workflow_id = b.workflow_id AND st.key ="
+    " CASE WHEN instr(e.detail, ': ') > 0 THEN substr(e.detail, 1, instr(e.detail, ': ') - 1)"
+    " ELSE e.detail END"
+    " WHERE l.to_id = ? AND l.kind = 'blocks' AND e.call_id > ? ORDER BY e.call_id, e.id"
 )
 
 
-def blockers_closed(
+def blocker_changes(
     conn: sqlite3.Connection, work_item_id: str, after: int
 ) -> list[tuple[int, dict]]:
-    """The items blocking this one that a call after `after` closed, oldest first.
+    """Each state an item blocking this one reached through a call after `after`, oldest first.
 
-    `blocker_closed`, with the blocker's reference as `blocker`, the state it is in
-    as `state` and its title as the text. A person's close through Planning's own
-    paths is a person's act (`via: "interface"`); another agent's says who, as
-    `agents_since` does. Valkama's own write, a launch and an unproved call name
-    nobody, and are not told. A blocker reopened since is not closed and not here.
+    `blocker_closed` when the blocker reached a terminal state and is still there,
+    its last transition; `blocker_changed` for every other, a close a later
+    transition undid included. Each has the blocker's reference as `blocker`, the
+    state that transition reached as `state` and the blocker's title as the text. A
+    person's transition through Planning's own paths is a person's act
+    (`via: "interface"`); another agent's says who, as `agents_since` does.
+    Valkama's own write, a launch and an unproved call name nobody, and are not told.
     """
 
     found = []
-    for row in conn.execute(_BLOCKERS_CLOSED, (work_item_id, after)).fetchall():
+    for row in conn.execute(_BLOCKER_CHANGES, (work_item_id, after)).fetchall():
         entry = _entry(
-            "blocker_closed",
+            "blocker_closed" if row[11] and row[12] else "blocker_changed",
             str(row[4]),
             blocker=f"{row[0]}-{row[1]}",
             state=str(row[3]),
