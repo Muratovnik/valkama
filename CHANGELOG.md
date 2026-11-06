@@ -204,7 +204,9 @@ checkouts are therefore distinguishable even at the same version.
   «Check status» keep the start of their own line above the buttons, with no empty strip
   over them, and «Don't answer» asks its question in their place.
   Changing an answer keeps the comment's icon on the line of its buttons on a phone, so
-  «Сохранить изменение» is now «Сохранить» in Russian.
+  «Сохранить изменение» is now «Сохранить» in Russian. The line kept above the buttons on a
+  phone for the question «Don't answer» asks is one line in English too, which now reads «The
+  agent gets a refusal; no undo.»
 - **A question that has ended is ringed as a whole, not round one line.** After a send or a
   decline focus went to the line saying how it ended and drew a thin capsule round it, pressed
   against the words and the rule of the answer. Focus now stays on the question itself,

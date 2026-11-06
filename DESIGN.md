@@ -1333,9 +1333,10 @@ way to the task and Check status, since a press on either would end the step any
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
 a phone's it is the line above them, which those two hold where they are offered, while the
 comment's press keeps the line of the buttons; only where neither is offered does that line stand
-for the asking alone, as tall as its words. Kept beside the controls as a room of its own, it sent
-the two answers to the next line where everything else fitted. What stands before the answers
-keeps the row's start at every width.
+for the asking alone, as tall as its words and the row's gap, and those words are one line in
+either language there. Kept beside the controls as a room of its own, it sent the two answers to
+the next line where everything else fitted. What stands before the answers keeps the row's start
+at every width.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A press following another can still do harm where something is held: folding lifts the next

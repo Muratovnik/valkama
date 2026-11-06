@@ -31,7 +31,7 @@ import {
 } from './questionPress.ts'
 import { test } from './test.ts'
 
-const ASKED = "The agent gets a refusal, and it can't be taken back."
+const ASKED = 'The agent gets a refusal; no undo.'
 
 const back = (scope: Locator) => scope.getByRole('button', { name: 'Back', exact: true })
 

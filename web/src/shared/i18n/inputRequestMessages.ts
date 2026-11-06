@@ -83,7 +83,7 @@ export const inputRequestMessages = {
       agentDeclined: 'Declined by agent {actor}',
       agentResolved: 'Resolved by agent {actor}',
       back: 'Back',
-      declineAsked: "The agent gets a refusal, and it can't be taken back.",
+      declineAsked: 'The agent gets a refusal; no undo.',
       cut: 'Shown are the newest questions and those still waiting; older ones are left out.',
       execution: 'Execution: {id}',
       session: 'Session: {id}',
