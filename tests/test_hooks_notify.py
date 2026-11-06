@@ -854,7 +854,11 @@ class StatementsTests(Harness):
                 "/api/planning/work-item/comment", id=self.unheld, body=str(number), reply_to=root
             )
         seen = self.statements()
-        self.assertEqual(1, len([sql for sql in seen if "WHERE m.id =" in sql]), seen)
+        # The root's author, and who waits for a reply in the thread: each once.
+        self.assertEqual(
+            1, len([sql for sql in seen if "WHERE m.id =" in sql and "m.awaits_reply" not in sql])
+        )
+        self.assertEqual(1, len([sql for sql in seen if "OR m.reply_to =" in sql]), seen)
 
 
 class AgreementTests(unittest.TestCase):

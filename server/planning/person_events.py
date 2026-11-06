@@ -195,7 +195,7 @@ def since_call(
 #: rows `_window` reads for a person, through an agent's call instead.
 _AGENT_COMMENTS = (
     "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request,"
-    " c.session_id, c.agent_id FROM work_item_comments m"
+    " c.session_id, c.agent_id, m.awaits_reply FROM work_item_comments m"
     " JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_state = 'confirmed'"
     " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
@@ -217,7 +217,8 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
     neither `from_person` nor the `person_spoke` guard: a client hook tells them
     apart. Each entry has `via: "agent"`, and `session` and `agent`, the speaker as
     its call row names it, so the hook can leave out the recipient's own words and
-    always says whose these are. Who is told is the hook's to decide.
+    always says whose these are; a comment that waits for a reply says
+    `awaits_reply: true`. Who is told is the hook's to decide.
     """
 
     found: list[tuple[tuple[int, int, int], dict]] = []
@@ -226,7 +227,10 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
     for row in conn.execute(_AGENT_COMMENTS, bound).fetchall():
         if row[2]:
             reports.add(int(row[4]))
-        found.append(((int(row[4]), 1, int(row[0])), _spoken(_comment_entry(row), row[7], row[8])))
+        entry = _spoken(_comment_entry(row), row[7], row[8])
+        if row[9]:
+            entry["awaits_reply"] = True
+        found.append(((int(row[4]), 1, int(row[0])), entry))
     for row in conn.execute(_AGENT_EVENTS, bound).fetchall():
         action = str(row[1])
         if action not in KINDS or (action == "summarized" and int(row[4]) in reports):
@@ -235,6 +239,102 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
             ((int(row[4]), 2, int(row[0])), _spoken(_event_entry(conn, row), row[5], row[6]))
         )
     return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
+
+
+#: A thread's comments in order, with what the call that wrote each proved: whoever
+#: waits for a reply there is told, and woken, by the first that answers it.
+_THREAD_ROWS = (
+    "SELECT m.id, m.call_id, m.awaits_reply, c.identity_state, c.identity_source, c.tool,"
+    " c.session_id, c.agent_id FROM work_item_comments m"
+    " LEFT JOIN execution_events c ON c.id = m.call_id"
+    " WHERE m.id = ? OR m.reply_to = ? ORDER BY m.id"
+)
+_QUESTION_THREAD_ROWS = (
+    "SELECT m.id, m.call_id, m.awaits_reply, c.identity_state, c.identity_source, c.tool,"
+    " c.session_id, c.agent_id FROM work_item_comments m"
+    " LEFT JOIN execution_events c ON c.id = m.call_id"
+    " WHERE m.reply_to_request = ? ORDER BY m.id"
+)
+#: The calls that set a root's resolved mark, `<id>` or `<id>: <decision>` in the event.
+_THREAD_MARKS = (
+    "SELECT call_id FROM work_item_events WHERE work_item_id = ? AND action = 'comment_resolved'"
+    " AND (detail = ? OR detail LIKE ?) ORDER BY id"
+)
+
+
+def awaited(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    entry: dict,
+    session_id: str,
+    agent_id: str | None,
+) -> dict[int, bool]:
+    """Who waits in a reply's thread: each comment after this recipient first waited
+    there, and whether it is the answer that ended a wait.
+
+    The recipient waits from a comment its own call wrote with `awaits_reply`: its
+    session for an orchestrator, itself for a subagent. A wait ends at the first
+    later reply by a person or by another confirmed session, which is the answer,
+    and at a resolved mark on the thread; the recipient's own session never answers
+    it. Every comment after the first wait is addressed to the recipient. Empty when
+    it never waited in this thread, which is one query for a thread nobody waits in.
+    """
+
+    root, question = entry.get("reply_to"), entry.get("reply_to_request")
+    if root is not None:
+        rows = conn.execute(_THREAD_ROWS, (root, root)).fetchall()
+    elif question is not None:
+        rows = conn.execute(_QUESTION_THREAD_ROWS, (question,)).fetchall()
+    else:
+        return {}
+    if not any(row[2] and _wrote(row, session_id, agent_id) for row in rows):
+        return {}
+    marks = (
+        [
+            int(row[0])
+            for row in conn.execute(_THREAD_MARKS, (work_item_id, str(root), f"{root}: %"))
+            if row[0] is not None
+        ]
+        if root is not None
+        else []
+    )
+    found: dict[int, bool] = {}
+    since: int | None = None
+    started = False
+    for row in rows:
+        call = int(row[1] or 0)
+        if since is not None and any(since < mark < call for mark in marks):
+            since = None
+        if _wrote(row, session_id, agent_id):
+            if row[2]:
+                since, started = call, True
+            continue
+        if not started:
+            continue
+        answers = _answers(row, session_id)
+        found[int(row[0])] = answers and since is not None
+        if answers:
+            since = None
+    return found
+
+
+def _wrote(row: tuple, session_id: str, agent_id: str | None) -> bool:
+    """Whether a thread row is the recipient's own: its session, or for a subagent itself."""
+
+    return (
+        row[3] == "confirmed" and row[6] == session_id and (agent_id is None or row[7] == agent_id)
+    )
+
+
+def _answers(row: tuple, session_id: str) -> bool:
+    """Whether a thread row answers this session: a person's, or another proved session's."""
+
+    if row[4] == BROWSER:
+        tool = str(row[5] or "")
+        return tool.startswith(("/api/planning/", "/api/modules/planning/"))
+    return (
+        row[3] == "confirmed" and row[4] != VALKAMA and row[6] is not None and row[6] != session_id
+    )
 
 
 def _spoken(entry: dict, session: object, agent: object) -> dict:
