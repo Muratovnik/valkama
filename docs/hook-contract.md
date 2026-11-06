@@ -494,10 +494,11 @@ the same rules as a person's act and beside the mentions above:
 A subscribed item is read like one the recipient wrote to, from the call that
 subscribed. A merge carries the subscription to the survivor, which the
 subscriber's own calls never named, so the subscriber hears the merge there and
-whatever follows on the survivor. A subscription or a mute that lapsed with its
-session tells nothing more from the moment it lapsed, before the sweep removes it as
-after: the hook reads its session by the rule the lease does, in the two queries it
-makes anyway.
+whatever follows on the survivor, and nothing written there before: the carried row
+starts at the merge, while its own call still says whose it is and when it lapses.
+A subscription or a mute that lapsed with its session tells nothing more from the
+moment it lapsed, before the sweep removes it as after: the hook reads its session
+by the rule the lease does, in the two queries it makes anyway.
 
 ### When it is told
 

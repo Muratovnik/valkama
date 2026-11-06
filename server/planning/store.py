@@ -50,6 +50,12 @@ _THREAD_COLUMNS = {
             "awaits_reply INTEGER NOT NULL DEFAULT 0 CHECK(awaits_reply IN (0,1))",
         ),
     ),
+    # The call after which a subscriber hears the item: the one that subscribed, or
+    # the one before the merge that carried the row here. Declared apart from `call_id`,
+    # which says whose the row is and so when it lapses.
+    "work_item_subscriptions": (
+        ("heard_after", "heard_after INTEGER REFERENCES execution_events(id)"),
+    ),
     "work_item_requests": (
         ("answer_version", "answer_version INTEGER NOT NULL DEFAULT 0"),
         (
@@ -242,7 +248,7 @@ CREATE TABLE IF NOT EXISTS work_item_subscriptions(
     agent_id TEXT NOT NULL DEFAULT '',
     follows INTEGER NOT NULL CHECK(follows IN (0,1)),
     call_id INTEGER NOT NULL REFERENCES execution_events(id),
-    created_at TEXT NOT NULL DEFAULT {_NOW},
+    created_at TEXT NOT NULL DEFAULT {_NOW}{_appended("work_item_subscriptions")},
     PRIMARY KEY(work_item_id, session_id, agent_id)
 );
 -- What a session follows, read from the session: a client hook asks on every tool

@@ -338,7 +338,8 @@ _SCOPE = (
     "SELECT work_item_id, MAX(own), MIN(id) FROM (SELECT work_item_id,"
     " CASE WHEN agent_id IS ? THEN id END AS own, id FROM execution_events"
     " WHERE session_id = ? AND kind = 'planning_write' AND identity_state = 'confirmed'"
-    " AND work_item_id IS NOT NULL{agent} UNION ALL SELECT work_item_id, NULL, call_id"
+    " AND work_item_id IS NOT NULL{agent} UNION ALL SELECT work_item_id, NULL,"
+    " COALESCE(heard_after, call_id)"
     " FROM work_item_subscriptions WHERE session_id = ? AND follows = 1{follower}"
     " AND {stands}) GROUP BY work_item_id ORDER BY MAX(id) DESC LIMIT {most}"
 )
@@ -392,11 +393,12 @@ def _in_scope(
 
     Each comes with where its news starts the first time: this recipient's own
     last write on it, or for an orchestrator whose subagent did all the writing,
-    the session's first; for an item it only follows, the call that subscribed.
-    An orchestrator follows what any agent of its session subscribed to; a mute
-    is only its writer's. A subscription or mute counts while its session stands
-    by the lease's rule (`_STANDS`), so a lapsed one is gone before the sweep. The newest event of the item's blockers is part of what
-    changes it, read by the links' index on the item blocked and each blocker's
+    the session's first; for an item it only follows, the call that subscribed, or
+    for one a merge carried it to, the call before the merge. An orchestrator
+    follows what any agent of its session subscribed to; a mute is only its
+    writer's. A subscription or mute counts while its session stands by the
+    lease's rule (`_STANDS`), so a lapsed one is gone before the sweep. The newest
+    event of the item's blockers is part of what changes it, read by the links' index on the item blocked and each blocker's
     events' index, and only where a holder label may be this recipient's: a
     blocker's state is told to the holder alone.
 

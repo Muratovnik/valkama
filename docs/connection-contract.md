@@ -952,11 +952,11 @@ nobody is told of it. Its call is recorded, naming the item, as every write's is
 It lapses with its session by the rule a [claim](#claims-are-leases) lapses by:
 its session has no row, failed, ended more than 12 hours ago or has not been seen
 for 14 days. A lapsed subscription or mute reads as gone at once, to the card and
-to the hook alike, and the sweep
-that releases lapsed claims when a server starts removes it; a session that comes
-back within its grace finds it standing. A merge gives the survivor the
-subscriptions of the items merged into it, keeping the survivor's own where both
-have one, and a deleted item takes them with it.
+to the hook alike, and the sweep that releases lapsed claims when a server starts
+removes it; a session that comes back within its grace finds it standing. A merge
+gives the survivor the subscriptions of the items merged into it, keeping the
+survivor's own where both have one, and a carried one hears the survivor from the
+merge on; a deleted item takes them with it.
 
 Every full record of an item, `get_work_item` and the card's read alike, lists the
 sessions that follow it now, oldest first; a mute and a lapsed one are not listed:

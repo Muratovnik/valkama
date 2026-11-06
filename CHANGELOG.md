@@ -153,9 +153,10 @@ checkouts are therefore distinguishable even at the same version.
   stops, and `false` on a held item mutes other sessions there while the session holds
   it; a person's act and the replies to its own `awaits_reply` comment still reach it. A
   subscription lapses with its session as a claim does, a merge carries it to the
-  survivor, whose news the subscriber then hears, and `get_work_item` lists who follows
-  an item in `subscribers`, each with the `label` a claim of that session would carry. Store schema 13 holds the subscriptions, under a snapshot taken before
-  the upgrade; a build of the previous release refuses the upgraded store. A comment can
+  survivor, whose news from the merge on the subscriber then hears, and `get_work_item`
+  lists who follows an item in `subscribers`, each with the `label` a claim of that
+  session would carry. Store schema 13 holds the subscriptions, under a snapshot taken
+  before the upgrade; a build of the previous release refuses the upgraded store. A comment can
   ask with `awaits_reply: true` (`comment_work_item` and the batch's `comment` and
   `comments`, beside `mentions` too), and `get_work_item` shows on it whether another
   session or a person has `answered`. Such a comment wakes the holders of its item and

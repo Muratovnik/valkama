@@ -75,11 +75,11 @@ def subscribe(conn: sqlite3.Connection, row: sqlite3.Row, follows: object) -> st
         return NOT_FOLLOWING
     if found is None or int(found[0]) != wanted:
         conn.execute(
-            "INSERT INTO work_item_subscriptions(work_item_id,session_id,agent_id,follows,call_id)"
-            " VALUES(?,?,?,?,?) ON CONFLICT(work_item_id,session_id,agent_id) DO UPDATE SET"
-            " follows = excluded.follows, call_id = excluded.call_id,"
-            " created_at = excluded.created_at",
-            (item, session, agent, wanted, call),
+            "INSERT INTO work_item_subscriptions(work_item_id,session_id,agent_id,follows,"
+            "call_id,heard_after) VALUES(?,?,?,?,?,?) ON CONFLICT(work_item_id,session_id,"
+            "agent_id) DO UPDATE SET follows = excluded.follows, call_id = excluded.call_id,"
+            " heard_after = excluded.heard_after, created_at = excluded.created_at",
+            (item, session, agent, wanted, call, call),
         )
     return FOLLOWING if wanted else MUTED
 
@@ -166,11 +166,22 @@ def expire(conn: sqlite3.Connection) -> int:
 
 
 def carry(conn: sqlite3.Connection, merged_id: str, survivor_id: str) -> None:
-    """A merge takes what follows the work along; a row the survivor has already stays."""
+    """A merge takes what follows the work along; a row the survivor has already stays.
 
+    A carried row hears the survivor from the merge on: what was written there
+    before was written on an item its session did not follow. The merge's own call
+    is the first it hears, so the row starts after the call before it.
+    """
+
+    merge = calls.call_id(conn, survivor_id)
+    if merge is None:
+        merge = int(
+            conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM execution_events").fetchone()[0]
+        )
     conn.execute(
-        "UPDATE OR IGNORE work_item_subscriptions SET work_item_id = ? WHERE work_item_id = ?",
-        (survivor_id, merged_id),
+        "UPDATE OR IGNORE work_item_subscriptions SET work_item_id = ?, heard_after = ?"
+        " WHERE work_item_id = ?",
+        (survivor_id, merge - 1, merged_id),
     )
     conn.execute("DELETE FROM work_item_subscriptions WHERE work_item_id = ?", (merged_id,))
 

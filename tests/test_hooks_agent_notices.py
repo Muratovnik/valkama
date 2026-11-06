@@ -328,6 +328,21 @@ class WhoListensTests(Harness):
             self.assertIn(f"{survivor} «Survivor»:", told)
             self.assertIn("marker S-1", told)
 
+    def test_a_carried_subscription_hears_the_survivor_from_the_merge_on(self) -> None:
+        survivor = self.item("Survivor")
+        self.conn.commit()
+        self.assertEqual("following", self.subscribe(AS_B, self.followed, True))
+        self.assertIsNone(self.hook())
+        for n in range(3):
+            self.comment(AS_A, survivor, f"Before the merge, marker BM-{n}")
+        self.person(COMMENT, id=survivor, body="A person before the merge, marker BP-1")
+        self.agent("merge_work_items", AS_THIRD, id=survivor, items=[self.followed])
+        told = self.hook()
+        assert told is not None, "the merge itself is news on the survivor"
+        self.assertIn(f"Merged {self.followed} into this item", told)
+        self.assertNotIn("marker BM-", told, "an agent's words on an item B did not follow")
+        self.assertNotIn("marker BP-1", told, "nor a person's")
+
     def test_a_reply_in_bs_thread_reaches_b_where_it_holds_nothing(self) -> None:
         root = self.comment(AS_B, self.followed, "My question to whoever works this")
         self.assertIsNone(self.hook())

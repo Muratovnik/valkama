@@ -29,7 +29,15 @@ from tests.test_schema12_migration import _catalog, _columns, _rows, _shape
 
 ADDED_TABLE = "work_item_subscriptions"
 AWAITS = "awaits_reply"
-COLUMNS = ["work_item_id", "session_id", "agent_id", "follows", "call_id", "created_at"]
+COLUMNS = [
+    "work_item_id",
+    "session_id",
+    "agent_id",
+    "follows",
+    "call_id",
+    "created_at",
+    "heard_after",
+]
 HELD = "11111111-1111-4111-8111-111111111111"
 LABELS = ("preschema12", "preschema13", "pretables", "preupgrade", "preidentity")
 SOURCES: dict[int, Callable[[str], None]] = {11: schema11.build, 12: schema12.build}
