@@ -39,10 +39,14 @@ const props = withDefaults(
     waiting: boolean
     /** Somebody waits on the answer, so it can be refused. */
     declinable?: boolean
+    /** What the strip asks once a change is cancelled, where the change is not to an answer. */
+    cancelMessage?: string
+    /** What the strip's way on says, where it discards something other than an answer. */
+    discardWord?: string
     /** What Send says, where it sends something other than an answer. */
     sendWord?: string
   }>(),
-  { declinable: true, sendWord: undefined },
+  { cancelMessage: undefined, declinable: true, discardWord: undefined, sendWord: undefined },
 )
 const emit = defineEmits<{
   'discard': []
@@ -83,8 +87,8 @@ defineExpose({
       class="request-confirm"
       tone="danger"
       :cancel-label="t('requests.keepChanging')"
-      :confirm-label="t('requests.discardChange')"
-      :message="t('requests.cancelAsked')"
+      :confirm-label="discardWord ?? t('requests.discardChange')"
+      :message="cancelMessage ?? t('requests.cancelAsked')"
       @cancel="emit('keep')"
       @confirm="emit('discard')"
     />

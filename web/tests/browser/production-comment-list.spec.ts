@@ -20,31 +20,52 @@ import {
   openList,
   OPTIONS,
 } from './commentListBackend.ts'
+import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const WORDS = {
   en: {
     send: 'Send marks',
     change: 'Change',
+    answerChange: 'Change answer',
     save: 'Save change',
     cancel: 'Cancel',
     note: 'Comment on the marks',
     ticked: (n: number) => `You ticked ${n} of ${OPTIONS}`,
     frozen: 'The task is closed: marks would reach no one. Reopen the task to tick them.',
     unsent: 'Not sent. This is what you had chosen:',
+    strip: {
+      marks: {
+        ask: 'Discard the change to these marks?',
+        confirm: 'Discard change to these marks',
+      },
+      answer: { ask: 'Discard the change to this answer?', confirm: 'Discard change' },
+    },
   },
   ru: {
     send: 'Отправить отметки',
     change: 'Изменить',
+    answerChange: 'Изменить ответ',
     save: 'Сохранить',
     cancel: 'Отмена',
     note: 'Комментарий к отметкам',
     ticked: (n: number) => `Вы отметили ${n} из ${OPTIONS}`,
     frozen: 'Задача закрыта: отметки не дошли бы ни до кого. Откройте задачу, чтобы отметить.',
     unsent: 'Не отправлено. Вот что вы выбрали:',
+    strip: {
+      marks: { ask: 'Отменить изменение отметок?', confirm: 'Отменить изменение отметок' },
+      answer: { ask: 'Отменить изменение ответа?', confirm: 'Отменить изменение' },
+    },
   },
 }
 type Words = (typeof WORDS)['en']
+
+/** An answered question, as the sibling answer specs open one: changed from its answer. */
+const ANSWERED: Parameters<typeof asked>[0] = {
+  status: 'answered',
+  answers: { route: 'move' },
+  resolved_at: '2026-10-24T12:00:00Z',
+}
 
 const button = (scope: Locator, name: string) => scope.getByRole('button', { name, exact: true })
 const tick = (list: Locator, label: string) => list.getByRole('checkbox', { name: label })
@@ -141,6 +162,46 @@ test('a tick not sent when the task closed stays in sight, and is there to send 
   expect(requests.writes[0]?.body.answers).toEqual({ items: ['c', 'a'] })
 })
 
+/** A sent list, with one mark ticked, from which the test changes it. */
+async function sentList(page: Page, words: Words) {
+  const opened = await openList(page)
+  await tick(opened.list, 'Widen the check').check()
+  await button(opened.list, words.send).click()
+  await expect(opened.list).toContainText(words.ticked(1))
+  return opened
+}
+
+/** Cancels a change with a mark ticked in it, which asks in the strip before it throws it away. */
+async function cancelChangedMarks(list: Locator, words: Words) {
+  await button(list, words.change).click()
+  await tick(list, 'Split the guard').check()
+  await button(list, words.cancel).click()
+}
+
+/** A question's answer changed and cancelled with something changed in it: the strip asks. */
+async function cancelChangedAnswer(page: Page, words: Words) {
+  const { card } = await openQuestion(page, [asked(ANSWERED)])
+  await card.getByRole('button', { name: words.answerChange, exact: true }).click()
+  await card.getByRole('radio', { name: 'Keep the comments', exact: true }).check()
+  await card.getByRole('button', { name: words.cancel, exact: true }).click()
+  return card
+}
+
+test('a cancelled change to a list asks about the marks, not the answer', async ({ page }) => {
+  const { list } = await sentList(page, WORDS.en)
+  await cancelChangedMarks(list, WORDS.en)
+  await expect(list.getByText(WORDS.en.strip.marks.ask, { exact: true })).toBeVisible()
+  await expect(button(list, WORDS.en.strip.marks.confirm)).toBeVisible()
+  await expect(list.getByText(WORDS.en.strip.answer.ask, { exact: true })).toHaveCount(0)
+})
+
+test('a cancelled change to a question asks about the answer', async ({ page }) => {
+  const card = await cancelChangedAnswer(page, WORDS.en)
+  await expect(card.getByText(WORDS.en.strip.answer.ask, { exact: true })).toBeVisible()
+  await expect(button(card, WORDS.en.strip.answer.confirm)).toBeVisible()
+  await expect(card.getByText(WORDS.en.strip.marks.ask, { exact: true })).toHaveCount(0)
+})
+
 /** Within a pixel: a drawn edge is a fraction of one off its box's by antialiasing alone. */
 function expectOn(edges: readonly (number | null)[], at: number, what: string) {
   for (const [index, edge] of edges.entries())
@@ -201,6 +262,22 @@ for (const width of [1280, 390]) {
 
 test.describe('in Russian', () => {
   test.use({ locale: 'ru-RU' })
+
+  test('a cancelled change to a list asks about the marks, not the answer', async ({ page }) => {
+    const { list } = await sentList(page, WORDS.ru)
+    await cancelChangedMarks(list, WORDS.ru)
+    await expect(list.getByText(WORDS.ru.strip.marks.ask, { exact: true })).toBeVisible()
+    await expect(button(list, WORDS.ru.strip.marks.confirm)).toBeVisible()
+    await expect(list.getByText(WORDS.ru.strip.answer.ask, { exact: true })).toHaveCount(0)
+  })
+
+  test('a cancelled change to a question asks about the answer', async ({ page }) => {
+    const card = await cancelChangedAnswer(page, WORDS.ru)
+    await expect(card.getByText(WORDS.ru.strip.answer.ask, { exact: true })).toBeVisible()
+    await expect(button(card, WORDS.ru.strip.answer.confirm)).toBeVisible()
+    await expect(card.getByText(WORDS.ru.strip.marks.ask, { exact: true })).toHaveCount(0)
+  })
+
   for (const width of [1280, 390]) {
     test(`every state stands on the comment's text at ${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
