@@ -325,3 +325,39 @@ test("a found item's title breaks after a slash and is named as written in the f
   const name = await nameOf(page, { named: option, text })
   expect(name).toBe(await plainNameOf(page, { named: option, text }))
 })
+
+test("a candidate's title breaks after a slash and is named as written in the picker of related work", async ({
+  page,
+}) => {
+  await installBackend(page)
+  await page.route('**/api/planning/search?*', (route) =>
+    route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-api',
+        work_items: [
+          {
+            work_item_id: '00000000-0000-4000-8000-000000000107',
+            planning_space_id: workItem.planning_space_id,
+            reference: 'MAIN-7',
+            title: workItem.title,
+            state: { name: 'Doing' },
+            claim_ref: '',
+          },
+        ],
+      },
+    }),
+  )
+  const drawer = await openCard(page)
+  await drawer.getByRole('tab', { name: /Relations/iu }).click()
+  await drawer.getByRole('button', { name: 'Add link', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Related task', exact: true })
+  await dialog.getByLabel('Reference, number or title').fill('loading')
+  const radio = dialog.getByRole('radio')
+  await expect(radio).toHaveCount(1)
+  const text = dialog.locator('.result-title > span')
+  const { count, inside } = await breaksIn(text)
+  expect(count).toBeGreaterThan(0)
+  expect(inside, 'breaks inside a word').toEqual([])
+  const name = await nameOf(page, { named: radio, text })
+  expect(name).toBe(await plainNameOf(page, { named: radio, text }))
+})
