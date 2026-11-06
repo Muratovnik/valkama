@@ -3,8 +3,8 @@
  * line under the holder's, labelled in the holder label's quiet ink, each session printed as
  * the card prints a holder, from the label the server gives it, which is the text a claim of
  * that session records. The line starts on the column the head's other lines start on, a name
- * moves to the next line whole rather than breaking inside itself, and nothing draws a plate or
- * an edge around the plain words. A card nobody follows, or only its holder, has no such line.
+ * moves to the next line whole rather than breaking inside itself, one wider than the line wraps
+ * between its words and is read whole, and nothing draws a plate or an edge around the words. A card nobody follows, or only its holder, has no such line.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -26,6 +26,7 @@ const CARD = serializePlatformRoute({
 
 const LABEL = { en: 'Subscribed', ru: 'Подписаны' } as const
 const ONE = '019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e'
+const TWO = '019a3c2e-8888-7c11-9e0f-2f4b6d8a1c3e'
 const since = '2026-08-13T08:00:00Z'
 
 /**
@@ -42,7 +43,7 @@ const ONE_LABEL = `codex (session ${ONE})`
 
 /**
  * Five subagents of Claude Code sessions, whose agent ids are 16 hex digits, so each name is
- * wider than half a phone's line: a phone's line holds one of them, a laptop's two.
+ * wider than half the drawer's line, a phone's and a laptop's alike: a line holds one of them.
  */
 const FIVE = Array.from({ length: 5 }, (_, index) => {
   const session = `0f1e2d3c-4b5a-4968-8778-${String(index).padStart(12, '0')}`
@@ -146,41 +147,6 @@ for (const locale of ['ru', 'en'] as const)
       expect(await surround(names.first())).toEqual(BARE)
     })
 
-    test(`${at}: five long names wrap whole, each line from the head's left edge`, async ({
-      page,
-    }) => {
-      const drawer = await openCard(page, locale, width, FIVE)
-      const line = drawer.locator('.card-subscribers')
-      const names = line.locator('.card-subscriber')
-      await expect(names).toHaveCount(5)
-      const block = await box(drawer.locator('.card-facts-block'))
-      const [labelWords] = await drawnLines(line.locator('.card-holder-label'))
-      const drawn = []
-      for (const name of await names.all()) {
-        const rects = await drawnLines(name)
-        // One line each: a name never breaks inside itself.
-        expect(new Set(rects.map((rect) => Math.round(rect.top))).size).toBe(1)
-        // And whole: nothing of it given way to an ellipsis.
-        expect(await name.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
-        expect(rects[0].right).toBeLessThanOrEqual(block.x + block.width + 0.5)
-        expect(await surround(name)).toEqual(BARE)
-        drawn.push(rects[0])
-      }
-      // Each session's name, as the holder's label for it would print.
-      await expect(names.first()).toHaveText('claude agent a7f3c19e0b2d4e50 · 0f1e2d3c-4b5a,')
-      await expect(names.last()).not.toContainText(',')
-      // The names take more lines than one, and every line after the first starts on the edge.
-      const tops = [...new Set(drawn.map((rect) => Math.round(rect.top)))]
-      expect(tops.length, `${at}: lines of names`).toBeGreaterThan(1)
-      for (const top of tops.slice(1)) {
-        const first = Math.min(
-          ...drawn.filter((rect) => Math.round(rect.top) === top).map((rect) => rect.left),
-        )
-        expect(first, `${at}: the line at ${top}`).toBeCloseTo(labelWords.left, 0)
-      }
-      await expectNoSilentClipping(page, `${at}: five followers`)
-    })
-
     // The holder following its own item is already named on the row above.
     for (const [who, followers] of [
       ['nobody follows', []],
@@ -224,19 +190,150 @@ test('a subscriber is named by its label, and the holder among them by it too', 
   await expect(drawer.locator('.card-subscribers')).not.toContainText('gemini')
 })
 
-test('on a phone a name wider than the line gives way and stays whole in its tooltip', async ({
-  page,
-}) => {
-  const drawer = await openCard(page, 'ru', 390, [CODEX_AGENT, follower(ONE, ONE_LABEL)])
-  const names = drawer.locator('.card-subscriber')
-  await expect(names).toHaveCount(2)
-  const long = names.first()
-  await expect(long).toHaveCSS('text-overflow', 'ellipsis')
-  expect(await long.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
-  await expect(long).toHaveAttribute('title', CODEX_AGENT.label)
-  const block = await box(drawer.locator('.card-facts-block'))
-  const cut = await box(long)
-  expect(cut.x + cut.width).toBeLessThanOrEqual(block.x + block.width + 0.5)
-  // The short one after it stays whole, on a line of its own.
-  expect(await names.last().evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
-})
+/**
+ * How a name is drawn, character by character: how many lines it takes, whether every break
+ * between them falls at a space, where each line starts, and the widths it would have on one
+ * line and its first and widest word, measured by a copy of its words in its own font outside
+ * any line.
+ */
+const nameLayout = (name: Locator) =>
+  name.evaluate((node) => {
+    const range = document.createRange()
+    const chars: { blank: boolean; left: number; right: number; top: number }[] = []
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+      const data = text.textContent ?? ''
+      for (const [at, char] of [...data].entries()) {
+        range.setStart(text, at)
+        range.setEnd(text, at + 1)
+        const rect = [...range.getClientRects()].find((found) => found.width > 0)
+        const blank = char === ' ' || rect === undefined
+        chars.push({ blank, left: rect?.left ?? 0, right: rect?.right ?? 0, top: rect?.top ?? 0 })
+      }
+    }
+    let breaksAtSpaces = true
+    let previous = -1
+    for (const [at, char] of chars.entries()) {
+      if (char.blank) continue
+      const broke = previous >= 0 && char.top > chars[previous].top + 2
+      if (broke && !chars.slice(previous + 1, at).some((between) => between.blank))
+        breaksAtSpaces = false
+      previous = at
+    }
+    const drawn = chars.filter((char) => !char.blank)
+    const tops = [...new Set(drawn.map((char) => Math.round(char.top)))]
+    const words = (node.textContent ?? '').split(' ')
+    const probe = document.createElement('span')
+    probe.style.cssText = 'position: absolute; visibility: hidden; white-space: pre'
+    node.append(probe)
+    const width = (text: string) => {
+      probe.textContent = text
+      return probe.getBoundingClientRect().width
+    }
+    const measured = {
+      oneLine: width(node.textContent ?? ''),
+      firstWord: width(words[0]),
+      widestWord: Math.max(...words.map((word) => width(word))),
+    }
+    probe.remove()
+    const [first] = drawn
+    const last = drawn.at(-1) ?? first
+    return {
+      ...measured,
+      breaksAtSpaces,
+      lines: tops.length,
+      lineStarts: tops.map((top) =>
+        Math.min(...drawn.filter((char) => Math.round(char.top) === top).map((char) => char.left)),
+      ),
+      right: Math.max(...drawn.map((char) => char.right)),
+      firstTop: first.top,
+      lastRight: last.right,
+      lastTop: last.top,
+      cut: node.scrollWidth > node.clientWidth,
+    }
+  })
+
+/**
+ * Every name of the line, each judged against the line it stands in: whole when it fits a line
+ * and on more lines only when it does not, broken only between its words while each word fits,
+ * every line it starts begun where the label begins, and whether it moved on although its first
+ * word had room where the line before it ended, the case a name that broke inside itself shows.
+ */
+async function namesOf(line: Locator) {
+  const room = await box(line)
+  const [label] = await drawnLines(line.locator('.card-holder-label'))
+  let before = { right: label.right, top: label.top }
+  const read = []
+  for (const name of await line.locator('.card-subscriber').all()) {
+    const drawn = await nameLayout(name)
+    const moved = drawn.firstTop > before.top + 2
+    const starts = moved ? drawn.lineStarts : drawn.lineStarts.slice(1)
+    read.push({
+      cut: drawn.cut || drawn.right > room.right + 0.5,
+      lines: drawn.oneLine <= room.width ? drawn.lines === 1 : drawn.lines > 1,
+      breaks: drawn.widestWord > room.width || drawn.breaksAtSpaces,
+      edge: starts.every((start) => Math.abs(start - label.left) <= 0.5),
+      forced: moved && room.right - before.right - 8 >= drawn.firstWord,
+    })
+    before = { right: drawn.lastRight, top: drawn.lastTop }
+  }
+  return read
+}
+
+/**
+ * Names of three widths in one list, so that at each width some name finds its first word room
+ * at the end of a line and the rest of it none: one that broke inside itself would show there.
+ * The Claude Code subagents' names are wider than half the drawer's line, the Codex sessions'
+ * a quarter of it, and the Codex subagent's, whose agent id is a whole UUID, wider than a phone.
+ */
+const MIXED = [
+  FIVE[0],
+  FIVE[1],
+  follower(ONE, ONE_LABEL),
+  CODEX_AGENT,
+  follower(TWO, `codex (session ${TWO})`),
+]
+
+for (const locale of ['ru', 'en'] as const)
+  for (const width of [320, 390, 760, 1280]) {
+    const at = `${locale} at ${width}`
+
+    test(`${at}: a name that fits a line moves to it whole, a wider one wraps at its words`, async ({
+      page,
+    }) => {
+      const drawer = await openCard(page, locale, width, MIXED)
+      const line = drawer.locator('.card-subscribers')
+      await expect(line.locator('.card-subscriber')).toHaveCount(5)
+      const names = await namesOf(line)
+      const every = (key: 'cut' | 'lines' | 'breaks' | 'edge') => names.map((name) => name[key])
+      expect(every('cut'), `${at}: nothing given way`).toEqual([false, false, false, false, false])
+      expect(every('lines'), `${at}: whole on a line`).toEqual([true, true, true, true, true])
+      expect(every('breaks'), `${at}: between words`).toEqual([true, true, true, true, true])
+      expect(every('edge'), `${at}: from the label's edge`).toEqual([true, true, true, true, true])
+      expect(
+        names.some((name) => name.forced),
+        `${at}: a name the line had room to start`,
+      ).toBe(true)
+      await expectNoSilentClipping(page, `${at}: mixed followers`)
+    })
+  }
+
+for (const width of [390, 320])
+  test(`at ${width} a name wider than the line wraps between its words and reads whole`, async ({
+    page,
+  }) => {
+    const drawer = await openCard(page, 'ru', width, [CODEX_AGENT, follower(ONE, ONE_LABEL)])
+    const long = drawer.locator('.card-subscriber').first()
+    await expect(long).toHaveText(`codex agent ${CODEX_ID} · 019a3c2e-5b7d,`)
+    const drawn = await nameLayout(long)
+    const room = await box(drawer.locator('.card-subscribers'))
+    expect(drawn.oneLine).toBeGreaterThan(room.width)
+    expect(drawn.lines).toBeGreaterThan(1)
+    expect(drawn.breaksAtSpaces).toBe(true)
+    expect(drawn.cut).toBe(false)
+    await expect(long).not.toHaveCSS('text-overflow', 'ellipsis')
+    // The whole label, the session's full id with it, is still its title, as the holder's is.
+    await expect(long).toHaveAttribute('title', CODEX_AGENT.label)
+    const short = await nameLayout(drawer.locator('.card-subscriber').last())
+    expect(short.lines).toBe(1)
+  })

@@ -149,16 +149,20 @@ const holderExecutor = computed(() =>
 /**
  * The sessions that follow the item, each by the label the server gives it, which is what a
  * claim of it records, printed as the holder is, a comma after all but the last; the holder's
- * row names its own.
+ * row names its own. A name is cut into its words, the dot kept with the word before it, so a
+ * name wider than the line breaks only between them.
  */
 const followers = computed(() => {
   const labels = (props.item.subscribers ?? [])
     .map(({ label }) => label)
     .filter((label) => label !== holder.value)
-  return labels.map((label, index) => ({
-    label,
-    words: index < labels.length - 1 ? `${holderName(label)},` : holderName(label),
-  }))
+  return labels.map((label, index) => {
+    const comma = index < labels.length - 1 ? ',' : ''
+    const words = `${holderName(label)}${comma}`
+      .split(/ (?!·)/)
+      .map((text, at) => ({ before: at ? ' ' : '', text }))
+    return { label, words }
+  })
 })
 
 function when(value: string): string {
@@ -298,7 +302,11 @@ defineExpose({ actionCell })
         :key="follower.label"
         class="card-subscriber"
         :title="follower.label"
-        >{{ follower.words }}</span
+        ><template
+          v-for="(word, at) in follower.words"
+          :key="at"
+          >{{ word.before }}<span class="card-subscriber-word">{{ word.text }}</span></template
+        ></span
       >
     </p>
     <MissingPlaces class="card-missing" />
@@ -409,8 +417,9 @@ defineExpose({ actionCell })
 }
 
 /* Who else follows the item: a note on the holder's row, as the missing places are below. The
-   names wrap between them, never inside one, and a line that wraps starts where the label does;
-   only a name wider than the whole line gives way, as the holder's does. */
+   names wrap between them, never inside one, and a line that wraps starts where the label does.
+   A name wider than the whole line wraps between its own words and is read whole, with no
+   ellipsis: the line is plain words, which a keyboard or a finger cannot hover for a title. */
 .card-subscribers {
   display: flex;
   flex-wrap: wrap;
@@ -426,9 +435,13 @@ defineExpose({ actionCell })
   min-width: 0;
   color: var(--color-text);
   font: var(--font-detail);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* A word moves to the next line whole; only one wider than the line breaks inside itself. */
+.card-subscriber-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* A note on the holder's row rather than a row of its own, so it stands closer to it. */

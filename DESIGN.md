@@ -1235,8 +1235,9 @@ shortened to its name and the start of its session with the whole value and its 
 in a tooltip and a warning dot once nobody is behind it. A plate there read as one more
 chip of the row above. Under it, as a note on that row, «Подписаны» in the same quiet
 ink names the other sessions that follow the item, each as its claim's holder would print,
-a name moving to the next line whole and only one wider than the line giving way; with
-nobody following there is no such line. The third row is the labels, and an item with none
+a name moving to the next line whole and one wider than the line wrapping between its own
+words, read whole with no ellipsis, since plain words offer no hover to a keyboard or a
+finger; with nobody following there is no such line. The third row is the labels, and an item with none
 has no such row and none of its room. Every fact stands at one height, the state chip's, so a wrap
 adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
