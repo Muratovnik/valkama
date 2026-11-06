@@ -316,4 +316,18 @@ for (const locale of LOCALES)
       await expect(card.locator('.confirm-strip')).toBeVisible()
       await expectStripOnColumn(card.locator('.confirm-strip'), card, `${at} asking`)
     })
+
+    test(`${at}: changing an answer keeps the comment's glyph on the line of Cancel and Save`, async ({
+      page,
+    }) => {
+      await inLocale(page, locale, width)
+      const { card } = await openQuestion(page, [answered])
+      await card.locator('.request-change').click()
+      const row = card.locator('.request-actions')
+      await expect(row.locator('.request-onward')).toBeVisible()
+      const { members } = await expectRow(row, `${at} changing`)
+      const centres = members.map((member) => centre(member))
+      for (const other of centres)
+        expect(near(other, centres[0] ?? other), `${at}: the glyph with the pair`).toBe(true)
+    })
   }

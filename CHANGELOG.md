@@ -203,6 +203,8 @@ checkouts are therefore distinguishable even at the same version.
   failed send or past a deadline, while everything fits on one. On a phone «Open task» and
   «Check status» keep the start of their own line above the buttons, with no empty strip
   over them, and «Don't answer» asks its question in their place.
+  Changing an answer keeps the comment's icon on the line of its buttons on a phone, so
+  «Сохранить изменение» is now «Сохранить» in Russian.
 - **A question that has ended is ringed as a whole, not round one line.** After a send or a
   decline focus went to the line saying how it ended and drew a thin capsule round it, pressed
   against the words and the rule of the answer. Focus now stays on the question itself,

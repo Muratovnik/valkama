@@ -59,7 +59,7 @@ test('ru: Cancel and Save of a change wrap together, at 390', async ({ page }) =
   ])
   await card.getByRole('button', { name: 'Изменить ответ', exact: true }).click()
   const cancel = card.getByRole('button', { name: 'Отмена', exact: true })
-  const save = card.getByRole('button', { name: 'Сохранить изменение', exact: true })
+  const save = card.getByRole('button', { name: 'Сохранить', exact: true })
   await expect(save).toBeVisible()
   expect(Math.abs((await topOf(cancel)) - (await topOf(save)))).toBeLessThanOrEqual(1)
 })

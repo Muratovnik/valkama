@@ -133,7 +133,7 @@ export const inputRequestMessages = {
       you: 'Вы',
       changeAnswer: 'Изменить ответ',
       changing: 'Вы меняете ответ. Пока изменение не сохранено, у агента остаётся прежний.',
-      saveChange: 'Сохранить изменение',
+      saveChange: 'Сохранить',
       cancel: 'Отмена',
       cancelAsked: 'Отменить изменение ответа?',
       keepChanging: 'Продолжить',
