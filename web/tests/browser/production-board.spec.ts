@@ -65,18 +65,22 @@ for (const [width, oneRow] of [
     )
     expect(pageOverflow, 'the page itself never scrolls sideways').toBeLessThanOrEqual(0)
     // Where the board has room, a long title gives way and the heading keeps one row; on a
-    // phone it wraps, and the actions end the counts' line or stand beside the title, never
-    // on a line of their own.
+    // phone it wraps, and the actions stand beside the title or end the last line with the
+    // counts or the note of work out of sight, never on a line of their own.
     const head = lanes.nth(0)
-    const [toggleRow, countsRow, actionsRow] = await Promise.all(
-      ['.lane-toggle', '.lane-counts', '.lane-actions'].map(async (part) => {
-        const box = await head.locator(part).boundingBox()
-        return Math.round((box?.y ?? 0) + (box?.height ?? 0) / 2)
+    const [toggleRow, countsRow, noteRow, actionsRow] = await head.evaluate((node) =>
+      ['.lane-toggle', '.lane-counts', '.lane-elsewhere', '.lane-actions'].map((part) => {
+        const box = node.querySelector(part)?.getBoundingClientRect()
+        return box ? Math.round(box.y + box.height / 2) : Number.NaN
       }),
     )
     expect(Math.abs(toggleRow - countsRow) <= 2, `heading on one row at ${width}px`).toBe(oneRow)
     expect(
-      Math.min(Math.abs(toggleRow - actionsRow), Math.abs(countsRow - actionsRow)),
+      Math.min(
+        ...[toggleRow, countsRow, noteRow]
+          .filter((row) => !Number.isNaN(row))
+          .map((row) => Math.abs(row - actionsRow)),
+      ),
       `the actions share a line at ${width}px`,
     ).toBeLessThanOrEqual(2)
     // An icon action rests bare, as an entry's do, and takes a fill under the pointer.
