@@ -112,7 +112,7 @@ function resetAll() {
         <span class="kind-color-value">{{ row.color }}</span>
         <VButton
           variant="ghost"
-          size="inline"
+          size="compact"
           :disabled="!row.chosen"
           :aria-label="t('settings.kindColors.resetName', { kind: row.word })"
           @click="reset(row.kind)"
@@ -155,11 +155,13 @@ function resetAll() {
   min-width: 0;
 }
 
-/* The face is the colour itself, on the fill every control stands on. */
+/* The face is the colour itself, on the fill every control stands on, as tall as the compact
+   reset beside it: the floor every input is given would stand it 4px taller. */
 .kind-color-input {
   flex: none;
   inline-size: var(--size-control-target);
   block-size: var(--size-control-height-compact);
+  min-block-size: 0;
   padding: var(--space-1);
   background: var(--color-control-surface);
   border-radius: var(--radius-control);

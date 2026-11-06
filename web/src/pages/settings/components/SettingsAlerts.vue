@@ -172,7 +172,10 @@ function readinessDetail(answer: AlertReadiness): string {
         />
       </SettingsRow>
 
-      <SettingsRow :label="t('alerts.readinessLabel')">
+      <SettingsRow
+        :label="t('alerts.readinessLabel')"
+        stack
+      >
         <div class="settings-alerts-control settings-alerts-line">
           <div
             class="settings-alerts-readiness"
