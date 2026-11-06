@@ -53,6 +53,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -266,7 +267,7 @@ useListKeys(root, {
             </button>
           </td>
           <td class="list-cell list-title">
-            <span class="list-name">{{ item.title }}</span>
+            <span class="list-name"><SlashBreaks :text="item.title" /></span>
             <span
               v-if="wide"
               class="list-under"

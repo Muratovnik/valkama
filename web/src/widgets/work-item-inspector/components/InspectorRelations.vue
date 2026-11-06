@@ -16,6 +16,7 @@ import RichInlines from '@/shared/ui/RichInlines.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -155,7 +156,7 @@ function when(value: string): string {
             >
               <span class="link-reference">{{ link.reference }}</span>
               <span class="link-body">
-                <span class="link-title">{{ link.title }}</span>
+                <span class="link-title"><SlashBreaks :text="link.title" /></span>
                 <!-- The other end's state, when the server could say it: a finished blocker reads as finished. -->
                 <SemanticState
                   v-if="link.state_category && link.state_name"

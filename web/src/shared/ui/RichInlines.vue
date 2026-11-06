@@ -21,7 +21,7 @@
  * break after each of its `/`, which a browser does not offer on its own, so a long path
  * fills the rest of its line rather than leaving it empty.
  */
-import { Fragment, h } from 'vue'
+import { h } from 'vue'
 import type { FunctionalComponent } from 'vue'
 
 import { opensInPlace } from '@/shared/lib/linkPress.ts'
@@ -30,20 +30,16 @@ import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
 import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 
 const props = defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
 
 type ReferenceNode = Extract<RichInline, { kind: 'reference' }>
 
-/** A reference's words; a path's with a place to break after each `/`, which adds no character. */
+/** A reference's words; a path's with a place to break after each `/`. */
 const ReferenceWords: FunctionalComponent<{ path: boolean; text: string }> = ({ path, text }) =>
-  h(
-    Fragment,
-    path
-      ? text.split(/(?<=\/)/u).flatMap((piece, index) => (index ? [h('wbr'), piece] : [piece]))
-      : [text],
-  )
+  path ? h(SlashBreaks, { text }) : text
 
 const resolve = useReferenceLinks()
 /** What a reference links to here, or null where it is text. */

@@ -219,6 +219,13 @@ checkouts are therefore distinguishable even at the same version.
   the column instead of pushing the words in. A disclosure's chevron, in a card and in
   Settings' diagnostics, starts on its column's edge too, folded or open, where it stood four
   to six pixels in.
+- **A long title no longer breaks in the middle of a word.** A title such as
+  `loading/empty/error/unavailable` was one word to the browser, and at a phone's width it
+  broke wherever the line ran out, leaving «un» on one line and «available» on the next.
+  A title now also breaks after each `/`, in the list, on the board, on the graph, at the
+  head of a card, on the hover card, in search, among a card's links and in the picker of
+  related work. A single word wider than the line still breaks inside, rather than
+  running past the edge.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field

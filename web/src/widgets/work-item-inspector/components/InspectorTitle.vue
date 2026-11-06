@@ -1,8 +1,13 @@
 <script setup lang="ts">
-/** The title as it was written, with each reference in it kept from breaking at its hyphen. */
+/**
+ * The title as it was written, with each reference in it kept from breaking at its hyphen
+ * and the rest free to break after a `/` as well.
+ */
 import { computed } from 'vue'
 
 import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
+
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 
 const props = defineProps<{ title: string }>()
 const runs = computed(() => titleRuns(props.title))
@@ -17,7 +22,10 @@ const runs = computed(() => titleRuns(props.title))
       v-if="run.whole"
       class="head-title-reference"
       >{{ run.text }}</span
-    ><template v-else>{{ run.text }}</template>
+    ><SlashBreaks
+      v-else
+      :text="run.text"
+    />
   </template>
 </template>
 

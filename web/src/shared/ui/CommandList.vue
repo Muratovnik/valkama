@@ -16,6 +16,8 @@ import { computed, onMounted, useId, useTemplateRef, watch } from 'vue'
 
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
+
 const props = withDefaults(
   defineProps<{
     items: readonly Item[]
@@ -122,7 +124,7 @@ function submit(event: KeyboardEvent) {
             >{{ item.reference }}</span
           >
         </span>
-        <span class="command-title">{{ item.title }}</span>
+        <span class="command-title"><SlashBreaks :text="item.title" /></span>
         <span class="command-detail">
           <slot
             name="detail"

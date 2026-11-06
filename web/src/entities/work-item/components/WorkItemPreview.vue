@@ -32,6 +32,7 @@ import { useWorkItemPreviewWords } from '@/entities/work-item/composables/useWor
 import type { WorkItemPreviewSubject } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 
 const props = withDefaults(defineProps<WorkItemPreviewSubject>(), {
   failure: null,
@@ -82,7 +83,7 @@ const copied = useWorkItemCopy(() => props.reference)
         class="preview-title"
         aria-hidden="true"
       >
-        {{ item.title }}
+        <SlashBreaks :text="item.title" />
       </p>
       <p
         v-if="facts.length || stale"

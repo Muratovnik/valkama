@@ -99,8 +99,9 @@ const briefFields: BriefFields = {
   planning_space_id: planningSpace.planning_space_id,
   reference: workItemRef.reference,
   number: 264,
-  // Unbreakable by design: slash-joined state names are what overflowed the tile
-  // in the live application, so the overflow check has something to catch.
+  // Slash-joined state names, which a browser takes for one word: they overflowed
+  // the tile in the live application and later broke inside a word at a phone's
+  // width, so the overflow and line-break checks have something to catch.
   title: 'Valkama platform execution loading/empty/error/unavailable/permission-denied',
   kind: 'task',
   state: DEV_STATE,

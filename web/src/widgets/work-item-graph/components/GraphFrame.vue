@@ -48,6 +48,7 @@ import { FRAME_HEADER } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { foldIsTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
+import { SlashBreaks } from '@/shared/ui/SlashBreaks.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const {
@@ -224,8 +225,8 @@ function onOpenBlur() {
             v-if="epic"
             class="graph-frame-title"
             :title="title"
-            >{{ title }}</span
-          >
+            ><SlashBreaks :text="title"
+          /></span>
         </span>
         <span
           v-if="inside"
