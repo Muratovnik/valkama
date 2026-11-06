@@ -147,6 +147,13 @@ const SEMANTIC_COLOR = SEMANTIC_COLOR_REFERENCE
 const AREA_DECLARATION =
   /(?:^|[{;])\s*(?:background|background-color|border|border-(?!inline-start|left)[\w-]+)\s*:([^;{}]*)/gi
 
+/**
+ * A mask's own image, the one place a gradient is drawn. A mask reads only how opaque
+ * each point of its image is, so a gradient there fades an edge and adds no colour;
+ * anywhere else, `background` and the `mask` shorthand included, it stays refused.
+ */
+const MASK_IMAGE = /(?:^|[{;])\s*(?:-webkit-)?mask-image\s*:[^;{}]*/gi
+
 const SOURCE_RULES = [
   {
     // A card that took its kind's colour would argue with the state the card speaks for.
@@ -229,7 +236,8 @@ const SOURCE_RULES = [
     message: 'a disclosure belongs to VDisclosure',
   },
   {
-    when: ({ source }) => /\b(?:linear|radial|conic)-gradient\s*\(/i.test(source),
+    when: ({ source }) =>
+      /\b(?:linear|radial|conic)-gradient\s*\(/i.test(source.replaceAll(MASK_IMAGE, '')),
     message: 'gradients are outside the Project Console visual contract',
   },
   {

@@ -98,7 +98,8 @@ This is an application, not a themed dashboard. The shell is dark throughout;
 hierarchy comes from tonal steps, typography, and a small set of colours that
 each mean one thing. There are no paper surfaces, textures, decorative
 diagrams, glass, gradients, glow, oversized marketing headings, or game-like
-chrome.
+chrome. The one gradient allowed is inside `mask-image`, where it adds no colour
+and only fades the end of a strip that scrolls on past it.
 
 ## System rules
 
