@@ -174,7 +174,7 @@ defineExpose({ holdsFocus })
       <p
         v-if="failed"
         ref="errorLine"
-        class="request-error"
+        class="request-error focus-landing"
         role="alert"
         tabindex="-1"
       >
@@ -268,13 +268,6 @@ defineExpose({ holdsFocus })
 
 .request-error {
   color: var(--color-danger);
-}
-
-/* Focus is moved here, ringed, when a refresh the reader asked for fails. The ring stands as
-   clear of the words as a question's own lines keep theirs; at half that it touched them. */
-.request-error:focus-visible {
-  border-radius: var(--radius-control);
-  outline-offset: var(--space-1);
 }
 
 .request-note {

@@ -1413,7 +1413,13 @@ The focus ring is drawn on `:focus-visible` alone: where the keyboard put focus,
 and where the interface moved it in answer to something — how a question ended,
 the next question, why a send failed — which asks for the ring whatever was used
 before (`moveFocus`). A press of the pointer rings nothing it lands on, including
-an element only the interface focuses. A text field shows focus by turning its own
+an element only the interface focuses. The interface takes focus to a whole and not to a line
+of words that only says something about it: how a question ended, its passed deadline and its
+title in the list of everything waiting describe or name the question, which takes the focus
+and the ring. Words that stay where focus lands, because taking it to their whole would send
+the next Tab to the start of a long form — why a write or a read did not go through, a reply
+just written, a list's heading — carry `.focus-landing` from `base.css`: the ring stands 4px
+clear of the words and turns at a control's corner, so one line never closes into a capsule. A text field shows focus by turning its own
 edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
 ground and fill it stands against.
 

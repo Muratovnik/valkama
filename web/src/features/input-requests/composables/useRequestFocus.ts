@@ -3,26 +3,29 @@ import type { Ref } from 'vue'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
 
-/** Where focus goes within one question, whose card is `card`. */
+/**
+ * Where focus goes within one question, whose card is `card`.
+ *
+ * The app takes focus to the question as a whole, and never to one of its lines of words: a
+ * ring drawn round one line stood as a thin capsule pressed against the words. The line that
+ * says why focus came (how the question ended, its deadline, its title in the list) names or
+ * describes the question instead, and is what is brought into view.
+ */
 export function useRequestFocus(card: Ref<HTMLElement | null>) {
-  /** Moves focus to this question's heading, or to the question where it has none. */
-  function focus() {
-    moveFocus(card.value?.querySelector<HTMLElement>('.request-title') ?? card.value)
+  /** Moves focus to the question and brings `line` into view, or the question where it has none. */
+  function focusOn(line: HTMLElement | null | undefined) {
+    moveFocus(card.value, { preventScroll: true })
+    ;(line ?? card.value)?.scrollIntoView({ block: 'nearest' })
   }
-  /**
-   * Moves focus to the question once it has ended, which its card describes by how it ended,
-   * and brings that line into view; to the question's heading while it still waits. The ring
-   * goes round the question the person stays on: drawn round its one line it stood as a thin
-   * capsule pressed against the words, beside the rule the answer is set in by.
-   */
+  /** Moves focus to this question, with its title in view where it has one. */
+  function focus() {
+    focusOn(card.value?.querySelector<HTMLElement>('.request-title'))
+  }
+  /** Moves focus to the question, with how it ended in view; as `focus` while it still waits. */
   function focusOutcome() {
     const line = card.value?.querySelector<HTMLElement>('.request-state')
-    if (!line) {
-      focus()
-      return
-    }
-    moveFocus(card.value, { preventScroll: true })
-    line.scrollIntoView({ block: 'nearest' })
+    if (line) focusOn(line)
+    else focus()
   }
   /**
    * Brings the question into view, at its first line under what the scroller keeps over
@@ -38,5 +41,5 @@ export function useRequestFocus(card: Ref<HTMLElement | null>) {
     revealFrame(root)
   }
   const holdsFocus = () => card.value?.contains(document.activeElement) ?? false
-  return { focus, focusOutcome, holdsFocus, reveal }
+  return { focus, focusOn, focusOutcome, holdsFocus, reveal }
 }

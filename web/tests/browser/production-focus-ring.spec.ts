@@ -113,18 +113,75 @@ for (const width of [1280, 390]) {
   })
 }
 
-test('in the list a press on a heading rings nothing, and answering rings the next one', async ({
+test('in the list a press on a heading rings nothing, and answering rings the next question as a whole', async ({
   page,
 }) => {
   const opened = await openQuestion(page, pair(2, 2))
   const { next, top } = await inTheList(page, opened)
-  const heading = top.locator('.request-title')
-  await heading.click()
-  await expect(heading).toBeFocused()
-  expect(await outline(heading)).toBe('none')
+  // The heading is words: a press on it lands on its question, and rings nothing.
+  await top.locator('.request-title').click()
+  await expect(top).toBeFocused()
+  expect(await outline(top)).toBe('none')
   await top.getByRole('radio', { name: 'Choice 1', exact: true }).click()
   await send(top).click()
-  const following = next.locator('.request-title')
-  await expect(following).toBeFocused()
-  expect(await outline(following)).toBe('solid')
+  // Focus goes to the next question, which its heading names: a ring round the heading alone
+  // stood as a capsule pressed against one line of words.
+  await expect(next).toBeFocused()
+  expect(await outline(next)).toBe('solid')
+  expect(await ringedInside(next)).toEqual([])
+  const title = (await next.locator('.request-title').textContent()) ?? ''
+  expect(title).not.toBe('')
+  await expect(next).toHaveAccessibleName(title)
+})
+
+/** How the ring stands round what holds it: its air from the box and the round of its corners. */
+const ringOf = (target: Locator) =>
+  target.evaluate((node) => {
+    const style = getComputedStyle(node)
+    const offset = Number.parseFloat(style.outlineOffset)
+    const corners = [
+      style.borderTopLeftRadius,
+      style.borderTopRightRadius,
+      style.borderBottomRightRadius,
+      style.borderBottomLeftRadius,
+    ].map((radius) => Number.parseFloat(radius) + offset)
+    const control = getComputedStyle(document.documentElement).getPropertyValue('--radius-control')
+    return {
+      style: style.outlineStyle,
+      offset,
+      corner: Math.max(...corners),
+      control: Number.parseFloat(control),
+    }
+  })
+
+/** Clear of the words, and turning at a control's corner, so one line never reads as a capsule. */
+async function expectLineRing(target: Locator) {
+  await expect(target).toBeFocused()
+  const ring = await ringOf(target)
+  expect(ring.style).toBe('solid')
+  expect(ring.offset).toBeGreaterThanOrEqual(4)
+  expect(ring.corner).toBeLessThanOrEqual(ring.control)
+}
+
+test('why a write or a read failed is ringed clear of its words, at a control corner and not as a capsule', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const opened = await openQuestion(page, [asked()])
+  const { card, dialog } = await inTheList(page, opened)
+  await page.route('**/api/modules/planning/requests?*', (route) =>
+    route.fulfill({ status: 500, json: {} }),
+  )
+  await dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' }).click()
+  await expectLineRing(dialog.locator('.request-toolbar .request-error'))
+
+  opened.requests.failNext(503)
+  await card.getByRole('radio', { name: 'Move them', exact: true }).click()
+  await send(card).click()
+  const sent = card.locator('.request-foot .request-error')
+  // One line at this width: where a rounder corner closed into a capsule round the words.
+  await expect(sent).toBeVisible()
+  const box = await sent.boundingBox()
+  expect(box?.height ?? 0).toBeLessThan(24)
+  await expectLineRing(sent)
 })

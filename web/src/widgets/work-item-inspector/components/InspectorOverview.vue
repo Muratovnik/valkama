@@ -218,7 +218,7 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
     >
       <SectionHeader
         ref="checklistHead"
-        class="checklist-head"
+        class="checklist-head focus-landing"
         tabindex="-1"
         :title="t('workItem.checklist')"
         :count="stepCount"

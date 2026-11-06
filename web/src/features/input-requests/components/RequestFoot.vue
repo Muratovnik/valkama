@@ -110,7 +110,7 @@ defineExpose({
     <p
       v-if="error"
       ref="errorLine"
-      class="request-error"
+      class="request-error focus-landing"
       role="alert"
       tabindex="-1"
     >
@@ -165,11 +165,5 @@ defineExpose({
   margin: 0;
   color: var(--color-danger);
   font: var(--font-detail);
-
-  /* The app moves focus here when a write does not go through, and rings it (`moveFocus`). */
-  &:focus-visible {
-    border-radius: var(--radius-control);
-    outline-offset: var(--space-1);
-  }
 }
 </style>

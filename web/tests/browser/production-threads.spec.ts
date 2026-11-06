@@ -86,13 +86,21 @@ for (const [size, width] of [
       const style = getComputedStyle(node)
       const reach = Number.parseFloat(style.outlineOffset) + Number.parseFloat(style.outlineWidth)
       const line = node.parentElement?.getBoundingClientRect().left ?? 0
+      const control = getComputedStyle(document.documentElement).getPropertyValue(
+        '--radius-control',
+      )
       return {
+        corner:
+          Number.parseFloat(style.borderTopLeftRadius) + Number.parseFloat(style.outlineOffset),
+        control: Number.parseFloat(control),
         gap: Number.parseFloat(style.outlineOffset),
         left: node.getBoundingClientRect().left - reach - line,
       }
     })
     expect(ring.gap).toBeGreaterThanOrEqual(4)
     expect(ring.left).toBeGreaterThanOrEqual(1)
+    // It turns at a control's corner, as every line focus is taken to does.
+    expect(ring.corner).toBeLessThanOrEqual(ring.control)
   })
 
   test(`a mark goes from the keyboard and comes off again at ${size}`, async ({ page }) => {

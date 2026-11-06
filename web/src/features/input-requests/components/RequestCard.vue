@@ -16,7 +16,9 @@
  *
  * Folding takes the controls that had focus away, whoever answered, so focus goes to the
  * question, described by how it ended: the person stays on the question they were in, and
- * the ring goes round it, as round a thread that folds. What is held belongs to the
+ * the ring goes round it, as round a thread that folds. A deadline passing does the same,
+ * with the question described by its deadline, and so does the list moving on to the next
+ * question, which its title names. What is held belongs to the
  * host, which outlives this while a dialog closes and opens and which the draft guard asks.
  * Folding also lifts what stands below it, so a press that lands here only because of that
  * reaches nothing: it was meant for another question.
@@ -50,7 +52,6 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
-import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
@@ -80,6 +81,8 @@ const emit = defineEmits<{
 const { t, d } = useI18n()
 const promptId = useId()
 const metaId = useId()
+const titleId = useId()
+const deadlineId = useId()
 const outcomeId = useId()
 // A path in a question belongs to that question's task, whichever task is open.
 provideDocumentLinks(() => ({
@@ -88,7 +91,7 @@ provideDocumentLinks(() => ({
 const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
 useUncoveredFocus(card)
-const { focus, focusOutcome, holdsFocus, reveal } = useRequestFocus(card)
+const { focus, focusOn, focusOutcome, holdsFocus, reveal } = useRequestFocus(card)
 const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
 const foot = ref<InstanceType<typeof RequestFoot> | null>(null)
@@ -143,14 +146,22 @@ watch(waiting, async (now) => {
   await nextTick()
   focusOutcome()
 })
-/** A deadline disables what had focus, so focus goes to why, as it does when a write fails. */
+/** A deadline disables what had focus, so focus goes to the question, which says why. */
 watch(pastDue, async (past) => {
   if (!past || !card.value?.contains(document.activeElement)) return
   await nextTick()
-  moveFocus(deadlineLine.value)
+  focusOn(deadlineLine.value)
 })
-/** Once it has ended the question is described by how it ended, which focus then comes to. */
-const describedBy = computed(() => (inForm.value ? undefined : outcomeId))
+/** In the list its title names the question; in a card's discussion, its author and time. */
+const labelledBy = computed(() => (props.standalone ? titleId : metaId))
+/**
+ * The question is described by how it ended once it has, and by its deadline once that has
+ * passed: what focus coming to it has to say.
+ */
+const describedBy = computed(() => {
+  if (!inForm.value) return outcomeId
+  return pastDue.value && request.value.expires_at ? deadlineId : undefined
+})
 const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
@@ -259,12 +270,13 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     class="request-card"
     tabindex="-1"
     :aria-busy="busyMark"
-    :aria-labelledby="metaId"
+    :aria-labelledby="labelledBy"
     :aria-describedby="describedBy"
   >
     <RequestHeader
       v-if="standalone"
       :entry="entry"
+      :title-id="titleId"
       @select="emit('select', $event)"
     />
     <EntryHead>
@@ -298,9 +310,9 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       </CollapsibleText>
       <p
         v-if="request.expires_at"
+        :id="deadlineId"
         ref="deadlineLine"
-        class="request-fact request-deadline"
-        tabindex="-1"
+        class="request-fact"
       >
         {{ deadlineLabel }}
       </p>
@@ -390,15 +402,9 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
   scroll-margin-top: var(--space-4);
 }
 
-/* The app moves focus to these, to the next question and to why a write no longer can go
-   through, and rings them as it does (`moveFocus`): it is the one sign of where the reader
-   was taken. A press on one takes focus too, and rings nothing. The ring itself is the base
-   one; here it only stands clear of the words. */
-:is(.request-card, .request-deadline):focus-visible {
-  border-radius: var(--radius-control);
-  outline-offset: var(--space-1);
-}
-
+/* The app moves focus here, to the question it stays on, and rings it as it does
+   (`moveFocus`): it is the one sign of where the reader was taken. A press here takes focus
+   too, and rings nothing. The ring is the base one, round the sheet's own corner. */
 .request-card:focus-visible {
   border-radius: var(--radius-card);
   outline-offset: var(--space-half);

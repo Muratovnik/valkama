@@ -381,7 +381,10 @@ describe('human input requests', () => {
     expect(titles()).toEqual(['Newer question', 'Older question'])
     expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 1, incomplete: false }])
     expect(wrapper.get('.request-status').text()).toBe('Waiting for an answer: 1')
-    expect(document.activeElement?.textContent).toBe('Older question')
+    // Focus is on the next question as a whole, which its heading names.
+    const label = document.activeElement?.getAttribute('aria-labelledby') ?? ''
+    expect(document.activeElement?.classList.contains('request-card')).toBe(true)
+    expect(document.querySelector(`[id="${label}"]`)?.textContent).toBe('Older question')
     expect(buttons(wrapper, 'Refresh')).toHaveLength(1)
 
     vi.mocked(answerInputRequest).mockResolvedValueOnce(answered(older))

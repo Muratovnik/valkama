@@ -21,13 +21,15 @@ function scrollerOf(element: HTMLElement): Element | null {
  * the bottom (`"end"`). A browser brings what takes focus into the panel, and a stuck part is
  * inside the panel, so the browser takes the element for shown while the stuck part covers it
  * (WCAG 2.4.11). Focus arrives after the browser's own scroll; what is still covered then is
- * moved clear by as much as it is covered. What is inside a stuck part is never covered by it.
+ * moved clear by as much as it is covered. What is inside a stuck part is never covered by it,
+ * and neither is what holds one: the question as a whole, which the app takes focus to, would
+ * otherwise be scrolled until its foot stood clear of itself.
  */
 export function useUncoveredFocus(root: Ref<HTMLElement | null>) {
   useEventListener(root, 'focusin', ({ target }: FocusEvent) => {
     if (!(target instanceof HTMLElement) || !root.value) return
     const edges = [...root.value.querySelectorAll<HTMLElement>('[data-stuck-edge]')].filter(
-      (edge) => !edge.contains(target),
+      (edge) => !edge.contains(target) && !target.contains(edge),
     )
     if (!edges.length) return
     const box = target.getBoundingClientRect()

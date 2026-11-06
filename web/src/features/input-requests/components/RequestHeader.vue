@@ -6,6 +6,9 @@
  * The task's number is a link to it, drawn as a number is in any text, with the same card on
  * a pointer at rest. It opens the very task the question came with rather than whatever a
  * search finds by that number, since two stores can hold the same key.
+ *
+ * The title names the question (`titleId`), which is what takes focus when the list moves on
+ * to it: the title itself is words, and a ring round it stood as a capsule round one line.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,7 +22,11 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 
-const props = defineProps<{ entry: InputRequestEntry }>()
+const props = defineProps<{
+  entry: InputRequestEntry
+  /** The id of the title, which names the question it stands over. */
+  titleId: string
+}>()
 const emit = defineEmits<{ select: [target: PlanningTarget] }>()
 const { t } = useI18n()
 const request = computed(() => props.entry.request)
@@ -54,10 +61,10 @@ provideReferenceLinks((reference, parent) => {
       />
     </p>
     <SectionHeading
+      :id="titleId"
       class="request-title"
       as="h3"
       level="panel"
-      tabindex="-1"
       >{{ request.title }}</SectionHeading
     >
     <p
@@ -83,13 +90,6 @@ provideReferenceLinks((reference, parent) => {
 
 .request-title {
   overflow-wrap: anywhere;
-}
-
-/* The list moves focus here, to the next question, and rings it as it does (`moveFocus`). A
-   press on it takes focus too, and rings nothing. The ring is the base one, clear of the words. */
-.request-title:focus-visible {
-  border-radius: var(--radius-control);
-  outline-offset: var(--space-1);
 }
 
 .request-context,

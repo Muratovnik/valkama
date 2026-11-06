@@ -136,6 +136,17 @@ input:is([type='checkbox'], [type='radio']) {
   outline-offset: 2px;
 }
 
+/* Words the app moves focus to and keeps it on, because taking it to the whole they stand in
+   would send the next Tab to the start of a long form: why a write or a read did not go
+   through, a reply just written, a list's heading. The ring stands clear of the words and
+   turns at a control's corner. A control's own radius at that distance closed one line into
+   a capsule round the words, and the recipe stood copied in six components. Words that only
+   say something about a question describe the question, which takes the focus instead. */
+.focus-landing:focus-visible {
+  border-radius: calc(var(--radius-control) - var(--space-1));
+  outline-offset: var(--space-1);
+}
+
 ::selection {
   color: var(--color-text-on-action);
   background: var(--color-accent);

@@ -176,6 +176,13 @@ checkouts are therefore distinguishable even at the same version.
   chosen with the keys does, instead of sending the next Tab to the top of the page. In the
   filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
+- **No more capsule-shaped rings round a line of words.** When a question's deadline passed
+  or the list moved on to the next question, focus went to the deadline's line or the next
+  question's title and drew a thin capsule round it. Focus now goes to the question itself,
+  which that line describes or names, and the ring goes round the question. Why a send or a
+  refresh failed still takes focus, so that Tab goes on from there, and its ring, like a
+  reply's and the checklist heading's, stands clear of the words with the corners of a
+  button.
 - **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
   mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
   next with «23:47»; the time now moves to the next line whole.

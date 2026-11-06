@@ -171,7 +171,7 @@ test('removing a question that stopped waiting takes focus to its neighbour, or 
   const remove = touched.getByRole('button', { name: 'Remove from list', exact: true })
   await remove.click()
   await expect(touched).toHaveCount(0)
-  await expect(card('The neighbour').locator('.request-title')).toBeFocused()
+  await expect(card('The neighbour')).toBeFocused()
   // Removed for good: the next read does not bring it back.
   await page.clock.runFor(POLL)
   await expect(touched).toHaveCount(0)
@@ -218,7 +218,7 @@ test('a refresh that fails rings its sentence clear of the words, as the list ri
   const failure = dialog.locator('.request-toolbar .request-error')
   await expect(failure).toBeFocused()
   await expect(failure).toHaveCSS('outline-style', 'solid')
-  // The 4px a question's deadline and failed send keep their ring at; 2px touched the letters.
+  // The 4px a failed send keeps its ring at too; 2px touched the letters.
   await expect(failure).toHaveCSS('outline-offset', '4px')
 })
 

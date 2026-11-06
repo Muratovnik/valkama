@@ -45,12 +45,6 @@
   overflow-wrap: anywhere;
 }
 
-/* The list's heading takes focus from the way here, and its ring stands clear of its words. */
-.checklist-head:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: var(--space-1);
-}
-
 .blockers {
   display: grid;
   gap: var(--space-1);

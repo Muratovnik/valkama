@@ -325,7 +325,7 @@ test('scrolling the question away ends the step, and a read that moves nothing d
   expect(writesTo(requests)).toEqual([])
 })
 
-test('a deadline passing while the step stands takes focus to the line that says so', async ({
+test('a deadline passing while the step stands takes focus to the question, which the line describes', async ({
   page,
 }) => {
   const { requests, stream, top } = await inCard(page)
@@ -335,9 +335,13 @@ test('a deadline passing while the step stands takes focus to the line that says
   await expect(top.getByText(/^Answer before/u)).toBeVisible()
   await raise(page, top)
   const line = top.getByText(/The deadline has passed/u)
-  await expect(line).toBeFocused({ timeout: 6000 })
-  // Ringed, though a press of the pointer came before: the ring is where focus was taken.
-  await expect(line).toHaveCSS('outline-style', 'solid')
+  await expect(line).toBeVisible({ timeout: 6000 })
+  await expect(top).toBeFocused()
+  await expect(top).toHaveAccessibleDescription(/The deadline has passed/u)
+  // Ringed round the question, though a press of the pointer came before: the ring is where
+  // focus was taken. Round the one line of words it stood as a capsule pressed against them.
+  await expect(top).toHaveCSS('outline-style', 'solid')
+  await expect(line).toHaveCSS('outline-style', 'none')
   await expect(asking(top)).toHaveCount(0)
   await expect(top.getByRole('button', { name: 'Check status', exact: true })).toBeVisible()
   expect(writesTo(requests)).toEqual([])

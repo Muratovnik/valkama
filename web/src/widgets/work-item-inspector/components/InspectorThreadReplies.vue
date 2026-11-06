@@ -143,7 +143,7 @@ function retryMark() {
         v-for="reply in shown"
         :id="writtenAnchor(reply.id)"
         :key="reply.id"
-        class="reply"
+        class="reply focus-landing"
         tabindex="-1"
       >
         <EntryHead>
@@ -237,19 +237,13 @@ function retryMark() {
 
 /* A reply takes focus from the press that showed it or the write that made it, and
    rings as it does. Its words run to both edges of the reply, so the ring stands clear of
-   them, as it does around a question's deadline; at two pixels it lay on the letters. The
-   inset before the replies' line is wider than the ring at every width, so the two never
-   cross. */
+   them (`focus-landing`); at two pixels it lay on the letters. The inset before the replies'
+   line is wider than the ring at every width, so the two never cross. */
 .reply {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
   scroll-margin-top: var(--space-4);
-
-  &:focus-visible {
-    border-radius: var(--radius-control);
-    outline-offset: var(--space-1);
-  }
 }
 
 .reply-text {
