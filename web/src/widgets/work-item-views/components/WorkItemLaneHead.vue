@@ -135,8 +135,15 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
    the last of its lane, because a sticky box never leaves its own section.
    One row while it fits, the title giving way first; on a narrow board the
    state, counts and actions take a second row instead of squeezing the title
-   down to its reference. */
+   down to its reference. A row it wraps onto starts where the heading's words
+   do, under the reference rather than under the chevron: the box is inset by
+   the toggle's inset, the chevron and their gap, and the toggle alone takes
+   that back. Wrapped from the box's own edge, the counts stood 4px left of the
+   chevron and 28px left of the number they count for. */
 .lane-head {
+  /* The chevron's drawn size, as the template asks `VIcon` for it. */
+  --lane-chevron-size: 16px;
+
   position: sticky;
   top: var(--lanes-head-block);
   left: 0;
@@ -149,6 +156,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   width: var(--board-visible-width);
   min-width: 0;
   min-height: var(--size-control-height-compact);
+  padding-inline-start: calc(var(--space-1) + var(--lane-chevron-size) + var(--space-2));
   background: var(--color-canvas);
 }
 
@@ -160,6 +168,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   min-width: 0;
   min-height: var(--size-control-height-compact);
   padding: 0 var(--space-2) 0 var(--space-1);
+  margin-inline-start: calc(-1 * var(--space-1) - var(--lane-chevron-size) - var(--space-2));
   border: 0;
   color: var(--color-text);
   text-align: start;
