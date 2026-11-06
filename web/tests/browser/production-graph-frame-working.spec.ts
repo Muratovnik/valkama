@@ -186,7 +186,7 @@ for (const { band, ceiling, height, width } of [
     const seen = await marks(page)
     expectHonest(seen, near)
     // A frame with room says it whole, and the longest reference leaves its frame the mark.
-    expect(seen.filter((mark) => / working$/u.test(mark.shown)).length).toBeGreaterThan(0)
+    expect(seen.filter((mark) => mark.shown.endsWith(' working')).length).toBeGreaterThan(0)
     expect(seen.map((mark) => mark.reference)).toContain(LONGEST)
   })
 }
