@@ -950,18 +950,23 @@ and what it holds, and its state only once the epic has moved, since one not
 started is the norm of a board that holds a hundred of them and the word goes on
 being read out. Its card and its chain are two icons with their words in
 `title` and `aria-label`, as an entry's actions are, at the end of the line;
-where the row wraps, at the end of its last line. Where that line is full they
-stand beside the title only if it stays whole there; otherwise they take the
-line's last part down with them onto a line of their own, since a title cut to
-half its words reads worse than a line more. Only where nothing can come down
-with them, a phone's row whose counts would leave its state alone or stand
-alone, do they end the row on their own. A wrapped line starts under the
-reference, not under the arrow, and in a lane with no epic that costs a line at
-320px: a line from the row's edge stood 4px left of the arrow. They come up
-under the pointer and when the keyboard reaches them, in a place kept for them,
-so nothing shifts or is covered; where nothing can hover they stay, a finger's
-reach apart. A
-pointer's press on the row does not leave them up. A tile the board brings into
+where the row wraps, at the end of its last line. A row that may wrap keeps its
+title's words: what it holds goes to the next line once it and the whole title
+no longer fit one, rather than the title giving way to keep it beside. Where the
+last line is full they stand beside the title only if it stays whole there;
+otherwise they take the line's last part down with them onto a line of their
+own, since a title cut to half its words reads worse than a line more. Only
+where nothing can come down with them, a phone's row whose counts would leave
+its state alone, stand alone or not fit a line beside them, do they end the row
+on their own. Where they stand follows from the row's width alone, worked out
+from its parts' widths as the lines lay them, so a window widened to a width
+and one narrowed to it draw the row alike. A wrapped line starts under the
+reference, not under the arrow, and in a lane with no epic that costs a line on
+the narrowest phones: a line from the row's edge stood 4px left of the arrow.
+They come up under the pointer and when the keyboard reaches them, in a place
+kept for them, so nothing shifts or is covered; where nothing can hover they
+stay, a finger's reach apart. A pointer's press on the row does not leave them
+up. A tile the board brings into
 view under the row's heading, by the keyboard, by opening it or by moving the
 tile below into its place, stands below
 the heading at the gap the lane keeps under it, however many lines the heading
