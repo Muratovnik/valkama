@@ -288,7 +288,8 @@ checkouts are therefore distinguishable even at the same version.
   which that line describes or names, and the ring goes round the question. Why a send or a
   refresh failed still takes focus, so that Tab goes on from there, and its ring, like a
   reply's and the checklist heading's, stands clear of the words with the corners of a
-  button.
+  button. Brought into view at the foot of a phone's screen, such a line keeps room for
+  that ring, whose lower side used to be cut off.
 - **The form that marks a thread resolved has its buttons where every form does.** It put
   «Mark resolved» before «Cancel», at the start of the line on a phone; «Cancel» now comes
   first and the primary button ends the line.

@@ -236,3 +236,61 @@ test('why a write or a read failed is ringed clear of its words, at a control co
   expect(box?.height ?? 0).toBeLessThan(24)
   await expectLineRing(sent)
 })
+
+/** How far the ring round `target` runs past what the window and every box that clips it show. */
+const ringCut = (target: Locator) =>
+  target.evaluate((node) => {
+    const style = getComputedStyle(node)
+    const out = Number.parseFloat(style.outlineOffset) + Number.parseFloat(style.outlineWidth)
+    const box = node.getBoundingClientRect()
+    const shown = { top: 0, left: 0, bottom: innerHeight, right: innerWidth }
+    for (let at = node.parentElement; at; at = at.parentElement) {
+      const clips = getComputedStyle(at)
+      if (clips.overflowX === 'visible' && clips.overflowY === 'visible') continue
+      const frame = at.getBoundingClientRect()
+      const top = frame.top + at.clientTop
+      const left = frame.left + at.clientLeft
+      shown.top = Math.max(shown.top, top)
+      shown.left = Math.max(shown.left, left)
+      shown.bottom = Math.min(shown.bottom, top + at.clientHeight)
+      shown.right = Math.min(shown.right, left + at.clientWidth)
+    }
+    return Math.max(
+      0,
+      shown.top - (box.top - out),
+      shown.left - (box.left - out),
+      box.bottom + out - shown.bottom,
+      box.right + out - shown.right,
+    )
+  })
+
+/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
+async function shot(page: Page, name: string) {
+  const folder = process.env.VALKAMA_SHOT_DIR
+  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
+}
+
+// Focus scrolls a landing just into view, flush with the edge, where the ring standing clear of
+// its words was cut: under why a send failed, at the foot of a phone's screen.
+for (const locale of ['en', 'ru'] as const)
+  test(`${locale} at 390: the ring round why a send failed is whole once focus scrolled it in`, async ({
+    page,
+  }) => {
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const { card, requests } = await openQuestion(page, [asked()])
+    await card.getByRole('radio', { name: 'Move them', exact: true }).check()
+    requests.failNext(503)
+    await card
+      .getByRole('button', { name: locale === 'en' ? 'Send' : 'Отправить', exact: true })
+      .press('Enter')
+    const sent = card.locator('.request-foot .request-error')
+    await expect(sent).toBeFocused()
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    )
+    expect(await outline(sent)).toBe('solid')
+    expect(await ringCut(sent)).toBe(0)
+    await shot(page, `send-failed-ring-${locale}-390`)
+  })

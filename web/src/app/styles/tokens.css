@@ -562,5 +562,9 @@
      shows; written once here because `base.css` draws the bar at this width. */
   --size-scrollbar: 10px;
 
+  /* How wide the one focus ring is (`base.css`). Named because what the ring stands
+     round keeps room for it: a landing scrolled flush with an edge had its ring cut. */
+  --size-focus-ring: 2px;
+
   color-scheme: dark;
 }

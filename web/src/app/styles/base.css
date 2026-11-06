@@ -140,7 +140,7 @@ input:is([type='checkbox'], [type='radio']) {
    this ring clear of its words or draw focus its own way, and does that on
    `:focus-visible` too; a field shows focus by its own edge (`VTextInput`). */
 :focus-visible {
-  outline: 2px solid var(--color-focus-ring);
+  outline: var(--size-focus-ring) solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -150,10 +150,15 @@ input:is([type='checkbox'], [type='radio']) {
    words and turns at a control's corner. A control's own radius at that distance closed one
    line into a capsule round the words, and the recipe stood copied in six components. Words
    that only say something about a question describe the question, which takes the focus
-   instead. */
-.focus-landing:focus-visible {
-  border-radius: calc(var(--radius-control) - var(--space-1));
-  outline-offset: var(--space-1);
+   instead. Focus scrolls a landing only just into view, so it keeps the ring's room as its
+   scroll margin: flush with the foot of a phone's screen the ring's lower side was cut. */
+.focus-landing {
+  scroll-margin: calc(var(--space-1) + var(--size-focus-ring));
+
+  &:focus-visible {
+    border-radius: calc(var(--radius-control) - var(--space-1));
+    outline-offset: var(--space-1);
+  }
 }
 
 ::selection {
