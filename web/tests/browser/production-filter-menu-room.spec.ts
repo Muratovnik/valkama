@@ -206,3 +206,26 @@ test('a space with fewer than two labels has no choice, and no head waits at the
   await expect(head(page).getByRole('option')).toHaveCount(0)
   await expect(head(page)).not.toBeInViewport({ ratio: 1 })
 })
+
+for (const width of [1280, 390]) {
+  test(`at ${width}px a quick filter's count stands beside its label, not at the menu's edge`, async ({
+    page,
+  }) => {
+    await openMenu(page, width, 800)
+    const counted = menu(page).locator('.option-row:has(.option-detail)')
+    // The scenario holds work in hand, or there is no count to place.
+    await expect(counted).not.toHaveCount(0)
+    const gaps = await counted.evaluateAll((rows) =>
+      rows.map((row) => {
+        // The words as drawn: a box grown to the row's end ends where the words do not.
+        const words = document.createRange()
+        words.selectNodeContents(row.querySelector('.option-text') ?? row)
+        const count = row.querySelector('.option-detail')?.getBoundingClientRect()
+        const gap = (count?.left ?? 0) - words.getBoundingClientRect().right
+        return { gap, row: row.textContent?.trim() }
+      }),
+    )
+    // The row's own gap: pushed to the far edge it stood 230px from its label at 1280.
+    for (const { gap, row } of gaps) expect(gap, row).toBeCloseTo(8, 0)
+  })
+}

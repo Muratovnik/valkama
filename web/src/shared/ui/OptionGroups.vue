@@ -276,8 +276,10 @@ const highlighted = (place: number) => place === props.highlight || undefined
   }
 }
 
+/* The words take what they need and no more, so a count stands beside what it counts. Grown to
+   the row's end, they sent the count to the menu's far edge, 230px from its label. */
 .option-text {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
