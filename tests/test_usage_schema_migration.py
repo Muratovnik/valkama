@@ -25,7 +25,7 @@ from tests import schema9, schema10
 ADDED_TABLES = {"usage_runs", "usage_segments", "usage_requests"}
 #: Schema 12's and 13's: the chain runs on to this build's own schema in the same open.
 LATER_TABLES = {"pinned_work_items", "work_item_subscriptions"}
-LATER_COLUMNS = {"work_item_requests": {"comment_id"}}
+LATER_COLUMNS = {"work_item_requests": {"comment_id"}, "work_item_comments": {"awaits_reply"}}
 ADDED_INDEXES = {
     "usage_segments_item",
     "usage_segments_session",
