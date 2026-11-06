@@ -50,15 +50,26 @@ const near = (one: number, other: number) => Math.abs(one - other) <= 1
 
 /**
  * A strip's buttons stand at its end and wrap together, as every form's do, and its words stand
- * on the column's edge unless a ground of its own shows it as a block.
+ * on the column's edge unless a ground of its own shows it as a block. `block` says which of the
+ * two the place it stands in calls for: a block on a ground below the strip's tone, the column's
+ * edge on a sheet of that tone.
  */
-export async function expectStripOnColumn(strip: Locator, column: Locator, what: string) {
+export async function expectStripOnColumn(
+  strip: Locator,
+  column: Locator,
+  what: string,
+  block = false,
+) {
   await expect(strip).toBeVisible()
   const drawn = await stripGeometry(strip, column)
+  expect(drawn.drawnAsBlock, `${what}: ${block ? 'a block' : 'no block'} where it stands`).toBe(
+    block,
+  )
   if (!drawn.drawnAsBlock)
-    expect(near(drawn.wordsLeft, drawn.column.left), `${what}: words on the column's edge`).toBe(
-      true,
-    )
+    expect(
+      Math.abs(drawn.wordsLeft - drawn.column.left),
+      `${what}: words on the column's edge`,
+    ).toBeLessThanOrEqual(1)
   const { buttons } = drawn
   const room = drawn.strip.right - drawn.strip.left
   let together = 8 * (buttons.length - 1)
