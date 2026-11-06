@@ -106,8 +106,8 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
 /**
  * How an entry's head draws the session its agent wrote from, by a Range over the id's own
  * characters: what is drawn, on how many lines, in what font, whether it stays inside the head,
- * and the whole id its tooltip or its link carries. A head that names no session draws
- * nothing of one.
+ * the whole id its tooltip or its link carries, and how tall each line of the name stands. A
+ * head that names no session draws nothing of one and has its name's lines all the same.
  */
 export const sessionHead = (head: Locator) =>
   head.evaluate((root) => {
@@ -135,6 +135,7 @@ export const sessionHead = (head: Locator) =>
       font: text ? getComputedStyle(text).fontFamily : '',
       inside: rects.every((rect) => rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5),
       lines: lines(rects),
+      lineHeight: who.getBoundingClientRect().height / lines(drawnIn(who)),
       link: link && { role: link.getAttribute('role'), title: link.title },
       overflow: root.scrollWidth - root.clientWidth,
       title: session?.title ?? '',

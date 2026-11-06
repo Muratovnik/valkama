@@ -245,7 +245,8 @@ checkouts are therefore distinguishable even at the same version.
   start of the session, as the card's holder and every other place do, in the monospace
   metadata font: a whole id is wider than a phone's head, and it ran past the head's edge or
   broke across two lines of its own. The whole id is in the tooltip, and a session Valkama
-  knows is a link that opens it.
+  knows is a link that opens it. A head's line with the id stands as tall as one without,
+  where it stood a pixel taller.
 - A card's sections on a narrow window say that there are more of them: the row fades
   out at each end where a section is cut, and only there, so a phone, which shows no
   scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the

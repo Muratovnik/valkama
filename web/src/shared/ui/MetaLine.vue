@@ -172,8 +172,13 @@ useEventListener(
   overflow-wrap: anywhere;
 }
 
+/* Set solid, so the line's own leading decides its height. At 13px the browser rounds the
+   metadata font's ascent to 12px against the interface font's 13, and with the line's leading
+   the id's box reached a pixel past the name's: a line holding it stood 17.9px, one without
+   16.9px. Its letters keep the name's baseline. */
 .meta-session {
   font-family: var(--font-family-mono);
+  line-height: var(--line-height-flat);
   white-space: nowrap;
 }
 

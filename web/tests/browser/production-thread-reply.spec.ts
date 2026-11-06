@@ -167,7 +167,7 @@ for (const locale of ['en', 'ru'] as const)
 
 /**
  * The card's talk, a question over it and the heads to read: a thread's root, its two replies
- * shown and the question, each from an agent.
+ * shown and the question, each from an agent, and a person's reply, which names no session.
  */
 async function openHeads(page: Page, locale: Locale, width: number) {
   await setUp(page, locale, width)
@@ -176,6 +176,7 @@ async function openHeads(page: Page, locale: Locale, width: number) {
   await page.reload()
   const { drawer, card } = opened
   const thread = drawer.locator('.thread-entry').filter({ hasText: 'Four replies below' })
+  const person = drawer.locator('.thread-entry').filter({ hasText: 'Should the second report' })
   await expect(thread.locator('.reply')).toHaveCount(2)
   await expect(card.locator('.request-meta')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
@@ -193,6 +194,7 @@ async function openHeads(page: Page, locale: Locale, width: number) {
       ...replies.map((head) => ({ head, whole: KNOWN, start: KNOWN_START, link: LINKED })),
       { head: card.locator('.request-meta'), whole: SESSION, start: START, link: null },
     ],
+    person: person.locator('.reply-meta'),
   }
 }
 
@@ -236,5 +238,20 @@ for (const locale of ['en', 'ru'] as const)
       await card.evaluate((node) => node.scrollIntoView({ block: 'start' }))
       await page.mouse.move(0, 0)
       await shot(page, `session-question-${locale}-${width}`)
+    })
+
+    // The id is set in the metadata font, whose ascent the browser rounds to 12px at 13px
+    // against the interface font's 13: a line holding it stood 17.9px against 16.9px.
+    test(`${at}: a head's line with a session stands as tall as one without`, async ({ page }) => {
+      const { heads, person } = await openHeads(page, locale, width)
+      const without = await sessionHead(person.first())
+      expect(without.drawn, 'a person names no session').toBe('')
+      for (const { head } of heads) {
+        const drawn = await sessionHead(head)
+        expect(
+          Math.abs(drawn.lineHeight - without.lineHeight),
+          `${at}: ${await head.textContent()}: ${drawn.lineHeight}px against ${without.lineHeight}px`,
+        ).toBeLessThanOrEqual(0.1)
+      }
     })
   }
