@@ -37,10 +37,10 @@ const props = withDefaults(
     /** Points of a review shown with no decision. */
     undecided: number
     waiting: boolean
-    /** Somebody waits on the answer, so it can be refused. */
-    declinable?: boolean
     /** What the strip asks once a change is cancelled, where the change is not to an answer. */
     cancelMessage?: string
+    /** Somebody waits on the answer, so it can be refused. */
+    declinable?: boolean
     /** What the strip's way on says, where it discards something other than an answer. */
     discardWord?: string
     /** What Send says, where it sends something other than an answer. */
