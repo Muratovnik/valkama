@@ -197,10 +197,40 @@ export async function expectRow(row: Locator, what: string, { declinable = true 
   const measured = await membersOf(row)
   expect(measured.members.length, `${what}: has controls`).toBeGreaterThan(0)
   expectNoEmptyBand(measured, what, declinable)
+  // Nor inside its buttons: one keeps room only for a word it can show, and a row that declines
+  // nothing has no "Don't answer" to show.
+  if (!declinable)
+    for (const { name, room } of await heldRoom(row))
+      expect(room, `${what}: ${name} as wide as its words`).toBeLessThanOrEqual(1)
   expectSides(measured, what)
   expectOneLineWhereItFits(measured, await askingWidth(row), what)
   return measured
 }
+
+/**
+ * How much wider each button that holds room for its other word (`request-held`) is than its
+ * own words and its padding: the room it keeps for a word it may show instead.
+ */
+const heldRoom = (row: Locator) =>
+  row.evaluate((node) =>
+    [...node.querySelectorAll<HTMLElement>('.request-held')]
+      .filter((button) => button.getClientRects().length > 0)
+      .map((button) => {
+        const text = document
+          .createTreeWalker(button, NodeFilter.SHOW_TEXT, {
+            acceptNode: (found) =>
+              found.textContent?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+          })
+          .nextNode()
+        const range = document.createRange()
+        if (text) range.selectNodeContents(text)
+        const words = text ? range.getBoundingClientRect().width : 0
+        const style = getComputedStyle(button)
+        const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+        const name = (button.textContent ?? '').trim()
+        return { name, room: button.getBoundingClientRect().width - words - padding }
+      }),
+  )
 
 const pairOf = (measured: Row) => measured.members.filter((member) => !member.lead)
 

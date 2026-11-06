@@ -1354,7 +1354,7 @@ either language there. Kept beside the controls as a room of its own, it sent th
 the next line where everything else fitted. What stands before the answers keeps the row's start
 at every width. A row nothing can be declined from, the one under a list an agent put under its
 comment, is the same row and keeps no place for an asking it never shows: each of its lines holds
-a control.
+a control, and its way on holds room for no word but its own.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A list under a comment is not held to that: its marks go with one send, and a send with

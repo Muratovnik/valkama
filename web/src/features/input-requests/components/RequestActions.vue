@@ -36,7 +36,8 @@
  *
  * A list under a comment is not declined (`declinable` false): nobody waits on it, so it has
  * only its way on, in its own words (`sendWord`), until a change of it is open. The row is
- * the same row: with no asking there is no place kept for it, so what stands before the way on
+ * the same row: with no asking there is no place kept for it, nor room for Don't answer in the
+ * way on, which stood 9px wider than its words for it in English, so what stands before the way on
  * is only what is offered there, and with nothing offered the way on ends the comment's line.
  */
 import { computed, ref } from 'vue'
@@ -99,10 +100,10 @@ const onward = computed(() => {
     const word = t('requests.saveChange')
     return { room: word, variant: 'primary' as const, word }
   }
-  const [word, room] = [t('requests.decline'), props.sendWord ?? t('requests.answer')]
-  return props.declining
-    ? { room, variant: 'danger' as const, word }
-    : { room: word, variant: 'primary' as const, word: room }
+  const [decline, send] = [t('requests.decline'), props.sendWord ?? t('requests.answer')]
+  if (props.declining) return { room: send, variant: 'danger' as const, word: decline }
+  // Room for the other word only where it can come: what declines nothing keeps none.
+  return { room: declines.value ? decline : send, variant: 'primary' as const, word: send }
 })
 
 function focusWayOut() {
