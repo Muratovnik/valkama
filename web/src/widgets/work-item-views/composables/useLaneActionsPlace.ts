@@ -78,8 +78,9 @@ export function useLaneActionsPlace(parts: LaneHeadParts, content: WatchSource) 
     const gap = Number.parseFloat(getComputedStyle(tailBox).columnGap)
     const end = tailBox.getBoundingClientRect().right + 0.5
     const after = before.getBoundingClientRect().right + gap + width(last)
-    if (after > end) return width(last) + gap + width(actionsBox) <= width(tailBox) + 0.5
-    return after + gap + width(actionsBox) <= end
+    return after > end
+      ? width(last) + gap + width(actionsBox) <= width(tailBox) + 0.5
+      : after + gap + width(actionsBox) <= end
   }
 
   /** The last part can come down with them: it does not start its line, the line above keeps
