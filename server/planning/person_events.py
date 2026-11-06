@@ -190,12 +190,16 @@ def since_call(
     return _window(conn, work_item_id, after, edits)
 
 
+#: How long a comment that waits for a reply goes on asking for the holders, as
+#: SQLite's date modifier: an older one is told and wakes nobody.
+ASKS_FOR = "-1 day"
 #: What other agents wrote on an item: the speaker is the call's proved session and
 #: agent, never the `author` it signed, and an unproved call names nobody. The same
 #: rows `_window` reads for a person, through an agent's call instead.
 _AGENT_COMMENTS = (
     "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request,"
-    " c.session_id, c.agent_id, m.awaits_reply FROM work_item_comments m"
+    " c.session_id, c.agent_id, m.awaits_reply,"
+    " m.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?) FROM work_item_comments m"
     " JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_state = 'confirmed'"
     " AND c.identity_source NOT IN (?,?) AND c.session_id IS NOT NULL ORDER BY m.id"
@@ -218,18 +222,21 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
     apart. Each entry has `via: "agent"`, and `session` and `agent`, the speaker as
     its call row names it, so the hook can leave out the recipient's own words and
     always says whose these are; a comment that waits for a reply says
-    `awaits_reply: true`. Who is told is the hook's to decide.
+    `awaits_reply: true`, and `recent: true` while it is younger than `ASKS_FOR`,
+    as does a mention by one. Who is told is the hook's to decide.
     """
 
     found: list[tuple[tuple[int, int, int], dict]] = []
     bound = (work_item_id, after, BROWSER, VALKAMA)
     reports: set[int] = set()
-    for row in conn.execute(_AGENT_COMMENTS, bound).fetchall():
+    for row in conn.execute(_AGENT_COMMENTS, (ASKS_FOR, *bound)).fetchall():
         if row[2]:
             reports.add(int(row[4]))
         entry = _spoken(_comment_entry(row), row[7], row[8])
         if row[9]:
             entry["awaits_reply"] = True
+            if row[10]:
+                entry["recent"] = True
         found.append(((int(row[4]), 1, int(row[0])), entry))
     for row in conn.execute(_AGENT_EVENTS, bound).fetchall():
         action = str(row[1])
@@ -473,7 +480,8 @@ def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
 
 
 _MENTIONING = (
-    "SELECT m.body, m.report, s.key, w.number FROM work_item_comments m"
+    "SELECT m.body, m.report, s.key, w.number, m.awaits_reply,"
+    " m.created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?) FROM work_item_comments m"
     " JOIN work_items w ON w.work_item_id = m.work_item_id"
     " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id WHERE m.id = ?"
 )
@@ -483,19 +491,25 @@ def _mentioned(conn: sqlite3.Connection, at: str, comment_id: int) -> dict:
     """A comment on another item that named this one: where it stands now, and what it said.
 
     `from` is that item's reference, after a merge the survivor's; with the item
-    deleted the comment went with it, and `from` is null with nothing to quote.
+    deleted the comment went with it, and `from` is null with nothing to quote. A
+    comment that waits for a reply says so, as `agents_since` says it.
     """
 
-    row = conn.execute(_MENTIONING, (comment_id,)).fetchone()
+    row = conn.execute(_MENTIONING, (ASKS_FOR, comment_id)).fetchone()
     if row is None:
         return _entry("mentioned", at, comment_id=comment_id, text="", **{"from": None})
     said = str(row[0])
     if row[1]:
         done = _json(str(row[1]))
         said = str(done.get("done", "")) if isinstance(done, dict) else ""
-    return _entry(
+    entry = _entry(
         "mentioned", at, comment_id=comment_id, text=said, **{"from": f"{row[2]}-{row[3]}"}
     )
+    if row[4]:
+        entry["awaits_reply"] = True
+        if row[5]:
+            entry["recent"] = True
+    return entry
 
 
 def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:

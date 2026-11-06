@@ -2,7 +2,10 @@
 
 The owner's rules: a session that asks with `awaits_reply` is woken once by the
 first reply in that thread from another session or a person, and later replies are
-told at its next tool call. A wake is the watcher exiting 2 for an idle session, or
+told at its next tool call. The comment that asks wakes, once, the holders of the
+item it is written on and of the items it names in `mentions`, for a day after it
+was written; a subscriber hears it at its next tool call. A wake is the watcher
+exiting 2 for an idle session, or
 a `Stop` notice that continues the turn once; a session's own writes, its own
 subagents' included, never wake it, and a subagent is never woken itself: its
 orchestrator is.
@@ -170,6 +173,86 @@ class AskerTests(Wakes):
         assert answer is not None
         told = json.loads(answer)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("marker X-1", told)
+
+
+class AddresseeTests(Wakes):
+    def test_a_question_on_bs_item_wakes_b_once_and_not_a(self) -> None:
+        """The owner's example: A asks B with awaits_reply on B's item while both idle."""
+
+        self.ask()
+        status, text = self.watch_as(B, alive=None)
+        self.assertEqual(notify.WAKE_STATUS, status, "B is woken")
+        self.assertTrue(text.startswith(FROM_AGENTS), text)
+        self.assertRegex(text, rf"- comment at \S+ by session {A} \(awaits a reply\): «[^»]*Q-1\?»")
+        self.assertIn("This is not an error", text)
+        self.assertIsNone(self.stop(B), "once")
+        self.assertIsNone(self.hook(session=B))
+        self.assertEqual((0, ""), self.watch_as(A), "A is not woken by its own question")
+        self.assertIsNone(self.stop(A))
+
+    def test_at_bs_stop_the_question_continues_the_turn_once(self) -> None:
+        self.ask()
+        told = self.stop(B)
+        assert told is not None
+        self.assertIn("(awaits a reply)", told)
+        self.assertIsNone(self.stop(B))
+
+    def test_a_question_naming_bs_item_in_mentions_wakes_b(self) -> None:
+        elsewhere = self.item("A's own")
+        self.agent("claim_work_item", AS_A, id=elsewhere)
+        self.settle()
+        self.comment(
+            AS_A,
+            elsewhere,
+            "Does yours read it, marker M-1?",
+            awaits_reply=True,
+            mentions=[self.held],
+        )
+        told = self.stop(B)
+        assert told is not None, "the holder of the item named is asked"
+        self.assertRegex(
+            told, rf"- mentioned at \S+ by session {A}, from {elsewhere} #\d+ \(awaits a reply\)"
+        )
+
+    def test_a_question_older_than_a_day_wakes_no_addressee(self) -> None:
+        asked = self.ask()
+        self.conn.execute(
+            "UPDATE work_item_comments SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now',"
+            " '-25 hours') WHERE id = ?",
+            (asked,),
+        )
+        self.conn.commit()
+        self.assertIsNone(self.stop(B), "too old to continue a turn")
+        self.assertEqual((0, ""), self.watch_as(B), "or to wake")
+        told = self.hook(session=B)
+        assert told is not None, "still told at the next tool call"
+        self.assertIn("(awaits a reply)", told)
+
+    def test_a_question_a_day_old_less_a_minute_still_wakes(self) -> None:
+        asked = self.ask()
+        self.conn.execute(
+            "UPDATE work_item_comments SET created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now',"
+            " '-23 hours', '-59 minutes') WHERE id = ?",
+            (asked,),
+        )
+        self.conn.commit()
+        self.assertIsNotNone(self.stop(B))
+
+    def test_a_subscriber_and_a_plain_comment_are_told_and_wake_nobody(self) -> None:
+        self.subscribe(AS_B, self.followed, True)
+        self.settle()
+        self.ask(ref=self.followed)
+        self.comment(AS_A, self.held, "Just so you know, marker J-1")
+        self.assertIsNone(self.stop(B), "a subscriber is not asked, and news is not a question")
+        told = self.hook(session=B)
+        assert told is not None
+        self.assertIn("marker Q-1", told)
+        self.assertIn("marker J-1", told)
+
+    def test_a_question_from_bs_own_subagent_asks_b_nothing(self) -> None:
+        self.comment({"sessionId": B, "threadId": A_CHILD}, self.held, "Mine", awaits_reply=True)
+        self.assertIsNone(self.stop(B))
+        self.assertIsNone(self.hook(session=B))
 
 
 if __name__ == "__main__":
