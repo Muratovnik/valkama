@@ -15,10 +15,11 @@ import { test } from './test.ts'
 import { reply, root } from './threadFixtures.ts'
 
 const WORDS = {
-  en: { mark: 'waiting for a reply', reply: 'Reply', send: 'Send' },
-  ru: { mark: 'ждёт ответа', reply: 'Ответить', send: 'Отправить' },
+  en: { mark: 'waiting for a reply', reply: 'Reply', send: 'Send', expand: 'Expand' },
+  ru: { mark: 'ждёт ответа', reply: 'Ответить', send: 'Отправить', expand: 'Развернуть' },
 } as const
 type Locale = keyof typeof WORDS
+type Row = ReturnType<typeof root>
 
 const ASKER = 'codex (session 019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e)'
 const OTHER = 'claude (session 0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e)'
@@ -66,12 +67,12 @@ const asked = () => [
   root(39, 'A short note that asks nothing.', { author: SHORT, at: SHORT_AT }),
 ]
 
-async function openAsked(page: Page, locale: Locale, width: number) {
+async function openAsked(page: Page, locale: Locale, width: number, more: Row[] = []) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width, height: 900 })
   const opened = await openCard(page)
-  opened.backend.item.comments.push(...asked())
+  opened.backend.item.comments.push(...asked(), ...more)
   await page.reload()
   const thread = (text: string) => opened.drawer.locator('.thread-entry').filter({ hasText: text })
   await expect(thread('Which parser')).toBeVisible()
@@ -88,17 +89,15 @@ const settle = (page: Page) =>
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   )
 
-/** The room a text separator " · " takes in a meta line's font, the time to the next word. */
-const SEPARATOR = 8
-
 /**
  * A meta line as drawn, by Ranges over its text rather than by boxes: where the author's first
  * words start, how many lines the author takes, which line the date is on, and the mark's
- * lines, with whether the mark follows the date on its line, a separator's room after it, or
- * starts a line of its own under it, on the line's edge.
+ * lines, with whether the mark follows the date on its line, as far after it as a text " · "
+ * would stand with its dot centred between them, or starts a line of its own under it, on the
+ * line's edge.
  */
-const metaOf = (meta: Locator, separator: number) =>
-  meta.evaluate((line, room) => {
+const metaOf = (meta: Locator) =>
+  meta.evaluate((line) => {
     const who = line.querySelector('.meta-who')
     const when = line.querySelector('.meta-when')
     if (!who || !when) throw new Error('A name and a time')
@@ -117,10 +116,21 @@ const metaOf = (meta: Locator, separator: number) =>
     const marks = mark ? drawn(mark) : []
     const box = line.getBoundingClientRect()
     const [words] = marks
+    // What a text " · " takes in this line's font, from the end of a word to the next one.
+    const style = getComputedStyle(line)
+    const canvas = document.createElement('canvas').getContext('2d')
+    if (!canvas) throw new Error('No canvas')
+    canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const room = canvas.measureText(' · ').width
+    // Where the mark's dot is drawn: centred in the room its own box keeps before its words.
+    const dot = mark ? getComputedStyle(mark, '::before') : null
+    const dotCentre =
+      mark && dot ? mark.getBoundingClientRect().left + Number.parseFloat(dot.width) / 2 : 0
     const followsTime =
       words !== undefined &&
       Math.abs(words.top - time.top) <= 2 &&
-      Math.abs(words.left - time.right - room) <= 1
+      Math.abs(words.left - time.right - room) <= 0.75 &&
+      Math.abs(dotCentre - (time.right + words.left) / 2) <= 0.75
     const startsLine =
       words !== undefined && words.top >= time.bottom - 1 && Math.abs(words.left - box.left) <= 1
     return {
@@ -133,7 +143,7 @@ const metaOf = (meta: Locator, separator: number) =>
       placed: followsTime || startsLine,
       followsTime,
     }
-  }, separator)
+  })
 
 /** What is drawn around the mark itself, and the ink and size of its words beside its line's. */
 const markStyle = (meta: Locator) =>
@@ -176,8 +186,8 @@ function metaLine(drawer: Locator, text: string, line: string) {
  */
 async function expectPlaced(drawer: Locator, at: string) {
   for (const [kind, asking, plain, line] of PAIRS) {
-    const drawn = await metaOf(metaLine(drawer, asking, line), SEPARATOR)
-    const control = await metaOf(metaLine(drawer, plain, line), SEPARATOR)
+    const drawn = await metaOf(metaLine(drawer, asking, line))
+    const control = await metaOf(metaLine(drawer, plain, line))
     const of = `${at}, ${kind}`
     expect(control.marks, of).toHaveLength(0)
     expect(drawn.authorLines, `${of}: the author's lines`).toBe(control.authorLines)
@@ -217,7 +227,7 @@ test('as the drawer narrows and widens, the mark is placed again for its width',
     await page.setViewportSize({ width, height: 900 })
     await settle(page)
     await expectPlaced(drawer, `resized to ${width}`)
-    const long = await metaOf(metaLine(drawer, 'Which parser', '.thread-meta'), SEPARATOR)
+    const long = await metaOf(metaLine(drawer, 'Which parser', '.thread-meta'))
     placements.add(long.followsTime)
   }
   // The long author's mark has stood both ways on the way, so each width placed it again.
@@ -251,7 +261,7 @@ for (const locale of ['ru', 'en'] as const)
     }) => {
       const { thread } = await openAsked(page, locale, width)
       // The case a mark counted as the name's width would break: the date shares the line.
-      const drawn = await metaOf(thread('Does the import keep').locator('.thread-meta'), SEPARATOR)
+      const drawn = await metaOf(thread('Does the import keep').locator('.thread-meta'))
       expect(drawn.authorLines, at).toBe(1)
       expect(Math.abs(drawn.timeTop - drawn.authorTop), at).toBeLessThanOrEqual(2)
       expect(drawn.marks).toHaveLength(1)

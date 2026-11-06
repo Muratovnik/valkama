@@ -111,10 +111,12 @@ useResizeObserver(
   white-space: nowrap;
 }
 
-/* Its dot fills the line's gap before it, so after the time it reads as «12:31 · ждёт
-   ответа». On a line of its own the room and its dot stand before the line, clipped. */
+/* Beside the time it takes back the line's gap and stands a text separator's width after it,
+   0.85em, the advance of " · " in the interface font, its dot centred in that room: it reads
+   «12:31 · ждёт ответа» as the card's other " · " read, where the line's 8px gap read tighter.
+   On a line of its own the room and its dot stand before the line, clipped. */
 .meta-after {
-  --separator: var(--space-2);
+  --separator: 0.85em;
 
   position: relative;
   flex: none;
