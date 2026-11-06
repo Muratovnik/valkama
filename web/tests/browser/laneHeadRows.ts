@@ -17,30 +17,13 @@ export interface Part {
   member: Member
 }
 
-/**
- * The line the actions end, as the parts of the heading after its title wrap: the room one such
- * line has, the gap between two parts, the actions' width, and the last part before them — its
- * width and the parts on its line beside it, by class.
- */
-interface Tail {
-  actions: number
-  gap: number
-  last: { beside: string[]; width: number } | null
-  line: number
-}
-
 export interface Reading {
   /** Whether the actions are drawn: they are see-through at rest where a pointer can hover. */
   actionsShown: boolean
-  /** Whether the title, whole, the toggle's end, the gap its words keep and the actions after it
-   *  fit the heading's first line. */
-  besideWhole: boolean
   height: number
   parts: Part[]
   /** The members of each row, top to bottom. */
   rows: Member[][]
-  /** The line the actions end; null where the heading has none. */
-  tail: Tail | null
   /** How many characters of the title are drawn whole, before any ellipsis. */
   titleChars: number
   titleLength: number
@@ -149,57 +132,6 @@ const drawnHeading = (head: Element, bare = false): Drawn => {
   }
 }
 
-/**
- * Whether the title, whole, fits beside the actions, and the line they end; runs in the page. The
- * title's whole width is its text's, however much of it its box shows.
- */
-const tailIn = (head: Element): { besideWhole: boolean; tail: Tail | null } => {
-  const words = head.querySelector('.lane-words')
-  const title = head.querySelector('.lane-title')
-  const toggle = head.querySelector('.lane-toggle')
-  const actions = head.querySelector('.lane-actions')
-  const tail = head.querySelector('.lane-tail')
-  if (!words || !title || !toggle || !actions || !tail) return { besideWhole: true, tail: null }
-  const width = (element: Element) => element.getBoundingClientRect().width
-  const range = document.createRange()
-  range.selectNodeContents(title)
-  const gap = Number.parseFloat(getComputedStyle(words).columnGap)
-  const reference = head.querySelector('.lane-reference')
-  const wordsEnd =
-    words.getBoundingClientRect().left -
-    head.getBoundingClientRect().left +
-    (reference ? width(reference) + gap : 0) +
-    range.getBoundingClientRect().width
-  const toggleEnd = Number.parseFloat(getComputedStyle(toggle).paddingInlineEnd)
-  const text = [
-    ...head.querySelectorAll('.lane-state:not(.visually-hidden), .lane-counts, .lane-elsewhere'),
-  ]
-  const lastPart = text.at(-1)
-  const box = lastPart?.getBoundingClientRect()
-  const beside = [toggle, ...text.slice(0, -1)].filter((part) => {
-    const other = part.getBoundingClientRect()
-    return box !== undefined && other.top < box.bottom && box.top < other.bottom
-  })
-  return {
-    besideWhole: wordsEnd + toggleEnd + gap + width(actions) <= width(head),
-    tail: {
-      actions: width(actions),
-      gap: Number.parseFloat(getComputedStyle(tail).columnGap),
-      last: box
-        ? {
-            beside: beside.map((part) =>
-              ['lane-toggle', 'lane-state', 'lane-counts', 'lane-elsewhere']
-                .filter((name) => part.classList.contains(name))
-                .join(' '),
-            ),
-            width: box.width,
-          }
-        : null,
-      line: width(tail),
-    },
-  }
-}
-
 /** The members of each row: a part whose middle falls inside a row already found stands on it. */
 function rowsOf(parts: Part[]): Member[][] {
   const actions = parts.filter(({ member }) => member === 'action').map(({ box }) => box)
@@ -238,16 +170,13 @@ function rowsOf(parts: Part[]): Member[][] {
 export async function readHeading(head: Locator): Promise<Reading> {
   const drawn = await head.evaluate(drawnHeading)
   const whole = drawn.letterEnds.findIndex((end) => end > drawn.titleEnd + 0.5)
-  const { besideWhole, tail } = await head.evaluate(tailIn)
   return {
     actionsShown: drawn.actionsShown,
-    besideWhole,
     height: drawn.height,
     parts: drawn.parts,
     rows: rowsOf(drawn.parts),
     titleChars: whole === -1 ? drawn.letterEnds.length : whole,
     titleLength: drawn.letterEnds.length,
-    tail,
     width: drawn.width,
   }
 }

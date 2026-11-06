@@ -11,12 +11,14 @@
  * against how the base drew the same heading (`laneHeadBase.ts`), every 10px from 320 to 1440 at
  * rest and at `WIDTHS` under the pointer and the keyboard too. Each exception is read from the
  * heading itself, not listed. A line more than the base is the cost of one of three things. The
- * base held that line only by laying its actions over the counts or the note. Or beside the title
- * the actions would cut it, so they end the last line, taking its last part down with them. Or the
- * lines after the first start under the reference rather than at the heading's edge, and the same
- * heading laid out from its edge takes fewer: that inset is kept, since a line wrapped from the
- * edge stood 4px left of the chevron. The title keeps at least the letters the base drew,
- * everywhere: where one line would cut it, the heading takes the base's lines instead.
+ * base held that line only by laying its actions over the counts or the note. Or every other
+ * layout of the heading with fewer lines, each drawn on a copy of it (`laneHeadOthers.ts`), covers
+ * text, leaves a part alone on a line or cuts the title. Or the lines after the first start under
+ * the reference rather than at the heading's edge, and the same heading laid out from its edge
+ * takes fewer: that inset is kept, since a line wrapped from the edge stood 4px left of the
+ * chevron. The actions stand alone on a line only where every other layout of as few lines does
+ * one of those things too. The title keeps at least the letters the base drew, everywhere: where
+ * one line would cut it, the heading takes the base's lines instead.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -25,7 +27,8 @@ import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { baseOf, SWEEP, WIDTHS } from './laneHeadBase.ts'
 import type { Drawn } from './laneHeadBase.ts'
-import { overlaps, settle } from './laneHeadGeometry.ts'
+import { settle } from './laneHeadGeometry.ts'
+import { better, covered } from './laneHeadOthers.ts'
 import { readHeading, rowsFromTheEdge } from './laneHeadRows.ts'
 import type { Part, Reading } from './laneHeadRows.ts'
 import { serveWide } from './laneWideFixture.ts'
@@ -54,36 +57,13 @@ const TOUCHED = new Set([320, 390, 760, 1280])
 
 const SIDES = ['left', 'top', 'right', 'bottom'] as const
 
-/** What an action lies over. Read at rest too: they come up where they stand. */
-function covered(reading: Reading): string[] {
-  const actions = reading.parts.filter(({ member }) => member === 'action')
-  return reading.parts
-    .filter(
-      ({ box, member }) => member !== 'action' && actions.some((one) => overlaps(one.box, box)),
-    )
-    .map(({ member }) => `an action covers the ${member}`)
-}
+/** The state alone on a line: never forced, since it can always stand beside the counts. */
+const stateAlone = (reading: Reading) =>
+  reading.rows.some((row) => row.length === 1 && row[0] === 'state')
 
-/**
- * Whether nothing can come down with the actions onto the line they end: beside the title they
- * would cut it, and the part they follow either cannot share a line with them or, taken down,
- * would leave the state alone on the line above.
- */
-function forcedAlone({ besideWhole, tail }: Reading): boolean {
-  const last = tail?.last
-  if (!tail || !last || besideWhole) return false
-  const leaves = last.beside.length === 1 && last.beside[0] === 'lane-state'
-  return leaves || last.width + tail.gap + tail.actions > tail.line
-}
-
-/** A line that holds the state or the actions and nothing else, but where nothing else can. */
-function alone(reading: Reading): string[] {
-  return reading.rows.flatMap((row) => {
-    if (row.length === 1 && row[0] === 'state') return ['the state stands on a line alone']
-    const lone = row.every((member) => member === 'action')
-    return lone && !forcedAlone(reading) ? ['the actions stand on a line alone'] : []
-  })
-}
+/** Whether the actions stand on a line of their own. */
+const actionsAlone = (reading: Reading) =>
+  reading.rows.some((row) => row.every((member) => member === 'action'))
 
 /** Whether every part but the actions stands where it stood at rest. */
 function still(reading: Reading, rest: Reading): boolean {
@@ -104,7 +84,9 @@ function faults(reading: Reading, rest: Reading): string[] {
     .filter(({ box }) => box.left < -0.5 || box.right > reading.width + 0.5)
     .map(({ member }) => `the ${member} runs past the heading`)
   const moved = still(reading, rest) ? [] : ['something moves']
-  return [...new Set([...covered(reading), ...alone(reading), ...outside, ...moved])]
+  const over = covered(reading).map((member) => `an action covers the ${member}`)
+  const alone = stateAlone(reading) ? ['the state stands on a line alone'] : []
+  return [...new Set([...over, ...alone, ...outside, ...moved])]
 }
 
 /** What one heading at rest gives up against the base: letters of its title, or lines. */
@@ -116,12 +98,21 @@ async function againstBase(head: Locator, rest: Reading, base: Drawn | undefined
       : []
   const lines = rest.rows.length
   if (lines <= base.rows || base.covered) return found
-  // Where beside the title they would cut it, the actions end the last line: one line more.
-  const ending = (rest.rows.at(-1) ?? []).includes('action') && !rest.besideWhole ? 1 : 0
   const inset = lines - (await rowsFromTheEdge(head))
-  return lines - base.rows <= ending + inset
+  if (lines - base.rows <= inset) return found
+  // A line more is forced only where every layout with fewer lines does worse.
+  const fewer = await better(head, rest)
+  return fewer.length === 0
     ? found
-    : [...found, `${lines} lines, the base ${base.rows}`]
+    : [...found, `${lines} lines, the base ${base.rows}; ${fewer.join(', ')}`]
+}
+
+/** Where the actions stand on a line alone, the layouts of as few lines that need not. */
+async function aloneAgainst(head: Locator, states: (readonly [string, Reading])[]) {
+  const [[, rest]] = states
+  if (!states.some(([, reading]) => actionsAlone(reading))) return []
+  const others = await better(head, rest, 1)
+  return others.length === 0 ? [] : [`the actions stand on a line alone; ${others.join(', ')}`]
 }
 
 /**
@@ -192,6 +183,8 @@ async function readWidth(
         found.push(...faults(reading, rest).map((one) => `${where} ${state}: ${one}`))
       if (!states.every(([, reading], at) => at === 0 || reading.actionsShown))
         found.push(`${where}: an action the pointer or keyboard is on is not up`)
+      const alone = await aloneAgainst(head, states)
+      found.push(...alone.map((one) => `${where}: ${one}`))
       const base = baseOf(`${locale}|${hover ? 'pointer' : 'touch'}|${scroll}|${name}`, width)
       const lost = await againstBase(head, rest, base)
       found.push(...lost.map((one) => `${where}: ${one}`))
