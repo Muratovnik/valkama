@@ -286,7 +286,7 @@ describe('the count on a phone’s rail', () => {
     // The quiet row and the two pinned rows with no work stand in the list uncounted.
     expect(count()).toBe('Work going on now: 5')
     const dropped = busyFrame()
-    dropped.spaces[0].rows.splice(1, 1)
+    dropped.spaces[0].rows = dropped.spaces[0].rows.filter((each) => each.reference !== 'MAIN-12')
     store.accept(dropped)
     await flushPromises()
     // A row that left still fades in the list, but nobody is on it now.
@@ -308,7 +308,8 @@ describe('pins on the rail', () => {
   it('pins through the store and draws the frame the pin answers with', async () => {
     const { store, wrapper } = rail(busyFrame())
     const pinned = busyFrame()
-    pinned.spaces[0].rows[1] = { ...pinned.spaces[0].rows[1], pinned: true }
+    const at = pinned.spaces[0].rows.findIndex((each) => each.reference === 'MAIN-12')
+    pinned.spaces[0].rows[at] = { ...pinned.spaces[0].rows[at], pinned: true }
     const pin = vi.spyOn(store, 'pin').mockImplementation(async () => store.accept(pinned))
     row(wrapper, 'MAIN-12').querySelector<HTMLElement>('.nav-row-pin')?.click()
     await flushPromises()

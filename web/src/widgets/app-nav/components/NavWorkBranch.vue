@@ -26,6 +26,8 @@ const props = defineProps<{
   /** Ids in this tree start with it: the rail's tree and the panel's can stand at once. */
   prefix: string
   size: 'rail' | 'touch'
+  /** A number as wide as the list's longest (`NavWorkTree`). */
+  widest: string
   route: (reference: string) => PlatformRoute | null
 }>()
 
@@ -76,6 +78,7 @@ function toggle(live: LiveNode) {
         :current="isCurrent(live)"
         :route="route(live.row.reference)"
         :fold="fold(live)"
+        :widest="widest"
         @fold="toggle(live)"
         @go="(next) => emit('go', next)"
       />
@@ -90,6 +93,7 @@ function toggle(live: LiveNode) {
         :prefix="prefix"
         :route="route"
         :size="size"
+        :widest="widest"
         @go="(next) => emit('go', next)"
       />
     </li>

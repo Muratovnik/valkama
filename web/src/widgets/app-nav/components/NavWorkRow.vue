@@ -7,7 +7,8 @@
  * it opens the card, and it is an address, so a press with a modifier opens it elsewhere
  * as any link does. A group's head has the fold at its start, a button of its own above
  * the link; an item has its sign there instead, in the same width, so the numbers of a
- * group's items stand in one column under the head's.
+ * group's items stand in one column under the head's. The number's column is as wide
+ * as the list's longest number (`NavWorkTree`), so a level's titles start at one x.
  *
  * The sign: three dots that run while the session works on the item, held still while it
  * holds the item and works on others, a ring while it waits for a person, and nothing for
@@ -40,6 +41,8 @@ const props = defineProps<{
   route: PlatformRoute | null
   row: ShownRow
   size: 'rail' | 'touch'
+  /** A number as wide as the list's longest, which sizes the number's column. */
+  widest: string
   /** The fold of a group's head, which an item has not. */
   fold?: { controls: string; id: string; label: string; open: boolean } | null
 }>()
@@ -180,7 +183,14 @@ function press(event: MouseEvent) {
       :title="hint"
       @click="press"
     >
-      <span class="nav-row-number">{{ number }}</span>
+      <span class="nav-row-numeral">
+        <span class="nav-row-number">{{ number }}</span>
+        <span
+          class="nav-row-widest"
+          aria-hidden="true"
+          >{{ widest }}</span
+        >
+      </span>
       <span class="nav-row-title">{{ row.title }}</span>
       <span
         v-if="fold && sign"
@@ -270,9 +280,10 @@ function press(event: MouseEvent) {
   }
 }
 
-/* A group's head leads its items, as an epic's row does on the board. */
-.nav-row-head .nav-row-link {
-  font: var(--font-strong);
+/* A group's head leads its items, as an epic's row does on the board. Only its title is
+   strong: its number keeps the weight, and so the width, of every number in its column. */
+.nav-row-head .nav-row-title {
+  font-weight: 600;
 }
 
 .nav-row-lead,
@@ -344,10 +355,22 @@ function press(event: MouseEvent) {
   }
 }
 
-.nav-row-number {
+/* The number over an unseen one as long as the list's longest, in figures of one width,
+   so the column is that wide on every row and a title starts at the same x whatever the
+   length of the number before it. */
+.nav-row-numeral {
+  display: inline-grid;
   flex: none;
   color: var(--color-navigation-text-muted);
   font-variant-numeric: tabular-nums;
+
+  > * {
+    grid-area: 1/1;
+  }
+}
+
+.nav-row-widest {
+  visibility: hidden;
 }
 
 .nav-row-title {

@@ -40,15 +40,18 @@ export function liveFrame(spaces: Space[], elsewhere = 0): LiveFrame {
 
 /**
  * A busy frame: two spaces, an epic at work heading its own group, every live state, a
- * quiet row, a pinned row with no work, a pinned closed row, agents on no row.
+ * quiet row, a pinned row with no work, a pinned closed row, agents on no row, and
+ * numbers of one, two and three digits side by side at both levels.
  */
 export function busyFrame(): LiveFrame {
+  const silent = { state: 'quiet', quiet_since: '2026-11-02T09:00:00Z' } as const
   return liveFrame(
     [
       liveSpace(
         'MAIN',
         [
           liveRow('MAIN-4', { kind: 'epic', title: 'Structured answers', state: 'working' }),
+          liveRow('MAIN-9', { parent: 'MAIN-4', title: 'Name the form', ...silent }),
           liveRow('MAIN-12', {
             parent: 'MAIN-4',
             title: 'Answer a review in one form',
@@ -70,6 +73,11 @@ export function busyFrame(): LiveFrame {
           }),
           liveRow('MAIN-20', { title: 'Notes for the owner', pinned: true, state_name: 'Backlog' }),
           liveRow('MAIN-31', { title: 'Waiting for a person', state: 'waiting' }),
+          liveRow('MAIN-118', {
+            title: 'Decide which route a reply takes when the owner answers from a phone',
+            ...silent,
+          }),
+          liveRow('MAIN-140', { parent: 'MAIN-4', title: 'Export the answers', ...silent }),
         ],
         { unplaced: 2 },
       ),

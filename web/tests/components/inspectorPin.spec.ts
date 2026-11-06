@@ -56,7 +56,8 @@ describe('the pin on a card', () => {
   it('reads a pinned item as pinned, and a press takes the pin off', async () => {
     useLiveWorkStore().accept(busyFrame())
     const unpinned = busyFrame()
-    unpinned.spaces[0].rows[5] = { ...unpinned.spaces[0].rows[5], pinned: false }
+    const at = unpinned.spaces[0].rows.findIndex((row) => row.reference === 'MAIN-20')
+    unpinned.spaces[0].rows[at] = { ...unpinned.spaces[0].rows[at], pinned: false }
     const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify(unpinned)))
     vi.stubGlobal('fetch', withSecurityBootstrap(fetch))
     const { say, wrapper } = pin('MAIN-20')

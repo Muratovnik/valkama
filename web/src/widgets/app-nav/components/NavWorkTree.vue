@@ -3,6 +3,9 @@
  * The side panel's list: each space the frame names, folded or open, with its work
  * under it, and what is at work in no row.
  *
+ * Every row's number stands in a column as wide as the list's longest number, so the
+ * titles of a level start at one x whatever their numbers' length.
+ *
  * A space's head is its key and name, which lead to its board, and a fold before them as
  * a group's head has, in the same column. Under its rows the space says how many agents
  * are at work in it on no row, «no task · N agents», as a caption and not a place to go;
@@ -18,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 
 import NavWorkBranch from '@/widgets/app-nav/components/NavWorkBranch.vue'
 import type { NavNode, NavOpen } from '@/widgets/app-nav/composables/useNavOpen.ts'
-import { liveTree } from '@/widgets/app-nav/utils/liveTree.ts'
+import { liveTree, rowNumber } from '@/widgets/app-nav/utils/liveTree.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -86,6 +89,13 @@ const trees = computed<SpaceTree[]>(() =>
 )
 const touch = computed(() => props.size === 'touch')
 const empty = computed(() => props.spaces.length === 0 && props.elsewhere === 0)
+/** A number as wide as the list's longest, which sizes every row's number column. */
+const widest = computed(() => {
+  const lengths = props.spaces.flatMap((space) =>
+    space.rows.map((row) => rowNumber(row.reference).length),
+  )
+  return '0'.repeat(Math.max(1, ...lengths))
+})
 const elsewhereWords = computed(() =>
   t('liveWork.elsewhere', { count: props.elsewhere }, props.elsewhere),
 )
@@ -199,6 +209,7 @@ function escape(event: KeyboardEvent) {
             :prefix="prefix"
             :route="entry.rowRoute"
             :size="size"
+            :widest="widest"
             @go="(next) => emit('go', next)"
           />
           <p

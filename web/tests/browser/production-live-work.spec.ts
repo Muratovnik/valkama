@@ -113,7 +113,8 @@ test('pins from a row under the pointer, and the pinned row keeps its pin in sig
   const streams = await installLiveStreams(page)
   const sent = await servePins(page, () => {
     const frame = busyFrame()
-    frame.spaces[0].rows[1] = { ...frame.spaces[0].rows[1], pinned: true }
+    const at = frame.spaces[0].rows.findIndex((row) => row.reference === 'MAIN-12')
+    frame.spaces[0].rows[at] = { ...frame.spaces[0].rows[at], pinned: true }
     return frame
   })
   await page.goto(SETTINGS)
