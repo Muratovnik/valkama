@@ -163,7 +163,14 @@ checkouts are therefore distinguishable even at the same version.
   out at each end where a section is cut, and only there, so a phone, which shows no
   scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the
   keyboard stops clear of the fade, one already in sight stays where it is, and a row that
-  fits draws none.
+  fits draws none. A click or a tap on a section half under the fade chooses it the first
+  time: the row no longer slides away between pressing and letting go.
+- **Zoomed out, the graph's band for the work under no epic reads cleanly.** «158 inside»
+  no longer runs onto the progress edge under it; pointing at the band or reaching its
+  chevron with the keyboard lights the chevron alone instead of covering the words and
+  the edge; and its shortened «••• 3» says «3 working» in full on hover and to a screen
+  reader. The first row of frames opens with room above it, so a finger's 44px target on
+  its chevron is no longer cut by the top of the graph.
 - **A choice made with the mouse leaves no focus ring behind.** Opening a dropdown with a
   click ringed the option under the pointer, and choosing one ringed the dropdown itself,
   as if it had been reached with Tab. Focus the interface places after a click now stands
