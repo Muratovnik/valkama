@@ -435,6 +435,19 @@ class BudgetTests(Wakes):
         self.assertEqual(notify.WAKE_STATUS, status)
         self.assertIn("marker P-9", text)
 
+    def test_a_wake_a_persons_news_made_is_not_one_of_the_six(self) -> None:
+        for number in range(1, 6):
+            self.assertIsNotNone(self.asked_and_continued(number), f"agent wake {number}")
+        self.person(COMMENT, id=self.held, body="A person, marker P-8")
+        self.ask(marker=6)
+        told = self.stop(B)
+        assert told is not None, "the person's news continues the turn"
+        self.assertIn("marker P-8", told)
+        self.assertIn("Question 6,", told, "and the agents' news goes with it")
+        self.assertNotIn("it came now because another agent's news asks", told)
+        self.assertIsNotNone(self.asked_and_continued(7), "the sixth wake by agents")
+        self.assertIsNone(self.asked_and_continued(8), "the seventh is held back")
+
     def test_a_wake_held_back_does_not_wake_later_and_an_hour_on_a_new_one_does(self) -> None:
         for number in range(1, 7):
             self.assertIsNotNone(self.asked_and_continued(number))
