@@ -142,3 +142,26 @@ for (const { width, alone } of [
     }
   })
 }
+
+test('a pointer opens the epic list over an empty search, the chosen epic standing in it', async ({
+  page,
+}) => {
+  const { dialog } = await openComposer(page, 1280)
+  const epic = dialog.getByRole('combobox', { name: 'Epic', exact: true })
+  await expect(epic).toHaveValue('No epic')
+  await epic.click()
+  const list = page.getByRole('listbox', { name: 'Epic' })
+  await expect(list).toBeVisible()
+  // Nothing painted as selected: the whole value stood highlighted on every press. The words
+  // stay in sight as the field's placeholder, and whatever is typed searches from nothing.
+  await expect(epic).toHaveValue('')
+  await expect(epic).toHaveAttribute('placeholder', 'No epic')
+  await page.keyboard.type('rew')
+  await expect(epic).toHaveValue('rew')
+  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}Dev`])
+  // Left without a choice, the field says what is still chosen.
+  await dialog.getByRole('heading', { name: 'New work' }).click()
+  await expect(list).toHaveCount(0)
+  await expect(epic).toHaveValue('No epic')
+  await expect(epic).not.toHaveAttribute('placeholder')
+})

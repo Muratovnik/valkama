@@ -116,6 +116,8 @@ const chips = computed(() =>
 )
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.error ? 'true' : undefined))
+/** The chosen words, standing in an emptied field while the list is open. */
+const standIn = computed(() => (open.value && !several.value ? shownLabel.value : undefined))
 const unavailable = (option: ChoiceOption) =>
   Boolean(option.disabled) || (full.value && !chosen.value.includes(option.value))
 
@@ -147,9 +149,15 @@ function typed(event: Event) {
   search.value = (event.target as HTMLInputElement).value
 }
 
-/** Typing replaces the chosen words rather than adding to them. */
-function selectWords(event: Event) {
-  if (!several.value && !search.value) (event.target as HTMLInputElement).select()
+/**
+ * Typing replaces the chosen words rather than adding to them. A press opens the list over an
+ * empty search with the chosen words standing in its place, so what is typed next searches from
+ * nothing, from any keyboard: a phone's composes even Latin words, past any key handler. Selecting
+ * the words did the same, and painted the whole value as selected on every press. Reka puts
+ * the words back as the list closes.
+ */
+function clearWords() {
+  if (!several.value && !search.value && text.value === shownLabel.value) text.value = ''
 }
 
 function keydown(event: KeyboardEvent) {
@@ -243,9 +251,9 @@ function pressBox(event: MouseEvent) {
           :aria-describedby="describedBy"
           :aria-activedescendant="activeRow"
           :aria-invalid="invalidMark"
+          :placeholder="standIn"
           @input="typed"
-          @focus="selectWords"
-          @click="selectWords"
+          @click="clearWords"
           @keydown="keydown"
         />
         <VIcon
