@@ -49,7 +49,63 @@ const coveredBy = (card: Locator) =>
       .map((edge) => edge.dataset.stuckEdge ?? '')
   })
 
+const WRAPPED_TITLE =
+  'Checks and skill texts for the release line, the hooks of every client and the words of the review'
+
+/** A title's first line, as drawn: a Range over its first text node, not the box around it. */
+const firstLine = (title: Locator) =>
+  title.evaluate((node) => {
+    const text = document.createTreeWalker(node, NodeFilter.SHOW_TEXT).nextNode()
+    if (!text) throw new Error('the group title has no text')
+    const range = document.createRange()
+    range.selectNodeContents(text)
+    const lines = [...range.getClientRects()]
+    const [line] = lines
+    if (!line) throw new Error('the group title draws no line')
+    return { centre: line.top + line.height / 2, lines: lines.length }
+  })
+
+/** The vertical centre of what is drawn: the `path` of a chevron, not its icon's box. */
+const drawnCentre = (mark: Locator) =>
+  mark.evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return rect.top + rect.height / 2
+  })
+
+/** Each group head whose chevron is more than a pixel off its title's first line. */
+async function headsOffTheLine(heads: Locator) {
+  const off: string[] = []
+  for (const head of await heads.all()) {
+    const title = head.locator('.request-group-title')
+    const line = await firstLine(title)
+    const chevron = await drawnCentre(head.locator('.request-group-glyph path'))
+    if (Math.abs(chevron - line.centre) > 1) {
+      off.push(
+        `${await title.textContent()} (${line.lines} lines): ${(chevron - line.centre).toFixed(1)} px`,
+      )
+    }
+  }
+  return off
+}
+
 for (const width of WIDTHS) {
+  test(`each group's chevron sits on the first line of its heading, at ${width}`, async ({
+    page,
+  }) => {
+    const { card } = await openReview(page, width)
+    const heads = card.locator('.request-group-toggle')
+    await expect(heads).toHaveCount(5)
+    expect(await headsOffTheLine(heads), `at ${width}`).toEqual([])
+    // A title that wraps keeps its chevron on its first line, not on the middle of the block.
+    const first = heads.first().locator('.request-group-title')
+    await first.evaluate((node, text) => {
+      node.textContent = text
+    }, WRAPPED_TITLE)
+    const wrapped = await firstLine(first)
+    expect(wrapped.lines, 'the wrapped title').toBeGreaterThan(1)
+    expect(await headsOffTheLine(heads.first()), `wrapped, at ${width}`).toEqual([])
+  })
+
   test(`the review scrolls nothing sideways and shows no backticks, at ${width}`, async ({
     page,
   }) => {

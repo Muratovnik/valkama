@@ -87,11 +87,17 @@ const bodyId = `${id}-body`
   min-width: 0;
 }
 
-/* The whole heading is its press, as wide as the group, its count at the far end. */
+/* The whole heading is its press, as wide as the group, its count at the far end. One row of
+   words, baseline to baseline; `align-content` centres that row's first line in the 40px press,
+   and the chevron is as tall as one line, so it stays on the first line however the title wraps. */
 .request-group-toggle {
-  display: flex;
+  display: grid;
   flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
   gap: var(--space-2);
+  align-content: center;
   align-items: baseline;
   min-width: 0;
   min-height: var(--size-control-height);
@@ -104,9 +110,10 @@ const bodyId = `${id}-body`
   cursor: pointer;
 }
 
+/* One line tall, so its drawn chevron, centred in the box, sits on the first line's centre. */
 .request-group-glyph {
-  flex: none;
-  align-self: center;
+  align-self: start;
+  block-size: 1lh;
   color: var(--color-text-muted);
 
   [aria-expanded='true'] > & {
@@ -115,13 +122,11 @@ const bodyId = `${id}-body`
 }
 
 .request-group-title {
-  flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .request-group-count {
-  flex: none;
   color: var(--color-text-muted);
   font: var(--font-detail);
 }
