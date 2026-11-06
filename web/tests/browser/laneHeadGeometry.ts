@@ -63,14 +63,23 @@ export const overlaps = (one: Box, two: Box) =>
   one.top < two.bottom - 0.5 &&
   two.top < one.bottom - 0.5
 
-/** Waits for two frames, so the layout a scroll started has been drawn before it is read. */
+/**
+ * Waits until the headings have been drawn as the last scroll or width left them: a new width
+ * reaches the board a frame before its headings, which are measured a frame later still, so it
+ * waits until three frames running draw every heading alike.
+ */
 export const settle = (locator: Locator) =>
-  locator.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-  )
+  locator.evaluate(async () => {
+    let drawn = ''
+    for (let same = 0, at = 0; same < 3 && at < 60; at += 1) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      const now = [...document.querySelectorAll('.lane-head')]
+        .map((head) => `${head.className} ${JSON.stringify(head.getBoundingClientRect())}`)
+        .join('|')
+      same = now === drawn ? same + 1 : 0
+      drawn = now
+    }
+  })
 
 export const sameBoxes = (one: Box[], two: Box[]) =>
   one.length === two.length &&
