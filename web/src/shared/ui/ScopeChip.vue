@@ -51,6 +51,12 @@ const emit = defineEmits<{ exit: [] }>()
   border-radius: var(--radius-control);
   cursor: pointer;
 
+  /* A forced palette clears the fill, and the chip read as words with a cross. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+
   &:hover {
     color: var(--color-text);
     background: var(--color-control-surface);

@@ -198,6 +198,12 @@ defineExpose({ focusLast })
   border-radius: var(--radius-control);
   cursor: pointer;
 
+  /* A forced palette clears the fill, and two chips side by side read as one run of words. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+
   &:hover .filter-chip-remove {
     color: var(--color-text);
   }

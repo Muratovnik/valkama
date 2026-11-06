@@ -214,6 +214,12 @@ const highlighted = (place: number) => place === props.highlight || undefined
   padding: var(--space-half);
   background: var(--color-surface-muted);
   border-radius: var(--radius-control);
+
+  /* A forced palette clears the track, and the choice not taken read as a word beside it. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
 }
 
 .option-choice {

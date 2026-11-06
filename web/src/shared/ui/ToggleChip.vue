@@ -45,6 +45,13 @@ const emit = defineEmits<{ toggle: [] }>()
   border-radius: var(--radius-control);
   cursor: pointer;
 
+  /* A forced palette clears the fill that made a chip at rest a control, and its word read
+     as a line of text. It takes an edge, as `VButton` does; the ring below replaces it. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+
   &:hover,
   &[aria-pressed='true'] {
     color: var(--color-text);
