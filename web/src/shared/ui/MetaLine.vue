@@ -116,13 +116,17 @@ useResizeObserver(
 /* Beside the time it takes back the line's gap and stands a text separator's width after it,
    0.85em, the advance of " · " in the interface font, its dot centred in that room: it reads
    «12:31 · пока без ответа» as the card's other " · " read, where the line's 8px gap read tighter.
-   On a line of its own the room and its dot stand before the line, clipped. */
+   On a line of its own the room and its dot stand before the line, clipped.
+   It never moves by a transition: the line reads each place in the task that tries it, and
+   the reduced-motion rule gives every property one, which kept the margin of the place just
+   left for that read; a line at the edge of fitting then chose the other place every frame. */
 .meta-after {
   --separator: 0.85em;
 
   flex: none;
   margin-inline-start: calc(-1 * var(--space-2));
   white-space: nowrap;
+  transition-property: none;
 
   &::before {
     content: '·' / '';
