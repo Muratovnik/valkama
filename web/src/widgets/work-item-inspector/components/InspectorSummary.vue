@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
@@ -6,11 +7,13 @@ import InspectorReport from '@/widgets/work-item-inspector/components/InspectorR
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import RichText from '@/shared/ui/RichText.vue'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 
 const props = defineProps<{ item: WorkItem }>()
 const { t } = useI18n()
+/** Open, the report stands in full and its preview gives way to it. */
+const opened = ref(false)
 
 function viewReport() {
   const report = document.querySelector<HTMLElement>(
@@ -26,20 +29,20 @@ function viewReport() {
     v-if="item.summary"
     class="outcome"
   >
-    <details class="outcome-details">
-      <summary class="outcome-toggle">
-        <SectionHeading
-          as="h3"
-          level="panel"
-          class="outcome-heading"
-          >{{ t('workItem.outcome') }}</SectionHeading
-        >
-      </summary>
+    <VDisclosure
+      v-model:open="opened"
+      class="outcome-details"
+      heading="h3"
+    >
+      <template #summary>{{ t('workItem.outcome') }}</template>
       <div class="outcome-body">
         <InspectorReport :report="item.summary" />
       </div>
-    </details>
-    <div class="outcome-preview">
+    </VDisclosure>
+    <div
+      v-show="!opened"
+      class="outcome-preview"
+    >
       <span class="outcome-preview-label">{{ t('workItem.outcomePreview') }}</span>
       <p class="outcome-preview-text">
         <RichText
@@ -71,31 +74,15 @@ function viewReport() {
   justify-self: start;
 }
 
-.outcome-toggle {
-  cursor: pointer;
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-}
-
-.outcome-heading {
-  display: inline-flex;
-  vertical-align: middle;
-}
-
-.outcome-body {
-  margin-top: var(--space-heading-content);
+/* The section's name is the toggle, in the type a panel's heading is set in. */
+.outcome-details {
+  --font-disclosure: var(--font-panel-title);
+  --space-disclosure-gap: var(--space-heading-content);
 }
 
 .outcome-preview {
   display: grid;
   gap: var(--space-label-value);
-
-  .outcome-details[open] ~ & {
-    display: none;
-  }
 }
 
 .outcome-preview-label {

@@ -130,8 +130,8 @@ describe('InstallationHealth resource state', () => {
           locale === 'en' ? 'only if you want' : 'только если нужны',
         )
         expect(warning.get('.health-finding-state').attributes('data-state')).toBe('degraded')
-        expect(warning.get('details').attributes('open')).toBeUndefined()
-        expect(warning.get('details').text()).toContain('VALKAMA_CODEX_ROLLOUT_ROOT')
+        expect(warning.get('.health-technical button').attributes('aria-expanded')).toBe('false')
+        expect(warning.get('.health-technical').text()).toContain('VALKAMA_CODEX_ROLLOUT_ROOT')
         expect(warning.get('.health-finding-state').text()).not.toContain('-telemetry')
       }
       expect(findings[0].get('.health-finding-state').attributes('data-state')).toBe('unavailable')

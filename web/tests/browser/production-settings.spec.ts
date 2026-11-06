@@ -164,11 +164,19 @@ test('Settings reads the installation in levels, each problem with its fix', asy
   await expect(summaryCounts.nth(1)).toContainText('Passed checks1')
 
   // Passed checks remain available without competing with work that needs action.
-  const passed = health.locator('.health-passed-summary')
+  const passed = health.locator('.health-passed').getByRole('button', { name: 'Passed checks' })
   await expect(passed).toContainText('Passed checks1')
+  // Closed, the passed checks stay in the document for the browser's find but show nothing.
+  const store = health.getByText('Store schema')
+  await expect(store).toBeHidden()
+  await expect(health.locator('.health-passed .disclosure-body')).toHaveAttribute(
+    'hidden',
+    'until-found',
+  )
   await passed.click()
-  await expect(health).toContainText('Store schema')
-  await expect(health).toContainText('Schema 5 is supported by this build')
+  await expect(passed).toHaveAttribute('aria-expanded', 'true')
+  await expect(store).toBeVisible()
+  await expect(health.getByText('Schema 5 is supported by this build')).toBeVisible()
 })
 
 test('Settings diagnostic actions stay readable at working widths', async ({ page }) => {

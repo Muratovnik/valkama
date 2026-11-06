@@ -17,6 +17,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 import { executionHistory } from '../browser/executionFixtures.ts'
@@ -174,7 +175,7 @@ describe('recorded history', () => {
     expect(wrapper.text()).toContain('Unknown date')
     expect(wrapper.text()).toContain('unknown timestamp')
     // The substance is the row's second line, not hidden behind a disclosure.
-    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.findComponent(VDisclosure).exists()).toBe(false)
     expect(wrapper.get('li .entry-detail').text()).toBe('retained')
     expect(wrapper.get('li > .entry-line').text()).toContain('System event: future_action')
     wrapper.unmount()

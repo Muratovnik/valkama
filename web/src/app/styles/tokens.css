@@ -505,6 +505,16 @@
   --space-dialog-inset: var(--space-6);
   --radius-dialog: var(--radius-card);
 
+  /* What a disclosure (`VDisclosure`) reads where its host names nothing: its toggle's words
+     in a control's weight at the size of the line the toggle rides, the toggle's line with no
+     inset and no fill of its own, and one step between the toggle and what it opens. A host
+     whose toggle heads a section, or names one, declares them on the disclosure's root. */
+  --font-disclosure: 500 var(--font-size-dense)/var(--line-height-tight)
+    var(--font-family-interface);
+  --space-disclosure-inset: 0px;
+  --space-disclosure-gap: var(--space-2);
+  --color-disclosure-head: transparent;
+
   /* The control tier: how tall a control stands, and how large a pointer has to
      be able to hit it. One token used to answer both — `--size-control-target`, the
      44px accessibility target — so every control was drawn at the size of its

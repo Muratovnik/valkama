@@ -31,6 +31,7 @@ import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 
 const props = defineProps<{
   busy: boolean
@@ -259,8 +260,8 @@ function evidence(attempt: Execution): string {
                 <dd class="fact-value">{{ t('execution.unstructured') }}</dd>
               </div>
             </dl>
-            <details class="attempt-context">
-              <summary>{{ t('history.detail') }}</summary>
+            <VDisclosure class="attempt-context">
+              <template #summary>{{ t('history.detail') }}</template>
               <RichText
                 v-if="attempt.result?.oracle"
                 class="attempt-delivery"
@@ -292,7 +293,7 @@ function evidence(attempt: Execution): string {
               >
                 {{ entry.session_id }} · {{ entry.status }} · {{ entry.attention }}
               </p>
-            </details>
+            </VDisclosure>
 
             <ul
               v-if="attempt.sessions.length"

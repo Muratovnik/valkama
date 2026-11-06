@@ -333,10 +333,10 @@ describe('task description and discussion', () => {
       props: { item, resourceRef, writable: true },
       global: editingPlugins(),
     })
-    const details = wrapper.get('.outcome details')
-    expect(details.element.tagName).toBe('DETAILS')
-    expect(details.attributes('open')).toBeUndefined()
-    expect(details.get('summary').text()).toBe('Task outcome')
+    const details = wrapper.get('.outcome .outcome-details')
+    const toggle = details.get('h3 button')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.text()).toBe('Task outcome')
     expect(details.get('.report').text()).toContain(report.next)
     expect(details.get('.report').text()).toContain(report.why)
     expect(wrapper.get('.outcome-preview-label').text()).toBe('Abbreviated preview')

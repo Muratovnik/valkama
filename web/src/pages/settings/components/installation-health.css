@@ -156,17 +156,11 @@
   border-top: 1px solid var(--color-rule);
 }
 
-.health-technical-summary,
-.health-passed-summary {
-  width: fit-content;
-  cursor: pointer;
-}
-
 .health-technical-list {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  margin: var(--space-2) 0 0;
+  margin: 0;
   background: var(--color-surface-recess);
   border-radius: var(--radius-control);
 
@@ -188,14 +182,14 @@
   }
 }
 
-.health-passed-summary {
-  box-sizing: border-box;
-  width: 100%;
-  padding: var(--space-4);
-  color: var(--color-text);
-  font: var(--font-label);
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-card);
+/* Its toggle stands in a head of the attention section's inset and fill, the levels under it. */
+.health-passed {
+  --font-disclosure: var(--font-label);
+  --space-disclosure-gap: 0px;
+  --space-disclosure-inset: var(--space-4);
+  --color-disclosure-head: var(--color-surface-muted);
+
+  overflow: clip;
 }
 
 .health-passed-level {

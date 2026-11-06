@@ -18,6 +18,12 @@ const svgOwners = new Set([
 ])
 const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/ResizableInspector.vue'])
 const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
+/**
+ * The file allowed to author a disclosure. Four screens used the browser's `<details>`, whose
+ * triangle took the weight of the words around it and stood on a line of its own above a
+ * summary laid out as a row, beside a product whose every other disclosure is a chevron.
+ */
+const disclosureOwners = new Set(['shared/ui/VDisclosure.vue'])
 // CommandList owns keyboard navigation of search results; ChoiceSelect owns form values;
 // MarkdownSuggestions owns the completions a text field offers as it is typed in, whose
 // keys stay with the field (`aria-activedescendant`) rather than with a list.
@@ -212,6 +218,15 @@ const SOURCE_RULES = [
     owners: dialogOwners,
     when: ({ markup }) => /<dialog\b/i.test(markup) || /\brole\s*=\s*["']dialog["']/i.test(markup),
     message: 'dialog semantics belong to OverlayHost and shared surface frames',
+  },
+  {
+    component: true,
+    owners: disclosureOwners,
+    when: ({ markup, source }) =>
+      /<(?:details|summary)\b/i.test(markup) ||
+      (/\bCollapsible(?:Root|Trigger|Content)\b/.test(source) &&
+        /\bfrom\s*['"]reka-ui['"]/.test(source)),
+    message: 'a disclosure belongs to VDisclosure',
   },
   {
     when: ({ source }) => /\b(?:linear|radial|conic)-gradient\s*\(/i.test(source),

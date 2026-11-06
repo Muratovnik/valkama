@@ -25,6 +25,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
@@ -238,14 +239,14 @@ function when(value: string): string {
         <span v-if="health !== 'ready'"> · {{ reason || t('memory.unavailable') }}</span>
       </p>
 
-      <details
+      <VDisclosure
         v-if="searched && !failure"
         class="quiet"
       >
-        <summary>{{ t('memory.technicalDetails') }}</summary>
+        <template #summary>{{ t('memory.technicalDetails') }}</template>
         <p>{{ t('memory.provider', { provider, capabilities: capabilityList }) }}</p>
         <p>{{ source }}</p>
-      </details>
+      </VDisclosure>
       <ul
         v-if="results.length"
         class="memory-results"

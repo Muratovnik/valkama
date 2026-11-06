@@ -24,6 +24,7 @@ import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 
 const { locale, t, te } = useI18n()
 const report = ref<DoctorReport | null>(null)
@@ -227,8 +228,8 @@ onMounted(load)
                     <strong class="health-action-label">{{ t('health.action') }}</strong>
                     <span>{{ finding(check, 'fix') }}</span>
                   </div>
-                  <details class="health-technical">
-                    <summary class="health-technical-summary">{{ t('health.technical') }}</summary>
+                  <VDisclosure class="health-technical">
+                    <template #summary>{{ t('health.technical') }}</template>
                     <dl class="health-technical-list">
                       <div class="health-technical-row">
                         <dt class="health-technical-term">{{ t('health.technicalCode') }}</dt>
@@ -246,7 +247,7 @@ onMounted(load)
                         <dd class="health-technical-value">{{ check.fix }}</dd>
                       </div>
                     </dl>
-                  </details>
+                  </VDisclosure>
                 </li>
               </ul>
             </section>
@@ -260,19 +261,17 @@ onMounted(load)
           />
         </section>
 
-        <details
+        <VDisclosure
           v-if="passedLevels.length"
           class="health-passed"
         >
-          <summary class="health-passed-summary">
-            <span class="health-titleline">
-              <strong>{{ t('settings.diagnostics.passed') }}</strong>
-              <CountBadge
-                placement="inline"
-                :value="passed"
-              />
-            </span>
-          </summary>
+          <template #summary>
+            <span>{{ t('settings.diagnostics.passed') }}</span>
+            <CountBadge
+              placement="inline"
+              :value="passed"
+            />
+          </template>
           <section
             v-for="level in passedLevels"
             :key="level.id"
@@ -294,7 +293,7 @@ onMounted(load)
               </li>
             </ul>
           </section>
-        </details>
+        </VDisclosure>
       </template>
     </PlatformStatePanel>
   </section>
