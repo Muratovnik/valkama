@@ -70,7 +70,6 @@ const TAB_ROLE = /\brole\s*=\s*(["'])(?:(?!\1).)*?\btab(?:list|panel)?\b/i
  */
 const TAB_VALUE = /(["'`])tab(?:list|panel)?\1/
 const TAB_KEY = /\brole["'`]?\s*:\s*(["'`])tab(?:list|panel)?\1/i
-const HTML_COMMENT = /<!--[\s\S]*?-->/g
 /**
  * Files allowed to author a text control.
  *
@@ -170,28 +169,28 @@ function uncommented(source) {
 const SOURCE_RULES = [
   {
     // A card that took its kind's colour would argue with the state the card speaks for.
-    when: ({ interfaceCopy }) =>
-      /(?:^|[{;])\s*background(?:-color|-image)?\s*:[^;{}]*--color-kind-/m.test(interfaceCopy),
+    when: ({ code }) =>
+      /(?:^|[{;])\s*background(?:-color|-image)?\s*:[^;{}]*--color-kind-/m.test(code),
     message: "a kind's colour draws its glyph and its word, never a surface",
   },
   {
     component: true,
-    when: ({ markup }) => /<select\b/i.test(markup),
+    when: ({ code }) => /<select\b/i.test(code),
     message: 'product selections must use the shared custom control',
   },
   {
     component: true,
     owners: selectionOwners,
-    when: ({ source }) =>
+    when: ({ code }) =>
       /\b(?:Select|Combobox|Listbox)(?:Root|Trigger|Content|Item|Portal|Viewport|Value|Input|Filter)\b/.test(
-        source,
-      ) && /\bfrom\s*['"]reka-ui['"]/.test(source),
+        code,
+      ) && /\bfrom\s*['"]reka-ui['"]/.test(code),
     message: 'Reka selection primitives belong to ChoiceSelect or CommandList',
   },
   {
     component: true,
     owners: selectionOwners,
-    when: ({ markup }) => /\brole\s*=\s*["'](?:combobox|listbox|option)["']/i.test(markup),
+    when: ({ code }) => /\brole\s*=\s*["'](?:combobox|listbox|option)["']/i.test(code),
     message: 'selection semantics belong to shared choice or command controls',
   },
   {
@@ -200,15 +199,13 @@ const SOURCE_RULES = [
     // what "pressed" looks like.
     component: true,
     owners: segmentedOwners,
-    when: ({ markup }) =>
-      /\baria-pressed\b/.test(markup) || /\brole\s*=\s*["']radio["']/i.test(markup),
+    when: ({ code }) => /\baria-pressed\b/.test(code) || /\brole\s*=\s*["']radio["']/i.test(code),
     message: 'a pressed-button group belongs to SegmentedControl',
   },
   {
     // Not only components: a composable can hand a template the role as an object.
     owners: tabOwners,
-    when: ({ interfaceCopy }) => {
-      const code = interfaceCopy.replaceAll(HTML_COMMENT, '')
+    when: ({ code }) => {
       return TAB_ROLE.test(code) || TAB_VALUE.test(code) || TAB_KEY.test(code)
     },
     message: 'tabs and their panels belong to SegmentedControl and TabPanel',
@@ -216,36 +213,36 @@ const SOURCE_RULES = [
   {
     component: true,
     owners: textFieldOwners,
-    when: ({ markup }) =>
-      /<textarea\b/i.test(markup) ||
-      /<input\b(?![^>]*\btype\s*=\s*["'](?:checkbox|color|radio|search)["'])/i.test(markup),
+    when: ({ code }) =>
+      /<textarea\b/i.test(code) ||
+      /<input\b(?![^>]*\btype\s*=\s*["'](?:checkbox|color|radio|search)["'])/i.test(code),
     message: 'a text field belongs to VTextInput',
   },
   {
     component: true,
     owners: svgOwners,
-    when: ({ markup }) => /<svg\b/i.test(markup),
+    when: ({ code }) => /<svg\b/i.test(code),
     message: 'generic interface icons must use VIcon',
   },
   {
     component: true,
     owners: overlayOwners,
-    when: ({ source }) => /\bOverlayHost\b/.test(source),
+    when: ({ code }) => /\bOverlayHost\b/.test(code),
     message: 'OverlayHost behavior belongs to the approved surface frames',
   },
   {
     component: true,
     owners: dialogOwners,
-    when: ({ markup }) => /<dialog\b/i.test(markup) || /\brole\s*=\s*["']dialog["']/i.test(markup),
+    when: ({ code }) => /<dialog\b/i.test(code) || /\brole\s*=\s*["']dialog["']/i.test(code),
     message: 'dialog semantics belong to OverlayHost and shared surface frames',
   },
   {
     component: true,
     owners: disclosureOwners,
-    when: ({ markup, source }) =>
-      /<(?:details|summary)\b/i.test(markup) ||
-      (/\bCollapsible(?:Root|Trigger|Content)\b/.test(source) &&
-        /\bfrom\s*['"]reka-ui['"]/.test(source)),
+    when: ({ code }) =>
+      /<(?:details|summary)\b/i.test(code) ||
+      (/\bCollapsible(?:Root|Trigger|Content)\b/.test(code) &&
+        /\bfrom\s*['"]reka-ui['"]/.test(code)),
     message: 'a disclosure belongs to VDisclosure',
   },
   {
@@ -254,9 +251,9 @@ const SOURCE_RULES = [
     message: 'gradients are outside the Project Console visual contract',
   },
   {
-    when: ({ source }) =>
+    when: ({ code }) =>
       /class="[^"]*(?:\b(?:flex|grid|block|hidden|truncate|shrink-0|tabular-nums)\b(?=[^"]*\b(?:items-|justify-|gap-|grid-cols|flex-col)\b)|\b(?:gap|p[xytblr]?|m[xytblr]?|w|h|min-w|min-h|max-w|size|text|bg|border|rounded|ring|opacity|z|inset|top|left|right|bottom|space-[xy]|leading|tracking)-(?:\[|\d|xs\b|sm\b|base\b|lg\b|xl\b|full\b|px\b|auto\b))/.test(
-        source,
+        code,
       ),
     message: 'utility classes are not the styling system here; use tokens and named classes',
   },
@@ -264,33 +261,31 @@ const SOURCE_RULES = [
     // Uppercase is texture, not hierarchy. Six lane names, five table headers
     // and four kickers set in caps turn every heading into a band the eye has
     // to read past; weight and the text tones carry the same rank quietly.
-    when: ({ source }) => /text-transform\s*:\s*uppercase/i.test(source),
+    when: ({ code }) => /text-transform\s*:\s*uppercase/i.test(code),
     message: 'hierarchy comes from weight and tone, not from uppercase',
   },
   {
-    when: ({ source }) =>
-      /\b(?:backdrop-filter|text-shadow)\s*:|filter\s*:\s*blur\s*\(/i.test(source),
+    when: ({ code }) => /\b(?:backdrop-filter|text-shadow)\s*:|filter\s*:\s*blur\s*\(/i.test(code),
     message: 'glass and glow effects are outside the Project Console visual contract',
   },
   {
-    when: ({ source }) =>
-      /--(?:ink-navy|paper-blue|chalk|graphite|coral|safety-orange|ledger-[\w-]*)\b/i.test(
-        source,
-      ) || /\b(?:Maintenance Ledger|Cutting Table)\b/i.test(source),
+    when: ({ code }) =>
+      /--(?:ink-navy|paper-blue|chalk|graphite|coral|safety-orange|ledger-[\w-]*)\b/i.test(code) ||
+      /\b(?:Maintenance Ledger|Cutting Table)\b/i.test(code),
     message: 'obsolete visual identity aliases are not compatibility APIs',
   },
   {
-    when: ({ interfaceCopy }) =>
+    when: ({ code }) =>
       /\b(?:it|this|that) does not\b|;\s*(?:it\s+)?(?:does not|doesn't|will not|won't|never)\b|;\s*[^.;\n]{0,100}\b(?:is|remains)\s+(?:unchanged|unaffected)\b|(?:он|она|это) не\s+(?:запускает|устанавливает|изменяет|останавливает|удаляет|делает)|;\s*[^.;\n]{0,100}не\s+(?:копирует|копируем|изменяется|затрагивается|запускает|устанавливает|делает)/iu.test(
-        interfaceCopy,
+        code,
       ),
     message:
       'state the useful behavior once instead of adding a self-justifying negative disclaimer',
   },
   {
-    when: ({ interfaceCopy }) =>
+    when: ({ code }) =>
       /\b(?:truthful inventory|seamless|best-in-class|cutting-edge)\b|правдив(?:ый|ая|ое)\s+(?:список|каталог|инвентаризация)/iu.test(
-        interfaceCopy,
+        code,
       ),
     message: 'replace generic product claims with a concrete product fact',
   },
@@ -412,22 +407,19 @@ export function scanUiSources(sources) {
   const violations = []
   for (const { file, source } of sources) {
     const component = file.endsWith('.vue')
-    const subject = {
-      source,
-      code: uncommented(source),
-      markup: source.replaceAll(/<!--[\s\S]*?-->/g, ''),
-      interfaceCopy: source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, ''),
-    }
+    // Every rule reads the file as it runs, so a comment that explains a rule never trips it
+    // and one beside a declaration never hides it.
+    const code = uncommented(source)
     for (const rule of SOURCE_RULES) {
       if (rule.component && !component) continue
       if (rule.owners?.has(file)) continue
-      if (rule.when(subject)) violations.push(`${file}: ${rule.message}`)
+      if (rule.when({ code })) violations.push(`${file}: ${rule.message}`)
     }
     violations.push(
-      ...offScaleWeights(file, source),
-      ...viewportQueries(file, source),
-      ...localColors(file, source),
-      ...tintedSurfaces(file, source),
+      ...offScaleWeights(file, code),
+      ...viewportQueries(file, code),
+      ...localColors(file, code),
+      ...tintedSurfaces(file, code),
     )
   }
   return violations
