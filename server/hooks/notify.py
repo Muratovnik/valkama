@@ -335,9 +335,10 @@ _ITEMS = (
     " AND u.session_id = ? AND u.follows = 1{agent}),"
     " EXISTS (SELECT 1 FROM work_item_subscriptions u WHERE u.work_item_id = w.work_item_id"
     " AND u.session_id = ? AND u.agent_id = ? AND u.follows = 0),"
+    " CASE WHEN instr(w.claim_ref, ?) > 0 OR instr(w.checklist, ?) > 0 THEN"
     " (SELECT COUNT(*) FROM work_item_links l JOIN work_items b ON b.work_item_id = l.from_id"
     " JOIN workflow_states st ON st.state_id = b.state_id"
-    " WHERE l.to_id = w.work_item_id AND l.kind = 'blocks' AND st.is_terminal = 1)"
+    " WHERE l.to_id = w.work_item_id AND l.kind = 'blocks' AND st.is_terminal = 1) ELSE 0 END"
     " FROM work_items w JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
     " WHERE w.work_item_id IN ({items})"
 )
@@ -363,7 +364,9 @@ def _in_scope(
     the session's first. A subscription writes a call on its item, so a followed
     item is among them. An orchestrator follows what any agent of its session
     subscribed to; a mute is only its writer's. How many of the item's blockers
-    are closed is part of what changes it, by the links' index on the item blocked.
+    are closed is part of what changes it, counted by the links' index on the item
+    blocked and only where a holder label may be this recipient's: a blocker's close
+    is told to the holder alone.
 
     None when the store does not have what this build reads yet: a hook of a new
     release can run against a store the first open of that release has not
@@ -387,7 +390,7 @@ def _in_scope(
             _ITEMS.format(
                 items=",".join("?" * len(scope)), agent=" AND u.agent_id = ?" if agent_id else ""
             ),
-            (suffix, suffix, *followers, session_id, agent_id or "", *scope),
+            (suffix, suffix, *followers, session_id, agent_id or "", suffix, suffix, *scope),
         ).fetchall()
     except _sqlite3.OperationalError:
         return None
