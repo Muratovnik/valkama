@@ -7,7 +7,7 @@
  * since they do; so the place follows from the width the heading has, whichever
  * place it held before.
  */
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Ref, WatchSource } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
@@ -22,6 +22,9 @@ export interface LaneHeadParts {
   tail: Ref<HTMLElement | null>
   toggle: Ref<HTMLElement | null>
 }
+
+/** Where a finger presses, the actions stand a reach apart, wider than under a pointer. */
+const coarse = typeof matchMedia === 'undefined' ? undefined : matchMedia('(pointer: coarse)')
 
 /** A length in the 64ths of a pixel layout works in. */
 const units = (pixels: number) => Math.round(pixels * 64)
@@ -55,7 +58,15 @@ function textParts(head: Element, tail: Element): Element[] {
   )
 }
 
-export function useLaneActionsPlace(parts: LaneHeadParts, content: WatchSource) {
+/**
+ * `board` is the width the board shows, which the heading is drawn across; `content` is the rest
+ * a width read here follows from besides the font: the words the heading says.
+ */
+export function useLaneActionsPlace(
+  parts: LaneHeadParts,
+  board: WatchSource,
+  content: WatchSource,
+) {
   const { actions, head, tail, toggle } = parts
   const layout = ref<LaneLayout>({ place: 'end', raised: false })
 
@@ -76,7 +87,24 @@ export function useLaneActionsPlace(parts: LaneHeadParts, content: WatchSource) 
     })
   }
 
-  useResizeObserver([head, tail, toggle], read)
+  // A new place makes the lane a line taller or shorter, and the browser observes every lane's
+  // size itself, for the size it keeps for a lane out of sight (`content-visibility`,
+  // `contain-intrinsic-size` in `WorkItemLanes`). Read in the turn of an observer of a box inside
+  // the lane, the place changed the lane's size where the browser could no longer tell itself of
+  // it in that frame, and it reported a ResizeObserver loop at every width where a place changed.
+  // So the board's width is read where the board's own observer has it (`useColumnFit`), outside
+  // the lanes; a heading its lane leaves unlaid out is not read there, which would lay the lane
+  // out, but once it is laid out again, off `.lane-measure`, a line of no height across it that
+  // nothing the place lays out resizes. The words are watched below and the font is listened for.
+  watch(
+    board,
+    () => {
+      if (head.value?.checkVisibility?.({ contentVisibilityAuto: true }) !== false) read()
+    },
+    { flush: 'post' },
+  )
+  const measure = computed(() => head.value?.querySelector<HTMLElement>(':scope > .lane-measure'))
+  useResizeObserver(measure, read)
   // A font that comes in after the heading was read changes every width read without always
   // resizing the boxes watched: a heading read in the fallback kept a place the font undid.
   useEventListener(
@@ -84,6 +112,7 @@ export function useLaneActionsPlace(parts: LaneHeadParts, content: WatchSource) 
     'loadingdone',
     read,
   )
+  useEventListener(coarse, 'change', read)
   watch(content, read, { flush: 'post' })
   onMounted(read)
 

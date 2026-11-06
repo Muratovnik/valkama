@@ -9,6 +9,11 @@
  * A heading once kept the place it had: at 440px in English, reached from below, its actions stood
  * alone on a third line and left an empty band at rest; reached from above, they took the counts
  * down with them.
+ *
+ * And no width on the walk has the browser report a ResizeObserver loop. A heading read in the
+ * turn of an observer inside its lane changed the lane's height, which the browser observes
+ * itself for a lane out of sight, too late to tell of it in that frame: the report came once at
+ * every width where a heading's actions moved or its state went up.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -113,6 +118,13 @@ for (const locale of ['en-US', 'ru-RU'])
         page,
       }) => {
         test.setTimeout(600_000)
+        await page.addInitScript(() => {
+          const reports: string[] = []
+          Object.assign(window, { reports })
+          window.addEventListener('error', ({ message }) =>
+            reports.push(`${innerWidth}px: ${message}`),
+          )
+        })
         await page.setViewportSize({ width: 1280, height: 900 })
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await installBackend(page)
@@ -126,6 +138,8 @@ for (const locale of ['en-US', 'ru-RU'])
           expect(changes, `${where}: widths where a heading changes`).toBeGreaterThan(5)
           expect(found, `${where}: headings drawn otherwise on the way back`).toEqual([])
         }
+        const reports = await page.evaluate(() => (window as { reports?: string[] }).reports)
+        expect(reports, 'errors the page reported on the walk').toEqual([])
       })
     })
 

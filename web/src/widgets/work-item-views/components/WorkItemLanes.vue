@@ -242,6 +242,7 @@ function laneGroup(lane: BoardLane): string {
           :lane="lane"
           :open="isOpen(lane)"
           :body-id="bodyId(lane)"
+          :board-width="visibleWidth"
           :left="away(lane, 'left')"
           :right="away(lane, 'right')"
           @toggle="toggle(lane, props.filtered)"
