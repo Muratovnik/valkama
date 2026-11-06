@@ -955,18 +955,26 @@ title's words: what it holds goes to the next line once it and the whole title
 no longer fit one, rather than the title giving way to keep it beside. Where the
 last line is full they stand beside the title only if it stays whole there;
 otherwise they take the line's last part down with them onto a line of their
-own, since a title cut to half its words reads worse than a line more. Only
-where nothing can come down with them, a phone's row whose counts would leave
-its state alone, stand alone or not fit a line beside them, do they end the row
-on their own. Where they stand follows from the row's width alone, worked out
-from its parts' widths as the lines lay them, so a window widened to a width
-and one narrowed to it draw the row alike. A wrapped line starts under the
-reference, not under the arrow, and in a lane with no epic that costs a line on
+own, since a title cut to half its words reads worse than a line more. The
+state goes up beside the whole title on its own, apart from the counts, wherever
+it fits there and that saves the row a line: a short title then keeps its state
+beside it and its counts and actions on the line below, where the state and the
+counts together left the actions a line alone. Only where nothing can come down
+with them, a phone's row whose counts would leave its state alone where the
+state does not fit beside the whole title, stand alone or not fit a line beside
+them, do they end the row on their own. Where they stand and where the state
+stands follow from the row's width alone, worked out from its parts' widths as
+the lines lay them, and are worked out again once the interface font has come
+in, so a window widened to a width, one narrowed to it and one opened before its
+font draw the row alike. A wrapped line starts under the reference, not under
+the arrow, and in a lane with no epic that costs a line on
 the narrowest phones: a line from the row's edge stood 4px left of the arrow.
 They come up under the pointer and when the keyboard reaches them, in a place
 kept for them, so nothing shifts or is covered; where nothing can hover they
 stay, a finger's reach apart. A pointer's press on the row does not leave them
-up. A tile the board brings into
+up, and the keyboard moving along a row held at the top leaves the board where
+it is: the room the board keeps there for that row does not push its own
+buttons out of view. A tile the board brings into
 view under the row's heading, by the keyboard, by opening it or by moving the
 tile below into its place, stands below
 the heading at the gap the lane keeps under it, however many lines the heading

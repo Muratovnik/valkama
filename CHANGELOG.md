@@ -353,11 +353,14 @@ checkouts are therefore distinguishable even at the same version.
   row's last line, beside the title when that line is full and the title stays whole there,
   or else on a last line with the note or counts they end, so at any width they cover neither
   the title, the state, the counts nor the note of work out of sight, nothing shifts when they
-  appear, and the title keeps the words it showed; a window widened or narrowed to a width
-  draws the row the same either way. Where nothing can hover they stay up, far enough apart
-  to tap. A tile brought into view under an epic's row from the keyboard, opened with a press
-  or moved up with Alt+↑, now stands wholly below the row at the lane's usual gap instead of
-  partly under it.
+  appear, and the title keeps the words it showed. A short title keeps its state beside it
+  and its counts and icons on one line below, rather than leaving the icons a line of their
+  own. A window widened or narrowed to a width, or opened before its font arrived, draws the
+  row the same either way. Where nothing can hover they stay up, far enough apart to tap, and
+  Tab or Shift+Tab along an epic's row held at the top of the board no longer scrolls the
+  board back to the lane's start. A tile brought into view under an epic's row from the
+  keyboard, opened with a press or moved up with Alt+↑, now stands wholly below the row at
+  the lane's usual gap instead of partly under it.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
