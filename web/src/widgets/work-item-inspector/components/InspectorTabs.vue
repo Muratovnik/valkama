@@ -25,7 +25,7 @@
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -111,14 +111,23 @@ onMounted(revealShown)
 watch(shown, () => nextTick(revealShown))
 
 /**
- * Only the keyboard's focus is brought in as it lands. A press focuses a section on its way
- * down and chooses it on its way up, and a strip moved in between left another section, or
- * none, under the pointer, so the press chose nothing; a finger's tap lost its first try the
- * same way. The section a press picks is brought in once the press is over, as it is shown.
+ * Focus brought by a press is not brought in as it lands; any other is. A press focuses a
+ * section on its way down and chooses it on its way up, and a strip moved in between left
+ * another section, or none, under the pointer, so the press chose nothing; a finger's tap,
+ * whose press the browser sends after the finger lifts, lost its first try the same way.
+ * The section a press picks is brought in once the press is over, as it is shown. The
+ * press is marked for the rest of the task its focus lands in, and no longer.
  */
+let pressing = false
+useEventListener(strip, 'mousedown', () => {
+  pressing = true
+  setTimeout(() => {
+    pressing = false
+  })
+})
+
 function focused(event: FocusEvent) {
-  const target = event.target
-  if (target instanceof Element && target.matches(':focus-visible')) reveal(target)
+  if (!pressing) reveal(event.target as Element | null)
 }
 </script>
 
