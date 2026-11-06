@@ -278,6 +278,23 @@ describe('rows with no work moving', () => {
   })
 })
 
+describe('the count on a phone’s rail', () => {
+  it('counts the items a session is on now, and nothing that only stands in the list', async () => {
+    const { store, wrapper } = rail(busyFrame())
+    const count = () => wrapper.get('.nav-work-rail').attributes('aria-label')
+    // Working, held or waiting: the epic at work, MAIN-12, MAIN-13, MAIN-31 and NEXT-5.
+    // The quiet row and the two pinned rows with no work stand in the list uncounted.
+    expect(count()).toBe('Work going on now: 5')
+    const dropped = busyFrame()
+    dropped.spaces[0].rows.splice(1, 1)
+    store.accept(dropped)
+    await flushPromises()
+    // A row that left still fades in the list, but nobody is on it now.
+    expect(drawn(wrapper)).toContain('MAIN-12')
+    expect(count()).toBe('Work going on now: 4')
+  })
+})
+
 describe('the row on show', () => {
   it('marks the open card’s row as the current page, and no other', () => {
     const { wrapper } = rail(busyFrame(), 'en', { key: 'MAIN', reference: 'MAIN-12' } as never)
