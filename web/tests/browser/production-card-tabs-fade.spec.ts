@@ -245,6 +245,9 @@ async function eachCut(
   for (const end of ['start', 'end'] as const)
     for (let index = 0; index < 5; index += 1) {
       await choose(tabs.nth(shown(index)))
+      // Once the row has brought the choice in, as the section widens to its weight, or it
+      // brings it in again over the scene.
+      await still(strip)
       await strip.evaluate((node, left) => node.scrollTo({ left }), end === 'end' ? 1e6 : 0)
       await still(strip)
       const under = await wordsUnderFade(strip, tabs.nth(index))
