@@ -406,7 +406,6 @@ function updateOpen(value: boolean) {
   min-height: var(--size-control-height);
   padding: var(--space-2);
   border-radius: var(--radius-status);
-  outline: 0;
   cursor: pointer;
 
   &.has-icon {

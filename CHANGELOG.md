@@ -139,6 +139,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A choice made with the mouse leaves no focus ring behind.** Opening a dropdown with a
+  click ringed the option under the pointer, and choosing one ringed the dropdown itself,
+  as if it had been reached with Tab. Focus the interface places after a click now stands
+  unringed everywhere; the keyboard still rings every stop, in the list and after it.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field

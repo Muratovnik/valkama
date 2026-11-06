@@ -126,7 +126,8 @@ input:is([type='checkbox'], [type='radio']) {
 
 /* The one focus ring, on whatever holds focus, drawn only where the browser says focus
    should be seen: after the keyboard, or where the app moved it and asked (`moveFocus`).
-   A press of the pointer rings nothing, not even an element only the app focuses: rings on
+   A press of the pointer rings nothing, not even an element only the app focuses after it
+   (`pressFocus`, since a press that prevents its own focus left that to chance): rings on
    `:focus` showed around headings and answers nobody had tabbed to. A component may move
    this ring clear of its words or draw focus its own way, and does that on
    `:focus-visible` too; a field shows focus by its own edge (`VTextInput`). */
