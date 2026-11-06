@@ -11,10 +11,13 @@
  * focus used to fall to the page under the dialog. The list moves it on: to the
  * next open question, or, with none left, to how the one just answered ended.
  * It went to the count line at the top once, which scrolled a long list away
- * from the card the reader was in.
+ * from the card the reader was in. It moves on only from the question focus is
+ * in: a reader who went elsewhere while the answer was out stays there, as the
+ * question itself leaves them (`grantFocus`).
  *
  * A refresh the reader asked for that fails puts focus on the sentence saying
- * so; one the poll started leaves focus where it is.
+ * so, unless they have moved focus since they asked; one the poll started leaves
+ * focus where it is.
  *
  * A question that stopped waiting can be removed from here. Focus goes to the question
  * after it, or the one before, and with none left to the way to read the list again.
@@ -31,6 +34,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { grantFocus, NO_FOCUS_RIGHT } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -111,8 +115,10 @@ const errorLine = ref<HTMLElement | null>(null)
 const emptyRefresh = ref<InstanceType<typeof VButton> | null>(null)
 /** A refresh the reader pressed is still running; its failure is theirs to hear about. */
 const asked = ref(false)
+let refreshRight = NO_FOCUS_RIGHT
 function askRefresh() {
   asked.value = true
+  refreshRight = grantFocus()
   emit('refresh')
 }
 watch(
@@ -122,7 +128,7 @@ watch(
     asked.value = false
     if (!props.failed) return
     await nextTick()
-    moveFocus(errorLine.value)
+    refreshRight.take(() => moveFocus(errorLine.value))
   },
 )
 async function dismiss(entry: InputRequestEntry) {
@@ -147,6 +153,7 @@ async function updated(entry: InputRequestEntry) {
   const key = requestIdentity(entry)
   // A form still open keeps the keyboard, and a changed answer is still this question's.
   if (entry.request.status === 'pending' || props.drafts[key]?.changing != null) return
+  if (!cards[key]?.holdsFocus()) return
   await nextTick()
   if (entry.request.answer_version > 1) {
     cards[key]?.focusOutcome()

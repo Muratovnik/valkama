@@ -89,18 +89,17 @@ const {
   entry: () => props.entry,
   itemClosed: () => props.itemClosed,
   write: (draft) => emit('update:draft', draft),
-  failed: async () => {
+  failed: async (right) => {
     await nextTick()
-    foot.value?.focusError()
+    right.take(() => foot.value?.focusError())
   },
   refuse: async () => {
     await nextTick()
     moveFocus(root.value?.querySelector<HTMLElement>('input'))
   },
-  settled: async (result, reread) => {
+  settled: async (result, reread, right) => {
     await nextTick()
-    if (reread) reveal()
-    else focusOutcome()
+    right.take(reread ? reveal : focusOutcome)
     emit('updated', result)
   },
 })

@@ -6,8 +6,9 @@
  * and the app's next step comes only with its answer, so an action is offered once
  * the one before it has run and the list can grow as the answers come.
  *
- * Focus starts on the first action and moves to the next as it is reached; Escape and
- * the way back to the button that opened it are the overlay's.
+ * Focus starts on the first action and moves to the next as it is reached, unless the person
+ * has moved it themselves while the action ran (`grantFocus`); Escape and the way back to the
+ * button that opened it are the overlay's.
  *
  * A session long silent may have crashed with its row still saying it runs, and only the
  * person can see whether its window is open. So the way to resume it stands apart from
@@ -26,6 +27,7 @@ import {
 } from '@/features/session-open/placeWords.ts'
 
 import type { PlanOpens } from '@/shared/api/openPlanModel.ts'
+import { grantFocus } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { agoWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -123,6 +125,7 @@ async function run(index: number) {
   const action = actions.value[index]
   if (running.value || index > reached.value || !action) return
   running.value = true
+  const right = grantFocus()
   let outcome: Outcome
   try {
     outcome = await action.run()
@@ -138,7 +141,7 @@ async function run(index: number) {
   if (!actions.value.includes(outcome.next)) actions.value = [...actions.value, outcome.next]
   reached.value = Math.max(reached.value, index + 1)
   await nextTick()
-  moveFocus(buttonAt(reached.value))
+  right.take(() => moveFocus(buttonAt(reached.value)))
 }
 </script>
 

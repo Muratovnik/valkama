@@ -16,6 +16,8 @@ import {
   InputRequestError,
 } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
+import { grantFocus } from '@/shared/lib/focusRight.ts'
+import type { FocusRight } from '@/shared/lib/focusRight.ts'
 
 const SUPPORTED_FIELDS = new Set(['boolean', 'choice', 'multi_choice', 'text', 'verdict'])
 
@@ -51,18 +53,25 @@ function failure(error: unknown) {
  *
  * Whether the form can send is one rule (`sendDisabled`), the same one a write is held to, so
  * the way on and the write cannot disagree on it.
+ *
+ * A write and a read the person asked for are given the right to move focus as they begin
+ * (`grantFocus`), and the host's answers to how they ended move focus through it: a person who
+ * went on into another field while the answer was out is left there.
  */
 export function useRequestWrites(host: {
   draft: () => RequestDraft
   entry: () => InputRequestEntry
-  /** The reason now stands where it is read. */
-  failed: () => Promise<void>
+  /** The reason now stands where it is read, focus going to it under `right`. */
+  failed: (right: FocusRight) => Promise<void>
   /** The question's task is closed, so its answer stays as it is. */
   itemClosed: () => boolean
   /** The send stopped at this field. */
   refuse: (field: string) => Promise<void>
-  /** A write confirmed, or a read asked for: `reread` is a read while a change is open. */
-  settled: (result: InputRequestEntry, reread: boolean) => Promise<void> | void
+  /**
+   * A write confirmed, or a read asked for: `reread` is a read while a change is open. Focus
+   * goes on under `right`.
+   */
+  settled: (result: InputRequestEntry, reread: boolean, right: FocusRight) => Promise<void> | void
   /** What the form holds is replaced. */
   write: (draft: RequestDraft) => void
 }) {
@@ -153,10 +162,14 @@ export function useRequestWrites(host: {
       : changing.value && error.value !== '',
   )
 
-  async function fail(code: 'conflict' | 'mutationError' | 'taskClosed', blocking: boolean) {
+  async function fail(
+    code: 'conflict' | 'mutationError' | 'taskClosed',
+    blocking: boolean,
+    right: FocusRight,
+  ) {
     error.value = code
     if (blocking) requiresRefresh.value = true
-    await host.failed()
+    await host.failed(right)
   }
   /** Takes back the first step of declining, unless the write is already out. */
   function stepBack() {
@@ -182,7 +195,7 @@ export function useRequestWrites(host: {
       return
     }
     asked.value = action === 'decline'
-    await write(action, checked)
+    await write(action, checked, grantFocus())
   }
   function send(action: Action, checked: Checked | null) {
     const entry = local.value
@@ -196,15 +209,15 @@ export function useRequestWrites(host: {
     }
     return changeInputRequestAnswer(atBase, checked.values, { ...parts, note })
   }
-  async function settle(result: InputRequestEntry, action: Action | null) {
+  async function settle(result: InputRequestEntry, action: Action | null, right: FocusRight) {
     const draft = host.draft()
     const reread = action === null && draft.changing !== null
     if (action === 'answer' || action === 'change') host.write(EMPTY_DRAFT)
     // A read while the form is open: from here on the change is written against what it said.
     if (reread) host.write({ ...draft, changing: result.request.revision })
-    await host.settled(result, reread)
+    await host.settled(result, reread, right)
   }
-  async function write(action: Action, checked: Checked | null) {
+  async function write(action: Action, checked: Checked | null, right: FocusRight) {
     const identity = requestIdentity(local.value)
     const current = ++generation
     busy.value = true
@@ -213,13 +226,13 @@ export function useRequestWrites(host: {
       const result = await send(action, checked)
       if (current !== generation || identity !== requestIdentity(local.value)) return
       if (requestIdentity(result) !== identity) {
-        await fail('mutationError', true)
+        await fail('mutationError', true, right)
         return
       }
       local.value = result
-      await settle(result, action)
+      await settle(result, action, right)
     } catch (error_) {
-      if (current === generation) await fail(failure(error_), true)
+      if (current === generation) await fail(failure(error_), true, right)
     } finally {
       if (current === generation) {
         busy.value = false
@@ -232,20 +245,21 @@ export function useRequestWrites(host: {
     const entry = local.value
     const identity = requestIdentity(entry)
     const current = ++generation
+    const right = grantFocus()
     busy.value = true
     try {
       const result = await fetchInputRequest(entry.target, entry.request.request_id)
       if (current !== generation || identity !== requestIdentity(local.value)) return
       if (requestIdentity(result) !== identity) {
-        await fail('mutationError', false)
+        await fail('mutationError', false, right)
         return
       }
       local.value = result
       error.value = ''
       requiresRefresh.value = false
-      await settle(result, null)
+      await settle(result, null, right)
     } catch {
-      if (current === generation) await fail('mutationError', false)
+      if (current === generation) await fail('mutationError', false, right)
     } finally {
       if (current === generation) busy.value = false
     }
