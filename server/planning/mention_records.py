@@ -15,7 +15,9 @@ answer here only says who will hear it.
 
 Agents telling one another could keep each other talking, so an agent's call
 names fewer items than the interface, and one session names one item only a few
-times an hour; the hook adds that such a mention never wakes anybody.
+times an hour; the hook adds that such a mention wakes nobody unless its comment
+waits for a reply (`awaits_reply`), and then only the holders of the item named,
+once and within a day.
 """
 
 from __future__ import annotations

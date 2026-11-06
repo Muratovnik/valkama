@@ -1736,9 +1736,11 @@ an answer goes in the comment's own thread.
 in the `person_spoke` guard, and wakes an idle holder as any act of a person does.
 An agent's mention is never a person's, whatever `author` it signs: it is not in
 `from_person` and does not count in `person_spoke`. The holders hear it at their
-next tool call, in a block of the notice of its own, and it never wakes a session
-or continues a turn; who is told and when is in
-[the hook contract](hook-contract.md#who-is-told). With nobody holding the item,
+next tool call, in a block of the notice of its own. It wakes a session or
+continues its turn only when its comment
+[waits for a reply](#a-comment-that-waits-for-a-reply): then it wakes the holders
+of the item named, once and within a day of being written. Who is told and when is
+in [the hook contract](hook-contract.md#who-is-told). With nobody holding the item,
 the record waits on it for whoever takes it next.
 
 **Merging.** A record stays where it was written: the mentions of a merged item

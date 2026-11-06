@@ -846,6 +846,9 @@ news waits for the upgrade.
 - A session that holds or follows more than 200 items is told about the 200 it
   wrote to or subscribed to last, and hears replies and answers only on those: a
   subscribed item is inside that window as a held one is.
+- Subscribing to a closed item is not refused: it answers `following`, the item
+  is listed with its subscribers, and its news is told as on an open one, a
+  reopen included, until the subscription is dropped or lapses with its session.
 - A thread or a question that a merge moved keeps its author's call, but that
   author reads the item it wrote to, not the survivor. Only the survivor's holders
   are sure to hear what follows there.
