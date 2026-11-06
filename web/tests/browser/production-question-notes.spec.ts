@@ -5,6 +5,7 @@
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
+import { answersTap } from './commentListBackend.ts'
 import { box, settledBox } from './editorPage.ts'
 import { asked, mixedField, openQuestion, routeField, send } from './questionBackend.ts'
 import { test } from './test.ts'
@@ -21,9 +22,9 @@ const fillOf = (button: Locator) =>
 const named = (scope: Locator, role: 'button' | 'textbox', name: string) =>
   scope.getByRole(role, { name, exact: true })
 
-for (const [width, target] of [
-  [1280, 24],
-  [390, 44],
+for (const [width, target, finger] of [
+  [1280, 24, false],
+  [390, 44, true],
 ] as const) {
   test(`a comment's press is a glyph at the end of a line it shares, at ${width}`, async ({
     page,
@@ -40,10 +41,13 @@ for (const [width, target] of [
       await expect(press.locator('svg')).toBeVisible()
       await expect(press).toHaveAttribute('title', title)
       await expect(press).toHaveAttribute('aria-expanded', 'false')
-      const size = await box(press)
-      expect(size.width).toBeGreaterThanOrEqual(target)
-      expect(size.height).toBeGreaterThanOrEqual(target)
     }
+    // The label's press grows its own box to the target, since rows stand right under it; the
+    // one at the buttons' start keeps its drawn box and reaches past it where a finger presses.
+    const size = await box(onField)
+    expect(size.width).toBeGreaterThanOrEqual(target)
+    expect(size.height).toBeGreaterThanOrEqual(target)
+    expect(await answersTap(onQuestion), 'the foot press takes a 44 px tap').toBe(finger)
     // At the right end of the line naming the field, over the toggles of the rows under it, and
     // no line of its own under the options.
     const legend = await box(card.locator('legend').first())
@@ -184,10 +188,9 @@ test.describe('under a coarse pointer', () => {
   test('a wide window still gives each press the whole target', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1400 })
     const { card } = await openQuestion(page, [asked(SEVERAL)])
-    for (const press of [named(card, 'button', ON_FIELD), named(card, 'button', ON_QUESTION)]) {
-      const { width, height } = await box(press)
-      expect(width).toBeGreaterThanOrEqual(44)
-      expect(height).toBeGreaterThanOrEqual(44)
-    }
+    const { width, height } = await box(named(card, 'button', ON_FIELD))
+    expect(width).toBeGreaterThanOrEqual(44)
+    expect(height).toBeGreaterThanOrEqual(44)
+    expect(await answersTap(named(card, 'button', ON_QUESTION))).toBe(true)
   })
 })

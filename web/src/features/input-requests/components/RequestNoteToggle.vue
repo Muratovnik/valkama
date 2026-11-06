@@ -4,6 +4,12 @@
  * of two comments stood as two lines of their own on every question, most of them never used.
  * Its words are for the pointer resting on it and for a reader. A comment written shows it in
  * the glyph's shape and in those words, where colour does not say it.
+ *
+ * Where a finger presses, it answers across `--size-control-target`. On the line of a field's
+ * label or a review's point it grows its own box to that, since rows stand right under it.
+ * At the left end of a question's or a list's buttons (`reach`) it keeps its drawn box and
+ * reaches past it instead (`reach.css`): grown there, centred on the boxes' axis, its ground,
+ * its ring and a forced palette's frame stood 3px outside the comment's sheet on a phone.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,8 +26,10 @@ const props = withDefaults(
     written: boolean
     /** What a reader hears, where the title would not say what the comment is on. */
     name?: string
+    /** It reaches past what it draws for a finger, rather than drawing that much. */
+    reach?: boolean
   }>(),
-  { name: undefined },
+  { name: undefined, reach: false },
 )
 const emit = defineEmits<{ press: [] }>()
 const { t } = useI18n()
@@ -35,7 +43,7 @@ const heardName = computed(() => said(props.name ?? props.title))
     class="request-note-toggle"
     variant="text"
     size="inline"
-    :class="{ 'is-written': written }"
+    :class="{ 'is-written': written, reach }"
     :disabled="disabled"
     :title="shownTitle"
     :aria-expanded="open"
@@ -61,16 +69,22 @@ const heardName = computed(() => said(props.name ?? props.title))
 }
 
 /* The whole target where a finger is what presses it: under a coarse pointer, and in a surface
-   as narrow as a phone's. */
+   as narrow as a phone's. One that reaches keeps its box, and is the box of its reach. */
 @media (pointer: coarse) {
-  .request-note-toggle {
+  .request-note-toggle:not(.reach) {
     --size-control-inline: var(--size-control-target);
   }
 }
 
 @container overlay (width <= 30rem) {
-  .request-note-toggle {
+  .request-note-toggle:not(.reach) {
     --size-control-inline: var(--size-control-target);
   }
 }
+
+.request-note-toggle.reach {
+  position: relative;
+}
 </style>
+
+<style scoped src="@/shared/ui/reach.css"></style>

@@ -1,0 +1,17 @@
+/*
+ * The target of a control that draws its sign alone, with no words to widen its box: under a
+ * finger or on a phone-wide screen it answers a press across `--size-control-target` around
+ * what it draws, and the row it stands in keeps its height. The board's «+» drew 41×36 and
+ * the grouping toggle's glyph 40×36, and each answered a press across no more.
+ *
+ * One rule for every such control, read by each as its own scoped style: `VButton` for an
+ * icon button or one given `reach`, `ToggleChip` for a toggle given `reach`. The host marks
+ * its root `.reach` and is the reach's box, `position: relative`, where this applies.
+ */
+@media (pointer: coarse), (width <= 620px) {
+  .reach::before {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc((100% - var(--size-control-target)) / 2));
+  }
+}

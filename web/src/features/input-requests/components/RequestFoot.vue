@@ -117,6 +117,7 @@ defineExpose({
         :open="note.open"
         :title="note.title ?? t('requests.questionNote')"
         :written="note.written"
+        reach
         @press="emit('note')"
       />
     </RequestActions>
