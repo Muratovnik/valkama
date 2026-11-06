@@ -17,6 +17,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { chainOf, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
 import { serve } from './chainFixtures.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { openPlanFor } from './openSessionFixtures.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -82,6 +83,8 @@ async function openCard(
   await installBackend(page, options)
   await own()
   await page.goto(CARD)
+  // Reduced, the slide still takes a frame, and on a loaded machine the first read lands in it.
+  await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
 }
 
 /** Nine under way, so the group stops after a screenful and offers the rest. */
@@ -113,8 +116,7 @@ async function openChain(page: Page, width: number) {
 async function expectHeadingsOnEdge(list: Locator, edge: number) {
   const headings = list.locator('.chain-group-title, .chain-done-toggle')
   await expect(headings).toHaveCount(4)
-  // The folded Done's slot is its toggle's box: the chevron inside it stands outside the box
-  // by design, so its own box is not the slot.
+  // Done's slot is its toggle's box, whose start its chevron's square shares.
   const slots = await boxes(list.locator('.chain-group-title > :first-child, .chain-done-toggle'))
   expect(slots).toHaveLength(4)
   expectOneEdge(
@@ -167,6 +169,148 @@ for (const width of [1280, 390]) {
     expectOneEdge(await wordsLeft(list.locator('.chain-more')), edge)
   })
 }
+
+/**
+ * Where the toggle's chevron is drawn, held to `edge`, and where its words start, read once a
+ * frame is drawn: Chromium answers a path's old box for the frame its `d` changed in.
+ */
+async function chevronOn(toggle: Locator, edge: number, what: string): Promise<number> {
+  await toggle.evaluate(
+    () => new Promise((drawn) => requestAnimationFrame(() => requestAnimationFrame(drawn))),
+  )
+  const [chevron] = await boxes(toggle.locator('svg path'))
+  const left = chevron?.left ?? Number.NaN
+  // Soft, so that one run names every disclosure standing off its edge, in either state.
+  expect
+    .soft(Math.abs(left - edge), `${what}: ${left} against ${edge}`)
+    .toBeLessThanOrEqual(ONE_EDGE)
+  const [words] = await wordsLeft(toggle)
+  return words ?? Number.NaN
+}
+
+/**
+ * A disclosure folded and then open: its chevron drawn on `edge` in both of its glyphs, and its
+ * words where they were. The set draws a chevron inside a square whose side bearings differ by
+ * direction, so a toggle that put the square on the edge stood its folded chevron 6px in and
+ * its open one 4px in.
+ */
+async function expectFoldOnEdge(toggle: Locator, edge: number, what: string) {
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  const folded = await chevronOn(toggle, edge, `${what}, folded`)
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  const open = await chevronOn(toggle, edge, `${what}, open`)
+  expect
+    .soft(Math.abs(open - folded), `${what}: its words moved, ${folded} to ${open}`)
+    .toBeLessThanOrEqual(ONE_EDGE)
+}
+
+for (const width of [1280, 390]) {
+  test(`a chain's disclosures draw their chevrons on its heading's edge at ${width}px`, async ({
+    page,
+  }) => {
+    const list = await openChain(page, width)
+    const section = page.locator('.drawer section.chain')
+    const [edge] = await wordsLeft(section.locator('.section-header-title'))
+    await expect(section.locator('.chain-details-toggle')).toBeVisible()
+    // «Chart and pace» over the list and «Done» in it, one under the other.
+    await expectFoldOnEdge(section.locator('.chain-details-toggle'), edge ?? Number.NaN, 'chart')
+    await expectFoldOnEdge(list.locator('.chain-done-toggle'), edge ?? Number.NaN, 'done')
+  })
+}
+
+const report = { done: LONG, next: '' }
+
+for (const width of [1280, 390]) {
+  test(`a card's disclosures draw their chevrons on their column's edge at ${width}px`, async ({
+    page,
+  }) => {
+    await enableExecutionTab(page)
+    await openCard(page, width, { card: (read) => ({ ...read, summary: report }) })
+    const drawer = page.locator('.drawer')
+
+    // The outcome's name is its toggle; the preview's label starts its column.
+    const outcome = drawer.locator('.outcome')
+    const [label] = await wordsLeft(outcome.locator('.outcome-preview-label'))
+    await expectFoldOnEdge(outcome.getByRole('button').first(), label ?? Number.NaN, 'outcome')
+
+    // An attempt's details under its facts.
+    await drawer.getByRole('tab', { name: /Execution/u }).click()
+    const attempt = drawer.locator('.attempt').first()
+    const [fact] = await wordsLeft(attempt.locator('.fact-name').first())
+    const detail = attempt.locator('.attempt-context').getByRole('button')
+    await expectFoldOnEdge(detail, fact ?? Number.NaN, 'attempt')
+
+    // Memory's technical details under the line that names its source, once it has searched.
+    await drawer.getByRole('tab', { name: /Memory/u }).click()
+    const form = drawer.locator('.memory-form')
+    await form.getByRole('textbox').fill('store')
+    await form.getByRole('button').click()
+    const technical = drawer.locator('.memory .disclosure').getByRole('button')
+    await expect(technical).toBeVisible()
+    const [source] = await wordsLeft(drawer.locator('.memory p.quiet').first())
+    await expectFoldOnEdge(technical, source ?? Number.NaN, 'memory')
+  })
+}
+
+/** Whether a toggle's chevron is drawn inside what answers a press and inside its focus ring. */
+function pressOf(node: Element) {
+  const chevron = node.querySelector('svg path')?.getBoundingClientRect()
+  if (!chevron) return null
+  const box = node.getBoundingClientRect()
+  const style = getComputedStyle(node)
+  const ring = Number.parseFloat(style.outlineOffset) + Number.parseFloat(style.outlineWidth)
+  const hit = document.elementFromPoint(chevron.left + 0.5, chevron.top + chevron.height / 2)
+  return {
+    focused: node.matches(':focus-visible'),
+    pressable: hit !== null && node.contains(hit),
+    ringed:
+      box.left - ring <= chevron.left &&
+      chevron.right <= box.right + ring &&
+      box.top - ring <= chevron.top &&
+      chevron.bottom <= box.bottom + ring,
+  }
+}
+
+const INSIDE = { focused: true, pressable: true, ringed: true }
+
+/**
+ * A chevron standing outside its press would be a mark nothing answers and a ring that cuts
+ * it, and one in its own muted ink would vanish from a forced palette, which clears that ink.
+ */
+test("a chain's chevrons stay inside their press, its ring and the palette's ink", async ({
+  page,
+}) => {
+  const list = await openChain(page, 1280)
+  const section = page.locator('.drawer section.chain')
+  const [edge] = await wordsLeft(section.locator('.section-header-title'))
+  for (const toggle of [
+    section.locator('.chain-details-toggle'),
+    list.locator('.chain-done-toggle'),
+  ]) {
+    // Keyboard focus, with no pointer press before it, then open from the keyboard.
+    await toggle.focus()
+    expect(await toggle.evaluate(pressOf)).toEqual(INSIDE)
+    await page.keyboard.press('Enter')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await chevronOn(toggle, edge ?? Number.NaN, 'pressed open')
+    expect(await toggle.evaluate(pressOf)).toEqual(INSIDE)
+    // The palette's own colours, read under it: outside it they name other values.
+    await page.emulateMedia({ forcedColors: 'active' })
+    const system = await page.evaluate(() =>
+      ['CanvasText', 'ButtonText', 'LinkText'].map((name) => {
+        const probe = document.body.appendChild(document.createElement('span'))
+        probe.style.cssText = `color: ${name}; forced-color-adjust: none`
+        const value = getComputedStyle(probe).color
+        probe.remove()
+        return value
+      }),
+    )
+    const ink = await toggle.locator('svg').evaluate((svg) => getComputedStyle(svg).color)
+    expect(system).toContain(ink)
+    await page.emulateMedia({ forcedColors: 'none' })
+  }
+})
 
 const KNOWN = '6f1c2a8e-0000-4000-8000-000000000201'
 const UNKNOWN = '6f1c2a8e-0000-4000-8000-000000000202'

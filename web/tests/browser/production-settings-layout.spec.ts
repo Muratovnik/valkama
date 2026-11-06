@@ -217,3 +217,63 @@ test('the diagnostics rows stack their two cells at 390px', async ({ page }) => 
   expect(rows.length).toBeGreaterThanOrEqual(3)
   expect(rows.filter(({ apart }) => apart > 1)).toEqual([])
 })
+
+/** Where an element's first letter is drawn, or, with `chevron`, its chevron's stroke. */
+function startOf(target: Locator, chevron = false) {
+  return target.evaluate((node, drawn) => {
+    if (drawn) return node.querySelector('svg path')?.getBoundingClientRect().left ?? Number.NaN
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    let text = walker.nextNode()
+    while (text && !text.textContent?.trim()) text = walker.nextNode()
+    if (!text) return Number.NaN
+    const range = document.createRange()
+    range.selectNodeContents(text)
+    return range.getClientRects()[0]?.left ?? Number.NaN
+  }, chevron)
+}
+
+/** The toggle's chevron on its column's first letter folded and open, its words staying put. */
+async function expectFoldOnEdge(page: Page, toggle: Locator, column: Locator, what: string) {
+  const edge = await startOf(column)
+  const held = async (state: string) => {
+    await expect(toggle).toHaveAttribute('aria-expanded', state)
+    // A frame drawn first: Chromium answers a path's old box for the frame its `d` changed in.
+    await page.evaluate(
+      () => new Promise((drawn) => requestAnimationFrame(() => requestAnimationFrame(drawn))),
+    )
+    const mark = await startOf(toggle, true)
+    expect
+      .soft(Math.abs(mark - edge), `${what}, expanded ${state}: ${mark} against ${edge}`)
+      .toBeLessThanOrEqual(0.5)
+    return startOf(toggle)
+  }
+  const folded = await held('false')
+  await toggle.click()
+  const open = await held('true')
+  expect.soft(Math.abs(open - folded), `${what}: its words moved`).toBeLessThanOrEqual(0.5)
+}
+
+// A disclosure put its chevron's square on the column's edge, and the set draws a chevron 6px
+// into that square folded and 4px open, so the mark stood off the edge the words start on.
+for (const width of WIDTHS)
+  test(`a diagnostics disclosure draws its chevron on its column's edge at ${width}px`, async ({
+    page,
+  }) => {
+    await openDiagnostics(page, width)
+    const heading = page.locator('.health-section-head .section-heading').first()
+    const finding = page.locator('.health-finding').first()
+    await expect(finding.locator('.health-detail')).toBeVisible()
+    const cases = [
+      {
+        what: 'passed',
+        toggle: page.locator('.health-passed').getByRole('button').first(),
+        column: heading,
+      },
+      {
+        what: 'technical',
+        toggle: finding.locator('.health-technical').getByRole('button'),
+        column: finding.locator('.health-detail'),
+      },
+    ]
+    for (const { what, toggle, column } of cases) await expectFoldOnEdge(page, toggle, column, what)
+  })
