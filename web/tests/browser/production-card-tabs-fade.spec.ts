@@ -7,132 +7,18 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { installBackend } from './backend.ts'
-import { enableExecutionTab } from './executionFixtures.ts'
-import { projectScope } from './planningFixtures.ts'
+import {
+  expectFadeOnCut,
+  fadedEnds,
+  frames,
+  openCard,
+  overrun,
+  pressPoint,
+  scrolled,
+  still,
+  wordsUnderFade,
+} from './cardTabsRow.ts'
 import { test } from './test.ts'
-
-async function openCard(page: Page, width: number, locale: 'en' | 'ru' = 'ru') {
-  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await enableExecutionTab(page)
-  await page.setViewportSize({ width, height: 700 })
-  await installBackend(page, { longRead: true })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
-  const drawer = page.locator('.drawer')
-  await expect(drawer).toHaveCSS('transform', 'none')
-  const strip = drawer.locator('.inspector-tabs')
-  await expect(strip.getByRole('tab')).toHaveCount(5)
-  return strip
-}
-
-/** The arguments of a function at its outer level: a stop may hold a calc() with commas. */
-function outerArguments(inner: string): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let from = 0
-  for (let at = 0; at < inner.length; at += 1) {
-    if (inner[at] === '(') depth += 1
-    else if (inner[at] === ')') depth -= 1
-    else if (inner[at] === ',' && depth === 0) {
-      parts.push(inner.slice(from, at).trim())
-      from = at + 1
-    }
-  }
-  return [...parts, inner.slice(from).trim()]
-}
-
-/** A stop that shows nothing of what it masks. */
-const clear = (stop: string) => /^(?:transparent|rgba\(0, 0, 0, 0\))/u.test(stop)
-
-/** Which ends of the row a computed `mask-image` fades: the start and the end of the line. */
-function endsOf(mask: string) {
-  if (mask === 'none') return { mask, start: false, end: false }
-  const inner = /^linear-gradient\((.*)\)$/su.exec(mask)?.[1]
-  if (!inner) throw new Error(`not a linear mask: ${mask}`)
-  const parts = outerArguments(inner)
-  const direction = /^to |deg$/u.test(parts[0]) ? parts[0] : 'to bottom'
-  if (direction !== 'to left' && direction !== 'to right') throw new Error(`not across: ${mask}`)
-  const stops = parts.slice(direction === parts[0] ? 1 : 0)
-  const [first, last] = [clear(stops[0]), clear(stops.at(-1) ?? '')]
-  const reversed = direction === 'to left'
-  return { mask, start: reversed ? last : first, end: reversed ? first : last }
-}
-
-const fadedEnds = async (strip: Locator) =>
-  endsOf(await strip.evaluate((node) => getComputedStyle(node).maskImage))
-
-/** How far the row can scroll past what it shows. */
-const overrun = (strip: Locator) => strip.evaluate((node) => node.scrollWidth - node.clientWidth)
-
-/** How far the strip has scrolled. */
-const scrolled = (strip: Locator) => strip.evaluate((node) => node.scrollLeft)
-
-/** The strip once it has stopped moving: the same over two frames. */
-async function still(strip: Locator) {
-  await expect
-    .poll(async () => {
-      const first = await scrolled(strip)
-      await strip.evaluate(
-        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-      )
-      return first === (await scrolled(strip))
-    })
-    .toBe(true)
-  return scrolled(strip)
-}
-
-/**
- * Which ends of the row cut a section, the first's box before the start or the last's past
- * the end, by more than the pixel a zoomed page rounds off: what the fade stands for.
- */
-const cutEnds = (strip: Locator) =>
-  strip.evaluate((node) => {
-    const row = node.getBoundingClientRect()
-    const sections = [...node.querySelectorAll('button')].map((tab) => tab.getBoundingClientRect())
-    const first = sections[0]
-    const last = sections.at(-1)
-    return {
-      start: first !== undefined && row.left - first.left > 1,
-      end: last !== undefined && last.right - row.right > 1,
-    }
-  })
-
-/** The fade at each end matches the cut there. */
-async function expectFadeOnCut(strip: Locator, where: string) {
-  await expect
-    .poll(async () => {
-      const { start, end } = await fadedEnds(strip)
-      return { start, end }
-    }, `${where}: the fade follows the cut`)
-    .toEqual(await cutEnds(strip))
-}
-
-/** Which faded end the words `tab` draws stand under now, as a Range over them reads them. */
-async function wordsUnderFade(strip: Locator, tab: Locator) {
-  const { start, end } = await fadedEnds(strip)
-  const [fade, row, words] = await Promise.all([
-    strip.evaluate((node) =>
-      Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade')),
-    ),
-    strip.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect),
-    tab.evaluate((node) => {
-      const range = document.createRange()
-      range.selectNodeContents(node)
-      return range.getBoundingClientRect().toJSON() as DOMRect
-    }),
-  ])
-  expect(fade, 'the fade has a width').toBeGreaterThan(0)
-  const under: string[] = []
-  if (start && words.left < row.left + fade - 0.5) under.push('start')
-  if (end && words.right > row.right - fade + 0.5) under.push('end')
-  if (words.left < row.left - 0.5) under.push('out before')
-  if (words.right > row.right + 0.5) under.push('out after')
-  return under
-}
 
 test('at 390px the row fades at the end that has more sections, and only there', async ({
   page,
@@ -165,24 +51,6 @@ test('at 1280px the sections fit and the row draws no mask', async ({ page }) =>
   expect(await overrun(strip), 'five sections fit a desktop card').toBeLessThanOrEqual(0)
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ mask: 'none' })
 })
-
-/** Where a person presses a section: the middle of what of its drawn words the row shows. */
-function pressPoint(strip: Locator, index: number) {
-  return strip.evaluate((node, at) => {
-    const row = node.getBoundingClientRect()
-    const range = document.createRange()
-    range.selectNodeContents(node.querySelectorAll('button')[at])
-    const words = range.getBoundingClientRect()
-    const left = Math.max(words.left, row.left + 2)
-    const right = Math.min(words.right, row.right - 2)
-    return { x: (left + right) / 2, y: (words.top + words.bottom) / 2, seen: right - left }
-  }, index)
-}
-
-const frames = (strip: Locator) =>
-  strip.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
 
 /**
  * A pointer's press on a section, down and up apart, where a person presses it: never
@@ -361,4 +229,78 @@ for (const locale of ['ru', 'en'] as const) {
         expect(pressed.filter((name) => name.endsWith('under the fade')).length).toBeGreaterThan(1)
       })
     })
+}
+
+/**
+ * Each section the fade cuts with the row at either end, enough of its words in sight to press,
+ * with `shown` chosen before it: the scene is set, and `act` is run on it. Says which it ran on.
+ */
+async function eachCut(
+  strip: Locator,
+  shown: (index: number) => number,
+  act: (index: number, end: 'end' | 'start') => Promise<void>,
+) {
+  const tabs = strip.getByRole('tab')
+  const ran: string[] = []
+  for (const end of ['start', 'end'] as const)
+    for (let index = 0; index < 5; index += 1) {
+      await choose(tabs.nth(shown(index)))
+      await strip.evaluate((node, left) => node.scrollTo({ left }), end === 'end' ? 1e6 : 0)
+      await still(strip)
+      const under = await wordsUnderFade(strip, tabs.nth(index))
+      const { seen } = await pressPoint(strip, index)
+      if (under.length === 0 || seen < 6) continue
+      await act(index, end)
+      ran.push(`${end}:${index}`)
+    }
+  return ran
+}
+
+for (const locale of ['ru', 'en'] as const) {
+  test(`at 390px in ${locale} a press on the section shown, cut by the fade, brings it clear`, async ({
+    page,
+  }) => {
+    const strip = await openCard(page, 390, locale)
+    const tabs = strip.getByRole('tab')
+    const pressed = await eachCut(
+      strip,
+      (index) => index,
+      async (index, end) => {
+        await press(page, strip, index)
+        await still(strip)
+        await expect(tabs.nth(index)).toHaveAttribute('aria-selected', 'true')
+        expect(await wordsUnderFade(strip, tabs.nth(index)), `${end}: section ${index}`).toEqual([])
+      },
+    )
+    expect(pressed.length, 'a section shown and cut, to press').toBeGreaterThan(0)
+  })
+
+  test(`at 390px in ${locale} a press let go off the row leaves the section it focused clear of the fade`, async ({
+    page,
+  }) => {
+    const strip = await openCard(page, 390, locale)
+    const tabs = strip.getByRole('tab')
+    const left = await eachCut(
+      strip,
+      (index) => (index === 2 ? 0 : 2),
+      async (index, end) => {
+        const { x, y } = await pressPoint(strip, index)
+        const before = await scrolled(strip)
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        await frames(strip)
+        expect(await scrolled(strip), 'the row holds still under a press').toBe(before)
+        await page.mouse.move(x, y + 120, { steps: 4 })
+        await page.mouse.up()
+        await still(strip)
+        const tab = tabs.nth(index)
+        await expect(tab, 'focused by the press').toBeFocused()
+        await expect(tab, 'and not chosen').toHaveAttribute('aria-selected', 'false')
+        expect(await tab.evaluate((node) => node.matches(':focus-visible')), 'no ring').toBe(false)
+        expect(await wordsUnderFade(strip, tab), `${end}: section ${index}`).toEqual([])
+        await page.mouse.move(0, 0)
+      },
+    )
+    expect(left.length, 'a section cut by the fade, to press').toBeGreaterThan(1)
+  })
 }

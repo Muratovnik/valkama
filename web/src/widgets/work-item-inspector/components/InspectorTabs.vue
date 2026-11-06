@@ -7,7 +7,7 @@
  * itself, over the thin bar every scroller here has, because a cut that fell between
  * two sections read as the whole strip. The one shown is brought into the row whenever
  * it changes, and so is each one the keyboard reaches, which the browser leaves where
- * it is while a sliver of it shows.
+ * it is while a sliver of it shows, and the one a press focused once the press is over.
  *
  * They are tabs over the card's body, and every section shows the moment it is chosen —
  * what one reads is read with the card — so the arrows show a section as they reach it.
@@ -115,16 +115,25 @@ watch(shown, () => nextTick(revealShown))
  * section on its way down and chooses it on its way up, and a strip moved in between left
  * another section, or none, under the pointer, so the press chose nothing; a finger's tap,
  * whose press the browser sends after the finger lifts, lost its first try the same way.
- * The section a press picks is brought in once the press is over, as it is shown. The
- * press is marked for the rest of the task its focus lands in, and no longer.
+ *
+ * The section a press focused is brought in once the press is over, wherever it was let go,
+ * in the task after the click it makes. Its being shown could not say so: a press on the
+ * section already shown changes nothing, and one let go off the row chooses nothing, and
+ * either left a focused section under the fade.
  */
 let pressing = false
 useEventListener(strip, 'mousedown', () => {
   pressing = true
+  window.addEventListener('mouseup', pressed, { capture: true, once: true })
+})
+
+function pressed() {
   setTimeout(() => {
     pressing = false
+    const section = document.activeElement
+    if (strip.value?.contains(section)) reveal(section)
   })
-})
+}
 
 function focused(event: FocusEvent) {
   if (!pressing) reveal(event.target as Element | null)

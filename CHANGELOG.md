@@ -178,7 +178,9 @@ checkouts are therefore distinguishable even at the same version.
   scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the
   keyboard stops clear of the fade, one already in sight stays where it is, and a row that
   fits draws none. A click or a tap on a section half under the fade chooses it the first
-  time: the row no longer slides away between pressing and letting go.
+  time: the row no longer slides away between pressing and letting go, and once the press is
+  over it brings that section clear of the fade, also when it was already the one shown or
+  the press was let go off the row.
 - **Zoomed out, the graph's band for the work under no epic reads cleanly.** «158 inside»
   no longer runs onto the progress edge under it; pointing at the band or reaching its
   chevron with the keyboard lights the chevron alone instead of covering the words and
