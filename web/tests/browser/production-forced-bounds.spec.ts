@@ -5,8 +5,9 @@
  *
  * Every element is read twice: in the product's own palette, for the ones whose ground
  * differs from what lies under them and that draw no edge of their own; and in the forced
- * palette, for an edge those ones now draw. The pixels of one tile's edge are read as well,
- * because a computed style says what was asked for, not what the palette painted.
+ * palette, for an edge those ones now draw. The pixels of each kind's edge are read as well,
+ * on two sides, because a computed style says what was asked for, not what was painted: the
+ * panel under the board asked for its edge and something opaque inside it was drawn over it.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -82,29 +83,56 @@ async function sweep(page: Page) {
   return { kinds, lost: [...new Set(lost)] }
 }
 
-/** How far apart, in lightness, an element's drawn edge and the ground just inside it are. */
-async function edgeStep(page: Page, what: Locator) {
+/**
+ * The colours along six pixels of a screenshot, from where an element's box starts inward:
+ * across its left side at the height of its middle, or down its top side at its middle.
+ * A pixel is what the palette painted, where a computed style says only what was asked for.
+ */
+async function pixelsIn(page: Page, what: Locator, side: 'left' | 'top') {
+  await what.scrollIntoViewIfNeeded()
   const box = await what.boundingBox()
   if (!box) throw new Error('nothing to read the edge of')
+  const x = Math.round(box.x + (side === 'top' ? box.width / 2 : 0))
+  const y = Math.round(side === 'top' ? box.y : box.y + Math.min(box.height / 2, 60))
   const shot = await page.screenshot({
-    clip: { x: box.x, y: box.y + box.height / 2, width: 6, height: 1 },
+    clip: { x, y, width: side === 'top' ? 1 : 6, height: side === 'top' ? 6 : 1 },
   })
   const blank = await page.context().newPage()
-  const row = await blank.evaluate(async (data) => {
+  const run = await blank.evaluate(async (data) => {
     const picture = new Image()
     picture.src = `data:image/png;base64,${data}`
     await picture.decode()
     const surface = new OffscreenCanvas(picture.width, picture.height)
     const paint = surface.getContext('2d')
     paint?.drawImage(picture, 0, 0)
-    const pixels = paint?.getImageData(0, 0, picture.width, 1).data ?? []
-    return Array.from(
-      { length: picture.width },
-      (_, at) => (pixels[at * 4] ?? 0) + (pixels[at * 4 + 1] ?? 0) + (pixels[at * 4 + 2] ?? 0),
+    const pixels = paint?.getImageData(0, 0, picture.width, picture.height).data ?? []
+    return Array.from({ length: 6 }, (_, at) =>
+      [pixels[at * 4], pixels[at * 4 + 1], pixels[at * 4 + 2]].join(','),
     )
   }, shot.toString('base64'))
   await blank.close()
-  return Math.abs((row[0] ?? 0) - (row[4] ?? 0))
+  return run
+}
+
+const lightness = (colour = '') => colour.split(',').reduce((sum, part) => sum + Number(part), 0)
+
+/**
+ * Whether the first visible element of each kind draws its edge on its left and its top: the
+ * first pixel in from its box stands apart from what lies just inside it, in a light palette
+ * or a dark one. The panel the board lies on asked for an edge and lost it under the board's
+ * own opaque ground, so every kind is read, and on two sides.
+ */
+async function drawnEdges(page: Page, kinds: string[]) {
+  const lost: string[] = []
+  for (const kind of kinds)
+    for (const side of ['left', 'top'] as const) {
+      const run = await pixelsIn(page, page.locator(`.${kind}:visible`).first(), side)
+      const step = Math.max(
+        ...run.slice(1).map((colour) => Math.abs(lightness(colour) - lightness(run[0]))),
+      )
+      if (step < 300) lost.push(`${kind} ${side}: ${run.join(' ')}`)
+    }
+  return lost
 }
 
 test('in the forced palette the board keeps the bounds its grounds drew', async ({ page }) => {
@@ -118,8 +146,8 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   for (const kind of ['work-item-column', 'work-item-tile', 'toggle-chip', 'module-stage'])
     expect(flat.kinds.join(' '), `${kind} is told apart by its ground`).toContain(kind)
   expect.soft(flat.lost, 'the flat board').toEqual([])
-  // Painted, not only asked for: the tile's first column of pixels is the palette's ink.
-  expect.soft(await edgeStep(page, page.locator('.work-item-tile').first())).toBeGreaterThan(300)
+  const surfaces = ['module-stage', 'work-item-column', 'work-item-tile', 'toggle-chip']
+  expect.soft(await drawnEdges(page, surfaces), 'edges drawn on the flat board').toEqual([])
 
   // By epic: the cells that hold tiles.
   await page.emulateMedia({ forcedColors: 'none' })
@@ -127,6 +155,8 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   const lanes = await sweep(page)
   expect(lanes.kinds.join(' ')).toContain('lane-cell')
   expect.soft(lanes.lost, 'the board by epic').toEqual([])
+  const laneSurfaces = ['module-stage', 'lane-cell:not(.bare)', 'work-item-tile']
+  expect.soft(await drawnEdges(page, laneSurfaces), 'edges drawn by epic').toEqual([])
 
   // A label picked in the filter, and the menu's choice between all and any of them.
   await page.emulateMedia({ forcedColors: 'none' })
@@ -137,6 +167,8 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   for (const kind of ['filter-chip', 'option-choices'])
     expect(filtered.kinds.join(' '), `${kind} is told apart by its ground`).toContain(kind)
   expect.soft(filtered.lost, 'the filtered board').toEqual([])
+  const picked = ['filter-chip', 'option-choices']
+  expect.soft(await drawnEdges(page, picked), 'edges drawn on the filtered board').toEqual([])
 
   // The chain the board is narrowed to.
   await page.emulateMedia({ forcedColors: 'none' })
@@ -144,6 +176,7 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   const chained = await sweep(page)
   expect(chained.kinds.join(' ')).toContain('scope-chip')
   expect.soft(chained.lost, 'the board narrowed to a chain').toEqual([])
+  expect.soft(await drawnEdges(page, ['scope-chip']), 'the chain chip’s edge').toEqual([])
 
   // The list.
   await page.emulateMedia({ forcedColors: 'none' })
@@ -151,6 +184,23 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   const list = await sweep(page)
   expect(list.kinds.join(' ')).toContain('work-item-list')
   expect.soft(list.lost, 'the list').toEqual([])
+  const listSurfaces = ['module-stage', 'work-item-list']
+  expect.soft(await drawnEdges(page, listSurfaces), 'edges drawn on the list').toEqual([])
+})
+
+test('on a phone in the forced palette the board draws the same edges', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page, {})
+  await page.mouse.move(0, 0)
+  const flat = ['module-stage', 'work-item-column', 'work-item-tile']
+  expect.soft(await drawnEdges(page, flat), 'the flat board').toEqual([])
+  await openBoard(page)
+  await page.mouse.move(0, 0)
+  const lanes = ['module-stage', 'lane-cell:not(.bare)', 'work-item-tile']
+  expect.soft(await drawnEdges(page, lanes), 'the board by epic').toEqual([])
 })
 
 test('in the forced palette the connection’s dot stays, the one mark of a narrow rail', async ({
