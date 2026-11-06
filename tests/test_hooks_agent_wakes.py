@@ -232,6 +232,44 @@ class AskerTests(Wakes):
         self.assertIsNone(self.stop(A), "the reply under the mark ended the wait")
         self.assertNotIn("the reply awaited", self.hook(session=A) or "")
 
+    def test_a_reply_is_judged_by_the_mark_it_was_written_under_not_the_one_read_later(
+        self,
+    ) -> None:
+        """Resolved, replied to and reopened before the asker's hook reads anything: the
+        thread has no mark when the hook reads, and the reply was still written under it."""
+
+        root = self.ask()
+        self.settle()
+        self.person(RESOLVE, id=self.held, comment_id=root, resolution="Settled")
+        self.reply(AS_B, root, "RL-1")
+        self.person(RESOLVE, id=self.held, comment_id=root, reopen=True)
+        self.assertIsNone(self.stop(A), "the reply under the mark does not continue a turn")
+        told = self.hook(session=A)
+        assert told is not None, "the reply is told at the next tool call"
+        self.assertIn("marker RL-1", told)
+        self.assertNotIn("the reply awaited", told)
+
+    def test_a_reply_and_a_reopen_in_one_call_leave_the_reply_under_the_mark(self) -> None:
+        """One `apply_work_item_changes` writes its comments before its resolutions, so the
+        reply stands under the mark the same call then removes."""
+
+        root = self.ask()
+        self.settle()
+        self.mark(root)
+        self.agent(
+            "apply_work_item_changes",
+            AS_B,
+            id=self.held,
+            comments=[{"body": "This one, marker RB-1", "reply_to": root}],
+            resolutions=[{"comment_id": root, "reopen": True}],
+        )
+        self.assertIsNone(self.root(root)["resolution"], "the call reopened the thread")
+        self.assertIsNone(self.stop(A), "the reply under the mark does not continue a turn")
+        told = self.hook(session=A)
+        assert told is not None, "the reply is told at the next tool call"
+        self.assertIn("marker RB-1", told)
+        self.assertNotIn("the reply awaited", told)
+
     def test_a_thread_resolved_again_after_a_reopen_waits_for_nothing(self) -> None:
         root = self.ask()
         self.settle()
