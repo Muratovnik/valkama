@@ -258,6 +258,16 @@ class _Scenario:
             conn.commit()
         finally:
             conn.close()
+        # A person's comment here that tells the contract card, which then reads its record.
+        self.http(
+            "/api/planning/work-item/comment",
+            {
+                "id": ref,
+                "body": "Decided to keep the old route; the contract card can drop it.",
+                "author": "user",
+                "mentions": [self.reference],
+            },
+        )
         return self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}")
 
     def live_frame(self) -> dict:

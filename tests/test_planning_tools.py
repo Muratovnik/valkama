@@ -335,10 +335,15 @@ class PlanningAcknowledgementTests(unittest.TestCase):
 
         `full=true` is the read that keeps every comment and event; `sessions`
         is what the read adds about the item, not part of the record a write
-        returns.
+        returns. The one key the two forms keep differently is `mentions`: a
+        write answers with the item's own record, the newest `HTTP_MENTIONS` and
+        their total, where the agent's full read lists all of them without one.
         """
 
         answer = self.call("get_work_item", id=reference, full=True)
+        record = service.get_work_item(self.conn, reference)
+        answer["mentions"] = record["mentions"]
+        answer["mentions_total"] = record["mentions_total"]
         return {k: v for k, v in answer.items() if k != "sessions"}
 
     @property

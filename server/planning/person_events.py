@@ -74,13 +74,14 @@ KINDS = {
     "comment_resolved": "thread_resolved",
     "comment_reopened": "thread_reopened",
     "request_changed": "question_changed",
+    # A person's words about this item, written on another one in a comment's `mentions`.
+    "mentioned": "mentioned",
 }
 #: The actions never told. `created`: an item a person filed says what it says, in
 #: the description an agent reads when it takes it. `execution_attached`: a launch
 #: or an observed session, which the agent in question already knows. `overridden`:
-#: a note on the transition or merge beside it, which is told. `mentioned`: the store
-#: holds the action, and no write records it yet.
-NOT_TOLD = frozenset({"created", "execution_attached", "overridden", "mentioned"})
+#: a note on the transition or merge beside it, which is told.
+NOT_TOLD = frozenset({"created", "execution_attached", "overridden"})
 
 #: The call that edits an item's fields, and those fields' columns by the name
 #: `calls.call_id` records. The one place a name read back from a row meets SQL.
@@ -309,7 +310,35 @@ def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
         # `<id>: <decision>` or `<id>`, as `service.resolve_comment` logs it.
         root, _colon, decision = detail.partition(": ")
         return _entry(kind, at, comment_id=int(root), text=decision)
+    if action == "mentioned":
+        return _mentioned(conn, at, int(detail))
     return _entry(kind, at, text=detail)
+
+
+_MENTIONING = (
+    "SELECT m.body, m.report, s.key, w.number FROM work_item_comments m"
+    " JOIN work_items w ON w.work_item_id = m.work_item_id"
+    " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id WHERE m.id = ?"
+)
+
+
+def _mentioned(conn: sqlite3.Connection, at: str, comment_id: int) -> dict:
+    """A comment on another item that named this one: where it stands now, and what it said.
+
+    `from` is that item's reference, after a merge the survivor's; with the item
+    deleted the comment went with it, and `from` is null with nothing to quote.
+    """
+
+    row = conn.execute(_MENTIONING, (comment_id,)).fetchone()
+    if row is None:
+        return _entry("mentioned", at, comment_id=comment_id, text="", **{"from": None})
+    said = str(row[0])
+    if row[1]:
+        done = _json(str(row[1]))
+        said = str(done.get("done", "")) if isinstance(done, dict) else ""
+    return _entry(
+        "mentioned", at, comment_id=comment_id, text=said, **{"from": f"{row[2]}-{row[3]}"}
+    )
 
 
 def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:

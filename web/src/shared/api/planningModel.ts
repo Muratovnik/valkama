@@ -18,6 +18,7 @@ import {
 } from '@/shared/api/contract.ts'
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
+import { EVENT_ACTIONS } from '@/shared/api/planningEventActions.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
@@ -36,32 +37,6 @@ export const WORK_ITEM_KINDS = ['bug', 'epic', 'improvement', 'task'] as const
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
 export const LINK_KINDS = ['blocks', 'discovered-from', 'duplicates', 'relates-to'] as const
 const REF_KINDS = ['commit', 'memory', 'session', 'url'] as const
-const EVENT_ACTIONS = [
-  'created',
-  'transitioned',
-  'claimed',
-  'released',
-  'taken_over',
-  'linked',
-  'unlinked',
-  'checklist_replaced',
-  'checklist_claimed',
-  'checklist_taken_over',
-  'checklist_released',
-  'checklist_completed',
-  'checklist_reopened',
-  'summarized',
-  'execution_attached',
-  'request_created',
-  'request_answered',
-  'request_declined',
-  'request_expired',
-  'request_changed',
-  'comment_resolved',
-  'comment_reopened',
-  'mentioned',
-  'overridden',
-] as const
 
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
@@ -241,7 +216,22 @@ const commentIdentity = {
   author: actor(),
   by_person: z.boolean().nullable(),
   resolution: resolutionSchema.nullable(),
+  /** The other items the comment told, by reference; a number in its text tells nobody. */
+  mentions: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 20).optional(),
 }
+
+/**
+ * A comment on another item that told this one. `from` is where that comment stands
+ * now and `quote` the start of what it said; both are null once that item is deleted.
+ */
+const mentionRecordSchema = strictObject({
+  comment_id: positiveInt(),
+  from: boundedText(WORK_ITEM_REFERENCE, 20).nullable(),
+  at: boundedText(ISO, 96),
+  by_person: z.boolean().nullable(),
+  author: actor(),
+  quote: blankable(300).nullable(),
+})
 const commentSchema = z.union([
   strictObject({
     ...commentIdentity,
@@ -356,6 +346,9 @@ const workItemSchema = strictObject({
   // Each entry stays bounded.
   comments: z.array(commentSchema),
   events: z.array(eventSchema),
+  // The read of one item carries the newest of these and how many there are.
+  mentions: boundedList(mentionRecordSchema, 50).optional(),
+  mentions_total: positiveInt(true).optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),

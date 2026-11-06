@@ -21,6 +21,7 @@ from . import (
     acknowledgements,
     api,
     calls,
+    mention_records,
     model,
     person_events,
     read_model,
@@ -169,6 +170,15 @@ _LIST = {
     },
     "required": ["label", "options"],
 }
+#: The other items a comment tells, beside what its text links.
+_MENTIONS = {
+    "type": "array",
+    "maxItems": mention_records.MAX_MENTIONS,
+    "items": {"type": "string"},
+    "description": "Other items to tell, by reference: each one's holders hear this comment, and"
+    " it stays on the item for whoever takes it. A number in the body tells nobody. The"
+    " answer says who will hear each.",
+}
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
@@ -176,6 +186,7 @@ CHAIN_SERIES_ENTRIES = 30
 #: How much history get_work_item carries unless the caller asks for all of it.
 RECENT_COMMENTS = 5
 RECENT_EVENTS = 10
+RECENT_MENTIONS = 5
 #: What every list and search says about paging, so an agent knows to keep going.
 _PAGING = (
     " An answer holds one page: truncated is true when more items match, and"
@@ -307,7 +318,9 @@ TOOLS = [
         f" mark, oldest first, at most {read_model.UNRESOLVED_PAGE}, with truncated, the"
         " next page being comments_after the last root read; unresolved_total counts them."
         " Each comment names its parent in reply_to or reply_to_request (null on a root),"
-        " by_person, and resolution, a root's mark."
+        " by_person, resolution, a root's mark, and mentions, the items it told."
+        f" mentions holds the {RECENT_MENTIONS} newest comments elsewhere that told this item,"
+        " with mentions_total."
         " questions gives its questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
         " and truncated when there are more.",
@@ -685,6 +698,7 @@ TOOLS = [
             },
             "make_current": _BOOL,
             "list": _LIST,
+            "mentions": _MENTIONS,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -723,6 +737,7 @@ TOOLS = [
             "reply_to": _REPLY_TO,
             "reply_to_request": _REPLY_TO_REQUEST,
             "list": _LIST,
+            "mentions": _MENTIONS,
         },
         ["id", "body"],
     ),
@@ -832,6 +847,7 @@ TOOLS = [
                     "reply_to": _REPLY_TO,
                     "reply_to_request": _REPLY_TO_REQUEST,
                     "list": _LIST,
+                    "mentions": _MENTIONS,
                 },
                 "required": ["body"],
             },
@@ -849,6 +865,7 @@ TOOLS = [
                         "reply_to": _INT,
                         "reply_to_request": _STR,
                         "list": _LIST,
+                        "mentions": _MENTIONS,
                     },
                     "required": ["body"],
                 },
@@ -1289,6 +1306,13 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
     item = answer[1]["work_item"]
+    # The newest few of the comments that named it, or all of them and no count.
+    named, total = read_model.mentions_of(
+        conn, item["work_item_id"], None if full else RECENT_MENTIONS
+    )
+    item = {**item, "mentions": named, "mentions_total": total}
+    if full:
+        del item["mentions_total"]
     return _with_url({**item, "questions": requests.item_questions(conn, item["work_item_id"])})
 
 

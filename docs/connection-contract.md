@@ -912,7 +912,7 @@ these groups, and applies them in this order:
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
-| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?}`, or a list of them | `comment_work_item` |
+| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?}`, or a list of them | `comment_work_item` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
 | `summary` | `{done, next, why?, list?}` | `set_work_item_summary` |
@@ -991,7 +991,8 @@ The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent, as `update_work_item` answers in `updated`;
 `comments` and `questions` list every comment and question the call wrote, so
 a reply or a withdrawal needs no read first. A comment or a summary that carried a
-[list](#a-list-on-a-comment) adds its `list_request_id`:
+[list](#a-list-on-a-comment) adds its `list_request_id`, and a comment that named
+other items adds who will hear them as [`mentions`](#mentions):
 
 ```json
 {"claim": true, "update": ["title", "priority"],
@@ -1634,13 +1635,15 @@ end of a link does not.
 `holders` are the holder of the item's claim and of each held step, as `claim_ref`
 and `claimed_by` name them. `told` is there only when they will not hear it:
 `nobody yet: no holder, it stays on the item`, `nobody: closed`, or `nobody: this
-call proved no session`. A batch's `applied.comment` carries the same `mentions`.
+call proved no session`. A batch's `applied.comment`, and each entry of
+`applied.comments`, carries the same `mentions`.
 
 **Reading.** Every comment, in every read, carries `mentions`, the references it
 named, `[]` when it named none. `get_work_item` carries `mentions`, the 5 newest
 comments that named this item, oldest first, and `mentions_total`; with
 `full: true` it carries all of them and no total. The HTTP item read carries the
-newest 50 and the total.
+newest 50 and the total, and so does every answer that is the whole item: the
+HTTP writes and a tool's `verbose` answer.
 
 ```json
 {"comment_id": 61, "from": "MAIN-12", "at": "2026-11-05T20:31:00.000000Z",

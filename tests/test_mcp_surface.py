@@ -2045,11 +2045,13 @@ class CompactWorkItemReadTests(WireCallTestCase):
 
     def test_full_answers_with_the_complete_record(self) -> None:
         answer = self.answer("get_work_item", {"id": self.reference, "full": True})
+        # A whole read carries every comment that told the item, so it counts none.
         self.assertEqual(
-            self.complete,
+            {k: v for k, v in self.complete.items() if k != "mentions_total"},
             {k: v for k, v in answer.items() if k not in ("sessions", "url", "questions")},
         )
         self.assertNotIn("history_truncated", answer)
+        self.assertNotIn("mentions_total", answer)
         self.assertEqual([], answer["sessions"])
 
     def test_comments_after_answers_with_all_that_came_since_and_nothing_before(self) -> None:

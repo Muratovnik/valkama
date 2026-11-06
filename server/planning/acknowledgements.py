@@ -177,6 +177,6 @@ def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
 
 
 def _written_beside(item: dict) -> dict:
-    """What a report's write put beside it: the list under it, when it carried one."""
+    """What a report's write put beside it: the list under it, and who hears the items it named."""
 
-    return {name: item[name] for name in ("list_request_id",) if name in item}
+    return {name: item[name] for name in ("list_request_id", "mentions") if name in item}

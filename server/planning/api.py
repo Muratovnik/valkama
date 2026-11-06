@@ -24,6 +24,7 @@ from . import (
     calls,
     chain,
     live_frame,
+    mention_records,
     migration,
     model,
     read_model,
@@ -561,7 +562,7 @@ def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    """A comment, and in the same write the list it carries."""
+    """A comment, and in the same write the list it carries and the items it tells."""
 
     question = _list(payload)
     if question is not None and (
@@ -569,6 +570,7 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     ):
         raise model.PlanningError("a list stands on a root, and this is a reply")
     with _all_or_nothing(conn):
+        named = _named(conn, payload)
         written = service.comment_work_item(
             conn,
             _text(payload, "id"),
@@ -578,7 +580,9 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             reply_to=_optional_int(payload, "reply_to"),
             reply_to_request=_optional_text(payload, "reply_to_request"),
         )
-        return _with_list(conn, written, int(written["comment_id"]), question, payload)
+        comment_id = int(written["comment_id"])
+        written = _with_mentions(conn, written, comment_id, named, payload)
+        return _with_list(conn, written, comment_id, question, payload)
 
 
 def _list(payload: Mapping[str, object]) -> tuple[str, list[dict]] | None:
@@ -586,6 +590,30 @@ def _list(payload: Mapping[str, object]) -> tuple[str, list[dict]] | None:
 
     value = payload.get("list")
     return None if value is None else requests.list_question(value)
+
+
+def _named(conn: sqlite3.Connection, payload: Mapping[str, object]) -> list[sqlite3.Row]:
+    """The items a comment or a report tells in `mentions`, each checked before it is written."""
+
+    if payload.get("mentions") is None:
+        return []
+    source = read_model.item_row(conn, _text(payload, "id"))
+    return mention_records.targets(conn, source, payload["mentions"])
+
+
+def _with_mentions(
+    conn: sqlite3.Connection,
+    answer: dict,
+    comment_id: int,
+    named: list[sqlite3.Row],
+    payload: Mapping[str, object],
+) -> dict:
+    """The answer of a write, with who will hear each item its comment named."""
+
+    if not named:
+        return answer
+    told = mention_records.record(conn, comment_id, named, _author(payload))
+    return {**answer, "mentions": told}
 
 
 def _with_list(
@@ -703,6 +731,7 @@ def _expire_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
 def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     question = _list(payload)
     with _all_or_nothing(conn):
+        named = _named(conn, payload)
         answer = service.report_work_item(
             conn,
             _text(payload, "id"),
@@ -712,7 +741,9 @@ def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             author=_author(payload),
         )
         # The report this call wrote is the item's newest comment.
-        return _with_list(conn, answer, int(answer["comments"][-1]["id"]), question, payload)
+        comment_id = int(answer["comments"][-1]["id"])
+        answer = _with_mentions(conn, answer, comment_id, named, payload)
+        return _with_list(conn, answer, comment_id, question, payload)
 
 
 def _select_summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -760,7 +791,9 @@ def _author(payload: Mapping[str, object]) -> str | None:
     return value
 
 
-_COMMENT_FIELDS = frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request", "list"})
+_COMMENT_FIELDS = frozenset(
+    {"body", "checklist_item_id", "reply_to", "reply_to_request", "list", "mentions"}
+)
 #: What a batch may change, in the order it applies them, with the fields each
 #: entry may name. The order is the contract: a closing transition is judged
 #: after the ticks and the summary sent beside it. `comment` is the one-entry
@@ -799,8 +832,8 @@ _APPLY_LISTED = frozenset({"checklist_ticks", "comments", "resolutions", "questi
 #: The most entries one list in a batch may hold.
 MAX_APPLY_ENTRIES = 100
 #: What a batch says of each comment it wrote: the comment, the root a reply
-#: joined, and the list it carries when it carries one.
-_COMMENT_ANSWER = ("comment_id", "reply_to", "reply_to_request", "list_request_id")
+#: joined, and the list it carries and who hears the items it named, when it did.
+_COMMENT_ANSWER = ("comment_id", "reply_to", "reply_to_request", "list_request_id", "mentions")
 
 _Step = tuple[str, int, Mapping[str, object]]
 

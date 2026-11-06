@@ -46,6 +46,7 @@
       "reply_to_request": null,
       "by_person": false,
       "resolution": null,
+      "mentions": [],
       "replies": 2,
       "last_reply": {
         "id": 3,
@@ -73,6 +74,7 @@
         "by_person": true,
         "text": "Moved to MAIN-14"
       },
+      "mentions": [],
       "replies": 0,
       "last_reply": null
     },
@@ -89,6 +91,7 @@
       "reply_to_request": null,
       "by_person": false,
       "resolution": null,
+      "mentions": [],
       "replies": 0,
       "last_reply": null
     }
@@ -177,13 +180,36 @@
         "session_id": null,
         "agent_id": null
       }
+    },
+    {
+      "action": "mentioned",
+      "detail": "9",
+      "author": "user",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "confirmed",
+        "source": "browser",
+        "session_id": null,
+        "agent_id": null
+      }
     }
   ],
   "comments_total": 7,
   "threads_total": 3,
   "unresolved_total": 2,
-  "events_total": 7,
+  "events_total": 8,
   "history_truncated": false,
+  "mentions": [
+    {
+      "comment_id": 9,
+      "from": "MAIN-2",
+      "at": "2026-01-02T03:04:05Z",
+      "by_person": true,
+      "author": "user",
+      "quote": "Decided to keep the old route; the contract card can drop it."
+    }
+  ],
+  "mentions_total": 1,
   "sessions": [],
   "questions": {
     "total": 3,

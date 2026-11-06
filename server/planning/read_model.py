@@ -315,7 +315,8 @@ def comment_record(row: sqlite3.Row) -> dict:
     under. `by_person` is true when the interface wrote it, false for any other
     call, and null for a row no call wrote: one older than identity, or the
     runner's. `resolution` is the resolved mark a root carries, or null: never
-    on a reply, which the store refuses to mark.
+    on a reply, which the store refuses to mark. `mentions` is filled in by
+    `with_mentions`, which every read passes its comments through.
     """
 
     return {
@@ -338,13 +339,95 @@ def comment_record(row: sqlite3.Row) -> dict:
             "by_person": _by_person(row["resolved_call_id"], row["resolved_source"]),
             "text": row["resolution"],
         },
+        "mentions": [],
     }
+
+
+def with_mentions(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Comments with the items each named in `mentions`, by reference in the order named.
+
+    One statement for every comment of a read. The record a mention leaves is an
+    event on the item it names, found by the comment's id; on an attached store from
+    before mentions there is none, and every comment named nothing.
+    """
+
+    identities = [int(record["id"]) for record in records]
+    if not identities:
+        return records
+    named: dict[int, list[str]] = {}
+    for row in conn.execute(
+        "SELECT x.detail, s.key, w.number FROM work_item_events x"
+        " JOIN work_items w ON w.work_item_id = x.work_item_id"
+        " JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
+        " WHERE x.action = 'mentioned'"
+        " AND x.detail IN (SELECT CAST(value AS TEXT) FROM json_each(?)) ORDER BY x.id",
+        (json.dumps(identities),),
+    ):
+        named.setdefault(int(row[0]), []).append(model.human_id(str(row[1]), int(row[2])))
+    return [{**record, "mentions": named.get(int(record["id"]), [])} for record in records]
 
 
 def comment(conn: sqlite3.Connection, comment_id: int) -> dict:
     """One comment as every read shows it, for a write to answer with what it left."""
 
-    return comment_record(conn.execute(_COMMENT_ROWS + " WHERE m.id = ?", (comment_id,)).fetchone())
+    row = conn.execute(_COMMENT_ROWS + " WHERE m.id = ?", (comment_id,)).fetchone()
+    return with_mentions(conn, [comment_record(row)])[0]
+
+
+#: How many of the comments that named an item its full record carries, the newest.
+HTTP_MENTIONS = 50
+#: How much of the naming comment a mention record quotes, the ellipsis counted.
+MENTION_QUOTE = 300
+
+
+def mentions_of(
+    conn: sqlite3.Connection, work_item_id: str, limit: int | None
+) -> tuple[list[dict], int]:
+    """The newest `limit` records of comments that named this item, oldest first, and how many."""
+
+    query = (
+        "SELECT e.detail, e.created_at, e.author, e.call_id, c.identity_source,"
+        " m.body, m.report, s.key, w.number"
+        " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
+        " LEFT JOIN work_item_comments m ON m.id = CAST(e.detail AS INTEGER)"
+        " LEFT JOIN work_items w ON w.work_item_id = m.work_item_id"
+        " LEFT JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
+        " WHERE e.work_item_id = ? AND e.action = 'mentioned' ORDER BY e.id DESC"
+    )
+    parameters: tuple[object, ...] = (work_item_id,)
+    if limit is not None:
+        query += " LIMIT ?"
+        parameters = (work_item_id, limit)
+    rows = conn.execute(query, parameters).fetchall()
+    total = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ? AND action = 'mentioned'",
+            (work_item_id,),
+        ).fetchone()[0]
+    )
+    return [_mention_record(row) for row in reversed(rows)], total
+
+
+def _mention_record(row: sqlite3.Row) -> dict:
+    gone = row[7] is None
+    return {
+        "comment_id": int(row[0]),
+        "from": None if gone else model.human_id(str(row[7]), int(row[8])),
+        "at": row[1],
+        "by_person": None if row[3] is None else row[4] == calls.BROWSER,
+        "author": row[2],
+        "quote": None if gone else _mention_quote(str(row[5]), str(row[6])),
+    }
+
+
+def _mention_quote(body: str, report: str) -> str:
+    """The start of what the comment said: its body, or a report's `done`."""
+
+    said = body
+    if report:
+        stored = model.summary(report, required=False)
+        said = str(stored["done"]) if stored else ""
+    return said if len(said) <= MENTION_QUOTE else said[: MENTION_QUOTE - 1] + "…"
 
 
 def _by_person(call: object, source: object) -> bool | None:
@@ -373,12 +456,15 @@ def last_reply(reply: Mapping[str, object] | None) -> dict | None:
 def request_replies(conn: sqlite3.Connection, request_id: str) -> list[dict]:
     """Every reply under a question, oldest first, each as every read shows a comment."""
 
-    return [
-        comment_record(row)
-        for row in conn.execute(
-            _COMMENT_ROWS + " WHERE m.reply_to_request = ? ORDER BY m.id", (request_id,)
-        )
-    ]
+    return with_mentions(
+        conn,
+        [
+            comment_record(row)
+            for row in conn.execute(
+                _COMMENT_ROWS + " WHERE m.reply_to_request = ? ORDER BY m.id", (request_id,)
+            )
+        ],
+    )
 
 
 def request_threads(
@@ -471,14 +557,17 @@ def _with_replies(conn: sqlite3.Connection, roots: list[sqlite3.Row]) -> list[di
             (json.dumps([row["newest"] for row in roots if row["newest"] is not None]),),
         )
     }
-    return [
-        {
-            **comment_record(row),
-            "replies": int(row["replies"]),
-            "last_reply": last_reply(newest.get(row["newest"])),
-        }
-        for row in roots
-    ]
+    return with_mentions(
+        conn,
+        [
+            {
+                **comment_record(row),
+                "replies": int(row["replies"]),
+                "last_reply": last_reply(newest.get(row["newest"])),
+            }
+            for row in roots
+        ],
+    )
 
 
 def _one_thread(
@@ -500,12 +589,15 @@ def _one_thread(
             " get_work_item_request reads that thread"
         )
     root = int(named["reply_to"] or comment_id)
-    return [
-        comment_record(row)
-        for row in conn.execute(
-            _COMMENT_ROWS + " WHERE m.id = ? OR m.reply_to = ? ORDER BY m.id", (root, root)
-        )
-    ]
+    return with_mentions(
+        conn,
+        [
+            comment_record(row)
+            for row in conn.execute(
+                _COMMENT_ROWS + " WHERE m.id = ? OR m.reply_to = ? ORDER BY m.id", (root, root)
+            )
+        ],
+    )
 
 
 def _exclusive(**cuts: object) -> None:
@@ -645,16 +737,19 @@ def present(
         )
         shown_threads = len(record["comments"])
     else:
-        record["comments"] = [
-            comment_record(item)
-            for item in _newest(
-                conn,
-                _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ?",
-                "m.id",
-                (identity, comments_after),
-                comments,
-            )
-        ]
+        record["comments"] = with_mentions(
+            conn,
+            [
+                comment_record(item)
+                for item in _newest(
+                    conn,
+                    _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ?",
+                    "m.id",
+                    (identity, comments_after),
+                    comments,
+                )
+            ],
+        )
     record["events"] = [
         {
             "action": event["action"],
@@ -689,6 +784,9 @@ def present(
             if shown_threads is not None
             else len(record["comments"]) < counts["comments_total"]
         ) or len(record["events"]) < events_total
+    # The comments elsewhere that named it, which every full record carries:
+    # a write's answer is the same record a read gives.
+    record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
     return record
 
 

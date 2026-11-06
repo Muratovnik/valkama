@@ -629,6 +629,14 @@ def _where(entry: dict) -> str:
     kind = entry["kind"]
     if kind in ("thread_resolved", "thread_reopened"):
         return f" on thread #{entry['comment_id']}"
+    if kind == "mentioned":
+        # The comment that named this item stands on another one, where its thread is.
+        where = entry.get("from")
+        return (
+            f" from {where} #{entry['comment_id']}"
+            if where
+            else f" from comment #{entry['comment_id']}"
+        )
     if kind != "reply":
         return ""
     root = entry.get("reply_to")

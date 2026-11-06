@@ -102,6 +102,18 @@ checkouts are therefore distinguishable even at the same version.
   reopens; a list on a closed item, or in the call that closes it, is refused. A merge
   moves a list with its comment, so a report's list stays with the report. See
   [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
+- **A comment can tell the work on other items.** A number in a comment's text stays a
+  link and tells nobody. `POST /api/planning/work-item/comment`, `comment_work_item`,
+  `report_work_item` and the batch's `comment` and `comments` take `mentions`, up to 20
+  items, on a root or a reply; naming the comment's own item, an item twice or a missing
+  one is refused. Each item named keeps a `mentioned` event pointing to the comment, and the
+  answer says per item who holds it and, in `told`, why nobody will hear it. A person's
+  mention is a person's act on the item named: its holders hear it in `from_person` and in
+  the hook's notice («mentioned … from MAIN-12 #61»), an idle holder is woken, and a close
+  is refused with `person_spoke` until an agent writes there. Every comment now carries the
+  items it named in `mentions`, and the read of an item carries the comments that named
+  it, the newest 5 for `get_work_item` and 50 over HTTP, with `mentions_total`. See
+  [Mentions](docs/connection-contract.md#mentions).
 
 ### Changed
 

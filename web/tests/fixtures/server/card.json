@@ -64,7 +64,8 @@
             "reply_to": null,
             "reply_to_request": null,
             "by_person": false,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
           },
           {
             "id": 2,
@@ -78,7 +79,8 @@
             "reply_to": 1,
             "reply_to_request": null,
             "by_person": true,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
           },
           {
             "id": 3,
@@ -92,7 +94,8 @@
             "reply_to": 1,
             "reply_to_request": null,
             "by_person": false,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
           },
           {
             "id": 4,
@@ -111,7 +114,8 @@
               "by": "user",
               "by_person": true,
               "text": "Moved to MAIN-14"
-            }
+            },
+            "mentions": []
           },
           {
             "id": 5,
@@ -125,7 +129,8 @@
             "reply_to": null,
             "reply_to_request": "00000000-0000-4000-8000-000000000005",
             "by_person": false,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
           },
           {
             "id": 6,
@@ -139,7 +144,8 @@
             "reply_to": null,
             "reply_to_request": "00000000-0000-4000-8000-000000000005",
             "by_person": true,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
           },
           {
             "id": 7,
@@ -153,7 +159,8 @@
             "reply_to": null,
             "reply_to_request": null,
             "by_person": false,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
           }
         ],
         "events": [
@@ -240,8 +247,31 @@
               "session_id": null,
               "agent_id": null
             }
+          },
+          {
+            "action": "mentioned",
+            "detail": "9",
+            "author": "user",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "browser",
+              "session_id": null,
+              "agent_id": null
+            }
           }
         ],
+        "mentions": [
+          {
+            "comment_id": 9,
+            "from": "MAIN-2",
+            "at": "2026-01-02T03:04:05Z",
+            "by_person": true,
+            "author": "user",
+            "quote": "Decided to keep the old route; the contract card can drop it."
+          }
+        ],
+        "mentions_total": 1,
         "agents": [],
         "last_claim_executor": {
           "session": null,

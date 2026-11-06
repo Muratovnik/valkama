@@ -127,7 +127,25 @@
             "reply_to": null,
             "reply_to_request": null,
             "by_person": false,
-            "resolution": null
+            "resolution": null,
+            "mentions": []
+          },
+          {
+            "id": 9,
+            "kind": "comment",
+            "report": null,
+            "checklist_item_id": null,
+            "checklist_item_text": null,
+            "author": "user",
+            "body": "Decided to keep the old route; the contract card can drop it.",
+            "at": "2026-01-02T03:04:05Z",
+            "reply_to": null,
+            "reply_to_request": null,
+            "by_person": true,
+            "resolution": null,
+            "mentions": [
+              "MAIN-1"
+            ]
           }
         ],
         "events": [
@@ -204,6 +222,8 @@
             }
           }
         ],
+        "mentions": [],
+        "mentions_total": 0,
         "agents": [
           {
             "agent_id": "b5e3d9a2f1c4b308",

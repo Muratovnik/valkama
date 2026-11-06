@@ -18,7 +18,17 @@ import json
 import sqlite3
 
 from . import agents as planning_agents
-from . import calls, leases, model, ranking, read_model, request_model, states, store, transitions
+from . import (
+    calls,
+    leases,
+    model,
+    ranking,
+    read_model,
+    request_model,
+    states,
+    store,
+    transitions,
+)
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -33,7 +43,6 @@ MAX_LIST_PAGE = 1000
 
 #: The same bound for one page of a search.
 MAX_SEARCH_PAGE = 200
-
 
 # -- reading -----------------------------------------------------------------
 
@@ -96,7 +105,9 @@ def get_work_item(
     `sessions` adds the agent sessions whose confirmed calls wrote to it, and
     `agents` the agents standing on it and an `executor` at the claim, each step
     and each agent, which only the card asks for. Without any of these the answer
-    is the complete record a screen draws from.
+    is the complete record a screen draws from. Every form carries `mentions`, the
+    newest `read_model.HTTP_MENTIONS` comments on other items that named this one, oldest
+    first, and `mentions_total`.
     """
 
     record = read_model.present(

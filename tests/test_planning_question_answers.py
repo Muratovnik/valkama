@@ -554,6 +554,7 @@ class FullFormTests(AnswerCase):
                 "reply_to_request": request["request_id"],
                 "by_person": None,
                 "resolution": None,
+                "mentions": [],
             },
             read["replies"][0],
         )

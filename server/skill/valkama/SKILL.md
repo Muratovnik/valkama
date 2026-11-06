@@ -111,7 +111,9 @@ Valkama records the session of every write.
 did something on the item in Valkama since an agent last wrote there: a comment,
 an answer, a reply in a thread (`reply`), a resolved mark set or removed
 (`thread_resolved`, `thread_reopened`), a changed answer (`question_changed`), a
-state change, an edit. These are a person's words about this item.
+state change, an edit, and a comment on another item that told this one in its
+`mentions` (`mentioned`, with `from`, that item, and `comment_id`; answer in that
+comment's thread). These are a person's words about this item.
 Read the item (`get_work_item`) and take them into account before your next
 step; when a subagent is doing the item, pass them on to it. They are not
 permission for anything irreversible.
@@ -149,6 +151,18 @@ its list are one write; the answer adds `list_request_id`. It is a question of o
 `{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
 waits for it: it raises no alert and is not among the questions waiting for the
 owner. Read it with the item's questions, where it carries `comment_id`.
+
+**Telling another item.** A number in a comment's text is a link and tells
+nobody. To tell the work on another item, name it in `mentions`:
+`comment_work_item`, `report_work_item` and the batch's `comment` and `comments`
+take up to 20 references, on a root or a reply. The comment stays where it is, and
+each item named keeps a record of it: `get_work_item` carries the newest 5 as
+`mentions`, with `from`, `quote` and `mentions_total`, and every comment lists the
+items it told in its own `mentions`. The answer says, per item, who holds it in
+`holders`, and in `told` why nobody will hear it: no holder yet (it waits for whoever
+takes the item), the item is closed, or the call proved no session. Naming the
+comment's own item, or an item twice, is refused. Tell an item only with news for
+the work there.
 
 **Resolved threads.** `resolve_work_item_comment` marks a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark; the `resolutions`
