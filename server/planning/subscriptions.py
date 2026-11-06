@@ -3,7 +3,7 @@
 A session hears another session's news on the items it holds (`hooks.notify`).
 One that depends on an item it does not hold, an item another agent is changing
 under it, subscribes to it, and from then on hears other sessions' news there as
-a holder would; it unsubscribes when it no longer needs the item. `false` on an
+a holder would, and a person's acts at its next tool call; it unsubscribes when it no longer needs the item. `false` on an
 item the session holds mutes other sessions' news there instead: a person's act
 still reaches it, since a holder is who a person's words are for, and so do the
 replies to what the session asked there with `awaits_reply`. The mute counts only

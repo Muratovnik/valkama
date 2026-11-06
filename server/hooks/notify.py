@@ -17,7 +17,9 @@ holds, because it keeps the whole and hands work out. A subagent is told about
 the items where it holds the claim or a step itself. Beside the holders, whoever
 started a thread hears the replies in it and whoever asked a question hears its
 answer, even on an item they hold nothing of, and so does their orchestrator.
-Every recipient is told each event once.
+A session that subscribed to an item (`planning.subscriptions`) hears a person's
+acts there at its next tool call, read from the place other sessions' news keeps,
+so they never wake it. Every recipient is told each event once.
 
 What another agent session wrote is not a person's act, and it is told apart, in
 a block of its own that names the session it came from, and only at `PostToolUse`
@@ -583,8 +585,8 @@ def collect(
 
     A holder hears everything a person did. So does a recipient that held the item
     when it last read it, once, so the write that took it away, a person cancelling
-    the item or taking the claim, is told too. Anybody else hears only what is
-    addressed to it.
+    the item or taking the claim, is told too. Anybody else hears here only what is
+    addressed to it; a subscriber hears the rest with other sessions' news.
 
     Other sessions' news is read from a place of its own, and only when `agents`: a
     reader without it, the `Stop` hook or the watcher, leaves that place where it
@@ -746,6 +748,8 @@ def _read(
         holds=holds,
         muted=listens == MUTED,
     )
+    if listens == ALL and not (holds or (mark is not None and mark[2])):
+        spoken += _followed(conn, item, heard, newest, session_id, agent_id)
     if holds and signature[3]:
         # A blocker's state: a person's close is the person's news and wakes, the rest of a
         # person's changes wait with other sessions' news for a tool call; another
@@ -761,7 +765,43 @@ def _read(
                     spoken.append(_at_call(entry, call))
             elif call > heard and listens != MUTED and entry["session"] != session_id:
                 spoken.append(_at_call(entry, call))
+    spoken.sort(key=lambda entry: entry["call"])
     return told, spoken, after, heard
+
+
+def _followed(
+    conn: sqlite3.Connection,
+    item: str,
+    heard: int,
+    newest: int,
+    session_id: str,
+    agent_id: str | None,
+) -> list[dict]:
+    """A person's acts on an item this recipient follows and does not hold, but for
+    what is addressed to it: those wait with other sessions' news, for a tool call.
+
+    The person's place moves at `Stop` and in the watcher, and what it reads there
+    wakes, so a subscriber's share of a person's news is read from the other place,
+    as another session's is, and wakes nobody. What is addressed to the recipient, a
+    reply in its thread or the answer it awaited, is the person's part, and wakes as
+    it did. The kinds are other sessions' kinds: no field edit and no rank.
+    """
+
+    from ..planning import person_events
+
+    found = [
+        _at_call(entry, call)
+        for call, entry in person_events.since_call(conn, item, heard, with_edits=False)
+        if call <= newest
+    ]
+    addressed = {
+        id(entry)
+        for entry in _for_recipient(conn, item, list(found), session_id, agent_id, whole=False)
+    }
+    rest = [entry for entry in found if id(entry) not in addressed]
+    for entry in rest:
+        entry["followed"] = True
+    return rest
 
 
 def _at_call(entry: dict, call: int) -> dict:
@@ -935,11 +975,18 @@ def render(news: list[tuple[str, str, list[dict]]], *, orchestrator: bool, wake:
         if wake
         else "Valkama notice: a person"
     )
-    whose = (
-        "this session holds or threads it started"
-        if orchestrator
-        else "you hold or threads you started"
-    )
+    if any(entry.get("followed") for _reference, _title, entry in events):
+        whose = (
+            "this session holds, follows or started threads on"
+            if orchestrator
+            else "you hold, follow or started threads on"
+        )
+    else:
+        whose = (
+            "this session holds or threads it started"
+            if orchestrator
+            else "you hold or threads you started"
+        )
     first = f"{head} acted in the Valkama interface on work {whose}."
     last = [
         "Before your next step on these items, read each with get_work_item: the whole text"

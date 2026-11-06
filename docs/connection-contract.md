@@ -928,7 +928,9 @@ deleted item takes its pin with it, and an export carries the pins as
 **Since 2.6.** An agent session hears what other sessions write on the items it
 holds (see the [hook contract](hook-contract.md#another-agent-sessions-news)). A
 session that depends on an item it does not hold subscribes to it, and hears that
-item's news as a holder would; it unsubscribes when it no longer needs the item.
+item's news as a holder would, a person's acts there included, though those wait
+for its next tool call and never wake it; it unsubscribes when it no longer needs
+the item.
 There is no tool of its own: the `subscribe` group of `apply_work_item_changes`
 takes a boolean, and `applied.subscribe` says what now stands:
 

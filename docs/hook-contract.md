@@ -400,6 +400,13 @@ Codex proves its session in every call.
   started and answers to questions it asked, even on items where it holds
   nothing. A subagent that holds nothing and started nothing is told nothing:
   give the work you hand out a step it claims.
+- **A session subscribed to the item**, since 2.6, hears a person's acts there
+  too, the kinds another session's news is told by: no field edit and no rank.
+  They come in the person's block at its next tool call or prompt, and never wake
+  it or continue its turn, since a person's words are the holder's to act on. What
+  is addressed to it, a reply in its thread or the answer it awaited, is told and
+  wakes as on any item it does not hold. See
+  [Subscriptions](connection-contract.md#subscriptions).
 - **An item that stopped being held** by the last write, a person cancelling it
   or taking the claim, is told once more in full, and after that only what is
   addressed to the recipient.
@@ -458,7 +465,8 @@ the same rules as a person's act and beside the mentions above:
   the agent that asked a question for its answer, decline or change, and a holder
   the last write took the item from, once more. Beside them, **a session
   subscribed to the item** hears everything a holder would, an orchestrator for
-  what any of its agents subscribed to and a subagent for its own. See
+  what any of its agents subscribed to and a subagent for its own, and a
+  person's acts there [at its next tool call](#who-is-told). See
   [Subscriptions](connection-contract.md#subscriptions).
 - **A mute.** A holder that set `subscribe: false` on its item hears no other
   session's news there, mentions included, while it holds the item. A person's act
@@ -580,7 +588,10 @@ model's own description and is kept to the one place the store holds it:
 `thread_resolved` quotes the decision, and `question_changed` quotes
 [what changed](connection-contract.md#the-difference-between-two-answers), row by
 row. A person's `mentioned` names the item and the comment that named this one. A
-subagent's notice says "work you hold or threads you started".
+subagent's notice says "work you hold or threads you started". When it carries a
+person's act on an item the session only follows, the head says "work this session
+holds, follows or started threads on", and "you hold, follow or started threads on"
+for a subagent.
 
 **Another agent session's news** comes in a second block, after the person's,
 under a heading of its own that never says a person acted. A block of mentions

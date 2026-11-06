@@ -42,6 +42,8 @@ THIRD = "019a3c2e-4444-7c11-9e0f-2f4b6d8a1c3e"
 AS_THIRD = {"sessionId": THIRD}
 FROM_AGENTS = "Valkama notice from agents, not from a person:"
 COMMENT = "/api/planning/work-item/comment"
+TRANSITION = "/api/planning/work-item/transition"
+UPDATE = "/api/planning/work-item/update"
 
 
 class Harness(unittest.TestCase):
@@ -261,6 +263,39 @@ class WhoListensTests(Harness):
         told = self.hook()
         assert told is not None, "no longer held, the item is heard as any other"
         self.assertIn(f"by session {A}, in your thread #{root}: «In B's thread, marker MR-1»", told)
+
+    def test_a_subscriber_hears_a_persons_acts_at_its_next_call_and_is_not_woken(self) -> None:
+        self.set_up_b()
+        self.assertIsNone(self.hook(event="stop"), "B is idle now")
+        self.person(COMMENT, id=self.followed, body="A person, marker PS-1")
+        self.person(TRANSITION, id=self.followed, state="backlog", force=True)
+        self.person(UPDATE, id=self.followed, title="Retitled by a person")
+        self.assertIsNone(
+            self.hook(event="stop"), "a person's act on a followed item continues no turn"
+        )
+        self.assertEqual((0, b""), self.watch(alive=1.0), "nor wakes")
+        told = self.hook()
+        assert told is not None, "not lost while it waited"
+        self.assertIn(
+            "a person acted in the Valkama interface on work this session holds, follows", told
+        )
+        self.assertIn(f"{self.followed} ", told)
+        self.assertIn("marker PS-1", told)
+        self.assertIn("- status at", told)
+        self.assertNotIn("- edited at", told, "a field edit is not told to a subscriber")
+        self.assertNotIn(FROM_AGENTS, told)
+        self.assertIsNone(self.hook(), "once")
+
+    def test_a_persons_reply_in_a_subscribers_own_thread_still_wakes_it(self) -> None:
+        self.set_up_b()
+        root = self.comment(AS_B, self.followed, "Asked on the item I follow")
+        self.assertIsNone(self.hook())
+        self.assertIsNone(self.hook(event="stop"), "B is idle now")
+        self.person(COMMENT, id=self.followed, body="Answer, marker PS-2", reply_to=root)
+        told = self.hook(event="stop")
+        assert told is not None, "what is addressed to it is the person's news, as before"
+        self.assertIn("marker PS-2", told)
+        self.assertIsNone(self.hook(), "and it is told once")
 
     def test_a_subagents_subscription_tells_it_and_its_orchestrator(self) -> None:
         self.agent("claim_work_item", AS_B, id=self.held)

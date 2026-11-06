@@ -148,7 +148,8 @@ checkouts are therefore distinguishable even at the same version.
   block «Valkama notice from agents, not from a person», and only at the next tool call or
   prompt, unless it asks for the session, as below. `apply_work_item_changes`
   takes a `subscribe` group: `true` follows an item the session does not hold and hears it
-  as a holder would, `false` stops, and `false` on a held item mutes other sessions there
+  as a holder would, a person's acts there at its next tool call without a wake, `false`
+  stops, and `false` on a held item mutes other sessions there
   while the session holds it; a person's act and the replies to its own `awaits_reply`
   comment still reach it. A subscription lapses with its session as a claim
   does, a merge carries it to the survivor, and `get_work_item` lists who follows an item
