@@ -340,12 +340,17 @@ checkouts are therefore distinguishable even at the same version.
 - **The board keeps its shapes in high-contrast mode, and its targets and edges on a
   phone.** With a Windows contrast theme on, tiles, columns, the cells of an epic's row,
   the list, the workspace panel and the settings sheet draw an edge instead of losing it
-  with their background; a toggle such as «By epic» or «Available», a picked filter, the
-  chain chip and the menu's «all / any» read as buttons rather than as plain words; and the
-  connection dot of the narrow sidebar no longer disappears. On a phone, the «+» for new
-  work and the other icons in a toolbar, the comment editor's formatting icons included,
-  answer a tap across 44 px, and an epic's row that wraps starts its counts under the epic's
-  number instead of left of its arrow.
+  with their background, on every page and on every side; a tile reached with the keyboard
+  keeps that edge and shows its focus ring inside it, in the theme's highlight colour; a
+  toggle such as «By epic» or «Available», a picked filter, the chain chip and the menu's
+  «all / any» read as buttons rather than as plain words; and the connection dot of the
+  narrow sidebar no longer disappears. On a phone, the «+» for new work, the grouping
+  toggle when it shows only its glyph and the other icons in a toolbar, the comment
+  editor's formatting icons included, answer a tap across 44 px; the editor's «Text /
+  Preview» switch, when it moves to a second line, stands at that line's end; and an epic's
+  row that wraps starts its counts under the epic's number instead of left of its arrow. On
+  a wide board an epic's row keeps its counts beside its title, shortening the title before
+  it wraps, and its «Open» and «Chain» buttons no longer leave a blank band under it.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
