@@ -64,8 +64,9 @@ for (const [width, oneRow] of [
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
     expect(pageOverflow, 'the page itself never scrolls sideways').toBeLessThanOrEqual(0)
-    // Where the board has room, a long title gives way and the lane's actions stay on its
-    // heading's row; on a phone they end a line the counts stand on, never one of their own.
+    // Where the board has room, a long title gives way and the heading keeps one row; on a
+    // phone it wraps, and the actions end the counts' line or stand beside the title, never
+    // on a line of their own.
     const head = lanes.nth(0)
     const [toggleRow, countsRow, actionsRow] = await Promise.all(
       ['.lane-toggle', '.lane-counts', '.lane-actions'].map(async (part) => {
@@ -73,7 +74,7 @@ for (const [width, oneRow] of [
         return Math.round((box?.y ?? 0) + (box?.height ?? 0) / 2)
       }),
     )
-    expect(Math.abs(toggleRow - actionsRow) <= 2, `heading on one row at ${width}px`).toBe(oneRow)
+    expect(Math.abs(toggleRow - countsRow) <= 2, `heading on one row at ${width}px`).toBe(oneRow)
     expect(
       Math.min(Math.abs(toggleRow - actionsRow), Math.abs(countsRow - actionsRow)),
       `the actions share a line at ${width}px`,

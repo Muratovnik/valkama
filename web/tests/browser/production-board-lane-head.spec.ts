@@ -25,16 +25,18 @@ const WIDTHS = [320, 350, 390, 430, 480, 530, 560, 600, 680, 760, 900, 1024, 128
 
 /**
  * The least a long title keeps whole, and the most lines its heading takes, where a reader
- * counts them, with work out of sight to the right. The base drew 16 letters at 320px, 27 at
- * 390px and 82 at 1280px, in at most three lines, two and two, only by laying the actions over
- * the counts. Then the actions kept a place of their own and the heading took five lines at
- * 320px, up to five at 390px and two at 1280px. Now beside the title on a full line, the
- * actions cost it letters at 390px instead of a line: 13 or 14 of its 27 stay.
+ * counts them, with work out of sight to the right, in the built app and its fonts. The base
+ * drew 15 letters at 320px, 25 at 390px and 68 or more at 1280px, in at most three lines, two
+ * and two, only by laying the actions over the counts. Then the actions kept a place of their
+ * own and the heading took five lines at 320px, up to five at 390px and two at 1280px. Now
+ * beside the title on a full line, the actions cost it letters at 390px instead of a line: 12
+ * or 13 of its 25 stay in English. At 1280px a heading the base drew on two lines takes one,
+ * and its title gives up its end: 64 letters or more stay.
  */
 const LONG_TITLES = new Map([
-  [320, { letters: 16, lines: 3 }],
-  [390, { letters: 13, lines: 3 }],
-  [1280, { letters: 66, lines: 1 }],
+  [320, { letters: 15, lines: 3 }],
+  [390, { letters: 12, lines: 3 }],
+  [1280, { letters: 64, lines: 1 }],
 ])
 
 async function openWide(page: Page, width: number) {
