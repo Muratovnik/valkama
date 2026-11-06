@@ -219,7 +219,10 @@ describe('a path', () => {
     const { wrapper } = drawn([strong('docs/plans/x.md')])
     await flushPromises()
     const path = wrapper.get('.rich-reference')
-    expect(path.html()).toContain('docs/<wbr>plans/<wbr>x.md')
+    // Each piece ending in a `/` carries the break, drawn by CSS rather than written as
+    // an element of its own: a `<wbr>` put a space into the link's accessible name.
+    expect(path.findAll('.slash-break').map((piece) => piece.text())).toEqual(['docs/', 'plans/'])
+    expect(path.find('wbr').exists()).toBe(false)
     expect(path.text()).toBe('docs/plans/x.md')
   })
 })

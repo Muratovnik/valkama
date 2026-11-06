@@ -225,7 +225,8 @@ checkouts are therefore distinguishable even at the same version.
   A title now also breaks after each `/`, in the list, on the board, on the graph, at the
   head of a card, on the hover card, in search, among a card's links and in the picker of
   related work. A single word wider than the line still breaks inside, rather than
-  running past the edge.
+  running past the edge. A screen reader reads the title, and a copy takes it, as it
+  was written, with no space after a `/`.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field

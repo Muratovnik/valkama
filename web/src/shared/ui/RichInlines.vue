@@ -30,21 +30,26 @@ import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
 import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
-import { slashPieces } from '@/shared/ui/slashBreaks.ts'
+import { SLASH_BREAK, slashPieces } from '@/shared/ui/slashBreaks.ts'
 
 const props = defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
 
 type ReferenceNode = Extract<RichInline, { kind: 'reference' }>
 
-/** A reference's words; a path's with a place to break after each `/`, which adds no character. */
-const ReferenceWords: FunctionalComponent<{ path: boolean; text: string }> = ({ path, text }) =>
-  h(
+/**
+ * A reference's words; a path's with a place to break after each `/` that is not text, so
+ * neither its copy nor its name gains a character (`slashBreaks.ts`).
+ */
+const ReferenceWords: FunctionalComponent<{ path: boolean; text: string }> = ({ path, text }) => {
+  const pieces = path ? slashPieces(text) : [text]
+  return h(
     Fragment,
-    path
-      ? slashPieces(text).flatMap((piece, index) => (index ? [h('wbr'), piece] : [piece]))
-      : [text],
+    pieces.map((piece, index) =>
+      index < pieces.length - 1 ? h('span', { class: SLASH_BREAK }, piece) : piece,
+    ),
   )
+}
 
 const resolve = useReferenceLinks()
 /** What a reference links to here, or null where it is text. */

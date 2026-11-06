@@ -70,6 +70,13 @@ table {
   clip-path: inset(50%);
 }
 
+/* A place to break after a `/` that is not text (`slashBreaks.ts`): a zero-width space
+   drawn with empty alternative text, so neither a copy nor an accessible name gains a
+   character. A `<wbr>` gave Chromium's accessible name a space at each break. */
+.slash-break::after {
+  content: '\200B' / '';
+}
+
 html,
 body,
 #app {
