@@ -204,7 +204,9 @@ checkouts are therefore distinguishable even at the same version.
   the rows do and the chevron ends the line after the count, pointing down while folded and
   up while open. What a point's answer opens, its steps or its way, stood at a third edge
   between them; it now starts under the point's words, and an answered review sets it in
-  by the step its reply is set in, the same step every reply and quote in the thread uses.
+  by the step its reply is set in, the same step every reply and quote in the thread uses. The
+  chevron now sits on the line of the title, also when the title wraps, and in a forced palette
+  it is drawn in the system ink, so it stays visible.
 - **An entry's time stands under its author on a phone, not in the middle of the line.**
   Where a question's or a comment's icons took the end of its head, the time that no longer
   fitted beside the name dropped to a line of its own and kept to the end of the words,

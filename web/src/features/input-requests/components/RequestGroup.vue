@@ -116,6 +116,13 @@ const bodyId = `${id}-body`
   block-size: 1lh;
   color: var(--color-text-muted);
 
+  /* A forced palette clears the ground and leaves a glyph its own muted ink, so the chevron
+     that says open or closed names the system ink itself (DESIGN.md, the forced palette). */
+  @media (forced-colors: active) {
+    color: CanvasText;
+    forced-color-adjust: none;
+  }
+
   [aria-expanded='true'] > & {
     rotate: 180deg;
   }

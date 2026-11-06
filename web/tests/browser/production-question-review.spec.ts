@@ -72,6 +72,9 @@ const drawnCentre = (mark: Locator) =>
     return rect.top + rect.height / 2
   })
 
+/** The stroke a mark is drawn in, as the computed style names it. */
+const strokeOf = (mark: Locator) => mark.evaluate((node) => getComputedStyle(node).stroke)
+
 /** Each group head whose chevron is more than a pixel off its title's first line. */
 async function headsOffTheLine(heads: Locator) {
   const off: string[] = []
@@ -104,6 +107,21 @@ for (const width of WIDTHS) {
     const wrapped = await firstLine(first)
     expect(wrapped.lines, 'the wrapped title').toBeGreaterThan(1)
     expect(await headsOffTheLine(heads.first()), `wrapped, at ${width}`).toEqual([])
+  })
+
+  test(`a group's chevron takes the system colour of a point's, in a forced palette, at ${width}`, async ({
+    page,
+  }) => {
+    const { card } = await openReview(page, width)
+    await page.emulateMedia({ forcedColors: 'active' })
+    const point = await strokeOf(card.locator('.request-point-glyph path').first())
+    const groups = card.locator('.request-group-glyph path')
+    await expect(groups).toHaveCount(5)
+    const strokes: string[] = []
+    for (const glyph of await groups.all()) strokes.push(await strokeOf(glyph))
+    expect(strokes, `group chevrons against the point's ${point} at ${width}`).toEqual(
+      Array.from({ length: 5 }, () => point),
+    )
   })
 
   test(`the review scrolls nothing sideways and shows no backticks, at ${width}`, async ({
