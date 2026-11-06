@@ -18,6 +18,8 @@
  * words after it are bare, a way to the session where there is one: a plate of the same
  * weight as the chips above it made the row one more chip. The lease is a tooltip and, when
  * nobody is behind it any more, a warning dot: a detail of the holder, not a fact of its own.
+ * The other sessions that follow the item stand under it, a note on that row with a label of
+ * the same ink, each printed as its claim's holder would be and kept whole on its line.
  *
  * Every row stands at the height of the state's own chip, so a head reads the same whichever
  * facts are present and however they wrap. The action ends the second row where the drawer
@@ -41,7 +43,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { holderName } from '@/shared/lib/actor.ts'
+import { holderName, sessionHolder } from '@/shared/lib/actor.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -143,6 +145,20 @@ const holderTitle = computed(
 const holderExecutor = computed(() =>
   props.item.state.is_terminal ? props.item.last_claim_executor : props.item.claim?.executor,
 )
+
+/**
+ * The sessions that follow the item, each labelled as its claim would be and printed as the
+ * holder is, a comma after all but the last; the holder's row names its own.
+ */
+const followers = computed(() => {
+  const labels = (props.item.subscribers ?? [])
+    .map(({ client, session, agent }) => sessionHolder(client, session, agent))
+    .filter((label) => label !== holder.value)
+  return labels.map((label, index) => ({
+    label,
+    words: index < labels.length - 1 ? `${holderName(label)},` : holderName(label),
+  }))
+})
 
 function when(value: string): string {
   const date = new Date(value)
@@ -271,6 +287,19 @@ defineExpose({ actionCell })
         @take-over="emit('take-over')"
       />
     </div>
+    <p
+      v-if="followers.length"
+      class="card-subscribers"
+    >
+      <span class="card-holder-label">{{ t('workItem.head.subscribers') }}</span>
+      <span
+        v-for="follower in followers"
+        :key="follower.label"
+        class="card-subscriber"
+        :title="follower.label"
+        >{{ follower.words }}</span
+      >
+    </p>
     <MissingPlaces class="card-missing" />
     <ul
       v-if="item.labels.length"
@@ -376,6 +405,29 @@ defineExpose({ actionCell })
   &:empty {
     display: none;
   }
+}
+
+/* Who else follows the item: a note on the holder's row, as the missing places are below. The
+   names wrap between them, never inside one, and a line that wraps starts where the label does;
+   only a name wider than the whole line gives way, as the holder's does. */
+.card-subscribers {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  margin: calc(var(--space-1) - var(--space-3)) 0 0;
+}
+
+.card-subscriber {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A note on the holder's row rather than a row of its own, so it stands closer to it. */

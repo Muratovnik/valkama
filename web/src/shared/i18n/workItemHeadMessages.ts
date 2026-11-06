@@ -18,6 +18,7 @@ export const workItemHeadMessages = {
       state: 'State: {state}. Move to another state',
       epic: 'Epic — take a task from it',
       holder: 'Held by',
+      subscribers: 'Subscribed',
     },
   },
   ru: {
@@ -32,6 +33,7 @@ export const workItemHeadMessages = {
       state: 'Состояние: {state}. Перевести в другое',
       epic: 'Эпик — возьмите задачу из него',
       holder: 'Исполняет',
+      subscribers: 'Подписаны',
     },
   },
 } as const

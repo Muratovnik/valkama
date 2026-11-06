@@ -1233,8 +1233,11 @@ glyph and word, and the epic. The second is who is on it: a label in the quiet i
 «Исполняет», or «Ранее отвечал» on finished work, then the holder as bare words,
 shortened to its name and the start of its session with the whole value and its lease
 in a tooltip and a warning dot once nobody is behind it. A plate there read as one more
-chip of the row above. The third row is the labels, and an item with none has no such
-row and none of its room. Every fact stands at one height, the state chip's, so a wrap
+chip of the row above. Under it, as a note on that row, «Подписаны» in the same quiet
+ink names the other sessions that follow the item, each as its claim's holder would print,
+a name moving to the next line whole and only one wider than the line giving way; with
+nobody following there is no such line. The third row is the labels, and an item with none
+has no such row and none of its room. Every fact stands at one height, the state chip's, so a wrap
 adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
 labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
