@@ -198,8 +198,17 @@ for (const width of [1500, 390]) {
     await expect(frame.locator('button.graph-frame-open')).toHaveAccessibleName(
       `Эпик MAIN-${EMPTY} «${LONG_TITLE}» · Нет задач`,
     )
-    // One height with any other folded epic, so its neighbours and lines keep their grid.
-    expect(await heightOf(frame)).toBe(await heightOf(frameOf(page, CROWDED)))
+    // As tall as its own lines: its counts and the header's padding, no room for an edge.
+    const [height, lines] = await frame.evaluate((element) => {
+      const counts = element.querySelector('.graph-frame-counts') as HTMLElement
+      const head = element.querySelector('.graph-frame-head') as HTMLElement
+      const padding = Number.parseFloat(getComputedStyle(head).paddingBottom)
+      return [
+        (element as HTMLElement).offsetHeight,
+        counts.offsetTop + counts.offsetHeight + padding,
+      ]
+    })
+    expect(height).toBeCloseTo(lines, 0)
   })
 }
 
@@ -347,6 +356,17 @@ async function nearerThanFar(page: Page) {
     await zoomIn.click()
 }
 
+/** Where a header's edge starts across, and how far over the header's foot it ends. */
+function edgeAtFoot(page: Page, n: number) {
+  return frameOf(page, n).evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const scale = box.width / (element as HTMLElement).offsetWidth
+    const head = (element.querySelector('.graph-frame-head') as HTMLElement).getBoundingClientRect()
+    const edge = (element.querySelector('.frame-progress') as HTMLElement).getBoundingClientRect()
+    return { x: (edge.x - box.x) / scale, rise: (head.bottom - edge.bottom) / scale }
+  })
+}
+
 test('zoomed out, a header is its reference and edge, in one place folded and open', async ({
   page,
 }) => {
@@ -356,12 +376,15 @@ test('zoomed out, a header is its reference and edge, in one place folded and op
   await expect(frameOf(page, OPEN)).toHaveClass(/overview/u)
   await expect(frameOf(page, OPEN)).not.toHaveClass(/folded/u)
   await expect(frameOf(page, CROWDED)).toHaveClass(/folded/u)
-  const parts = ['.graph-frame-reference', '.frame-progress']
   expectSamePlaces(
     await headerPlaces(frameOf(page, OPEN)),
     await headerPlaces(frameOf(page, CROWDED)),
-    parts,
+    ['.graph-frame-reference'],
   )
+  // Each header is as tall as its own lines, so the edge is read from the header's foot.
+  const [open, folded] = await Promise.all([edgeAtFoot(page, OPEN), edgeAtFoot(page, CROWDED)])
+  expect(Math.abs(open.x - folded.x), 'the edge across').toBeLessThanOrEqual(1)
+  expect(Math.abs(open.rise - folded.rise), 'the edge over the foot').toBeLessThanOrEqual(1)
   const whole = await frameOf(page, CROWDED).evaluate((element) => {
     const box = element.getBoundingClientRect()
     const reference = element.querySelector('.graph-frame-reference')?.getBoundingClientRect()
@@ -407,12 +430,13 @@ async function targetOf(frame: Locator, target: string) {
     const box = element.getBoundingClientRect()
     const scale = box.width / (element as HTMLElement).offsetWidth
     const x = box.left + 6 * scale
+    const header = (element.querySelector('.graph-frame-head') as HTMLElement).offsetHeight
     let height = 0
     for (let y = box.top - 80 * scale; y < box.top + 300 * scale; y += 0.25) {
       const hit = document.elementFromPoint(x, y)
       if (hit?.closest<HTMLElement>('[data-walk-target]')?.dataset.walkTarget === id) height += 0.25
     }
-    return { field: height / scale, screen: height, scale }
+    return { field: height / scale, header, screen: height, scale }
   }, target)
 }
 
@@ -422,15 +446,15 @@ test('zoomed far out, a header is a target as tall as it stands with the air rou
   await openFarField(page)
   const folded = await targetOf(frameOf(page, CROWDED), `frame:${identity(CROWDED)}`)
   const open = await targetOf(frameOf(page, OPEN), `frame:${identity(OPEN)}`)
-  // The header's 160, and of the 36 of air above and below it what no neighbour's
-  // target takes, in the field's own units.
-  expect(folded.field).toBeGreaterThanOrEqual(200)
-  expect(open.field).toBeGreaterThanOrEqual(200)
+  // The header as tall as its lines, and of the 36 of air above and below it what no
+  // neighbour's target takes, 40 of the 72, in the field's own units.
+  expect(folded.field).toBeGreaterThanOrEqual(folded.header + 40)
+  expect(open.field).toBeGreaterThanOrEqual(open.header + 40)
   await expect(frameOf(page, CROWDED).locator('.graph-frame-inside')).toHaveText('+66')
   const loose = page.locator('.graph-frame[data-frame="none"]')
   await expect(loose.locator('.graph-frame-inside')).toHaveText('+25')
   const looseTarget = await targetOf(loose, 'frame:none:fold')
-  expect(looseTarget.field).toBeGreaterThanOrEqual(200)
+  expect(looseTarget.field).toBeGreaterThanOrEqual(looseTarget.header + 40)
   await expect(frameOf(page, CROWDED).locator('button.graph-frame-open')).toHaveAccessibleName(
     /· 66 открытых внутри$/u,
   )

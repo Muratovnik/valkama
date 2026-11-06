@@ -45,6 +45,8 @@ export interface PlacedFrame {
   /** Unfolding it would draw something; without that it stays folded and offers no fold. */
   foldable: boolean
   folded: boolean
+  /** How tall its header is: the room the layout left for it, which is what is drawn. */
+  header: number
   height: number
   /** An epic's or container's `work_item_id`, or `NO_EPIC_FRAME`. */
   id: string
@@ -58,17 +60,19 @@ export interface PlacedFrame {
   y: number
 }
 
+/** What a frame's header shows, wherever the frame stands. */
+export type FrameHead = Pick<PlacedFrame, 'epic' | 'foldable' | 'folded' | 'id' | 'progress'>
+
 export const NODE_WIDTH = 264
 export const NODE_HEIGHT = 112
 export const MARGIN = 24
 
 /**
- * A frame's header, the same one folded or open and at every zoom: folding
- * changes what stands under it and nothing in it, and the layout's room for it
- * is what is drawn. It holds the reference line, three lines of title, the counts,
- * what a fold hides and the progress edge, and it is tall enough to hit from far
- * off: with the air round it its target (`GraphFrame`) stays 24px on a screen
- * down to a zoom of 0.104.
+ * The room a frame's header is given where nothing has measured it: a layout read in a
+ * test, or a document that lays nothing out. On the field each header is as tall as its
+ * own lines, measured as the header itself draws them (`GraphFrameHeads`), and this is no
+ * less than the tallest of those takes: three lines of title, two of counts and what a
+ * fold hides.
  */
 export const FRAME_HEADER = 160
 /** The air between an open frame's edge and the work inside it. */

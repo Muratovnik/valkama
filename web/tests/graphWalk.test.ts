@@ -100,6 +100,7 @@ function frame(
     parentId: null,
     folded,
     foldable: true,
+    header: FRAME_HEADER,
     ...box,
     progress: { active: 0, ahead: 2, blocked: 0, done: 0, review: 0, total: 2 },
     members: [],

@@ -65,13 +65,24 @@ export const HIERARCHY_OPTIONS: Readonly<Record<string, string>> = {
   'elk.spacing.edgeEdge': '12',
 }
 
-/** An open frame's own additions: room for its header, and never narrower than folded. */
-export const FRAME_OPTIONS: Readonly<Record<string, string>> = {
-  ...HIERARCHY_OPTIONS,
-  'elk.padding': `[top=${FRAME_HEADER},left=${FRAME_PADDING},bottom=${FRAME_PADDING},right=${FRAME_PADDING}]`,
-  'elk.nodeSize.constraints': 'MINIMUM_SIZE',
-  'elk.nodeSize.minimum': `(${FOLDED_WIDTH}, ${FRAME_HEADER})`,
+/**
+ * An open frame's own additions: room for its header, as tall as that header is, and
+ * never narrower than folded.
+ */
+export function frameOptions(header: number): Record<string, string> {
+  return {
+    ...HIERARCHY_OPTIONS,
+    'elk.padding': `[top=${header},left=${FRAME_PADDING},bottom=${FRAME_PADDING},right=${FRAME_PADDING}]`,
+    'elk.nodeSize.constraints': 'MINIMUM_SIZE',
+    'elk.nodeSize.minimum': `(${FOLDED_WIDTH}, ${header})`,
+  }
 }
+
+/** Each frame's header height by id; a frame nothing measured gets `FRAME_HEADER`. */
+export type FrameHeaders = ReadonlyMap<string, number>
+
+/** The height frame `id`'s header is laid out with. */
+const headerOf = (headers: FrameHeaders, id: string) => headers.get(id) || FRAME_HEADER
 
 /** A card and the air round it, as a block packs it. */
 const CELL = { width: NODE_WIDTH + 36, height: NODE_HEIGHT + 36 }
@@ -104,12 +115,21 @@ export function looseOptions(linked: number, loose: number): Record<string, stri
 
 const card = (id: string): ElkNode => ({ id, width: NODE_WIDTH, height: NODE_HEIGHT })
 
+/** What a frame's node is built from besides the frame. */
+interface FrameContext {
+  headers: FrameHeaders
+  nested: Map<string, Frame[]>
+  touched: Set<string>
+}
+
 /** The ELK node of one frame, with the frames standing in it. */
-function frameNode(frame: Frame, nested: Map<string, Frame[]>, touched: Set<string>): ElkNode {
-  if (frame.folded) return { id: frame.id, width: FOLDED_WIDTH, height: FRAME_HEADER }
+function frameNode(frame: Frame, context: FrameContext): ElkNode {
+  const { headers, nested, touched } = context
+  const header = headerOf(headers, frame.id)
+  if (frame.folded) return { id: frame.id, width: FOLDED_WIDTH, height: header }
   const linked = frame.cards.filter((item) => touched.has(item.work_item_id))
   const loose = frame.cards.filter((item) => !touched.has(item.work_item_id))
-  const inner = (nested.get(frame.id) ?? []).map((child) => frameNode(child, nested, touched))
+  const inner = (nested.get(frame.id) ?? []).map((child) => frameNode(child, context))
   const children = [...linked.map((item) => card(item.work_item_id)), ...inner]
   if (loose.length) {
     children.push({
@@ -118,7 +138,7 @@ function frameNode(frame: Frame, nested: Map<string, Frame[]>, touched: Set<stri
       children: loose.map((item) => card(item.work_item_id)),
     })
   }
-  return { id: frame.id, layoutOptions: { ...FRAME_OPTIONS }, children }
+  return { id: frame.id, layoutOptions: frameOptions(header), children }
 }
 
 /** The top-level frame each drawn frame and card stands in. */
@@ -239,7 +259,10 @@ function rootChildren(components: readonly Component[]): ElkNode[] {
 }
 
 /** The ELK graph of a space's frames: one component per node of the root. */
-export function frameGraph(projection: FrameProjection): ElkNode {
+export function frameGraph(
+  projection: FrameProjection,
+  headers: FrameHeaders = new Map(),
+): ElkNode {
   const touched = new Set(projection.edges.flatMap((edge) => [edge.source, edge.target]))
   const nested = new Map<string, Frame[]>()
   for (const frame of projection.frames) {
@@ -249,7 +272,7 @@ export function frameGraph(projection: FrameProjection): ElkNode {
   const home = new Map<string, number>()
   const groups = components(projection)
   const children = groups.map((group, index): ElkNode => {
-    const nodes = group.map((frame) => frameNode(frame, nested, touched))
+    const nodes = group.map((frame) => frameNode(frame, { headers, nested, touched }))
     const mark = (node: ElkNode) => {
       home.set(node.id, index)
       for (const child of node.children ?? []) mark(child)
@@ -294,10 +317,11 @@ function box(node: ElkNode | undefined, what: string) {
 export async function layoutFrames(
   projection: FrameProjection,
   engine: GraphLayoutEngine,
+  headers: FrameHeaders = new Map(),
 ): Promise<GraphLayout> {
   if (!projection.frames.length)
     return { nodes: [], frames: [], edges: [], width: MARGIN * 2, height: MARGIN * 2 }
-  const result = await engine.layout(frameGraph(projection))
+  const result = await engine.layout(frameGraph(projection, headers))
   const placed = flatten(result)
   const routes = new Map<string, ElkExtendedEdge>()
   for (const node of placed.values()) for (const edge of node.edges ?? []) routes.set(edge.id, edge)
@@ -310,6 +334,7 @@ export async function layoutFrames(
     foldable: frame.foldable,
     progress: frame.progress,
     members: frame.members,
+    header: headerOf(headers, frame.id),
     ...box(placed.get(frame.id), frame.id),
   }))
   const nodes = projection.frames

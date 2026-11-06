@@ -14,7 +14,6 @@
  * rest. The work under none has only the first: there is no epic to open.
  */
 
-import { FRAME_HEADER } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 export type GraphWalkKey = 'ArrowDown' | 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'End' | 'Home'
@@ -59,10 +58,10 @@ export function isGraphWalkKey(key: string): key is GraphWalkKey {
   return key in DIRECTIONS || key === 'Home' || key === 'End'
 }
 
-/** A frame's header, one height folded or open. */
+/** A frame's header, as tall as the layout made it. */
 export function headerBox(frame: PlacedFrame): Box {
-  const { x, y, width } = frame
-  return { x, y, width, height: FRAME_HEADER }
+  const { x, y, width, header } = frame
+  return { x, y, width, height: header }
 }
 
 /**

@@ -17,6 +17,7 @@ import GraphEmptyState from '@/widgets/work-item-graph/components/GraphEmptyStat
 import GraphField from '@/widgets/work-item-graph/components/GraphField.vue'
 import GraphFieldCorner from '@/widgets/work-item-graph/components/GraphFieldCorner.vue'
 import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
+import GraphFrameHeads from '@/widgets/work-item-graph/components/GraphFrameHeads.vue'
 import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
 import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
@@ -82,9 +83,11 @@ const {
   hiddenDone,
   hovered,
   live,
+  measure,
   openTotal,
   placed,
   pending,
+  projected,
   failed,
   retry,
   ready,
@@ -104,8 +107,7 @@ const {
     version: props.version,
   }),
   () => props.selectedId ?? null,
-  showClosed,
-  () => branchFrame.value?.ids ?? null,
+  { branch: () => branchFrame.value?.ids ?? null, chainShowDone: showClosed, measured: true },
 )
 
 /** Whether a drawing is on the field: a layout over it runs in the background. */
@@ -452,6 +454,11 @@ function onFieldPointerLeave() {
         </template>
       </GraphField>
       <GraphControls @fit="fitWhole" />
+      <GraphFrameHeads
+        v-if="projected"
+        :projection="projected"
+        @measured="measure"
+      />
     </div>
   </section>
 </template>

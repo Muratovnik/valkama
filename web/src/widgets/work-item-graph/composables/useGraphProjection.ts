@@ -49,6 +49,7 @@ import type {
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { createGraphLayoutRunner } from '@/widgets/work-item-graph/utils/graphLayoutRunner.ts'
 import { layoutFrames } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
+import type { FrameHeaders } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -73,6 +74,26 @@ type ProjectionInput = () => {
   spaceItems?: GraphSource['nodes']
 }
 
+/** The heights of a projection's headers as they are drawn, and the projection measured. */
+export interface MeasuredHeaders {
+  heights: FrameHeaders
+  /** The `key` of the projection whose headers these are. */
+  key: string
+}
+
+/** What the host adds to the field it draws, beyond what it shows. */
+interface ProjectionOptions {
+  /** The chain's own «show closed», which the host keeps beside the chain. */
+  chainShowDone?: Ref<boolean>
+  /**
+   * The host measures each header as it draws (`measure`), and a frame layout waits for
+   * it; without that every frame gets `FRAME_HEADER`.
+   */
+  measured?: boolean
+  /** The branch the card pinned, which stays lit while it is let go. */
+  branch?: () => ReadonlySet<string> | null
+}
+
 export type GraphProjection = {
   /** The placed field with today's items, frames and links laid on it by id. */
   drawn: ComputedRef<GraphLayout | null>
@@ -90,11 +111,15 @@ export type GraphProjection = {
   pending: Ref<boolean>
   /** The geometry of the last layout; it changes only when a layout lands. */
   placed: Ref<GraphLayout | null>
+  /** The frames the next layout lays out, whose headers are measured before it runs. */
+  projected: ComputedRef<FrameProjection | null>
   ready: ComputedRef<WorkItemBrief[]>
   showDone: Ref<boolean>
   applyFocus: (event: GraphFocusEvent) => void
   /** Whether a drawn frame is folded now. */
   folded: (frameId: string) => boolean
+  /** The headers of `projected`, as they are drawn. */
+  measure: (headers: MeasuredHeaders) => void
   retry: () => void
   /** Fold a drawn frame or open it; the choice is kept for the space. */
   toggle: (frameId: string) => void
@@ -132,9 +157,10 @@ function decorate(
 export function useGraphProjection(
   input: ProjectionInput,
   selected: () => string | null = () => null,
-  chainShowDone: Ref<boolean> = ref(false),
-  branch: () => ReadonlySet<string> | null = () => null,
+  options: ProjectionOptions = {},
 ): GraphProjection {
+  const { branch = () => null, chainShowDone = ref(false), measured = false } = options
+  const headers = shallowRef<MeasuredHeaders | null>(null)
   /**
    * Whether closed work is drawn, held once for the space and once for the
    * chain in view. A chain opens on its open part whatever the space was set to,
@@ -211,10 +237,26 @@ export function useGraphProjection(
 
   /** The scope a layout belongs to: a new one leaves nothing of the last drawn. */
   const context = computed(() => JSON.stringify([input().space, scope.value, showDone.value]))
-  /** Everything the geometry depends on; a layout runs when, and only when, it changes. */
-  const structure = computed(() =>
-    source.value ? `${context.value}|${projection.value?.key ?? flatKey.value}` : '',
-  )
+  /**
+   * How tall each header is, as the header draws it; null while the frames just
+   * projected are still to be measured, and a layout waits for them.
+   */
+  const heights = computed<FrameHeaders | null>(() => {
+    const frames = projection.value
+    if (!frames?.frames.length || !measured) return new Map()
+    return headers.value?.key === frames.key ? headers.value.heights : null
+  })
+  /**
+   * Everything the geometry depends on; a layout runs when, and only when, it changes.
+   * A header's height is part of it, so a title or a count that takes another line lays
+   * the field out again and one that does not lays nothing out.
+   */
+  const structure = computed(() => {
+    if (!source.value) return ''
+    const frames = projection.value
+    const sizes = frames?.frames.map((frame) => heights.value?.get(frame.id) ?? '?') ?? []
+    return `${context.value}|${frames?.key ?? flatKey.value}|${sizes.join(',')}`
+  })
 
   const placed = shallowRef<GraphLayout | null>(null)
   const pending = ref(false)
@@ -243,12 +285,13 @@ export function useGraphProjection(
       placedContext = context.value
       pending.value = Boolean(data)
       failed.value = false
-      if (!data) return
+      // Pending until the headers are measured: a layout now would be laid out again.
+      if (!data || !heights.value) return
       timeout = setTimeout(() => runner.stop(), 30_000)
       const frames = projection.value
       try {
         const result = frames
-          ? await layoutFrames(frames, runner)
+          ? await layoutFrames(frames, runner, heights.value)
           : await layout(data, runner, showDone.value, scope.value)
         if (request === current) placed.value = result
       } catch {
@@ -355,9 +398,13 @@ export function useGraphProjection(
     hiddenDone,
     hovered: computed(() => focus.value.hovered),
     live: computed(() => input().live ?? {}),
+    measure: (now) => {
+      headers.value = now
+    },
     openTotal,
     pending,
     placed,
+    projected: projection,
     ready,
     retry,
     showDone,

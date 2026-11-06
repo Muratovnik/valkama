@@ -127,6 +127,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **An epic's header on the graph is as tall as its title.** A title of one, two or three
+  lines takes that many, and the counts stand right under it, with no empty band between
+  them; the layout leaves each header the room it is drawn at. The chevron leads the
+  reference line, and the title, the counts, what a fold hides and the progress edge start
+  at one left edge, the one the frame's cards start at. Zoomed out, a band's grown words
+  stay inside the shorter header, and far out the frame's ground still opens its epic.
 - **A question holds up to 40 fields instead of 12.** The 64 KiB the fields of one
   question fit in are unchanged.
 - **`question_changed` says what changed, row by row,** as `changed: p12 later→accept;

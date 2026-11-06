@@ -1051,7 +1051,10 @@ board, only a frame the filter found something in. So every item is on the field
 as a card or as the frame it heads, and the open-or-all switch counts the items the
 counts line above it counts. A frame has three readings.
 Open, it is its header over its cards. Folded, it is the header alone, a little
-wider than a card so its counts fit. Zoomed out past reading, the header is the
+wider than a card so its counts fit. A header is as tall as its title, one to three
+lines, with the counts right under it, and the layout leaves it the room that same
+header takes when drawn; the chevron leads its reference line, and everything in the
+header starts at one left edge, the one its cards start at. Zoomed out past reading, the header is the
 epic's reference grown with the field, as a zoomed-out card's is, with the count of
 work moving under it at the far end and a thicker edge beneath; the work under no epic
 keeps its name instead. The header is two buttons with one action each, as a card

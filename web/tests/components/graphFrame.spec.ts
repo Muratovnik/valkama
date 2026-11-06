@@ -43,6 +43,7 @@ function frame(overrides: Partial<PlacedFrame> = {}): PlacedFrame {
     y: 0,
     width: 600,
     height: 200,
+    header: 120,
     progress: progress({ done: 8, active: 2, blocked: 1, ahead: 10 }),
     members: [],
     ...overrides,

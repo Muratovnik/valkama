@@ -24,10 +24,14 @@
 
 import type { ELK, ElkNode } from 'elkjs/lib/elk-api'
 
-import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  FRAME_HEADER,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { createGraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayoutEngine.ts'
 import {
-  FRAME_OPTIONS,
+  frameOptions,
   HIERARCHY_OPTIONS,
   looseOptions,
   ROOT_OPTIONS,
@@ -55,7 +59,7 @@ export function warmGraph(): ElkNode {
         children: [
           {
             id: 'frame',
-            layoutOptions: { ...FRAME_OPTIONS },
+            layoutOptions: frameOptions(FRAME_HEADER),
             children: [
               card('a'),
               card('b'),

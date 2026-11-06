@@ -18,8 +18,6 @@ import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
 const LONGEST = 'WWWWWWWW-888888888'
-/** The height of a frame's header, in the field's units, at every zoom. */
-const FRAME_HEADER = 160
 
 async function serve(page: Page, width = 1500, height = 900) {
   const { model } = broadSpace()
@@ -75,6 +73,8 @@ async function zoomUnder(page: Page, ceiling: number) {
 interface Mark {
   /** The dots are in sight. */
   dots: boolean
+  /** The frame's id. */
+  frame: string
   /** The header's height, in the field's units. */
   header: number
   /** What the pointer is told on the header. */
@@ -129,6 +129,7 @@ function marks(page: Page): Promise<Mark[]> {
         dots: !outside(dots),
         overReference: crossing,
         header: (head?.getBoundingClientRect().height ?? 0) / scale,
+        frame: (frame as HTMLElement).dataset.frame ?? '',
         hint: frame.querySelector('.graph-frame-open')?.getAttribute('title') ?? '',
         reference: frame.querySelector('.graph-frame-reference')?.textContent?.trim() ?? '',
       }
@@ -136,7 +137,24 @@ function marks(page: Page): Promise<Mark[]> {
   )
 }
 
-function expectHonest(seen: Mark[]) {
+/**
+ * Each frame's header height in the field's units, by its id: as tall as its lines, which
+ * it stays at every zoom.
+ */
+function headerHeights(page: Page) {
+  return page
+    .locator('.graph-frame')
+    .evaluateAll((frames) =>
+      Object.fromEntries(
+        frames.map((frame) => [
+          (frame as HTMLElement).dataset.frame ?? '',
+          (frame.querySelector('.graph-frame-head') as HTMLElement).offsetHeight,
+        ]),
+      ),
+    )
+}
+
+function expectHonest(seen: Mark[], near: Record<string, number>) {
   expect(seen.length).toBeGreaterThan(2)
   for (const mark of seen) {
     const where = `the mark of ${mark.reference || 'the work under no epic'}`
@@ -145,30 +163,35 @@ function expectHonest(seen: Mark[]) {
     // Dots say nothing without the words beside them.
     expect(mark.dots && !mark.phraseWhole, `${where} shows its dots alone`).toBe(false)
     expect(mark.overReference, `${where} stands over the reference`).toBe(false)
-    expect(Math.round(mark.header), `${where}: the header's height`).toBe(FRAME_HEADER)
+    expect(Math.round(mark.header), `${where}: the header's height`).toBe(near[mark.frame])
     expect(mark.hint, `${where}: the hover text`).toContain(mark.phrase)
   }
 }
 
 // A window small enough that the whole field fits only far out, where the band grows more.
-for (const { band, ceiling, height, longest, width } of [
-  { band: 'overview', ceiling: 0.4, width: 1500, height: 900, longest: true },
-  // Far out the band has no second row, so the longest reference leaves no room.
-  { band: 'far', ceiling: 0.22, width: 760, height: 560, longest: false },
+for (const { band, ceiling, height, width } of [
+  { band: 'overview', ceiling: 0.4, width: 1500, height: 900 },
+  { band: 'far', ceiling: 0.22, width: 760, height: 560 },
 ] as const) {
   test(`zoomed out (${band}) a frame says what its number counts, or gives way whole`, async ({
     page,
   }) => {
     await serve(page, width, height)
+    const near = await headerHeights(page)
     const zoom = await zoomUnder(page, ceiling)
     expect(zoom).toBeLessThan(ceiling)
     await expect(page.locator('.graph-frame.overview').first()).toBeAttached()
     const seen = await marks(page)
-    expectHonest(seen)
-    // A frame with room says it whole, the longest reference's among them where its band
-    // has a second row to give.
+    expectHonest(seen, near)
+    // A frame with room says it whole. The longest reference leaves the mark room only on a
+    // second row, which a band offers where its header is tall enough to hold one at full
+    // size, and never far out; elsewhere the mark gives way whole.
     expect(seen.filter((mark) => mark.phraseWhole).length).toBeGreaterThan(0)
-    expect(seen.find((mark) => mark.reference === LONGEST)?.phraseWhole).toBe(longest)
+    const secondRow = page.locator(
+      `.graph-frame:has(.graph-frame-reference[title="${LONGEST}"]) .graph-frame-band-wraps`,
+    )
+    const wraps = (await secondRow.count()) > 0
+    expect(seen.find((mark) => mark.reference === LONGEST)?.phraseWhole).toBe(wraps)
   })
 }
 

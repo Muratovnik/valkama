@@ -18,8 +18,8 @@ import {
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import {
-  FRAME_OPTIONS,
   frameGraph,
+  frameOptions,
   HIERARCHY_OPTIONS,
   layoutFrames,
   ROOT_OPTIONS,
@@ -257,7 +257,7 @@ describe('the options a hierarchical layout is given', () => {
   ]
 
   it('never include an option that ends a hierarchical layout', () => {
-    for (const options of [ROOT_OPTIONS, HIERARCHY_OPTIONS, FRAME_OPTIONS]) {
+    for (const options of [ROOT_OPTIONS, HIERARCHY_OPTIONS, frameOptions(FRAME_HEADER)]) {
       const keys = Object.keys(options).join(' ')
       expect(keys).not.toMatch(/considerModelOrder|wrapping/u)
     }

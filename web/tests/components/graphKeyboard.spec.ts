@@ -30,6 +30,7 @@ function frame(id: string, folded: boolean, parentId: string | null = null): Pla
     y: parentId ? 80 : 0,
     width: folded ? 288 : 640,
     height: folded ? 72 : 400,
+    header: 72,
     progress: { active: 0, ahead: 1, blocked: 0, done: 0, review: 0, total: 1 },
     members: ['card'],
   }

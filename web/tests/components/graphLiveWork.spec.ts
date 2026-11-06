@@ -124,6 +124,7 @@ describe('a frame with live work under it', () => {
           y: 0,
           width: 288,
           height: 72,
+          header: 72,
           progress: { done: 1, review: 0, active: 2, blocked: 0, ahead: 0, total: 3 },
           members: [],
         },

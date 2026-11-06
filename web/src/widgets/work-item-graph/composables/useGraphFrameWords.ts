@@ -8,11 +8,11 @@ import { useI18n } from 'vue-i18n'
 
 import { countedGroups } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type { FrameHead } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 interface FrameWordsInput {
   far: () => boolean
-  frame: () => PlacedFrame
+  frame: () => FrameHead
   overview: () => boolean
   working: () => number
 }
