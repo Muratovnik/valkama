@@ -58,6 +58,7 @@
   .health-checked {
     margin: 0;
     color: var(--color-text-tertiary);
+    font: var(--font-detail);
     text-align: end;
   }
 }
@@ -123,7 +124,7 @@
   display: grid;
   gap: var(--space-heading-content);
   min-width: 0;
-  padding: var(--space-5);
+  padding: var(--space-5) var(--space-4);
 
   & + & {
     border-top: 1px solid var(--color-rule);
@@ -221,8 +222,9 @@
 }
 
 @container workspace (width <= 696px) {
-  .health-passed-row,
-  .health-technical-row {
+  /* Nested as the rules of two columns are, or those outrank this one at any width. */
+  .health-passed-level .health-passed-row,
+  .health-technical-list .health-technical-row {
     grid-template-columns: 1fr;
   }
 
