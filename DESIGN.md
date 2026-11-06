@@ -1551,7 +1551,9 @@ the next question, why a send failed — when a key, and not a press, was the la
 before the move (`moveFocus`), so a keyboard user still sees where focus went. After a
 press of a mouse, pen or finger the interface moves focus just the same, for a screen
 reader and the next Tab, and draws no ring: the last press or key decides, and a pointer
-passing over the page does not. A press of the pointer rings nothing it lands on, including
+passing over the page does not. A landing at the end of a round trip yields to the person: if
+they moved focus themselves after the action began, into a field to type or to another control,
+focus stays where they put it. A press of the pointer rings nothing it lands on, including
 an element only the interface focuses. The interface takes focus to a whole and not to a line
 of words that only says something about it: how a question ended, its passed deadline and its
 title in the list of everything waiting describe or name the question, which takes the focus
