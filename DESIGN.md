@@ -950,12 +950,20 @@ and what it holds, and its state only once the epic has moved, since one not
 started is the norm of a board that holds a hundred of them and the word goes on
 being read out. Its card and its chain are two icons with their words in
 `title` and `aria-label`, as an entry's actions are, at the end of the line;
-where the row wraps, at the end of its last line, or beside the title when that
-line is full, never on a line of their own. They come up under the pointer and
-when the keyboard reaches them, in a place kept for them, so nothing shifts or
-is covered; where nothing can hover they stay, a finger's reach apart. A
+where the row wraps, at the end of its last line. Where that line is full they
+stand beside the title only if it stays whole there; otherwise they take the
+line's last part down with them onto a line of their own, since a title cut to
+half its words reads worse than a line more. Only where nothing can come down
+with them, a phone's row whose counts would leave its state alone or stand
+alone, do they end the row on their own. A wrapped line starts under the
+reference, not under the arrow, and in a lane with no epic that costs a line at
+320px: a line from the row's edge stood 4px left of the arrow. They come up
+under the pointer and when the keyboard reaches them, in a place kept for them,
+so nothing shifts or is covered; where nothing can hover they stay, a finger's
+reach apart. A
 pointer's press on the row does not leave them up. A tile the board brings into
-view under the row's heading, by the keyboard or by opening it, stands below
+view under the row's heading, by the keyboard, by opening it or by moving the
+tile below into its place, stands below
 the heading at the gap the lane keeps under it, however many lines the heading
 takes.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
