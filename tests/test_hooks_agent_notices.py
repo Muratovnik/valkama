@@ -237,6 +237,31 @@ class WhoListensTests(Harness):
         self.comment(AS_A, self.followed, "The other item is not muted")
         self.assertIn("not muted", self.hook() or "")
 
+    def test_a_muted_holder_still_hears_the_reply_it_awaits_and_nothing_else(self) -> None:
+        self.set_up_b()
+        self.assertEqual("muted", self.subscribe(AS_B, self.held, False))
+        root = self.comment(AS_B, self.held, "Muted, and I ask", awaits_reply=True)
+        self.assertIsNone(self.hook())
+        self.comment(AS_A, self.held, "Plain news, marker MN-1")
+        self.comment(AS_A, self.held, "The answer, marker MA-1", reply_to=root)
+        told = self.hook(event="stop")
+        assert told is not None, "the reply it awaited continues its turn"
+        self.assertIn("marker MA-1", told)
+        self.assertIn("(the reply awaited)", told)
+        self.assertNotIn("marker MN-1", told, "the mute keeps the rest out")
+        self.assertIsNone(self.hook())
+
+    def test_a_mute_ends_with_the_hold(self) -> None:
+        self.set_up_b()
+        self.assertEqual("muted", self.subscribe(AS_B, self.held, False))
+        self.agent("claim_work_item", AS_B, id=self.held, release=True)
+        root = self.comment(AS_B, self.held, "My thread, after letting the item go")
+        self.assertIsNone(self.hook())
+        self.comment(AS_A, self.held, "In B's thread, marker MR-1", reply_to=root)
+        told = self.hook()
+        assert told is not None, "no longer held, the item is heard as any other"
+        self.assertIn(f"by session {A}, in your thread #{root}: «In B's thread, marker MR-1»", told)
+
     def test_a_subagents_subscription_tells_it_and_its_orchestrator(self) -> None:
         self.agent("claim_work_item", AS_B, id=self.held)
         self.subscribe(AS_CHILD, self.followed, True)

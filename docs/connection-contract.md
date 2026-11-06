@@ -935,7 +935,7 @@ takes a boolean, and `applied.subscribe` says what now stands:
 | Sent | The session holds the item | Writes | `applied.subscribe` |
 | --- | --- | --- | --- |
 | `true` | either way | a subscription | `following` |
-| `false` | yes | a mute: other sessions' news there is not told, a person's still is | `muted` |
+| `false` | yes | a mute, while the session holds the item: other sessions' news there is not told, a person's still is, and so are the replies to the session's own `awaits_reply` comment | `muted` |
 | `false` | no | nothing, and forgets a subscription | `not_following` |
 
 "The session" is the confirmed session and agent of the call, never `author`: a

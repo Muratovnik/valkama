@@ -146,7 +146,8 @@ tool call.
 When your work depends on an item you do not hold, one another agent is changing
 under you, subscribe to it with the batch's `subscribe: true` and hear its news as
 a holder would; send `subscribe: false` once you no longer need it. `false` on an
-item you hold mutes other agents there, never a person.
+item you hold mutes other agents there while you hold it; a person, and the replies
+to your own `awaits_reply` comment, still reach you.
 
 **Comments.** `comment_work_item` is for what the fields have no place for: a
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a

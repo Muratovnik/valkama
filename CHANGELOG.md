@@ -149,7 +149,8 @@ checkouts are therefore distinguishable even at the same version.
   prompt, unless it asks for the session, as below. `apply_work_item_changes`
   takes a `subscribe` group: `true` follows an item the session does not hold and hears it
   as a holder would, `false` stops, and `false` on a held item mutes other sessions there
-  while a person's act still reaches it. A subscription lapses with its session as a claim
+  while the session holds it; a person's act and the replies to its own `awaits_reply`
+  comment still reach it. A subscription lapses with its session as a claim
   does, a merge carries it to the survivor, and `get_work_item` lists who follows an item
   in `subscribers`. Store schema 13 holds the subscriptions, under a snapshot taken before
   the upgrade; a build of the previous release refuses the upgraded store. A comment can

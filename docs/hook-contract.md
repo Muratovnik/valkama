@@ -461,7 +461,10 @@ the same rules as a person's act and beside the mentions above:
   what any of its agents subscribed to and a subagent for its own. See
   [Subscriptions](connection-contract.md#subscriptions).
 - **A mute.** A holder that set `subscribe: false` on its item hears no other
-  session's news there, mentions included. A person's act still reaches it.
+  session's news there, mentions included, while it holds the item. A person's act
+  still reaches it, and so do the replies after it asked there with
+  `awaits_reply`. Once the session no longer holds the item the mute counts for
+  nothing, and the item is heard as any other it does not hold.
 - **One speaker.** A session's own conversation and its subagents are one
   speaker: none of them is told what another of them wrote. A mention keeps its
   rule above, every holder but the agent that spoke.

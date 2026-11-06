@@ -25,7 +25,8 @@ and `UserPromptSubmit`: a comment, a reply, a report, a question and what became
 it, a transition, a claim, a link, a step, a summary, a thread's mark, a mention.
 It reaches the same recipients by the same rules, and beside them a session that
 subscribed to the item (`planning.subscriptions`); a holder that muted the item
-hears none of it. A session's own conversation and its subagents are one speaker:
+hears none of it while it holds the item, but for the replies to what it asked there
+with `awaits_reply`. A session's own conversation and its subagents are one speaker:
 none of them is told what another of them wrote, except a mention, which reaches
 every holder but the agent that spoke. A `Stop` notice continues the turn and the
 watcher wakes the session, so either would turn agents telling one another into a
@@ -417,7 +418,8 @@ def _in_scope(
         item = str(row[0])
         holds = bool(row[9]) and (str(row[4]).endswith(suffix) or _holds_step(str(row[5]), suffix))
         signature = (int(row[6]), int(row[7] or 0), int(row[8] or 0), int(row[12] or 0))
-        listens = MUTED if row[11] else ALL if holds or row[10] else ADDRESSED_ONLY
+        # A mute counts while its writer holds the item: let go, the row says nothing.
+        listens = MUTED if row[11] and holds else ALL if holds or row[10] else ADDRESSED_ONLY
         found.append(
             (item, f"{row[1]}-{row[2]}", str(row[3]), signature, scope[item], holds, listens)
         )
@@ -730,24 +732,21 @@ def _read(
         ]
         told = _for_recipient(conn, item, found, session_id, agent_id, whole=whole)
     heard = mark[3] if mark is not None else own
-    spoken = (
-        [
-            _at_call(entry, call)
-            for call, entry in person_events.agents_since(conn, item, heard)
-            if call <= newest
-        ]
-        if listens != MUTED
-        else []
-    )
+    spoken = [
+        _at_call(entry, call)
+        for call, entry in person_events.agents_since(conn, item, heard)
+        if call <= newest
+    ]
     spoken = _agents_for_recipient(
         conn,
         item,
         spoken,
         session_id,
         agent_id,
-        whole=listens == ALL or (mark is not None and mark[2]),
+        whole=listens == ALL or (listens != MUTED and mark is not None and mark[2]),
         follows=listens == ALL,
         holds=holds,
+        muted=listens == MUTED,
     )
     if holds and signature[3]:
         # A blocker closed: a person's close is the person's news, another session's its own.
@@ -795,6 +794,7 @@ def _agents_for_recipient(
     whole: bool,
     follows: bool,
     holds: bool = False,
+    muted: bool = False,
 ) -> list[dict]:
     """What one recipient hears of other sessions' news on an item.
 
@@ -805,19 +805,25 @@ def _agents_for_recipient(
     A comment that waits for a reply, written on this item or naming it in its
     mentions, asks for the holders of the item while it is `recent`: it says so,
     `asks: true`. Another session's only: a session never asks itself.
+
+    A holder that `muted` the item hears only the replies after it asked there with
+    `awaits_reply`: what it waits for is never another session's noise.
     """
 
     mentions = [
         entry
         for entry in entries
-        if entry["kind"] == "mentioned" and follows and not _spoke(entry, session_id, agent_id)
+        if entry["kind"] == "mentioned"
+        and follows
+        and not muted
+        and not _spoke(entry, session_id, agent_id)
     ]
     others = [
         entry
         for entry in entries
         if entry["kind"] != "mentioned" and entry["session"] != session_id
     ]
-    told = _for_recipient(conn, item, others, session_id, agent_id, whole=whole)
+    told = _for_recipient(conn, item, others, session_id, agent_id, whole=whole, awaited_only=muted)
     if holds:
         for entry in [*told, *mentions]:
             if entry.get("recent") and entry["session"] != session_id:
@@ -840,6 +846,7 @@ def _for_recipient(
     agent_id: str | None,
     *,
     whole: bool,
+    awaited_only: bool = False,
 ) -> list[dict]:
     """What one recipient hears of an item's news, each reply saying whose thread it is.
 
@@ -849,7 +856,8 @@ def _for_recipient(
     `awaits_reply`, and what became of its questions. The reply that answered such
     a wait says so, `answers: true`. The call that wrote a root, and who waits in
     a thread, are read here and nowhere on the way here, so an item that did not
-    change never pays for them. Once per root.
+    change never pays for them. Once per root. `awaited_only` keeps nothing but the
+    replies after this recipient asked with `awaits_reply`.
     """
 
     from ..planning import person_events
@@ -870,6 +878,8 @@ def _for_recipient(
             if root not in waits:
                 waits[root] = person_events.awaited(conn, item, entry, session_id, agent_id)
             answer = waits[root].get(entry["comment_id"])
+        if awaited_only and answer is None:
+            continue
         if root not in authors:
             authors[root] = person_events.author_of(conn, item, entry)
         author = authors[root]

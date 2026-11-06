@@ -5,7 +5,9 @@ One that depends on an item it does not hold, an item another agent is changing
 under it, subscribes to it, and from then on hears other sessions' news there as
 a holder would; it unsubscribes when it no longer needs the item. `false` on an
 item the session holds mutes other sessions' news there instead: a person's act
-still reaches it, since a holder is who a person's words are for.
+still reaches it, since a holder is who a person's words are for, and so do the
+replies to what the session asked there with `awaits_reply`. The mute counts only
+while the session holds the item; the row stays, and lapses with the session.
 
 A subscription belongs to the confirmed session and agent of the call that wrote
 it, never to the `author` it signed, so a subagent's subscription tells that
