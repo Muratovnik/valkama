@@ -11,7 +11,18 @@
  * A press changes no box. A check set beside the words made the chip 18px wider,
  * and everything along the row moved to make that room, and back.
  */
-defineProps<{ pressed: boolean }>()
+withDefaults(
+  defineProps<{
+    pressed: boolean
+    /**
+     * The target an icon button has, for a toggle a narrow host shows as its sign alone:
+     * under a finger or on a phone-wide screen it answers a press across
+     * `--size-control-target` whatever it draws (`reach.css`).
+     */
+    reach?: boolean
+  }>(),
+  { reach: false },
+)
 
 const emit = defineEmits<{ toggle: [] }>()
 </script>
@@ -20,6 +31,7 @@ const emit = defineEmits<{ toggle: [] }>()
   <button
     class="toggle-chip"
     type="button"
+    :class="{ reach }"
     :aria-pressed="pressed"
     @click="emit('toggle')"
   >
@@ -93,3 +105,5 @@ const emit = defineEmits<{ toggle: [] }>()
   }
 }
 </style>
+
+<style scoped src="./reach.css"></style>

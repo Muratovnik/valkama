@@ -12,7 +12,9 @@
  * that repeats down a surface, such as the rest of a group, where a fill per row
  * would be louder than the rows.
  */
-withDefaults(
+import { computed } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     disabled?: boolean
     /** A square button holding one icon; its name comes from `aria-label`. */
@@ -44,12 +46,15 @@ withDefaults(
     reach: false,
   },
 )
+
+/** An icon button reaches as one given `reach` does, but for an inline one (`EntryHead`). */
+const reaching = computed(() => props.reach || (props.icon && props.size !== 'inline'))
 </script>
 
 <template>
   <button
     class="button"
-    :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon, reach }]"
+    :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon, 'reach': reaching }]"
     :type="type"
     :disabled="disabled"
     :title="title"
@@ -201,20 +206,14 @@ withDefaults(
   }
 
   /* An icon has no words to widen its box, so under a finger or on a phone-wide screen
-     its target reaches `--size-control-target` past what it draws, and the row it stands
-     in keeps its height: the board's «+» drew 41×36 and answered a press across no more.
-     An inline icon grows its own box there instead (`EntryHead`), because a line of them
-     two pixels apart has no room around each to reach into. The button is the reach's
-     box only here, at the weight of the base rule, so a host that places it keeps its
-     own position. */
+     its target reaches past what it draws (`reach.css`). An inline icon grows its own box
+     there instead (`EntryHead`), because a line of them two pixels apart has no room
+     around each to reach into. The button is the reach's box only here, at the weight of
+     the base rule, so a host that places it keeps its own position. */
   @media (pointer: coarse), (width <= 620px) {
     position: relative;
-
-    &:is(.icon-only:not(.size-inline), .reach)::after {
-      content: '';
-      position: absolute;
-      inset: min(0px, calc((100% - var(--size-control-target)) / 2));
-    }
   }
 }
 </style>
+
+<style scoped src="./reach.css"></style>

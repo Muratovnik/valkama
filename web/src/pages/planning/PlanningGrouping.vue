@@ -6,7 +6,8 @@
  * on the counts' line where one does not. Only on a phone, and only while a filter
  * is on, does it give the word up to the reset for its glyph, so the work does not
  * move as a filter turns on; the name stays its accessible name and its hover text
- * either way.
+ * either way. A glyph alone has no words to widen it, so then it reaches as an icon
+ * button does (`reach`).
  */
 import { useI18n } from 'vue-i18n'
 
@@ -31,6 +32,7 @@ const { t } = useI18n()
     :aria-label="t('workItem.lanes.groupingLabel')"
     :title="t('workItem.lanes.groupingLabel')"
     :pressed="pressed"
+    :reach="filtered"
     @toggle="emit('toggle')"
   >
     <VIcon
