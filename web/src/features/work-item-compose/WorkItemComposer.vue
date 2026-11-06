@@ -162,7 +162,7 @@ async function submit() {
         :disabled="busy"
         @submit="submit"
       />
-      <div class="composer-pair">
+      <div class="composer-pair has-titles">
         <SearchCombobox
           v-model="labels"
           :label="t('workItem.labels')"
@@ -209,5 +209,13 @@ async function submit() {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-3);
+
+  /* An epic's title and a row of labels need more than a phone's half: under 240px a column,
+     the two stand one above the other, and each list opens as wide as its field. Side by side
+     at 172px an epic's title was cut to a few words in its field and took six lines in its
+     list. */
+  &.has-titles {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  }
 }
 </style>

@@ -3,7 +3,8 @@
  *
  * Through the real dialog over the board's own read: an epic found by a word of its
  * title, one label the space already uses and one typed new, and what the create call
- * then sent. The lists stand inside the dialog at a desktop's width and at a phone's.
+ * then sent. The lists stand under their fields, as wide as they are, at a desktop's width and
+ * at a phone's, where each field takes the dialog's whole width rather than half of it.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -15,6 +16,8 @@ import { identity, projectScope, workItem } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+/** As long as a real epic's: at a half-width field's 172px it took six lines. */
+const EPIC_TITLE = 'Parser rework: one grammar for tables, front matter, footnotes and fenced code'
 
 /** Where a box stands; a box with none is a failure of its own. */
 async function measured(box: Locator) {
@@ -34,7 +37,7 @@ async function openComposer(page: Page, width: number) {
         work_item_id: identity(12),
         reference: 'MAIN-12',
         number: 12,
-        title: 'Parser rework',
+        title: EPIC_TITLE,
         kind: 'epic',
         claim_ref: '',
         claim_state: null,
@@ -66,10 +69,10 @@ test('an item is created with an epic found by search, a label the space has and
   await epic.click()
   await page.keyboard.type('rework')
   const list = page.getByRole('listbox', { name: 'Epic' })
-  await expect(list.getByRole('option')).toHaveText(['MAIN-12 · Parser reworkDev'])
+  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}Dev`])
   await page.keyboard.press('Enter')
   await expect(list).toHaveCount(0)
-  await expect(epic).toHaveValue('MAIN-12 · Parser rework')
+  await expect(epic).toHaveValue(`MAIN-12 · ${EPIC_TITLE}`)
 
   const labels = dialog.getByRole('combobox', { name: 'Labels', exact: true })
   await labels.click()
@@ -99,7 +102,12 @@ test('an item is created with an epic found by search, a label the space has and
   })
 })
 
-for (const width of [1280, 390]) {
+// Side by side on a desktop; one above the other on a phone, where half the dialog left an
+// epic's title 172px in its field and in its list, six lines of it there.
+for (const { width, alone } of [
+  { width: 1280, alone: false },
+  { width: 390, alone: true },
+]) {
   test(`at ${width}px an open list stands under its field and inside the dialog`, async ({
     page,
   }) => {
@@ -114,6 +122,10 @@ for (const width of [1280, 390]) {
       const frame = await measured(dialog)
       expect(Math.round(shown.x)).toBe(Math.round(box.x))
       expect(Math.round(shown.width)).toBe(Math.round(box.width))
+      // Alone on its row, a field keeps the same inset from both edges of the dialog.
+      const before = box.x - frame.x
+      const after = frame.x + frame.width - box.x - box.width
+      expect(Math.abs(before - after) < 1).toBe(alone)
       expect(shown.y).toBeGreaterThan(box.y + box.height)
       expect(shown.x + shown.width).toBeLessThanOrEqual(frame.x + frame.width)
       expect(shown.y + shown.height).toBeLessThanOrEqual(900)
