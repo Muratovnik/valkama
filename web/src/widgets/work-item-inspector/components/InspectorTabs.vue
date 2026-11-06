@@ -124,15 +124,20 @@ watch(shown, () => nextTick(revealShown))
 let pressing = false
 useEventListener(strip, 'mousedown', () => {
   pressing = true
-  window.addEventListener('mouseup', pressed, { capture: true, once: true })
 })
+useEventListener(
+  window,
+  'mouseup',
+  () => {
+    if (pressing) setTimeout(pressed)
+  },
+  { capture: true },
+)
 
 function pressed() {
-  setTimeout(() => {
-    pressing = false
-    const section = document.activeElement
-    if (strip.value?.contains(section)) reveal(section)
-  })
+  pressing = false
+  const section = document.activeElement
+  if (strip.value?.contains(section)) reveal(section)
 }
 
 function focused(event: FocusEvent) {
