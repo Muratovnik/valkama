@@ -57,6 +57,8 @@ import {
   MessageSquare,
   Monitor,
   MousePointer2,
+  Network,
+  PanelRightOpen,
   Pause,
   Play,
   Plus,
@@ -101,6 +103,10 @@ const ICONS: Record<string, Component> = {
   'arrow-down': ArrowDown,
   'bell': Bell,
   'board': SquareKanban,
+  // An epic's card, opened beside the board, and its chain drawn on the board: a lane
+  // heading's two actions.
+  'card': PanelRightOpen,
+  'chain': Network,
   'check': Check,
   // The two agent clients get their own neutral glyph rather than the unknown
   // circle they were falling back to: a session row that says "codex" beside a

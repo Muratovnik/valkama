@@ -18,14 +18,6 @@ import { cell, centre, drag, lane, openBoard, routeState, serve, shot, tiles } f
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
-/** The sum of an rgb(a) colour's first three channels: a lighter fill has the larger sum. */
-function brightness(color: string): number {
-  return (color.match(/\d+(\.\d+)?/g) ?? [])
-    .slice(0, 3)
-    .map(Number)
-    .reduce((sum, value) => sum + value, 0)
-}
-
 for (const [width, oneRow] of [
   [1440, true],
   [1024, true],
@@ -72,18 +64,21 @@ for (const [width, oneRow] of [
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
     expect(pageOverflow, 'the page itself never scrolls sideways').toBeLessThanOrEqual(0)
-    // Where the board has room, a long title gives way and the lane's actions
-    // stay on its heading's row; on a phone they take a row of their own.
+    // Where the board has room, a long title gives way and the lane's actions stay on its
+    // heading's row; on a phone they end a line the counts stand on, never one of their own.
     const head = lanes.nth(0)
-    const rows = await Promise.all(
-      ['.lane-toggle', '.lane-actions'].map(async (part) => {
+    const [toggleRow, countsRow, actionsRow] = await Promise.all(
+      ['.lane-toggle', '.lane-counts', '.lane-actions'].map(async (part) => {
         const box = await head.locator(part).boundingBox()
         return Math.round((box?.y ?? 0) + (box?.height ?? 0) / 2)
       }),
     )
-    expect(Math.abs(rows[0] - rows[1]) <= 2, `heading on one row at ${width}px`).toBe(oneRow)
-    // A labelled lane action reads as a control: a fill at rest, and a hover that is
-    // one step lighter than the fill, not the same fill.
+    expect(Math.abs(toggleRow - actionsRow) <= 2, `heading on one row at ${width}px`).toBe(oneRow)
+    expect(
+      Math.min(Math.abs(toggleRow - actionsRow), Math.abs(countsRow - actionsRow)),
+      `the actions share a line at ${width}px`,
+    ).toBeLessThanOrEqual(2)
+    // An icon action rests bare, as an entry's do, and takes a fill under the pointer.
     const laneAction = head.locator('.lane-actions button').first()
     const restFill = await laneAction.evaluate(
       (element) => getComputedStyle(element).backgroundColor,
@@ -92,11 +87,8 @@ for (const [width, oneRow] of [
     const hoverFill = await laneAction.evaluate(
       (element) => getComputedStyle(element).backgroundColor,
     )
-    expect(restFill, `lane action has a fill at rest at ${width}px`).not.toBe('rgba(0, 0, 0, 0)')
-    expect(
-      brightness(hoverFill),
-      `lane action hover is lighter than rest at ${width}px`,
-    ).toBeGreaterThan(brightness(restFill))
+    expect(restFill, `lane action rests bare at ${width}px`).toBe('rgba(0, 0, 0, 0)')
+    expect(hoverFill, `lane action fills under the pointer at ${width}px`).not.toBe(restFill)
     await page.screenshot(shot(info, `w-board-lanes-${width}.png`))
   })
 }

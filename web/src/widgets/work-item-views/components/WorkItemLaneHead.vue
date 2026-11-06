@@ -10,9 +10,10 @@
  * lane passes under the row of state names, so a lane in view always says whose
  * it is. The note of work out of sight says on which side: «2 в «Review» →».
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useLaneActionsPlace } from '@/widgets/work-item-views/composables/useLaneActionsPlace.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
@@ -48,7 +49,24 @@ const chevron = computed(() => (props.open ? 'chevron-down' : 'chevron-right'))
 const toggleLabel = computed(() =>
   t(props.open ? 'workItem.lanes.fold' : 'workItem.lanes.unfold', { lane: title.value }),
 )
+const away = computed(() => props.left !== '' || props.right !== '')
 const stateShown = computed(() => props.lane.epic && printsFacet('state', 'lane', props.lane.epic))
+const openLabel = computed(() =>
+  t('workItem.lanes.openEpic', { reference: props.lane.epic?.reference ?? '' }),
+)
+const chainLabel = computed(() =>
+  t('workItem.lanes.showChain', { reference: props.lane.epic?.reference ?? '' }),
+)
+
+const tail = ref<HTMLElement | null>(null)
+const actions = ref<HTMLElement | null>(null)
+const room = ref<HTMLElement | null>(null)
+const { crowded } = useLaneActionsPlace(tail, actions, room, () => [
+  props.left,
+  props.right,
+  counts.value,
+  stateShown.value,
+])
 
 // The spaces live in the strings: a template trims the space before a tag
 // closes, which ran «To the right:» into the count for a screen reader.
@@ -59,7 +77,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 </script>
 
 <template>
-  <header class="lane-head">
+  <header
+    class="lane-head"
+    :class="{ acting: props.lane.epic, away, crowded }"
+  >
     <button
       class="lane-toggle"
       type="button"
@@ -73,22 +94,27 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         :name="chevron"
         :size="16"
       />
-      <span
-        v-if="props.lane.epic"
-        class="lane-reference"
-        >{{ props.lane.epic.reference }}</span
-      >
-      <span class="lane-title">{{ title }}</span>
+      <span class="lane-words">
+        <span
+          v-if="props.lane.epic"
+          class="lane-reference"
+          >{{ props.lane.epic.reference }}</span
+        >
+        <span class="lane-title">{{ title }}</span>
+      </span>
     </button>
-    <SemanticState
-      v-if="props.lane.epic"
-      class="lane-state"
-      dimension="work-item-state"
-      :class="{ 'visually-hidden': !stateShown }"
-      :state="props.lane.epic.state.category"
-      :label="props.lane.epic.state.name"
-    />
-    <span class="lane-tail">
+    <span
+      ref="tail"
+      class="lane-tail"
+    >
+      <SemanticState
+        v-if="props.lane.epic"
+        class="lane-state"
+        dimension="work-item-state"
+        :class="{ 'visually-hidden': !stateShown }"
+        :state="props.lane.epic.state.category"
+        :label="props.lane.epic.state.name"
+      />
       <span class="lane-counts">{{ counts }}</span>
       <span
         v-if="props.left"
@@ -105,23 +131,43 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       >
       <span
         v-if="props.lane.epic"
+        ref="actions"
         class="lane-actions"
       >
         <VButton
           variant="ghost"
           size="inline"
-          :aria-label="t('workItem.lanes.openEpic', { reference: props.lane.epic.reference })"
+          :title="openLabel"
+          :aria-label="openLabel"
+          icon
+          reach
           @click="emit('open', props.lane.epic.reference)"
-          >{{ t('workItem.lanes.open') }}</VButton
         >
+          <VIcon
+            name="card"
+            :size="16"
+          />
+        </VButton>
         <VButton
           variant="ghost"
           size="inline"
-          :aria-label="t('workItem.lanes.showChain', { reference: props.lane.epic.reference })"
+          :title="chainLabel"
+          :aria-label="chainLabel"
+          icon
+          reach
           @click="emit('chain', props.lane.epic.reference)"
-          >{{ t('workItem.lanes.chain') }}</VButton
         >
+          <VIcon
+            name="chain"
+            :size="16"
+          />
+        </VButton>
       </span>
+      <span
+        v-if="props.lane.epic"
+        ref="room"
+        class="lane-room"
+      />
     </span>
   </header>
 </template>
@@ -131,13 +177,12 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
    and under the row of state names while its lane passes, on the workspace's
    own ground so the tiles go under it rather than through it. It leaves with
    the last of its lane, because a sticky box never leaves its own section.
-   One row while it fits, the title giving way first down to a floor; only
-   where the title would be squeezed past it do the state, counts and work out
-   of sight take a second row. A row it wraps onto starts where the heading's
-   words do, under the reference rather than under the chevron: the box is
-   inset by the toggle's inset, the chevron and their gap, and the toggle alone
-   takes that back. Wrapped from the box's own edge, the counts stood 4px left
-   of the chevron and 28px left of the number they count for. */
+   One row while it fits, the title giving way first. A row it wraps onto starts
+   where the heading's words do, under the reference rather than under the
+   chevron: the box is inset by the toggle's inset, the chevron and their gap,
+   and the toggle alone takes that back. Wrapped from the box's own edge, the
+   counts stood 4px left of the chevron and 28px left of the number they count
+   for. */
 .lane-head {
   /* The chevron's drawn size, as the template asks `VIcon` for it. */
   --lane-chevron-size: 16px;
@@ -146,12 +191,16 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
      some thirty characters of the title. */
   --lane-title-floor: 320px;
 
+  /* The two actions side by side. Where an icon answers a press across 44px
+     (`reach.css`), they stand far enough apart for the two reaches not to meet, and the
+     last keeps its reach inside the board, whose edge clipped it. */
+  --lane-actions-width: calc(2 * var(--size-control-inline) + var(--space-1));
+
   position: sticky;
   top: var(--lanes-head-block);
   left: 0;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
   grid-column: 1 / -1;
   gap: var(--space-1) var(--space-3);
   justify-self: start;
@@ -161,16 +210,34 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   min-height: var(--size-control-height-compact);
   padding-inline-start: calc(var(--space-1) + var(--lane-chevron-size) + var(--space-2));
   background: var(--color-canvas);
+
+  @media (pointer: coarse), (width <= 620px) {
+    --lane-actions-width: calc(var(--size-control-target) * 1.5 + var(--size-control-inline) / 2);
+  }
+}
+
+/* A heading that also says where its work out of sight is would squeeze its
+   title down to a letter, and so would a narrow board: these wrap, the title
+   giving way first down to its floor. Elsewhere the line stays one row, as it
+   always has, and only the title gives way. */
+.lane-head.away {
+  flex-wrap: wrap;
+}
+
+@container board-lanes (width <= 560px) {
+  .lane-head {
+    flex-wrap: wrap;
+  }
 }
 
 /* It wraps by its floor and grows to its words, so the counts follow the title
    rather than standing at the far end, and a title that fits is never cut. It
-   takes the row's free room a thousand times faster than the tail beside it, so a
-   long title gives way first and the tail only takes what is left once the title
-   has its words. */
+   takes the row's free room a thousand times faster than the tail beside it, and
+   gives room up as fast, so a long title gives way first and the tail only takes
+   what is left once the title has its words. */
 .lane-toggle {
   display: inline-flex;
-  flex: 1000 1 var(--lane-title-floor);
+  flex: 1000 1000 var(--lane-title-floor);
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
@@ -200,6 +267,22 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   color: var(--color-text-muted);
 }
 
+.lane-words {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+
+  /* Beside the actions, the reference and the title end short of them: the row is
+     the board's visible width, less the toggle's insets, the chevron and its gap. */
+  .crowded & {
+    max-width: calc(
+      var(--board-visible-width) - var(--space-1) - var(--lane-chevron-size) - 3 * var(--space-2) -
+        var(--lane-actions-width)
+    );
+  }
+}
+
 .lane-reference {
   flex: 0 0 auto;
   color: var(--color-text-tertiary);
@@ -215,6 +298,46 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The state, the counts, the note of work out of sight and an epic's actions:
+   beside the title while they fit there, else on the rows below, where they wrap
+   part by part. Wherever the actions stand, a place of their width is the last
+   part, so whether the tail fits beside the title does not depend on where they
+   stand. The lines stand apart by their parts' own margin rather than by a gap,
+   so the empty place, wrapped onto a line of its own, is a line of no height. */
+.lane-tail {
+  display: flex;
+  flex: 1 0 auto;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+  margin-block-start: calc(-1 * var(--space-1));
+
+  > :not(.lane-room) {
+    margin-block-start: var(--space-1);
+  }
+
+  .lane-head:is(.away, :not(.acting)) & {
+    flex-shrink: 1;
+  }
+
+  /* The lane of work under no epic has no actions: its parts wrap one by one
+     with the title's. */
+  .lane-head:not(.acting) & {
+    display: contents;
+
+    > * {
+      margin-block-start: 0;
+    }
+  }
+}
+
+@container board-lanes (width <= 560px) {
+  .lane-tail {
+    flex-shrink: 1;
+  }
 }
 
 .lane-state {
@@ -239,36 +362,27 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   font-variant-numeric: tabular-nums;
 }
 
-/* The counts, the note of work out of sight and the actions wrap as one unit, so a
-   row never holds the actions alone and the counts wrap only when the title's floor,
-   the counts and the actions do not fit beside each other. Where the title is short
-   the unit takes the rest of the row, and the actions stand at its end. */
-.lane-tail {
-  display: flex;
-  flex: 1 1 auto;
-  gap: var(--space-3);
-  align-items: center;
-
-  /* Nothing can hover here: the unit goes back to the heading's own flow, where the
-     actions stand at the end of its rows as they always have. */
-  @media (hover: none) {
-    display: contents;
-  }
-}
-
-/* A place of their own at the end of the row, not laid over it: they take their
-   inline size from the start, empty at rest and filled when a pointer is over the
-   heading or the keyboard has reached them, so nothing moves or is covered when
-   they come up. They stay in the Tab order, and arriving there is what shows them;
-   a press with the pointer leaves focus behind without leaving them up. */
+/* At the end of the heading's last line, in a place of their own, so nothing moves
+   or is covered when they come up; where that line is full, at the end of the first
+   (`useLaneActionsPlace`). Icons, as an entry's actions are, with their words in
+   the tooltip and for a screen reader. They stay in the Tab order, and arriving
+   there is what shows them; a press with the pointer leaves focus behind without
+   leaving them up. */
 .lane-actions {
-  display: inline-flex;
+  display: flex;
   flex: 0 0 auto;
   gap: var(--space-1);
   align-items: center;
   margin-inline-start: auto;
   opacity: 0;
   transition: opacity var(--duration-quick) var(--ease-out);
+
+  /* Reaches of 44px around icons of 28px: as far apart as each reaches past its icon, and
+     the last as far from the heading's end. */
+  @media (pointer: coarse), (width <= 620px) {
+    gap: calc(var(--size-control-target) - var(--size-control-inline));
+    padding-inline-end: calc(var(--size-control-target) / 2 - var(--size-control-inline) / 2);
+  }
 
   .lane-head:is(:hover, :has(:focus-visible)) & {
     opacity: 1;
@@ -277,6 +391,24 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   /* Nothing can hover here, so they stand. */
   @media (hover: none) {
     opacity: 1;
+  }
+
+  .crowded & {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    block-size: var(--size-control-height-compact);
+    margin: 0;
+  }
+}
+
+/* The actions' place in the lines while they stand beside the title. */
+.lane-room {
+  display: none;
+  flex: 0 0 var(--lane-actions-width);
+
+  .crowded & {
+    display: block;
   }
 }
 </style>
