@@ -444,11 +444,32 @@ async function togglePin() {
   }
 }
 
+/* The open row in the system's own pair. Taking the row out of the forced palette takes
+   everything in it out too, so every ink in it, the dots and the rings are that pair's:
+   a grey number or a CanvasText dot on Highlight is a pair no palette promises. */
 @media (forced-colors: active) {
   .nav-row.current {
     color: HighlightText;
     background: Highlight;
     forced-color-adjust: none;
+
+    :is(.nav-row-lead, .nav-row-fold, .nav-row-number, .nav-row-title, .nav-row-own),
+    :is(.nav-row-meta, .nav-row-pin) {
+      color: HighlightText;
+    }
+
+    .nav-row-pin {
+      background: Highlight;
+    }
+
+    .work-dots > * {
+      background: HighlightText;
+    }
+
+    :is(.nav-row-fold, .nav-row-pin):focus-visible,
+    .nav-row-link:focus-visible::before {
+      outline-color: HighlightText;
+    }
   }
 }
 </style>

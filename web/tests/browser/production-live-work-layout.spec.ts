@@ -8,13 +8,14 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams, liveRow } from './liveWorkPage.ts'
-import { globalScope } from './planningFixtures.ts'
+import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
@@ -259,6 +260,58 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await liveRow(page, 'MAIN-12', '.side-panel-body').locator('.nav-row-link').click()
   await expect(panel).toBeHidden()
   await expect(page).toHaveURL(/\/modules\/planning\/project\/example-project\?entity=/u)
+})
+
+test('a forced palette keeps the dots, and the open row is the system’s own pair throughout', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' })
+  await installBackend(page)
+  const streams = await installLiveStreams(page)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  await expect(page.locator('.drawer')).toBeVisible()
+  const frame = busyFrame()
+  frame.spaces[0].rows.push(frameRow(workItemRef.reference, { state: 'working', agents: 1 }))
+  await streams.live(frame)
+  const dot = liveRow(page, 'MAIN-12').locator('.work-dots i').first()
+  await expect(dot).toBeVisible()
+  const paint = await dot.evaluate((node) => getComputedStyle(node).backgroundColor)
+  expect(paint).not.toBe('rgba(0, 0, 0, 0)')
+
+  const current = liveRow(page, workItemRef.reference)
+  await expect(current.locator('.nav-row-link')).toHaveAttribute('aria-current', 'page')
+  const seen = await current.evaluate((row) => {
+    // What the palette's pair resolves to here, read off a probe the palette leaves alone.
+    const probe = document.createElement('span')
+    probe.style.cssText = 'color: HighlightText; background: Highlight; forced-color-adjust: none'
+    document.body.append(probe)
+    const pair = {
+      ink: getComputedStyle(probe).color,
+      ground: getComputedStyle(probe).backgroundColor,
+    }
+    probe.remove()
+    const parts = row.querySelectorAll(
+      '.nav-row-lead, .nav-row-number, .nav-row-title, .nav-row-meta',
+    )
+    return {
+      pair,
+      ground: getComputedStyle(row).backgroundColor,
+      inks: [...parts].map((part) => getComputedStyle(part).color),
+      dots: [...row.querySelectorAll('.work-dots i')].map(
+        (part) => getComputedStyle(part).backgroundColor,
+      ),
+    }
+  })
+  expect(seen.ground).toBe(seen.pair.ground)
+  expect(seen.inks).toHaveLength(4)
+  expect(seen.dots).toHaveLength(3)
+  for (const ink of [...seen.inks, ...seen.dots]) expect(ink).toBe(seen.pair.ink)
 })
 
 const running = (page: Page) =>
