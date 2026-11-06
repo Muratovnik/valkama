@@ -35,6 +35,8 @@ ADDED_COLUMNS = {
         "resolved_by",
         "resolution",
         "resolved_call_id",
+        # Schema 13 appends this one: the chain runs on to this build's own schema.
+        "awaits_reply",
     ],
     # Schema 12 appends the last one: the chain runs on to this build's own schema.
     "work_item_requests": ["answer_version", "comment_id"],

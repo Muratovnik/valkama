@@ -283,10 +283,22 @@ LAST_REPLY_LIMIT = 500
 #: moves nothing the reader has yet to see.
 UNRESOLVED_PAGE = 20
 
+
 #: Every comment column, and the sources of the calls that wrote the row and its
-#: resolved mark, which are what the two `by_person` values are read from.
+#: resolved mark, which are what the two `by_person` values are read from; and,
+#: for a comment that waits for a reply, whether one came, worked out only for it:
+#: a later reply in its thread (`r`, through its call `rc`) by a person, or by a
+#: confirmed session other than the one whose call `c` wrote the comment. The
+#: roots below read the same.
 _COMMENT_ROWS = (
-    "SELECT m.*, c.identity_source AS call_source, k.identity_source AS resolved_source"
+    "SELECT m.*, c.identity_source AS call_source, k.identity_source AS resolved_source,"
+    " CASE WHEN m.awaits_reply = 1 THEN EXISTS (SELECT 1 FROM work_item_comments r"
+    " LEFT JOIN execution_events rc ON rc.id = r.call_id WHERE r.id > m.id"
+    " AND CASE WHEN m.reply_to_request IS NULL THEN r.reply_to = COALESCE(m.reply_to, m.id)"
+    " ELSE r.reply_to_request = m.reply_to_request END"
+    " AND (rc.identity_source = 'browser' OR (rc.identity_state = 'confirmed'"
+    " AND rc.identity_source <> 'valkama' AND rc.session_id IS NOT NULL"
+    " AND rc.session_id IS NOT c.session_id))) END AS answered"
     " FROM work_item_comments m"
     " LEFT JOIN execution_events c ON c.id = m.call_id"
     " LEFT JOIN execution_events k ON k.id = m.resolved_call_id"
@@ -294,8 +306,12 @@ _COMMENT_ROWS = (
 #: The roots of an item with how many replies each has and its newest. A read
 #: closes the inner query with its own filter, order and limit, then `_ROOT_CALLS`.
 _ROOT_ROWS = (
-    "SELECT t.*, c.identity_source AS call_source, k.identity_source AS resolved_source"
-    " FROM ("
+    "SELECT t.*, c.identity_source AS call_source, k.identity_source AS resolved_source,"
+    " CASE WHEN t.awaits_reply = 1 THEN EXISTS (SELECT 1 FROM work_item_comments r"
+    " LEFT JOIN execution_events rc ON rc.id = r.call_id WHERE r.reply_to = t.id"
+    " AND (rc.identity_source = 'browser' OR (rc.identity_state = 'confirmed'"
+    " AND rc.identity_source <> 'valkama' AND rc.session_id IS NOT NULL"
+    " AND rc.session_id IS NOT c.session_id))) END AS answered FROM ("
     "  SELECT m.*,"
     "   (SELECT COUNT(*) FROM work_item_comments r WHERE r.reply_to = m.id) AS replies,"
     "   (SELECT MAX(r.id) FROM work_item_comments r WHERE r.reply_to = m.id) AS newest"
@@ -316,10 +332,12 @@ def comment_record(row: sqlite3.Row) -> dict:
     call, and null for a row no call wrote: one older than identity, or the
     runner's. `resolution` is the resolved mark a root carries, or null: never
     on a reply, which the store refuses to mark. `mentions` is filled in by
-    `with_mentions`, which every read passes its comments through.
+    `with_mentions`, which every read passes its comments through. A comment that
+    waits for a reply says so, `awaits_reply: true`, with whether another session or
+    a person has `answered`; any other carries neither key.
     """
 
-    return {
+    record = {
         "id": row["id"],
         "kind": "report" if row["report"] else "comment",
         "report": model.summary(row["report"], required=False),
@@ -341,6 +359,10 @@ def comment_record(row: sqlite3.Row) -> dict:
         },
         "mentions": [],
     }
+    if row["awaits_reply"]:
+        record["awaits_reply"] = True
+        record["answered"] = bool(row["answered"])
+    return record
 
 
 def with_mentions(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:

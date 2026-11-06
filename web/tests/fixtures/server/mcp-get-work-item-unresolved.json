@@ -47,6 +47,8 @@
       "by_person": false,
       "resolution": null,
       "mentions": [],
+      "awaits_reply": true,
+      "answered": true,
       "replies": 2,
       "last_reply": {
         "id": 3,

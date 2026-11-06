@@ -46,7 +46,9 @@
       "reply_to_request": null,
       "by_person": false,
       "resolution": null,
-      "mentions": []
+      "mentions": [],
+      "awaits_reply": true,
+      "answered": true
     },
     {
       "id": 2,

@@ -218,6 +218,9 @@ const commentIdentity = {
   resolution: resolutionSchema.nullable(),
   /** The other items the comment told, by reference; a number in its text tells nobody. */
   mentions: boundedList(boundedText(WORK_ITEM_REFERENCE, 20), 20).optional(),
+  /** Present only on a comment that waits for a reply, with whether another session or a person gave one. */
+  awaits_reply: z.literal(true).optional(),
+  answered: z.boolean().optional(),
 }
 
 /**

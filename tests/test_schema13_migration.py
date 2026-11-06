@@ -1,8 +1,9 @@
-"""Schema 13: what a session follows beside what it holds.
+"""Schema 13: what a session follows beside what it holds, and a comment that waits.
 
 The sources are stores built from the catalogs the last schema-11 and schema-12
 builds created, populated as those builds wrote them. What this suite holds the
-migration to: every existing value stays, the subscriptions table arrives once --
+migration to: every existing value stays, the subscriptions table and a comment's
+`awaits_reply`, 0 on every comment there was, arrive once --
 a store at 11 under the one recovery point `preschema12` that covers both steps, a
 store at 12 under `preschema13` -- a second open writes nothing, the recovery point
 brings the store back and the migration runs again, a fresh store has the same
@@ -26,6 +27,7 @@ from tests import schema9, schema11, schema12
 from tests.test_schema12_migration import _catalog, _columns, _rows, _shape
 
 ADDED_TABLE = "work_item_subscriptions"
+AWAITS = "awaits_reply"
 COLUMNS = ["work_item_id", "session_id", "agent_id", "follows", "call_id", "created_at"]
 HELD = "11111111-1111-4111-8111-111111111111"
 LABELS = ("preschema12", "preschema13", "pretables", "preupgrade", "preidentity")
@@ -69,6 +71,16 @@ class SchemaThirteenTests(unittest.TestCase):
         )
         key = [row[1] for row in conn.execute(f"PRAGMA table_info({ADDED_TABLE})") if row[5]]
         self.assertEqual(["work_item_id", "session_id", "agent_id"], key)
+        awaits = [
+            (row[2], row[3], row[4])
+            for row in conn.execute("PRAGMA table_info(work_item_comments)")
+            if row[1] == AWAITS
+        ]
+        self.assertEqual([("INTEGER", 1, "0")], awaits)
+        self.assertEqual(
+            [],
+            conn.execute(f"SELECT id FROM work_item_comments WHERE {AWAITS} <> 0").fetchall(),
+        )
         self.assertEqual("ok", conn.execute("PRAGMA integrity_check").fetchone()[0])
 
     def upgrade(self, version: int, label: str) -> None:
@@ -113,6 +125,16 @@ class SchemaThirteenTests(unittest.TestCase):
                 conn.execute(insert, row)
         conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (HELD,))
         self.assertEqual(0, conn.execute(f"SELECT COUNT(*) FROM {ADDED_TABLE}").fetchone()[0])
+        conn.rollback()
+
+    def test_a_comment_waits_for_a_reply_or_does_not(self) -> None:
+        self.source(12)
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        insert = f"INSERT INTO work_item_comments(work_item_id,body,{AWAITS}) VALUES(?,?,?)"
+        conn.execute(insert, (HELD, "Waits", 1))
+        with self.assertRaises(sqlite3.IntegrityError):
+            conn.execute(insert, (HELD, "Neither", 2))
         conn.rollback()
 
     def test_preschema13_restores_12_and_the_migration_runs_again(self) -> None:

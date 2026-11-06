@@ -1645,12 +1645,14 @@ def comment_work_item(
     checklist_item_id: str | None = None,
     reply_to: int | None = None,
     reply_to_request: str | None = None,
+    awaits_reply: bool = False,
 ) -> dict:
     """A comment: the root of a thread, or a reply under one when it names a parent.
 
     A reply answers a comment (`reply_to`) or a question (`reply_to_request`) of
     the same item. Threads are one level deep, so a reply to a reply stands under
-    that reply's root, and the answer names the root it joined.
+    that reply's root, and the answer names the root it joined. `awaits_reply`
+    says the writer waits for an answer in that thread; a read says whether one came.
     """
 
     if not conn.in_transaction:
@@ -1667,7 +1669,8 @@ def comment_work_item(
     root, question = parent if parent is not None else (None, None)
     inserted = conn.execute(
         "INSERT INTO work_item_comments(work_item_id,author,body,checklist_item_id,"
-        "checklist_item_text,call_id,reply_to,reply_to_request) VALUES(?,?,?,?,?,?,?,?)",
+        "checklist_item_text,call_id,reply_to,reply_to_request,awaits_reply)"
+        " VALUES(?,?,?,?,?,?,?,?,?)",
         (
             str(row["work_item_id"]),
             model.actor(author),
@@ -1677,6 +1680,7 @@ def comment_work_item(
             calls.call_id(conn, str(row["work_item_id"])),
             root,
             question,
+            int(awaits_reply),
         ),
     )
     # Both parents always: the root a reply joined, and null for a new root.

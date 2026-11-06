@@ -582,6 +582,7 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             checklist_item_id=_optional_text(payload, "checklist_item_id"),
             reply_to=_optional_int(payload, "reply_to"),
             reply_to_request=_optional_text(payload, "reply_to_request"),
+            awaits_reply=_flag(payload, "awaits_reply"),
         )
         comment_id = int(written["comment_id"])
         written = _with_mentions(conn, written, comment_id, named, payload)
@@ -795,7 +796,15 @@ def _author(payload: Mapping[str, object]) -> str | None:
 
 
 _COMMENT_FIELDS = frozenset(
-    {"body", "checklist_item_id", "reply_to", "reply_to_request", "list", "mentions"}
+    {
+        "body",
+        "checklist_item_id",
+        "reply_to",
+        "reply_to_request",
+        "list",
+        "mentions",
+        "awaits_reply",
+    }
 )
 #: What a batch may change, in the order it applies them, with the fields each
 #: entry may name. The order is the contract: a closing transition is judged

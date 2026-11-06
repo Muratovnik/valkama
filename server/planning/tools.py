@@ -180,6 +180,11 @@ _MENTIONS = {
     f" tells nobody. A session names one item at most {mention_records.MAX_PER_HOUR} times an"
     " hour. The answer says who will hear each.",
 }
+_AWAITS_REPLY = {
+    "type": "boolean",
+    "description": "This comment waits for an answer in its thread; get_work_item says on the"
+    " comment whether another session or a person has replied (answered).",
+}
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
@@ -739,6 +744,7 @@ TOOLS = [
             "reply_to_request": _REPLY_TO_REQUEST,
             "list": _LIST,
             "mentions": _MENTIONS,
+            "awaits_reply": _AWAITS_REPLY,
         },
         ["id", "body"],
     ),
@@ -857,6 +863,7 @@ TOOLS = [
                     "reply_to_request": _REPLY_TO_REQUEST,
                     "list": _LIST,
                     "mentions": _MENTIONS,
+                    "awaits_reply": _AWAITS_REPLY,
                 },
                 "required": ["body"],
             },
@@ -875,6 +882,7 @@ TOOLS = [
                         "reply_to_request": _STR,
                         "list": _LIST,
                         "mentions": _MENTIONS,
+                        "awaits_reply": _AWAITS_REPLY,
                     },
                     "required": ["body"],
                 },

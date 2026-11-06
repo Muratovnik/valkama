@@ -25,12 +25,13 @@ _REF_SQL = ",".join(f"'{kind}'" for kind in sorted(model.REF_KINDS))
 
 _NOW = "(strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
 
-#: What schemas 10 and 12 append, by table, in the order they append it. A comment
+#: What schemas 10, 12 and 13 append, by table, in the order they append it. A comment
 #: is the root of a thread when it names no parent and a reply when it names one --
 #: a root comment or a question, never both -- and only a root carries the
 #: resolve mark. A question keeps the number of its current answer; the answers
 #: it replaced live in `work_item_request_answers`. Schema 12 lets a question stand
-#: on a root comment, as the list of choices under it. ALTER TABLE can only append,
+#: on a root comment, as the list of choices under it, and schema 13 lets a comment
+#: say it waits for a reply (`awaits_reply`). ALTER TABLE can only append,
 #: so the base schema declares these last from the same text and a fresh store
 #: has the shape a migrated one reaches.
 _THREAD_COLUMNS = {
@@ -44,6 +45,10 @@ _THREAD_COLUMNS = {
         ("resolved_by", "resolved_by TEXT NOT NULL DEFAULT ''"),
         ("resolution", "resolution TEXT NOT NULL DEFAULT ''"),
         ("resolved_call_id", "resolved_call_id INTEGER REFERENCES execution_events(id)"),
+        (
+            "awaits_reply",
+            "awaits_reply INTEGER NOT NULL DEFAULT 0 CHECK(awaits_reply IN (0,1))",
+        ),
     ),
     "work_item_requests": (
         ("answer_version", "answer_version INTEGER NOT NULL DEFAULT 0"),
@@ -370,8 +375,9 @@ _THREAD_INDEXES = (
 
 
 def migrate_threads(conn: sqlite3.Connection) -> None:
-    """Schema 10's and 12's Planning step: threads, the resolve mark, answer versions,
-    a question on a root comment and the mention action, once.
+    """Schema 10's, 12's and 13's Planning step: threads, the resolve mark, answer
+    versions, a question on a root comment, the mention action and a comment that
+    waits for a reply, once.
 
     Appends the columns `_THREAD_COLUMNS` names, numbers an answered question's
     current answer 1 in the same call that adds the column (a later open leaves

@@ -78,6 +78,8 @@ SCHEMA10_COLUMNS = {
         "resolved_by",
         "resolution",
         "resolved_call_id",
+        # Schema 13's: the chain runs on to this build's own schema.
+        "awaits_reply",
     },
     # Schema 12's column: the chain runs on to this build's own schema.
     "work_item_requests": {"answer_version", "comment_id"},

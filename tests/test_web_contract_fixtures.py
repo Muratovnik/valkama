@@ -392,7 +392,9 @@ class _Scenario:
         """Build the discussion and the questions, then read them as each reader does."""
 
         ref = self.reference
-        agent_root = self.tool("comment_work_item", id=ref, body="The export leaves out claims.")
+        agent_root = self.tool(
+            "comment_work_item", id=ref, body="The export leaves out claims.", awaits_reply=True
+        )
         reply = self.http(
             "/api/planning/work-item/comment",
             {
