@@ -84,16 +84,14 @@ for (const [size, width] of [
     // The ring stands clear of the words and inside the replies' line, not on either.
     const ring = await written.evaluate((node) => {
       const style = getComputedStyle(node)
-      const reach = Number.parseFloat(style.outlineOffset) + Number.parseFloat(style.outlineWidth)
+      const gap = Number.parseFloat(style.outlineOffset)
+      const reach = gap + Number.parseFloat(style.outlineWidth)
       const line = node.parentElement?.getBoundingClientRect().left ?? 0
-      const control = getComputedStyle(document.documentElement).getPropertyValue(
-        '--radius-control',
-      )
+      const root = getComputedStyle(document.documentElement)
       return {
-        corner:
-          Number.parseFloat(style.borderTopLeftRadius) + Number.parseFloat(style.outlineOffset),
-        control: Number.parseFloat(control),
-        gap: Number.parseFloat(style.outlineOffset),
+        corner: Number.parseFloat(style.borderTopLeftRadius) + gap,
+        control: Number.parseFloat(root.getPropertyValue('--radius-control')),
+        gap,
         left: node.getBoundingClientRect().left - reach - line,
       }
     })
