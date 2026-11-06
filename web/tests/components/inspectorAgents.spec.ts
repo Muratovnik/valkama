@@ -21,6 +21,18 @@ import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
 
+// A group that can reach its session asks where a press on it would go. No server answers
+// here, so the plan fails the way an unreachable one does, without going to the network.
+vi.mock('@/shared/api/openPlanModel.ts', async (load) => {
+  const actual = await load<typeof import('@/shared/api/openPlanModel.ts')>()
+  return {
+    ...actual,
+    fetchOpenPlan: vi.fn(() =>
+      Promise.reject(new actual.OpenPlanRequestError('request-failed', 'no server in a test')),
+    ),
+  }
+})
+
 const NOW = '2026-11-02T12:00:00Z'
 
 function agent(overrides: Partial<WorkItemAgent> = {}): WorkItemAgent {
