@@ -172,7 +172,10 @@ checkouts are therefore distinguishable even at the same version.
   three notices in an hour quoting other agents on one item, that item's news is one
   line per notice that counts the events, names who wrote them and says to read the
   item; the reply a session awaited, a blocker that closed and a person's acts are
-  always quoted. The hook's `.marks` files are now headed `v4`. See
+  always quoted. The hook's `.marks` files are now headed `v4`.
+  In the card, the sessions that follow an item stand under its holder, and a comment still
+  waiting for its reply says «waiting for a reply» in its head until another session or
+  you reply in its thread. See
   [Subscriptions](docs/connection-contract.md#subscriptions),
   [another agent session's news](docs/hook-contract.md#another-agent-sessions-news) and
   [when it wakes](docs/hook-contract.md#when-another-sessions-news-wakes).

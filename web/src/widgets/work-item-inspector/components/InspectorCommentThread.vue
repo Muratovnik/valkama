@@ -24,6 +24,7 @@ import InspectorStepsAction from '@/widgets/work-item-inspector/components/Inspe
 import InspectorThreadFlags from '@/widgets/work-item-inspector/components/InspectorThreadFlags.vue'
 import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
 import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
+import { waitsForReply } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import type { ThreadRow } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import {
   entryAnchor,
@@ -135,6 +136,7 @@ const resolveLabel = computed(() => t(mark.value ? 'threads.reopen' : 'threads.r
 const firstLine = computed(() =>
   plainText(root.value.report ? root.value.report.done : root.value.body),
 )
+const waiting = computed(() => (waitsForReply(root.value) ? t('threads.awaitsReply') : ''))
 
 /** A reply newer than the mark says the thread was spoken in since someone closed it. */
 const replyAfterMark = computed(() => {
@@ -225,6 +227,7 @@ function sendMark() {
           :id="metaId"
           class="thread-meta"
           :when="when(root.at)"
+          :after="waiting"
           >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
         >
         <template

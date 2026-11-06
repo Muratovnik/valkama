@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 
 import InspectorEntrySteps from '@/widgets/work-item-inspector/components/InspectorEntrySteps.vue'
 import InspectorStepsAction from '@/widgets/work-item-inspector/components/InspectorStepsAction.vue'
+import { waitsForReply } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import type { ThreadComment } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import {
   injectThreadForms,
@@ -109,6 +110,9 @@ function authorOf(reply: ThreadComment) {
 function sessionOf(reply: ThreadComment) {
   return reply.by_person === true ? '' : actorSession(reply.author)
 }
+function waitingOf(reply: ThreadComment) {
+  return waitsForReply(reply) ? t('threads.awaitsReply') : ''
+}
 function send() {
   if (props.parent) sendReply(props.threadKey, props.parent, props.root)
 }
@@ -150,6 +154,7 @@ function retryMark() {
           <MetaLine
             class="reply-meta"
             :when="when(reply.at)"
+            :after="waitingOf(reply)"
             >{{ authorOf(reply) }}
             <span v-if="sessionOf(reply)">{{ sessionOf(reply) }}</span></MetaLine
           >

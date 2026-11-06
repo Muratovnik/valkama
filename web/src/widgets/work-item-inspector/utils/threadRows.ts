@@ -181,3 +181,10 @@ export function isUnresolved(row: ThreadRow, kept: ReadonlySet<string>) {
     ? row.comment.resolution === null
     : row.kind === 'detached' || stillOpen(row, kept)
 }
+
+/**
+ * Whether an entry asked and still waits for its reply: it said so with `awaits_reply`, and the
+ * read does not yet say another session or a person has `answered` in its thread.
+ */
+export const waitsForReply = (entry: ThreadComment) =>
+  entry.awaits_reply === true && entry.answered !== true

@@ -28,6 +28,14 @@ function markThread(item: WorkItem, body: Record<string, unknown>) {
   return { json: { work_item: item.reference, comment_id: root.id, resolution: root.resolution } }
 }
 
+type Entry = WorkItem['comments'][number]
+
+/** Whether `entry` is the root of `reply`'s thread or another reply in it. */
+const inThread = (entry: Entry, reply: Entry) =>
+  reply.reply_to_request === null
+    ? (entry.reply_to ?? entry.id) === reply.reply_to
+    : entry.reply_to_request === reply.reply_to_request
+
 function writeReply(item: WorkItem, body: Record<string, unknown>) {
   const reply: WorkItem['comments'][number] = {
     id: nextId(item),
@@ -42,6 +50,9 @@ function writeReply(item: WorkItem, body: Record<string, unknown>) {
     body: String(body.body),
   }
   item.comments.push(reply)
+  // A person's reply answers what waited in its thread, as the server's read then says.
+  for (const entry of item.comments)
+    if (entry.awaits_reply && entry.id < reply.id && inThread(entry, reply)) entry.answered = true
   return {
     work_item: item.reference,
     comment_count: item.comments.length,
