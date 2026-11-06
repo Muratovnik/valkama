@@ -19,14 +19,16 @@ export default defineConfig({
   projects: [
     {
       name: 'harness',
-      testMatch: /ui-[a-z-]+\.spec\.ts/,
+      // From the start of the file's name, and digits allowed: a name with one was skipped
+      // without a word, and one merely containing `ui-` would have run here too.
+      testMatch: /(?:^|[\\/])ui-[a-z0-9-]+\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], baseURL: harness },
     },
     {
       name: 'production',
       // Every production spec but the Russian one, which runs in its own
       // locale below: a list of names skipped each spec nobody added to it.
-      testMatch: /production-(?!locale\.)[a-z-]+\.spec\.ts/,
+      testMatch: /(?:^|[\\/])production-(?!locale\.)[a-z0-9-]+\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: app,
@@ -35,7 +37,7 @@ export default defineConfig({
     },
     {
       name: 'production-ru',
-      testMatch: /production-locale\.spec\.ts/,
+      testMatch: /(?:^|[\\/])production-locale\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: app,
