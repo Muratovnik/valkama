@@ -153,9 +153,9 @@ describe('a list under a comment', () => {
     const article = thread(wrapper, 1)
     expect(article.element.tagName).toBe('ARTICLE')
     // Under the words of the comment, in its own sheet.
-    const parts = [...article.element.children].map((child) => child.className)
-    expect(parts.indexOf('comment-list')).toBeGreaterThan(
-      parts.findIndex((name) => name.includes('thread-text')),
+    const parts = [...article.element.children]
+    expect(parts.findIndex((child) => child.classList.contains('comment-list'))).toBeGreaterThan(
+      parts.findIndex((child) => child.classList.contains('thread-text')),
     )
     // The question stands as a question; the list does not.
     expect(wrapper.findAll('.request-card')).toHaveLength(1)
