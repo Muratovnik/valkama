@@ -350,7 +350,9 @@ checkouts are therefore distinguishable even at the same version.
   Preview» switch, when it moves to a second line, stands at that line's end; and an epic's
   row that wraps starts its counts under the epic's number instead of left of its arrow. On
   a wide board an epic's row keeps its counts beside its title, shortening the title before
-  it wraps, and its «Open» and «Chain» buttons no longer leave a blank band under it.
+  it wraps, and its «Open» and «Chain» buttons no longer leave a blank band under it; they
+  now keep their own place at the end of the row, so they cover neither the title nor the
+  counts when they come up.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field

@@ -88,38 +88,40 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       :state="props.lane.epic.state.category"
       :label="props.lane.epic.state.name"
     />
-    <span class="lane-counts">{{ counts }}</span>
-    <span
-      v-if="props.left"
-      class="lane-elsewhere"
-      ><span aria-hidden="true">{{ TO_LEFT }}</span
-      ><span class="visually-hidden">{{ leftLead }}</span
-      >{{ props.left }}</span
-    >
-    <span
-      v-if="props.right"
-      class="lane-elsewhere"
-      ><span class="visually-hidden">{{ rightLead }}</span
-      >{{ props.right }}<span aria-hidden="true">{{ TO_RIGHT }}</span></span
-    >
-    <span
-      v-if="props.lane.epic"
-      class="lane-actions"
-    >
-      <VButton
-        variant="ghost"
-        size="inline"
-        :aria-label="t('workItem.lanes.openEpic', { reference: props.lane.epic.reference })"
-        @click="emit('open', props.lane.epic.reference)"
-        >{{ t('workItem.lanes.open') }}</VButton
+    <span class="lane-tail">
+      <span class="lane-counts">{{ counts }}</span>
+      <span
+        v-if="props.left"
+        class="lane-elsewhere"
+        ><span aria-hidden="true">{{ TO_LEFT }}</span
+        ><span class="visually-hidden">{{ leftLead }}</span
+        >{{ props.left }}</span
       >
-      <VButton
-        variant="ghost"
-        size="inline"
-        :aria-label="t('workItem.lanes.showChain', { reference: props.lane.epic.reference })"
-        @click="emit('chain', props.lane.epic.reference)"
-        >{{ t('workItem.lanes.chain') }}</VButton
+      <span
+        v-if="props.right"
+        class="lane-elsewhere"
+        ><span class="visually-hidden">{{ rightLead }}</span
+        >{{ props.right }}<span aria-hidden="true">{{ TO_RIGHT }}</span></span
       >
+      <span
+        v-if="props.lane.epic"
+        class="lane-actions"
+      >
+        <VButton
+          variant="ghost"
+          size="inline"
+          :aria-label="t('workItem.lanes.openEpic', { reference: props.lane.epic.reference })"
+          @click="emit('open', props.lane.epic.reference)"
+          >{{ t('workItem.lanes.open') }}</VButton
+        >
+        <VButton
+          variant="ghost"
+          size="inline"
+          :aria-label="t('workItem.lanes.showChain', { reference: props.lane.epic.reference })"
+          @click="emit('chain', props.lane.epic.reference)"
+          >{{ t('workItem.lanes.chain') }}</VButton
+        >
+      </span>
     </span>
   </header>
 </template>
@@ -162,10 +164,13 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 }
 
 /* It wraps by its floor and grows to its words, so the counts follow the title
-   rather than standing at the far end, and a title that fits is never cut. */
+   rather than standing at the far end, and a title that fits is never cut. It
+   takes the row's free room a thousand times faster than the tail beside it, so a
+   long title gives way first and the tail only takes what is left once the title
+   has its words. */
 .lane-toggle {
   display: inline-flex;
-  flex: 1 1 var(--lane-title-floor);
+  flex: 1000 1 var(--lane-title-floor);
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
@@ -234,20 +239,34 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   font-variant-numeric: tabular-nums;
 }
 
-/* Out of sight at rest, and out of the rows too: hidden, they wrapped onto a row of
-   their own and left a blank band under the heading, or pushed the counts off the
-   title's line. A pointer brings them up at the end of the heading, over its last
-   row, which they do not move. They stay in the Tab order, and arriving there is what
-   shows them; a press with the pointer leaves focus behind without leaving them up. */
+/* The counts, the note of work out of sight and the actions wrap as one unit, so a
+   row never holds the actions alone and the counts wrap only when the title's floor,
+   the counts and the actions do not fit beside each other. Where the title is short
+   the unit takes the rest of the row, and the actions stand at its end. */
+.lane-tail {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  align-items: center;
+
+  /* Nothing can hover here: the unit goes back to the heading's own flow, where the
+     actions stand at the end of its rows as they always have. */
+  @media (hover: none) {
+    display: contents;
+  }
+}
+
+/* A place of their own at the end of the row, not laid over it: they take their
+   inline size from the start, empty at rest and filled when a pointer is over the
+   heading or the keyboard has reached them, so nothing moves or is covered when
+   they come up. They stay in the Tab order, and arriving there is what shows them;
+   a press with the pointer leaves focus behind without leaving them up. */
 .lane-actions {
-  position: absolute;
-  inset-block-end: 0;
-  inset-inline-end: 0;
   display: inline-flex;
+  flex: 0 0 auto;
   gap: var(--space-1);
   align-items: center;
-  min-block-size: min(100%, var(--size-control-height-compact));
-  background: var(--color-canvas);
+  margin-inline-start: auto;
   opacity: 0;
   transition: opacity var(--duration-quick) var(--ease-out);
 
@@ -255,12 +274,8 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
     opacity: 1;
   }
 
-  /* Nothing can hover here, so they stand, at the end of the heading's rows. */
+  /* Nothing can hover here, so they stand. */
   @media (hover: none) {
-    position: static;
-    flex: 0 0 auto;
-    margin-inline-start: auto;
-    background: none;
     opacity: 1;
   }
 }

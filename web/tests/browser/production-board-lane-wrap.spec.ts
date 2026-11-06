@@ -8,90 +8,10 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { boardSpace } from './boardFixtures.ts'
 import { openBoard, serve, shot } from './boardPage.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { drawnParts, overlaps, sameBoxes, settle } from './laneHeadGeometry.ts'
+import { serveWide } from './laneWideFixture.ts'
 import { test } from './test.ts'
-
-/** The board's own space, read through `wideSpace`, over what `serve` answers. */
-async function serveWide(page: Page) {
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    const model = response.body as unknown as Model
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(
-        response.status === 200 && 'work_items' in model
-          ? wideSpace({ ...model, work_items: [...model.work_items, ...boardSpace()] })
-          : model,
-      ),
-    })
-  })
-}
-
-type Model = Record<string, unknown> & {
-  work_items: Record<string, unknown>[]
-  workflow: { states: Record<string, unknown>[] }
-}
-
-const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-
-/**
- * The board's space with a workflow wider than a desktop's board, and epics with work in
- * the last state, out of sight to the right: the headings that once wrapped their hidden
- * actions, or their note of that work beside a title shown whole, onto a row of its own.
- */
-function wideSpace(model: Model): Model {
-  const [backlog, dev, done] = model.workflow.states
-  const between = ['Review', 'Testing', 'Staging', 'Blocked'].map((name, index) => ({
-    ...dev,
-    state_id: id(950 + index),
-    key: name.toLowerCase(),
-    name,
-  }))
-  const states = [backlog, dev, ...between, done].map((state, position) => ({
-    ...state,
-    position,
-  }))
-  // An item names its state without the workflow's ordering.
-  const blocked = Object.fromEntries(
-    Object.entries(states.at(-2) ?? {}).filter(([key]) => key !== 'position'),
-  )
-  const [template] = model.work_items
-  // One title that fits beside its counts and its note of work out of sight, and one
-  // that fits only when it gives way, each with work in the last state.
-  const titles = [
-    'Lane heads keep their counts beside a title shown whole, at every width',
-    'Lane heads that shorten a long title before they move its counts and their note of work off the line',
-  ]
-  const added = titles.flatMap((title, index) => [
-    {
-      ...template,
-      work_item_id: id(491 + 2 * index),
-      reference: `MAIN-${491 + 2 * index}`,
-      number: 491 + 2 * index,
-      title,
-      kind: 'epic',
-      container: true,
-      parent_id: null,
-    },
-    {
-      ...template,
-      work_item_id: id(492 + 2 * index),
-      reference: `MAIN-${492 + 2 * index}`,
-      number: 492 + 2 * index,
-      title: 'Work waiting at the far end of the board',
-      state: blocked,
-      parent_id: id(491 + 2 * index),
-    },
-  ])
-  return {
-    ...model,
-    workflow: { ...model.workflow, states },
-    work_items: [...model.work_items, ...added],
-  }
-}
 
 interface Row {
   left: number
@@ -156,6 +76,13 @@ test('a lane heading that wraps at 390px starts its next row under its words', a
       ).toBeLessThanOrEqual(1)
   }
   await page.screenshot(shot(info, 'lane-wrap-390.png'))
+  const tallest = await page
+    .locator('.lane-head')
+    .evaluateAll((heads) => heads.map((head) => (head as HTMLElement).offsetHeight))
+  await page
+    .locator('.lane-head')
+    .nth(tallest.indexOf(Math.max(...tallest)))
+    .screenshot(shot(info, 'lane-head-390-long-title.png'))
 })
 
 interface Head {
@@ -221,7 +148,8 @@ test('at 1280px a lane heading wraps only for want of room and keeps no blank ro
   const heads = await page.locator('.lane-head').evaluateAll(readHeads)
   // The states run past the board's width here, so headings name work out of sight.
   expect(heads.filter(({ elsewhere }) => elsewhere).length).toBeGreaterThanOrEqual(1)
-  const counts = new Set(['lane-counts', 'lane-elsewhere'])
+  // The counts, the note of work out of sight and the actions wrap as one unit.
+  const counts = new Set(['lane-tail'])
   for (const [index, head] of heads.entries()) {
     const said = `heading ${index}: ${JSON.stringify(head.rows)}`
     // The lane's actions, out of sight at rest, once wrapped onto a row that showed nothing.
@@ -247,4 +175,154 @@ test('at 1280px a lane heading wraps only for want of room and keeps no blank ro
   expect(hovered?.actions?.shown).toBe(true)
   expect(Math.abs((hovered?.actions?.right ?? 0) - (hovered?.right ?? 0))).toBeLessThanOrEqual(1)
   await page.screenshot(shot(info, 'lane-heads-1280.png'))
+})
+
+test('at 1280px an epic heading keeps its actions in a place of their own on hover and focus', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await installBackend(page)
+  await serve(page)
+  await serveWide(page)
+  await openBoard(page)
+
+  const epics = page.locator('.lane-head', { has: page.locator('.lane-actions') })
+  const total = await epics.count()
+  expect(total, 'epic headings with actions').toBeGreaterThanOrEqual(3)
+  for (let index = 0; index < total; index += 1) {
+    const head = epics.nth(index)
+    const said = `heading ${index}`
+    const actions = head.locator('.lane-actions')
+
+    await page.mouse.move(0, 0)
+    await expect(actions, `${said} at rest`).toHaveCSS('opacity', '0')
+    const rest = await head.evaluate(drawnParts)
+    await head.screenshot(shot(info, `lane-head-1280-${index}-rest.png`))
+
+    await head.hover()
+    await expect(actions, `${said} on hover`).toHaveCSS('opacity', '1')
+    const hovered = await head.evaluate(drawnParts)
+    await head.screenshot(shot(info, `lane-head-1280-${index}-hover.png`))
+
+    await page.mouse.move(0, 0)
+    await head.locator('.lane-toggle').evaluate((node: HTMLElement) => {
+      node.focus({ preventScroll: true })
+    })
+    await page.keyboard.press('Tab')
+    await expect(actions, `${said} on keyboard focus`).toHaveCSS('opacity', '1')
+    const focused = await head.evaluate(drawnParts)
+    await head.screenshot(shot(info, `lane-head-1280-${index}-focus.png`))
+
+    for (const [state, drawn] of [
+      ['at rest', rest],
+      ['on hover', hovered],
+      ['on focus', focused],
+    ] as const) {
+      const others = [...drawn.title, ...drawn.counts, ...drawn.elsewhere]
+      const hits = drawn.actions.flatMap((action, at) =>
+        others.some((other) => overlaps(action, other)) ? [`action ${at}`] : [],
+      )
+      expect.soft(hits, `${said} ${state}: actions over a title or count`).toEqual([])
+      const onRow = drawn.actions.every(
+        (action) =>
+          Math.abs(
+            (action.top + action.bottom) / 2 - (drawn.toggle.top + drawn.toggle.bottom) / 2,
+          ) <= 2,
+      )
+      expect.soft(onRow, `${said} ${state}: actions leave the first row`).toBe(true)
+      expect
+        .soft(Math.abs(drawn.height - rest.height), `${said} ${state}: height`)
+        .toBeLessThanOrEqual(0.5)
+      expect.soft(sameBoxes(drawn.counts, rest.counts), `${said} ${state}: counts`).toBe(true)
+      expect
+        .soft(sameBoxes(drawn.elsewhere, rest.elsewhere), `${said} ${state}: elsewhere`)
+        .toBe(true)
+      expect.soft(sameBoxes(drawn.title, rest.title), `${said} ${state}: title`).toBe(true)
+    }
+  }
+})
+
+/** A tile the board brings into view under its sticky lane heading stops at the lane's normal gap. */
+async function scrollsTileBelowHeading(page: Page, width: number) {
+  await page.setViewportSize({ width, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await installBackend(page)
+  await serve(page)
+  await serveWide(page)
+  await openBoard(page)
+  await page.mouse.move(0, 0)
+
+  // The tallest heading below the first open lane, so the heading that stays at the top is
+  // the one this width makes: two rows on a narrow board.
+  const heights = await page
+    .locator('.board-lane.open .lane-head')
+    .evaluateAll((heads) => heads.map((head) => (head as HTMLElement).offsetHeight))
+  const at = heights.indexOf(Math.max(...heights.slice(1)), 1)
+
+  const board = page.locator('.work-item-lanes')
+  const lane = page.locator('.board-lane.open').nth(at)
+  const head = lane.locator('.lane-head')
+  const tile = lane.locator('[data-reference]').first()
+  // The sheet is the tile as drawn; its open button sits lower inside it.
+  const sheet = tile.locator('.work-item-tile')
+  await expect(sheet).toBeVisible()
+
+  const gapAt = async () => {
+    const heading = await head.boundingBox()
+    const top = await sheet.boundingBox()
+    return top && heading ? top.y - (heading.y + heading.height) : Number.NaN
+  }
+  // The gap a tile keeps under its heading in the lane's own layout, before anything scrolls.
+  const normal = await gapAt()
+
+  // Bring the tile to 50px below the board's top, under the heading that stays at the top while
+  // its lane passes. Scrolling re-lays out the lanes above (their heights are estimates until
+  // they are drawn), so the tile is moved in steps, each read once the layout has settled.
+  for (let step = 0; step < 4; step += 1) {
+    const top = await tile.boundingBox()
+    const scroller = await board.boundingBox()
+    if (!top || !scroller || Math.abs(top.y - scroller.y - 50) <= 1) break
+    await board.evaluate(
+      (node: HTMLElement, by: number) => {
+        node.scrollTop += by
+      },
+      top.y - scroller.y - 50,
+    )
+    await settle(board)
+  }
+  const before = await head.boundingBox()
+  const beforeTile = await sheet.boundingBox()
+  const tileUnder = Boolean(before && beforeTile && beforeTile.y < before.y + before.height)
+
+  // The way the board brings a tile into view: the tile's open button, nearest edge.
+  await tile.locator('.tile-open').evaluate((node: HTMLElement) => {
+    node.scrollIntoView({ block: 'nearest' })
+  })
+  await settle(board)
+  return { after: await gapAt(), heading: heights[at], normal, tileUnder }
+}
+
+test('at 1280px a tile scrolled into view stops under its lane heading at the normal gap', async ({
+  page,
+}) => {
+  const { after, heading, normal, tileUnder } = await scrollsTileBelowHeading(page, 1280)
+  expect(heading, 'a one-row heading').toBeLessThanOrEqual(40)
+  expect(tileUnder, 'tile under the heading before the scroll').toBe(true)
+  expect(after, 'gap under the heading after scrolling').toBeGreaterThanOrEqual(-0.5)
+  expect(after, `gap under the heading, normal gap ${normal.toFixed(1)}px`).toBeLessThanOrEqual(
+    normal + 0.5,
+  )
+})
+
+test('at 390px a tile scrolled into view under a two-row heading stops at the normal gap', async ({
+  page,
+}) => {
+  const { after, heading, normal, tileUnder } = await scrollsTileBelowHeading(page, 390)
+  expect(heading, 'a two-row heading').toBeGreaterThan(40)
+  expect(tileUnder, 'tile under the heading before the scroll').toBe(true)
+  expect(after, 'gap under the heading after scrolling').toBeGreaterThanOrEqual(-0.5)
+  expect(after, `gap under the heading, normal gap ${normal.toFixed(1)}px`).toBeLessThanOrEqual(
+    normal + 0.5,
+  )
 })
