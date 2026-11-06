@@ -146,7 +146,13 @@ function currentState(module: ModuleManifest) {
 </template>
 
 <style scoped>
+/* Where an entry's label starts, measured from the entry's own start: its padding, the
+   icon's column and the gap after it. A list in the group's slot reads it to start a
+   caption under the label rather than at an edge of its own (`NavWorkTree`). */
 .nav-group {
+  --nav-icon-column: 22px;
+  --nav-label-start: calc(var(--space-3) + var(--nav-icon-column) + var(--space-3));
+
   display: flex;
   flex-direction: column;
   gap: var(--space-half);
@@ -234,7 +240,7 @@ function currentState(module: ModuleManifest) {
      line. */
   position: relative;
   display: grid;
-  grid-template-columns: 22px minmax(0, auto) minmax(0, 1fr);
+  grid-template-columns: var(--nav-icon-column) minmax(0, auto) minmax(0, 1fr);
   gap: var(--space-3);
   align-items: center;
   width: 100%;

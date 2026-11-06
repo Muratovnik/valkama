@@ -10,12 +10,13 @@
  * The button counts the items an agent's session is on now. A press opens the panel; a
  * row pressed there closes it and opens the card, and the cross, the scrim and Escape
  * close it and give focus back to the button. The panel's rows are a finger's height
- * and the same rows: the frame is the store's, and so is what folds are open.
+ * and the same rows: the frame is the store's, and so is what folds are open. Its heading
+ * starts where the spaces' names do.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import NavWorkTree from '@/widgets/app-nav/components/NavWorkTree.vue'
+import NavWorkTree, { NAME_INDENT_TOUCH } from '@/widgets/app-nav/components/NavWorkTree.vue'
 import type { NavShown, NavTarget } from '@/widgets/app-nav/components/NavWorkTree.vue'
 import type { NavOpen } from '@/widgets/app-nav/composables/useNavOpen.ts'
 
@@ -105,6 +106,7 @@ const elsewhere = computed(() => store.frame?.elsewhere ?? 0)
       :open="panelOpen"
       :title="t('liveWork.title')"
       :close-label="t('liveWork.close')"
+      :title-indent="NAME_INDENT_TOUCH"
       @close="panelOpen = false"
     >
       <NavWorkTree

@@ -7,22 +7,29 @@
  *
  * Its head is the rail's head and not an overlay's: the title at the rail's size beside
  * the way out, and no rule under them, since the rail draws none. An overlay's head stands
- * 24px in from its edges, which on a panel 340px wide is room the rows need.
+ * 24px in from its edges, which on a panel 340px wide is room the rows need. The title
+ * starts where the words of what the panel holds start, which only the content knows: it
+ * says how far in from the body's edge they stand as `titleIndent`.
  */
-import { useId } from 'vue'
+import { computed, useId } from 'vue'
 
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-defineProps<{
+const props = defineProps<{
   closeLabel: string
   open: boolean
   title: string
+  /** How far the content's words stand in from the body's edge, as a CSS length. */
+  titleIndent?: string
 }>()
 
 const emit = defineEmits<{ close: [] }>()
 const titleId = `side-panel-${useId()}`
+const indent = computed(() =>
+  props.titleIndent === undefined ? undefined : { '--side-panel-indent': props.titleIndent },
+)
 </script>
 
 <template>
@@ -36,6 +43,7 @@ const titleId = `side-panel-${useId()}`
   >
     <section
       class="side-panel"
+      :style="indent"
       :aria-labelledby="titleId"
     >
       <header class="side-panel-head">
@@ -64,7 +72,12 @@ const titleId = `side-panel-${useId()}`
 </template>
 
 <style scoped>
+/* The title starts at the body's edge, 8px, and the content's indent past it, which the
+   content's `titleIndent` sets on this element in place of the 8px it otherwise takes. */
 .side-panel {
+  --side-panel-indent: var(--space-2);
+  --side-panel-title-start: calc(var(--space-2) + var(--side-panel-indent));
+
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -79,7 +92,7 @@ const titleId = `side-panel-${useId()}`
   gap: var(--space-2);
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--side-panel-title-start));
 }
 
 .side-panel-title {

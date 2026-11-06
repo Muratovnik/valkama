@@ -1,3 +1,11 @@
+<script lang="ts">
+/**
+ * How far a space's name stands in from the list's start in the phone's panel: the head's
+ * padding, the fold's finger-wide lead and the gap after it, as the style below lays out.
+ */
+export const NAME_INDENT_TOUCH = 'calc(var(--size-control-target) + var(--space-1) * 2)'
+</script>
+
 <script setup lang="ts">
 /**
  * The side panel's list: each space the frame names, folded or open, with its work
@@ -10,7 +18,10 @@
  * a group's head has, in the same column. Under its rows the space says how many agents
  * are at work in it on no row, «no task · N agents», as a caption and not a place to go;
  * the agents whose folder is under no space are said once, after every space. With
- * nothing to show the list says that nobody is working, quietly, in the room a row takes.
+ * nothing to show the list says that nobody is working, quietly, in the room a row takes,
+ * as a caption of what holds it: under the rail entry's label, which the rail's group
+ * hands down as `--nav-label-start` (`NavModuleList`), and in the phone's panel where the
+ * spaces' names would start, which is where its heading starts (`NAME_INDENT_TOUCH`).
  *
  * On the rail Escape folds the innermost open group or space around focus and gives focus
  * to its fold; folded, the next Escape goes on to the one around it, and past the spaces
@@ -147,7 +158,7 @@ function escape(event: KeyboardEvent) {
   >
     <p
       v-if="empty"
-      class="nav-tree-note"
+      class="nav-tree-note nav-tree-empty"
     >
       <span class="nav-tree-note-words">{{ t('liveWork.empty') }}</span>
     </p>
@@ -346,6 +357,14 @@ function escape(event: KeyboardEvent) {
 
 .nav-tree-note-nested {
   padding-inline-start: calc(var(--space-3) + var(--nav-tree-lead) + var(--space-1) * 2);
+}
+
+/* With no space to name, the line is a caption of what holds the list: under the rail
+   entry's label, and in the phone's panel where a name would start. */
+.nav-tree-empty {
+  --nav-tree-empty-start: var(--nav-label-start, calc(var(--nav-tree-lead) + var(--space-1) * 2));
+
+  padding-inline-start: calc(var(--nav-tree-empty-start));
 }
 
 .nav-tree-touch {
