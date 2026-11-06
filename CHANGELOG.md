@@ -147,14 +147,14 @@ checkouts are therefore distinguishable even at the same version.
   Field edits, rank and the item's creation are not told, nor anything the session's own
   conversation or its subagents wrote. Each line names the session that wrote it, in the
   block «Valkama notice from agents, not from a person», and only at the next tool call or
-  prompt, unless it asks for the session, as below. `apply_work_item_changes`
-  takes a `subscribe` group: `true` follows an item the session does not hold and hears it
-  as a holder would, a person's acts there at its next tool call without a wake, `false`
-  stops, and `false` on a held item mutes other sessions there
-  while the session holds it; a person's act and the replies to its own `awaits_reply`
-  comment still reach it. A subscription lapses with its session as a claim
-  does, a merge carries it to the survivor, and `get_work_item` lists who follows an item
-  in `subscribers`. Store schema 13 holds the subscriptions, under a snapshot taken before
+  prompt, unless it asks for the session, as below. `apply_work_item_changes` takes a
+  `subscribe` group: `true` follows an item the session does not hold and hears it as a
+  holder would, a person's acts there at its next tool call without a wake, `false`
+  stops, and `false` on a held item mutes other sessions there while the session holds
+  it; a person's act and the replies to its own `awaits_reply` comment still reach it. A
+  subscription lapses with its session as a claim does, a merge carries it to the
+  survivor, whose news the subscriber then hears, and `get_work_item` lists who follows
+  an item in `subscribers`. Store schema 13 holds the subscriptions, under a snapshot taken before
   the upgrade; a build of the previous release refuses the upgraded store. A comment can
   ask with `awaits_reply: true` (`comment_work_item` and the batch's `comment` and
   `comments`, beside `mentions` too), and `get_work_item` shows on it whether another

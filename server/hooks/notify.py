@@ -44,8 +44,8 @@ writer on every tool call. Each recipient has a small file beside the spool,
 call it has read, the item's change signature and whether it held the item then,
 and apart from those the last call whose agents' news it read and whether some
 still waits: a `Stop` reads past such news without telling it; the wakes other
-sessions' news made; and per item, the notices that quoted it. Whether it follows the item is read from the store each time,
-never kept here. A file that cannot be read is an empty one, so the worst a damaged
+sessions' news made; and per item, the notices that quoted it. Whether it follows
+the item is read from the store each time, never kept here. A file that cannot be read is an empty one, so the worst a damaged
 file does is tell the current news once more, and wake once more.
 
 What it costs. `PostToolUse` runs on every tool call, so this module imports
@@ -452,8 +452,8 @@ Mark = tuple[int, tuple[int, int, int, int], bool, int, bool]
 #: The wakes other sessions' news made, as whole seconds of the clock, the newest
 #: hour's; how many events the limit held back since a notice last said so; the
 #: newest call those were read to, past which nothing held back wakes again; and per
-#: item, the times of the notices that quoted other sessions' news on it, the newest
-#: `FOLD_WINDOW_SECONDS`'.
+#: item, the times of the notices that quoted other sessions' news on it within
+#: `FOLD_WINDOW_SECONDS`.
 Budget = tuple[tuple[int, ...], int, int, dict[str, tuple[int, ...]]]
 NO_BUDGET: Budget = ((), 0, 0, {})
 
