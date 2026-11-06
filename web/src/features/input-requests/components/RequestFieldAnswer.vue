@@ -15,10 +15,11 @@
  * field with nothing given says so, as an older answer may have left one with a comment
  * standing in for it.
  */
-import { computed, ref, useId } from 'vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestOption from '@/features/input-requests/components/RequestOption.vue'
+import { useOpenedOptions } from '@/features/input-requests/composables/useOpenedOptions.ts'
 import { fieldOptions } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 
@@ -52,13 +53,7 @@ function isChosen(option: string) {
   if (Array.isArray(value)) return value.includes(option)
   return typeof value === 'boolean' ? String(value) === option : value === option
 }
-const opened = ref<ReadonlySet<string>>(new Set())
-const isOpen = (option: string) => opened.value.has(option)
-function toggle(option: string) {
-  const next = new Set(opened.value)
-  if (!next.delete(option)) next.add(option)
-  opened.value = next
-}
+const { isOpen, toggle } = useOpenedOptions()
 </script>
 
 <template>

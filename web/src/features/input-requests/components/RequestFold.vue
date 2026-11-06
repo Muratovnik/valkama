@@ -13,9 +13,7 @@
  * were decided, with every row behind a press on a review that would run to a screen and more.
  *
  * Words still in the form when the question closed some other way are the only copy of
- * what was written. They stay in view under their own words, and never join the reply. A
- * choice made there was never sent either, so it is said too, one line per field, ahead of
- * the words; a form that held only a choice used to fold as if it had held nothing.
+ * what was written. They stay in view (`RequestUnsent`), and never join the reply.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 import RequestFieldAnswer from '@/features/input-requests/components/RequestFieldAnswer.vue'
 import RequestHistory from '@/features/input-requests/components/RequestHistory.vue'
 import RequestSummary from '@/features/input-requests/components/RequestSummary.vue'
+import RequestUnsent from '@/features/input-requests/components/RequestUnsent.vue'
 import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -63,11 +62,6 @@ const bareText = computed(() => props.request.fields.length === 1)
 const note = computed(() => props.request.note ?? '')
 /** Each field answered on its own, where the question is not answered row by row. */
 const plainFields = computed(() => (structured.value ? [] : props.request.fields))
-/** What the note over the unsent part says it is: what was chosen, written, or both. */
-const unsentNote = computed(() => {
-  if (!props.unsentChosen.length) return t('requests.draftKept')
-  return t(props.unsent ? 'requests.draftKeptBoth' : 'requests.draftKeptChosen')
-})
 const closing = computed(() => {
   const { status, answered_by: by, by_person: person } = props.request
   if (status === 'answered') return ''
@@ -134,25 +128,10 @@ const closing = computed(() => {
     >
       {{ closing }}<template v-if="when"> · {{ when }}</template>
     </p>
-    <div
-      v-if="unsent || unsentChosen.length"
-      class="request-unsent"
-    >
-      <p class="request-unsent-note">{{ unsentNote }}</p>
-      <p
-        v-for="line in unsentChosen"
-        :key="line"
-        class="request-unsent-text"
-      >
-        {{ line }}
-      </p>
-      <p
-        v-if="unsent"
-        class="request-unsent-text"
-      >
-        {{ unsent }}
-      </p>
-    </div>
+    <RequestUnsent
+      :unsent="unsent"
+      :unsent-chosen="unsentChosen"
+    />
   </div>
 </template>
 
@@ -193,25 +172,5 @@ const closing = computed(() => {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-}
-
-.request-unsent {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.request-unsent-note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.request-unsent-text {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-editor);
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 </style>

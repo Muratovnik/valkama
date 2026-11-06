@@ -49,6 +49,7 @@ import RequestChosen from '@/features/input-requests/components/RequestChosen.vu
 import RequestNote from '@/features/input-requests/components/RequestNote.vue'
 import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import RequestOption from '@/features/input-requests/components/RequestOption.vue'
+import { useOpenedOptions } from '@/features/input-requests/composables/useOpenedOptions.ts'
 import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
 import { fieldOptions } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
@@ -160,13 +161,7 @@ function pick(option: string, event: Event) {
   else emit('edit', { ownChosen: false, value: isYesNo.value ? option === 'true' : option })
 }
 
-const opened = ref<ReadonlySet<string>>(new Set())
-const isOpen = (option: string) => opened.value.has(option)
-function toggleDescription(option: string) {
-  const next = new Set(opened.value)
-  if (!next.delete(option)) next.add(option)
-  opened.value = next
-}
+const { isOpen, toggle: toggleDescription } = useOpenedOptions()
 const detailsId = (option: string) => `${id}-details-${option}`
 /** What is chosen and still folded in its row, in the options' order. */
 const chosenFolded = computed(() =>
