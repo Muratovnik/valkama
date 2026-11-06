@@ -221,3 +221,29 @@ test('in the forced palette the connection’s dot stays, the one mark of a narr
   ])
   expect(fill, 'the dot is drawn in the palette’s ink').toBe(ink)
 })
+
+test('in the forced palette a tile the keyboard reached keeps its edge and rings apart from it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page, {})
+  await page.mouse.move(0, 0)
+  const tile = page.locator('.work-item-tile').first()
+  const rest = await pixelsIn(page, tile, 'left')
+  await page.keyboard.press('Tab')
+  await tile.locator('.tile-open').focus()
+  await expect(tile.locator('.tile-open')).toBeFocused()
+  const focused = await pixelsIn(page, tile, 'left')
+
+  // The edge stays where it was; a ring in the edge's ink, laid on it, only made it thicker.
+  expect(focused[0], `the edge at rest ${rest.join(' ')}, focused ${focused.join(' ')}`).toBe(
+    rest[0],
+  )
+  const ring = focused.slice(1).findIndex((colour) => lightness(colour) > 300) + 1
+  expect(ring, `a ring inside the edge: ${focused.join(' ')}`).toBeGreaterThan(1)
+  expect(lightness(focused[ring - 1]), 'ground between the edge and the ring').toBeLessThan(100)
+  expect(focused[ring], 'the ring in a colour of its own').not.toBe(focused[0])
+})
