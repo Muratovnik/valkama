@@ -203,7 +203,7 @@ const nameLayout = (name: Locator) =>
     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
     for (let text = walker.nextNode(); text; text = walker.nextNode()) {
       const data = text.textContent ?? ''
-      for (const [at, char] of [...data].entries()) {
+      for (const [at, char] of data.split('').entries()) {
         range.setStart(text, at)
         range.setEnd(text, at + 1)
         const rect = [...range.getClientRects()].find((found) => found.width > 0)
