@@ -11,8 +11,15 @@
  *
  * They are tabs over the card's body, and every section shows the moment it is chosen —
  * what one reads is read with the card — so the arrows show a section as they reach it.
+ *
+ * A strip cut by its width fades out at each end that has more past it. The bar alone did
+ * not say so: an overlay scrollbar shows only while the strip moves, and a phone's row
+ * ended at a cut word with nothing after it. Whatever the browser brings into the row
+ * stands clear of the fade, as far in as the fade is wide.
  */
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+
+import { useResizeObserver } from '@vueuse/core'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -26,6 +33,21 @@ const props = defineProps<{
 }>()
 const shown = defineModel<string>({ required: true })
 const strip = ref<HTMLElement | null>(null)
+
+/** Whether tabs lie past either end of the row, read off the strip as it stands. */
+const more = reactive({ before: false, after: false })
+function measure() {
+  const node = strip.value
+  if (!node) return
+  // A pixel of room: a zoomed page scrolls by fractions and never quite reaches its end.
+  more.before = node.scrollLeft > 1
+  more.after = node.scrollWidth - node.clientWidth - node.scrollLeft > 1
+}
+// The strip changes width with the card, and its row with the sections it holds.
+useResizeObserver(
+  computed(() => [strip.value, strip.value?.firstElementChild as HTMLElement | null]),
+  measure,
+)
 
 /** Into the row: the strip is the only thing that scrolls for it. */
 function reveal(target: Element | null | undefined) {
@@ -57,7 +79,9 @@ function focused(event: FocusEvent) {
   <div
     ref="strip"
     class="inspector-tabs"
+    :class="{ 'more-before': more.before, 'more-after': more.after }"
     @focusin="focused"
+    @scroll="measure"
   >
     <SegmentedControl
       v-model="shown"
@@ -71,7 +95,29 @@ function focused(event: FocusEvent) {
 
 <style scoped>
 .inspector-tabs {
+  --size-tabs-fade: var(--space-8);
+
   width: 100%;
   overflow-x: auto;
+  scroll-padding-inline: var(--size-tabs-fade);
+
+  /* A mask reads only how opaque its image is, so the colour stands for "shown". */
+  &.more-before {
+    mask-image: linear-gradient(to right, transparent, black var(--size-tabs-fade));
+  }
+
+  &.more-after {
+    mask-image: linear-gradient(to left, transparent, black var(--size-tabs-fade));
+  }
+
+  &.more-before.more-after {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(--size-tabs-fade),
+      black calc(100% - var(--size-tabs-fade)),
+      transparent
+    );
+  }
 }
 </style>

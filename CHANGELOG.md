@@ -149,6 +149,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- A card's sections on a narrow window say that there are more of them: the row fades
+  out at each end that has sections past it, and only there, so a phone, which shows no
+  scrollbar, no longer ends the row at a cut word. A section reached with the keyboard
+  stops clear of the fade, and a row that fits draws none.
 - **A choice made with the mouse leaves no focus ring behind.** Opening a dropdown with a
   click ringed the option under the pointer, and choosing one ringed the dropdown itself,
   as if it had been reached with Tab. Focus the interface places after a click now stands
