@@ -1,7 +1,8 @@
 /**
- * The ring says where focus is when the keyboard or the app put it there. A press of the
- * pointer draws none, since the reader already knows what they pressed, and a field shows
- * that it holds focus by its own edge, the same for a press as for Tab.
+ * The ring says where focus is when the keyboard put it there, or the app moved it after a key.
+ * A press of the pointer draws none, nor does focus the app moves in answer to it, since the
+ * reader already knows what they pressed: the owner chose no ring after a pointer action. A
+ * field shows that it holds focus by its own edge, the same for a press as for Tab.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -89,50 +90,57 @@ const ringedInside = (scope: Locator) =>
       .map((node) => node.className.toString()),
   )
 
-for (const width of [1280, 390]) {
-  test(`focus the app moves after a press is ringed around the question it stays on, at ${width}`, async ({
+/** Each way of sending, and the outline the question it lands on draws after it. */
+const SENDS = [
+  { input: 'a press', act: (control: Locator) => control.click(), ring: 'none' },
+  { input: 'a key', act: (control: Locator) => control.press('Enter'), ring: 'solid' },
+] as const
+
+for (const width of [1280, 390])
+  for (const { input, act, ring } of SENDS)
+    test(`focus the app moves after ${input} stays on the question as a whole, at ${width}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      const { card } = await openQuestion(page, [asked()])
+      await card.getByRole('radio', { name: 'Move them', exact: true }).click()
+      await act(send(card))
+      // The question folds, and focus stays on it, described by how it ended. After a key it is
+      // ringed round the question: round that one line of words the ring stood as a thin capsule.
+      await expect(card.locator('.request-state')).toContainText('You answered')
+      await expect(card).toBeFocused()
+      expect(await outline(card)).toBe(ring)
+      expect(await ringedInside(card)).toEqual([])
+      await expect(card).toHaveAttribute('aria-describedby', /.+/u)
+      const description = await card.evaluate(
+        (node) =>
+          document.querySelector(`[id="${node.getAttribute('aria-describedby') ?? ''}"]`)
+            ?.textContent,
+      )
+      expect(description).toContain('You answered')
+    })
+
+for (const { input, act, ring } of SENDS)
+  test(`in the list a press on a heading rings nothing, and answering by ${input} goes to the next question as a whole`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: 900 })
-    const { card } = await openQuestion(page, [asked()])
-    await card.getByRole('radio', { name: 'Move them', exact: true }).click()
-    await send(card).click()
-    // The question folds under the pointer, and focus stays on it, described by how it ended:
-    // a ring drawn round that one line of words stood as a thin capsule pressed against them.
-    await expect(card.locator('.request-state')).toContainText('You answered')
-    await expect(card).toBeFocused()
-    expect(await outline(card)).toBe('solid')
-    expect(await ringedInside(card)).toEqual([])
-    await expect(card).toHaveAttribute('aria-describedby', /.+/u)
-    const description = await card.evaluate(
-      (node) =>
-        document.querySelector(`[id="${node.getAttribute('aria-describedby') ?? ''}"]`)
-          ?.textContent,
-    )
-    expect(description).toContain('You answered')
+    const opened = await openQuestion(page, pair(2, 2))
+    const { next, top } = await inTheList(page, opened)
+    // The heading is words: a press on it lands on its question, and rings nothing.
+    await top.locator('.request-title').click()
+    await expect(top).toBeFocused()
+    expect(await outline(top)).toBe('none')
+    await top.getByRole('radio', { name: 'Choice 1', exact: true }).click()
+    await act(send(top))
+    // Focus goes to the next question, which its heading names, ringed after a key: a ring round
+    // the heading alone stood as a capsule pressed against one line of words.
+    await expect(next).toBeFocused()
+    expect(await outline(next)).toBe(ring)
+    expect(await ringedInside(next)).toEqual([])
+    const title = (await next.locator('.request-title').textContent()) ?? ''
+    expect(title).not.toBe('')
+    await expect(next).toHaveAccessibleName(title)
   })
-}
-
-test('in the list a press on a heading rings nothing, and answering rings the next question as a whole', async ({
-  page,
-}) => {
-  const opened = await openQuestion(page, pair(2, 2))
-  const { next, top } = await inTheList(page, opened)
-  // The heading is words: a press on it lands on its question, and rings nothing.
-  await top.locator('.request-title').click()
-  await expect(top).toBeFocused()
-  expect(await outline(top)).toBe('none')
-  await top.getByRole('radio', { name: 'Choice 1', exact: true }).click()
-  await send(top).click()
-  // Focus goes to the next question, which its heading names: a ring round the heading alone
-  // stood as a capsule pressed against one line of words.
-  await expect(next).toBeFocused()
-  expect(await outline(next)).toBe('solid')
-  expect(await ringedInside(next)).toEqual([])
-  const title = (await next.locator('.request-title').textContent()) ?? ''
-  expect(title).not.toBe('')
-  await expect(next).toHaveAccessibleName(title)
-})
 
 /** How far the top of `card`, ring and all, stands below the top of the box that scrolls it. */
 const topInView = (card: Locator) =>
@@ -154,7 +162,8 @@ test('in the list the next question above comes into view from its top edge, rin
   const opened = await openQuestion(page, pair(20, 2))
   const { next, top } = await inTheList(page, opened)
   await next.getByRole('radio', { name: 'Choice 1', exact: true }).click()
-  await send(next).click()
+  // From the keyboard, which rings it, so the ring is in what must come into view.
+  await send(next).press('Enter')
   // The question still waiting is the one above, out of sight under the list's top edge.
   await expect(top).toBeFocused()
   expect(await outline(top)).toBe('solid')
@@ -199,22 +208,27 @@ test('why a write or a read failed is ringed clear of its words, at a control co
   await page.route('**/api/modules/planning/requests?*', (route) =>
     route.fulfill({ status: 500, json: {} }),
   )
-  await dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' }).click()
+  const refresh = dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' })
+  // A press takes focus to the reason and rings nothing; the same refresh from a key rings it.
+  await refresh.click()
   const failed = dialog.locator('.request-toolbar .request-error')
+  await expect(failed).toBeFocused()
+  expect(await outline(failed)).toBe('none')
+  await refresh.press('Enter')
   await expectLineRing(failed)
   // Across the line up to the refresh, as a failed send is: round the words alone it stood as a chip.
-  const refresh = await dialog.locator('.request-toolbar').getByRole('button').boundingBox()
+  const button = await refresh.boundingBox()
   const line = await failed.boundingBox()
   const gap = await dialog
     .locator('.request-toolbar')
     .evaluate((node) => Number.parseFloat(getComputedStyle(node).columnGap))
   expect(
-    Math.abs((refresh?.x ?? 0) - gap - ((line?.x ?? 0) + (line?.width ?? 0))),
+    Math.abs((button?.x ?? 0) - gap - ((line?.x ?? 0) + (line?.width ?? 0))),
   ).toBeLessThanOrEqual(1)
 
   opened.requests.failNext(503)
   await card.getByRole('radio', { name: 'Move them', exact: true }).click()
-  await send(card).click()
+  await send(card).press('Enter')
   const sent = card.locator('.request-foot .request-error')
   // One line at this width: where a rounder corner closed into a capsule round the words.
   await expect(sent).toBeVisible()

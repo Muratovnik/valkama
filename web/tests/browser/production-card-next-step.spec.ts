@@ -134,6 +134,9 @@ test('the line is quiet and the words read as a description’s, with little hei
   expect(await next.locator('.next-step-label').ariaSnapshot()).not.toContain('·')
 })
 
+/** What the heading of the list draws after each way of pressing. */
+const RING_AFTER: Record<string, string> = { mouse: 'none', keyboard: 'solid' }
+
 /** The two ways a reader presses a button. */
 const PRESSES = {
   mouse: (button: Locator) => button.click(),
@@ -155,11 +158,12 @@ for (const width of [1280, 390]) {
       const head = drawer.locator('.checklist-head')
       await expect(head).toBeFocused()
       await expect(head).toBeInViewport({ ratio: 1 })
-      // It comes to rest under the sticky sections and not behind them, ringed either way.
+      // It comes to rest under the sticky sections and not behind them, ringed after a key
+      // only: the owner chose no ring after a pointer action.
       const tabs = await drawer.locator('.drawer-frame-tabs').boundingBox()
       const rest = await head.boundingBox()
       expect(rest?.y ?? 0).toBeGreaterThanOrEqual((tabs?.y ?? 0) + (tabs?.height ?? 0) - 1)
-      await expect(head).toHaveCSS('outline-style', 'solid')
+      await expect(head).toHaveCSS('outline-style', RING_AFTER[input])
       await expect(head).toContainText('2/9')
     })
   }

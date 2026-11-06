@@ -162,11 +162,14 @@ test('a tick not sent when the task closed stays in sight, and is there to send 
   expect(requests.writes[0]?.body.answers).toEqual({ items: ['c', 'a'] })
 })
 
-/** A sent list, with one mark ticked, from which the test changes it. */
+/**
+ * A sent list, with one mark ticked, from which the test changes it. Sent from the keyboard,
+ * the list it lands on is ringed; the owner chose no ring after a pointer action.
+ */
 async function sentList(page: Page, words: Words) {
   const opened = await openList(page)
   await tick(opened.list, 'Widen the check').check()
-  await button(opened.list, words.send).click()
+  await button(opened.list, words.send).press('Enter')
   await expect(opened.list).toContainText(words.ticked(1))
   return opened
 }
@@ -269,7 +272,7 @@ const ringGaps = (list: Locator) =>
 /** A focused list's ring keeps `--space-1` from its words on every side. Half a pixel is rounding. */
 async function expectRingClear(list: Locator) {
   const ring = await ringGaps(list)
-  expect(ring.style, 'the ring is drawn for the keyboard or a landing').toBe('solid')
+  expect(ring.style, 'the ring is drawn for the keyboard and a landing after a key').toBe('solid')
   for (const [side, gap] of Object.entries(ring.gaps))
     expect
       .soft(gap, `the ring's gap to the words on the ${side}`)
@@ -277,7 +280,7 @@ async function expectRingClear(list: Locator) {
 }
 
 for (const width of [1280, 390]) {
-  test(`a list that takes focus after a send rings clear of its words at ${width}`, async ({
+  test(`a list that takes focus after a send from the keyboard rings clear of its words at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 })

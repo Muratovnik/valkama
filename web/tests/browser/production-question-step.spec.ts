@@ -338,9 +338,9 @@ test('a deadline passing while the step stands takes focus to the question, whic
   await expect(line).toBeVisible({ timeout: 6000 })
   await expect(top).toBeFocused()
   await expect(top).toHaveAccessibleDescription(/The deadline has passed/u)
-  // Ringed round the question, though a press of the pointer came before: the ring is where
-  // focus was taken. Round the one line of words it stood as a capsule pressed against them.
-  await expect(top).toHaveCSS('outline-style', 'solid')
+  // A press of the pointer came last, so no ring: the owner chose no ring after a pointer
+  // action. Focus is on the question, not on the line, round which a ring stood as a capsule.
+  await expect(top).toHaveCSS('outline-style', 'none')
   await expect(line).toHaveCSS('outline-style', 'none')
   await expect(asking(top)).toHaveCount(0)
   await expect(top.getByRole('button', { name: 'Check status', exact: true })).toBeVisible()

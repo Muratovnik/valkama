@@ -121,20 +121,22 @@ test('an option label is inline markdown as written words are, and never a block
   await expect(several.locator('.request-answer').last().locator('strong')).toHaveText('v2')
 })
 
+// Declined from the keyboard: the owner chose no ring after a pointer action, so a press would
+// draw none of what this measures (`production-focus-landing.spec.ts` holds that side).
 test('the ring stands round a question that ended and moves none of its words', async ({
   page,
 }) => {
   const { card, requests } = await openQuestion(page, [asked()])
   const decline = card.getByRole('button', { name: "Don't answer", exact: true })
   requests.failNext(503)
-  await decline.click()
-  await decline.click()
+  await decline.press('Enter')
+  await decline.press('Enter')
   const error = card.locator('.request-error')
   await expect(error).toBeFocused()
   await expect(error).toHaveCSS('outline-offset', '4px')
   await card.getByRole('button', { name: 'Check status', exact: true }).click()
-  await decline.click()
-  await decline.click()
+  await decline.press('Enter')
+  await decline.press('Enter')
   const state = card.locator('.request-state')
   await expect(card).toBeFocused()
   await expect(card).toHaveCSS('outline-style', 'solid')

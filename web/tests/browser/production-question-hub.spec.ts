@@ -214,7 +214,8 @@ test('a refresh that fails rings its sentence clear of the words, as the list ri
   await page.route('**/api/modules/planning/requests?*', (route) =>
     route.fulfill({ status: 500, json: {} }),
   )
-  await dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' }).click()
+  // From the keyboard, which rings it: the owner chose no ring after a pointer action.
+  await dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' }).press('Enter')
   const failure = dialog.locator('.request-toolbar .request-error')
   await expect(failure).toBeFocused()
   await expect(failure).toHaveCSS('outline-style', 'solid')
