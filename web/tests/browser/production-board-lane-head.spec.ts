@@ -14,8 +14,8 @@
  * take its last part down with them. Or, in the lane of work under no epic at 320px in Russian,
  * the line under the title starts under the reference, not at the heading's edge, and holds less:
  * that inset is kept, since a line wrapped from the edge stood 4px left of the chevron. Where the
- * heading keeps fewer lines than the base, its title gives way to keep it so, as it gives way
- * before the counts wrap.
+ * heading keeps one line that the base drew as two, its title gives way to keep it so, as it gives
+ * way before the counts wrap; nowhere else does it keep fewer letters than the base.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -118,7 +118,7 @@ function againstBase(rest: Reading, base: Drawn | undefined, named: boolean): st
   const tied = last.includes('action') && last.length > 1
   const extra = lines > base.rows
   return [
-    ...(rest.titleChars < base.letters && lines >= base.rows
+    ...(rest.titleChars < base.letters && !(lines === 1 && base.rows > 1)
       ? [`the title keeps ${rest.titleChars} letters, the base ${base.letters}`]
       : []),
     ...(extra && !(base.covered || (tied && !rest.besideWhole) || named)
