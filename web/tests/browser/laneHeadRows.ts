@@ -22,7 +22,7 @@ export interface Part {
  * line has, the gap between two parts, the actions' width, and the last part before them — its
  * width and the parts on its line beside it, by class.
  */
-export interface Tail {
+interface Tail {
   actions: number
   gap: number
   last: { beside: string[]; width: number } | null
