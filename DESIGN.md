@@ -358,7 +358,9 @@ and only fades the end of a strip that scrolls on past it.
   same idea for a control riding a dense header. `--size-control-target` is the
   pointer area, and it is spent only where there is no label to widen the box —
   an icon button, a tag in a card foot, a 22px switch — where the extra pixels
-  go on a hit area rather than on the drawing. The floor everything clears is
+  go on a hit area rather than on the drawing: under a finger or on a phone-wide
+  screen an icon button answers a press across the target around what it draws, and its
+  row keeps its height. The floor everything clears is
   WCAG 2.5.8 at 24px; 44 is the 2.5.5 AAA figure and this product spends it
   wherever a control has no label of its own to widen the box, which is where
   the difference is felt. One token used to answer both,
@@ -1526,7 +1528,10 @@ A forced palette clears every background, so a mark drawn as a fill — a status
 a switch's knob, a grip — names a system colour itself and stands out of the palette's
 reach with `forced-color-adjust: none`: `CanvasText` for a mark that says a state,
 `Highlight` for what is chosen. The palette has no colour for danger; a failure keeps
-its disc and its edge in the palette's ink, and its words say the rest.
+its disc and its edge in the palette's ink, and its words say the rest. What is told apart
+by its ground alone — a tile, a column, a sheet, a chip or a toggle at rest — loses its
+bounds with that ground, so it draws its edge in the palette's ink instead, inside itself
+where it takes no room: `CanvasText` around a surface, `ButtonText` around a control.
 
 Russian and English are equal layout cases, not a base language and a
 translation: a rule that only holds while the shorter string is on screen does

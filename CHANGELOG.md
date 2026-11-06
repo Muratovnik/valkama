@@ -337,6 +337,15 @@ checkouts are therefore distinguishable even at the same version.
   the edge: on the branch map's tip such a word was cut off at the edge with nothing to
   say it went on. A screen reader reads the title, and a copy takes it, as it was
   written, with no space after a `/`.
+- **The board keeps its shapes in high-contrast mode, and its targets and edges on a
+  phone.** With a Windows contrast theme on, tiles, columns, the cells of an epic's row,
+  the list, the workspace panel and the settings sheet draw an edge instead of losing it
+  with their background; a toggle such as «By epic» or «Available», a picked filter, the
+  chain chip and the menu's «all / any» read as buttons rather than as plain words; and the
+  connection dot of the narrow sidebar no longer disappears. On a phone, the «+» for new
+  work and the other icons in a toolbar, the comment editor's formatting icons included,
+  answer a tap across 44 px, and an epic's row that wraps starts its counts under the epic's
+  number instead of left of its arrow.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
