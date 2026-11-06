@@ -346,7 +346,10 @@ that execution ends, and any pending request expires when its item closes, so an
 item holding an open request stays open. A list under a comment does not hold it:
 the item closes with a list unticked, and the list then freezes, `expired` with
 `task_closed`, until the item reopens. To get the ticks, keep the item open, in
-review for instance; a call that writes a list and closes its item is refused. The
+review for instance; a call that writes a list and closes its item is refused. A
+list's compact form has `undecided`: `["items"]` while nothing on it is ticked, also
+once the person sent it with none ticked. Treat that as not decided, never as every
+option refused. The
 owner's own rules on where to ask come first.
 
 ## Merging items that are one change

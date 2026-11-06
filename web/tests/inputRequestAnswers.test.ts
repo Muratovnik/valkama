@@ -68,6 +68,33 @@ test('asks for something at the first field when nothing is chosen or written, r
   })
 })
 
+test('a list sends its ticks as they stand, none ticked too, which the agent reads as not decided', () => {
+  // The owner's rule: the marks go with one send, and a send with nothing ticked is allowed.
+  const items = [
+    { id: 'items', label: 'What to take on', type: 'multi_choice', required: false, options },
+  ] as InputRequestField[]
+  for (const nothing of [EMPTY_DRAFT, answers({ items: [] })])
+    expect(checkAnswers(items, nothing, { list: true })).toMatchObject({
+      refused: [],
+      values: { items: [] },
+    })
+  expect(checkAnswers(items, answers({ items: ['merge'] }), { list: true })).toMatchObject({
+    refused: [],
+    values: { items: ['merge'] },
+  })
+  // A tick that is no option of the list is still no answer.
+  expect(checkAnswers(items, answers({ items: ['gone'] }), { list: true }).refused).toEqual([
+    'items',
+  ])
+  // The same field in a question still asks for something: an empty answer tells nothing.
+  expect(checkAnswers(items, EMPTY_DRAFT).refused).toEqual(['items'])
+  expect(checkAnswers(fields, EMPTY_DRAFT, { list: false }).refused).toEqual([
+    'proceed',
+    'branch',
+    'note',
+  ])
+})
+
 test('sends false, leaves out an empty optional field and refuses nothing', () => {
   expect(
     checkAnswers(fields, answers({ proceed: false, branch: 'merge', extra: [], note: 'why' })),

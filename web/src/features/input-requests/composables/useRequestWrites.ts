@@ -4,7 +4,7 @@ import {
   ANSWER_VERSION_LIMIT,
   differsFromAnswer,
 } from '@/features/input-requests/utils/answerChange.ts'
-import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
+import { isCommentList, requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import { checkAnswers, EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -170,7 +170,10 @@ export function useRequestWrites(host: {
       asked.value = true
       return
     }
-    const checked = action === 'decline' ? null : checkAnswers(request.value.fields, host.draft())
+    const checked =
+      action === 'decline'
+        ? null
+        : checkAnswers(request.value.fields, host.draft(), { list: isCommentList(local.value) })
     refused.value = checked?.refused ?? []
     const first = refused.value[0]
     if (first !== undefined) {

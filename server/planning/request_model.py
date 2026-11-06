@@ -551,6 +551,24 @@ def _verdicts(descriptors: list[dict], parts: dict) -> dict:
     return {"verdicts": verdicts, "undecided": undecided}
 
 
+def _list_undecided(descriptors: list[dict], parts: dict) -> dict:
+    """A list's `undecided`: its field while nothing on it is ticked, and nothing otherwise.
+
+    The person may send a list with nothing ticked, and that says the list is not
+    decided yet, which an answer with no row would leave an agent to guess.
+    """
+
+    given = parts["answers"] or {}
+    owns = parts["own"] or {}
+    return {
+        "undecided": [
+            field["id"]
+            for field in descriptors
+            if not given.get(field["id"]) and field["id"] not in owns
+        ]
+    }
+
+
 def _row_line(row: dict, name: str) -> str:
     """One field of an answer as a notice quotes it: `name: choice`, with what it adds."""
 
@@ -565,10 +583,12 @@ def _row_line(row: dict, name: str) -> str:
     return f"{name}: {head}"
 
 
-def answer_text(descriptors: list[dict], stored: dict) -> str:
+def answer_text(descriptors: list[dict], stored: dict, *, listed: bool = False) -> str:
     """What came back as one line: each field by its label, then the note on the question.
 
-    A review reads as a summary instead, since a row per point does not fit a notice.
+    A review reads as a summary instead, since a row per point does not fit a notice. A
+    list (`listed`) sent with nothing ticked says so, `label: not decided`, where a
+    question's empty field says nothing.
     """
 
     parts = split_answers(stored)
@@ -576,7 +596,11 @@ def answer_text(descriptors: list[dict], stored: dict) -> str:
         return _review_text(descriptors, parts)
     labels = {field["id"]: field["label"] for field in descriptors}
     rows, _clipped = _answer_rows(descriptors, parts)
-    lines = [_row_line(row, labels[row["field"]]) for row in rows]
+    undecided = _list_undecided(descriptors, parts)["undecided"] if listed else []
+    lines = [
+        *(f"{labels[identity]}: not decided" for identity in undecided),
+        *(_row_line(row, labels[row["field"]]) for row in rows),
+    ]
     note = parts["note"]
     return "; ".join([*lines, note] if note else lines)
 
@@ -782,7 +806,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     the one it replaced as `previous`. `replies` counts the question's thread and
     `last_reply` quotes its latest reply as a thread's root carries it. A review
     adds `verdicts` and `undecided`, which stand whole before any row, and a list
-    on a comment `comment_id`, the comment it stands under.
+    on a comment `comment_id`, the comment it stands under, and `undecided`, its
+    field while nothing on it is ticked.
     `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
     in a text, or past `MAX_COMPACT_JSON` the replaced answer first, then every
     label, then the later fields of the current one.
@@ -793,14 +818,16 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     note = record["note"]
     descriptors = record["fields"]
     review = is_review(descriptors)
+    listed = record.get("comment_id") is not None
     rows, clipped = _answer_rows(descriptors, record, review=review)
     item = {
         "id": record["request_id"],
         "status": record["status"],
         "question": prompt[:QUESTION_PREVIEW] + ("…" if len(prompt) > QUESTION_PREVIEW else ""),
         # Only a list stands under a comment, and only a list says which.
-        **({"comment_id": record["comment_id"]} if record.get("comment_id") is not None else {}),
+        **({"comment_id": record["comment_id"]} if listed else {}),
         **(_verdicts(descriptors, record) if review else {}),
+        **(_list_undecided(descriptors, record) if listed else {}),
         "answer": [],
         "note": _clip(note) if note is not None else None,
         "answered_by": record["answered_by"] if answered else None,
@@ -827,13 +854,15 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
         if lost:
             clipped = True
         else:
-            item, cut = _with_previous(item, descriptors, record["history"][-1], review=review)
+            item, cut = _with_previous(
+                item, descriptors, record["history"][-1], review=review, listed=listed
+            )
             clipped = clipped or cut
     return {**item, "clipped": True} if clipped else item
 
 
 def _with_previous(
-    item: dict, descriptors: list[dict], version: dict, *, review: bool
+    item: dict, descriptors: list[dict], version: dict, *, review: bool, listed: bool
 ) -> tuple[dict, bool]:
     """The compact question with the answer its current one replaced, in the room left.
 
@@ -844,6 +873,7 @@ def _with_previous(
     rows, clipped = _answer_rows(descriptors, version, review=review)
     previous: dict = {
         **(_verdicts(descriptors, version) if review else {}),
+        **(_list_undecided(descriptors, version) if listed else {}),
         "answer": [],
         "note": None,
         "answered_at": version["answered_at"],

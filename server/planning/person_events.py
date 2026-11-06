@@ -384,7 +384,8 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
     """
 
     row = conn.execute(
-        "SELECT prompt, fields_json, answers_json FROM work_item_requests WHERE request_id = ?",
+        "SELECT prompt, fields_json, answers_json, comment_id FROM work_item_requests"
+        " WHERE request_id = ?",
         (request_id,),
     ).fetchone()
     if row is None:
@@ -397,7 +398,7 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
         return ""
     from . import request_model
 
-    answer = request_model.answer_text(fields, stored)
+    answer = request_model.answer_text(fields, stored, listed=row[3] is not None)
     if action == "request_answered":
         return answer
     replaced = conn.execute(

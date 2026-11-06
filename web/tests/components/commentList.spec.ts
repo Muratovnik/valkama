@@ -188,11 +188,31 @@ describe('a list under a comment', () => {
     expect(listIn(wrapper).text()).toContain('You ticked 2 of 3')
   })
 
-  it('refuses a send with nothing ticked at the rows, and writes nothing', async () => {
+  it('sends with nothing ticked, as the owner allows: none of the marks, and nothing refused', async () => {
+    vi.mocked(answerInputRequest).mockImplementation(async (entry, answers) => ({
+      ...sent((answers as { items: string[] }).items),
+      target: entry.target,
+    }))
     const wrapper = open(card([root(1)]), { questions: [list()] })
     await press(wrapper, 'Send marks')
-    expect(answerInputRequest).not.toHaveBeenCalled()
-    expect(listIn(wrapper).text()).toContain('Tick at least one option.')
+    expect(answerInputRequest).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(answerInputRequest).mock.calls[0]?.[1]).toEqual({ items: [] })
+    expect(listIn(wrapper).text()).not.toContain('Tick at least one option.')
+    expect(listIn(wrapper).text()).toContain('You ticked 0 of 3')
+  })
+
+  it('saves a change that unticks every mark', async () => {
+    vi.mocked(changeInputRequestAnswer).mockImplementation(async (entry, answers) => ({
+      ...sent((answers as { items: string[] }).items, { revision: 3, answer_version: 2 }),
+      target: entry.target,
+    }))
+    const wrapper = open(card([root(1)]), { questions: [sent(['a'])] })
+    await press(wrapper, 'Change')
+    await tick(wrapper, 0, false)
+    await press(wrapper, 'Save change')
+    expect(vi.mocked(changeInputRequestAnswer).mock.calls[0]?.[1]).toEqual({ items: [] })
+    expect(listIn(wrapper).text()).not.toContain('Tick at least one option.')
+    expect(listIn(wrapper).text()).toContain('You ticked 0 of 3')
   })
 
   it('sent: every row with its mark, how many and when, and the way to change them', () => {

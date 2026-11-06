@@ -1357,6 +1357,8 @@ comment, is the same row and keeps no place for an asking it never shows: each o
 a control.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
+A list under a comment is not held to that: its marks go with one send, and a send with
+nothing ticked goes too, which tells the agent the list is not decided.
 A press following another can still do harm where something is held: folding lifts the next
 question, and its options or a Send over its choice can arrive under the second press of a
 double click. So a press at the point of the one before, with no move between, on anything

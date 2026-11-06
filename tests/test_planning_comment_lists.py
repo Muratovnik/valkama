@@ -22,6 +22,7 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.planning import api, calls, interactions, model, requests, service
+from server.planning.request_model import MINUS
 from server.planning.routing import PlanningRouting
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -343,6 +344,80 @@ class WaitsForNobodyTests(Harness):
                 expected_revision=answered["revision"],
                 answers={"items": ["a", "b"]},
             )
+
+
+class ReadingTests(Harness):
+    """What an agent reads of the ticks: a send with none ticked says the list is not decided.
+
+    The owner's rule is that the marks go with one send, and that a send with nothing ticked
+    is allowed and reads to the agent as not decided, not as an answer with nothing in it.
+    """
+
+    def answer(self, listed: dict, items: list[str], *, change: bool = False) -> dict:
+        path = "/api/planning/request/change" if change else "/api/planning/request/answer"
+        return self.person(
+            path,
+            id=listed["request_id"],
+            expected_revision=listed["revision"],
+            answers={"items": items},
+        )
+
+    def compact(self, request_id: str) -> dict:
+        read = self.agent("list_work_item_requests", id=self.ref)["requests"]
+        [found] = [entry for entry in read if entry["id"] == request_id]
+        return found
+
+    def told(self) -> list[dict]:
+        """What the next agent write carries of the person's answers."""
+
+        said = self.agent("comment_work_item", id=self.ref, body="Read the marks.")
+        return [
+            event
+            for event in said.get("from_person", [])
+            if event["kind"] in ("question_answered", "question_changed")
+        ]
+
+    def test_none_ticked_reads_as_the_list_not_decided_in_every_read(self) -> None:
+        listed = self.request(self.listed()["list_request_id"])
+        answered = self.answer(listed, [])
+        self.assertEqual("answered", answered["status"])
+        whole = self.agent("get_work_item_request", id=listed["request_id"])
+        self.assertEqual({"items": []}, whole["answers"], "the whole read says the ticks are none")
+        compact = self.compact(listed["request_id"])
+        self.assertEqual(["items"], compact["undecided"])
+        self.assertEqual([], compact["answer"])
+        item_read = self.agent("get_work_item", id=self.ref)["questions"]["items"]
+        on_item = next(entry for entry in item_read if entry["id"] == listed["request_id"])
+        self.assertEqual(["items"], on_item["undecided"])
+        [event] = self.told()
+        self.assertEqual("What to take on: not decided", event["text"])
+
+    def test_a_tick_decides_the_list_and_a_change_to_none_undecides_it(self) -> None:
+        listed = self.request(self.listed()["list_request_id"])
+        self.assertEqual(["items"], self.compact(listed["request_id"])["undecided"], "pending")
+        answered = self.answer(listed, ["a"])
+        compact = self.compact(listed["request_id"])
+        self.assertEqual([], compact["undecided"])
+        self.assertEqual(
+            [{"field": "items", "value": ["a"], "label": "Widen the check"}], compact["answer"]
+        )
+        self.assertEqual(["What to take on: Widen the check"], [e["text"] for e in self.told()])
+        self.answer(answered, [], change=True)
+        compact = self.compact(listed["request_id"])
+        self.assertEqual(["items"], compact["undecided"])
+        self.assertEqual([], compact["previous"]["undecided"], "the replaced answer had a tick")
+        self.assertEqual([f"changed: items {MINUS}a"], [e["text"] for e in self.told()])
+
+    def test_a_question_keeps_no_undecided_and_an_empty_optional_field_no_row(self) -> None:
+        field = {"id": "extra", "label": "Extra", "type": "multi_choice", "required": False}
+        asked = self.agent(
+            "create_work_item_request",
+            id=self.ref,
+            kind="question",
+            prompt="Anything else?",
+            fields=[{**field, "options": OPTIONS}],
+        )
+        self.assertNotIn("undecided", self.compact(asked["request_id"]))
 
 
 class MergeTests(Harness):

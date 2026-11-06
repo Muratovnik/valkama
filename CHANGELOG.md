@@ -100,12 +100,16 @@ checkouts are therefore distinguishable even at the same version.
   is not in the interface's read of open questions without an item, and it does not hold
   the item open. On a closed item it reads `expired` with `task_closed` until the item
   reopens; a list on a closed item, or in the call that closes it, is refused. A merge
-  moves a list with its comment, so a report's list stays with the report. See
+  moves a list with its comment, so a report's list stays with the report. A list's
+  compact read carries `undecided`, `["items"]` while nothing on it is ticked, so a list
+  sent with nothing ticked reads as not decided, and its notice says `<label>: not
+  decided`. See
   [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
 - **A list an agent puts under its comment is ticked right there.** The card shows it under
   the comment's words, inside that comment, and no longer as a question of its own: it adds
   nothing to «Waiting for an answer» or to the discussion's counts. Ticking only marks a row;
-  «Send marks» sends them once, with a comment on the marks if you want one, and a
+  «Send marks» sends them once, with a comment on the marks if you want one, also with
+  nothing ticked, which tells the agent you have not decided, and a
   recommended option says so as in a question. Sent, every row keeps its mark, a line says
   «You ticked 2 of 5» and when, and «Change» opens the marks again; a change made elsewhere
   in the meantime is said, not overwritten. On a closed task the list says that marks would

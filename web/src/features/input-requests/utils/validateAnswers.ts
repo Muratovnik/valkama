@@ -140,7 +140,12 @@ interface CheckedAnswers {
   values: InputAnswers
 }
 
-function checkField(field: InputRequestField, draft: RequestDraft, checked: CheckedAnswers) {
+function checkField(
+  field: InputRequestField,
+  draft: RequestDraft,
+  checked: CheckedAnswers,
+  list: boolean,
+) {
   const { id } = field
   const own = chosenOwn(draft, id)
   const fieldNote = (draft.fieldNotes[id] ?? '').trim()
@@ -154,7 +159,8 @@ function checkField(field: InputRequestField, draft: RequestDraft, checked: Chec
   if (own && field.type !== 'multi_choice') return
   const value = draft.answers[id]
   if (value === undefined || blank(value)) {
-    if (field.required && !own) checked.refused.push(id)
+    if (list && field.type === 'multi_choice') checked.values[id] = []
+    else if (field.required && !own) checked.refused.push(id)
   } else if (validField(field, value)) checked.values[id] = value
   else checked.refused.push(id)
 }
@@ -171,12 +177,21 @@ function checkField(field: InputRequestField, draft: RequestDraft, checked: Chec
  * With nothing chosen or written at all the first field is refused, required or not: an
  * answer with nothing in it tells the agent nothing. A question always has a field.
  *
+ * A list under a comment (`list`) is the exception, by what its field is: its ticks are the
+ * answer as they stand, and none ticked is one too, which the agent reads as not decided. So
+ * its field sends `[]` rather than being left out, and nothing in it is refused for being empty.
+ *
  * A field under another is answered only while it is shown. Hidden, its draft is kept for when
  * it shows again and nothing of it is sent, so it is never refused either.
  */
-export function checkAnswers(fields: InputRequestField[], draft: RequestDraft): CheckedAnswers {
+export function checkAnswers(
+  fields: InputRequestField[],
+  draft: RequestDraft,
+  { list = false } = {},
+): CheckedAnswers {
   const checked: CheckedAnswers = { fieldNotes: {}, own: {}, refused: [], values: {} }
-  for (const field of fields) if (isShown(field, draft.answers)) checkField(field, draft, checked)
+  for (const field of fields)
+    if (isShown(field, draft.answers)) checkField(field, draft, checked, list)
   const [first] = fields
   const empty =
     !Object.keys(checked.values).length &&

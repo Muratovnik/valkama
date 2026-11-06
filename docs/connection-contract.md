@@ -2171,7 +2171,12 @@ interface draws it in its comment, under the text, with no author of its own,
 since the comment has one, and no "Do not answer", since nobody waits for it.
 
 **Ticking.** Ticks are sent with one button, and ticking alone sends nothing, so
-five ticks are one answer and one notice. A person's answer is a
+five ticks are one answer and one notice. A send with nothing ticked is allowed and
+answers `{"items": []}`: the person has not decided the list, which is neither a
+refusal of every option nor an answer with something missing. The compact form of a
+list says so in `undecided`, `["items"]` while nothing on it is ticked and `[]`
+once something is, in `previous` too, and the notice of that answer reads
+`<label>: not decided`. A person's answer is a
 `question_answered` event: the agent that wrote the list and the item's holders
 hear it, as for any question (see
 [the hook contract](hook-contract.md#who-is-told)), and the next agent write

@@ -300,6 +300,10 @@ carries `under` (the parent's id) and, for a `multi_choice`, `of` (how many
 options it offers) and no label, and for a verdict with a comment or an own
 variant. `previous` has the same shape.
 
+A list under a comment adds `comment_id` and `undecided`: `["items"]` while nothing
+on it is ticked, which a send with none ticked leaves it, and `[]` once something
+is. `previous` has it too.
+
 `by_person` is true when the latest call that closed or changed the question came
 through Valkama's interface, false for any other call that answered, changed,
 declined or withdrew it, and null while none has, which includes an answer written

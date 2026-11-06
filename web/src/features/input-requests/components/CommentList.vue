@@ -6,7 +6,8 @@
  *
  * Nobody waits on it, so nothing declines it and nothing counts it as waiting. Ticking only
  * ticks, as choosing does in a question: five ticks sent one by one would wake the agent five
- * times. The rows are a question's (`RequestOption`), denser and with no ground, their boxes on
+ * times. A send with nothing ticked goes too, and tells the agent the list is not decided
+ * (`checkAnswers`). The rows are a question's (`RequestOption`), denser and with no ground, their boxes on
  * the edge of the comment's words, and the comment on the ticks opens from the left end of the
  * buttons' row as a question's does.
  *
