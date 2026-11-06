@@ -4,9 +4,10 @@
  * the deadline, in the list of everything waiting, and while an answer is changed.
  *
  * Every line of the row holds a control, but for the one place the step of declining needs
- * where nothing else can give it, and that is exactly as tall as its words: the comment's glyph
- * never takes a line of its own (DESIGN.md), and on a phone in the card nothing else stands
- * before the buttons. The two answers are one pair at the row's end; what comes before them
+ * where nothing else can give it: on a phone in the card, where only the comment's glyph stands
+ * before the buttons and that glyph never takes a line of its own (DESIGN.md). That band is the
+ * one empty band a row may show, kept for the step's words unseen, and it is one line of them
+ * and the row's gap, in both languages; its words, once drawn, take one line. The two answers are one pair at the row's end; what comes before them
  * keeps the row's start at every width; the row is one line wherever its controls and the
  * asking fit on one; and the step moves nothing, its words drawn where the way to the task and
  * Check status stood, on one line where that place allows.
@@ -53,11 +54,12 @@ const membersOf = (row: Locator) =>
         }
       })
     const { bottom, left, right, top } = node.getBoundingClientRect()
-    // The place kept for the asking where no control stands in it.
+    // The place kept for the asking where no control stands in it, and one line of its words.
     const lead = node.querySelector('.request-lead')
     const held = lead && !lead.querySelector('button') ? lead.getBoundingClientRect() : null
     const room = held && { bottom: held.bottom, left: held.left, right: held.right, top: held.top }
-    return { row: { bottom, left, right, top }, members, room }
+    const line = lead ? Number.parseFloat(getComputedStyle(lead, '::before').lineHeight) : 0
+    return { row: { bottom, left, right, top }, members, room, line }
   })
 type Row = Awaited<ReturnType<typeof membersOf>>
 
@@ -100,20 +102,30 @@ const overlaps = (one: Edge, other: Edge) =>
   one.top < other.bottom &&
   other.top < one.bottom
 
-/** Every line of the row holds a control: its top and bottom are theirs, and no gap between
- *  two lines is wider than the row's gap. */
-function expectNoEmptyBand({ members, room, row }: Row, what: string) {
-  const boxes = [...members.map((member) => member.box), ...(room ? [room] : [])]
-  const tops = Math.min(...boxes.map((box) => box.top))
-  const bottoms = Math.max(...boxes.map((box) => box.bottom))
-  expect(near(row.top, tops), `${what}: the row starts with a control`).toBe(true)
-  expect(near(row.bottom, bottoms), `${what}: the row ends with a control`).toBe(true)
-  const spans = boxes.map((box) => [box.top, box.bottom] as const).sort((a, b) => a[0] - b[0])
+/**
+ * Every line of the row holds a control seen: its bottom is theirs, and no gap between two lines
+ * is wider than the row's gap. The place kept unseen for the asking is no control. Its band over
+ * the row is the one exception, where it stands with no control in it: exactly one line of its
+ * words and the row's gap, nothing more.
+ */
+function expectNoEmptyBand({ line, members, room, row }: Row, what: string) {
+  const spans = members
+    .map((member) => [member.box.top, member.box.bottom] as const)
+    .sort((a, b) => a[0] - b[0])
+  const top = (spans[0]?.[0] ?? row.top) - row.top
+  if (room && top > 1) {
+    expect(near(room.top, row.top), `${what}: the band is the place kept for the asking`).toBe(true)
+    expect(
+      Math.abs(top - (line + GAP)),
+      `${what}: the band is one line of the asking and the gap, ${top.toFixed(1)}px`,
+    ).toBeLessThanOrEqual(1)
+  } else expect(top, `${what}: the row starts with a control`).toBeLessThanOrEqual(1)
   let reached = spans[0]?.[1] ?? row.top
-  for (const [top, bottom] of spans) {
-    expect(top - reached, `${what}: no empty band between lines`).toBeLessThanOrEqual(GAP + 1)
-    reached = Math.max(reached, bottom)
+  for (const [start, end] of spans) {
+    expect(start - reached, `${what}: no empty band between lines`).toBeLessThanOrEqual(GAP + 1)
+    reached = Math.max(reached, end)
   }
+  expect(near(row.bottom, reached), `${what}: the row ends with a control`).toBe(true)
 }
 
 /** The two answers on one line at the row's end, and what comes before them at its start, in
@@ -202,7 +214,7 @@ async function expectStep(card: Locator, what: string) {
     `${what}: the pair stays`,
   ).toEqual(pairOf(before).map(({ left, top }) => ({ left, top })))
   const lines = await askingLines(row)
-  // A place kept for the asking alone is exactly as tall as what it draws there.
+  // A place kept for the asking alone is exactly as tall as what it draws there, one line.
   if (before.room) {
     const drawn =
       Math.max(...lines.map((line) => line.bottom)) - Math.min(...lines.map((line) => line.top))
@@ -210,6 +222,10 @@ async function expectStep(card: Locator, what: string) {
       Math.abs(drawn - (before.room.bottom - before.room.top)),
       `${what}: the place is the words'`,
     ).toBeLessThanOrEqual(2)
+    // On a line of its own, over the buttons, that place is the row's one empty band.
+    const room = before.room
+    if (pairOf(before).every((member) => member.box.top >= room.bottom))
+      expect(lines, `${what}: the asking on one line over the buttons`).toHaveLength(1)
   }
   const pairLeft = Math.min(...pairOf(during).map((member) => member.left))
   for (const line of lines) {
