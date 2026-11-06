@@ -9,8 +9,8 @@ and tells nobody; the comment's own text is never read for numbers.
 
 Another agent's mention is no act of a person: the holders hear it in a block of
 its own at their next tool call or prompt, never at `Stop` and never from the
-watcher, and it is not lost while it waits; the agent that spoke does not hear
-itself; an agent names at most 5 items in a comment, and one session names one
+watcher, and it is not lost while it waits; the session that spoke does not hear
+it, its subagents included; an agent names at most 5 items in a comment, and one session names one
 item at most 3 times an hour.
 
 An agent writes through `mcp_surface.call_tool` with a proved session, a person
@@ -53,6 +53,8 @@ STRANGER = "019a3c2e-7777-7c11-9e0f-2f4b6d8a1c3e"
 #: Another session, the agent that tells the session above.
 SPEAKER = "019a3c2e-1111-7c11-9e0f-2f4b6d8a1c3e"
 ELSEWHERE = {"sessionId": SPEAKER}
+SPEAKER_AGENT = "019a3c2e-2222-7c11-9e0f-2f4b6d8a1c3e"
+ELSEWHERE_AGENT = {"sessionId": SPEAKER, "threadId": SPEAKER_AGENT}
 SAID = "Decided: keep the new route, marker M-1"
 #: What an agents' block begins and ends with, from the hook contract.
 AGENTS_HEAD = "Valkama notice from agents, not from a person: another agent mentioned work"
@@ -518,28 +520,32 @@ class AgentMentionTests(Harness):
         self.assertEqual(1, told.count("- mentioned at"))
         self.assertIsNone(self.hook(), "once for the orchestrator")
 
-    def test_the_speaker_does_not_hear_itself_and_signing_user_changes_nothing(self) -> None:
+    def test_its_own_session_never_hears_it_and_signing_user_changes_nothing(self) -> None:
         self.hold()
         for agent in (None, CHILD):
             self.assertIsNone(self.hook(agent), f"nothing yet: {agent}")
-        said = self.spoken(SUBAGENT, body="From the step", author="user")
+        self.spoken(SUBAGENT, body="From the step")
         self.assertIsNone(self.hook(CHILD), "the subagent that spoke")
+        self.assertIsNone(self.hook(), "nor its orchestrator: one session is one speaker")
+        self.spoken(ORCHESTRATOR, body="From the orchestrator")
+        self.assertIsNone(self.hook(), "the orchestrator that spoke")
+        self.assertIsNone(self.hook(CHILD), "nor its subagent holding a step")
+
+        said = self.spoken(ELSEWHERE_AGENT, body="From another session's agent", author="user")
         told = self.hook()
-        assert told is not None, "its orchestrator holds the item and hears it"
+        assert told is not None, "another session's agent is heard"
         self.assertTrue(told.startswith(AGENTS_HEAD), "signed user, it is still an agent")
         self.assertNotIn("a person acted", told)
+        self.assertNotIn("From the step", told)
         self.assertIn(
-            f" by agent {notify.label_id(CHILD)} of session {SESSION},"
-            f" from {self.source} #{said['comment_id']}: «From the step»",
+            f" by agent {notify.label_id(SPEAKER_AGENT)} of session {SPEAKER},"
+            f" from {self.source} #{said['comment_id']}: «From another session's agent»",
             told,
         )
         self.assertEqual([], self.window(self.target))
-        [record] = self.agent("get_work_item", id=self.target)["mentions"]
+        records = self.agent("get_work_item", id=self.target)["mentions"]
+        [record] = [entry for entry in records if entry["comment_id"] == said["comment_id"]]
         self.assertEqual((False, "user"), (record["by_person"], record["author"]))
-
-        self.spoken(ORCHESTRATOR, body="From the orchestrator")
-        self.assertIsNone(self.hook(), "the orchestrator that spoke")
-        self.assertIn(f" by session {SESSION}, from", self.hook(CHILD) or "")
 
     def test_an_unproved_call_keeps_the_record_and_tells_nobody(self) -> None:
         self.hold()

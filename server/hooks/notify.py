@@ -27,8 +27,7 @@ It reaches the same recipients by the same rules, and beside them a session that
 subscribed to the item (`planning.subscriptions`); a holder that muted the item
 hears none of it while it holds the item, but for the replies to what it asked there
 with `awaits_reply`. A session's own conversation and its subagents are one speaker:
-none of them is told what another of them wrote, except a mention, which reaches
-every holder but the agent that spoke. A `Stop` notice continues the turn and the
+none of them is told what another of them wrote, a mention included. A `Stop` notice continues the turn and the
 watcher wakes the session, so either would turn agents telling one another into a
 loop that keeps sessions busy; they carry such news only when it asks for the
 session: the reply it awaited, a comment awaiting its reply on work it holds, a
@@ -799,43 +798,27 @@ def _agents_for_recipient(
     """What one recipient hears of other sessions' news on an item.
 
     Nothing its own session wrote: a session's conversation and its subagents are
-    one speaker. A mention is the exception kept from before: it reaches whoever
-    follows the item now, every agent of the session but the one that spoke.
+    one speaker, and a mention is no exception. Another session's mention reaches
+    whoever follows the item now.
 
     A comment that waits for a reply, written on this item or naming it in its
     mentions, asks for the holders of the item while it is `recent`: it says so,
-    `asks: true`. Another session's only: a session never asks itself.
+    `asks: true`.
 
     A holder that `muted` the item hears only the replies after it asked there with
     `awaits_reply`: what it waits for is never another session's noise.
     """
 
-    mentions = [
-        entry
-        for entry in entries
-        if entry["kind"] == "mentioned"
-        and follows
-        and not muted
-        and not _spoke(entry, session_id, agent_id)
-    ]
-    others = [
-        entry
-        for entry in entries
-        if entry["kind"] != "mentioned" and entry["session"] != session_id
-    ]
+    others = [entry for entry in entries if entry["session"] != session_id]
+    mentions = [entry for entry in others if entry["kind"] == "mentioned" and follows and not muted]
+    others = [entry for entry in others if entry["kind"] != "mentioned"]
     told = _for_recipient(conn, item, others, session_id, agent_id, whole=whole, awaited_only=muted)
     if holds:
         for entry in [*told, *mentions]:
-            if entry.get("recent") and entry["session"] != session_id:
+            if entry.get("recent"):
                 entry["asks"] = True
     order = {id(entry): place for place, entry in enumerate(entries)}
     return sorted([*told, *mentions], key=lambda entry: order[id(entry)])
-
-
-def _spoke(entry: dict, session_id: str, agent_id: str | None) -> bool:
-    """Whether a mention is this recipient's own words: the same session and agent."""
-
-    return entry["session"] == session_id and entry["agent"] == agent_id
 
 
 def _for_recipient(

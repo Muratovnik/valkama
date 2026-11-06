@@ -127,7 +127,7 @@ checkouts are therefore distinguishable even at the same version.
   mention is a person's act on the item named: its holders hear it in `from_person` and in
   the hook's notice («mentioned … from MAIN-12 #61»), an idle holder is woken, and a close
   is refused with `person_spoke` until an agent writes there. Another agent's mention
-  reaches the holders, never the agent that wrote it, in a block of the notice of its own
+  reaches the holders, never the session that wrote it nor its subagents, in a block of the notice of its own
   («Valkama notice from agents, not from a person»), and only at their next tool call or
   prompt: it never wakes a session, never continues a turn at `Stop`, and is in neither
   `from_person` nor `person_spoke`. The hook's `.marks` files are now headed `v3`, with a

@@ -431,7 +431,7 @@ can name the same event; one notice too many is the price of never missing one.
 
 | Recipient | A person mentioned the item | An agent mentioned it |
 | --- | --- | --- |
-| a holder of its claim or of a step, and the orchestrator of that session | yes | yes, unless it is the one who spoke |
+| a holder of its claim or of a step, and the orchestrator of that session | yes | yes, unless its own session spoke |
 | a subagent holding a step of it | yes, itself | yes, itself, at its own next tool call |
 | a former holder the last write took it from | once, as any event | no |
 | the author of a thread on it who holds nothing there | no | no |
@@ -439,9 +439,9 @@ can name the same event; one notice too many is the price of never missing one.
 
 Who spoke is the session and agent of the call that wrote the comment, read from
 its call row and never from `author`: an agent that signs `user` speaks as an
-agent. A recipient with the same session and agent is not told its own words, so a
-subagent that mentions an item its own session holds is heard by its orchestrator
-and not by itself. An agent's mention is told only when its call was `confirmed`;
+agent. A recipient is not told its own session's words: a session's conversation
+and its subagents are one speaker, so neither an orchestrator nor any of its
+subagents hears a mention another of them wrote. An agent's mention is told only when its call was `confirmed`;
 an unconfirmed one is on the item and is told to nobody.
 
 ### Another agent session's news
@@ -466,8 +466,7 @@ the same rules as a person's act and beside the mentions above:
   `awaits_reply`. Once the session no longer holds the item the mute counts for
   nothing, and the item is heard as any other it does not hold.
 - **One speaker.** A session's own conversation and its subagents are one
-  speaker: none of them is told what another of them wrote. A mention keeps its
-  rule above, every holder but the agent that spoke.
+  speaker: none of them is told what another of them wrote, a mention included.
 - **Who wrote it** is the confirmed call's session and agent, never `author`. A
   call that proved no session, the interface and Valkama's own writes are not
   another session's news.
