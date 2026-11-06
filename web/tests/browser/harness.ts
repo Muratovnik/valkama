@@ -19,6 +19,10 @@ import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
+// The interface font, as the app's entry point (`main.ts`) asks for it: without it every
+// surface here was drawn and measured in the stack's second font.
+import '@fontsource-variable/inter'
+
 import '@/app/styles/index.css'
 
 import { DocumentLinksSurface } from './documentLinksSurface.ts'
