@@ -1350,7 +1350,9 @@ comment's press keeps the line of the buttons; only where neither is offered doe
 for the asking alone, as tall as its words and the row's gap, and those words are one line in
 either language there. Kept beside the controls as a room of its own, it sent the two answers to
 the next line where everything else fitted. What stands before the answers keeps the row's start
-at every width.
+at every width. A row nothing can be declined from, the one under a list an agent put under its
+comment, is the same row and keeps no place for an asking it never shows: each of its lines holds
+a control.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A press following another can still do harm where something is held: folding lifts the next
