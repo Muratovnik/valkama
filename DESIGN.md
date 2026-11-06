@@ -1530,8 +1530,10 @@ reach with `forced-color-adjust: none`: `CanvasText` for a mark that says a stat
 `Highlight` for what is chosen. The palette has no colour for danger; a failure keeps
 its disc and its edge in the palette's ink, and its words say the rest. What is told apart
 by its ground alone — a tile, a column, a sheet, a chip or a toggle at rest — loses its
-bounds with that ground, so it draws its edge in the palette's ink instead, inside itself
-where it takes no room: `CanvasText` around a surface, `ButtonText` around a control.
+bounds with that ground, so it draws its edge in the palette's ink instead. A surface draws a
+1px `CanvasText` border, because what is laid out inside it cannot cover a border: the
+workspace panel's edge drawn as an outline inside it was lost under the board's own opaque
+ground. A control draws a `ButtonText` outline inside itself, where it takes no room.
 
 Russian and English are equal layout cases, not a base language and a
 translation: a rule that only holds while the shorter string is on screen does

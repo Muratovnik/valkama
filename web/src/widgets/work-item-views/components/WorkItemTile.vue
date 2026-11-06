@@ -256,10 +256,9 @@ const describedBy = computed(() => {
   }
 
   /* A forced palette clears the ground that was all its edge, and a column of tiles read
-     as one run of text. The palette's ink draws the edge inside, taking no room. */
+     as one run of text. The palette's ink draws the edge as a border. */
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    border: 1px solid currentcolor;
   }
 
   /* The ring is drawn around the sheet, inside it. A tile fills the width of a

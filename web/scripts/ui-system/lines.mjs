@@ -35,6 +35,8 @@ export const LINE_BUDGET = new Map([
   // component it separates, and drew nothing else.
   ['app/components/AppNotice.vue', 1],
   ['app/styles/base.css', 1],
+  // The workspace panel's edge in a forced palette (below).
+  ['app/App.vue', 1],
   ['widgets/app-nav/components/AppNav.vue', 1],
 
   // Shared primitives. Fields keep their interactive edge; floating surfaces
@@ -76,9 +78,10 @@ export const LINE_BUDGET = new Map([
   ['features/input-requests/components/RequestFieldAnswer.vue', 1], // A comment's rule, as a quote's.
   ['features/input-requests/components/RequestHistory.vue', 1], // A replaced answer's, the same.
   // Settings General uses one earned divider between its preference groups
-  // and one row family. Diagnostics uses section and row dividers, plus status
-  // edges for initial-load and refresh failures.
-  ['pages/settings/components/SettingsGeneral.vue', 1],
+  // and one row family, and its sheet's edge in a forced palette (below).
+  // Diagnostics uses section and row dividers, plus status edges for
+  // initial-load and refresh failures.
+  ['pages/settings/components/SettingsGeneral.vue', 2],
   ['pages/settings/components/SettingsRow.vue', 1],
   ['pages/settings/components/installation-health.css', 5],
   // Planning's own surfaces. Overview divides the facts from the record; the
@@ -93,7 +96,7 @@ export const LINE_BUDGET = new Map([
   ['widgets/document-viewer/components/DocumentText.vue', 1],
   // The branch map's task readout floats over the lanes beside it (overlay).
   ['widgets/work-item-inspector/components/ChainBranchTip.vue', 1],
-  ['widgets/work-item-views/components/WorkItemList.vue', 1],
+  ['widgets/work-item-views/components/WorkItemList.vue', 2],
   // The line that says a reorder in a lane is the whole board's order (overlay).
   ['widgets/work-item-views/components/WorkItemBoard.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
@@ -105,6 +108,15 @@ export const LINE_BUDGET = new Map([
   // A frame's progress in a forced palette, where hues are gone: work begun is a
   // dashed run of the edge (status edge), told from the filled run of work done.
   ['widgets/work-item-graph/components/GraphFrameProgress.vue', 1],
+
+  // A forced palette clears every ground, so a surface told apart by its ground
+  // alone draws its edge in the palette's ink there and nowhere else: the panel
+  // above, the settings sheet, and the list (beside its sticky rule), its columns,
+  // the cells of an epic's row and its tiles. A border, because an outline drawn
+  // inside lay under an opaque ground the surface holds and was lost.
+  ['widgets/work-item-views/components/WorkItemColumn.vue', 1],
+  ['widgets/work-item-views/components/WorkItemLaneCell.vue', 1],
+  ['widgets/work-item-views/components/WorkItemTile.vue', 1],
 ])
 
 /**

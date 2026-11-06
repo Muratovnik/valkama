@@ -359,10 +359,10 @@ useListKeys(root, {
   border-radius: var(--radius-card);
   scroll-padding-block: var(--size-control-height) var(--space-1);
 
-  /* A forced palette clears the ground, and with it the list's bounds on the workspace. */
+  /* A forced palette clears the ground, and with it the list's bounds on the workspace. A
+     border, outside the scroll: the sticky head lay over an outline drawn inside. */
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    border: 1px solid currentcolor;
   }
 
   &[data-fit='narrow'] {

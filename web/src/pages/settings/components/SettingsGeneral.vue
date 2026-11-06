@@ -93,8 +93,7 @@ function emitLocale(value: string) {
 
   /* A forced palette clears the sheet; the rules between its groups stay, its edge goes. */
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    border: 1px solid currentcolor;
   }
 }
 

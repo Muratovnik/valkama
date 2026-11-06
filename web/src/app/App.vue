@@ -407,10 +407,10 @@ usePlatformEntryRestore({
   container: workspace / inline-size;
 
   /* A forced palette clears the ground that parted the panel from the chrome, so its edge is
-     drawn in the palette's ink, inside it, where it takes no room. */
+     drawn in the palette's ink. A border, because nothing laid out inside can cover it: an
+     outline drawn inside lay under the board's own opaque, positioned ground and was lost. */
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    border: 1px solid currentcolor;
   }
 }
 

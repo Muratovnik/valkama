@@ -143,8 +143,7 @@ function placed(move: BoardMove, landing: StackLanding) {
 
   /* A forced palette clears the ground, and with it where one state ends and the next begins. */
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    border: 1px solid currentcolor;
   }
 
   /* The count belongs beside the state's name, not at the far edge of the

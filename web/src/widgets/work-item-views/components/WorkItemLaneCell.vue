@@ -166,14 +166,18 @@ function walk(event: KeyboardEvent) {
 
   /* A forced palette clears the ground, so a cell that has one takes an edge instead. */
   @media (forced-colors: active) {
-    outline: 1px solid CanvasText;
-    outline-offset: -1px;
+    border: 1px solid currentcolor;
   }
 
   &.bare:not(.landable) {
     gap: 0;
     background: none;
-    outline: none;
+
+    /* It keeps the border's room in the ground's colour, so a drag that makes it a landing
+       moves nothing inside it. */
+    @media (forced-colors: active) {
+      border-color: Canvas;
+    }
 
     .lane-stack {
       min-height: 0;
