@@ -102,6 +102,16 @@ checkouts are therefore distinguishable even at the same version.
   reopens; a list on a closed item, or in the call that closes it, is refused. A merge
   moves a list with its comment, so a report's list stays with the report. See
   [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
+- **A list an agent puts under its comment is ticked right there.** The card shows it under
+  the comment's words, inside that comment, and no longer as a question of its own: it adds
+  nothing to «Waiting for an answer» or to the discussion's counts. Ticking only marks a row;
+  «Send marks» sends them once, with a comment on the marks if you want one, and a
+  recommended option says so as in a question. Sent, every row keeps its mark, a line says
+  «You ticked 2 of 5» and when, and «Change» opens the marks again; a change made elsewhere
+  in the meantime is said, not overwritten. On a closed task the list says that marks would
+  reach no one until the task is reopened, keeps what you had ticked and not sent in sight,
+  and offers it again once the task reopens. The rows are as wide as the comment's text and
+  each takes a tap across its whole line on a phone.
 - **A comment can tell the work on other items.** A number in a comment's text stays a
   link and tells nobody. `POST /api/planning/work-item/comment`, `comment_work_item`,
   `report_work_item` and the batch's `comment` and `comments` take `mentions`, on a root
