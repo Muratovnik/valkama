@@ -15,17 +15,17 @@
  * muted, and say why in the row's name and hover text; a pinned item that has closed says
  * its state where the agents' count would stand. A colour is never all that says it.
  *
- * The pin is the row's last part. On the rail it shows under the pointer and focus, over
- * the end of the row so nothing beside it moves, and on a pinned row always, with its
- * room kept: it is the one mark of the pin and the way to take it off. On a phone there is
- * no pointer to bring it out, so only a pinned row has one, a finger's width wide.
+ * The pin is the row's last part, in a column of its own that the rail keeps on every
+ * row, so the title's ellipsis and the count stand clear of it, and it comes up under the
+ * pointer and focus in the row where a pinned row shows it always (`NavWorkPin`). On a
+ * phone there is no pointer to bring it out, so only a pinned row has one, a finger's
+ * width wide.
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import NavWorkPin from '@/widgets/app-nav/components/NavWorkPin.vue'
 import { rowNumber } from '@/widgets/app-nav/utils/liveTree.ts'
-
-import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -48,7 +48,6 @@ const emit = defineEmits<{ fold: []; go: [route: PlatformRoute] }>()
 
 const { d, t } = useI18n()
 const store = useLiveWorkStore()
-const say = useOpenNotice()
 
 const QUIET_DAY = { month: 'short', day: '2-digit' } as const
 
@@ -98,7 +97,6 @@ const href = computed(() =>
 const number = computed(() => rowNumber(props.row.reference))
 const currentMark = computed(() => (props.current ? ('page' as const) : undefined))
 const pinShown = computed(() => props.size === 'rail' || props.row.pinned)
-const pinWords = computed(() => (props.row.pinned ? t('liveWork.unpin') : t('liveWork.pin')))
 /** What stands at the end of the link: a closed item's state, else how many agents are on it. */
 const meta = computed(() => {
   if (props.row.is_terminal) return { agents: false, word: props.row.state_name }
@@ -118,14 +116,6 @@ function press(event: MouseEvent) {
   event.preventDefault()
   emit('go', props.route)
 }
-
-async function togglePin() {
-  try {
-    await store.pin(props.row.reference, !props.row.pinned)
-  } catch {
-    say(t('liveWork.pinFailed'), 'refused')
-  }
-}
 </script>
 
 <template>
@@ -133,7 +123,14 @@ async function togglePin() {
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
     class="nav-row"
-    :class="{ current, muted, pinned, 'nav-row-head': head, 'nav-row-touch': touch }"
+    :class="{
+      current,
+      muted,
+      pinned,
+      'nav-row-head': head,
+      'nav-row-touch': touch,
+      'nav-row-has-pin': pinShown,
+    }"
     :style="depthStyle"
     @pointerenter="hold(true)"
     @pointerleave="hold(false)"
@@ -215,20 +212,12 @@ async function togglePin() {
         />{{ meta.word }}
       </span>
     </a>
-    <button
+    <NavWorkPin
       v-if="pinShown"
-      class="nav-row-pin"
-      type="button"
-      :aria-label="pinWords"
-      :title="pinWords"
-      @click="togglePin"
-    >
-      <VIcon
-        class="nav-row-pin-glyph"
-        name="pin"
-        :size="14"
-      />
-    </button>
+      :pinned="row.pinned"
+      :reference="row.reference"
+      :size="size"
+    />
   </div>
 </template>
 
@@ -266,8 +255,18 @@ async function togglePin() {
     color: var(--color-navigation-text-muted);
   }
 
-  &.pinned {
+  /* The pin's column, kept on every row of the rail so nothing under it is ever covered
+     and its pin comes up where a pinned row's stands (`NavWorkPin`). */
+  &.nav-row-has-pin {
+    --nav-work-pin-sight: hidden;
+
     grid-template-columns: var(--nav-row-lead) minmax(0, 1fr) auto;
+  }
+
+  /* Focus anywhere in the row, not only the keyboard's: a pin that hid while focus was
+     on its way to it would drop that focus. */
+  &:is(:hover, :focus-within) {
+    --nav-work-pin-sight: visible;
   }
 }
 
@@ -374,56 +373,6 @@ async function togglePin() {
   white-space: nowrap;
 }
 
-/* Under the pointer and focus it lies over the end of the row on the row's own ground, so
-   its arrival moves nothing; on a pinned row it stands in a column of its own and always
-   shows, filled, since it is the one mark of the pin. Its height is the row's either way,
-   not the floor every button has. */
-.nav-row-pin {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  z-index: 1;
-  display: none;
-  justify-content: center;
-  align-items: center;
-  inline-size: var(--size-control-inline);
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  color: var(--color-navigation-text-muted);
-  background: var(--color-navigation-raised);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-text-on-dark);
-  }
-
-  &:focus-visible {
-    outline-offset: -2px;
-  }
-
-  .nav-row:is(:hover, :focus-within) & {
-    display: inline-flex;
-  }
-
-  .nav-row.current & {
-    background: var(--color-navigation-active);
-  }
-
-  .nav-row.pinned & {
-    position: static;
-    display: inline-flex;
-    min-block-size: var(--size-control-inline);
-    color: var(--color-text-on-dark-muted);
-    background: none;
-  }
-}
-
-.nav-row.pinned .nav-row-pin-glyph {
-  fill: currentcolor;
-}
-
 /* A phone: a finger's row, the reading size, and the pin only where there is one. */
 .nav-row-touch {
   --nav-row-lead: 28px;
@@ -434,13 +383,8 @@ async function togglePin() {
     font: var(--font-control);
   }
 
-  .nav-row-fold,
-  &.pinned .nav-row-pin {
+  .nav-row-fold {
     min-block-size: var(--size-control-target);
-  }
-
-  .nav-row-pin {
-    inline-size: var(--size-control-target);
   }
 }
 
@@ -456,10 +400,6 @@ async function togglePin() {
     :is(.nav-row-lead, .nav-row-fold, .nav-row-number, .nav-row-title, .nav-row-own),
     :is(.nav-row-meta, .nav-row-pin) {
       color: HighlightText;
-    }
-
-    .nav-row-pin {
-      background: Highlight;
     }
 
     .work-dots > * {
