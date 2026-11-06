@@ -58,6 +58,7 @@ import type { FieldEdit } from '@/features/input-requests/utils/validateAnswers.
 import type { InputRequestField, InputRequestOption } from '@/shared/api/inputRequestModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
+import LineEnd from '@/shared/ui/LineEnd.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 
 type EditorSuggest = InstanceType<typeof MarkdownEditor>['$props']['suggest']
@@ -252,16 +253,17 @@ defineExpose({ focus })
     >
       <legend class="request-legend">
         <span :id="legendId">{{ label }}</span>
-        <RequestNoteToggle
-          v-if="offersNote"
-          class="request-legend-note"
-          :disabled="disabled"
-          :name="t('requests.fieldNoteName', { field: field.label })"
-          :open="noteOpen"
-          :title="t('requests.fieldNote')"
-          :written="noteWritten"
-          @press="pressFieldNote"
-        />
+        <LineEnd v-if="offersNote">
+          <RequestNoteToggle
+            class="request-legend-note"
+            :disabled="disabled"
+            :name="t('requests.fieldNoteName', { field: field.label })"
+            :open="noteOpen"
+            :title="t('requests.fieldNote')"
+            :written="noteWritten"
+            @press="pressFieldNote"
+          />
+        </LineEnd>
       </legend>
       <RequestOption
         v-for="option in rows"
@@ -369,12 +371,13 @@ defineExpose({ focus })
 }
 
 /* Read as the label of a text field reads, so the fields of one question do
-   not each wear a different caption. The comment's press stands at its other end. */
+   not each wear a different caption. The comment's press stands at its other end, on its first
+   line however it wraps. */
 .request-legend {
   display: flex;
   gap: var(--space-2);
   justify-content: space-between;
-  align-items: center;
+  align-items: first baseline;
   inline-size: 100%;
   padding: 0;
   margin-bottom: var(--space-label-value);

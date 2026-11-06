@@ -20,7 +20,8 @@
  * stop only while focus is in the row: twenty-five toggles stood between the segments and Send.
  *
  * Side by side where the row is wide, the segments go under the label on a row of their own,
- * across its whole width, where it is not; a phone gets the target a finger needs.
+ * across its whole width, where it is not; a phone gets the target a finger needs. Its presses
+ * and the segments stand on the label's first line, however it wraps (`LineEnd`).
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -37,6 +38,7 @@ import type { InputAnswers, InputRequestField } from '@/shared/api/inputRequestM
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
+import LineEnd from '@/shared/ui/LineEnd.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -196,25 +198,29 @@ defineExpose({ focus })
           <span v-if="advice">{{ advice }}</span>
         </span>
       </div>
-      <VButton
+      <LineEnd
         v-if="folds"
-        class="request-point-toggle"
-        variant="text"
-        size="compact"
-        :tabindex="toggleStop"
-        :title="toggleLabel"
-        :aria-controls="detailShown"
-        :aria-expanded="open"
-        :aria-label="`${toggleLabel}: ${name}`"
-        icon
-        @click="open = !open"
+        class="request-point-end request-point-toggles"
       >
-        <VIcon
-          class="request-point-glyph"
-          name="chevron-down"
-          :size="16"
-        />
-      </VButton>
+        <VButton
+          class="request-point-toggle"
+          variant="text"
+          size="compact"
+          :tabindex="toggleStop"
+          :title="toggleLabel"
+          :aria-controls="detailShown"
+          :aria-expanded="open"
+          :aria-label="`${toggleLabel}: ${name}`"
+          icon
+          @click="open = !open"
+        >
+          <VIcon
+            class="request-point-glyph"
+            name="chevron-down"
+            :size="16"
+          />
+        </VButton>
+      </LineEnd>
       <SegmentedControl
         class="request-point-segments"
         size="compact"
@@ -225,7 +231,7 @@ defineExpose({ focus })
         :aria-invalid="invalidMark"
         @update:model-value="emit('verdict', $event)"
       />
-      <div class="request-point-tools">
+      <LineEnd class="request-point-end request-point-tools">
         <VButton
           class="request-point-own"
           variant="text"
@@ -251,7 +257,7 @@ defineExpose({ focus })
           :written="noteWritten"
           @press="pressNote"
         />
-      </div>
+      </LineEnd>
     </div>
     <RichText
       v-if="field.description && open"
@@ -331,7 +337,7 @@ defineExpose({ focus })
     'segments segments segments';
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: var(--space-2) var(--space-1);
-  align-items: start;
+  align-items: first baseline;
   min-width: 0;
 }
 
@@ -367,19 +373,21 @@ defineExpose({ focus })
   gap: 0 var(--space-2);
 }
 
-.request-point-toggle {
-  grid-area: toggle;
+/* The baseline they lend is the label's line. */
+.request-point-end {
+  font: var(--font-strong);
+}
 
-  &[aria-expanded='true'] .request-point-glyph {
-    rotate: 180deg;
-  }
+.request-point-toggles {
+  grid-area: toggle;
+}
+
+.request-point-toggle[aria-expanded='true'] .request-point-glyph {
+  rotate: 180deg;
 }
 
 .request-point-tools {
-  display: flex;
   grid-area: tools;
-  gap: var(--space-1);
-  align-items: center;
 }
 
 /* The three words share the line, so each is as easy to hit as the others. */

@@ -5,20 +5,22 @@
  * text of every entry.
  *
  * The words share no box with the icons, so however long a name runs it wraps inside its own
- * column and the icons hold the top of the row at the end, where a thumb finds them. A short
- * head centres on the icons; a long one starts at their top and goes on below them.
+ * column, and the icons stand on its first line (`LineEnd`). A short head, whose first line is
+ * the whole of its words, centres on the icons; a long one starts with its first line on their
+ * middle and goes on below them. Its words are a detail line, which is the line they end.
  *
  * Where a finger is the pointer, or the screen is as narrow as a phone's, an icon is a 44px
  * target and no longer 28px. It is drawn bare, so the difference is room around the glyph, and
  * `VButton` reads the size from this token. A head with nothing to do keeps the height of its
  * words.
  */
+import LineEnd from '@/shared/ui/LineEnd.vue'
 </script>
 
 <template>
   <div class="entry-head">
     <div class="entry-words"><slot /></div>
-    <div class="entry-actions"><slot name="actions" /></div>
+    <LineEnd class="entry-actions"><slot name="actions" /></LineEnd>
   </div>
 </template>
 
@@ -26,8 +28,9 @@
 .entry-head {
   display: flex;
   gap: var(--space-2);
-  align-items: flex-start;
+  align-items: first baseline;
   min-width: 0;
+  font: var(--font-detail);
 
   @media (pointer: coarse), (width <= 620px) {
     --size-control-inline: var(--size-control-target);
@@ -38,22 +41,10 @@
   display: grid;
   flex: 1 1 0;
   grid-template-columns: minmax(0, 1fr);
-  align-content: center;
   min-width: 0;
-  min-block-size: var(--size-control-inline);
 }
 
-.entry-actions {
-  display: flex;
-  flex: none;
-  gap: var(--space-1);
-
-  &:empty {
-    display: none;
-  }
-}
-
-.entry-head:has(> .entry-actions:empty) > .entry-words {
-  min-block-size: 0;
+.entry-actions:empty {
+  display: none;
 }
 </style>

@@ -569,7 +569,15 @@ chrome.
   rather than with the text beside it. Baseline is for a row that is text and
   nothing else. An icon that ends a line of words centres on that line, and on
   the first line once the words wrap, not on the middle of the block they make:
-  a review group's chevron stood half a line under the title it ends.
+  a review group's chevron stood half a line under the title it ends. One rule
+  does it, `LineEnd`: it holds the icons and lends them the baseline of the
+  line they end, an unseen space centred where their targets are, and the row
+  aligns by `first baseline`, which here aligns a line with a line. A target
+  taller than the line moves the words down by half the difference rather than
+  rising above the row, so each target keeps its size; a head of one line is
+  centred on its icons as before. Aligned to the block, or started at the top
+  in a target taller than the line, an icon stood 4–14px under the first line
+  of an entry's head, a review's point and a field's label.
 - What a block in a column draws first stands on the column's edge. A row or a bare
   inline control whose fill keeps an inset under the pointer, `--space-fill-inset`, stands
   that inset outside the column as a negative margin, so its words start where the heading
