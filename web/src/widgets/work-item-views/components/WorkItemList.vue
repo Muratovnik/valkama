@@ -359,6 +359,12 @@ useListKeys(root, {
   border-radius: var(--radius-card);
   scroll-padding-block: var(--size-control-height) var(--space-1);
 
+  /* A forced palette clears the ground, and with it the list's bounds on the workspace. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+
   &[data-fit='narrow'] {
     --list-slot-size: var(--space-4);
   }

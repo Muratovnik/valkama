@@ -405,6 +405,13 @@ usePlatformEntryRestore({
   overflow: hidden;
   border-top-left-radius: var(--radius-shell);
   container: workspace / inline-size;
+
+  /* A forced palette clears the ground that parted the panel from the chrome, so its edge is
+     drawn in the palette's ink, inside it, where it takes no room. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
 }
 
 /* Focus lands here when a press named no control to go back to. A ring around the whole

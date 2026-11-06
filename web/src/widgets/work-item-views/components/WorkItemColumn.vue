@@ -141,6 +141,12 @@ function placed(move: BoardMove, landing: StackLanding) {
   border-radius: var(--radius-card);
   scroll-snap-align: start;
 
+  /* A forced palette clears the ground, and with it where one state ends and the next begins. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+
   /* The count belongs beside the state's name, not at the far edge of the
      column: six numbers pushed right form a column of their own that means
      nothing read alone. */

@@ -255,6 +255,13 @@ const describedBy = computed(() => {
     background: var(--color-surface-hover);
   }
 
+  /* A forced palette clears the ground that was all its edge, and a column of tiles read
+     as one run of text. The palette's ink draws the edge inside, taking no room. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+
   /* The ring is drawn around the sheet, inside it. A tile fills the width of a
      column that clips its overflow, so a ring drawn outside lost both its sides
      there, and its top or bottom too wherever a scroll left the tile against

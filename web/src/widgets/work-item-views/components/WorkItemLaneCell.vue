@@ -164,9 +164,16 @@ function walk(event: KeyboardEvent) {
   background: var(--color-surface);
   border-radius: var(--radius-card);
 
+  /* A forced palette clears the ground, so a cell that has one takes an edge instead. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+
   &.bare:not(.landable) {
     gap: 0;
     background: none;
+    outline: none;
 
     .lane-stack {
       min-height: 0;

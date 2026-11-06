@@ -90,6 +90,12 @@ function emitLocale(value: string) {
   background: var(--color-surface);
   overflow: hidden;
   border-radius: var(--radius-card);
+
+  /* A forced palette clears the sheet; the rules between its groups stay, its edge goes. */
+  @media (forced-colors: active) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
 }
 
 .settings-general-group + .settings-general-group {
