@@ -265,6 +265,10 @@ async function togglePin() {
   &.muted .nav-row-title {
     color: var(--color-navigation-text-muted);
   }
+
+  &.pinned {
+    grid-template-columns: var(--nav-row-lead) minmax(0, 1fr) auto;
+  }
 }
 
 /* A group's head leads its items, as an epic's row does on the board. */
@@ -284,7 +288,7 @@ async function togglePin() {
 .nav-row-fold {
   position: relative;
   z-index: 1;
-  block-size: var(--size-control-inline);
+  min-block-size: var(--size-control-inline);
   padding: 0;
   border: 0;
   color: var(--color-navigation-text-muted);
@@ -372,7 +376,8 @@ async function togglePin() {
 
 /* Under the pointer and focus it lies over the end of the row on the row's own ground, so
    its arrival moves nothing; on a pinned row it stands in a column of its own and always
-   shows, filled, since it is the one mark of the pin. */
+   shows, filled, since it is the one mark of the pin. Its height is the row's either way,
+   not the floor every button has. */
 .nav-row-pin {
   position: absolute;
   inset-block: 0;
@@ -382,6 +387,7 @@ async function togglePin() {
   justify-content: center;
   align-items: center;
   inline-size: var(--size-control-inline);
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: var(--color-navigation-text-muted);
@@ -408,7 +414,7 @@ async function togglePin() {
   .nav-row.pinned & {
     position: static;
     display: inline-flex;
-    block-size: var(--size-control-inline);
+    min-block-size: var(--size-control-inline);
     color: var(--color-text-on-dark-muted);
     background: none;
   }
@@ -430,7 +436,7 @@ async function togglePin() {
 
   .nav-row-fold,
   &.pinned .nav-row-pin {
-    block-size: var(--size-control-target);
+    min-block-size: var(--size-control-target);
   }
 
   .nav-row-pin {

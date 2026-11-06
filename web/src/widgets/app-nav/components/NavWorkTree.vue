@@ -260,7 +260,7 @@ function escape(event: KeyboardEvent) {
   justify-content: center;
   align-items: center;
   inline-size: var(--nav-tree-lead);
-  block-size: var(--size-control-inline);
+  min-block-size: var(--size-control-inline);
   padding: 0;
   border: 0;
   color: var(--color-navigation-text-muted);
@@ -343,7 +343,7 @@ function escape(event: KeyboardEvent) {
   }
 
   .nav-tree-fold {
-    block-size: var(--size-control-target);
+    min-block-size: var(--size-control-target);
   }
 }
 </style>
