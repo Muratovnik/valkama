@@ -213,12 +213,16 @@ function submit(event: KeyboardEvent) {
   }
 }
 
+/* The marks centre on the reference, and the reference stands on the first line of the title
+   by its baseline: the head hands on the baseline of the one item that takes part in baseline
+   alignment, not its first mark's lower edge. Centred in the row, the reference hung between
+   the two lines of a long title. */
 .command-head {
   display: inline-flex;
   grid-area: head;
   gap: var(--space-2);
   align-items: center;
-  align-self: center;
+  align-self: baseline;
   white-space: nowrap;
 }
 
@@ -243,6 +247,7 @@ function submit(event: KeyboardEvent) {
 }
 
 .command-reference {
+  align-self: baseline;
   color: var(--color-text);
   font-family: var(--font-family-mono);
 }
