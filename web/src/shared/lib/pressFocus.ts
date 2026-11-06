@@ -10,7 +10,9 @@
  * ringed after a click.
  * Nothing in the library takes a ring's say, so the say is given where every such focus
  * passes: a `focus()` naming no `focusVisible` after a press, and before the next key,
- * names it false. After a key nothing changes.
+ * names it false. After a key nothing changes. Where typing goes the browser's own verdict
+ * stands (`takesTyping`): it shows focus there after a press too, since a writer must see
+ * where the letters go, and a field a press took the reader to stood unframed until Enter.
  *
  * This is the one record of the last input, and `moveFocus` reads it too: a press of a mouse,
  * pen or finger (`pointerdown`, whatever its `pointerType`) or a key other than a bare modifier.
@@ -21,6 +23,33 @@ let lastInput: 'key' | 'pointer' | null = null
 
 /** Whether a press of the pointer, and not a key, was the last input. */
 export const pressedLast = (): boolean => lastInput === 'pointer'
+
+/**
+ * The input types a reader types into, as the WICG `:focus-visible` polyfill lists them for
+ * the browsers' own rule. A read-only field takes no letters, so a press leaves it quiet.
+ */
+const TYPED = new Set([
+  'date',
+  'datetime',
+  'datetime-local',
+  'email',
+  'month',
+  'number',
+  'password',
+  'search',
+  'tel',
+  'text',
+  'time',
+  'url',
+  'week',
+])
+
+/** Whether typing goes into `node`, where the browser shows focus after a press as well. */
+export function takesTyping(node: Element): boolean {
+  if (node instanceof HTMLInputElement) return TYPED.has(node.type) && !node.readOnly
+  if (node instanceof HTMLTextAreaElement) return !node.readOnly
+  return node instanceof HTMLElement && node.isContentEditable
+}
 
 /** A key held for a press or another key is not a use of the keyboard on its own. */
 const MODIFIERS = new Set(['Alt', 'AltGraph', 'CapsLock', 'Control', 'Meta', 'Shift'])
@@ -41,8 +70,8 @@ export function quietFocusAfterPress(): void {
   for (const prototype of [HTMLElement.prototype, SVGElement.prototype]) {
     const focus = Object.getOwnPropertyDescriptor(prototype, 'focus')?.value as unknown
     if (typeof focus !== 'function') continue
-    prototype.focus = function (this: HTMLOrSVGElement, options?: FocusOptions) {
-      const quiet = pressedLast() && options?.focusVisible === undefined
+    prototype.focus = function (this: HTMLElement | SVGElement, options?: FocusOptions) {
+      const quiet = pressedLast() && options?.focusVisible === undefined && !takesTyping(this)
       Reflect.apply(focus, this, [quiet ? { ...options, focusVisible: false } : options])
     }
   }

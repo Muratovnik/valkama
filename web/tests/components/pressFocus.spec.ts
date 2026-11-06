@@ -62,6 +62,45 @@ it('a modifier held for a click is not the keyboard; any other key gives the bro
   expect(asked()).toBeUndefined()
 })
 
+/** An element of `tag` on the page, with `set` applied to it first. */
+function placed<T extends HTMLElement>(tag: string, set: (node: T) => void = () => {}) {
+  const node = document.createElement(tag) as T
+  set(node)
+  return document.body.appendChild(node)
+}
+
+// Where typing goes the browser shows focus after a press as well, and a field the interface
+// takes the reader to after a click stood unframed until Enter: the browser's verdict stands.
+it('after a press, a field typed into keeps the browser verdict on its focus', () => {
+  const typed = [
+    placed<HTMLInputElement>('input'),
+    placed<HTMLInputElement>('input', (node) => (node.type = 'search')),
+    placed<HTMLInputElement>('input', (node) => (node.type = 'email')),
+    placed<HTMLInputElement>('input', (node) => (node.type = 'number')),
+    placed<HTMLTextAreaElement>('textarea'),
+    placed<HTMLDivElement>('div', (node) => (node.contentEditable = 'true')),
+  ]
+  press()
+  for (const field of typed) {
+    field.focus({ preventScroll: true })
+    expect(asked(), field.outerHTML).toEqual({ preventScroll: true })
+    moveFocus(field)
+    expect(asked(), field.outerHTML).toEqual({})
+  }
+  // What takes no letters stays quiet after a press, a field that cannot be written in included.
+  const quiet = [
+    placed<HTMLInputElement>('input', (node) => (node.type = 'checkbox')),
+    placed<HTMLInputElement>('input', (node) => (node.readOnly = true)),
+    placed<HTMLTextAreaElement>('textarea', (node) => (node.readOnly = true)),
+  ]
+  for (const field of quiet) {
+    field.focus()
+    expect(asked(), field.outerHTML).toEqual({ focusVisible: false })
+    moveFocus(field)
+    expect(asked(), field.outerHTML).toEqual({ focusVisible: false })
+  }
+})
+
 it('wraps the browser once however often it is installed', () => {
   quietFocusAfterPress()
   press()

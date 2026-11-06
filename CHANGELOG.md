@@ -204,7 +204,9 @@ checkouts are therefore distinguishable even at the same version.
   thread's replies, jump to the checklist, fail a send or go back to a link with the mouse or
   by touch, focus still moves to the reply, the list or the reason, so a screen reader and the
   next Tab go on from there, but no ring is drawn round it. The same action from the keyboard
-  still rings where focus went.
+  still rings where focus went. A text field the interface takes you to, such as a thread's
+  decision after Resolve, still turns its edge the focus colour after a click, so you see
+  where typing goes.
 - **An epic's header on the graph is as tall as its title.** A title of one, two or three
   lines takes that many, and the counts stand right under it, with no empty band between
   them; the layout leaves each header the room it is drawn at. The chevron leads the

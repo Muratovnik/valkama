@@ -134,6 +134,39 @@ for (const input of INPUTS) {
     expect(await landing(page, thread.locator('.reply').first(), input)).toEqual(RING_AFTER[input])
   })
 
+  // Where typing goes, focus is seen after a press as after a key: the field's edge turns the
+  // focus colour. A click on Resolve left the field it opened focused under a grey edge.
+  test(`a field the interface takes focus to shows its edge after ${input}`, async ({ page }) => {
+    const { threadOf } = await openTalkedOn(page)
+    const thread = threadOf('Should the second report')
+    await act(thread.getByRole('button', { name: 'Resolve', exact: true }), input)
+    const field = thread.getByRole('textbox', { name: 'Decision (optional)' })
+    await expect(field).toBeFocused()
+    await page.mouse.move(0, 0)
+    const edge = async () => {
+      await ringOf(page, field)
+      return field.evaluate((node) => {
+        const probe = document.body.appendChild(document.createElement('i'))
+        probe.style.color = 'var(--color-focus-ring)'
+        const focusColour = getComputedStyle(probe).color
+        probe.remove()
+        return {
+          visible: node.matches(':focus-visible'),
+          focusColour,
+          edge: getComputedStyle(node).borderTopColor,
+        }
+      })
+    }
+    const shown = await edge()
+    expect(shown).toEqual({
+      visible: true,
+      focusColour: shown.focusColour,
+      edge: shown.focusColour,
+    })
+    await page.keyboard.type('A decision')
+    expect(await edge()).toEqual(shown)
+  })
+
   test(`the checklist's head takes focus from All steps, ringed only after a key: ${input}`, async ({
     page,
   }) => {
