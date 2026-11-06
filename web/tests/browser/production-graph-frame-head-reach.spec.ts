@@ -20,10 +20,10 @@ import type { Box } from './graphPixels.ts'
 import { test } from './test.ts'
 
 /**
- * The headers whose fold, with a target of `least` pixels reaching up and back from it, stands
- * inside the field.
+ * The headers whose fold is drawn wholly inside the field, the first row's among them: the
+ * field's edge has to leave each its whole target, as the air above the first row does.
  */
-async function foldedInSight(page: Page, least: number): Promise<Locator[]> {
+async function foldedInSight(page: Page): Promise<Locator[]> {
   const field = await page.locator('.vue-flow').boundingBox()
   if (!field) throw new Error('no field')
   const heads = page.locator('.vue-flow .graph-frame-head:has(.graph-frame-fold)')
@@ -32,14 +32,28 @@ async function foldedInSight(page: Page, least: number): Promise<Locator[]> {
     const box = await heads.nth(index).locator('.graph-frame-fold').boundingBox()
     if (
       box &&
-      box.x + box.width - least > field.x &&
-      box.y + box.height - least > field.y &&
+      box.x >= field.x &&
+      box.y >= field.y &&
       box.x + 40 < field.x + field.width &&
       box.y + box.height < field.y + field.height
     )
       found.push(heads.nth(index))
   }
   return found
+}
+
+/** How far below the field's top the first row of folds stands, and the folds measured. */
+async function firstRow(page: Page, heads: Locator[]) {
+  const field = await page.locator('.vue-flow').boundingBox()
+  const tops = await page
+    .locator('.vue-flow .graph-frame-fold')
+    .evaluateAll((folds) => folds.map((fold) => fold.getBoundingClientRect().top))
+  const measured = await Promise.all(
+    heads.map((head) =>
+      head.locator('.graph-frame-fold').evaluate((fold) => fold.getBoundingClientRect().top),
+    ),
+  )
+  return { top: Math.min(...tops) - (field?.y ?? 0), first: Math.min(...tops), measured }
 }
 
 /** The square of points round the fold that a press there gives to the fold, by hit test. */
@@ -105,8 +119,12 @@ for (const { least, touch, width } of [
       const { zoom } = await camera(page)
       // The field opens at a reading scale, never further out than 0.75.
       expect(zoom).toBeGreaterThanOrEqual(0.75)
-      const heads = await foldedInSight(page, least)
+      const heads = await foldedInSight(page)
       expect(heads.length).toBeGreaterThan(0)
+      // The first row is among them: no fold stands above the field's top, cut by it.
+      const row = await firstRow(page, heads)
+      expect(row.top, 'the first row of folds stands inside the field').toBeGreaterThanOrEqual(0)
+      expect(Math.min(...row.measured), 'the first row is measured').toBeCloseTo(row.first, 0)
       for (const head of heads) {
         const target = await foldTarget(head)
         const where = `a fold at ${zoom}`
@@ -308,7 +326,7 @@ test.describe('the rings of a header', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await openBroadField(page, 1280)
     await settledCamera(page)
-    const [head] = await foldedInSight(page, 28)
+    const [head] = await foldedInSight(page)
     expect(head).toBeDefined()
     const fold = head.locator('.graph-frame-fold')
     await expect(fold).toHaveAttribute('aria-expanded', 'true')

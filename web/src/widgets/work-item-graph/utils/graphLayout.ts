@@ -102,10 +102,17 @@ export interface GraphFitViewOptions {
  */
 export const FRAME_GAP = 16
 
+/**
+ * The air above the first row: as much as the layout leaves between two frames, the air a
+ * fold's target reaches up into from its header. At the frame gap a finger's 44px target on
+ * the first row stood cut to 35 by the field's top edge.
+ */
+const FIRST_ROW_AIR = 36
+
 export function graphFitViewOptions(): GraphFitViewOptions {
   return {
     padding: {
-      top: `${FRAME_GAP}px`,
+      top: `${FIRST_ROW_AIR}px`,
       bottom: `${FRAME_GAP}px`,
       left: `${FRAME_GAP * 2}px`,
       right: `${FRAME_GAP * 2}px`,

@@ -76,21 +76,25 @@ function onDrawing(
       at: camera.x,
       size: size.width,
       gap: 32,
+      gapEnd: 32,
     },
     {
       start: Math.min(...ys),
       end: Math.max(...ys) + NODE_HEIGHT,
       at: camera.y,
       size: size.height,
-      gap: 16,
+      // The air above the first row is the air between two frames, for a fold's reach.
+      gap: 36,
+      gapEnd: 16,
     },
   ]
   for (const axis of axes) {
     const first = axis.start * camera.zoom + axis.at
     const last = axis.end * camera.zoom + axis.at
-    if (last - first <= axis.size - 2 * axis.gap)
+    if (last - first <= axis.size - axis.gap - axis.gapEnd)
       assert.ok(Math.abs(first - axis.gap) < 0.5, 'starts at the start')
-    else assert.ok(first <= axis.gap + 0.5 && last >= axis.size - axis.gap - 0.5, 'fills the field')
+    else
+      assert.ok(first <= axis.gap + 0.5 && last >= axis.size - axis.gapEnd - 0.5, 'fills the field')
   }
 }
 
@@ -131,7 +135,7 @@ test('a narrowed field of unlinked work opens on its first node, with no empty g
   assert.equal(camera.zoom, 0.75)
   const first = [...placed.nodes].sort((left, right) => left.y - right.y || left.x - right.x)[0]
   assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
-  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
+  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 36) < 0.5)
   onDrawing(placed, camera, field)
   assert.equal(graphAnchor(placed)?.id, first.work_item_id)
 })

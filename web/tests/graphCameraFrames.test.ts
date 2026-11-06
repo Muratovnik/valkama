@@ -53,7 +53,7 @@ test('a field of frames too large to read opens on its first header at the top-l
   // The first target as the field is read is a header's fold, not a card.
   assert.equal(first.id, foldTarget(first.frameId))
   assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
-  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
+  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 36) < 0.5)
   // In sight at the top-left, it is where the keyboard enters too.
   assert.equal(graphAnchor(placed, {}, { camera, dimensions })?.id, first.id)
 })
@@ -149,7 +149,7 @@ test('a field that begins with finished frames still opens on its beginning when
   // The finished frame the field begins with stands at the top-left, where it is read.
   const [first] = walkTargets(placed).sort(readingOrder)
   assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
-  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
+  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 36) < 0.5)
 })
 
 for (const [what, fold] of [
