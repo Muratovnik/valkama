@@ -5,7 +5,7 @@ import {
   differsFromAnswer,
 } from '@/features/input-requests/utils/answerChange.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { checkAnswers } from '@/features/input-requests/utils/validateAnswers.ts'
+import { checkAnswers, EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import {
@@ -44,6 +44,13 @@ function failure(error: unknown) {
  * the revision its form was opened on, not the copy here, which a poll may have moved on: an
  * answer that changed under the form is a conflict to read, not something to overwrite. A
  * write that went wrong stays on screen across those polls, for the same reason.
+ *
+ * What the form holds is the host's, written back through `write`: an answer or a change that
+ * confirmed took it, so it empties; a decline leaves it, as what was not sent; and a read while
+ * a change is open moves the revision the change is written against to what the read said.
+ *
+ * Whether the form can send is one rule (`sendDisabled`), the same one a write is held to, so
+ * the way on and the write cannot disagree on it.
  */
 export function useRequestWrites(host: {
   draft: () => RequestDraft
@@ -54,8 +61,10 @@ export function useRequestWrites(host: {
   itemClosed: () => boolean
   /** The send stopped at this field. */
   refuse: (field: string) => Promise<void>
-  /** A write confirmed, or a read asked for: `action` is null for the read. */
-  settled: (result: InputRequestEntry, action: Action | null) => Promise<void> | void
+  /** A write confirmed, or a read asked for: `reread` is a read while a change is open. */
+  settled: (result: InputRequestEntry, reread: boolean) => Promise<void> | void
+  /** What the form holds is replaced. */
+  write: (draft: RequestDraft) => void
 }) {
   const local = ref(host.entry())
   const busy = ref(false)
@@ -124,6 +133,15 @@ export function useRequestWrites(host: {
     () => changing.value && !differsFromAnswer(request.value, host.draft()),
   )
   const declining = computed(() => asked.value && writable.value && !requiresRefresh.value)
+  /** Whether a write of this kind can go: none waits on a read, and the form has something to say. */
+  function opens(action: Action) {
+    if (requiresRefresh.value) return false
+    return action === 'change' ? changeable.value && !unchanged.value : writable.value
+  }
+  /** The way on can send nothing from what the form holds now. */
+  const sendDisabled = computed(() => !opens(changing.value ? 'change' : 'answer'))
+  /** The fields take nothing: a write is out, or nothing here can be written. */
+  const fieldsDisabled = computed(() => busy.value || !(changing.value || writable.value))
   /**
    * Only a write the server refused or could not confirm, or a deadline that has passed
    * here, needs the request read again; a question that has closed has nothing left to read
@@ -145,8 +163,7 @@ export function useRequestWrites(host: {
     if (!busy.value) asked.value = false
   }
   async function resolve(action: Action) {
-    const open = action === 'change' ? changeable.value && !unchanged.value : writable.value
-    if (busy.value || !open || requiresRefresh.value) return
+    if (busy.value || !opens(action)) return
     // A person need put nothing into a question to decline it, and it cannot be taken back,
     // so whatever brought this press here, the first one only asks.
     if (action === 'decline' && !asked.value) {
@@ -176,6 +193,14 @@ export function useRequestWrites(host: {
     }
     return changeInputRequestAnswer(atBase, checked.values, { ...parts, note })
   }
+  async function settle(result: InputRequestEntry, action: Action | null) {
+    const draft = host.draft()
+    const reread = action === null && draft.changing !== null
+    if (action === 'answer' || action === 'change') host.write(EMPTY_DRAFT)
+    // A read while the form is open: from here on the change is written against what it said.
+    if (reread) host.write({ ...draft, changing: result.request.revision })
+    await host.settled(result, reread)
+  }
   async function write(action: Action, checked: Checked | null) {
     const identity = requestIdentity(local.value)
     const current = ++generation
@@ -189,7 +214,7 @@ export function useRequestWrites(host: {
         return
       }
       local.value = result
-      await host.settled(result, action)
+      await settle(result, action)
     } catch (error_) {
       if (current === generation) await fail(failure(error_), true)
     } finally {
@@ -215,7 +240,7 @@ export function useRequestWrites(host: {
       local.value = result
       error.value = ''
       requiresRefresh.value = false
-      await host.settled(result, null)
+      await settle(result, null)
     } catch {
       if (current === generation) await fail('mutationError', false)
     } finally {
@@ -229,6 +254,7 @@ export function useRequestWrites(host: {
     changing,
     declining,
     error,
+    fieldsDisabled,
     forget,
     local,
     pastDue,
@@ -237,6 +263,7 @@ export function useRequestWrites(host: {
     request,
     requiresRefresh,
     resolve,
+    sendDisabled,
     stepBack,
     supported,
     unchanged,

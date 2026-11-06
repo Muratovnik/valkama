@@ -37,7 +37,6 @@ import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 import {
   editField,
-  EMPTY_DRAFT,
   hasDraft,
   stillRefused,
 } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -76,18 +75,19 @@ const {
   changeable,
   changing,
   error,
+  fieldsDisabled,
   forget,
   refresh,
   refused,
   request,
-  requiresRefresh,
   resolve,
+  sendDisabled,
   unchanged,
-  writable,
 } = useRequestWrites({
   draft: () => props.draft,
   entry: () => props.entry,
   itemClosed: () => props.itemClosed,
+  write: (draft) => emit('update:draft', draft),
   failed: async () => {
     await nextTick()
     foot.value?.focusError()
@@ -96,10 +96,7 @@ const {
     await nextTick()
     moveFocus(root.value?.querySelector<HTMLElement>('input'))
   },
-  settled: async (result, action) => {
-    const reread = action === null && props.draft.changing !== null
-    if (action !== null) emit('update:draft', EMPTY_DRAFT)
-    if (reread) emit('update:draft', { ...props.draft, changing: result.request.revision })
+  settled: async (result, reread) => {
     await nextTick()
     if (reread) reveal()
     else focusOutcome()
@@ -126,12 +123,6 @@ const inForm = computed(() => waiting.value || (changing.value && !frozen.value)
 const busyMark = computed(() => busy.value || undefined)
 /** A form says what it is busy with; a record is described by how it stands. */
 const describedBy = computed(() => (inForm.value ? undefined : outcomeId))
-const fieldsDisabled = computed(() => busy.value || !(changing.value || writable.value))
-const sendDisabled = computed(() =>
-  changing.value
-    ? !changeable.value || requiresRefresh.value || unchanged.value
-    : !writable.value || requiresRefresh.value,
-)
 const offered = computed(() => changeable.value && !frozen.value)
 const refusal = computed(() => (refused.value.length ? t('requests.missing.multi_choice') : ''))
 const refusalId = computed(() => (refusal.value ? errorId : undefined))

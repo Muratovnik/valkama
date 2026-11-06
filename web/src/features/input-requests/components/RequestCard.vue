@@ -39,11 +39,7 @@ import { useStepAttention } from '@/features/input-requests/composables/useStepA
 import { useUncoveredFocus } from '@/features/input-requests/composables/useUncoveredFocus.ts'
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
 import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
-import {
-  EMPTY_DRAFT,
-  hasDraft,
-  stillRefused,
-} from '@/features/input-requests/utils/validateAnswers.ts'
+import { hasDraft, stillRefused } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import { provideDocumentLinks } from '@/entities/project-document/documentLinks.ts'
@@ -103,21 +99,22 @@ const {
   changing,
   declining,
   error,
+  fieldsDisabled,
   forget,
   pastDue,
   refresh,
   refused,
   request,
-  requiresRefresh,
   resolve,
+  sendDisabled,
   stepBack,
   supported,
   unchanged,
-  writable,
 } = useRequestWrites({
   draft: () => props.draft,
   entry: () => props.entry,
   itemClosed: () => props.itemClosed,
+  write: (draft) => emit('update:draft', draft),
   failed: async () => {
     await nextTick()
     foot.value?.focusError()
@@ -125,11 +122,7 @@ const {
   refuse: async (field) => {
     await answerFields.value?.focusField(field)
   },
-  settled: async (result, action) => {
-    const reread = action === null && props.draft.changing !== null
-    if (action === 'answer' || action === 'change') emit('update:draft', EMPTY_DRAFT)
-    // A read while the form is open: from here on the change is written against what it said.
-    if (reread) emit('update:draft', { ...props.draft, changing: result.request.revision })
+  settled: async (result, reread) => {
     await nextTick()
     if (reread) reveal()
     else focusOutcome()
@@ -166,12 +159,6 @@ const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
 const busyMark = computed(() => busy.value || undefined)
-const fieldsDisabled = computed(() => busy.value || !(changing.value || writable.value))
-const sendDisabled = computed(() =>
-  changing.value
-    ? !changeable.value || requiresRefresh.value || unchanged.value
-    : !writable.value || requiresRefresh.value,
-)
 /** The press of the comment on the question, which stands in the foot while there is a form. */
 const noteToggle = computed(() =>
   inForm.value && supported.value
