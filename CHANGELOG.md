@@ -143,6 +143,18 @@ checkouts are therefore distinguishable even at the same version.
   click ringed the option under the pointer, and choosing one ringed the dropdown itself,
   as if it had been reached with Tab. Focus the interface places after a click now stands
   unringed everywhere; the keyboard still rings every stop, in the list and after it.
+- Every part of a screen that opens on request — technical details and passed checks in
+  Diagnostics, a task's outcome, the recorded details of an attempt and of a memory
+  search — opens on the same chevron as the rest of the app, beside its words. Passed
+  checks drew the browser's triangle on a line of its own above its name, set in a
+  heavier weight than anything else on the screen.
+- In Diagnostics the time of the check is set in the size of the counts beside it, a
+  finding starts on the same edge as its level, and on a narrow window a passed check's
+  description and a technical value stand under their names instead of a few letters to
+  a line beside them.
+- In Settings, Readiness is named on the line of its state rather than half way down
+  beside the button under it, and a task type's colour swatch stands as tall as its
+  Reset.
 - A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
   control character, because the character check also stopped at 512 characters.
 - Moving the pointer from one graph card to the next no longer flashes the whole field
