@@ -1,7 +1,8 @@
 /**
- * A card's sections, on a row narrower than they are: the row fades out at each end that
- * has more sections past it and at no other, so a phone, which draws no scrollbar, still
- * says the row goes on. A section the keyboard brings in stands clear of the fade.
+ * A card's sections, on a row narrower than they are: the row fades out at each end where a
+ * section is cut and at no other, so a phone, which draws no scrollbar, still says the row
+ * goes on. A section picked by the pointer or reached by the keyboard stands with its words
+ * clear of the fade, and one that already did is not moved.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -13,8 +14,8 @@ import { enableExecutionTab } from './executionFixtures.ts'
 import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-async function openCard(page: Page, width: number) {
-  await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+async function openCard(page: Page, width: number, locale: 'en' | 'ru' = 'ru') {
+  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await enableExecutionTab(page)
   await page.setViewportSize({ width, height: 700 })
@@ -67,21 +68,70 @@ const fadedEnds = async (strip: Locator) =>
 /** How far the row can scroll past what it shows. */
 const overrun = (strip: Locator) => strip.evaluate((node) => node.scrollWidth - node.clientWidth)
 
+/** How far the strip has scrolled. */
+const scrolled = (strip: Locator) => strip.evaluate((node) => node.scrollLeft)
+
+/** The strip once it has stopped moving: the same over two frames. */
+async function still(strip: Locator) {
+  await expect
+    .poll(async () => {
+      const first = await scrolled(strip)
+      await strip.evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      )
+      return first === (await scrolled(strip))
+    })
+    .toBe(true)
+  return scrolled(strip)
+}
+
 /**
- * Whether the row keeps what it brings in clear of its ends, and which faded end `tab`
- * stands under now.
+ * Which ends of the row cut a section, the first's box before the start or the last's past
+ * the end, by more than the pixel a zoomed page rounds off: what the fade stands for.
  */
-async function underFade(strip: Locator, tab: Locator) {
+const cutEnds = (strip: Locator) =>
+  strip.evaluate((node) => {
+    const row = node.getBoundingClientRect()
+    const sections = [...node.querySelectorAll('button')].map((tab) => tab.getBoundingClientRect())
+    const first = sections[0]
+    const last = sections.at(-1)
+    return {
+      start: first !== undefined && row.left - first.left > 1,
+      end: last !== undefined && last.right - row.right > 1,
+    }
+  })
+
+/** The fade at each end matches the cut there. */
+async function expectFadeOnCut(strip: Locator, where: string) {
+  await expect
+    .poll(async () => {
+      const { start, end } = await fadedEnds(strip)
+      return { start, end }
+    }, `${where}: the fade follows the cut`)
+    .toEqual(await cutEnds(strip))
+}
+
+/** Which faded end the words `tab` draws stand under now, as a Range over them reads them. */
+async function wordsUnderFade(strip: Locator, tab: Locator) {
   const { start, end } = await fadedEnds(strip)
-  const fade = await strip.evaluate((node) =>
-    Number.parseFloat(getComputedStyle(node).scrollPaddingInlineStart),
-  )
-  const [row, box] = await Promise.all([strip.boundingBox(), tab.boundingBox()])
-  if (!row || !box) throw new Error('the row or its section is not drawn')
+  const [fade, row, words] = await Promise.all([
+    strip.evaluate((node) =>
+      Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade')),
+    ),
+    strip.evaluate((node) => node.getBoundingClientRect().toJSON() as DOMRect),
+    tab.evaluate((node) => {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      return range.getBoundingClientRect().toJSON() as DOMRect
+    }),
+  ])
+  expect(fade, 'the fade has a width').toBeGreaterThan(0)
   const under: string[] = []
-  if (start && box.x < row.x + fade - 0.5) under.push('start')
-  if (end && box.x + box.width > row.x + row.width - fade + 0.5) under.push('end')
-  return { padded: fade > 0, under }
+  if (start && words.left < row.left + fade - 0.5) under.push('start')
+  if (end && words.right > row.right - fade + 0.5) under.push('end')
+  if (words.left < row.left - 0.5) under.push('out before')
+  if (words.right > row.right + 0.5) under.push('out after')
+  return under
 }
 
 test('at 390px the row fades at the end that has more sections, and only there', async ({
@@ -92,11 +142,19 @@ test('at 390px the row fades at the end that has more sections, and only there',
 
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: false, end: true })
 
+  // Two pixels in, only the row's own inset has left sight: no section is cut before it.
+  await strip.evaluate((node) => node.scrollTo({ left: 2 }))
+  await still(strip)
+  await expectFadeOnCut(strip, 'two pixels in')
+  await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: false, end: true })
+
   await strip.evaluate((node) => node.scrollTo({ left: (node.scrollWidth - node.clientWidth) / 2 }))
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: true, end: true })
+  await expectFadeOnCut(strip, 'halfway')
 
   await strip.evaluate((node) => node.scrollTo({ left: node.scrollWidth }))
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: true, end: false })
+  await expectFadeOnCut(strip, 'at the end')
 
   await strip.evaluate((node) => node.scrollTo({ left: 0 }))
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: false, end: true })
@@ -108,17 +166,58 @@ test('at 1280px the sections fit and the row draws no mask', async ({ page }) =>
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ mask: 'none' })
 })
 
-test('a section the keyboard reaches at 390px stands clear of the fade', async ({ page }) => {
-  const strip = await openCard(page, 390)
+/**
+ * Pick each section in turn, along the row and back, and read what the pick did: a section
+ * whose words were in sight and clear of the fade is not moved, and every section picked
+ * ends in sight, clear of the fade, with the fade at the ends that cut a section.
+ */
+async function pickEach(strip: Locator, pick: (index: number) => Promise<void>) {
   const tabs = strip.getByRole('tab')
-  await tabs.first().focus()
-  await expect(tabs.first()).toBeFocused()
-  await expect.poll(() => underFade(strip, tabs.first())).toEqual({ padded: true, under: [] })
-  for (let index = 1; index < (await tabs.count()); index += 1) {
-    await page.keyboard.press('ArrowRight')
-    await expect(tabs.nth(index)).toBeFocused()
-    await expect
-      .poll(() => underFade(strip, tabs.nth(index)), `section ${index + 1}`)
-      .toEqual({ padded: true, under: [] })
+  const count = await tabs.count()
+  const along = Array.from({ length: count }, (_, at) => at)
+  for (const index of [...along, ...along.toReversed().slice(1)]) {
+    const tab = tabs.nth(index)
+    const words = await tab.textContent()
+    const name = words?.trim() ?? String(index)
+    const before = await still(strip)
+    const underBefore = await wordsUnderFade(strip, tab)
+    const clearBefore = underBefore.length === 0
+    await pick(index)
+    await expect(tab).toHaveAttribute('aria-selected', 'true')
+    const after = await still(strip)
+    // Short of the browser's own clamp: the section left behind gives up its heavier weight,
+    // and a row a pixel shorter cannot stand scrolled past its new end.
+    const end = await overrun(strip)
+    if (clearBefore)
+      expect(after, `${name}, clear of the fade, is not moved`).toBe(Math.min(before, end))
+    expect(await wordsUnderFade(strip, tab), `${name} once picked`).toEqual([])
+    await expectFadeOnCut(strip, `${name} once picked`)
   }
-})
+}
+
+for (const locale of ['ru', 'en'] as const) {
+  test(`a section picked by the pointer at 390px in ${locale} stands clear of the fade and moves only when it did not`, async ({
+    page,
+  }) => {
+    const strip = await openCard(page, 390, locale)
+    const tabs = strip.getByRole('tab')
+    await expect(tabs).toHaveCount(5)
+    await pickEach(strip, (index) => tabs.nth(index).click())
+  })
+
+  test(`a section the keyboard reaches at 390px in ${locale} stands clear of the fade and moves only when it did not`, async ({
+    page,
+  }) => {
+    const strip = await openCard(page, 390, locale)
+    const tabs = strip.getByRole('tab')
+    await tabs.first().focus()
+    await expect(tabs.first()).toBeFocused()
+    let at = 0
+    await pickEach(strip, async (index) => {
+      if (index === at) return
+      await page.keyboard.press(index > at ? 'ArrowRight' : 'ArrowLeft')
+      await expect(tabs.nth(index)).toBeFocused()
+      at = index
+    })
+  })
+}

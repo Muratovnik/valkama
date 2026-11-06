@@ -12,10 +12,16 @@
  * They are tabs over the card's body, and every section shows the moment it is chosen —
  * what one reads is read with the card — so the arrows show a section as they reach it.
  *
- * A strip cut by its width fades out at each end that has more past it. The bar alone did
- * not say so: an overlay scrollbar shows only while the strip moves, and a phone's row
- * ended at a cut word with nothing after it. Whatever the browser brings into the row
- * stands clear of the fade, as far in as the fade is wide.
+ * A strip cut by its width fades out at each end where a section is cut, and at no other.
+ * The bar alone did not say so: an overlay scrollbar shows only while the strip moves, and
+ * a phone's row ended at a cut word with nothing after it. The fade is keyed to that cut,
+ * never to how far the strip has scrolled: a strip moved two pixels had faded the start
+ * over a whole first section, since the row's own inset hides nothing.
+ *
+ * A section already in sight and clear of the fade stays where it is when it is picked;
+ * one that is not is brought in as far as the fade is wide, so its words stand clear of it.
+ * A browser asked to keep a fade's width clear of every pick moved the strip by the two
+ * pixels a section already in sight stood inside that width.
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 
@@ -34,28 +40,62 @@ const props = defineProps<{
 const shown = defineModel<string>({ required: true })
 const strip = ref<HTMLElement | null>(null)
 
-/** Whether tabs lie past either end of the row, read off the strip as it stands. */
+/** A zoomed page scrolls by fractions and never quite reaches its end: a pixel is no cut. */
+const SLACK = 1
+
+const sectionsIn = (node: HTMLElement) => [...node.querySelectorAll('button')]
+
+/** Whether a section is cut at either end of the row, read off the strip as it stands. */
 const more = reactive({ before: false, after: false })
 function measure() {
   const node = strip.value
   if (!node) return
-  // A pixel of room: a zoomed page scrolls by fractions and never quite reaches its end.
-  more.before = node.scrollLeft > 1
-  more.after = node.scrollWidth - node.clientWidth - node.scrollLeft > 1
+  const row = node.getBoundingClientRect()
+  const sections = sectionsIn(node)
+  const first = sections[0]?.getBoundingClientRect()
+  const last = sections.at(-1)?.getBoundingClientRect()
+  more.before = first !== undefined && row.left - first.left > SLACK
+  more.after = last !== undefined && last.right - row.right > SLACK
 }
-// The strip changes width with the card, and its row with the sections it holds.
+// The strip changes width with the card, and its row with the sections it holds: the one
+// shown widens as it takes the heavier weight, after the pick that brought it in.
 useResizeObserver(
   computed(() => [strip.value, strip.value?.firstElementChild as HTMLElement | null]),
-  measure,
+  () => {
+    measure()
+    revealShown()
+  },
 )
 
-/** Into the row: the strip is the only thing that scrolls for it. */
+/** Where a section's words are drawn: the section's own box holds its padding too. */
+function wordsOf(section: HTMLElement): DOMRect {
+  const range = document.createRange()
+  range.selectNodeContents(section)
+  return range.getBoundingClientRect()
+}
+
+/**
+ * Into the row, and only when it is not in sight already: the strip is the only thing that
+ * scrolls for it. The first and the last section go to the row's ends, which no fade covers.
+ */
 function reveal(target: Element | null | undefined) {
-  target?.scrollIntoView({
-    block: 'nearest',
-    inline: 'nearest',
-    container: 'nearest',
-  } as ScrollIntoViewOptions)
+  const node = strip.value
+  if (!node || !(target instanceof HTMLElement)) return
+  measure()
+  const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--size-tabs-fade'))
+  const row = node.getBoundingClientRect()
+  const words = wordsOf(target)
+  const start = row.left + (more.before ? fade : 0)
+  const end = row.right - (more.after ? fade : 0)
+  if (words.left >= start - SLACK && words.right <= end + SLACK) return
+  const sections = sectionsIn(node)
+  const box = target.getBoundingClientRect()
+  if (words.left < start) {
+    node.scrollLeft = target === sections[0] ? 0 : node.scrollLeft + box.left - row.left - fade
+  } else {
+    node.scrollLeft =
+      target === sections.at(-1) ? node.scrollWidth : node.scrollLeft + box.right - row.right + fade
+  }
 }
 
 function revealShown() {
@@ -71,7 +111,7 @@ onMounted(revealShown)
 watch(shown, () => nextTick(revealShown))
 
 function focused(event: FocusEvent) {
-  if (event.target instanceof Element) reveal(event.target)
+  reveal(event.target as Element | null)
 }
 </script>
 
@@ -99,7 +139,6 @@ function focused(event: FocusEvent) {
 
   width: 100%;
   overflow-x: auto;
-  scroll-padding-inline: var(--size-tabs-fade);
 
   /* A mask reads only how opaque its image is, so the colour stands for "shown". */
   &.more-before {
