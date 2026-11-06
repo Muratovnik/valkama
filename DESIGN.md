@@ -967,8 +967,12 @@ stands follow from the row's width alone, worked out from its parts' widths as
 the lines lay them, and are worked out again once the interface font has come
 in, so a window widened to a width, one narrowed to it and one opened before its
 font draw the row alike. A wrapped line starts under the reference, not under
-the arrow, and in a lane with no epic that costs a line on
-the narrowest phones: a line from the row's edge stood 4px left of the arrow.
+the arrow: a line from the row's edge stood 4px left of the arrow. The indent,
+28px (the arrow's 4px inset, its 16px and their 8px gap), shortens every
+wrapped line, so the row takes a line more across at most the 28px of width
+above each width where lines from the edge would first fit it in one line
+fewer. That happens up to 890px, in lanes with an epic and without: three lines
+for two, or four for three where a long title also names work out of sight.
 They come up under the pointer and when the keyboard reaches them, in a place
 kept for them, so nothing shifts or is covered; where nothing can hover they
 stay, a finger's reach apart. A pointer's press on the row does not leave them
