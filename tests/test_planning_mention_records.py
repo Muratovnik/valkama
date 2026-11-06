@@ -668,7 +668,7 @@ class AgentMarksTests(Harness):
         self.assertIsNotNone(self.hook())
         path = self.marks_path()
         with open(path, "rb") as handle:
-            self.assertEqual(b"v3\n", handle.read(3))
+            self.assertEqual(b"v4\n", handle.read(3))
         marks = notify.read_marks(path)
         lines = [
             f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]} {int(mark[2])}"

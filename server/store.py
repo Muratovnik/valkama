@@ -246,7 +246,8 @@ MIGRATIONS = {
 #
 # 13 added what a session follows beside what it holds (`work_item_subscriptions`)
 # and a comment that waits for a reply (`work_item_comments.awaits_reply`, 0 on
-# every comment there was). No existing row changed its meaning. It is raised so the upgrade takes a recovery
+# every comment there was), with an index of the links by the item they point to.
+# No existing row changed its meaning. It is raised so the upgrade takes a recovery
 # point of its own, and because a build at 12 would leave a merged item's
 # subscriptions on the closed duplicate and never let a lapsed one go, so a session
 # would go on hearing an item it had left.

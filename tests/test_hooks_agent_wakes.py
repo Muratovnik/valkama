@@ -4,7 +4,10 @@ The owner's rules: a session that asks with `awaits_reply` is woken once by the
 first reply in that thread from another session or a person, and later replies are
 told at its next tool call. The comment that asks wakes, once, the holders of the
 item it is written on and of the items it names in `mentions`, for a day after it
-was written; a subscriber hears it at its next tool call. A wake is the watcher
+was written; a subscriber hears it at its next tool call. A blocker of an item
+reaching a terminal state wakes that item's holder once, closed by a person or by
+another session; closed by the holder's own session, it tells nobody. A wake is the
+watcher
 exiting 2 for an idle session, or
 a `Stop` notice that continues the turn once; a session's own writes, its own
 subagents' included, never wake it, and a subagent is never woken itself: its
@@ -20,6 +23,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -253,6 +257,117 @@ class AddresseeTests(Wakes):
         self.comment({"sessionId": B, "threadId": A_CHILD}, self.held, "Mine", awaits_reply=True)
         self.assertIsNone(self.stop(B))
         self.assertIsNone(self.hook(session=B))
+
+
+TRANSITION = "/api/planning/work-item/transition"
+
+
+class BlockerTests(Wakes):
+    def setUp(self) -> None:
+        super().setUp()
+        self.blocker = self.item("The parser rewrite")
+        self.agent("link_work_items", AS_A, id=self.blocker, other=self.held, kind="blocks")
+        self.settle()
+
+    def close_as(self, meta: object) -> None:
+        self.agent("transition_work_item", meta, id=self.blocker, state="cancelled", force=True)
+
+    def test_a_person_closing_the_blocker_wakes_the_holder_once(self) -> None:
+        self.person(TRANSITION, id=self.blocker, state="cancelled", force=True)
+        status, text = self.watch_as(B, alive=None)
+        self.assertEqual(notify.WAKE_STATUS, status)
+        self.assertIn("a person acted", text)
+        self.assertRegex(
+            text, rf"- blocker_closed at \S+ on {self.blocker}, now Cancelled: «The parser rewrite»"
+        )
+        self.assertIsNone(self.stop(B), "once")
+        self.assertIsNone(self.hook(session=B))
+        self.assertIsNone(self.stop(A), "A holds nothing it blocked")
+
+    def test_another_session_closing_the_blocker_wakes_the_holder_once(self) -> None:
+        self.close_as(AS_A)
+        status, text = self.watch_as(B, alive=None)
+        self.assertEqual(notify.WAKE_STATUS, status)
+        self.assertTrue(text.startswith(FROM_AGENTS), text)
+        self.assertRegex(
+            text, rf"- blocker_closed at \S+ by session {A}, on {self.blocker}, now Cancelled"
+        )
+        self.assertIn("a blocker of its work closed", text)
+        self.assertIsNone(self.stop(B), "once")
+        self.assertIsNone(self.hook(session=B))
+
+    def test_the_holders_own_session_closing_it_wakes_and_tells_nobody(self) -> None:
+        self.close_as(AS_B)
+        self.assertIsNone(self.stop(B))
+        self.assertEqual((0, ""), self.watch_as(B))
+        self.assertIsNone(self.hook(session=B))
+        self.assertIsNone(self.stop(A))
+
+    def test_closed_again_after_a_reopen_it_wakes_again_and_busy_it_waits(self) -> None:
+        self.close_as(AS_A)
+        self.assertIsNotNone(self.stop(B))
+        self.person(TRANSITION, id=self.blocker, state="backlog", force=True)
+        self.hook(session=B)
+        self.close_as(AS_A)
+        told = self.hook(session=B)
+        assert told is not None, "busy: told at the next tool call"
+        self.assertIn("blocker_closed", told)
+        self.assertIsNone(self.stop(B), "and then nothing is left to wake for")
+
+    def test_a_place_from_before_blockers_counted_tells_nothing_again(self) -> None:
+        self.close_as(AS_A)
+        self.assertIsNotNone(self.hook(session=B))
+        path = self.marks_path()
+        marks = notify.read_marks(path)
+        lines = [
+            f"{item} {mark[0]} {mark[1][0]} {mark[1][1]} {mark[1][2]} {int(mark[2])}"
+            f" {mark[3]} {int(mark[4])}"
+            for item, mark in marks.items()
+        ]
+        with open(path, "wb") as handle:
+            handle.write(("\n".join(["v3", *lines]) + "\n").encode("ascii"))
+        self.assertEqual(
+            {item: (m[0], (*m[1][:3], 0), m[2], m[3], m[4]) for item, m in marks.items()},
+            notify.read_marks(path),
+        )
+        self.assertIsNone(self.hook(session=B), "read once more from its place: nothing new")
+        self.assertTrue(notify.read_marks(path), "and counted now")
+
+    def marks_path(self) -> str:
+        return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, B + ".marks")
+
+
+class CostTests(Wakes):
+    def statements(self, **reading: bool) -> list[str]:
+        conn = notify._connect(self.path)
+        assert conn is not None
+        self.addCleanup(conn.close)
+        seen: list[str] = []
+        conn.set_trace_callback(seen.append)
+        state = os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
+        notify.collect(conn, state, B, None, **reading)
+        return seen
+
+    def test_nothing_new_is_two_indexed_reads_for_a_call_a_stop_and_the_watcher(self) -> None:
+        blocker = self.item("Blocks the held item")
+        self.agent("link_work_items", AS_A, id=blocker, other=self.held, kind="blocks")
+        self.agent("transition_work_item", AS_A, id=blocker, state="cancelled", force=True)
+        self.subscribe(AS_B, self.followed, True)
+        self.ask()
+        self.hook(session=B)
+        for reading in (
+            {},
+            {"agents": False, "wake": True},
+            {"take": False, "agents": False, "wake": True},
+        ):
+            with self.subTest(reading=reading):
+                seen = self.statements(**reading)
+                self.assertEqual(2, len(seen), seen)
+                self.assertFalse([sql for sql in seen if "JOIN execution_events" in sql], seen)
+        plan = " ".join(str(row[3]) for row in self.conn.execute("EXPLAIN QUERY PLAN " + seen[1]))
+        self.assertIn("work_item_links_to", plan, "the blockers are read by the item blocked")
+        self.assertNotIn("SCAN l", plan)
+        self.assertNotIn("SCAN b", plan)
 
 
 if __name__ == "__main__":

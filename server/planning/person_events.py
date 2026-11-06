@@ -344,6 +344,51 @@ def _answers(row: tuple, session_id: str) -> bool:
     )
 
 
+#: Each item that blocks this one and is closed now, with the transition that closed
+#: it, the last one, and what that call proved.
+_BLOCKERS_CLOSED = (
+    "SELECT s.key, b.number, b.title, st.name, e.created_at, e.call_id, c.identity_state,"
+    " c.identity_source, c.tool, c.session_id, c.agent_id FROM work_item_links l"
+    " JOIN work_items b ON b.work_item_id = l.from_id"
+    " JOIN workflow_states st ON st.state_id = b.state_id AND st.is_terminal = 1"
+    " JOIN planning_spaces s ON s.planning_space_id = b.planning_space_id"
+    " JOIN work_item_events e ON e.id = (SELECT MAX(t.id) FROM work_item_events t"
+    " WHERE t.work_item_id = b.work_item_id AND t.action = 'transitioned')"
+    " JOIN execution_events c ON c.id = e.call_id"
+    " WHERE l.to_id = ? AND l.kind = 'blocks' AND e.call_id > ? ORDER BY e.call_id"
+)
+
+
+def blockers_closed(
+    conn: sqlite3.Connection, work_item_id: str, after: int
+) -> list[tuple[int, dict]]:
+    """The items blocking this one that a call after `after` closed, oldest first.
+
+    `blocker_closed`, with the blocker's reference as `blocker`, the state it is in
+    as `state` and its title as the text. A person's close through Planning's own
+    paths is a person's act (`via: "interface"`); another agent's says who, as
+    `agents_since` does. Valkama's own write, a launch and an unproved call name
+    nobody, and are not told. A blocker reopened since is not closed and not here.
+    """
+
+    found = []
+    for row in conn.execute(_BLOCKERS_CLOSED, (work_item_id, after)).fetchall():
+        entry = _entry(
+            "blocker_closed",
+            str(row[4]),
+            blocker=f"{row[0]}-{row[1]}",
+            state=str(row[3]),
+            text=str(row[2]),
+        )
+        source = str(row[7] or "")
+        if source == BROWSER:
+            if str(row[8] or "").startswith(("/api/planning/", "/api/modules/planning/")):
+                found.append((int(row[5]), entry))
+        elif row[6] == "confirmed" and source != VALKAMA and row[9] is not None:
+            found.append((int(row[5]), _spoken(entry, row[9], row[10])))
+    return found
+
+
 def _spoken(entry: dict, session: object, agent: object) -> dict:
     entry["via"] = "agent"
     entry["session"] = str(session)

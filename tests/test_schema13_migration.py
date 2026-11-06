@@ -3,7 +3,8 @@
 The sources are stores built from the catalogs the last schema-11 and schema-12
 builds created, populated as those builds wrote them. What this suite holds the
 migration to: every existing value stays, the subscriptions table and a comment's
-`awaits_reply`, 0 on every comment there was, arrive once --
+`awaits_reply`, 0 on every comment there was, and the links' index by the item they
+point to arrive once --
 a store at 11 under the one recovery point `preschema12` that covers both steps, a
 store at 12 under `preschema13` -- a second open writes nothing, the recovery point
 brings the store back and the migration runs again, a fresh store has the same
@@ -77,6 +78,11 @@ class SchemaThirteenTests(unittest.TestCase):
             if row[1] == AWAITS
         ]
         self.assertEqual([("INTEGER", 1, "0")], awaits)
+        self.assertEqual(
+            ["to_id", "kind"],
+            [row[2] for row in conn.execute("PRAGMA index_info(work_item_links_to)")],
+            "what blocks an item is read from the item blocked",
+        )
         self.assertEqual(
             [],
             conn.execute(f"SELECT id FROM work_item_comments WHERE {AWAITS} <> 0").fetchall(),

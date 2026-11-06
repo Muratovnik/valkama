@@ -157,6 +157,9 @@ CREATE TABLE IF NOT EXISTS work_item_links(
     created_at TEXT NOT NULL DEFAULT {_NOW},
     UNIQUE(from_id, to_id, kind)
 );
+-- What blocks an item, read from the item blocked: a client hook asks on every
+-- tool call whether a blocker of the work it holds has closed. Schema 13.
+CREATE INDEX IF NOT EXISTS work_item_links_to ON work_item_links(to_id, kind);
 CREATE TABLE IF NOT EXISTS work_item_comments(
     id INTEGER PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
