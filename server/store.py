@@ -243,7 +243,13 @@ MIGRATIONS = {
 # event it does not know, raise an alert for a list as if it were a question
 # waiting on the person, and carry a list away from its comment in a merge; the
 # ratchet makes it refuse a store at 12 instead.
-STORE_SCHEMA_VERSION = 12
+#
+# 13 added what a session follows beside what it holds (`work_item_subscriptions`).
+# No existing row changed its meaning. It is raised so the upgrade takes a recovery
+# point of its own, and because a build at 12 would leave a merged item's
+# subscriptions on the closed duplicate and never let a lapsed one go, so a session
+# would go on hearing an item it had left.
+STORE_SCHEMA_VERSION = 13
 
 
 class StoreTooNewError(RuntimeError):
@@ -725,7 +731,8 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's and 12's, and one at 11 only schema 12's.
+            # 10 only schema 11's to 13's, one at 11 only schema 12's and 13's, and
+            # one at 12 only schema 13's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a

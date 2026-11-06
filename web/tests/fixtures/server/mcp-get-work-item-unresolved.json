@@ -189,7 +189,24 @@
     }
   ],
   "mentions_total": 1,
-  "sessions": [],
+  "subscribers": [
+    {
+      "session": "00000000-0000-4000-8000-000000000008",
+      "client": "codex",
+      "agent": "c6f4e0a3b2d1c519",
+      "since": "2026-01-02T03:04:05Z"
+    }
+  ],
+  "sessions": [
+    {
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "client": "codex",
+      "identity_source": "codex-meta",
+      "first_at": "2026-01-02T03:04:05.000Z",
+      "last_at": "2026-01-02T03:04:05.000Z",
+      "writes": 1
+    }
+  ],
   "questions": {
     "total": 3,
     "open": 2,

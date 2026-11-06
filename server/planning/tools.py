@@ -766,7 +766,7 @@ TOOLS = [
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. Each group works"
         " exactly as its single tool does, and they apply in this order: claim,"
-        " update, checklist, checklist_ticks, refs, links, comment or comments,"
+        " subscribe, update, checklist, checklist_ticks, refs, links, comment or comments,"
         " resolutions, questions, summary, transition — so a claim and its steps"
         " take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
@@ -784,6 +784,14 @@ TOOLS = [
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
                 " starting it when it is in a backlog or queued state.",
+            },
+            "subscribe": {
+                "type": "boolean",
+                "description": "true: this session hears other sessions' news on the item"
+                " as its holder would; false stops that, and on an item the session holds"
+                " mutes other sessions' news there (a person's still comes). Written for"
+                " the proved session and agent, lapsing with the session; applied.subscribe"
+                " says following, muted or not_following.",
             },
             "update": {
                 "type": "object",

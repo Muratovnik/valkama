@@ -223,6 +223,20 @@ CREATE TABLE IF NOT EXISTS pinned_work_items(
     pinned_at TEXT NOT NULL DEFAULT {_NOW},
     call_id INTEGER REFERENCES execution_events(id)
 );
+-- What a session follows beside what it holds, added with schema 13: one row per
+-- item, session and agent ('' for the session's own conversation). `follows` 1 is
+-- a subscription to an item; 0 mutes other sessions' news on an item it holds.
+-- Who wrote it, and when, is the call; the row lapses with its session, as a
+-- claim does (`planning.subscriptions`), and goes with the item.
+CREATE TABLE IF NOT EXISTS work_item_subscriptions(
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL DEFAULT '',
+    follows INTEGER NOT NULL CHECK(follows IN (0,1)),
+    call_id INTEGER NOT NULL REFERENCES execution_events(id),
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    PRIMARY KEY(work_item_id, session_id, agent_id)
+);
 
 """
 
@@ -537,6 +551,7 @@ SCHEMA_TABLES = (
     "work_item_requests",
     "work_item_request_answers",
     "pinned_work_items",
+    "work_item_subscriptions",
 )
 
 

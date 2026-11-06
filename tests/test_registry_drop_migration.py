@@ -57,6 +57,7 @@ ADDED = {
     "usage_segments",
     "usage_requests",
     "pinned_work_items",
+    "work_item_subscriptions",
 }
 #: When the schema-8 build wrote the rows below.
 CREATED_AT = "2026-08-09T16:50:36Z"

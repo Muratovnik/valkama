@@ -288,6 +288,14 @@ const eventSchema = strictObject({
   identity: eventIdentitySchema,
 })
 
+/** A session that follows the item without holding it, as the call that subscribed proved it. */
+const subscriberSchema = strictObject({
+  session: blankable(200),
+  client: callField(),
+  agent: callField(),
+  since: boundedText(ISO, 96),
+})
+
 /**
  * The lease behind a claim. `holder` is `claim_ref`, the author the claim was
  * signed with: a launch signs its runner, and the owner's own claims sign
@@ -349,6 +357,7 @@ const workItemSchema = strictObject({
   // The read of one item carries the newest of these and how many there are.
   mentions: boundedList(mentionRecordSchema, 50).optional(),
   mentions_total: positiveInt(true).optional(),
+  subscribers: z.array(subscriberSchema).optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),

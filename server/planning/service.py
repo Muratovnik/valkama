@@ -27,6 +27,7 @@ from . import (
     request_model,
     states,
     store,
+    subscriptions,
     transitions,
 )
 
@@ -1451,6 +1452,8 @@ def _fold(
             (survivor_id, identity),
         )
         conn.execute("DELETE FROM pinned_work_items WHERE work_item_id = ?", (identity,))
+        # So does whoever follows it: a session that subscribed hears the survivor.
+        subscriptions.carry(conn, identity, survivor_id)
         if found:
             set_checklist(conn, identity, [], force=True, author=author)
         if not _linked(conn, identity, survivor_id, "duplicates"):

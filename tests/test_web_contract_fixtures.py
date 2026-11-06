@@ -35,7 +35,7 @@ from urllib.parse import urlencode
 
 from server import http_surface, mcp_surface, session_open, sessions, store
 from server.ops import url_schemes
-from server.planning import calls, service
+from server.planning import calls, read_model, service, subscriptions
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -206,6 +206,24 @@ class _Scenario:
                 **others,
             }
         )
+
+    def subscriber(self, ref: str) -> None:
+        """An agent of another session follows the card it holds nothing of."""
+
+        conn = store.connect()
+        try:
+            follower = calls.Identity(
+                state=calls.CONFIRMED,
+                source=calls.CODEX_META,
+                session_id="6f1c2a8e-0000-4000-8000-0000000000f5",
+                agent_id="c6f4e0a3b2d1c519",
+                client="codex",
+            )
+            with calls.bind(follower, "apply_work_item_changes"):
+                subscriptions.subscribe(conn, read_model.item_row(conn, ref), True)
+            conn.commit()
+        finally:
+            conn.close()
 
     def executor_card(self) -> dict:
         """A card whose claim, steps and agents each name an executor."""
@@ -468,6 +486,7 @@ class _Scenario:
                 ],
             },
         )
+        self.subscriber(ref)
         executors = self.executor_card()
         return {
             "comment-reply": reply,

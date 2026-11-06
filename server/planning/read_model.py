@@ -18,7 +18,7 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
-from . import calls, leases, model
+from . import calls, leases, model, subscriptions
 
 
 @contextlib.contextmanager
@@ -787,6 +787,8 @@ def present(
     # The comments elsewhere that named it, which every full record carries:
     # a write's answer is the same record a read gives.
     record["mentions"], record["mentions_total"] = mentions_of(conn, identity, HTTP_MENTIONS)
+    # Who follows it without holding it, for the card to name.
+    record["subscribers"] = subscriptions.subscribers(conn, identity)
     return record
 
 

@@ -1,7 +1,7 @@
 {
   "target": {
     "kind": "session",
-    "session": "00000000-0000-4000-8000-000000000009",
+    "session": "00000000-0000-4000-8000-000000000010",
     "agent": ""
   },
   "surface": "browser",
@@ -30,7 +30,7 @@
     {
       "kind": "open-link",
       "scheme": "vscode",
-      "link": "vscode://anthropic.claude-code/open?session=00000000-0000-4000-8000-000000000009"
+      "link": "vscode://anthropic.claude-code/open?session=00000000-0000-4000-8000-000000000010"
     }
   ]
 }

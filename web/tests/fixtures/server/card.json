@@ -272,6 +272,14 @@
           }
         ],
         "mentions_total": 1,
+        "subscribers": [
+          {
+            "session": "00000000-0000-4000-8000-000000000008",
+            "client": "codex",
+            "agent": "c6f4e0a3b2d1c519",
+            "since": "2026-01-02T03:04:05Z"
+          }
+        ],
         "agents": [],
         "last_claim_executor": {
           "session": null,

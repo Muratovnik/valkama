@@ -23,8 +23,8 @@ from server import store, store_backups
 from tests import schema9, schema10
 
 ADDED_TABLES = {"usage_runs", "usage_segments", "usage_requests"}
-#: Schema 12's: the chain runs on to this build's own schema in the same open.
-LATER_TABLES = {"pinned_work_items"}
+#: Schema 12's and 13's: the chain runs on to this build's own schema in the same open.
+LATER_TABLES = {"pinned_work_items", "work_item_subscriptions"}
 LATER_COLUMNS = {"work_item_requests": {"comment_id"}}
 ADDED_INDEXES = {
     "usage_segments_item",

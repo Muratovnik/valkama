@@ -1689,6 +1689,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
             {
                 "id",
                 "claim",
+                "subscribe",
                 "update",
                 "checklist",
                 "checklist_ticks",

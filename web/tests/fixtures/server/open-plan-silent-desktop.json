@@ -1,7 +1,7 @@
 {
   "target": {
     "kind": "session",
-    "session": "00000000-0000-4000-8000-000000000014",
+    "session": "00000000-0000-4000-8000-000000000015",
     "agent": ""
   },
   "surface": "desktop",
@@ -24,7 +24,7 @@
     {
       "kind": "resume-in-terminal",
       "client": "claude",
-      "session": "00000000-0000-4000-8000-000000000014",
+      "session": "00000000-0000-4000-8000-000000000015",
       "folder": "/workspace"
     }
   ]

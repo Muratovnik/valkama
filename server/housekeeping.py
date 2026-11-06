@@ -10,7 +10,8 @@ transaction:
 
 - deliver the hook spool: events a hook process could not write because the
   store was busy, missing or at another schema version;
-- release the Planning leases past their grace that no write met.
+- release the Planning leases past their grace that no write met, and drop the
+  subscriptions whose session lapsed by the same rule.
 
 The spool goes first, because a delivered event can move a session's
 heartbeat forward and keep its lease from lapsing. Both steps share one budget,
@@ -53,6 +54,7 @@ from dataclasses import dataclass, field
 from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
+from .planning import subscriptions as planning_subscriptions
 from .telemetry import liveness, usage_collect
 
 #: The whole budget of what runs before the first request. A client gives an
@@ -178,6 +180,8 @@ def expire_leases(conn: sqlite3.Connection) -> int:
     conn.execute("BEGIN IMMEDIATE")
     try:
         expired = planning_service.expire_leases(conn)
+        # What lapses with a session lapses at the same sweep: its subscriptions.
+        planning_subscriptions.expire(conn)
     except BaseException:
         conn.rollback()
         raise

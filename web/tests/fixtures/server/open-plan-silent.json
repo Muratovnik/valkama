@@ -1,7 +1,7 @@
 {
   "target": {
     "kind": "session",
-    "session": "00000000-0000-4000-8000-000000000014",
+    "session": "00000000-0000-4000-8000-000000000015",
     "agent": ""
   },
   "surface": "browser",
@@ -23,7 +23,7 @@
     },
     {
       "kind": "copy",
-      "text": "cd \"/workspace\" && claude --resume 00000000-0000-4000-8000-000000000014"
+      "text": "cd \"/workspace\" && claude --resume 00000000-0000-4000-8000-000000000015"
     }
   ]
 }

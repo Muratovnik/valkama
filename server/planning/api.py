@@ -30,6 +30,7 @@ from . import (
     read_model,
     requests,
     service,
+    subscriptions,
     usage,
     views,
 )
@@ -803,6 +804,7 @@ _COMMENT_FIELDS = frozenset(
 #: one of the two. A question's entry takes what `create_work_item_request` does.
 APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
+    ("subscribe", frozenset()),
     ("update", frozenset(model.UPDATABLE_FIELDS)),
     ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done"})),
@@ -864,7 +866,8 @@ def _steps(
     """Every step the payload names, in application order, refused before anything is written.
 
     A step is its group, its index within the group and its fields. `claim`
-    is a boolean, so `false` names no step. A refused entry is named beside the
+    is a boolean, so `false` names no step; `subscribe` is one whose `false` is a
+    step of its own, stopping. A refused entry is named beside the
     message as a refused write is, so the caller reads one shape for both.
     """
 
@@ -878,6 +881,11 @@ def _steps(
                 raise PlanningHttpError(400, "invalid_request", "claim must be a boolean")
             if value:
                 steps.append((group, 0, {}))
+            continue
+        if group == "subscribe":
+            if not isinstance(value, bool):
+                raise PlanningHttpError(400, "invalid_request", "subscribe must be a boolean")
+            steps.append((group, 0, {"follows": value}))
             continue
         entries = value if group in _APPLY_LISTS else [value]
         if not isinstance(entries, list) or len(entries) > MAX_APPLY_ENTRIES:
@@ -912,6 +920,9 @@ def _apply_step(
     if group == "claim":
         claimed = _claim(conn, base)
         return {name: claimed[name] for name in ("started", "warnings") if claimed.get(name)}, True
+    if group == "subscribe":
+        row = read_model.item_row(conn, _text(base, "id"))
+        return {}, subscriptions.subscribe(conn, row, entry["follows"])
     if group == "update":
         _update(conn, {**entry, **base})
         return {}, model.updated_fields(entry)

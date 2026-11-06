@@ -149,13 +149,22 @@ def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
     # earlier build wrote has no `claim_call_id`: its claims name no call.
     columns = row.keys()  # `in row` would search a Row's values, not its names
     if "claim_call_id" in columns and row["claim_call_id"] is not None:
-        call = conn.execute(
-            "SELECT c.identity_state, c.identity_source, c.session_id, c.agent_id, c.received_at,"
-            " s.id AS session_row, s.status, s.last_seen, s.ended_at"
-            " FROM execution_events c LEFT JOIN sessions s ON s.id = c.session_id"
-            " WHERE c.id = ?",
-            (int(row["claim_call_id"]),),
-        ).fetchone()
+        call = conn.execute(CALL + " WHERE c.id = ?", (int(row["claim_call_id"]),)).fetchone()
+    return of_call(holder, call)
+
+
+#: The call behind a lease, with the session row its liveness is read from. Whatever
+#: else lapses with its session (`subscriptions`) reads these columns by these names.
+CALL = (
+    "SELECT c.identity_state, c.identity_source, c.session_id, c.agent_id, c.received_at,"
+    " s.id AS session_row, s.status, s.last_seen, s.ended_at"
+    " FROM execution_events c LEFT JOIN sessions s ON s.id = c.session_id"
+)
+
+
+def of_call(holder: str, call: sqlite3.Row | None) -> Lease:
+    """The lease `holder` has through `call`, a row of `CALL`, or an unconfirmed one."""
+
     if call is None:
         return Lease(holder, UNCONFIRMED, None, None, None, None, None, None)
     session_id = call["session_id"] or None
