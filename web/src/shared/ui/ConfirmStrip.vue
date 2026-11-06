@@ -18,10 +18,15 @@ const props = withDefaults(
     cancelLabel: string
     confirmLabel: string
     message: string
+    /**
+     * It stands on a sheet, whose ground is the strip's own: there it draws no ground, which
+     * could not be told from the sheet's, and no inset, which read as a third left edge.
+     */
+    onSheet?: boolean
     /** `danger` when going ahead destroys something, such as an unsaved draft. */
     tone?: 'danger' | 'primary'
   }>(),
-  { tone: 'primary' },
+  { onSheet: false, tone: 'primary' },
 )
 
 const emit = defineEmits<{ cancel: []; confirm: [] }>()
@@ -49,6 +54,7 @@ onUnmounted(() => {
     ref="strip"
     class="confirm-strip"
     role="group"
+    :class="{ 'on-sheet': props.onSheet }"
     :aria-labelledby="id"
   >
     <p
@@ -86,6 +92,12 @@ onUnmounted(() => {
   border-radius: var(--radius-card);
 }
 
+/* On a sheet of its own ground: the words and buttons on the column's edge. */
+.confirm-strip.on-sheet {
+  padding: 0;
+  background: none;
+}
+
 .confirm-message {
   margin: 0;
   color: var(--color-text);
@@ -93,9 +105,12 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
 }
 
+/* At the strip's end, as every form's buttons stand, on whichever line they take; started at
+   its beginning they read as a list once they wrapped. */
 .confirm-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  justify-content: flex-end;
 }
 </style>

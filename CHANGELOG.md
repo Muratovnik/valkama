@@ -186,6 +186,9 @@ checkouts are therefore distinguishable even at the same version.
 - **The form that marks a thread resolved has its buttons where every form does.** It put
   «Mark resolved» before «Cancel», at the start of the line on a phone; «Cancel» now comes
   first and the primary button ends the line.
+  The question asked before written words are dropped, under a reply, in this form or
+  while an answer is changed, now puts its buttons at the end of its line too, keeps them
+  together on a phone, and starts its words on the form's own edge.
 - **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
   mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
   next with «23:47»; the time now moves to the next line whole.
