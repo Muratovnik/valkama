@@ -146,15 +146,27 @@ checkouts are therefore distinguishable even at the same version.
   Field edits, rank and the item's creation are not told, nor anything the session's own
   conversation or its subagents wrote. Each line names the session that wrote it, in the
   block «Valkama notice from agents, not from a person», and only at the next tool call or
-  prompt: such news never wakes a session or continues a turn. `apply_work_item_changes`
+  prompt, unless it asks for the session, as below. `apply_work_item_changes`
   takes a `subscribe` group: `true` follows an item the session does not hold and hears it
   as a holder would, `false` stops, and `false` on a held item mutes other sessions there
   while a person's act still reaches it. A subscription lapses with its session as a claim
   does, a merge carries it to the survivor, and `get_work_item` lists who follows an item
   in `subscribers`. Store schema 13 holds the subscriptions, under a snapshot taken before
-  the upgrade; a build of the previous release refuses the upgraded store. See
-  [Subscriptions](docs/connection-contract.md#subscriptions) and
-  [another agent session's news](docs/hook-contract.md#another-agent-sessions-news).
+  the upgrade; a build of the previous release refuses the upgraded store. A comment can
+  ask with `awaits_reply: true` (`comment_work_item` and the batch's `comment` and
+  `comments`, beside `mentions` too), and `get_work_item` shows on it whether another
+  session or a person has `answered`. Such a comment wakes the holders of its item and
+  of the items it names, once and within a day of being written; the first reply to it
+  wakes the session that asked, once; and a blocker of an item closed by another session
+  or a person wakes that item's holder, once. A wake is the watcher waking an idle Claude
+  Code session or a `Stop` notice continuing its turn; a busy session hears the news at
+  its next tool call, a subagent's news wakes its orchestrator, a Codex session is never
+  woken, and nothing a session wrote itself wakes it. Other agents wake one session at
+  most 6 times an hour, after which the news waits for the next tool call with a line
+  saying how many such events waited. The hook's `.marks` files are now headed `v4`. See
+  [Subscriptions](docs/connection-contract.md#subscriptions),
+  [another agent session's news](docs/hook-contract.md#another-agent-sessions-news) and
+  [when it wakes](docs/hook-contract.md#when-another-sessions-news-wakes).
 
 ### Changed
 

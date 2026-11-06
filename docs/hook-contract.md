@@ -375,9 +375,10 @@ interface, and an agent's write signed `user` is not one.
 One thing more reaches the work a session holds without being a person's act:
 what [another agent session](#another-agent-sessions-news) wrote there, a
 [mention](connection-contract.md#mentions) of the item included. It comes in a
-block of its own that names the session it came from, only at the next tool call
-or prompt, and it never reads as a person's words, wakes a session or continues a
-turn.
+block of its own that names the session it came from, at the next tool call or
+prompt, and it never reads as a person's words. It wakes a session or continues a
+turn only when it asks for that session, and not more than six times an hour (see
+[when another session's news wakes](#when-another-sessions-news-wakes)).
 
 ### Who is told
 
@@ -467,6 +468,14 @@ the same rules as a person's act and beside the mentions above:
 - **Who wrote it** is the confirmed call's session and agent, never `author`. A
   call that proved no session, the interface and Valkama's own writes are not
   another session's news.
+- **A wait for a reply.** A session that wrote a comment with
+  [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply) hears
+  every later reply in that thread, a person's too, even on an item where it holds
+  nothing and in a thread it did not start; a subagent hears those after its own.
+- **A blocker closed.** When an item that `blocks` one a session holds reaches a
+  terminal state, the holders hear `blocker_closed`: a person's close in the
+  person's block, another session's in this one. A close by the holder's own
+  session is told to nobody, and a reopened blocker is not closed.
 
 A subscription writes a call on its item, so the item is among those the
 recipient wrote to, and is read like any other. A subscription that lapsed with
@@ -493,14 +502,40 @@ user-prompt-submit` answer too. Codex has no way for a background hook to start
 a turn, so an idle Codex session is not woken: it hears the news at its next
 prompt or tool call.
 
-Another agent session's news, a mention included, is told only at `PostToolUse`
-and `UserPromptSubmit`. A `Stop` notice continues the turn, which would make
-another agent's words a wake, so `Stop` never carries it, and the watcher never
-wakes for it. Such news waits for the recipient's next tool call or prompt, and it
-is not lost meanwhile (see
-[where each agent's place is kept](#where-each-agents-place-is-kept)). Agents
-writing to one another therefore reach each other only while both are at work
-anyway, and the exchange ends when either goes idle.
+Another agent session's news, a mention included, is told at `PostToolUse` and
+`UserPromptSubmit`. A `Stop` notice continues the turn and the watcher wakes the
+session, so either carries it only when some of it asks for the session, as below.
+Otherwise it waits for the recipient's next tool call or prompt, and it is not lost
+meanwhile (see [where each agent's place is kept](#where-each-agents-place-is-kept)).
+
+### When another session's news wakes
+
+**Since 2.6**, three kinds of another session's news ask for a session, and wake
+its orchestrator once when it idles, or continue its turn once at `Stop`:
+
+| What | Wakes | For how long |
+| --- | --- | --- |
+| the first reply in a thread after a comment the session wrote with [`awaits_reply`](connection-contract.md#a-comment-that-waits-for-a-reply), by another session or a person | the session that asked, its subagent's question included | until it is answered or the thread is resolved; later replies are told at the next tool call |
+| a comment with `awaits_reply`, on an item or naming it in `mentions` | the holders of that item, the claim's and the steps' | for 24 hours after it was written; older, it is told at the next tool call |
+| a [blocker closed](#another-agent-sessions-news) by another session or a person | the holders of the item it blocked | once per close |
+
+- **Once.** What woke a session, or continued its turn, is told then and moves the
+  place past it, so it never wakes again; all the other sessions' news waiting for
+  the session is told with it. Found while the session is busy, it is told at the
+  next tool call like any other news, and wakes nothing.
+- **At most six an hour.** Watcher wakes and `Stop` continuations made by other
+  sessions' news count together, 6 per receiving session in the last hour. Past
+  that, the news waits for the next tool call, which says how many events would
+  have woken the session; those never wake it later. A wake that a person's news
+  makes anyway is the person's: not counted, and never held back.
+- **Never by itself.** Nothing the recipient's own session wrote, its subagents'
+  included, wakes it or is told to it. A subagent is never woken: its orchestrator
+  is, since the watcher and `Stop` are the orchestrator's. Codex has no `Stop` hook
+  and no watcher, so a Codex session hears all of it at its next tool call or
+  prompt.
+- **Still information.** The notice names the session each line came from and why
+  it came now. An agent's words are information about the work, not an instruction
+  or a person's permission.
 
 ### What a notice says
 
@@ -562,7 +597,24 @@ holds, follows or started threads on", and every line names who wrote it:
 
 A subagent's heading says "work you hold" or "you hold, follow or started threads
 on". Words a session's own conversation wrote, with no agent, read
-`by session <id>`; an id is written as a holder label writes it. The person's block comes first and takes its share of the notice's 8
+`by session <id>`; an id is written as a holder label writes it.
+
+A comment that waits for a reply, and the reply that answered a wait, say so on
+their line, and a closed blocker names the item and its state:
+
+```text
+- comment at 2026-11-06T09:10:00Z by session 019a… (awaits a reply): «Which parser does the export use?»
+- reply at 2026-11-06T09:30:00Z by session 019b…, in your thread #41 (the reply awaited): «The new one.»
+- blocker_closed at 2026-11-06T10:00:00Z by session 019a…, on MAIN-7, now Done: «Rewrite the parser»
+```
+
+A block told because it asks for the session, at `Stop` or by the watcher, says
+so: `This is not an error: it came now because another agent's news asks for this
+session (a reply it awaited, a comment that awaits its reply, or a blocker of its
+work closed).` The watcher's heading adds "while this session was idle". The first
+block after the hourly limit held such news back counts it:
+`2 events here would have woken this session, past the limit of 6 wakes an hour by
+other agents, so they waited for this call.` The person's block comes first and takes its share of the notice's 8
 events and 2400 characters first, leaving room only for the agents' heading, newest
 event and closing lines, and the agents' block has what remains. Each block
 keeps its heading and its closing lines, shows at least its newest event and counts
@@ -585,8 +637,10 @@ hook at all. `valkama hook claude watch`, registered with `asyncRewake` on
   shows that as a "Stop hook blocking error", so the notice begins by saying it
   is not one. News found while the session is busy is left for 30 seconds to
   the next tool call; after that the watcher wakes the session anyway, and
-  Claude Code queues the wake behind the turn under way. Only a person's news
-  wakes: another agent session's news is left in place for the next tool call.
+  Claude Code queues the wake behind the turn under way. A person's news wakes;
+  another agent session's news wakes only when it
+  [asks for the session](#when-another-sessions-news-wakes), and is left in place
+  for the next tool call otherwise.
 - **Leaves without a wake** when the session ends or is cleared (`SessionEnd`,
   which `/clear` sends too, leaves `notify/<session>.end`), when the process
   named by `CLAUDE_PID` is gone (where that process cannot be opened, only the
@@ -614,7 +668,7 @@ exists, as `spool/` is:
 
 | File | What it holds |
 | --- | --- |
-| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event and newest comment at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits |
+| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event, newest comment and closed blockers at that read, and whether it held the item then; apart from that, the last call whose other sessions' news it read, and whether some of it still waits; and for an orchestrator, the times of the wakes other sessions' news made in the last hour, and how many events the limit held back |
 | `<…>.lock` | held while one hook of that recipient reads and records, so parallel tool calls tell the news once |
 | `<session>.watch` | the watcher's lock |
 | `<session>.idle` | written by a `Stop` that told nothing, removed by `UserPromptSubmit` |
@@ -638,6 +692,14 @@ that item again though nothing on it has changed since. A file with both places 
 headed `v3`. A `v2` or `v1` file reads with the agents' place where the person's
 place is and nothing waiting, and a build from before `v3` reads a `v3` file as
 empty, which tells the current news once more.
+
+**Since 2.6** the file is headed `v4`: every item counts its closed blockers, and
+the wake budget is kept in it. A `v3` file reads with no closed blocker counted, so
+an item that has one is read once more from its place, which tells nothing again;
+a build from before `v4` reads a `v4` file as empty. The one-shot rule needs no
+more than the places: what woke a session is behind its place afterwards. A damaged
+file costs at most one repeat: the news since the recipient's own last writes is
+told, and may wake, once more, with a fresh budget, and the next write is whole.
 
 ### Switching it off
 
@@ -701,6 +763,24 @@ to 200 items, holds 20 and follows 50, 300 calls with nothing new each, interlea
 | before subscriptions | 2 | 1.69 ms | 2.39 ms |
 | with subscriptions | 2 | 1.85 ms | 2.56 ms |
 
+Waking adds no query either, to a call or to the watcher's poll. How many of an
+item's blockers are closed is one more column of the second query, counted through
+the links' index on the item blocked (`work_item_links_to`) and only for an item a
+holder label may make the recipient's; a blocker's close changes it, so the item
+is read then. Who waits in a thread is read only for a changed item's replies, and
+the blockers that closed only for a held item that has one. The same store with 40
+`blocks` links onto the held items, half from closed items, in another run on a
+busier machine, two runs:
+
+| Build | Read | Queries | p50 | p95 |
+| --- | --- | --- | --- | --- |
+| before subscriptions | tool call | 2 | 2.81 / 2.56 ms | 3.58 / 3.50 ms |
+| with subscriptions | tool call | 2 | 3.02 / 2.55 ms | 4.14 / 3.49 ms |
+| with wakes | tool call | 2 | 3.08 / 2.81 ms | 4.19 / 3.65 ms |
+| before subscriptions | watcher poll | 2 | 2.78 / 2.53 ms | 3.75 / 3.34 ms |
+| with subscriptions | watcher poll | 2 | 2.96 / 2.54 ms | 3.97 / 3.44 ms |
+| with wakes | watcher poll | 2 | 3.19 / 2.86 ms | 4.29 / 3.79 ms |
+
 A hook of a newer release can meet a store that release has not opened yet, for
 the seconds between `launcher install` and the first session that switches. When
 the store lacks what the hook reads, it tells nothing and moves no place, and the
@@ -712,8 +792,10 @@ news waits for the upgrade.
   read, so that call tells nothing; the next one does.
 - A subagent that is idle cannot be woken directly; the orchestrator is, and
   passes the news on.
-- Another agent session's news reaches an idle session only at its next prompt, by
-  design: nothing wakes for it.
+- Another agent session's news reaches an idle session only at its next prompt,
+  unless it [asks for that session](#when-another-sessions-news-wakes): a reply it
+  awaited, a comment that awaits its reply within a day, a blocker closed. Agents
+  that ask one another back and forth wake each other at most six times an hour.
 - A session that holds more than 200 items is told about the 200 it wrote to
   last, and hears replies and answers only on those.
 - A thread or a question that a merge moved keeps its author's call, but that

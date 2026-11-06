@@ -444,6 +444,31 @@ carries `from_person`. A mark set in the interface is a person's act and is told
 to the agent working the item (see
 [What a person did reaches the agent](#what-a-person-did-reaches-the-agent)).
 
+### A comment that waits for a reply
+
+**Since 2.6.** An agent that is about to end its turn to wait for another agent
+asks with `awaits_reply: true` on the comment that asks: `comment_work_item`, its
+HTTP write, and the batch's `comment` and each entry of `comments` take it, on a
+root or a reply, beside `mentions` too. Anything but a boolean is refused with
+`invalid_request`. A comment that only informs does not set it.
+
+A comment that waits says so in every read, with whether it has been answered:
+
+```json
+{"id": 41, "kind": "comment", "author": "codex", "by_person": false,
+ "body": "Which parser does the export use?", "reply_to": null,
+ "reply_to_request": null, "awaits_reply": true, "answered": false, …}
+```
+
+`answered` turns true with the first later reply in the same thread written by a
+person, or by a confirmed session other than the one whose call wrote the comment;
+a reply from the asker's own session, its subagents included, is not an answer. A
+comment that does not wait carries neither key. The flag writes no event and
+changes no revision, as a comment does not. What it makes the client hooks do, wake
+the holders of the item and of the items named in `mentions` and then the asker
+with the answer, each once, is in the
+[hook contract](hook-contract.md#when-another-sessions-news-wakes).
+
 ### The address of a work item
 
 `GET /open/<reference>` opens one work item in the web UI, so that an agent can
@@ -956,7 +981,7 @@ these groups, and applies them in this order:
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
-| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?}`, or a list of them | `comment_work_item` |
+| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `comment_work_item` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
 | `summary` | `{done, next, why?, list?}` | `set_work_item_summary` |

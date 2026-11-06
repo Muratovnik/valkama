@@ -29,18 +29,20 @@ hears none of it. A session's own conversation and its subagents are one speaker
 none of them is told what another of them wrote, except a mention, which reaches
 every holder but the agent that spoke. A `Stop` notice continues the turn and the
 watcher wakes the session, so either would turn agents telling one another into a
-loop that keeps sessions busy; neither tells one. Such news waits for the next
-tool call instead.
+loop that keeps sessions busy; they carry such news only when it asks for the
+session: the reply it awaited, a comment awaiting its reply on work it holds, a
+blocker of that work closed. Each wakes once, at most `MOST_WAKES` an hour; the
+rest waits for the next tool call.
 
 Where the place is kept. Not in the store: a hook that wrote there would be a
 writer on every tool call. Each recipient has a small file beside the spool,
 `notify/<session>[--<agent>].marks`, holding for every item it wrote to the last
 call it has read, the item's change signature and whether it held the item then,
 and apart from those the last call whose agents' news it read and whether some
-still waits: a `Stop` reads past such news without telling it. Whether it follows
-the item is read from the store each time, never kept here. A file that
-cannot be read is an empty one, so the worst a damaged file does is tell the
-current news once more.
+still waits: a `Stop` reads past such news without telling it; and the wakes other
+sessions' news made. Whether it follows the item is read from the store each time,
+never kept here. A file that cannot be read is an empty one, so the worst a damaged
+file does is tell the current news once more, and wake once more.
 
 What it costs. `PostToolUse` runs on every tool call, so this module imports
 nothing at module level beyond the standard library's C parts, reads the input

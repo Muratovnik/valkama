@@ -182,8 +182,9 @@ _MENTIONS = {
 }
 _AWAITS_REPLY = {
     "type": "boolean",
-    "description": "This comment waits for an answer in its thread; get_work_item says on the"
-    " comment whether another session or a person has replied (answered).",
+    "description": "Set only before ending your turn to wait for another agent, never for"
+    " information: wakes the holders here and of mentions once, and the first reply by"
+    " another session or a person wakes you once. get_work_item shows answered.",
 }
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
