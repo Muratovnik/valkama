@@ -190,6 +190,16 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
   .nav-refresh[data-tone='warning'] & {
     background: var(--color-warning);
   }
+
+  /* A forced palette clears a fill, and the dot is one: on a narrow rail it was the button's
+     only mark. It says a state, so it takes the palette's ink and stays out of its reach. */
+  @media (forced-colors: active) {
+    &,
+    .nav-refresh[data-tone] & {
+      background: CanvasText;
+      forced-color-adjust: none;
+    }
+  }
 }
 
 .connection-copy {
