@@ -1315,7 +1315,9 @@ and can stand open beside another. Nothing in a row's label can be pressed, beca
 there selects: a reference in it reads as text, and a line holding a link opens on its chevron
 like one that runs on, so the link works where it opened. What is chosen is never left folded: it stands whole
 under the options and above Send, because only what was shown in full may be sent as the
-person's answer, and an agent can put a condition in what a row folds away. It stands
+person's answer, and an agent can put a condition in what a row folds away. It keeps to its
+rows' edges: on a question's ground with its words on the radios', and under a list's rows,
+which have no ground, with none and its words on the boxes' edge. It stands
 there rather than opening in the row so that choosing moves no row: a row closing above the
 next press would take that one from under the pointer, and near the top of a card there
 is no scroll to take that back. The arrows bring the chosen row into view by no more than

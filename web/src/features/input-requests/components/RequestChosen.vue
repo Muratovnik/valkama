@@ -9,12 +9,22 @@
  * near the top of a card there is no scroll left to take that back. Nothing reads this
  * out on an arrow press: the radio names it with `aria-details`, and it is in the order
  * of the text for whoever goes on to read it.
+ *
+ * It keeps to its rows' edges. A question's rows have a ground and an inset, so it has its own
+ * ground on theirs and its words on their controls'. A list's (`dense`) have neither, so it has
+ * no ground and its words stand on the boxes' edge: its 12px inset there was a third edge in
+ * one column, between the boxes and the words.
  */
 import RichText from '@/shared/ui/RichText.vue'
 
-defineProps<{
-  entries: readonly { description: string; id: string; label: string }[]
-}>()
+withDefaults(
+  defineProps<{
+    entries: readonly { description: string; id: string; label: string }[]
+    /** Under a list's rows, which have no ground and no inset. */
+    dense?: boolean
+  }>(),
+  { dense: false },
+)
 </script>
 
 <template>
@@ -23,6 +33,7 @@ defineProps<{
     :id="entry.id"
     :key="entry.id"
     class="request-chosen"
+    :class="{ 'is-dense': dense }"
   >
     <RichText
       class="request-chosen-label"
@@ -47,6 +58,11 @@ defineProps<{
   margin-block-start: var(--space-1);
   background: var(--color-surface-active);
   border-radius: var(--radius-control);
+
+  &.is-dense {
+    padding: 0;
+    background: none;
+  }
 }
 
 .request-chosen-label {

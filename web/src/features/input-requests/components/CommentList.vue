@@ -262,7 +262,10 @@ const detailsOf = (option: string) =>
           </template>
         </RequestOption>
       </fieldset>
-      <RequestChosen :entries="chosenFolded" />
+      <RequestChosen
+        :entries="chosenFolded"
+        dense
+      />
       <FieldError
         v-if="refusal"
         :id="errorId"
