@@ -4,7 +4,8 @@
  * a line of its own otherwise. The rule is checked here against an oracle built from the line
  * itself, which lays a copy of it out three ways, without the mark, with the mark beside the date
  * and with the mark on its own line, and reads which place the rule asks for. The line is checked
- * at every step of a drawer narrowed to a phone's and widened back, a few frames after each step.
+ * after the author's name changes on a read, when no width changes, and at every step of a drawer
+ * narrowed to a phone's and widened back, a few frames after each step.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -13,7 +14,11 @@ import { openCard } from './editorPage.ts'
 import { test } from './test.ts'
 import { reply, root } from './threadFixtures.ts'
 
-type Locale = 'ru' | 'en'
+const WORDS = {
+  en: { reply: 'Reply', send: 'Send' },
+  ru: { reply: 'Ответить', send: 'Отправить' },
+} as const
+type Locale = keyof typeof WORDS
 
 const ASKER = 'codex (session 019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e)'
 const OTHER = 'claude (session 0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e)'
@@ -178,6 +183,48 @@ const offRule = (found: Placement[]) =>
       row.markLines !== 1 && 'the mark broke',
     ].filter(Boolean)
     return wrong.length ? [`${row.entry}: ${wrong.join(', ')}`] : []
+  })
+
+/** A reply the person writes in another thread, so the card reads the item again. */
+async function readAgain(
+  page: Page,
+  opened: Awaited<ReturnType<typeof openAsked>>,
+  locale: Locale,
+) {
+  const target = opened.thread('A short note that asks nothing')
+  await target.getByRole('button', { name: WORDS[locale].reply, exact: true }).click()
+  await page.keyboard.insertText('A write so the card reads again.')
+  await target.getByRole('button', { name: WORDS[locale].send, exact: true }).click()
+  await expect(target.locator('.reply').filter({ hasText: 'A write so the card' })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await settle(page)
+  await settle(page)
+}
+
+const of = (found: Placement[], text: string) => found.find((row) => row.entry.includes(text))
+
+for (const locale of ['ru', 'en'] as const)
+  test(`${locale}: an author renamed on a read places the mark again, at the same width`, async ({
+    page,
+  }) => {
+    const opened = await openAsked(page, locale, 1280)
+    const before = await placements(page)
+    expect(offRule(before), 'before the rename').toEqual([])
+    expect(of(before, 'Which parser')?.own, 'the long author keeps the mark off its line').toBe(
+      true,
+    )
+    const comments = opened.backend.item.comments
+    const at = (id: number) => comments.find((entry) => entry.id === id)
+    // The long author shortened and the short one lengthened: the line keeps its width.
+    Object.assign(at(31) ?? {}, { author: SHORT })
+    Object.assign(at(38) ?? {}, { author: ASKER })
+    await readAgain(page, opened, locale)
+    await expect(opened.thread('Which parser').locator('.meta-who')).toHaveText(SHORT)
+    const after = await placements(page)
+    expect(offRule(after), 'after the rename').toEqual([])
+    // Renamed short, the author has room for the mark beside the date.
+    expect(of(after, 'Which parser')?.own, 'the mark beside the date').toBe(false)
+    expect(await opened.pageErrors()).toEqual([])
   })
 
 /** Narrowed to a phone's width and widened back, each step a few frames apart. */

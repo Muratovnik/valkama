@@ -24,9 +24,12 @@
  * own, with no dot. Flex breaks a line by the name's 14ch basis, not by its words, so left to
  * the line it kept the time's line and squeezed a long name onto one more line. No CSS asks
  * how many lines a name takes, so the line tries both places and keeps the one that costs the
- * name nothing, again whenever its width changes.
+ * name nothing, again whenever it is drawn anew and whenever its width changes. Drawn anew
+ * covers the name, which arrives through the slot and no prop names: a name renamed shorter on
+ * a read left the line's box as it was, and the mark stayed on a line of its own beside room
+ * the date had for it.
  */
-import { onMounted, ref, useTemplateRef, watch } from 'vue'
+import { onMounted, onUpdated, ref, useTemplateRef } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
@@ -59,7 +62,9 @@ onMounted(() => {
   // Placed again once the fonts are in, where the document loads them: a test's may not.
   if ('fonts' in document) void document.fonts.ready.then(place)
 })
-watch([() => props.when, () => props.after], place, { flush: 'post' })
+// After every render: a new time, a new state or a new name. Placing sets `ownLine`, which
+// renders once more and places the same way again, so it settles there.
+onUpdated(place)
 // Placed in the next frame: changing the line inside the observer's own callback would size it
 // again in the same frame, which the observer reports as a loop.
 useResizeObserver(
