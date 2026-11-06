@@ -220,6 +220,9 @@
         "status": "pending",
         "question": "What to take on",
         "comment_id": 7,
+        "undecided": [
+          "items"
+        ],
         "answer": [],
         "note": null,
         "answered_by": null,
