@@ -171,14 +171,35 @@ for (const [width, first] of [
   })
 }
 
-/** Where focus goes over every stop there is and a few more, in one direction. */
+/**
+ * Where focus goes over every stop there is and a few more, in one direction: each stop that
+ * left the surface, by what holds focus there.
+ *
+ * A reference's card is portalled out of the surface, and a Tab from the reference goes
+ * through the card's controls and on from the reference (`ReferencePreview`), so a stop in a
+ * card that describes a reference in the surface is still in it. Any other stop outside is not.
+ */
 async function roundTheTrap(page: Page, surface: Locator, key: string) {
-  const inside: boolean[] = []
+  const stops: { at: string; held: boolean }[] = []
   for (let press = 0; press < 40; press += 1) {
     await page.keyboard.press(key)
-    inside.push(await surface.evaluate((node) => node.contains(document.activeElement)))
+    stops.push(
+      await surface.evaluate((node) => {
+        const active = document.activeElement
+        const card = active?.closest('.reference-preview')
+        const ofReference = [...node.querySelectorAll('[aria-describedby]')].some((reference) =>
+          (reference.getAttribute('aria-describedby') ?? '')
+            .split(' ')
+            .some((id) => id && card?.querySelector(`[id="${id}"]`)),
+        )
+        return {
+          held: node.contains(active) || Boolean(card && ofReference),
+          at: active?.outerHTML.slice(0, 80) ?? 'nothing',
+        }
+      }),
+    )
   }
-  return inside.filter((held) => !held)
+  return stops.filter(({ held }) => !held).map(({ at }) => at)
 }
 
 for (const key of ['Tab', 'Shift+Tab']) {
