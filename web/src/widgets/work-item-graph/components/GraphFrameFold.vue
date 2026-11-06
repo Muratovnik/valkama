@@ -11,8 +11,11 @@
  * stops short of the reference line beside it and the title under it, which are the epic's;
  * the header draws no taller for it. Its ring encloses the chevron and nothing else.
  *
- * Zoomed out past reading, the fold is the work under no epic's one button, across its
- * whole band and the air above and below it (`foldIsTarget`).
+ * Zoomed out past reading, the fold is the work under no epic's one button: its reach runs
+ * across its whole band and the air above and below it (`foldIsTarget`), and the fold
+ * itself stays the chevron's square, so the face and the ring it draws under the pointer
+ * and the keyboard cover the chevron and none of the band's words or its edge. Stretched
+ * over the band, with the reach above them, its face had covered all of them.
  */
 import { computed } from 'vue'
 
@@ -99,16 +102,13 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
 }
 
 /* Zoomed out the band is the button, and its target runs on into the air above and below
-   it that the layout leaves empty: 36px, the least air between two frames. */
+   it that the layout leaves empty: 36px, the least air between two frames. The reach is
+   laid over the header (`GraphFrameHead` places it), and the fold keeps the chevron's square. */
 .graph-frame-fold.overview {
-  grid-row: 1 / -1;
-  place-items: start;
-  place-self: stretch stretch;
-  inline-size: auto;
-  block-size: auto;
+  position: static;
 
   &::before {
-    inset: calc(-36px - var(--space-2)) calc(-1 * var(--space-4));
+    inset: -36px 0;
     inline-size: auto;
     block-size: auto;
   }

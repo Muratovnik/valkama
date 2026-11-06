@@ -378,6 +378,8 @@ function onOpenBlur() {
   --band-fit: 1;
   --grow: calc(2.2 * var(--band-fit));
 
+  /* What a fold reaches over: the whole band (`GraphFrameFold`). */
+  position: relative;
   grid-template-rows: minmax(0, 1fr) auto;
   align-content: stretch;
 
