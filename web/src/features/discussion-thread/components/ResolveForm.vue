@@ -74,15 +74,15 @@ const { asking, cancel } = useAskedCancel(
     />
     <div class="resolve-actions">
       <VButton
+        :disabled="pending"
+        @click="cancel"
+        >{{ t('threads.cancel') }}</VButton
+      >
+      <VButton
         type="submit"
         variant="primary"
         :disabled="pending"
         >{{ t('threads.markResolved') }}</VButton
-      >
-      <VButton
-        :disabled="pending"
-        @click="cancel"
-        >{{ t('threads.cancel') }}</VButton
       >
     </div>
     <p
@@ -114,7 +114,8 @@ const { asking, cancel } = useAskedCancel(
 
 <style scoped>
 /* A row while it fits, and the field over its buttons where it does not: the buttons line
-   up with the control, under the label both of them answer to. */
+   up with the control, under the label both of them answer to. Cancel and then the primary,
+   at the form's end on either line, as every form's buttons stand. */
 .resolve-form {
   display: flex;
   flex-wrap: wrap;
@@ -132,6 +133,8 @@ const { asking, cancel } = useAskedCancel(
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  justify-content: flex-end;
+  margin-inline-start: auto;
 }
 
 .resolve-error,

@@ -1,8 +1,8 @@
 /**
  * The rows of controls under a question and an entry, and the times written into their lines,
  * where the room runs short. The two answers of a question are one pair and wrap together, as
- * Cancel and Save do while an answer is changed; a form's buttons wrapped under its count stand
- * at its end, as every other form's do; and a time inside a sentence breaks around itself and
+ * Cancel and Save do while an answer is changed; a form's buttons, Cancel and then its primary,
+ * stand at its end on whichever line they take; and a time inside a sentence breaks around itself and
  * never inside, «05 нояб. 2026 г.,» at the end of one line and «23:47» starting the next.
  */
 import { expect } from '@playwright/test'
@@ -112,3 +112,33 @@ test('ru: a time inside the line of a closed question and of a mark stays whole,
   await expect(mark).toBeVisible()
   expect(await timeLines(mark.locator('.thread-mark'))).toBe(1)
 })
+
+/** Where a control stands across the window. */
+const edge = (target: Locator) =>
+  target.evaluate((node) => {
+    const box = node.getBoundingClientRect()
+    return { left: box.left, right: box.right, top: box.top }
+  })
+
+for (const width of [1280, 390]) {
+  test(`ru: the mark form has Cancel and then its primary at its end, as every form does, at ${width}`, async ({
+    page,
+  }) => {
+    await inRussian(page, width)
+    const opened = await openCard(page)
+    opened.backend.item.comments.push(root(1, 'A thread to settle.'))
+    await page.reload()
+    const entry = opened.drawer.locator('.thread-entry').filter({ hasText: 'A thread to settle.' })
+    await entry.getByRole('button', { name: 'Разобрано', exact: true }).click()
+    const form = entry.locator('.resolve-form')
+    const cancel = form.getByRole('button', { name: 'Отмена', exact: true })
+    const mark = form.getByRole('button', { name: 'Отметить разобранным', exact: true })
+    await expect(mark).toBeVisible()
+    const [first, last] = [await edge(cancel), await edge(mark)]
+    const end = await form.evaluate((node) => node.getBoundingClientRect().right)
+    // One row, Cancel before the primary, and the primary at the form's end.
+    expect(Math.abs(first.top - last.top)).toBeLessThanOrEqual(1)
+    expect(first.right).toBeLessThan(last.left)
+    expect(Math.abs(last.right - end)).toBeLessThanOrEqual(1)
+  })
+}

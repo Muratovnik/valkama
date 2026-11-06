@@ -183,6 +183,9 @@ checkouts are therefore distinguishable even at the same version.
   refresh failed still takes focus, so that Tab goes on from there, and its ring, like a
   reply's and the checklist heading's, stands clear of the words with the corners of a
   button.
+- **The form that marks a thread resolved has its buttons where every form does.** It put
+  «Mark resolved» before «Cancel», at the start of the line on a phone; «Cancel» now comes
+  first and the primary button ends the line.
 - **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
   mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
   next with «23:47»; the time now moves to the next line whole.
