@@ -153,6 +153,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         class="lane-actions"
       >
         <VButton
+          class="lane-action"
           variant="ghost"
           size="inline"
           :title="openLabel"
@@ -167,6 +168,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           />
         </VButton>
         <VButton
+          class="lane-action"
           variant="ghost"
           size="inline"
           :title="chainLabel"
@@ -275,6 +277,15 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
+}
+
+/* The board keeps a tile it brings into view clear of a heading held at its top
+   (`scroll-padding-block` in `WorkItemLanes`). The heading's own buttons stand in
+   that room, and the keyboard reaching one of them scrolled the board back to the
+   lane's start to clear it of its own heading: they count that room as theirs. */
+.lane-toggle,
+.lane-action {
+  scroll-margin-block-start: calc(-1 * (var(--size-control-height-compact) + var(--space-2)));
 }
 
 .lane-chevron {
