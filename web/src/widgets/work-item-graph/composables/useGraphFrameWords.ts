@@ -56,13 +56,23 @@ export function useGraphFrameWords(input: FrameWordsInput) {
     return insideWhole.value.join('')
   })
 
+  /** The work moving under it, said whole. */
+  const live = computed(() => {
+    const working = input.working()
+    return working > 0 ? [`${working} ${t('graph.frame.working', working)}`] : []
+  })
+
+  /**
+   * What the fold does and what it hides. Over the work under no epic the fold is the
+   * header's one button, so it says the work moving under it too, as the epic's does.
+   */
   const foldLabel = computed(() => {
     const verb = input.frame().folded ? 'unfold' : 'fold'
     const kind = isEpic.value ? 'Epic' : 'Parent'
     const action = named.value
       ? t(`graph.frame.${verb}${kind}`, named.value)
       : t(`graph.frame.${verb}None`)
-    return [action, ...insideWhole.value].join(' · ')
+    return [action, ...insideWhole.value, ...(named.value ? [] : live.value)].join(' · ')
   })
 
   /** What a reader hears for the open target: the same facts the header shows. */
@@ -76,9 +86,7 @@ export function useGraphFrameWords(input: FrameWordsInput) {
       const word = t(`graph.frame.${group}`, count)
       return `${count} ${word}`
     })
-    const working = input.working()
-    const live = working > 0 ? [`${working} ${t('graph.frame.working', working)}`] : []
-    return [head, standing, ...groups, ...insideWhole.value, ...live].join(' · ')
+    return [head, standing, ...groups, ...insideWhole.value, ...live.value].join(' · ')
   })
 
   return { epic, foldLabel, inside, insideShown, openLabel }

@@ -6,7 +6,8 @@
  * and its hover text say the whole phrase.
  *
  * Served the broad synthetic space with half of the work filed under an epic being worked on,
- * and one epic given the longest reference a space can have.
+ * three items under no epic as well, and one epic given the longest reference a space can
+ * have. Over the work under no epic the fold is the header's one button, so the fold says it.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -23,7 +24,10 @@ const LONGEST = 'WWWWWWWW-888888888'
 async function serve(page: Page, width = 1500, height = 900) {
   const { model } = broadSpace()
   const filed = model.work_items.filter((item) => !item.state.is_terminal && item.parent_id)
-  const working = filed.filter((_, index) => index % 2 === 0)
+  const unfiled = model.work_items.filter(
+    (item) => !item.state.is_terminal && !item.parent_id && !item.container && item.kind !== 'epic',
+  )
+  const working = [...filed.filter((_, index) => index % 2 === 0), ...unfiled.slice(0, 3)]
   const live = Object.fromEntries(working.map((item) => [item.work_item_id, { state: 'working' }]))
   // The epic of the first worked-on item takes the longest reference.
   const renamed = working[0]?.parent_id
@@ -80,6 +84,8 @@ interface Mark {
   header: number
   /** What the pointer is told on the header. */
   hint: string
+  /** What a reader hears for the header's button: the epic's, or the fold under no epic. */
+  name: string
   /** The words drawn stand over the reference beside them. */
   overReference: boolean
   reference: string
@@ -107,6 +113,9 @@ function marks(page: Page): Promise<Mark[]> {
       const dots = box('.work-dots')
       const reference = frame.querySelector<HTMLElement>('.graph-frame-reference')
       const named = reference?.getBoundingClientRect()
+      const target =
+        frame.querySelector('.graph-frame-open[data-walk-target]') ??
+        frame.querySelector('.graph-frame-fold')
       if (!shown || !drawn || !dots || !header) throw new Error('a mark has its words and dots')
       const within = (part: DOMRect, outer: DOMRect = shown) =>
         part.width > 0 &&
@@ -129,7 +138,8 @@ function marks(page: Page): Promise<Mark[]> {
         referenceCut: reference !== null && reference.scrollWidth > reference.clientWidth + 1,
         header: header.height / scale,
         frame: (frame as HTMLElement).dataset.frame ?? '',
-        hint: frame.querySelector('.graph-frame-open')?.getAttribute('title') ?? '',
+        hint: target?.getAttribute('title') ?? '',
+        name: target?.getAttribute('aria-label') ?? '',
         reference: reference?.textContent?.trim() ?? '',
       }
     }),
@@ -167,6 +177,7 @@ function expectHonest(seen: Mark[], near: Record<string, number>) {
     expect(Math.round(mark.header), `${where}: the header's height`).toBe(near[mark.frame])
     const count = /^\d+/u.exec(mark.shown)?.[0] ?? ''
     expect(mark.hint, `${where}: the hover text`).toContain(`${count} working`)
+    expect(mark.name, `${where}: the button's name`).toContain(`${count} working`)
   }
 }
 
@@ -188,6 +199,10 @@ for (const { band, ceiling, height, width } of [
     // A frame with room says it whole, and the longest reference leaves its frame the mark.
     expect(seen.filter((mark) => mark.shown.endsWith(' working')).length).toBeGreaterThan(0)
     expect(seen.map((mark) => mark.reference)).toContain(LONGEST)
+    expect(
+      seen.map((mark) => mark.frame),
+      'the work under no epic',
+    ).toContain('none')
   })
 }
 
@@ -197,9 +212,14 @@ test('close up the mark says its words beside its dots, and names no hover text'
   await serve(page)
   const seen = await marks(page)
   expect(seen.length).toBeGreaterThan(0)
+  expect(
+    seen.map((mark) => mark.frame),
+    'the work under no epic',
+  ).toContain('none')
   for (const mark of seen) {
     expect(mark.shown).toMatch(/^\d+ working$/u)
     expect(mark.shownWhole && mark.dots).toBe(true)
     expect(mark.hint).toBe('')
+    expect(mark.name).toContain(mark.shown)
   }
 })

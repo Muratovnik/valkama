@@ -99,8 +99,12 @@ const openType = computed(() => asButton('button'))
 const openName = computed(() => asButton(openLabel.value))
 const openWalk = computed(() => walked(asButton(openTarget.value)))
 const openTab = computed(() => asButton(tabIndex(openTarget.value)))
-/** Zoomed out a header shows less than it is, so the pointer is told the rest, as a card is. */
+/**
+ * Zoomed out a header shows less than it is, so the pointer is told the rest, as a card is:
+ * on the epic's button, or over the work under no epic on the fold, its one button.
+ */
 const openHint = computed(() => (overview ? openName.value : undefined))
+const foldHint = computed(() => (overview && !epic.value ? foldLabel.value : undefined))
 
 const head = useTemplateRef<HTMLElement>('head')
 const { fit, secondRow } = useGraphBandFit({
@@ -155,6 +159,7 @@ function onOpenBlur() {
       :overview="overview"
       :aria-label="foldLabel"
       :aria-expanded="!frame.folded"
+      :title="foldHint"
       :data-walk-target="walked(foldTarget)"
       :tabindex="tabIndex(foldTarget)"
       @click="emit('toggle', frame.id)"
