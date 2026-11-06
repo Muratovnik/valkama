@@ -154,7 +154,7 @@ checkouts are therefore distinguishable even at the same version.
   it; a person's act and the replies to its own `awaits_reply` comment still reach it. A
   subscription lapses with its session as a claim does, a merge carries it to the
   survivor, whose news the subscriber then hears, and `get_work_item` lists who follows
-  an item in `subscribers`. Store schema 13 holds the subscriptions, under a snapshot taken before
+  an item in `subscribers`, each with the `label` a claim of that session would carry. Store schema 13 holds the subscriptions, under a snapshot taken before
   the upgrade; a build of the previous release refuses the upgraded store. A comment can
   ask with `awaits_reply: true` (`comment_work_item` and the batch's `comment` and
   `comments`, beside `mentions` too), and `get_work_item` shows on it whether another
@@ -172,10 +172,10 @@ checkouts are therefore distinguishable even at the same version.
   three notices in an hour quoting other agents on one item, that item's news is one
   line per notice that counts the events, names who wrote them and says to read the
   item; the reply a session awaited, a question that wakes it, a blocker that closed and
-  a person's acts are always quoted. The hook's `.marks` files are now headed `v4`.
-  In the card, the sessions that follow an item stand under its holder, and a comment still
-  waiting for its reply says «waiting for a reply» in its head until another session or
-  you reply in its thread. See
+  a person's acts are always quoted. The hook's `.marks` files are now headed `v4`. The
+  card names the sessions that follow an item under its holder, «Subscribed», as their
+  claims would name them, and a comment that asked says «no reply yet» after its time
+  until another session or you reply in its thread, or the thread is resolved. See
   [Subscriptions](docs/connection-contract.md#subscriptions),
   [another agent session's news](docs/hook-contract.md#another-agent-sessions-news) and
   [when it wakes](docs/hook-contract.md#when-another-sessions-news-wakes).

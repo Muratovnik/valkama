@@ -1,6 +1,6 @@
 /**
  * A comment that asks and waits for a reply, in the built application's card: its meta line
- * says so in plain words after the time, «· ждёт ответа», in that line's own ink and with
+ * says so in plain words after the time, «· пока без ответа», in that line's own ink and with
  * nothing drawn around them, until another session or a person replies in its thread. The
  * words come last on the line and stay beside the time only where the author keeps the lines
  * it has without them; otherwise they start a line of their own, with no dot. Either way the
@@ -15,8 +15,8 @@ import { test } from './test.ts'
 import { reply, root } from './threadFixtures.ts'
 
 const WORDS = {
-  en: { mark: 'waiting for a reply', reply: 'Reply', send: 'Send', expand: 'Expand' },
-  ru: { mark: 'ждёт ответа', reply: 'Ответить', send: 'Отправить', expand: 'Развернуть' },
+  en: { mark: 'no reply yet', reply: 'Reply', send: 'Send', expand: 'Expand' },
+  ru: { mark: 'пока без ответа', reply: 'Ответить', send: 'Отправить', expand: 'Развернуть' },
 } as const
 type Locale = keyof typeof WORDS
 type Row = ReturnType<typeof root>
@@ -222,16 +222,17 @@ test('as the drawer narrows and widens, the mark is placed again for its width',
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   const { drawer } = await openAsked(page, 'ru', 1280)
-  const placements = new Set<boolean>()
-  for (const width of [760, 390, 320, 1280]) {
+  const placements: boolean[] = []
+  for (const width of [1280, 320, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     await settle(page)
     await expectPlaced(drawer, `resized to ${width}`)
-    const long = await metaOf(metaLine(drawer, 'Which parser', '.thread-meta'))
-    placements.add(long.followsTime)
+    const short = await metaOf(metaLine(drawer, 'Does the import keep', '.thread-meta'))
+    placements.push(short.followsTime)
   }
-  // The long author's mark has stood both ways on the way, so each width placed it again.
-  expect([...placements].sort()).toEqual([false, true])
+  // The short author's mark follows the time on a wide drawer and not on a phone's, so each
+  // width placed it again, there and back.
+  expect(placements).toEqual([true, false, true])
   expect(errors).toEqual([])
 })
 

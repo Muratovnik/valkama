@@ -18,7 +18,7 @@
  * basis, so a name shorter than 14ch still shares the line with a time beside it that fits,
  * and the room the name leaves goes before the time, so the time ends a line it shares.
  *
- * `after` is a short state of the entry, «ждёт ответа», said after the time, a dot between.
+ * `after` is a short state of the entry, «пока без ответа», said after the time, a dot between.
  * It comes after the time, so the time stands where it stands without it. It stays beside the
  * time only where the name keeps the lines it has without it; otherwise it starts a line of its
  * own, with no dot. Flex breaks a line by the name's 14ch basis, not by its words, so left to
@@ -113,7 +113,7 @@ useResizeObserver(
 
 /* Beside the time it takes back the line's gap and stands a text separator's width after it,
    0.85em, the advance of " · " in the interface font, its dot centred in that room: it reads
-   «12:31 · ждёт ответа» as the card's other " · " read, where the line's 8px gap read tighter.
+   «12:31 · пока без ответа» as the card's other " · " read, where the line's 8px gap read tighter.
    On a line of its own the room and its dot stand before the line, clipped. */
 .meta-after {
   --separator: 0.85em;
