@@ -225,11 +225,7 @@ input:is([type='checkbox'], [type='radio']) {
    mono was what made the ledger look like a log file. */
 code,
 pre,
-.session-id,
-.scope-id,
-.scope-fraction,
-.flow-node-id,
-.doc-path {
+.flow-node-id {
   font-family: var(--font-family-mono);
 }
 

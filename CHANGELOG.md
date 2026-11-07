@@ -661,6 +661,8 @@ checkouts are therefore distinguishable even at the same version.
 - The Agents tab names each parent session by the start of its id as every other place does,
   its first two groups: cut to eight characters, two sessions started within a minute of each
   other read as one.
+- On the Agents tab, the line under an agent that holds its id stands as tall as the line of
+  its times, no longer a pixel taller.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

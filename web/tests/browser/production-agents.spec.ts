@@ -17,6 +17,7 @@ import { expectNoSilentClipping } from './overflow.ts'
 import { blockedWorkItem, projectScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
+import { drawnLines } from './textLines.ts'
 
 const LONG_LABEL =
   'Проверить экспорт и журналы на утечку метки при параллельных запусках субагентов'
@@ -349,4 +350,27 @@ test('news of an agent reaches an open card, with no frame of the model and no p
   expect(reads.filter((path) => !path.endsWith('/usage'))).toEqual([
     '/api/modules/planning/work-item',
   ])
+})
+
+// The agent's id is set in the metadata font, whose ascent the browser rounds to 12px at 13px
+// against the interface font's 13: its line stood 17.9px against the times' 16.9px.
+test("a row's line with its agent's id stands as tall as the line of its times", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page, { agents: () => rowsOf(LIVE_PARENT) })
+  await page.goto(CARD)
+  const section = await openAgents(page)
+  const row = section.locator('.agent').first()
+  await expect(row.locator('.agent-source .agent-id')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  const perLine = []
+  for (const line of ['.agent-times', '.agent-source']) {
+    const node = row.locator(line)
+    const height = await node.evaluate((box) => box.getBoundingClientRect().height)
+    const drawn = await drawnLines(node)
+    perLine.push(height / drawn.length)
+  }
+  const [times = 0, source = 0] = perLine
+  expect(Math.abs(source - times), `${source}px a line against ${times}px`).toBeLessThanOrEqual(0.1)
 })
