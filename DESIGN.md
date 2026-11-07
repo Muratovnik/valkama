@@ -1333,6 +1333,9 @@ metadata font beside the name, with the whole id in its tooltip and, where the s
 the session, as the link to it. The name and that start are one unit: the start stands right
 after the name on the name's last line, and the date shares that line only where the whole pair
 fits beside it, otherwise taking a line of its own under the name, starting where the name does.
+Where even the name's last word and the start are wider than the head's column, as beside three
+44px icons at 320–370px or two beside a long name at 320px, the start stands on a line of its own
+under the name, from its left edge, and the date under it.
 What can be done to an entry stands at the end of that line, as icons in the muted
 ink that always show, since a phone has no pointer to bring them out with (`EntryHead`,
 `EntryAction`): Reply, the mark and its removal, Make task outcome, Change answer, and on the

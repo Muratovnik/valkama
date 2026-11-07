@@ -257,7 +257,9 @@ checkouts are therefore distinguishable even at the same version.
   without, where it stood a pixel taller. The name and the session's start now stay together,
   the start right after the name: where they do not fit beside the date, the date moves to a
   line of its own under the name, where on a phone the start used to stand alone under the
-  name with the date beside it.
+  name with the date beside it. Only on the narrowest phones, where the icons leave a head too
+  little room for even the name's last word and the start, does the start take a line of its
+  own under the name, with the date under it.
 - A card's sections on a narrow window say that there are more of them: the row fades
   out at each end where a section is cut, and only there, so a phone, which shows no
   scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the

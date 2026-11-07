@@ -23,14 +23,17 @@
  * Where the server knows the session the start is the link to it that the id is in prose
  * (`RichInlines`), so a finger reaches the whole id too. The whole id is 36 characters, about
  * 274px in that font, wider than a head's column on a phone, where it broke inside itself on
- * two lines of its own; the start fits on the name's line from 320px. It is one of the name's
- * words for the state below.
+ * two lines of its own; the start keeps to one line there. It is one of the name's words for
+ * the state below.
  *
  * The name and the start are one: a no-break space holds the start to the name's last word, and
  * the pair keeps the time's line only where it fits there whole, its whole width the basis the
  * line breaks on; otherwise the time takes a line of its own. On the name's 14ch the pair broke
  * between them beside the time, «kolo» over «019a2b3c-4d5e», the start alone under the name. A
- * name too long for a line wraps by its own words, and the start ends its last line.
+ * name too long for a line wraps by its own words, and the start ends its last line; where even
+ * the name's last word and the start are wider than the head's column, beside three icons at
+ * 320–370px or two beside a long name at 320px, the start stands on a line of its own under the
+ * name, from its left edge, and the time under it.
  *
  * `after` is a short state of the entry, «пока без ответа», said after the time, a dot between.
  * It comes after the time, so the time stands where it stands without it. It stays beside the
