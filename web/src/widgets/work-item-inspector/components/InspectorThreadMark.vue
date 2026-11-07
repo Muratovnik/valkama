@@ -70,8 +70,8 @@ const facts = computed(() => {
 
   position: relative;
   min-width: 0;
-  padding-inline-start: var(--separator);
-  margin-inline: calc(-1 * var(--separator)) var(--separator);
+  padding-inline-start: calc(var(--separator));
+  margin-inline: calc(-1 * var(--separator)) calc(var(--separator));
   white-space: nowrap;
 
   &::before {
@@ -83,8 +83,8 @@ const facts = computed(() => {
   }
 
   &.is-words {
-    white-space: normal;
     overflow-wrap: anywhere;
+    white-space: normal;
   }
 }
 </style>
