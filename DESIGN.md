@@ -639,7 +639,10 @@ same way, not a record that could not be loaded. The context bar keeps the
 selected Planning space or operating scope and global activity controls in
 fixed, predictable positions.
 
-In the Work list, a closed row on a narrow screen has no empty lead column: its title takes that room, and only an open row keeps the sign's column, so closed and open titles start at different x.
+In the Work list's phone panel (the navigation narrower than 760px), only a closed
+top-level item with no sign and no fold loses its lead column, so its title takes that
+room; a group's head, an item with a sign, a pinned closed epic and a closed item nested
+under another keep their lead column.
 
 The shell owns one page scroll surface. Horizontal scrolling belongs only to a
 data region that genuinely needs it, such as Kanban lanes or a wide table.
