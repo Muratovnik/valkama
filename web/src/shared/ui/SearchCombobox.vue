@@ -401,7 +401,7 @@ function pressBox(event: MouseEvent) {
     background: var(--color-surface-active);
 
     @media (forced-colors: active) {
-      outline: 2px solid Highlight;
+      outline: var(--size-focus-ring) solid Highlight;
       outline-offset: -2px;
     }
   }

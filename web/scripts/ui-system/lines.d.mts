@@ -18,3 +18,5 @@ export declare function scanBorderBudget(sources: readonly UiSource[], budget?: 
 export declare function scanHiddenRules(sources: readonly UiSource[]): string[]
 
 export declare function scanControlSizes(sources: readonly UiSource[], budget?: Budget): string[]
+
+export declare function scanFocusRingWidths(sources: readonly UiSource[]): string[]

@@ -104,7 +104,7 @@ const atMin = computed(() => viewport.value.zoom <= minZoom.value)
 
   &:focus-visible {
     color: var(--color-text);
-    outline: 2px solid var(--color-focus-ring);
+    outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: -2px;
   }
 

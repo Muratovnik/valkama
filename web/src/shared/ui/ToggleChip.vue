@@ -100,7 +100,7 @@ const emit = defineEmits<{ toggle: [] }>()
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
+    outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: 2px;
   }
 }

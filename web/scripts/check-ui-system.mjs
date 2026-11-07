@@ -15,6 +15,7 @@ import {
   LINE_BUDGET,
   scanBorderBudget,
   scanControlSizes,
+  scanFocusRingWidths,
   scanHiddenRules,
 } from './ui-system/lines.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
@@ -51,6 +52,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanTrimmedWords(sources),
     ...scanTitleBreaks(sources, titles),
     ...scanControlSizes(sources, sizes),
+    ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),
     ...scanImportDirection(sources),
     ...scanImportCycles(sources),

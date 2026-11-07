@@ -93,7 +93,7 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
   &:focus-visible {
     background: var(--color-surface-hover);
     outline: solid var(--color-focus-ring);
-    outline-width: var(--ring, 2px);
+    outline-width: var(--ring, var(--size-focus-ring));
     outline-offset: calc(-1 * var(--ring-air, var(--space-half)));
   }
 }

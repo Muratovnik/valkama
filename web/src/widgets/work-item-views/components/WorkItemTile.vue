@@ -268,7 +268,7 @@ const describedBy = computed(() => {
      it in the colour of what is chosen: on the edge, in the edge's ink, it only
      made the line thicker. */
   &:has(.tile-open:focus-visible) {
-    outline: 2px solid var(--color-focus-ring);
+    outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: -2px;
 
     @media (forced-colors: active) {
