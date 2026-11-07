@@ -1,6 +1,8 @@
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
+import { frames } from './frames'
+
 /**
  * Where a confirm strip's parts are drawn, against the column it stands in: the first line of
  * its words (a Range over them), its buttons, the inside edges of the strip and of the column,
@@ -61,6 +63,9 @@ export async function expectStripOnColumn(
   block = false,
 ) {
   await expect(strip).toBeVisible()
+  // The strip learns its ground on mount (ground.ts), so the class that takes its padding away
+  // lands a frame after it is visible.
+  await frames(strip)
   const drawn = await stripGeometry(strip, column)
   expect(drawn.drawnAsBlock, `${what}: ${block ? 'a block' : 'no block'} where it stands`).toBe(
     block,

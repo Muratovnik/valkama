@@ -146,7 +146,4 @@ export function pressPoint(strip: Locator, index: number) {
   }, index)
 }
 
-export const frames = (strip: Locator) =>
-  strip.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+export { frames } from './frames'
