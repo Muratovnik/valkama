@@ -57,7 +57,6 @@ interface Box {
 
 interface RowBoxes {
   depth: string
-  leadless: boolean
   meta: Box | null
   pin: Box | null
   reference: string
@@ -87,7 +86,6 @@ function rows(page: Page, within: string) {
         reference:
           row.querySelector('.nav-row-link')?.getAttribute('aria-label')?.split(' ')[0] ?? '',
         depth: row.style.getPropertyValue('--nav-row-depth'),
-        leadless: row.classList.contains('nav-row-leadless'),
       }
     }),
   ) as Promise<RowBoxes[]>
@@ -103,14 +101,45 @@ function byLevel(all: RowBoxes[], pick: (row: RowBoxes) => number | null) {
   return levels
 }
 
+/** The closed row of the edges frame, which a phone draws without a lead. */
+const CLOSED_ROWS = new Set(['MAIN-7'])
+
+/** The lead's width and the gap after it, as an open row's grid gives them. */
+function leadRoom(page: Page, within: string) {
+  return page.locator(within).evaluate((root) => {
+    const row = root.querySelector<HTMLElement>('.nav-row:not(.nav-row-leadless)')
+    if (row === null) throw new Error('no open row in the list')
+    const style = getComputedStyle(row)
+    return {
+      gap: Number.parseFloat(style.columnGap),
+      lead: Number.parseFloat(style.gridTemplateColumns.split(' ')[0]),
+    }
+  })
+}
+
 /**
- * A closed row on a phone has no lead, so its title stands one lead to the left of the open
- * rows' titles: each kind starts at one edge of its own there. Elsewhere a level shares one.
+ * On a phone a closed row has no lead, so its title stands one lead and gap to the left of the
+ * open rows of its level: each closed row is measured against an open row of its level, and the
+ * difference must be the lead and gap an open row's grid gives. Elsewhere a level shares one edge.
  */
-function titlesOneEdge(all: RowBoxes[], width: number) {
-  const groups =
-    width > 760 ? [all] : [all.filter((row) => !row.leadless), all.filter((row) => row.leadless)]
-  for (const group of groups) oneEdge(group, (row) => row.title.left, 'title')
+function titlesOneEdge(all: RowBoxes[], width: number, room: { gap: number; lead: number }) {
+  if (width > 760) {
+    oneEdge(all, (row) => row.title.left, 'title')
+    return
+  }
+  const closed = all.filter((row) => CLOSED_ROWS.has(row.reference))
+  const open = all.filter((row) => !CLOSED_ROWS.has(row.reference))
+  expect(closed.length, 'closed rows in the frame').toBeGreaterThan(0)
+  oneEdge(open, (row) => row.title.left, 'title')
+  for (const row of closed) {
+    const peer = open.find((other) => other.depth === row.depth)
+    if (peer === undefined)
+      throw new Error(`no open row at level ${row.depth} for ${row.reference}`)
+    expect(
+      Math.abs(peer.title.left - row.title.left - (room.lead + room.gap)),
+      `${row.reference} title one lead and gap left of level ${row.depth}`,
+    ).toBeLessThanOrEqual(1)
+  }
 }
 
 function oneEdge(all: RowBoxes[], pick: (row: RowBoxes) => number | null, what: string) {
@@ -136,7 +165,7 @@ for (const width of [1280, 390])
       )
     // The fixture puts numbers of one, two and three digits side by side.
     expect(new Set(numbers)).toEqual(new Set([1, 2, 3]))
-    titlesOneEdge(all, width)
+    titlesOneEdge(all, width, await leadRoom(page, within))
   })
 
 /** Whatever lies over a point of the focused row's ring, above its link, and draws there. */
