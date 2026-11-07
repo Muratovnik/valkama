@@ -58,6 +58,8 @@ describe('eventWords', () => {
     ['ru', 'unlinked', 'blocks from MAIN-8', 'Заблокировано MAIN-8'],
     ['en', 'request_created', '66666666-6666-4666-8666-666666666661', ''],
     ['en', 'request_answered', '66666666-6666-4666-8666-666666666661', ''],
+    // A mention keeps the id of the other item's comment in the record, not in the row.
+    ['en', 'mentioned', '12', ''],
     // A question the card has read is named by its title, which the row lacked.
     [
       'en',
