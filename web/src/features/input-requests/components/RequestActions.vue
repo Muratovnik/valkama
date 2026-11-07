@@ -10,9 +10,9 @@
  * since nobody should refuse without seeing the end of what will not go: it takes the place of
  * the way to the task and the read of its status, which a press would end the step on anyway,
  * and that place is kept as wide as the asking needs on two lines. On a row as narrow as a
- * phone's that place is the line above the buttons, which those two hold, and which stays the
- * asking's alone only where neither is offered: the comment's press keeps the line of the
- * buttons, since it is a glyph with no line of its own. Under them it fell out of the window
+ * phone's that place is the line above the buttons, which those two hold, the comment's press
+ * leading them, and which stays the asking's alone only where neither is offered: there the
+ * comment's press keeps the line of the buttons, since it is a glyph with no line of its own. Under them it fell out of the window
  * with a foot at the window's edge, and no scroll can bring it back without ending the step.
  * Kept beside the controls as a room of its own, it sent the two to the next line where
  * everything else fitted.
@@ -29,7 +29,9 @@
  *
  * What the host puts in the slot stands first in the row: the press of the comment on the
  * question, on the row's left end, as what comes before all of this. The way to the task and
- * the read of its status stand after it, at the row's start at every width.
+ * the read of its status stand after it, at the row's start at every width. On a phone's row
+ * the comment's press leads them on their line: kept on the buttons' line it left «Open task»
+ * a line alone above them, and at 320px took a line alone itself, three lines for four controls.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -120,6 +122,7 @@ defineExpose({ focusWayOut })
   <div
     ref="root"
     class="request-actions"
+    :class="{ 'has-lead-controls': standalone || refreshable }"
   >
     <slot />
     <!-- What comes before the two answers, and the place their asking takes. -->
@@ -254,10 +257,22 @@ defineExpose({ focusWayOut })
     flex-basis: 100%;
     order: -1;
   }
+
+  /* Controls in the place: the comment's press stands at the start of their line, and the place
+     takes what it leaves of the line. */
+  .has-lead-controls :slotted(*) {
+    order: -1;
+  }
+
+  .has-lead-controls .request-lead {
+    flex-basis: auto;
+  }
 }
 
 /* What the host puts first stands on the row's left end, its glyph on the axis of the radios,
-   which stand the rows' inset in from it: none where the rows have none (`--request-row-inset`). */
+   which stand the rows' inset in from it: none where the rows have none (`--request-row-inset`).
+   It changes lines by no transition: the reduced-motion rule gives every property one, and the
+   frame it took drew the glyph at the far end of the line it was leaving. */
 :slotted(*) {
   position: relative;
   inset-inline-start: calc(
@@ -265,6 +280,7 @@ defineExpose({ focusWayOut })
       (var(--font-size-interface) - var(--size-control-inline)) / 2
   );
   margin-inline-end: auto;
+  transition-property: none;
 }
 
 .request-pair {

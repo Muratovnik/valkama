@@ -646,6 +646,11 @@ checkouts are therefore distinguishable even at the same version.
   between its parts on a phone: a line no longer ends with a dot, the date no longer has the
   decision's first word beside it, and a decision too long for the date's line starts a line
   of its own.
+- On a phone, a question's «Open task» in the list of questions waiting for an answer, and its
+  «Check status» after a send that failed, no longer stand on a line alone over the buttons: the
+  comment's press stands beside them, and at 320px it no longer takes a line of its own, so the
+  row is two lines instead of three. Under a list an agent put under its comment, the row is one
+  line where it fits.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

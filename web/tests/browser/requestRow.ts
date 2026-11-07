@@ -37,6 +37,7 @@ const membersOf = (row: Locator) =>
           top,
           lead: button.closest('.request-pair') === null,
           placed: button.closest('.request-lead') !== null,
+          slotted: button.closest('.request-lead, .request-pair') === null,
           name: (button.getAttribute('aria-label') ?? button.textContent ?? '').trim(),
           box: { bottom: whole.bottom, left: whole.left, right: whole.right, top: whole.top },
         }
@@ -180,9 +181,19 @@ function expectOneLineWhereItFits(measured: Row, asking: number, what: string) {
     return
   }
   // As narrow as a phone's, the place before the buttons is the line above theirs: each of the
-  // two is one line where its controls fit, the comment's glyph on the buttons' line.
-  const placed = measured.members.filter((member) => member.placed)
-  const rest = measured.members.filter((member) => !member.placed)
+  // two is one line where its controls fit. The comment's glyph leads the place's line where the
+  // place holds controls, and stands on the buttons' line where it holds only the asking's room.
+  const inPlace = measured.members.filter((member) => member.placed)
+  const glyphAbove = inPlace.length > 0
+  // A place of controls is no line apart where all of it fits on one with the buttons.
+  if (glyphAbove && fitsOneLine(measured, asking)) {
+    expectOnOneLine(measured.members, `${what}: one line, as everything fits`)
+    return
+  }
+  const placed = measured.members.filter(
+    (member) => member.placed || (glyphAbove && member.slotted),
+  )
+  const rest = measured.members.filter((member) => !placed.includes(member))
   if (fitAcross(placed, measured)) expectOnOneLine(placed, `${what}: the place is one line`)
   if (fitAcross(rest, measured)) expectOnOneLine(rest, `${what}: the buttons are one line`)
   const above = Math.max(...placed.map(({ box }) => box.bottom))
@@ -281,9 +292,11 @@ export async function expectStep(card: Locator, what: string) {
       expect(overlaps(line, member), `${what}: on nothing (${member.name})`).toBe(false)
   }
   const sameLineAsPair = lines.every((line) => line.right <= pairLeft)
-  const place = sameLineAsPair
-    ? pairLeft - GAP - during.row.left
-    : during.row.right - during.row.left
+  // Over the buttons the place is its line, less the comment's glyph where that leads it.
+  const over = await row
+    .locator('.request-lead')
+    .evaluate((lead) => lead.getBoundingClientRect().width)
+  const place = sameLineAsPair ? pairLeft - GAP - during.row.left : over
   if (asking <= place) expect(lines, `${what}: one line where it fits`).toHaveLength(1)
   else expect(lines.length, `${what}: two lines at most`).toBeLessThanOrEqual(2)
   await card.locator('.request-way-out').click()

@@ -1418,10 +1418,11 @@ person pressed no longer stands where they left it. What is asked lies on nothin
 person refuses seeing the end of what will not go, and moves nothing: it takes the place of the
 way to the task and Check status, since a press on either would end the step anyway, and that
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
-a phone's it is the line above them, which those two hold where they are offered, while the
-comment's press keeps the line of the buttons; only where neither is offered does that line stand
-for the asking alone, as tall as its words and the row's gap, and those words are one line in
-either language there. Kept beside the controls as a room of its own, it sent the two answers to
+a phone's it is the line above them, which those two hold where they are offered, the comment's
+press leading them there, and the whole row is one line where all of it fits beside the answers;
+only where neither is offered does that line stand for the asking alone, the comment's press
+keeping the line of the buttons, as tall as its words and the row's gap, and those words are one
+line in either language there. Kept beside the controls as a room of its own, it sent the two answers to
 the next line where everything else fitted. What stands before the answers keeps the row's start
 at every width. A row nothing can be declined from, the one under a list an agent put under its
 comment, is the same row and keeps no place for an asking it never shows: each of its lines holds
