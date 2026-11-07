@@ -29,12 +29,12 @@
  * What the host puts in the slot stands first in the row: the press of the comment on the
  * question, on the row's left end, as what comes before all of this. The way to the task and
  * the read of its status stand after it, at the row's start at every width. On a phone's row
- * the comment's press always stands first on the place's line, whether the place holds those
- * two or only the asking's room, and the place takes the rest of that line, its controls
- * wrapping inside it: the press never takes a line of its own. Kept on the buttons' line it
- * left «Open task» a line alone above them, and at 320px took a line alone itself, three lines
- * for four controls; let up only where the place fitted beside it, it was still left alone
- * where the place broke onto a line of its own.
+ * the place is the line above the buttons, and the comment's press stands on the buttons' line
+ * where it fits beside the two answers. Where it does not, at 320px, it stands first on the
+ * place's line instead, and the place takes the rest of that line, its controls wrapping inside
+ * it: kept on the buttons' line there it took a line alone between the place and the buttons.
+ * Led by the press at every phone's width, the place left the press alone over the buttons
+ * where it held nothing but the asking's room, and put «Проверить статус» on a line of its own.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -253,23 +253,36 @@ defineExpose({ focusWayOut })
 }
 
 /* As narrow as a phone, the place is the line above the buttons, and the comment's press, first
-   in the row, stands at its start: the place takes the rest of the line beside it, on no line
-   apart, and the buttons go to the next line unless all of it fits on one. */
+   in the row, stays on theirs. */
 @container (width <= 30rem) {
-  /* No narrower than its widest control, which would otherwise lie over the buttons beside it. */
   .request-lead {
-    flex: 1 1 0;
-    grid-template-columns: minmax(min-content, 1fr);
+    flex-basis: 100%;
     order: -1;
   }
+}
 
-  :slotted(*) {
-    order: -1;
+/* Too narrow for the press beside the two answers of a question that waits: 18rem is the press,
+   the gap and the wider of the two languages' pairs, «Don't answer» held twice. There the press
+   stands first on the place's line, which takes the rest of that line, no narrower than its
+   widest control, which would otherwise lie over the buttons beside it. Wrapping fills a line
+   before the next and never sends a control back, so the row cannot find out for itself that
+   the press does not fit where it stands: the width is written here, and the row's test
+   (`requestRow.ts`) measures the fit at 320, 390 and 430px in both languages. */
+@container (width < 18rem) {
+  .request-actions:has(.request-lead.is-room) {
+    .request-lead {
+      flex: 1 1 0;
+      grid-template-columns: minmax(min-content, 1fr);
+    }
+
+    :slotted(*) {
+      order: -1;
+    }
   }
 
   /* With controls in the place, the press stands on the axis of their first line: centred on a
      place of two lines it stood between them, on a line of its own. */
-  .request-actions:has(.request-lead-controls > *) {
+  .request-actions:has(.request-lead.is-room .request-lead-controls > *) {
     .request-lead {
       align-self: flex-start;
     }

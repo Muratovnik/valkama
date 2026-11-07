@@ -190,30 +190,33 @@ const across = (members: Row['members']) =>
 const fitAcross = (members: Row['members'], { row }: Row) => across(members) <= row.right - row.left
 
 /**
- * On a phone's row the comment's glyph stands first on the place's line, whatever the place
- * holds, its controls or only the asking's room, and never on a line of its own: it shares a line
- * with the place, before it. The buttons stand under the place unless all of it fits one line,
- * one line where they fit across, the pair one line wherever.
+ * On a phone's row the comment's glyph stands on the buttons' line where it fits beside them, and
+ * only where it does not, first on the place's line, before what the place holds: never on a line
+ * of its own, nor over the buttons where their line would hold it. The buttons stand under the
+ * place, one line where they fit across, the pair one line wherever.
  */
-function expectGlyphLeads(measured: Row, place: Edge, what: string) {
+function expectGlyphPlaced(measured: Row, place: Edge, what: string) {
   const slotted = measured.members.filter((member) => member.slotted)
+  const rest = measured.members.filter((member) => !member.lead)
+  const beside = fitAcross([...slotted, ...rest], measured)
+  const firstPlaced = measured.members.find((member) => member.placed)
   for (const glyph of slotted) {
     const { box } = glyph
-    expect(
-      box.top < place.bottom - 1 && place.top < box.bottom - 1,
-      `${what}: ${glyph.name} on the place's line`,
-    ).toBe(true)
+    const onPlace = box.top < place.bottom - 1 && place.top < box.bottom - 1
+    const withButtons = rest.some((member) => near(centre(member.box), centre(box)))
+    expect(onPlace || withButtons, `${what}: ${glyph.name} on no line of its own`).toBe(true)
+    expect(withButtons, `${what}: ${glyph.name} beside the buttons where it fits there`).toBe(
+      beside,
+    )
+    if (beside) continue
     expect(box.right, `${what}: ${glyph.name} before the place`).toBeLessThanOrEqual(place.left + 1)
-  }
-  // On the axis of the first line of controls in the place, where it holds any.
-  const firstPlaced = measured.members.find((member) => member.placed)
-  if (firstPlaced)
-    for (const glyph of slotted)
+    // On the axis of the first line of controls in the place, where it holds any.
+    if (firstPlaced)
       expect(
         Math.abs(centre(glyph) - centre(firstPlaced.box)),
         `${what}: ${glyph.name} on the line of ${firstPlaced.name}`,
       ).toBeLessThanOrEqual(3)
-  const rest = measured.members.filter((member) => !member.lead)
+  }
   if (fitAcross(rest, measured)) expectOnOneLine(rest, `${what}: the buttons are one line`)
   else expectOnOneLine(pairOf(measured), `${what}: the pair is one line`)
   for (const member of rest)
@@ -228,14 +231,16 @@ function expectOneLineWhereItFits(measured: Row, asking: number, what: string) {
     if (fits) expectOnOneLine(measured.members, `${what}: one line, as everything fits`)
     return
   }
-  // As narrow as a phone's, the place before the buttons is the line above theirs, led by the
-  // comment's glyph, and the whole row one line only where all of it fits.
-  const [first, ...others] = measured.members.map((member) => centre(member.box))
-  if (others.every((other) => near(other, first ?? other))) {
+  // As narrow as a phone's, the place before the buttons is the line above theirs, and the whole
+  // row, the place with it, one line only where all of it fits.
+  const place = measured.place
+  const [first, ...others] = measured.members.map((member) => member.box)
+  const placeAlong = first !== undefined && place.top < first.bottom && first.top < place.bottom
+  if (placeAlong && others.every((other) => near(centre(other), centre(first)))) {
     expect(fits, `${what}: one line only where all of it fits`).toBe(true)
     return
   }
-  expectGlyphLeads(measured, measured.place, what)
+  expectGlyphPlaced(measured, place, what)
 }
 
 /**

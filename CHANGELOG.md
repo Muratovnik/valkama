@@ -651,13 +651,13 @@ checkouts are therefore distinguishable even at the same version.
   between its parts on a phone: a line no longer ends with a dot, the date no longer has the
   decision's first word beside it, and a decision too long for the date's line starts a line
   of its own.
-- On a phone, the comment's press on a question stands at the start of the line above the
-  buttons and no longer takes a line of its own: beside «Open task» in the list of questions
-  waiting for an answer, beside «Check status» after a send that failed, and beside the room kept
-  for the asking where neither is offered. At 320px the row of a question waiting in that list,
-  or past its deadline in its card, is two lines instead of three. Where «Open task» and «Check
-  status» do not fit one line beside it, they stand on two lines beside it. Under a list an agent
-  put under its comment, the row is one line where it fits.
+- On a phone, the comment's press on a question no longer takes a line of its own. It stands
+  beside the buttons where it fits there, and at 320px, where it does not, at the start of the
+  line above them: beside «Open task» in the list of questions waiting for an answer, beside
+  «Check status» past the deadline or after a send that failed, or beside the room kept for
+  Don't answer to ask whether it is meant. At 320px the row of a question in its card, and of
+  one waiting in that list, is two lines instead of three, and one past its deadline in that
+  list in Russian three instead of four.
 - The panel that opens a session no longer ends a message with one word alone on a phone:
   «Now open the session in it.» left «it.» on a line of its own at 390px, and «нём.» in Russian.
 - A task's system events print the session an agent wrote from as every other place does: the

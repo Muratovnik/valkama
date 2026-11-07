@@ -1425,14 +1425,16 @@ person pressed no longer stands where they left it. What is asked lies on nothin
 person refuses seeing the end of what will not go, and moves nothing: it takes the place of the
 way to the task and Check status, since a press on either would end the step anyway, and that
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
-a phone's it is the line above them, which those two hold where they are offered. The comment's
-press always stands first on that line, whether the two are offered there or only the asking's
-room is kept, and the place takes the rest of the line beside it: what it holds wraps inside it,
-so «Открыть задачу» and «Проверить статус» stand on two lines beside the press at 390px rather
-than on one over the buttons. The whole row is one line where all of it fits beside the answers.
-The asking changes none of this, so it moves the press nowhere, and its words take the room
-beside the press. Kept beside the controls as a room of its own, the asking sent the two answers
-to the next line where everything else fitted. What stands before the answers keeps the row's start
+a phone's it is the line above them, which those two hold where they are offered; where neither
+is, that line stands for the asking alone, as tall as one line of its words and the row's gap,
+so that the asking moves nothing when it comes. The comment's press stands on the buttons' line
+where it fits beside the two answers, and only where it does not, at 320px, first on the place's
+line, which takes the rest of that line, what it holds wrapping inside it. Either way the press
+takes no line of its own: kept on the buttons' line at 320px it stood alone between the place
+and the buttons, and leading the place at 390px it stood alone over the buttons where the place
+held nothing but the asking's room. The asking changes none of this, so it moves the press
+nowhere. Kept beside the controls as a room of its own, the asking sent the two answers to the
+next line where everything else fitted. What stands before the answers keeps the row's start
 at every width. A row nothing can be declined from, the one under a list an agent put under its
 comment, is the same row and keeps no place for an asking it never shows: each of its lines holds
 a control, and its way on holds room for no word but its own. The comment's press at the start of
@@ -1459,8 +1461,8 @@ choose or send without being meant, or take away what was just opened.
 A comment is one quiet press away and explains a choice without standing in for one. The press
 is a glyph with no line of its own: for a field at the end of the line naming it, its field
 opening under the options, and for the whole question at the left end of the row of buttons, its
-field opening above them; on a phone that is the start of the line above the buttons, even where
-no control stands there. A question of one field offers only the second, since for the person
+field opening above them; on a phone too narrow for it beside the buttons, at the start of the
+line above them. A question of one field offers only the second, since for the person
 both would say the same; one an older answer has on its field stays to be read and changed. Once
 written the glyph is filled and says so in its words, and the comment closes only empty. Opening
 anything moves nothing already read: an option's description goes on from where its excerpt

@@ -1,7 +1,7 @@
 /**
  * The row of controls under a list an agent put under its comment, held to the rules of a
  * question's row (`requestRow.ts`) in each of the list's four states, in both languages, at a
- * desktop width and a phone's: waiting (and after a send that failed), answered, changing with
+ * desktop width and three phones': waiting (and after a send that failed), answered, changing with
  * the asking before a change is dropped, and frozen by a closed task.
  *
  * The list declines nothing, so no place is kept for an asking: every line of the row holds a
@@ -16,7 +16,7 @@ import { centre, expectRow, near } from './requestRow.ts'
 import { test } from './test.ts'
 
 const LOCALES = ['en', 'ru'] as const
-const WIDTHS = [1280, 390] as const
+const WIDTHS = [1280, 430, 390, 320] as const
 type Locale = (typeof LOCALES)[number]
 const GAP = 8
 
