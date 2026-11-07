@@ -9,11 +9,17 @@ import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { boardRoute, serve } from './boardPage.ts'
+import { frames } from './frames.ts'
 import { test } from './test.ts'
 
-/** What holds focus, and whether it is drawn ringed. */
-const focusShown = (page: Page) =>
-  page.evaluate(() => {
+/**
+ * What holds focus, and whether it is drawn ringed, two frames after the last change: a key or a
+ * press moves focus, and a ring drawn for it shows in the computed style only once the frame after
+ * it is drawn.
+ */
+async function focusShown(page: Page) {
+  await frames(page.locator(':root'))
+  return page.evaluate(() => {
     const node = document.activeElement
     if (!(node instanceof HTMLElement) || node === document.body) return null
     return {
@@ -23,6 +29,7 @@ const focusShown = (page: Page) =>
       outline: getComputedStyle(node).outlineStyle,
     }
   })
+}
 
 async function expectQuiet(page: Page, role: string) {
   const shown = await focusShown(page)
@@ -108,6 +115,8 @@ for (const width of [1280, 390]) {
     await expect(page.getByRole('option', { name: 'High', exact: true })).toBeFocused()
     await expectRinged(page, 'option')
     await page.keyboard.press('ArrowDown')
+    // The list moves focus in a timer after the key, so a read at once may find the option left.
+    await expect(page.getByRole('option', { name: 'High', exact: true })).not.toBeFocused()
     await expectRinged(page, 'option')
     const walked = await focusShown(page)
     const reached = walked?.text ?? ''
