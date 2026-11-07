@@ -620,6 +620,9 @@ checkouts are therefore distinguishable even at the same version.
 - A question's options show code in their labels as code, as their descriptions already
   did: a label such as «The standard `vue/max-lines-per-block`» showed its backticks. In
   the form a link in a label reads as its words, since a press there also chooses the option.
+- On a phone, and wherever a finger presses, the pencil that writes your own variant on a
+  review's point answers a tap across 44 px, as the comment icon beside it already did; it
+  answered across 28 px.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

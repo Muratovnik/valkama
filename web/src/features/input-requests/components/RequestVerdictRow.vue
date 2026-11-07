@@ -20,8 +20,10 @@
  * stop only while focus is in the row: twenty-five toggles stood between the segments and Send.
  *
  * Side by side where the row is wide, the segments go under the label on a row of their own,
- * across its whole width, where it is not; a phone gets the target a finger needs. Its presses
- * and the segments stand on the label's first line, however it wraps (`LineEnd`).
+ * across its whole width, where it is not; a phone gets the target a finger needs, and so do the
+ * own variant's and the comment's presses, each growing its own box as an entry's icons do
+ * (`reach-grow`): the own variant stood 28×28 beside a comment press of 44. Its presses and the
+ * segments stand on the label's first line, however it wraps (`LineEnd`).
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -231,7 +233,7 @@ defineExpose({ focus })
         :aria-invalid="invalidMark"
         @update:model-value="emit('verdict', $event)"
       />
-      <LineEnd class="request-point-end request-point-tools">
+      <LineEnd class="request-point-end request-point-tools reach-grow">
         <VButton
           class="request-point-own"
           variant="text"
@@ -416,10 +418,17 @@ defineExpose({ focus })
   }
 }
 
-/* A finger's whole target where a finger is what presses them. */
+/* A finger's whole target where a finger is what presses them, as in a narrow sheet the
+   comment's press takes it (`RequestNoteToggle`). */
 @container overlay (width <= 30rem) {
   .request-point-segments {
     --size-control-height-compact: var(--size-control-target);
   }
+
+  .request-point-tools {
+    --size-control-inline: var(--size-control-target);
+  }
 }
 </style>
+
+<style scoped src="@/shared/ui/reach.css"></style>
