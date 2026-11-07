@@ -623,8 +623,9 @@ checkouts are therefore distinguishable even at the same version.
   above them.
 - **On a phone held on its side the graph keeps room to draw.** In a window about 360px tall
   or shorter the key and the zoom buttons took all of the height, the graph had none and
-  the buttons were cut. The graph now stays at least one row of cards tall and the view
-  scrolls down to the zoom buttons; a drag on the graph still moves the graph, not the view.
+  the buttons were cut. The graph now keeps up to a row of cards, as much as the window
+  allows while leaving a finger's room beside it, and the view scrolls down to the zoom
+  buttons; a drag on the graph still moves the graph, and one beside it scrolls the view.
 - An answer given in the interface now reaches the agent: a person answering, changing,
   declining or withdrawing a question never produced a notice, a `from_person` line or the
   `person_spoke` refusal, because the interface answers through a route those reads did not

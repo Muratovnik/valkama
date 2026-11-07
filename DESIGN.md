@@ -1049,9 +1049,12 @@ lies on the flow, so no framing and no pan puts a node under either, and the fie
 tall as the room the two strips leave it. It keeps a floor — one row of cards at the size
 the field opens to be read, with the air a framing keeps round it — and its row grows to
 that floor, so the floor never runs the field over the strip below. A window too short for
-that — a phone held on its side — scrolls the graph's view instead, so the field keeps its
-floor and the strip below is reached whole, never covered or cut. A finger on the field
-moves the camera, not the view; the view scrolls from the bar and the strips. In a
+that — a phone held on its side — scrolls the graph's view instead, so the strip below is
+reached whole, never covered or cut. There the floor gives way to the view's own height:
+the field stays a finger's target shorter than the view, so wherever the view is scrolled
+the bar and the strips beside the field show that target between them, the larger at
+least half of it. A finger on the field moves the camera, not the view; on the bar or a
+strip it scrolls the view. A view under one target tall leaves the field no floor. In a
 phone-wide workspace the bar is one row — the filter or the chip and a «Graph
 options» button that opens the switch and the key under it — the frontier count
 takes the key's place in the upper strip, and the camera controls

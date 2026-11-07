@@ -128,10 +128,16 @@ const PRESS_SLOP = 4
   /* As tall as the row the canvas leaves it between its strips (`GraphView`), and never
      shorter than its floor (`GRAPH_FIELD_FLOOR`): the row grows to the floor and the section
      scrolls, so the floor cannot run the field over the camera's strip, as a 360px floor the
-     row did not hold once did. */
+     row did not hold once did.
+
+     The floor stays a finger's target shorter than the section's own height (`100cqh`, the
+     section a size container): wherever the section is scrolled, the bands left in sight
+     above and below the field show that target between them, the larger at least half of
+     it to scroll by. A floor as tall as the section's view left a scroll position where the
+     field filled it, and a finger there could only move the camera. */
   width: 100%;
   height: 100%;
-  min-height: var(--graph-field-floor);
+  min-height: max(0px, min(var(--graph-field-floor), 100cqh - var(--size-control-target)));
   background: var(--color-surface-recess);
   overflow: hidden;
 

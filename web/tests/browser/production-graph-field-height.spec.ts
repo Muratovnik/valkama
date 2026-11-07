@@ -6,8 +6,12 @@
  *
  * A window too short for that row — a phone held on its side — keeps the field at its floor,
  * one row of cards at reading size (`--graph-field-floor`), and the graph's section scrolls
- * instead: without the floor the field there was 0px tall and the strip was cut. A finger dragged on the field
- * moves the camera and not the section; dragged on the bar, it scrolls the section. The
+ * instead: without the floor the field there was 0px tall and the strip was cut. The floor
+ * stays a finger's target shorter than the section's view, so wherever the section stands a
+ * band beside the field shows at least 20px to scroll by: a floor as tall as the view left
+ * a scroll position where the field filled it and a finger could only move the camera. A
+ * finger dragged on the field moves the camera and not the section; dragged on the bar, it
+ * scrolls the section. The
  * section scrolls up and down only, and its scrollport keeps a ring's room past its drawn
  * edges: flush with them, the «Graph options» button's reach scrolled it 2px sideways and
  * its ring was cut, where both had stood whole over the workspace's gutter.
@@ -51,6 +55,11 @@ const measure = (page: Page) =>
         getComputedStyle(document.querySelector('.graph-flow') as Element).getPropertyValue(
           '--graph-field-floor',
         ),
+      ),
+      // The view the section scrolls, and a finger's target (`--size-control-target`).
+      room: section.clientHeight,
+      target: Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--size-control-target'),
       ),
       section: {
         top: view.top,
@@ -172,18 +181,26 @@ for (const [width, height] of [
   })
 }
 
+/** The floor a short section leaves the field: a finger's target short of its view. */
+const floorIn = (drawn: Drawn) => Math.max(0, Math.min(drawn.floor, drawn.room - drawn.target))
+
 for (const [width, height] of [
   [844, 340],
   [844, 300],
+  [667, 300],
 ] as const) {
-  test(`at ${width}x${height} the field keeps its floor and the section scrolls to the camera's strip`, async ({
+  test(`at ${width}x${height} the field keeps the floor its section leaves and the section scrolls to the camera's strip`, async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await openBroadField(page, width, height)
     await settledCamera(page)
     const opened = await measure(page)
-    expect(opened.field.height, 'the field at its floor').toBeGreaterThanOrEqual(opened.floor - 0.5)
+    expect(opened.field.height, 'the field at the floor the section leaves').toBeCloseTo(
+      floorIn(opened),
+      0,
+    )
+    expect(floorIn(opened), 'a floor to draw on').toBeGreaterThan(0)
     expectFieldBetweenStrips(opened)
     expect(opened.section.scrolls, 'the section scrolls').toBe(true)
     await expectBarKept(page, opened)
@@ -202,9 +219,7 @@ for (const [width, height] of [
     )
     expectButtonsTaken(end)
     expectFieldBetweenStrips(end)
-    expect(end.field.height, 'the field at its floor once scrolled').toBeGreaterThanOrEqual(
-      end.floor - 0.5,
-    )
+    expect(end.field.height, 'the field at that floor once scrolled').toBeCloseTo(floorIn(end), 0)
   })
 }
 
@@ -234,6 +249,37 @@ async function settledScroll(page: Page) {
     })
     .toBe(true)
   return sectionScroll(page)
+}
+
+/**
+ * The section scrolled to `top`, and the larger of the bands in sight above and below the
+ * field: how tall it shows, a point on it, and the drag that scrolls the section from there.
+ */
+async function bandAt(page: Page, top: number) {
+  await page.locator('.graph').evaluate((section, to) => {
+    section.scrollTop = to
+  }, top)
+  await frames(page.locator(':root'))
+  return page.locator('.graph').evaluate((section) => {
+    const view = section.getBoundingClientRect()
+    const bottom = view.top + section.clientHeight
+    const field = (section.querySelector('.graph-flow') as Element).getBoundingClientRect()
+    const above = Math.max(0, Math.min(field.top, bottom) - view.top)
+    const below = Math.max(0, bottom - Math.max(field.bottom, view.top))
+    const upper = above >= below
+    const x = view.left + view.width * 0.75
+    const y = upper ? view.top + above / 2 : bottom - below / 2
+    const atEnd = section.scrollTop >= section.scrollHeight - section.clientHeight - 1
+    return {
+      at: section.scrollTop,
+      size: Math.max(above, below),
+      x,
+      y,
+      onField: Boolean(document.elementFromPoint(x, y)?.closest('.graph-flow')),
+      // A finger moved up scrolls the section on, down scrolls it back from its end.
+      dy: atEnd ? 30 : -30,
+    }
+  })
 }
 
 async function drawnBox(page: Page, selector: string) {
@@ -278,4 +324,34 @@ test.describe('under a finger', () => {
       .toBeGreaterThan(40)
     expect(await settledScroll(page), 'the section stayed where it was').toBe(scrolled)
   })
+
+  for (const [width, height] of [
+    [844, 340],
+    [844, 300],
+    [667, 300],
+  ] as const)
+    test(`at ${width}x${height} a band beside the field stays in sight to scroll by, wherever the section stands`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await openBroadField(page, width, height)
+      await settledCamera(page)
+      const end = await page
+        .locator('.graph')
+        .evaluate((section) => section.scrollHeight - section.clientHeight)
+      expect(end, 'the section scrolls').toBeGreaterThan(0)
+      for (let top = 0; top < end + 10; top += 10) {
+        const band = await bandAt(page, Math.min(top, end))
+        expect(
+          band.size,
+          `at ${band.at}px a band beside the field in sight`,
+        ).toBeGreaterThanOrEqual(20)
+        expect(band.onField, `at ${band.at}px the band is not the field`).toBe(false)
+        await drag(page, band.x, band.y, band.dy)
+        await expect
+          .poll(() => sectionScroll(page), `at ${band.at}px a drag on the band scrolls the section`)
+          .not.toBe(band.at)
+        await settledScroll(page)
+      }
+    })
 })

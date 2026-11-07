@@ -481,6 +481,7 @@ function onFieldPointerLeave() {
   margin-inline: calc(-1 * var(--space-1));
   background: var(--color-surface-recess) content-box;
   overflow-y: auto; /* A window too short for the field's floor scrolls here. */
+  container-type: size; /* Its height bounds the field's floor (`GraphField`). */
 }
 
 .graph-canvas {
@@ -488,7 +489,6 @@ function onFieldPointerLeave() {
   flex: 1 1 auto;
   grid-template-rows: auto minmax(min-content, 1fr) auto; /* As tall as the field's floor. */
   min-height: min-content;
-  padding: 0;
   border: 1px solid var(--color-rule);
   background: var(--color-surface-recess);
   overflow: hidden;
