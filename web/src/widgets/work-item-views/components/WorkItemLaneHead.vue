@@ -222,7 +222,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   display: flex;
   grid-column: 1 / -1;
   gap: var(--space-1) var(--space-3);
-  justify-self: start;
   align-items: center;
   width: var(--board-visible-width);
   min-width: 0;
@@ -230,11 +229,20 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   padding-block-start: var(--space-1);
   padding-inline-start: calc(var(--space-1) + var(--lane-chevron-size) + var(--space-2));
   margin-block-start: calc(-1 * var(--space-1));
-  background: var(--color-canvas);
-  box-shadow: 0 0 0 var(--space-1) var(--color-canvas);
 
   /* The board's width lands in the frame it changes: the reduced-motion rule would ease it. */
   transition-property: none;
+
+  /* Its ground, under its words, over the room at its sides and above it and not below: a shadow
+     spread round it hid the first 4px of the tile coming out from under it held at the top, and
+     drew nothing in a forced palette, where the tiles passing beside it showed as stripes. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) 0;
+    z-index: -1;
+    background: var(--color-canvas);
+  }
 }
 
 /* A heading that also says where its work out of sight is would squeeze its title down to a
@@ -274,11 +282,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
   &:hover {
     background: var(--color-surface-hover);
-  }
-
-  &:focus-visible {
-    outline: var(--size-focus-ring) solid var(--color-focus-ring);
-    outline-offset: 2px;
   }
 }
 

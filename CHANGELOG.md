@@ -630,6 +630,9 @@ checkouts are therefore distinguishable even at the same version.
 - In a window a phone's width, the comment icon beside a question field's label answers a
   press across 44 px with a mouse too, as every other icon there does; it answered across
   28 px unless a finger pressed it.
+- An epic's row held at the top of the board no longer hides the first 4 px of the tile coming
+  out from under it, and in high-contrast mode the tiles passing beside it no longer show as
+  stripes at its sides.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
