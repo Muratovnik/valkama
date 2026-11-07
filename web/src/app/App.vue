@@ -21,6 +21,7 @@ import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
 import { useProjectResources } from '@/app/composables/useProjectResources.ts'
+import { useSessionOpening } from '@/app/composables/useSessionOpening.ts'
 import { useShellNotice } from '@/app/composables/useShellNotice.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
 
@@ -30,16 +31,13 @@ import DocumentDrawer from '@/widgets/document-viewer/components/DocumentDrawer.
 import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import { provideOpenNotice } from '@/features/session-open/openNotice.ts'
 import SessionContext from '@/features/session-open/SessionContext.vue'
-import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
 
-import { fetchSessionContext } from '@/shared/api/api.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
-import type { ResolvedRef } from '@/shared/types/reference.ts'
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 
 const { t, te, locale } = useI18n()
@@ -221,28 +219,16 @@ function openEntity(entity?: EntityRef) {
   })
 }
 
-async function openSession(sessionId: string, navigate = false) {
-  try {
-    const context = await fetchSessionContext(sessionId)
-    if (navigate && context.resolved && context.work_item && context.space_root?.resource_ref) {
-      const next = resolveSessionWorkItemRoute(
-        context.space_root.resource_ref,
-        context.work_item,
-        contextReady.value,
-        moduleRegistrations.value,
-      )
-      if (next) {
-        writeRoute(next)
-        return
-      }
-    }
-    sessionContext.value = context
-  } catch (error) {
+const { openSession, sessionContext } = useSessionOpening({
+  contextReady,
+  moduleRegistrations,
+  modulesSettled,
+  pendingSession,
+  refused: () => {
     say(localizedFailure({ code: 'request_failed', status: null, retryable: true }), 'refused')
-    console.error(error)
-  }
-}
-const sessionContext = ref<ResolvedRef | null>(null)
+  },
+  writeRoute,
+})
 const { documentView, openDocument } = useAppDocuments([
   activeModule,
   () => JSON.stringify(route.value.entity),
@@ -258,12 +244,6 @@ useAppReferenceLinks({
   openTarget,
   openSession: (id) => void openSession(id),
   say,
-})
-watch([pendingSession, modulesSettled, contextReady], () => {
-  if (!pendingSession.value || !modulesSettled.value || !contextReady.value) return
-  const id = pendingSession.value
-  pendingSession.value = ''
-  void openSession(id, true)
 })
 function selectLocale(requested: string) {
   const value = requested === 'ru' ? 'ru' : 'en'
