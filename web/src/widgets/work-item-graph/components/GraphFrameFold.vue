@@ -34,7 +34,7 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
 
 <template>
   <button
-    class="graph-frame-fold"
+    class="graph-frame-fold reach-room"
     type="button"
     :class="{ overview }"
   >
@@ -51,7 +51,7 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
 .graph-frame-fold {
   /* The scale the field opens at to be read: `READABLE_ZOOM` in `graphCamera.ts`. */
   --graph-reading-scale: 0.75;
-  --fold-target: calc(var(--size-control-inline) / var(--graph-reading-scale));
+  --fold-target: calc(var(--reach-target) / var(--graph-reading-scale));
 
   position: relative;
   z-index: 1;
@@ -72,7 +72,9 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
   cursor: pointer;
 
   /* A pseudo-element of its own until the shared reach (`reach.css`) can size a target
-     for a field the camera scales; that unification should take this one over. */
+     for a field the camera scales; that unification should take this one over. Whether a
+     finger presses is asked there already (`reach-room`): asked here of a coarse pointer
+     alone, it was a second answer to that question. */
   &::before {
     content: '';
     position: absolute;
@@ -93,10 +95,6 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
     outline: solid var(--color-focus-ring);
     outline-width: var(--ring, 2px);
     outline-offset: calc(-1 * var(--ring-air, var(--space-half)));
-  }
-
-  @media (pointer: coarse) {
-    --fold-target: calc(var(--size-control-target) / var(--graph-reading-scale));
   }
 }
 
@@ -126,3 +124,5 @@ const chevron = computed(() => (folded ? 'chevron-right' : 'chevron-down'))
   }
 }
 </style>
+
+<style scoped src="@/shared/ui/reach.css"></style>

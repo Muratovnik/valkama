@@ -627,6 +627,9 @@ checkouts are therefore distinguishable even at the same version.
 - On a phone, and wherever a finger presses, the pencil that writes your own variant on a
   review's point answers a tap across 44 px, as the comment icon beside it already did; it
   answered across 28 px.
+- In a window a phone's width, the comment icon beside a question field's label answers a
+  press across 44 px with a mouse too, as every other icon there does; it answered across
+  28 px unless a finger pressed it.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

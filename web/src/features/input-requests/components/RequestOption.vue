@@ -224,16 +224,9 @@ const describedBy = computed(() => {
   }
 }
 
-/* A dense row stands a finger's height short of a tap, so where a finger presses, the press
-   reaches over the rows beside it by as much as it lacks. */
-@media (pointer: coarse) {
-  .is-dense .request-option-toggle::before {
-    content: '';
-    position: absolute;
-    inset: calc((var(--size-control-height-compact) - var(--size-control-target)) / 2);
-  }
-}
-
+/* A dense row stands a finger's height short of a tap. Where a finger presses, the press reaches
+   over the rows beside it by as much as it lacks, as every icon button does (`VButton`, from
+   `reach.css`); so it does in a sheet as narrow as a phone's. */
 @container overlay (width <= 30rem) {
   .is-dense .request-option-toggle::before {
     content: '';
