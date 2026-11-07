@@ -29,6 +29,13 @@ const srcPath = (file: string) => fileURLToPath(new URL(`../src/${file}`, import
 
 const host = (css: string) => [{ file: 'future/Host.vue', source: `<style scoped>${css}</style>` }]
 
+const component = (script: string, css: string) => [
+  {
+    file: 'future/Host.vue',
+    source: `<script setup lang="ts">\n${script}\n</script>\n<template><p /></template>\n<style scoped>\n${css}\n</style>`,
+  },
+]
+
 test('an escape hatch is a reach unless the file is on the list', () => {
   const reaches = [
     '.registry-grant-actions :deep(.registry-revoke) { color: red; }',
@@ -57,6 +64,25 @@ test('prose quoting a selector does not authorise one', () => {
   assert.equal(bought.length, 1)
 })
 
+test('each part of a component is read in its own language, as the other rules read it', () => {
+  // A `//` comment in the script is a comment, so the selector it quotes reaches nothing.
+  assert.deepEqual(
+    scanScopeEscapes(component('// a :deep( selector would be wrong here\nconst a = 1', '.a {}')),
+    [],
+  )
+  // A `/*` inside a quoted glob opens no comment, so it cannot hide the reach after it.
+  const hidden = component(
+    "const pages = import.meta.glob('./pages/*.vue')",
+    '.a :deep(.b) { color: red; }\n/* note */',
+  )
+  assert.equal(scanScopeEscapes(hidden).length, 1)
+  // The kind the message names is read the same way: only the reach that is code.
+  const named = scanScopeEscapes(
+    component('// :global(.x) was here', '.a :deep(.b) { color: red; }'),
+  )
+  assert.match(named[0] ?? '', /^future\/Host\.vue: :deep\(\) styles/)
+})
+
 test('the declared owners are files that still exist and still reach', () => {
   // A list of exceptions decays in two directions: an entry can outlive the
   // reach it excused, and a file can be renamed out from under it. Either way
@@ -77,7 +103,7 @@ test('the declared owners are files that still exist and still reach', () => {
       continue
     }
     assert.ok(
-      hasScopeEscape(source),
+      hasScopeEscape(file, source),
       `${file}: declared in scopeEscapeOwners but its source no longer contains a scope escape`,
     )
   }

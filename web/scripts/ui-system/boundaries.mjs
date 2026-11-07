@@ -1,5 +1,7 @@
 import { posix } from 'node:path'
 
+import { uncommented } from './comments.mjs'
+
 /**
  * The component boundary rule: which files may leave their own component.
  *
@@ -83,9 +85,10 @@ export function scanScopeEscapes(sources) {
   for (const { file, source } of sources) {
     const scoped = file.endsWith('.vue') || sheets.has(file)
     if (!scoped || scopeEscapeOwners.has(file)) continue
-    if (!hasScopeEscape(source)) continue
+    const code = uncommented(file, source)
+    if (!SCOPE_ESCAPE.test(code)) continue
     violations.push(
-      `${file}: ${escapeKinds(source)} styles an element this component does not render; ` +
+      `${file}: ${escapeKinds(code)} styles an element this component does not render; ` +
         'hand the child a class, let it place its own slot, or add this file to ' +
         'scopeEscapeOwners with the reason',
     )
@@ -98,20 +101,16 @@ export function scanScopeEscapes(sources) {
  * `scanScopeEscapes` reads every other file. Exported so the owners list can be
  * checked against the files it excuses instead of only against itself — the
  * excusing set is what `scanScopeEscapes` skips, so nothing else can ask it.
- */
-export function hasScopeEscape(source) {
-  return SCOPE_ESCAPE.test(withoutComments(source))
-}
-
-/**
- * A comment cannot be a reach, and it must not be able to authorise one either.
  *
- * The prose in these files quotes selectors constantly — the whole point of the
- * comments here is to say what a rule replaced — so a rule reading the raw
- * source would fire on its own explanation.
+ * A comment cannot be a reach, and it must not be able to authorise one either:
+ * the prose in these files quotes selectors constantly, to say what a rule
+ * replaced. Each part is read in its own language (`comments.mjs`), as the line
+ * and import rules read it. Stripping `/* … *\/` across the raw file took a
+ * `// :deep(` in a script for a reach, and let the `/*` of a quoted glob
+ * (`'./pages/*.vue'`) hide a real one in the `<style>` below it.
  */
-function withoutComments(source) {
-  return source.replaceAll(/\/\*[\S\s]*?\*\//g, ' ').replaceAll(/<!--[\S\s]*?-->/g, ' ')
+export function hasScopeEscape(file, source) {
+  return SCOPE_ESCAPE.test(uncommented(file, source))
 }
 
 export { scopeEscapeOwners }
