@@ -84,7 +84,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 <template>
   <header
     ref="head"
-    class="lane-head"
+    class="lane-head reach-room"
     :class="{ acting: props.lane.epic, away, crowded, tied }"
   >
     <button
@@ -207,8 +207,13 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   --lane-chevron-size: 16px;
 
   /* The two actions side by side. Where an icon answers a press across 44px (`reach.css`), so
-     far apart that the reaches do not meet, and the last within the board, whose edge cut it. */
-  --lane-actions-width: calc(2 * var(--size-control-inline) + var(--space-1));
+     far apart that the reaches do not meet, and the last within the board, whose edge cut it.
+     Each reach stands half of what the target adds past its icon. */
+  --lane-reach-past: calc(var(--reach-target) - var(--size-control-inline));
+  --lane-actions-width: calc(
+    2 * var(--size-control-inline) + max(var(--space-1), var(--lane-reach-past)) +
+      var(--lane-reach-past) / 2
+  );
 
   position: sticky;
   top: var(--lanes-head-block);
@@ -230,10 +235,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
   /* The board's width lands in the frame it changes: the reduced-motion rule would ease it. */
   transition-property: none;
-
-  @media (pointer: coarse), (width <= 620px) {
-    --lane-actions-width: calc(var(--size-control-target) * 1.5 + var(--size-control-inline) / 2);
-  }
 }
 
 /* A heading that also says where its work out of sight is would squeeze its title down to a
@@ -395,18 +396,15 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 .lane-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: var(--space-1);
+
+  /* Where a finger presses, reaches of 44px around icons of 28px: as far apart as each reaches
+     past its icon, and the last as far from the heading's end. */
+  gap: max(var(--space-1), var(--lane-reach-past));
   align-items: center;
+  padding-inline-end: calc(var(--lane-reach-past) / 2);
   margin-inline-start: auto;
   opacity: 0;
   transition: opacity var(--duration-quick) var(--ease-out);
-
-  /* Reaches of 44px around icons of 28px: as far apart as each reaches past its icon, and
-     the last as far from the heading's end. */
-  @media (pointer: coarse), (width <= 620px) {
-    gap: calc(var(--size-control-target) - var(--size-control-inline));
-    padding-inline-end: calc(var(--size-control-target) / 2 - var(--size-control-inline) / 2);
-  }
 
   .lane-head:is(:hover, :has(:focus-visible)) & {
     opacity: 1;
@@ -457,3 +455,5 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   height: 0;
 }
 </style>
+
+<style scoped src="@/shared/ui/reach.css"></style>

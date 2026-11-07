@@ -10,15 +10,14 @@
  * middle and goes on below them. Its words are a detail line, which is the line they end.
  *
  * Where a finger is the pointer, or the screen is as narrow as a phone's, an icon is a 44px
- * target and no longer 28px. It is drawn bare, so the difference is room around the glyph, and
- * `VButton` reads the size from this token. A head with nothing to do keeps the height of its
- * words.
+ * target and no longer 28px (`reach-grow`, `reach.css`). It is drawn bare, so the difference is
+ * room around the glyph. A head with nothing to do keeps the height of its words.
  */
 import LineEnd from '@/shared/ui/LineEnd.vue'
 </script>
 
 <template>
-  <div class="entry-head">
+  <div class="entry-head reach-grow">
     <div class="entry-words"><slot /></div>
     <LineEnd class="entry-actions"><slot name="actions" /></LineEnd>
   </div>
@@ -31,10 +30,6 @@ import LineEnd from '@/shared/ui/LineEnd.vue'
   align-items: first baseline;
   min-width: 0;
   font: var(--font-detail);
-
-  @media (pointer: coarse), (width <= 620px) {
-    --size-control-inline: var(--size-control-target);
-  }
 }
 
 .entry-words {
@@ -48,3 +43,5 @@ import LineEnd from '@/shared/ui/LineEnd.vue'
   display: none;
 }
 </style>
+
+<style scoped src="./reach.css"></style>

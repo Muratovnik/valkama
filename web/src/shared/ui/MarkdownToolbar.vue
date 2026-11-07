@@ -76,7 +76,7 @@ const viewOptions = computed(() => [
 <template>
   <div class="markdown-toolbar">
     <div
-      class="markdown-tools"
+      class="markdown-tools reach-grow"
       role="group"
       :aria-label="t('editor.tools')"
     >
@@ -126,15 +126,13 @@ const viewOptions = computed(() => [
   margin-inline-start: auto;
 }
 
-/* Under a finger or on a phone-wide screen an icon is a 44px target, drawn bare, as an
-   entry's actions are (`EntryHead`); two pixels apart they have no room to reach into. */
+/* Where a finger presses an icon is a 44px target, drawn bare, as an entry's actions are
+   (`reach-grow`); two pixels apart they have no room to reach into. */
 .markdown-tools {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-half);
-
-  @media (pointer: coarse), (width <= 620px) {
-    --size-control-inline: var(--size-control-target);
-  }
 }
 </style>
+
+<style scoped src="./reach.css"></style>

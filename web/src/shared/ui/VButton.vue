@@ -53,7 +53,7 @@ const reaching = computed(() => props.reach || (props.icon && props.size !== 'in
 
 <template>
   <button
-    class="button"
+    class="button reach-box"
     :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon, 'reach': reaching }]"
     :type="type"
     :disabled="disabled"
@@ -204,16 +204,13 @@ const reaching = computed(() => props.reach || (props.icon && props.size !== 'in
   &.icon-only.size-inline {
     min-width: var(--size-control-inline);
   }
-
-  /* An icon has no words to widen its box, so under a finger or on a phone-wide screen
-     its target reaches past what it draws (`reach.css`). An inline icon grows its own box
-     there instead (`EntryHead`), because a line of them two pixels apart has no room
-     around each to reach into. The button is the reach's box only here, at the weight of
-     the base rule, so a host that places it keeps its own position. */
-  @media (pointer: coarse), (width <= 620px) {
-    position: relative;
-  }
 }
+
+/* An icon has no words to widen its box, so where a finger presses its target reaches past
+   what it draws (`reach.css`), and every button is the box of a reach there, at the weight of
+   the base rule, so a host that places it keeps its own position. An inline icon grows its own
+   box instead where its host asks (`reach-grow`), because a line of them two pixels apart has
+   no room around each to reach into. */
 </style>
 
 <style scoped src="./reach.css"></style>

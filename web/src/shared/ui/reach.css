@@ -1,17 +1,39 @@
 /*
- * The target of a control that draws its sign alone, with no words to widen its box: under a
- * finger or on a phone-wide screen it answers a press across `--size-control-target` around
- * what it draws, and the row it stands in keeps its height. The board's «+» drew 41×36 and
- * the grouping toggle's glyph 40×36, and each answered a press across no more.
+ * Where a finger presses: under a coarse pointer or on a phone-wide screen, a control that draws
+ * its sign alone, with no words to widen its box, answers a press across `--size-control-target`.
+ * This is the one place that asks (`check:ui-system` holds every other file to its container),
+ * read by each host as its own scoped style; the host says which way its controls take it:
  *
- * One rule for every such control, read by each as its own scoped style: `VButton` for an
- * icon button or one given `reach`, `ToggleChip` for a toggle given `reach`. The host marks
- * its root `.reach` and is the reach's box, `position: relative`, where this applies.
+ * - `.reach` — the target reaches past what it draws, and the row it stands in keeps its
+ *   height: `VButton` for an icon button or one given `reach`, `ToggleChip` for a toggle given
+ *   `reach`. The board's «+» drew 41×36 and the grouping toggle's glyph 40×36, and each
+ *   answered a press across no more. `.reach-box` is the box it reaches from, `position:
+ *   relative` only here, so a host that places it keeps its own position elsewhere.
+ * - `.reach-grow` — a line of inline icons two pixels apart has no room around each to reach
+ *   into, so each grows its own box to the target (`EntryHead`, `MarkdownToolbar`).
+ * - `.reach-room` — a host that sets reaching icons apart reads `--reach-target`, the target
+ *   each answers across: its inline box until a finger presses (`WorkItemLaneHead`).
  */
+.reach-room {
+  --reach-target: var(--size-control-inline);
+}
+
 @media (pointer: coarse), (width <= 620px) {
+  .reach-box {
+    position: relative;
+  }
+
   .reach::before {
     content: '';
     position: absolute;
     inset: min(0px, calc((100% - var(--size-control-target)) / 2));
+  }
+
+  .reach-grow {
+    --size-control-inline: var(--size-control-target);
+  }
+
+  .reach-room {
+    --reach-target: var(--size-control-target);
   }
 }
