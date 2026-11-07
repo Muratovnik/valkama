@@ -6,6 +6,19 @@
  * brief, a frame's counts — is read here by that id from what the host sent
  * last, so a frame of the stream that changes only those redraws the words and
  * leaves the places where they were.
+ *
+ * The canvas holds three rows: the key's strip, the flow, the controls' strip. The chrome
+ * is beside the flow rather than on it, so no node is ever drawn under it, however the
+ * camera stands. The field is as tall as the middle row, and that row has a floor: one row
+ * of cards at the size the field opens to be read (`NODE_HEIGHT` 112 × `READABLE_ZOOM` 0.75
+ * = 84px) with the air a framing keeps above and below it (`graphFitViewOptions`: 36 and
+ * 16), 136px. With no floor a window about 360px tall left the field nothing and cut the
+ * camera's strip; a floor of the field's own once ran it over that strip. The canvas grows
+ * round the row, and a window too short for it — a phone held on its side — scrolls the
+ * section, so the strip is reached whole. The section's scrollport reaches a ring's width
+ * (`--space-1`: the 2px ring and its 2px offset) past its drawn edge on each side, so a
+ * ring or a finger's reach on the bar's last control is not cut where it stood whole over
+ * the workspace's gutter before the section scrolled.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -364,9 +377,6 @@ function onFieldPointerLeave() {
 
     <!-- Hover cleanup only: leaving the canvas with a pointer clears the hover -->
     <!-- highlight. Nothing here is reachable or actionable by pointer alone. -->
-    <!-- The frame holds three rows: the key's strip, the flow, the controls' -->
-    <!-- strip. The chrome is beside the flow rather than on it, so no node is -->
-    <!-- ever drawn under it, however the camera stands. -->
     <!-- eslint-disable-next-line vuejs-accessibility/mouse-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
     <div
       v-show="!emptyKind"
@@ -469,14 +479,17 @@ function onFieldPointerLeave() {
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  background: var(--color-surface-recess);
+  padding-inline: var(--space-1); /* A ring's room: see the script's head. */
+  margin-inline: calc(-1 * var(--space-1));
+  background: var(--color-surface-recess) content-box;
+  overflow-y: auto; /* A window too short for the field's floor scrolls here. */
 }
 
 .graph-canvas {
   display: grid;
   flex: 1 1 auto;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 0;
+  grid-template-rows: auto minmax(136px, 1fr) auto; /* The floor: see the script's head. */
+  min-height: min-content;
   padding: 0;
   border: 1px solid var(--color-rule);
   background: var(--color-surface-recess);

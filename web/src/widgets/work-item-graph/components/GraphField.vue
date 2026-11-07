@@ -128,6 +128,11 @@ const PRESS_SLOP = 4
   background: var(--color-surface-recess);
   overflow: hidden;
 
+  /* A finger on the field moves the camera, never the section that scrolls round it in a
+     short window. Vue Flow's zoom cancels each move it pans with; saying so here as well
+     tells the browser before any script runs, so a busy frame cannot start a scroll. */
+  touch-action: none;
+
   /* The field and its dots are drawn immediately; only the nodes wait for the
      camera, so opening the graph shows an empty field settling into a graph
      rather than a flash of oversized cards. */

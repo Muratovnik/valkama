@@ -1046,10 +1046,12 @@ workflow key. The graph's key stands in the field's own strip above the flow,
 not in the bar, and keeps the place of a state a switch can add, so no switch
 moves the bar or the field; the camera controls stand in the strip below. Neither
 lies on the flow, so no framing and no pan puts a node under either, and the field is as
-tall as the room the two strips leave it. It keeps no height of its own, which would run
-it over the strip below: in a window about 360px tall or shorter the bars and the two
-strips take all the room and the field has none, and in a shorter one the strip below is
-cut. In a
+tall as the room the two strips leave it. Its floor is the row's, never a height of the
+field's own, which would run it over the strip below: one row of cards at the size the
+field opens to be read, with the air a framing keeps round it. A window too short for
+that — a phone held on its side — scrolls the graph's view instead, so the field keeps its
+floor and the strip below is reached whole, never covered or cut. A finger on the field
+moves the camera, not the view; the view scrolls from the bar and the strips. In a
 phone-wide workspace the bar is one row — the filter or the chip and a «Graph
 options» button that opens the switch and the key under it — the frontier count
 takes the key's place in the upper strip, and the camera controls
