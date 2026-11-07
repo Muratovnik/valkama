@@ -332,27 +332,6 @@ export function scanControlSizes(sources, budget = CONTROL_SIZE_BUDGET) {
 }
 
 /**
- * A focus ring is as wide as the one the keyboard's ring in `base.css` draws: `--size-focus-ring`,
- * which what a ring stands round keeps room for. Thirty rings wrote that width as `2px`, so
- * the token named a width they would not have followed. A 2px outline is that ring; a forced
- * palette's 1px frame is not, and keeps its own width.
- */
-const RING_WIDTH = /(?:^|[{;])\s*outline(?:-width)?\s*:[^;{}]*(?<![\w.-])2px\b/gi
-
-export function scanFocusRingWidths(sources) {
-  const violations = []
-  for (const { file, source } of sources) {
-    if (!/\.(?:vue|css)$/.test(file)) continue
-    const rings = uncommented(file, source).match(RING_WIDTH)?.length ?? 0
-    if (rings)
-      violations.push(
-        `${file}: writes ${rings} outline(s) 2px wide; a focus ring's width is var(--size-focus-ring)`,
-      )
-  }
-  return violations
-}
-
-/**
  * The layer order. A file may import from a layer strictly below its own and
  * from nowhere else, which is what makes any layer removable from the top
  * without touching what is underneath it.

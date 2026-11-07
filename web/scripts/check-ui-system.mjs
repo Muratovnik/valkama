@@ -9,13 +9,13 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { scanScopeEscapes } from './ui-system/boundaries.mjs'
+import { scanFocusRingWidths } from './ui-system/focus-rings.mjs'
 import { scanImportCycles, scanImportDirection } from './ui-system/imports.mjs'
 import {
   CONTROL_SIZE_BUDGET,
   LINE_BUDGET,
   scanBorderBudget,
   scanControlSizes,
-  scanFocusRingWidths,
   scanHiddenRules,
 } from './ui-system/lines.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'

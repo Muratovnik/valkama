@@ -231,7 +231,7 @@ function onOpenBlur() {
 
   /* A ring's air from what it encloses, and its own width. */
   --ring-air: var(--space-half);
-  --ring: 2px;
+  --ring: var(--size-focus-ring);
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
