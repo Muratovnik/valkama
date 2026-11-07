@@ -50,6 +50,8 @@ interface Measured {
   depth: string
   height: number
   lead: number
+  /** A closed row on a phone: it has no lead column, so its number stands at its own x. */
+  leadless: boolean
   lines: number
   number: number
   reference: string
@@ -70,6 +72,7 @@ function measure(page: Page, within: string) {
           row.querySelector('.nav-row-link')?.getAttribute('aria-label')?.split(' ')[0] ?? '',
         depth: row.style.getPropertyValue('--nav-row-depth'),
         height: row.getBoundingClientRect().height,
+        leadless: row.classList.contains('nav-row-leadless'),
         lead: lead?.getBoundingClientRect().left ?? Number.NaN,
         number: number?.getBoundingClientRect().left ?? Number.NaN,
         controls: controls.map((control) => control.getBoundingClientRect().height),
@@ -89,8 +92,14 @@ function oneColumn(rows: Measured[], pick: (row: Measured) => number) {
 }
 
 function holdsTheGrid(rows: Measured[], rowHeight: number, step: number) {
-  const leads = oneColumn(rows, (row) => row.lead)
-  oneColumn(rows, (row) => row.number)
+  // A closed row without a lead keeps its number in a column of its own, one lead to the left.
+  const open = rows.filter((row) => !row.leadless)
+  const leads = oneColumn(open, (row) => row.lead)
+  oneColumn(open, (row) => row.number)
+  oneColumn(
+    rows.filter((row) => row.leadless),
+    (row) => row.number,
+  )
   // A level stands one step in from the level above it.
   expect(Math.abs((leads.get('2') ?? 0) - (leads.get('1') ?? 0) - step)).toBeLessThanOrEqual(1)
   for (const row of rows) {
@@ -156,6 +165,8 @@ test('the rail’s list stands on one grid at 1280', async ({ page }) => {
     .boundingBox()
   expect(Math.abs((note?.x ?? 0) - (levelOne?.number ?? 0))).toBeLessThanOrEqual(1)
   expect(await nothingRinged(page, '.nav-work-list')).toEqual([])
+  // A closed row on the rail keeps its lead: the phone's panel is the only one that drops it.
+  await expect(liveRow(page, 'MAIN-7').locator('.nav-row-lead')).toHaveCount(1)
   // A press with the pointer rings nothing either.
   await page.locator('.nav-tree-fold').first().click()
   expect(await nothingRinged(page, '.nav-work-list')).toEqual([])
@@ -331,3 +342,133 @@ test('the dots run, and reduced motion holds every one still', async ({ page }) 
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect.poll(() => running(page)).toBe(0)
 })
+
+/**
+ * On a phone a closed row has no sign for its lead, so it has no lead: the lead's column and
+ * its gap go and the title takes their room. The assertions state that relation rather than
+ * numbers: the lead and its gap are read from an open row's computed grid, and the title the
+ * base grid would give the same closed row is laid out on that row.
+ *
+ * Measured 07.11 on the base 4cb63290, MAIN-7 pinned, title box: 60,56 px at 320 and 128,56 px
+ * at 390; with the fix 108,56 px and 176,56 px.
+ */
+for (const width of [320, 390]) {
+  test(`at ${width} px a closed row's title gets the room of an open row's lead and gap, and its ring, pin and box hold`, async ({
+    page,
+  }) => {
+    await open(page, { width, height: 844 })
+    await page.locator('.nav-work-rail').click()
+    const panel = page.getByRole('dialog', { name: 'Work' })
+    await expect(panel).toBeVisible()
+    await settled(panel)
+    await page.mouse.move(0, 0)
+    await page.evaluate(() => document.fonts.ready)
+
+    const closed = liveRow(page, 'MAIN-7', '.side-panel-body')
+    const current = liveRow(page, 'MAIN-12', '.side-panel-body')
+
+    // An open row keeps its lead, with its sign in it; the lead's width and gap are its grid.
+    await expect(current.locator('.nav-row-lead')).toHaveCount(1)
+    await expect(current.locator('.nav-row-lead .work-dots')).toBeVisible()
+    const leadBox = await current.locator('.nav-row-lead').boundingBox()
+    const room = await current.evaluate((node) => {
+      const style = getComputedStyle(node)
+      return {
+        gap: Number.parseFloat(style.columnGap),
+        lead: Number.parseFloat(style.gridTemplateColumns.split(' ')[0]),
+      }
+    })
+    expect(room.lead).toBeCloseTo(leadBox?.width ?? Number.NaN, 0)
+
+    // The closed title as it stands, and as the base grid lays out the same row: the lead
+    // track back in its column, the link and the pin kept in theirs.
+    const widths = await closed.evaluate((row, lead) => {
+      const link = row.querySelector<HTMLElement>('.nav-row-link')
+      const pin = row.querySelector<HTMLElement>('.nav-row-pin')
+      const title = row.querySelector<HTMLElement>('.nav-row-title')
+      if (!link || !title) throw new Error('a row without its link or title')
+      const kept = {
+        grid: row.style.gridTemplateColumns,
+        link: link.style.gridColumn,
+        pin: pin?.style.gridColumn ?? '',
+      }
+      const actual = title.getBoundingClientRect().width
+      row.style.gridTemplateColumns = pin
+        ? `${lead}px minmax(0, 1fr) auto`
+        : `${lead}px minmax(0, 1fr)`
+      link.style.gridColumn = '2'
+      if (pin) pin.style.gridColumn = '3'
+      const base = title.getBoundingClientRect().width
+      row.style.gridTemplateColumns = kept.grid
+      link.style.gridColumn = kept.link
+      if (pin) pin.style.gridColumn = kept.pin
+      return { actual, base }
+    }, room.lead)
+    expect(
+      Math.abs(widths.actual - widths.base - (room.lead + room.gap)),
+      `closed title ${widths.actual} px, base grid ${widths.base} px, lead ${room.lead} gap ${room.gap} at ${width} px`,
+    ).toBeLessThanOrEqual(1)
+
+    await expect(closed.locator('.nav-row-lead')).toHaveCount(0)
+
+    // The pin of a pinned closed row stays a finger's target.
+    expect(await closed.locator('.nav-row-pin').boundingBox()).toMatchObject({
+      width: 44,
+      height: 44,
+    })
+
+    // Nothing of the closed row stands outside its box, and it does not scroll across.
+    const outside = await closed.evaluate((node) => {
+      const box = node.getBoundingClientRect()
+      return [...node.querySelectorAll<Element>('*')]
+        .filter((child) => {
+          const rect = child.getBoundingClientRect()
+          return rect.width > 0 && (rect.left < box.left - 0.5 || rect.right > box.right + 0.5)
+        })
+        .map((child) => child.getAttribute('class') ?? child.tagName)
+    })
+    expect(outside).toEqual([])
+    expect(await closed.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)
+
+    // The keyboard's ring stands on the closed row's link, whole and inside the row and the panel.
+    const link = closed.locator('.nav-row-link')
+    await link.focus()
+    await page.keyboard.press('Shift+Tab')
+    await page.keyboard.press('Tab')
+    await expect(link).toBeFocused()
+    const ring = await link.evaluate((node) => {
+      const row = node.closest<HTMLElement>('.nav-row')
+      const body = node.closest<HTMLElement>('.side-panel-body')
+      if (!row || !body) throw new Error('a link outside its row or panel')
+      const box = row.getBoundingClientRect()
+      const frame = body.getBoundingClientRect()
+      const drawn = getComputedStyle(node, '::before')
+      const middleX = (box.left + box.right) / 2
+      const middleY = (box.top + box.bottom) / 2
+      const edges = [
+        [box.left + 1, middleY],
+        [box.right - 1, middleY],
+        [middleX, box.top + 1],
+        [middleX, box.bottom - 1],
+      ]
+      return {
+        clipped:
+          box.left < frame.left ||
+          box.right > frame.right ||
+          box.top < frame.top ||
+          box.bottom > frame.bottom,
+        hits: edges.map(([x, y]) => {
+          const hit = document.elementFromPoint(x, y)
+          return hit !== null && row.contains(hit)
+        }),
+        outline: drawn.outlineStyle,
+        width: Number.parseFloat(drawn.outlineWidth),
+      }
+    })
+    expect(ring.outline).toBe('solid')
+    expect(ring.width).toBeGreaterThan(0)
+    expect(ring.clipped).toBe(false)
+    expect(ring.hits).toEqual([true, true, true, true])
+    await page.mouse.move(0, 0)
+  })
+}
