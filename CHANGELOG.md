@@ -119,7 +119,8 @@ checkouts are therefore distinguishable even at the same version.
 - **A comment can tell the work on other items.** A number in a comment's text stays a
   link and tells nobody. `POST /api/planning/work-item/comment`, `comment_work_item`,
   `report_work_item` and the batch's `comment` and `comments` take `mentions`, on a root
-  or a reply: up to 20 items from the interface and 5 from an agent, and one session names
+  or a reply: up to 20 items in a person's call over HTTP and 5 from an agent (the card has
+  no control for it yet), and one session names
   one item at most 3 times an hour, the fourth refused with `mention_limit` (429 over
   HTTP). Naming the comment's own item, an item twice or a missing one is refused. Each
   item named keeps a `mentioned` event pointing to the comment, and the answer says per
