@@ -2,6 +2,7 @@ import { agentsByParent } from '@/widgets/work-item-inspector/utils/agentFacts.t
 
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import type { UsageAgent } from '@/shared/api/planningUsageApi.ts'
+import { sessionStart } from '@/shared/lib/actor.ts'
 
 /**
  * The agents a card's record names and the runs its usage read counts are two lists of the same
@@ -55,7 +56,7 @@ export function agentRowGroups(agents: readonly WorkItemAgent[], spent: readonly
         agents: [],
         executor: null,
         session: run.session_id,
-        shortSession: run.session_id.slice(0, 8),
+        shortSession: sessionStart(run.session_id),
         usageSession: run.session_id,
         rows: [],
       }

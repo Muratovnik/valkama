@@ -299,17 +299,24 @@ describe('rows of one parent', () => {
     expect(groups[0].executor?.session).toBe('one')
   })
 
+  // Two sessions started within a minute share their id's first group: printed to 8 characters
+  // they read as one parent, where every other surface prints a session's first two groups.
   it('have nothing to tell apart when there is one parent, and say which when there are two', () => {
-    const one = mountAgents([ofParent('a', 'first-session', executorOf('first-session'))])
+    const first = '019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b'
+    const second = '019a2b3c-4d6f-7f00-8a9b-0c1d2e3f4a5b'
+    const one = mountAgents([ofParent('a', first, executorOf(first))])
     expect(one.find('.agent-group-id').exists()).toBe(false)
     const two = mountAgents([
-      ofParent('a', 'first-session', executorOf('first-session')),
-      ofParent('b', 'second-session', executorOf('second-session')),
+      ofParent('a', first, executorOf(first)),
+      ofParent('b', second, executorOf(second)),
     ])
-    expect(two.findAll('.agent-group-id').map((id) => id.text())).toEqual(['first-se', 'second-s'])
+    expect(two.findAll('.agent-group-id').map((id) => id.text())).toEqual([
+      '019a2b3c-4d5e',
+      '019a2b3c-4d6f',
+    ])
     expect(two.findAll('.agent-group-id').map((id) => id.attributes('title'))).toEqual([
-      'first-session',
-      'second-session',
+      first,
+      second,
     ])
   })
 })

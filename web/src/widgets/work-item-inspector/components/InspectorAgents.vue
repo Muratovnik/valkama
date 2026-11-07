@@ -31,7 +31,7 @@ import { useI18n } from 'vue-i18n'
 import AgentSessionUsage from '@/widgets/work-item-inspector/components/AgentSessionUsage.vue'
 import AgentsUsageSummary from '@/widgets/work-item-inspector/components/AgentsUsageSummary.vue'
 import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
-import { agentFacts } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
+import { agentFacts, agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import type { TimeWords } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import { agentRowGroups } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
 import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
@@ -127,7 +127,7 @@ const groups = computed(() =>
       key,
       agent,
       /** The run's short id, where the record names no agent to call it by. */
-      runId: run?.agent_id?.slice(0, 8) ?? '',
+      runId: agentIdStart(run?.agent_id ?? ''),
       figures: run ? figures({ ...run }, estimated.value) : [],
       ...(agent
         ? {

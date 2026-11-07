@@ -1,10 +1,14 @@
 import type { Executor } from '@/shared/api/executorModel.ts'
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
+import { sessionStart } from '@/shared/lib/actor.ts'
 import { agoWords, spanWords } from '@/shared/lib/timeSpan.ts'
 import type { SpanWords } from '@/shared/lib/timeSpan.ts'
 
 /** Enough of an agent's id to tell it from its siblings and to find it in a holder. */
-const SHORT_ID = 8
+const AGENT_ID_START = 8
+
+/** The start of an agent's id, as its row and its run print it; a session prints its own. */
+export const agentIdStart = (id: string) => id.slice(0, AGENT_ID_START)
 
 /** The catalog's words and the locale's dates, handed in so this stays pure. */
 export interface TimeWords extends SpanWords {
@@ -42,6 +46,7 @@ interface AgentGroup {
   executor: Executor | null
   /** The parent session, as much of it as tells it from its siblings beside its whole id. */
   session: string
+  /** Its start, as every surface prints a session (`sessionStart`). */
   shortSession: string
 }
 
@@ -58,7 +63,7 @@ export function agentsByParent(agents: readonly WorkItemAgent[]): AgentGroup[] {
       agents: [],
       executor: null,
       session,
-      shortSession: session.slice(0, SHORT_ID),
+      shortSession: sessionStart(session),
     }
     group.agents.push(agent)
     if (agent.executor?.session) group.executor = agent.executor
@@ -89,7 +94,7 @@ export function agentFacts(agent: WorkItemAgent, now: number, words: TimeWords):
   const startAt = Date.parse(start)
   const lastAt = Date.parse(agent.last_activity_at ?? start)
   const started = moment(start, now, words)
-  const shortId = agent.agent_id.slice(0, SHORT_ID)
+  const shortId = agentIdStart(agent.agent_id)
   const ended = agent.ended_at ? moment(agent.ended_at, now, words) : null
   if (agent.ended_at !== null) {
     return {

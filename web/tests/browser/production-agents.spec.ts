@@ -169,10 +169,10 @@ test('rows of two parents stand under two heads, the parent of the newest first'
   await expect(groups.first().locator('.agent').nth(1)).toContainText('Agent number 2')
   await expect(groups.nth(1).locator('.agent')).toHaveCount(1)
   await expect(section.getByRole('button', { name: /^Open the parent session/u })).toHaveCount(2)
-  // Two heads can read alike, so each says whose it is.
+  // Two heads can read alike, so each says whose it is, by its start as every surface prints it.
   await expect(groups.locator('.agent-group-id')).toHaveText([
-    ENDED_PARENT.session.slice(0, 8),
-    LIVE_PARENT.session.slice(0, 8),
+    ENDED_PARENT.session.slice(0, 13),
+    LIVE_PARENT.session.slice(0, 13),
   ])
 })
 
