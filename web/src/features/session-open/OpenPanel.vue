@@ -217,9 +217,12 @@ async function run(index: number) {
 </template>
 
 <style scoped>
+/* Its words wrap so that no paragraph ends on a word alone: «Now open the session in it.» left
+   «it.» a line of its own at 390px, and «нём.» in Russian. */
 .open-panel {
   display: grid;
   gap: var(--space-heading-content);
+  text-wrap: pretty;
 }
 
 .open-panel-why {

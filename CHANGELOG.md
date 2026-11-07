@@ -651,6 +651,8 @@ checkouts are therefore distinguishable even at the same version.
   comment's press stands beside them, and at 320px it no longer takes a line of its own, so the
   row is two lines instead of three. Under a list an agent put under its comment, the row is one
   line where it fits.
+- The panel that opens a session no longer ends a message with one word alone on a phone:
+  «Now open the session in it.» left «it.» on a line of its own at 390px, and «нём.» in Russian.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
