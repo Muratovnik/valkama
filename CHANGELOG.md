@@ -656,6 +656,8 @@ checkouts are therefore distinguishable even at the same version.
 - A task's system events print the session an agent wrote from as every other place does: the
   start of its id in the metadata font, the whole id in its tooltip, and a link to the session
   where Valkama knows it, instead of the whole 36-character id in the interface font.
+- The ring a key puts round the start of an agent's session, in an entry's head on a phone,
+  no longer crosses the tops of the time's digits on the line under it.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

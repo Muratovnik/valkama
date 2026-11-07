@@ -232,11 +232,19 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
    is a little over 1.2em. Not below, because what a box overflows below lengthens what
    its scroller scrolls, and on a text's last line a pixel of it showed «Show all» a pixel
    short; above, nothing scrolls. Each line of a wrapped reference is drawn whole, with
-   its own padding and focus ring. */
+   its own padding and focus ring. Where a line under it holds words at once, as the time
+   under a session's start does, the host sets `--rich-reference-below` to 0: the reach and
+   the ring then end at the words. */
 .rich-reference {
-  padding-block: calc(1lh - 1.2em - 1px) var(--space-half);
+  --reference-below: var(--rich-reference-below, var(--space-half));
+
+  padding-block: calc(1lh - 1.2em - 1px) calc(var(--reference-below));
   cursor: pointer;
   box-decoration-break: clone;
+
+  &:focus-visible {
+    outline-offset: var(--reference-below);
+  }
 
   &.identifier {
     font-family: var(--font-family-mono);

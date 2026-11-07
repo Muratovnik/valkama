@@ -1,17 +1,23 @@
 /**
  * The start of an agent's session where a card prints it, read off the built page in both
- * languages: in its system events.
+ * languages: in its talk's heads and in its system events.
+ *
+ * Under a start the time of an entry takes a line of its own on a phone, and the ring a key put
+ * round the start's link crossed the tops of its digits by 2px at 320–430px: the ring stands on
+ * the words there, clear of the line under it.
  *
  * The system events printed an author's session whole, 36 characters in the interface font,
  * where every other surface prints its start in the metadata font, the whole id in its tooltip
  * and a link where the server knows the session.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { launchedSessionId } from './executionFixtures.ts'
+import { frames } from './frames.ts'
 import { openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
+import { talkedOn } from './threadFixtures.ts'
 
 type Locale = 'en' | 'ru'
 
@@ -25,6 +31,78 @@ async function setUp(page: Page, locale: Locale, width: number) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width, height: 900 })
 }
+
+/** The card's talk, its replies signed from the session the server knows. */
+async function openTalk(page: Page, locale: Locale, width: number) {
+  await setUp(page, locale, width)
+  const opened = await openQuestion(page, [])
+  opened.backend.item.comments.push(
+    ...talkedOn().map((row) =>
+      row.reply_to === null
+        ? row
+        : { ...row, author: row.author.replace(/\(session [^)]+\)/u, `(session ${KNOWN})`) },
+    ),
+  )
+  await page.reload()
+  const heads = opened.drawer
+    .locator('.reply-meta')
+    .filter({ has: page.locator('.meta-session a') })
+  await expect(heads.first()).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await page.mouse.move(0, 0)
+  await frames(opened.drawer)
+  return heads
+}
+
+/**
+ * Where a key's ring round the start's link ends below, and where the ink of the time's digits
+ * starts, read off the time's own font: the top of its words' box, less what of it lies above
+ * its digits' tops.
+ */
+const ringOverTime = (head: Locator) =>
+  head.evaluate((root) => {
+    const link = root.querySelector<HTMLElement>('.meta-session a')
+    const time = root.querySelector<HTMLElement>('.meta-when')
+    if (!link || !time?.firstChild) throw new Error('A linked start and a time')
+    link.focus()
+    const ring = getComputedStyle(link)
+    const box = [...link.getClientRects()].at(-1)
+    const range = document.createRange()
+    range.selectNodeContents(time.firstChild)
+    const words = range.getBoundingClientRect()
+    const context = document.createElement('canvas').getContext('2d')
+    if (!box || !context) throw new Error('A drawn link')
+    context.font = getComputedStyle(time).font
+    const drawn = context.measureText(time.textContent ?? '')
+    return {
+      ringBottom:
+        box.bottom + Number.parseFloat(ring.outlineOffset) + Number.parseFloat(ring.outlineWidth),
+      ringed: link.matches(':focus-visible'),
+      inkTop: words.top + drawn.fontBoundingBoxAscent - drawn.actualBoundingBoxAscent,
+      under: words.top >= box.bottom,
+    }
+  })
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [320, 390])
+    test(`${locale} at ${width}: the ring round a session's start stays off the time under it`, async ({
+      page,
+    }) => {
+      const heads = await openTalk(page, locale, width)
+      const drawn = []
+      for (const head of await heads.all()) drawn.push(await ringOverTime(head))
+      expect(
+        drawn.map(({ ringed }) => ringed),
+        `${locale} at ${width}: a key's ring`,
+      ).not.toContain(false)
+      // Each of them on a phone, the time under the start.
+      const under = drawn.filter((head) => head.under)
+      expect(under.length, `${locale} at ${width}: times under a start`).toBeGreaterThan(0)
+      for (const { inkTop, ringBottom } of under)
+        expect(ringBottom, `${locale} at ${width}: the ring over the digits`).toBeLessThanOrEqual(
+          inkTop,
+        )
+    })
 
 const EVENTS = { en: 'System events', ru: 'Системные события' } as const
 

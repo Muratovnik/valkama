@@ -6,6 +6,10 @@
  * so a finger reaches the whole id too. The whole id is 36 characters, about 274px in that
  * font, wider than a head's column on a phone, where it broke inside itself on two lines of
  * its own; the start keeps to one line there.
+ *
+ * Its link reaches no lower than its words and its ring stands on them: under a start the
+ * time of an entry can take the next line, and the ring of the usual reach crossed the tops of
+ * its digits by 2px at 320–430px.
  */
 import { computed } from 'vue'
 
@@ -43,6 +47,8 @@ provideReferenceLinks((reference, parent) => {
    the id's box reached a pixel past the name's: a line holding it stood 17.9px, one without
    16.9px. Its letters keep the name's baseline. */
 .session-start {
+  --rich-reference-below: 0;
+
   font-family: var(--font-family-mono);
   line-height: var(--line-height-flat);
   white-space: nowrap;
