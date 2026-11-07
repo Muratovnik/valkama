@@ -12,9 +12,9 @@
  */
 import { parse as parseCss } from 'postcss'
 import selectorParser from 'postcss-selector-parser'
-import { parse as parseSfc } from 'vue/compiler-sfc'
 
 import { uncommented } from './comments.mjs'
+import { styleBlocks } from './sfc.mjs'
 
 const FOCUS_STATES = new Set([':focus', ':focus-visible', ':focus-within'])
 
@@ -60,11 +60,9 @@ function forFocus(declaration) {
  */
 function stylesOf(file, source) {
   const code = uncommented(file, source)
-  if (file.endsWith('.css')) return [{ css: code, line: 1 }]
-  return parseSfc(code).descriptor.styles.map(({ content, loc }) => ({
-    css: content,
-    line: loc.start.line,
-  }))
+  return file.endsWith('.css')
+    ? [{ css: code, line: 1 }]
+    : styleBlocks(code).map(({ content, line }) => ({ css: content, line }))
 }
 
 export function scanFocusRingWidths(sources) {

@@ -8,9 +8,10 @@
  * and no other rule may say the first. A comment may name the property: only a declaration fails.
  */
 
+import { styleBlocks } from './sfc.mjs'
+
 const OWNER = 'app/styles/shell.css'
 const COMMENT = /\/\*[\s\S]*?\*\//g
-const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style>/g
 const TRIM = /(?:^|[{;\s])text-box(?:-trim|-edge)?\s*:/g
 /** The class's own rule, cut out of its owner so that what is left is held like any other file. */
 const OWN_RULE = /\.trimmed-word\s*\{[^}]*\}/
@@ -18,7 +19,9 @@ const OWN_RULE = /\.trimmed-word\s*\{[^}]*\}/
 function stylesOf({ file, source }) {
   if (file.endsWith('.css')) return source
   if (!file.endsWith('.vue')) return ''
-  return [...source.matchAll(STYLE_BLOCK)].map((block) => block[1]).join('\n')
+  return styleBlocks(source)
+    .map((block) => block.content)
+    .join('\n')
 }
 
 export function scanTrimmedWords(sources) {

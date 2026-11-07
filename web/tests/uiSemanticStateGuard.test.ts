@@ -27,6 +27,20 @@ test('a binding-state class cannot recreate the semantic palette locally', () =>
   assert.match(violations[0], /canonical uiSystem presentation API/)
 })
 
+test("a `<style>` written in a script does not hide the component's own status style", () => {
+  const source = `
+    <script setup>const label = "<style>"</script>
+    <template><span class="binding-chip" :class="[project.binding_state]">Mapped</span></template>
+    <style scoped>
+      .binding-chip { color: var(--color-text-muted); &.mapped { color: var(--color-success); } }
+    </style>
+  `
+
+  const violations = scanSemanticStateOwnership(component(source))
+  assert.equal(violations.length, 1)
+  assert.match(violations[0], /canonical uiSystem presentation API/)
+})
+
 test('a relation-state class cannot own several semantic outcomes', () => {
   const source = `
     <template>

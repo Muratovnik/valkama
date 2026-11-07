@@ -1,3 +1,5 @@
+import { styleBlocks } from '../../scripts/ui-system/sfc.mjs'
+
 /**
  * Source-text assertions describe intent, not formatting. Compacting the style
  * block keeps them true whether the file is minified or laid out by Prettier —
@@ -108,10 +110,17 @@ function flattenNesting(source: string): string {
     return out
   }
 
-  // A `.css` file is CSS throughout; inside an SFC only the style block is, and
+  // A `.css` file is CSS throughout; inside an SFC only the style blocks are, and
   // the rest of the file has braces of its own.
-  if (!/<style[^>]*>/.test(source)) return flatten(withoutComments(source), [''])
-  return source.replaceAll(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (_, open, css, close) => {
-    return `${open}${flatten(withoutComments(css as string), [''])}${close}`
-  })
+  const blocks = styleBlocks(source)
+  if (blocks.length === 0) return flatten(withoutComments(source), [''])
+  let out = source
+  // Last block first, so each block's offsets still hold when an earlier one is spliced.
+  for (const block of [...blocks].reverse()) {
+    out =
+      out.slice(0, block.start) +
+      flatten(withoutComments(block.content), ['']) +
+      out.slice(block.end)
+  }
+  return out
 }

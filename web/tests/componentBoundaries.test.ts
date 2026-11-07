@@ -130,3 +130,12 @@ test('a stylesheet a component scopes to itself is held to the same list', () =>
   const global = { file: 'future/Host.vue', source: '<style src="./parts/host.css"></style>' }
   assert.deepEqual(scanScopeEscapes([global, sheet]), [])
 })
+
+test('a `<style scoped src>` inside a template is no block, so it scopes no sheet', () => {
+  const inTemplate = {
+    file: 'future/Host.vue',
+    source: '<template><div><style scoped src="./parts/host.css"></style></div></template>',
+  }
+  const sheet = { file: 'future/parts/host.css', source: '.a :deep(.b) { color: red; }' }
+  assert.deepEqual(scanScopeEscapes([inTemplate, sheet]), [])
+})

@@ -11,6 +11,7 @@ import { parse as parseCss } from 'postcss'
 import selectorParser from 'postcss-selector-parser'
 
 import { SEMANTIC_COLOR_PROPERTY } from './semantic-colors.mjs'
+import { styleBlocks } from './sfc.mjs'
 
 export const SEMANTIC_MARK_PROPERTY =
   /^(?:accent-color|background(?:-color|-image)?|border(?:(?:-(?:block|inline)(?:-(?:start|end))?|-(?:top|right|bottom|left))(?:-color)?|-color)?|box-shadow|caret-color|color|column-rule(?:-color)?|fill|filter|flood-color|lighting-color|outline(?:-color)?|stop-color|stroke|text-decoration-color|text-emphasis-color|text-shadow|-webkit-text-fill-color|-webkit-text-stroke(?:-color)?)$/u
@@ -48,9 +49,9 @@ function styleSourcePath(componentFile, reference) {
 /** Inline and external styles authored by one component. */
 export function localStyles(file, source, sourceByFile) {
   const styles = []
-  for (const match of source.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/giu)) {
-    styles.push(match[2])
-    const reference = /\bsrc\s*=\s*(['"])(.*?)\1/iu.exec(match[1])?.[2]
+  for (const block of styleBlocks(source)) {
+    styles.push(block.content)
+    const reference = typeof block.attrs.src === 'string' ? block.attrs.src : undefined
     if (!reference) continue
     const target = styleSourcePath(file, reference)
     const external = target && sourceByFile.get(target)

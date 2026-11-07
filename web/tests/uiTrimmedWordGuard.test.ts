@@ -38,6 +38,18 @@ test('its owner may not trim in a second rule either', () => {
   assert.equal(scanTrimmedWords([{ file: OWNER, source: twice }]).length, 1)
 })
 
+test('a `<style>` written in a script is no stylesheet, so text in the script trims nothing', () => {
+  const source = [
+    '<script setup>',
+    'const label = "<style>"',
+    "const note = '.x { text-box: trim-both ex alphabetic }'",
+    '</script>',
+    '<template><i /></template>',
+    '<style scoped>.word { color: red; }</style>',
+  ].join('\n')
+  assert.deepEqual(scanTrimmedWords([{ file: 'future/Word.vue', source }]), [])
+})
+
 test('words about the property, and a script that names it, are not a declaration', () => {
   const comment =
     '<style>/* the box is trimmed with text-box: see shell.css */ .a { color: red }</style>'

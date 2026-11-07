@@ -14,6 +14,7 @@ import {
 } from './finger.mjs'
 import { staleEntries } from './lines.mjs'
 import { SEMANTIC_COLOR_REFERENCE } from './semantic-colors.mjs'
+import { styleBlocks } from './sfc.mjs'
 
 // The chain's scope chart and branch map are drawings of data, not icons: the
 // chart plots two lines from a series, and the map draws one segment per member
@@ -526,7 +527,9 @@ export function scanTypeStyles(sources) {
   for (const { file, source } of sources) {
     if (file === 'app/styles/tokens.css') continue
     const css = file.endsWith('.vue')
-      ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n')
+      ? styleBlocks(source)
+          .map((block) => block.content)
+          .join('\n')
       : source
     for (const { selector, body } of ruleBodies(css)) {
       const style = assembledStyle(body)

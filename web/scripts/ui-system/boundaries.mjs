@@ -1,6 +1,7 @@
 import { posix } from 'node:path'
 
 import { uncommented } from './comments.mjs'
+import { styleBlocks } from './sfc.mjs'
 
 /**
  * The component boundary rule: which files may leave their own component.
@@ -71,9 +72,9 @@ function scopedSheets(sources) {
   for (const { file, source } of sources) {
     if (!file.endsWith('.vue')) continue
     const directory = posix.dirname(file)
-    for (const tag of source.matchAll(/<style\b[^>]*>/g)) {
-      const src = /\bsrc="([^"]+)"/.exec(tag[0])
-      if (src && /\bscoped\b/.test(tag[0])) sheets.add(posix.join(directory, src[1]))
+    for (const { attrs } of styleBlocks(source)) {
+      if (typeof attrs.src === 'string' && attrs.scoped)
+        sheets.add(posix.join(directory, attrs.src))
     }
   }
   return sheets
