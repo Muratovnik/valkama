@@ -61,6 +61,14 @@ export const UNBROKEN_TITLES = new Map([
   ['shared/ui/OverlayHost.vue {{ title }}', "a pane's hidden name, which is not drawn"],
   ['shared/ui/SectionHeader.vue {{ title }}', "a section's heading"],
   [
+    'shared/ui/SidePanel.vue {{ title }}',
+    `a side panel's heading: the interface's words, ${ONE_LINE}`,
+  ],
+  [
+    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }}',
+    `a row of the Work list is ${ONE_LINE}`,
+  ],
+  [
     'widgets/work-item-inspector/components/ChainMembers.vue {{ member.title }}',
     `a chain's row is ${ONE_LINE}`,
   ],
