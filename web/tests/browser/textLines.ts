@@ -2,7 +2,7 @@ import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 /** One line of drawn words: where it stands and what it says. */
-export interface DrawnLine {
+interface DrawnLine {
   left: number
   right: number
   text: string
@@ -43,7 +43,7 @@ export const drawnLines = (node: Locator, selector = ':scope') =>
   }, selector)
 
 /** How wide the words under `selector` would be on one line, at the font they are drawn in. */
-export const oneLineWidth = (node: Locator, selector = ':scope') =>
+const oneLineWidth = (node: Locator, selector = ':scope') =>
   node.evaluate((root, within) => {
     const target = root.matches(within) ? root : root.querySelector(within)
     if (!target?.parentElement) throw new Error(`Nothing at ${within}`)
