@@ -6,6 +6,7 @@
 import { getTransformForBounds } from '@vue-flow/core'
 import type { Dimensions, ViewportTransform } from '@vue-flow/core'
 
+import { NODE_HEIGHT } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MIN, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -21,6 +22,17 @@ const READABLE_ZOOM = 0.75
 
 /** A padding the fit options state in pixels, as a number. */
 const pixels = (value: string) => Number.parseFloat(value)
+
+/**
+ * The least the field stands where its section has the room: one row of cards at the size
+ * the field opens to be read, with the air a framing keeps above and below that row.
+ * `GraphField` publishes it as `--graph-field-floor`, the one place the stylesheet and the
+ * browser specs read it, so a card or an air that changes here moves the floor with it.
+ */
+export const GRAPH_FIELD_FLOOR =
+  NODE_HEIGHT * READABLE_ZOOM +
+  pixels(graphFitViewOptions().padding.top) +
+  pixels(graphFitViewOptions().padding.bottom)
 
 /** The smallest box round `boxes`. */
 function extent(boxes: readonly Box[]): {

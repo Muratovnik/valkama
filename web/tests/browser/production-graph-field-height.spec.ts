@@ -5,8 +5,8 @@
  * over the strip, and a press on «Fit whole graph» landed on a card.
  *
  * A window too short for that row — a phone held on its side — keeps the field at its floor,
- * one row of cards at reading size (136px), and the graph's section scrolls instead: without
- * the floor the field there was 0px tall and the strip was cut. A finger dragged on the field
+ * one row of cards at reading size (`--graph-field-floor`), and the graph's section scrolls
+ * instead: without the floor the field there was 0px tall and the strip was cut. A finger dragged on the field
  * moves the camera and not the section; dragged on the bar, it scrolls the section. The
  * section scrolls up and down only, and its scrollport keeps a ring's room past its drawn
  * edges: flush with them, the «Graph options» button's reach scrolled it 2px sideways and
@@ -20,9 +20,6 @@ import type { Page } from '@playwright/test'
 import { frames } from './frames.ts'
 import { camera, openBroadField, settledCamera } from './graphFieldCamera.ts'
 import { test } from './test.ts'
-
-/** One row of cards at reading size and the framing's air round it (`GraphView`). */
-const FIELD_FLOOR = 136
 
 /** The field, its neighbours and the camera's buttons as they stand now. */
 const measure = (page: Page) =>
@@ -49,6 +46,12 @@ const measure = (page: Page) =>
     const bar = box('.graph-bar')
     const sideways = getComputedStyle(section).overflowX !== 'visible'
     return {
+      // The floor the field publishes (`GRAPH_FIELD_FLOOR`), one row of cards at reading size.
+      floor: Number.parseFloat(
+        getComputedStyle(document.querySelector('.graph-flow') as Element).getPropertyValue(
+          '--graph-field-floor',
+        ),
+      ),
       section: {
         top: view.top,
         bottom: view.bottom,
@@ -158,7 +161,7 @@ for (const [width, height] of [
     expectButtonsTaken(drawn)
     // The field runs from the key's row to the strip, no further: the row is its size.
     expectFieldBetweenStrips(drawn)
-    expect(drawn.field.height, 'the field keeps room to draw').toBeGreaterThan(FIELD_FLOOR)
+    expect(drawn.field.height, 'the field keeps room to draw').toBeGreaterThan(drawn.floor)
     // A window with the room scrolls nothing: the canvas ends where the section does.
     expect(drawn.section.scrolls, 'the section does not scroll').toBe(false)
     expect(drawn.canvas.bottom, 'the canvas ends at the section').toBeCloseTo(
@@ -180,7 +183,7 @@ for (const [width, height] of [
     await openBroadField(page, width, height)
     await settledCamera(page)
     const opened = await measure(page)
-    expect(opened.field.height, 'the field at its floor').toBeGreaterThanOrEqual(FIELD_FLOOR - 0.5)
+    expect(opened.field.height, 'the field at its floor').toBeGreaterThanOrEqual(opened.floor - 0.5)
     expectFieldBetweenStrips(opened)
     expect(opened.section.scrolls, 'the section scrolls').toBe(true)
     await expectBarKept(page, opened)
@@ -200,7 +203,7 @@ for (const [width, height] of [
     expectButtonsTaken(end)
     expectFieldBetweenStrips(end)
     expect(end.field.height, 'the field at its floor once scrolled').toBeGreaterThanOrEqual(
-      FIELD_FLOOR - 0.5,
+      end.floor - 0.5,
     )
   })
 }

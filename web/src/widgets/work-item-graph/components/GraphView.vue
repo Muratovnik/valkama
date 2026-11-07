@@ -9,16 +9,14 @@
  *
  * The canvas holds three rows: the key's strip, the flow, the controls' strip. The chrome
  * is beside the flow rather than on it, so no node is ever drawn under it, however the
- * camera stands. The field is as tall as the middle row, and that row has a floor: one row
- * of cards at the size the field opens to be read (`NODE_HEIGHT` 112 × `READABLE_ZOOM` 0.75
- * = 84px) with the air a framing keeps above and below it (`graphFitViewOptions`: 36 and
- * 16), 136px. With no floor a window about 360px tall left the field nothing and cut the
- * camera's strip; a floor of the field's own once ran it over that strip. The canvas grows
- * round the row, and a window too short for it — a phone held on its side — scrolls the
- * section, so the strip is reached whole. The section's scrollport reaches a ring's width
- * (`--space-1`: the 2px ring and its 2px offset) past its drawn edge on each side, so a
- * ring or a finger's reach on the bar's last control is not cut where it stood whole over
- * the workspace's gutter before the section scrolled.
+ * camera stands. The field is as tall as the middle row, and the row grows to the field's
+ * floor (`GraphField`): with no floor a window about 360px tall left the field nothing and
+ * cut the camera's strip, and a floor the row did not hold once ran the field over that
+ * strip. The canvas grows round the row, and a window too short for it — a phone held on
+ * its side — scrolls the section, so the strip is reached whole. The section's scrollport
+ * reaches a ring's width (`--space-1`: the 2px ring and its 2px offset) past its drawn edge
+ * on each side, so a ring or a finger's reach on the bar's last control is not cut where it
+ * stood whole over the workspace's gutter before the section scrolled.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -488,7 +486,7 @@ function onFieldPointerLeave() {
 .graph-canvas {
   display: grid;
   flex: 1 1 auto;
-  grid-template-rows: auto minmax(136px, 1fr) auto; /* The floor: see the script's head. */
+  grid-template-rows: auto minmax(min-content, 1fr) auto; /* As tall as the field's floor. */
   min-height: min-content;
   padding: 0;
   border: 1px solid var(--color-rule);

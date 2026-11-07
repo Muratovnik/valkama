@@ -22,6 +22,7 @@ import type { GraphMotion } from '@/widgets/work-item-graph/composables/useGraph
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
+import { GRAPH_FIELD_FLOOR } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MAX, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
@@ -58,6 +59,7 @@ const PRESS_SLOP = 4
     zoom-activation-key-code="Control"
     no-pan-class-name="nopan"
     no-wheel-class-name="nowheel"
+    :style="{ '--graph-field-floor': `${GRAPH_FIELD_FLOOR}px` }"
     :class="{ settled }"
     :data-motion="motion"
     :nodes="nodes"
@@ -120,11 +122,16 @@ const PRESS_SLOP = 4
   /* The camera says how much a comet's stroke grows against a field zoomed far out. */
   --graph-comet-stroke-scale: 1;
 
-  /* As tall as the row the canvas leaves it between its strips (`GraphView`), at any window.
-     A floor of its own kept it 360px tall in a shorter row, where it ran over the camera's
-     strip and took the presses meant for its buttons. */
+  /* The field's floor, written over from `GRAPH_FIELD_FLOOR` by the template. */
+  --graph-field-floor: 0px;
+
+  /* As tall as the row the canvas leaves it between its strips (`GraphView`), and never
+     shorter than its floor (`GRAPH_FIELD_FLOOR`): the row grows to the floor and the section
+     scrolls, so the floor cannot run the field over the camera's strip, as a 360px floor the
+     row did not hold once did. */
   width: 100%;
   height: 100%;
+  min-height: var(--graph-field-floor);
   background: var(--color-surface-recess);
   overflow: hidden;
 

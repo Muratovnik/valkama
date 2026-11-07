@@ -1046,9 +1046,9 @@ workflow key. The graph's key stands in the field's own strip above the flow,
 not in the bar, and keeps the place of a state a switch can add, so no switch
 moves the bar or the field; the camera controls stand in the strip below. Neither
 lies on the flow, so no framing and no pan puts a node under either, and the field is as
-tall as the room the two strips leave it. Its floor is the row's, never a height of the
-field's own, which would run it over the strip below: one row of cards at the size the
-field opens to be read, with the air a framing keeps round it. A window too short for
+tall as the room the two strips leave it. It keeps a floor — one row of cards at the size
+the field opens to be read, with the air a framing keeps round it — and its row grows to
+that floor, so the floor never runs the field over the strip below. A window too short for
 that — a phone held on its side — scrolls the graph's view instead, so the field keeps its
 floor and the strip below is reached whole, never covered or cut. A finger on the field
 moves the camera, not the view; the view scrolls from the bar and the strips. In a
