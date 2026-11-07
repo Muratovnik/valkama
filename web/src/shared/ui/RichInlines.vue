@@ -235,16 +235,20 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
    its own padding and focus ring. Where a line under it holds words at once, as the time
    under a session's start does, the host sets `--rich-reference-below` to 0, and the reach
    ends at the words; its ring stands off them by `--rich-reference-ring`, as far as the line
-   under them leaves room for. */
+   under them leaves room for. Focus scrolls a reference only just into view, so it keeps that
+   ring's room as its scroll margin, as a landing does (`.focus-landing`): resting on a drawer's
+   foot, a session's start took a key's ring with its lower side cut. */
 .rich-reference {
   --reference-below: var(--rich-reference-below, var(--space-half));
+  --reference-ring: var(--rich-reference-ring, var(--reference-below));
 
   padding-block: calc(1lh - 1.2em - 1px) calc(var(--reference-below));
   cursor: pointer;
   box-decoration-break: clone;
+  scroll-margin: calc(var(--reference-ring) + var(--size-focus-ring));
 
   &:focus-visible {
-    outline-offset: var(--rich-reference-ring, var(--reference-below));
+    outline-offset: var(--reference-ring);
   }
 
   &.identifier {

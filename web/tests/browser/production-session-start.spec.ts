@@ -116,6 +116,54 @@ for (const locale of ['en', 'ru'] as const)
       }
     })
 
+/**
+ * Where a key's ring round the start's link stands against the foot of what scrolls it: the
+ * link's last line, its ring's offset and width, and the scroller's seen bottom. Asked to, it
+ * first scrolls the link's last line to 1px over that foot, wholly in view.
+ */
+const ringAtFoot = (link: Locator, { toFoot = false } = {}) =>
+  link.evaluate((node, scroll) => {
+    let scroller = node.parentElement
+    while (scroller && !/auto|scroll/u.test(getComputedStyle(scroller).overflowY))
+      scroller = scroller.parentElement
+    if (!scroller) throw new Error('A start in a scroller')
+    const box = scroller
+    const footOf = () =>
+      Math.min(
+        box.getBoundingClientRect().top + box.clientTop + box.clientHeight,
+        window.innerHeight,
+      )
+    const bottomOf = () => Math.max(...[...node.getClientRects()].map((rect) => rect.bottom))
+    if (scroll) box.scrollTop += bottomOf() - footOf() + 1
+    const ring = getComputedStyle(node)
+    const bottom = bottomOf()
+    return {
+      bottom,
+      foot: footOf(),
+      ringBottom:
+        bottom + Number.parseFloat(ring.outlineOffset) + Number.parseFloat(ring.outlineWidth),
+      ringed: node.matches(':focus-visible'),
+    }
+  }, toFoot)
+
+// Focus scrolls only what is not wholly in view, and only just into it, so the link keeps its
+// ring's room as its scroll margin, as a landing does: with none, a start resting on the
+// drawer's foot took the key's ring with its lower side cut, 3.5px of it in a 900px window.
+for (const width of [390, 1280])
+  test(`at ${width}: a key reaching a start on the drawer's foot draws its whole ring`, async ({
+    page,
+  }) => {
+    const heads = await openTalk(page, 'en', width)
+    const link = heads.last().locator('.meta-session a')
+    const placed = await ringAtFoot(link, { toFoot: true })
+    expect(placed.foot - placed.bottom, `at ${width}: the start on the foot`).toBeCloseTo(1, 0)
+    await link.focus()
+    await frames(link)
+    const { foot, ringBottom, ringed } = await ringAtFoot(link)
+    expect(ringed, `at ${width}: a key's ring`).toBe(true)
+    expect(ringBottom, `at ${width}: the ring inside the drawer`).toBeLessThanOrEqual(foot)
+  })
+
 const EVENTS = { en: 'System events', ru: 'Системные события' } as const
 
 /** A claim an agent's call made, signed with its session. */

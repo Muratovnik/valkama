@@ -664,7 +664,8 @@ checkouts are therefore distinguishable even at the same version.
   start of its id in the metadata font, the whole id in its tooltip, and a link to the session
   where Valkama knows it, instead of the whole 36-character id in the interface font.
 - The ring a key puts round the start of an agent's session, in an entry's head on a phone,
-  no longer crosses the tops of the time's digits on the line under it.
+  no longer crosses the tops of the time's digits on the line under it, and a start resting on
+  the foot of a card shows that ring whole, its lower side no longer cut off.
 - The Agents tab names each parent session by the start of its id as every other place does,
   its first two groups: cut to eight characters, two sessions started within a minute of each
   other read as one.
