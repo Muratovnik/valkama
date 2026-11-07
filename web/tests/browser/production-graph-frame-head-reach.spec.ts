@@ -56,23 +56,53 @@ async function firstRow(page: Page, heads: Locator[]) {
   return { top: Math.min(...tops) - (field?.y ?? 0), first: Math.min(...tops), measured }
 }
 
-/** The square of points round the fold that a press there gives to the fold, by hit test. */
+/**
+ * The square of points round the fold that a press there gives to the fold, by hit test: every
+ * pixel of the patch the rows and columns through its middle find, and a margin round it, and
+ * every third pixel of the rest of the room round the fold, where a press that reached the fold
+ * would widen the patch and leave it ragged. A hit test at every pixel of that room, some nine
+ * thousand a fold, took a field's folds past the test's time.
+ */
 function foldTarget(head: Locator) {
   return head.evaluate((element) => {
     const fold = element.querySelector('.graph-frame-fold') as HTMLElement
     const box = fold.getBoundingClientRect()
-    let hits = 0
+    const room = {
+      left: Math.floor(box.left - 70),
+      right: box.right + 10,
+      top: Math.floor(box.top - 70),
+      bottom: box.bottom + 10,
+    }
     const seen = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
-    for (let y = Math.floor(box.top - 70); y < box.bottom + 10; y += 1)
-      for (let x = Math.floor(box.left - 70); x < box.right + 10; x += 1) {
-        const hit = document.elementFromPoint(x + 0.5, y + 0.5)
-        if (hit === null || !fold.contains(hit)) continue
-        hits += 1
-        seen.left = Math.min(seen.left, x)
-        seen.right = Math.max(seen.right, x + 1)
-        seen.top = Math.min(seen.top, y)
-        seen.bottom = Math.max(seen.bottom, y + 1)
-      }
+    const counted = new Set<string>()
+    const press = (x: number, y: number) => {
+      const hit = document.elementFromPoint(x + 0.5, y + 0.5)
+      if (hit === null || !fold.contains(hit)) return
+      counted.add(`${x},${y}`)
+      seen.left = Math.min(seen.left, x)
+      seen.right = Math.max(seen.right, x + 1)
+      seen.top = Math.min(seen.top, y)
+      seen.bottom = Math.max(seen.bottom, y + 1)
+    }
+    const middle = {
+      x: Math.floor((box.left + box.right) / 2),
+      y: Math.floor((box.top + box.bottom) / 2),
+    }
+    for (let x = room.left; x < room.right; x += 1) press(x, middle.y)
+    for (let y = room.top; y < room.bottom; y += 1) press(middle.x, y)
+    const patch = {
+      left: seen.left - 3,
+      right: seen.right + 3,
+      top: seen.top - 3,
+      bottom: seen.bottom + 3,
+    }
+    for (let y = Math.max(patch.top, room.top); y < Math.min(patch.bottom, room.bottom); y += 1)
+      for (let x = Math.max(patch.left, room.left); x < Math.min(patch.right, room.right); x += 1)
+        press(x, y)
+    for (let y = room.top; y < room.bottom; y += 3)
+      for (let x = room.left; x < room.right; x += 3)
+        if (x < patch.left || x >= patch.right || y < patch.top || y >= patch.bottom) press(x, y)
+    const hits = counted.size
     const width = seen.right - seen.left
     const height = seen.bottom - seen.top
     // The epic's words: a press on any of them is never the fold's.
