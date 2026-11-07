@@ -22,6 +22,7 @@ import InspectorEntrySteps from '@/widgets/work-item-inspector/components/Inspec
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
 import InspectorStepsAction from '@/widgets/work-item-inspector/components/InspectorStepsAction.vue'
 import InspectorThreadFlags from '@/widgets/work-item-inspector/components/InspectorThreadFlags.vue'
+import InspectorThreadMark from '@/widgets/work-item-inspector/components/InspectorThreadMark.vue'
 import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
 import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
 import { waitsForReply } from '@/widgets/work-item-inspector/utils/threadRows.ts'
@@ -40,7 +41,6 @@ import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { plainText } from '@/shared/lib/richText.ts'
-import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
 import EntryHead from '@/shared/ui/EntryHead.vue'
@@ -119,15 +119,6 @@ const authorName = computed(() =>
 const authorSession = computed(() =>
   root.value.by_person === true ? '' : actorSession(root.value.author),
 )
-const markLine = computed(() => {
-  const given = mark.value
-  if (!given) return ''
-  const who = given.by_person === true ? t('threads.you') : actorName(given.by)
-  const when = unbroken(props.when(given.at))
-  return given.text
-    ? t('threads.resolvedWith', { who, when, decision: given.text })
-    : t('threads.resolvedLine', { who, when })
-})
 const foldToggleLabel = computed(() => t(folded.value ? 'threads.expand' : 'threads.collapse'))
 const foldToggleIcon = computed(() => (folded.value ? 'chevron-down' : 'chevron-up'))
 const expandedMark = computed(() => !folded.value)
@@ -192,12 +183,11 @@ function sendMark() {
     :aria-labelledby="labelledBy"
   >
     <EntryHead v-if="mark">
-      <p
+      <InspectorThreadMark
         :id="markId"
-        class="thread-mark"
-      >
-        {{ markLine }}
-      </p>
+        :mark="mark"
+        :when="when"
+      />
       <template
         v-if="!formOpen"
         #actions
@@ -357,14 +347,6 @@ function sendMark() {
 
 .thread-text {
   font: var(--font-editor);
-}
-
-.thread-mark {
-  min-width: 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  overflow-wrap: anywhere;
 }
 
 /* One line of the root: the fold says what the thread was about and no more. */

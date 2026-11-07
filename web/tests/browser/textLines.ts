@@ -13,7 +13,8 @@ export interface DrawnLine {
  * The lines the words under `selector` (or the node itself) are drawn on, read character by
  * character off the text nodes, so a box's padding or a link's two rects never count. A
  * character more than half a letter lower than the line before starts a new line: words in
- * two fonts on one line start a pixel or so apart.
+ * two fonts on one line start a pixel or so apart. Words only a screen reader is given
+ * (`.visually-hidden`) are not drawn and do not count.
  */
 export const drawnLines = (node: Locator, selector = ':scope') =>
   node.evaluate((root, within) => {
@@ -24,6 +25,7 @@ export const drawnLines = (node: Locator, selector = ':scope') =>
     const range = document.createRange()
     const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
     for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+      if (text.parentElement?.closest('.visually-hidden')) continue
       for (const { 0: letter, index } of (text.textContent ?? '').matchAll(/./gsu)) {
         range.setStart(text, index)
         range.setEnd(text, index + letter.length)
