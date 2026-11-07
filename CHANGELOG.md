@@ -239,6 +239,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- An agent's session id stays whole in the head of a comment, a reply and a question. On a
+  phone the head of a reply broke it after its hyphen, «kolo 019a2b3c-» over «4d5e»; the
+  line now breaks between the name and the id, as between any two words. The head prints the
+  start of the session, as the card's holder and every other place do, in the monospace
+  metadata font: a whole id is wider than a phone's head, and it ran past the head's edge or
+  broke across two lines of its own. The whole id is in the tooltip, and a session Valkama
+  knows is a link that opens it.
 - A card's sections on a narrow window say that there are more of them: the row fades
   out at each end where a section is cut, and only there, so a phone, which shows no
   scrollbar, no longer ends the row at a cut word. A section picked with the mouse or the

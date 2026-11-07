@@ -42,6 +42,11 @@ export function actorSession(raw: string): string {
  */
 const SESSION_PREFIX = 13
 
+/** The start of a session id, as every surface prints it; the whole id is for a tooltip or a link. */
+export function sessionStart(session: string): string {
+  return session.slice(0, SESSION_PREFIX)
+}
+
 /**
  * Who holds a work item or a step, as every surface prints it. The server
  * names a holder whose client proved its session `claude (session 5937…)`,
@@ -50,11 +55,11 @@ const SESSION_PREFIX = 13
  */
 export function holderName(raw: string): string {
   const { name, session } = splitActor(raw)
-  return session && name !== raw.trim() ? `${name} · ${session.slice(0, SESSION_PREFIX)}` : name
+  return session && name !== raw.trim() ? `${name} · ${sessionStart(session)}` : name
 }
 
 /** A session no holder names, as a holder of it would print: its client, if known, and its start. */
 export function sessionName(client: string, session: string): string {
-  const start = session.slice(0, SESSION_PREFIX)
+  const start = sessionStart(session)
   return client ? `${client} · ${start}` : start
 }

@@ -1325,7 +1325,10 @@ questions than one read brings reads those still waiting on their own, and says 
 newest and those waiting are shown and older ones left out.
 Whatever answers a comment, a report or a question stands under it as a thread, a reply set
 off from its root by one rule, and the whole thread is one `article` named by its root's
-meta line. What can be done to an entry stands at the end of that line, as icons in the muted
+meta line. That line prints an agent's session as every surface does, the start of it in the
+metadata font beside the name, with the whole id in its tooltip and, where the server knows
+the session, as the link to it.
+What can be done to an entry stands at the end of that line, as icons in the muted
 ink that always show, since a phone has no pointer to bring them out with (`EntryHead`,
 `EntryAction`): Reply, the mark and its removal, Make task outcome, Change answer, and on the
 line of a mark the fold. They rise to full ink under the pointer and the keys, and carry their

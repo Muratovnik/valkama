@@ -156,9 +156,9 @@ function retryMark() {
           <MetaLine
             class="reply-meta"
             :when="when(reply.at)"
+            :session="sessionOf(reply)"
             :after="waitingOf(reply)"
-            >{{ authorOf(reply) }}
-            <span v-if="sessionOf(reply)">{{ sessionOf(reply) }}</span></MetaLine
+            >{{ authorOf(reply) }}</MetaLine
           >
           <template
             v-if="canReply"

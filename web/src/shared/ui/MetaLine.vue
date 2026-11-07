@@ -18,6 +18,14 @@
  * basis, so a name shorter than 14ch still shares the line with a time beside it that fits,
  * and the room the name leaves goes before the time, so the time ends a line it shares.
  *
+ * The session an agent wrote from follows its name as every surface prints a session: its
+ * start (`sessionStart`), one token in the metadata font, with the whole id in its tooltip.
+ * Where the server knows the session the start is the link to it that the id is in prose
+ * (`RichInlines`), so a finger reaches the whole id too. The whole id is 36 characters, about
+ * 274px in that font, wider than a head's column on a phone, where it broke inside itself on
+ * two lines of its own; the start fits on the name's line from 320px. It is one of the name's
+ * words for the state below.
+ *
  * `after` is a short state of the entry, «пока без ответа», said after the time, a dot between.
  * It comes after the time, so the time stands where it stands without it. It stays beside the
  * time only where the name keeps the lines it has without it; otherwise it starts a line of its
@@ -31,11 +39,31 @@
  * again with each key typed in its thread's draft, and placing it on every render laid the
  * drawer out twice per mark per key, 60 ms a key on a thread of 200 replies.
  */
-import { onMounted, onUpdated, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, onUpdated, ref, useTemplateRef } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
-const props = defineProps<{ when: string; after?: string }>()
+import { sessionStart } from '@/shared/lib/actor.ts'
+import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
+import type { RichInline } from '@/shared/lib/richText.ts'
+import RichInlines from '@/shared/ui/RichInlines.vue'
+
+const props = defineProps<{ when: string; after?: string; session?: string }>()
+
+/** The space between the name and its session: a space in the template is dropped there. */
+const apart = computed(() => (props.session ? ' ' : ''))
+const start = computed(() => sessionStart(props.session ?? ''))
+/** The start as a reference of its own, which the layers above answer for as the whole id. */
+const drawn = computed((): RichInline[] => [
+  { kind: 'reference', reference: { kind: 'session', value: start.value }, code: false },
+])
+provideReferenceLinks((reference, parent) => {
+  const whole = props.session
+  if (!whole || reference.kind !== 'session' || reference.value !== start.value)
+    return parent(reference)
+  const link = parent({ kind: 'session', value: whole })
+  return link && { ...link, title: `${link.title}\n${whole}` }
+})
 
 const line = useTemplateRef<HTMLElement>('line')
 /** The state starts a line of its own rather than follow the time. */
@@ -103,7 +131,14 @@ useEventListener(
     class="meta-line"
     :class="{ 'has-after': after }"
   >
-    <span class="meta-who"><slot /></span>
+    <span class="meta-who"
+      ><slot />{{ apart
+      }}<span
+        v-if="session"
+        class="meta-session"
+        :title="session"
+        ><RichInlines :nodes="drawn" /></span
+    ></span>
     <span class="meta-when">{{ when }}</span>
     <span
       v-if="after"
@@ -135,6 +170,11 @@ useEventListener(
   max-width: max-content;
   margin-inline-end: auto;
   overflow-wrap: anywhere;
+}
+
+.meta-session {
+  font-family: var(--font-family-mono);
+  white-space: nowrap;
 }
 
 .meta-when {

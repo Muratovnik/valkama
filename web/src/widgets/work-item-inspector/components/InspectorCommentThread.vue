@@ -227,8 +227,9 @@ function sendMark() {
           :id="metaId"
           class="thread-meta"
           :when="when(root.at)"
+          :session="authorSession"
           :after="waiting"
-          >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
+          >{{ authorName }}</MetaLine
         >
         <template
           v-if="writable"

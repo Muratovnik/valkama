@@ -102,3 +102,41 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
   ).toEqual([])
   return place
 }
+
+/**
+ * How an entry's head draws the session its agent wrote from, by a Range over the id's own
+ * characters: what is drawn, on how many lines, in what font, whether it stays inside the head,
+ * and the whole id its tooltip or its link carries. A head that names no session draws
+ * nothing of one.
+ */
+export const sessionHead = (head: Locator) =>
+  head.evaluate((root) => {
+    const who = root.querySelector('.meta-who')
+    if (!who) throw new Error('A name')
+    const session = root.querySelector<HTMLElement>('.meta-session')
+    const link = session?.querySelector('a') ?? null
+    const box = root.getBoundingClientRect()
+    const range = document.createRange()
+    const drawnIn = (node: Node) => {
+      range.selectNodeContents(node)
+      return [...range.getClientRects()].filter((rect) => rect.width > 0)
+    }
+    // Lines by their tops, apart by more than half a letter: words of two fonts on one line
+    // start a pixel or so apart.
+    const lines = (rects: DOMRect[]) => {
+      const half = Number.parseFloat(getComputedStyle(who).fontSize) / 2
+      const tops = rects.map((rect) => rect.top).sort((a, b) => a - b)
+      return tops.filter((top, index) => index === 0 || top - tops[index - 1] > half).length
+    }
+    const rects = session ? drawnIn(session) : []
+    const text = link ?? session
+    return {
+      drawn: session?.textContent ?? '',
+      font: text ? getComputedStyle(text).fontFamily : '',
+      inside: rects.every((rect) => rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5),
+      lines: lines(rects),
+      link: link && { role: link.getAttribute('role'), title: link.title },
+      overflow: root.scrollWidth - root.clientWidth,
+      title: session?.title ?? '',
+    }
+  })

@@ -9,6 +9,9 @@ import type { Locator, Page } from '@playwright/test'
 
 import { expectStripOnColumn } from './confirmStrip.ts'
 import { openCard } from './editorPage.ts'
+import { launchedSessionId } from './executionFixtures.ts'
+import { sessionHead } from './metaLine.ts'
+import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -19,10 +22,44 @@ const WORDS = {
 type Locale = keyof typeof WORDS
 const FLOOR = 24
 
-async function openThread(page: Page, locale: Locale, width: number) {
+/** An agent's session as Claude and Codex write it: a UUID of 36 characters. */
+const SESSION = '019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b'
+/** What every surface prints of a session: its first two groups. */
+const START = '019a2b3c-4d5e'
+/** A session the server knows, which a head links to. */
+const KNOWN = launchedSessionId
+const KNOWN_START = '11111111-2222'
+/** A link to the session drawn as the words it acts on, whose tooltip holds the whole id. */
+const LINKED = { role: 'button', title: expect.stringContaining(KNOWN) }
+
+/** Where a shot goes when a person asks for shots; a run without the setting takes none. */
+async function shot(page: Page, name: string) {
+  const folder = process.env.VALKAMA_SHOT_DIR
+  if (folder) await page.screenshot({ path: `${folder}/${name}.png` })
+}
+
+async function setUp(page: Page, locale: Locale, width: number) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width, height: 900 })
+}
+
+/**
+ * The card's talk with each agent's session written whole, as an agent sends it: a root's one
+ * the server does not know, a reply's one it does.
+ */
+function talkedWith() {
+  return talkedOn().map((row) => ({
+    ...row,
+    author: row.author.replace(
+      /\(session [^)]+\)/u,
+      `(session ${row.reply_to === null ? SESSION : KNOWN})`,
+    ),
+  }))
+}
+
+async function openThread(page: Page, locale: Locale, width: number) {
+  await setUp(page, locale, width)
   const opened = await openCard(page)
   opened.backend.item.comments.push(...talkedOn())
   await page.reload()
@@ -125,5 +162,79 @@ for (const locale of ['en', 'ru'] as const)
       const form = thread.locator('form.resolve-form')
       await expect(form.locator('.confirm-strip')).toBeVisible()
       await expectStripOnColumn(form.locator('.confirm-strip'), form, `${at} decision`)
+    })
+  }
+
+/**
+ * The card's talk, a question over it and the heads to read: a thread's root, its two replies
+ * shown and the question, each from an agent.
+ */
+async function openHeads(page: Page, locale: Locale, width: number) {
+  await setUp(page, locale, width)
+  const opened = await openQuestion(page, [asked({ author: `kolo (session ${SESSION})` })])
+  opened.backend.item.comments.push(...talkedWith())
+  await page.reload()
+  const { drawer, card } = opened
+  const thread = drawer.locator('.thread-entry').filter({ hasText: 'Four replies below' })
+  await expect(thread.locator('.reply')).toHaveCount(2)
+  await expect(card.locator('.request-meta')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await thread.evaluate((node) => node.scrollIntoView({ block: 'start' }))
+  await page.mouse.move(0, 0)
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  )
+  const replies = await thread.locator('.reply-meta').all()
+  return {
+    card,
+    thread,
+    heads: [
+      { head: thread.locator('.thread-meta'), whole: SESSION, start: START, link: null },
+      ...replies.map((head) => ({ head, whole: KNOWN, start: KNOWN_START, link: LINKED })),
+      { head: card.locator('.request-meta'), whole: SESSION, start: START, link: null },
+    ],
+  }
+}
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1280, 390, 320]) {
+    const at = `${locale} at ${width}`
+
+    // A whole id is 36 characters, 274px in the metadata font, and a head's column on a phone is
+    // 147–265px: it broke inside itself on two lines of its own under the name. Every surface
+    // prints the start of a session, the whole of it in a tooltip, and a link where the server
+    // knows the session, as an id in prose is.
+    test(`${at}: an entry's head prints the start of its session on the name's line, the whole id behind it`, async ({
+      page,
+    }) => {
+      const { card, heads, thread } = await openHeads(page, locale, width)
+      const mono = await page.evaluate(() => {
+        const probe = document.body.appendChild(document.createElement('i'))
+        probe.style.fontFamily = 'var(--font-family-mono)'
+        const family = getComputedStyle(probe).fontFamily
+        probe.remove()
+        return family
+      })
+      await shot(page, `session-head-${locale}-${width}`)
+      expect(heads).toHaveLength(4)
+      for (const { head, whole, start, link } of heads) {
+        const drawn = await sessionHead(head)
+        const label = `${at}: ${await head.textContent()}`
+        expect(drawn.overflow, `${label}: past the head`).toBeLessThanOrEqual(0)
+        expect(drawn.drawn, label).toBe(start)
+        expect(drawn.lines, `${label}: the start's lines`).toBe(1)
+        expect(drawn.inside, `${label}: inside the head`).toBe(true)
+        expect(drawn.font, label).toBe(mono)
+        expect(drawn.title, `${label}: the tooltip`).toBe(whole)
+        // A link only to a session the server knows, which says the whole id as well.
+        expect(drawn.link, `${label}: the link to the session`).toEqual(link)
+      }
+      // The start reached under a finger opens the session, which says its whole id.
+      await thread.locator('.reply-meta').first().getByRole('button', { name: KNOWN_START }).click()
+      await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await card.evaluate((node) => node.scrollIntoView({ block: 'start' }))
+      await page.mouse.move(0, 0)
+      await shot(page, `session-question-${locale}-${width}`)
     })
   }

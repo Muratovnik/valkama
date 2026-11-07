@@ -271,7 +271,8 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
         :id="metaId"
         class="request-meta"
         :when="stamp(request.created_at)"
-        >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
+        :session="authorSession"
+        >{{ authorName }}</MetaLine
       >
       <template #actions>
         <EntryAction
