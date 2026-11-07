@@ -7,7 +7,7 @@
  * since they do; so the place follows from the width the heading has, whichever
  * place it held before.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Ref, WatchSource } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
@@ -95,7 +95,11 @@ export function useLaneActionsPlace(
   // So the board's width is read where the board's own observer has it (`useColumnFit`), outside
   // the lanes; a heading its lane leaves unlaid out is not read there, which would lay the lane
   // out, but once it is laid out again, off `.lane-measure`, a line of no height across it that
-  // nothing the place lays out resizes. The words are watched below and the font is listened for.
+  // nothing the place lays out resizes. That line lies deeper than the lane, so its observer runs
+  // after the browser's own has taken the lane's size: read in its turn, a new place still changed
+  // the lane too late to be told, so it is read in the next frame. The lane is laid out again some
+  // way before it comes into sight, so the frame it keeps its old place is not seen unless it is
+  // brought straight into view from far off. The words are watched below and the font listened for.
   watch(
     board,
     () => {
@@ -104,7 +108,12 @@ export function useLaneActionsPlace(
     { flush: 'post' },
   )
   const measure = computed(() => head.value?.querySelector<HTMLElement>(':scope > .lane-measure'))
-  useResizeObserver(measure, read)
+  let pending = 0
+  useResizeObserver(measure, () => {
+    cancelAnimationFrame(pending)
+    pending = requestAnimationFrame(read)
+  })
+  onBeforeUnmount(() => cancelAnimationFrame(pending))
   // A font that comes in after the heading was read changes every width read without always
   // resizing the boxes watched: a heading read in the fallback kept a place the font undid.
   useEventListener(
