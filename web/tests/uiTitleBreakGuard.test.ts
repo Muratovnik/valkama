@@ -67,7 +67,7 @@ test('a title drawn through the directive, and words that only mention one, are 
 })
 
 test('the register lets through only what it names, and names only what the tree holds', () => {
-  const register = new Map([['future/Row.vue {{ title }}', "a heading's words"]])
+  const register = new Map([['future/Row.vue {{ title }} in h3', "a heading's words"]])
   assert.deepEqual(scanTitleBreaks(drawn('<h3>{{ title }}</h3>'), register), [])
   assert.equal(scanTitleBreaks(drawn('<h3>{{ item.title }}</h3>'), register).length, 2)
   assert.match(scanTitleBreaks(drawn('<h3 />'), register).join('\n'), /no longer writes; drop it/u)
@@ -91,16 +91,60 @@ test('a title inside a template literal is a title written as text', () => {
     assert.deepEqual(scanTitleBreaks(drawn(template), new Map()), [], template)
 })
 
-test('an entry lets through one place, and the second of an expression is its own', () => {
-  const twice = drawn('<p>{{ title }}</p><h2>{{ title }}</h2>')
-  const first = new Map([['future/Row.vue {{ title }}', 'the pinned words']])
+test('an entry lets through one place, named by the element it stands in', () => {
+  const twice = drawn(
+    '<p class="pinned">{{ title }}</p><h2 class="name"><slot>{{ title }}</slot></h2>',
+  )
+  const first = new Map([['future/Row.vue {{ title }} in p.pinned', 'the pinned words']])
   const refused = scanTitleBreaks(twice, first)
   assert.equal(refused.length, 1)
-  assert.ok(refused[0].startsWith('future/Row.vue: writes {{ title }} #2 as text'), refused[0])
-  const both = new Map([...first, ['future/Row.vue {{ title }} #2', 'the heading']])
+  assert.ok(
+    refused[0].startsWith('future/Row.vue: writes {{ title }} in h2.name > slot as text'),
+    refused[0],
+  )
+  const both = new Map([...first, ['future/Row.vue {{ title }} in h2.name > slot', 'the heading']])
   assert.deepEqual(scanTitleBreaks(twice, both), [])
   assert.match(
-    scanTitleBreaks(drawn('<p>{{ title }}</p>'), both).join('\n'),
-    /registers future\/Row.vue \{\{ title \}\} #2, which the tree no longer writes/u,
+    scanTitleBreaks(drawn('<p class="pinned">{{ title }}</p>'), both).join('\n'),
+    /registers future\/Row.vue \{\{ title \}\} in h2.name > slot, which the tree no longer writes/u,
+  )
+})
+
+test('two places that swap keep their own reasons, and two in one kind of element are counted', () => {
+  const register = new Map([
+    ['future/Row.vue {{ title }} in p.pinned', 'the pinned words, held to one line'],
+    ['future/Row.vue {{ title }} in h2', 'the heading the interface writes'],
+  ])
+  const placed = drawn('<p class="pinned">{{ title }}</p><h2>{{ title }}</h2>')
+  const swapped = drawn('<h2>{{ title }}</h2><p class="pinned">{{ title }}</p>')
+  assert.deepEqual(scanTitleBreaks(placed, register), [])
+  assert.deepEqual(scanTitleBreaks(swapped, register), [])
+  // A place the register did not name is refused wherever it stands in the file.
+  const moved = drawn('<h2>{{ title }}</h2><p class="row">{{ title }}</p>')
+  assert.deepEqual(
+    scanTitleBreaks(moved, register).map((line) => line.split(' as text')[0]),
+    [
+      'future/Row.vue: writes {{ title }} in p.row',
+      'title-breaks.mjs: registers future/Row.vue {{ title }} in p.pinned, which the tree no longer writes; drop it',
+    ],
+  )
+  // Only places alike in expression and element are told apart by their order.
+  const alike = drawn('<li>{{ title }}</li><li>{{ title }}</li>')
+  assert.deepEqual(
+    scanTitleBreaks(alike, new Map()).map((line) => line.split(' as text')[0]),
+    ['future/Row.vue: writes {{ title }} in li', 'future/Row.vue: writes {{ title }} in li #2'],
+  )
+})
+
+test('the element a title stands in is read past attributes, void and closed elements', () => {
+  const template =
+    '<div class="row" :title="a > b"><img src="x"><input /><span class="x">a</span>' +
+    '<VBadge class="tag one" v-if="ok">{{ item.title }}</VBadge>{{ title }}</div>'
+  assert.deepEqual(
+    scanTitleBreaks(drawn(template), new Map()).map((line) => line.split(' as text')[0]),
+    [
+      'future/Row.vue: writes {{ item.title }} in VBadge.tag.one',
+      'future/Row.vue: writes {{ title }} in div.row',
+    ],
   )
 })

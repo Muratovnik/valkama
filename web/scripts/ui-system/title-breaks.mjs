@@ -11,9 +11,11 @@
  * (`{{ title }}`, `{{ item.title }}`, `{{ title(entry) }}`, `{{ `${item.title} ·` }}`),
  * outside the words of a quoted string, is refused unless the file registers it below with
  * what it is: a title held to one line that ends in an ellipsis breaks nowhere, and a heading
- * the interface writes itself is not a work item's title. An entry is one place: the second
- * `{{ title }}` of a file is registered as `{{ title }} #2`, with a reason of its own, since
- * the pinned title and the heading of one drawer are two answers. The element the directive
+ * the interface writes itself is not a work item's title. An entry is one place, named by the
+ * element it stands in: the pinned title and the heading of one drawer are two answers, so
+ * they are `{{ title }} in p.drawer-frame-pinned-title` and `{{ title }} in h2.drawer-frame-name
+ * > slot`, each with a reason of its own, and two that swap keep theirs. Only places alike in
+ * both expression and element are told apart by their order, as `#2`. The element the directive
  * sits on holds no text of its own, so a title drawn through it is never seen here. A
  * registered interpolation that is gone is refused too, so the register says what the tree
  * holds.
@@ -27,7 +29,11 @@
 
 const TEMPLATE = /<template\b[^>]*>([\s\S]*)<\/template>/
 const HTML_COMMENT = /<!--[\s\S]*?-->/g
-const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g
+/** An interpolation, or a tag read past its quoted attribute values. */
+const PIECE = /\{\{([\s\S]*?)\}\}|<(\/?)([A-Za-z][\w:-]*)((?:"[^"]*"|'[^']*'|[^'">])*)>/g
+/** A `class` as written, not a bound `:class`. */
+const STATIC_CLASS = /(?:^|\s)class\s*=\s*(?:"([^"]*)"|'([^']*)')/
+const VOID_ELEMENT = new Set(['area', 'br', 'col', 'embed', 'hr', 'img', 'input', 'source', 'wbr'])
 /** A quoted string from its opening quote. */
 const QUOTED = /^(?:'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")/
 const NAMES_TITLE = /(?<![\w$])title(?![\w$])/
@@ -39,58 +45,82 @@ const ONE_LINE = 'held to one line with an ellipsis, so it breaks nowhere'
  * expression as written, with why.
  */
 export const UNBROKEN_TITLES = new Map([
-  ['app/components/AppContextBar.vue {{ title }}', "the module's name"],
-  ['features/input-requests/components/RequestGroup.vue {{ title }}', "a review group's name"],
+  ['app/components/AppContextBar.vue {{ title }} in h1.module-title', "the module's name"],
   [
-    'features/input-requests/components/RequestHeader.vue {{ request.title }}',
+    'features/input-requests/components/RequestGroup.vue {{ title }} in span.request-group-title',
+    "a review group's name",
+  ],
+  [
+    'features/input-requests/components/RequestHeader.vue {{ request.title }} in SectionHeading.request-title',
     "a question's title",
   ],
   [
-    'pages/planning/PlanningPortfolio.vue {{ project.title || project.project_id }}',
+    'pages/planning/PlanningPortfolio.vue {{ project.title || project.project_id }} in strong.project-title',
     "a project's name",
   ],
-  ['pages/planning/PlanningPortfolio.vue {{ space.title }}', "a planning space's name"],
-  ['pages/settings/components/SettingsGroup.vue {{ title }}', "a settings group's heading"],
-  ['shared/ui/BrandMark.vue {{ title }}', "the mark's SVG title, which is not drawn"],
-  ['shared/ui/DataEmptyState.vue {{ title }}', "an empty state's heading"],
-  ['shared/ui/DrawerFrame.vue {{ title }}', `the pinned title is ${ONE_LINE}`],
   [
-    'shared/ui/DrawerFrame.vue {{ title }} #2',
+    'pages/planning/PlanningPortfolio.vue {{ space.title }} in span.space-name',
+    "a planning space's name",
+  ],
+  [
+    'pages/settings/components/SettingsGroup.vue {{ title }} in header.settings-group-head > SectionHeading',
+    "a settings group's heading",
+  ],
+  [
+    'shared/ui/BrandMark.vue {{ title }} in svg.brand-mark-svg > title',
+    "the mark's SVG title, which is not drawn",
+  ],
+  ['shared/ui/DataEmptyState.vue {{ title }} in strong.empty-title', "an empty state's heading"],
+  [
+    'shared/ui/DrawerFrame.vue {{ title }} in p.drawer-frame-pinned-title',
+    `the pinned title is ${ONE_LINE}`,
+  ],
+  [
+    'shared/ui/DrawerFrame.vue {{ title }} in h2.drawer-frame-name > slot',
     "the heading's words where its slot is left empty, which no drawer does: the card, the one drawer, draws its title in the slot through the directive",
   ],
-  ['shared/ui/MarkdownSuggestions.vue {{ row.title }}', `a suggestion is ${ONE_LINE}`],
   [
-    'shared/ui/OverlayHeader.vue {{ title }}',
+    'shared/ui/MarkdownSuggestions.vue {{ row.title }} in span.markdown-suggestion-title',
+    `a suggestion is ${ONE_LINE}`,
+  ],
+  [
+    'shared/ui/OverlayHeader.vue {{ title }} in component.overlay-header-name',
     `an overlay's heading: the interface's words, or a document's name ${ONE_LINE}`,
   ],
-  ['shared/ui/OverlayHost.vue {{ title }}', "a pane's hidden name, which is not drawn"],
-  ['shared/ui/SectionHeader.vue {{ title }}', "a section's heading"],
   [
-    'shared/ui/SidePanel.vue {{ title }}',
+    'shared/ui/OverlayHost.vue {{ title }} in span.visually-hidden',
+    "a pane's hidden name, which is not drawn",
+  ],
+  [
+    'shared/ui/SectionHeader.vue {{ title }} in SectionHeading.section-header-title',
+    "a section's heading",
+  ],
+  [
+    'shared/ui/SidePanel.vue {{ title }} in h2.side-panel-title',
     `a side panel's heading: the interface's words, ${ONE_LINE}`,
   ],
   [
-    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }}',
+    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }} in span.nav-row-title',
     `a row of the Work list is ${ONE_LINE}`,
   ],
   [
-    'widgets/work-item-inspector/components/ChainMembers.vue {{ member.title }}',
+    'widgets/work-item-inspector/components/ChainMembers.vue {{ member.title }} in span.chain-row-title',
     `a chain's row is ${ONE_LINE}`,
   ],
   [
-    'widgets/work-item-inspector/components/InspectorActivity.vue {{ title(entry) }}',
+    'widgets/work-item-inspector/components/InspectorActivity.vue {{ title(entry) }} in span.entry-title',
     'what happened, in the history',
   ],
   [
-    'widgets/work-item-inspector/components/InspectorOutcomeForm.vue {{ title }}',
+    'widgets/work-item-inspector/components/InspectorOutcomeForm.vue {{ title }} in div.closing-head > SectionHeading',
     "a form's heading",
   ],
   [
-    'widgets/work-item-inspector/components/InspectorRefusal.vue {{ notice.title }}',
+    'widgets/work-item-inspector/components/InspectorRefusal.vue {{ notice.title }} in strong.refusal-title',
     "a refusal's heading",
   ],
   [
-    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }}',
+    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }} in span.lane-title',
     `the epic's title over its lane is ${ONE_LINE}`,
   ],
 ])
@@ -144,18 +174,45 @@ function templateCode(expression, start) {
   return { code, end: index + 1 }
 }
 
-/** Each `{{ … }}` of a template that names a title, as written, the second of one as `#2`. */
+/**
+ * Where an interpolation stands: its element, and the elements around it out to the first with
+ * a static class, as `h2.drawer-frame-name > slot`. That survives two places swapping, where a
+ * count of an expression's occurrences handed each the other's reason.
+ */
+function anchorOf(open) {
+  const path = []
+  for (const element of open.toReversed()) {
+    path.unshift(element.name)
+    if (element.classed) break
+  }
+  return path.join(' > ')
+}
+
+/** Each `{{ … }}` of a template that names a title, by expression and the element it stands in. */
 function titlesIn(source) {
   const template = TEMPLATE.exec(source)?.[1]?.replaceAll(HTML_COMMENT, '') ?? ''
+  const open = []
+  const places = []
+  for (const [, body, closing, tag, attributes] of template.matchAll(PIECE)) {
+    if (body !== undefined) {
+      const expression = expressionOf(body)
+      if (NAMES_TITLE.test(codeOf(expression).code)) places.push([expression, anchorOf(open)])
+    } else if (closing) {
+      const at = open.findLastIndex((element) => element.tag === tag)
+      if (at !== -1) open.length = at
+    } else if (!VOID_ELEMENT.has(tag.toLowerCase()) && !attributes.trimEnd().endsWith('/')) {
+      const [, double, single] = STATIC_CLASS.exec(attributes) ?? []
+      const classes = (double ?? single ?? '').split(/\s+/).filter(Boolean)
+      open.push({ tag, name: [tag, ...classes].join('.'), classed: classes.length > 0 })
+    }
+  }
   const seen = new Map()
-  return [...template.matchAll(INTERPOLATION)]
-    .map((match) => expressionOf(match[1]))
-    .filter((expression) => NAMES_TITLE.test(codeOf(expression).code))
-    .map((expression) => {
-      const place = (seen.get(expression) ?? 0) + 1
-      seen.set(expression, place)
-      return place === 1 ? `{{ ${expression} }}` : `{{ ${expression} }} #${place}`
-    })
+  return places.map(([expression, anchor]) => {
+    const place = anchor ? `{{ ${expression} }} in ${anchor}` : `{{ ${expression} }}`
+    const count = (seen.get(place) ?? 0) + 1
+    seen.set(place, count)
+    return count === 1 ? place : `${place} #${count}`
+  })
 }
 
 export function scanTitleBreaks(sources, register = UNBROKEN_TITLES) {
