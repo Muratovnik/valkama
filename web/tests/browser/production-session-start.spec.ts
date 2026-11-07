@@ -68,6 +68,8 @@ const ringOverTime = (head: Locator) =>
     const ring = getComputedStyle(link)
     const box = [...link.getClientRects()].at(-1)
     const range = document.createRange()
+    range.selectNodeContents(link)
+    const start = range.getBoundingClientRect()
     range.selectNodeContents(time.firstChild)
     const words = range.getBoundingClientRect()
     const context = document.createElement('canvas').getContext('2d')
@@ -79,7 +81,8 @@ const ringOverTime = (head: Locator) =>
         box.bottom + Number.parseFloat(ring.outlineOffset) + Number.parseFloat(ring.outlineWidth),
       ringed: link.matches(':focus-visible'),
       inkTop: words.top + drawn.fontBoundingBoxAscent - drawn.actualBoundingBoxAscent,
-      under: words.top >= box.bottom,
+      // By the words, not the link's box, whose reach below is what is measured.
+      under: words.top - start.top > start.height / 2,
     }
   })
 
