@@ -206,7 +206,7 @@ for (const locale of ['en', 'ru'] as const)
     // 147–265px: it broke inside itself on two lines of its own under the name. Every surface
     // prints the start of a session, the whole of it in a tooltip, and a link where the server
     // knows the session, as an id in prose is.
-    test(`${at}: an entry's head prints the start of its session on the name's line, the whole id behind it`, async ({
+    test(`${at}: an entry's head prints the start of its session whole on one line, the whole id behind it`, async ({
       page,
     }) => {
       const { card, heads, thread } = await openHeads(page, locale, width)
@@ -231,13 +231,12 @@ for (const locale of ['en', 'ru'] as const)
         // A link only to a session the server knows, which says the whole id as well.
         expect(drawn.link, `${label}: the link to the session`).toEqual(link)
       }
-      // The start reached under a finger opens the session, which says its whole id.
-      await thread.locator('.reply-meta').first().getByRole('button', { name: KNOWN_START }).click()
-      await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()
-      await page.keyboard.press('Escape')
       await card.evaluate((node) => node.scrollIntoView({ block: 'start' }))
       await page.mouse.move(0, 0)
       await shot(page, `session-question-${locale}-${width}`)
+      // The start reached under a finger opens the session, which says its whole id.
+      await thread.locator('.reply-meta').first().getByRole('button', { name: KNOWN_START }).click()
+      await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()
     })
 
     // The id is set in the metadata font, whose ascent the browser rounds to 12px at 13px
