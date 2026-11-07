@@ -61,10 +61,16 @@ for (const [width, target, finger] of [
     )
     const second = await box(named(card, 'button', ON_SECOND))
     expect(Math.abs(across(second) - across(chevron))).toBeLessThanOrEqual(1)
-    // On the left end of the row of buttons, over the radios, and nothing is drawn for it above.
+    // On the left end of the row of buttons, over the radios, and nothing is drawn for it above;
+    // on a phone at the start of the line above them, kept for the asking, not a line of its own.
     const question = await box(onQuestion)
     const onward = await box(send(card))
-    expect(Math.abs(middle(question) - middle(onward))).toBeLessThanOrEqual(1)
+    const beside = Math.abs(middle(question) - middle(onward)) <= 1
+    const above = question.y + question.height <= onward.y
+    expect({ above, beside }, 'the press beside the buttons, or above them on a phone').toEqual({
+      above: finger,
+      beside: !finger,
+    })
     const radio = await box(card.getByRole('radio').first())
     expect(Math.abs(across(question) - across(radio))).toBeLessThanOrEqual(1)
     await expect(card.locator('.request-fields > .request-note')).toHaveCount(0)
