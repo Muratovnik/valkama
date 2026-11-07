@@ -1330,7 +1330,9 @@ Whatever answers a comment, a report or a question stands under it as a thread, 
 off from its root by one rule, and the whole thread is one `article` named by its root's
 meta line. That line prints an agent's session as every surface does, the start of it in the
 metadata font beside the name, with the whole id in its tooltip and, where the server knows
-the session, as the link to it.
+the session, as the link to it. The name and that start are one unit: the start stands right
+after the name on the name's last line, and the date shares that line only where the whole pair
+fits beside it, otherwise taking a line of its own under the name, starting where the name does.
 What can be done to an entry stands at the end of that line, as icons in the muted
 ink that always show, since a phone has no pointer to bring them out with (`EntryHead`,
 `EntryAction`): Reply, the mark and its removal, Make task outcome, Change answer, and on the

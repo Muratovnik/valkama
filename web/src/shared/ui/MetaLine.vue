@@ -26,6 +26,12 @@
  * two lines of its own; the start fits on the name's line from 320px. It is one of the name's
  * words for the state below.
  *
+ * The name and the start are one: a no-break space holds the start to the name's last word, and
+ * the pair keeps the time's line only where it fits there whole, its whole width the basis the
+ * line breaks on; otherwise the time takes a line of its own. On the name's 14ch the pair broke
+ * between them beside the time, «kolo» over «019a2b3c-4d5e», the start alone under the name. A
+ * name too long for a line wraps by its own words, and the start ends its last line.
+ *
  * `after` is a short state of the entry, «пока без ответа», said after the time, a dot between.
  * It comes after the time, so the time stands where it stands without it. It stays beside the
  * time only where the name keeps the lines it has without it; otherwise it starts a line of its
@@ -50,8 +56,8 @@ import RichInlines from '@/shared/ui/RichInlines.vue'
 
 const props = defineProps<{ when: string; after?: string; session?: string }>()
 
-/** The space between the name and its session: a space in the template is dropped there. */
-const apart = computed(() => (props.session ? ' ' : ''))
+/** The no-break space that holds the session to the name: a space in the template is dropped there. */
+const apart = computed(() => (props.session ? '\u{A0}' : ''))
 const start = computed(() => sessionStart(props.session ?? ''))
 /** The start as a reference of its own, which the layers above answer for as the whole id. */
 const drawn = computed((): RichInline[] => [
@@ -131,7 +137,9 @@ useEventListener(
     class="meta-line"
     :class="{ 'has-after': after }"
   >
-    <span class="meta-who"
+    <span
+      class="meta-who"
+      :class="{ 'has-session': session }"
       ><slot />{{ apart
       }}<span
         v-if="session"
@@ -170,6 +178,10 @@ useEventListener(
   max-width: max-content;
   margin-inline-end: auto;
   overflow-wrap: anywhere;
+
+  &.has-session {
+    flex-basis: auto;
+  }
 }
 
 /* Set solid, so the line's own leading decides its height. At 13px the browser rounds the

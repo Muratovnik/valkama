@@ -18,7 +18,9 @@ export type DatePlace = 'first line' | 'own line'
  * the whole width. In either place the name breaks inside a word only where that word does
  * not fit its line. A name squeezed into what the time left over once stood a word or two to
  * a line, and a time on its own line held to the end of the words stood in the middle of an
- * entry's head, under nothing, wherever icons took the rest of that line.
+ * entry's head, under nothing, wherever icons took the rest of that line. A name with an
+ * agent's session is owed its whole width with the session's start, which is one with it
+ * (`expectSessionWithName`), so beside a time it does not fit with it takes a line of its own.
  */
 export async function expectDateHeld(meta: Locator, where: string): Promise<DatePlace> {
   const line = await meta.evaluate((root, minCh) => {
@@ -60,6 +62,7 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
       left: box.left,
       nameLeft: Math.min(...whose.map((rect) => rect.left)),
       right: box.right,
+      session: who.querySelector('.meta-session') !== null,
       whenLeft: whenBox.left,
       whenRight: whenBox.right,
       whenTop: whenBox.top,
@@ -74,7 +77,7 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
   ).toBeGreaterThan(line.width)
   const place: DatePlace = Math.abs(line.whenTop - line.nameTop) <= 2 ? 'first line' : 'own line'
   const room = line.width - line.whenWidth - line.gap
-  const owed = Math.min(line.minimum, line.nameWidth)
+  const owed = line.session ? line.nameWidth : Math.min(line.minimum, line.nameWidth)
   // A pixel either side of the threshold is the browser's rounding, not a decision.
   if (Math.abs(room - owed) > 1) {
     expect(place, `${where}: the date's line, with ${room}px left beside it`).toBe(
@@ -141,3 +144,138 @@ export const sessionHead = (head: Locator) =>
       title: session?.title ?? '',
     }
   })
+
+type UnitPlace = 'its line' | 'own line'
+type StartPlace = 'after the name' | 'own line'
+
+/**
+ * An agent's name and its session's start, one unit in an entry's head: the start stands on the
+ * name's last line, right after it, a space apart; the date stands on that line after the start,
+ * or, where the pair does not fit beside it, on a line of its own under it, starting where the
+ * name starts. Never the date on the first line with the start on a line below it, which is how
+ * «kolo» stood over «019a2b3c-4d5e» beside the date on a phone. The start takes a line of its
+ * own under the name only where the name's last line and the start are wider than the head's
+ * column, as beside three icons at 320. Lines are counted by what is drawn: a rect starts a line
+ * when it begins below the middle of the line before, since the start, in the metadata font,
+ * stands a pixel lower than the name on the same line.
+ */
+export async function expectSessionWithName(
+  meta: Locator,
+  where: string,
+): Promise<{ date: UnitPlace; start: StartPlace }> {
+  const drawn = await meta.evaluate((root) => {
+    const who = root.querySelector('.meta-who')
+    const session = root.querySelector('.meta-session')
+    const when = root.querySelector('.meta-when')
+    if (!who || !session || !when) throw new Error('A name, a session and a time')
+    const range = document.createRange()
+    const drawnNow = () => [...range.getClientRects()].filter((rect) => rect.width > 0)
+    // The name, from its first letter to its last, apart from the space after it.
+    const texts: Text[] = []
+    const walker = document.createTreeWalker(who, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode())
+      if (!session.contains(node) && node.textContent?.trim()) texts.push(node as Text)
+    const [first, last] = [texts[0], texts.at(-1)]
+    if (!first || !last) throw new Error('No name')
+    range.setStart(first, first.data.search(/\S/u))
+    range.setEnd(last, last.data.trimEnd().length)
+    const name = drawnNow()
+    range.selectNodeContents(session)
+    const start = drawnNow()
+    range.selectNodeContents(when)
+    const time = drawnNow()
+    const kinds = [
+      ...name.map((rect) => ({ rect, kind: 'name' })),
+      ...start.map((rect) => ({ rect, kind: 'start' })),
+      ...time.map((rect) => ({ rect, kind: 'time' })),
+    ].sort((one, other) => one.rect.top - other.rect.top)
+    let line = -1
+    let middle = Number.NEGATIVE_INFINITY
+    const placed = kinds.map(({ rect, kind }) => {
+      if (rect.top > middle) {
+        line += 1
+        middle = (rect.top + rect.bottom) / 2
+      }
+      return { kind, line, left: rect.left, right: rect.right, width: rect.width }
+    })
+    const of = (kind: string) => placed.filter((rect) => rect.kind === kind)
+    const lastLine = Math.max(...of('name').map((rect) => rect.line))
+    const onLast = of('name').filter((rect) => rect.line === lastLine)
+    const canvas = document.createElement('canvas').getContext('2d')
+    if (!canvas) throw new Error('No canvas')
+    const style = getComputedStyle(who)
+    canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const sum = (kind: string) => of(kind).reduce((total, rect) => total + rect.width, 0)
+    const box = root.getBoundingClientRect()
+    return {
+      // The name's left edge: where its first line starts.
+      nameLeft: Math.min(
+        ...of('name')
+          .filter((rect) => rect.line === 0)
+          .map(({ left }) => left),
+      ),
+      nameLastLine: lastLine,
+      nameRight: Math.max(...onLast.map(({ right }) => right)),
+      lastLineWidth: onLast.reduce((total, rect) => total + rect.width, 0),
+      // The head's column the pair has: the name's box, which takes the line where it wraps.
+      room: who.getBoundingClientRect().width,
+      startWidth: sum('start'),
+      space: canvas.measureText(' ').width,
+      startLines: [...new Set(of('start').map((rect) => rect.line))],
+      startLeft: Math.min(...of('start').map(({ left }) => left)),
+      startRight: Math.max(...of('start').map(({ right }) => right)),
+      timeLines: [...new Set(of('time').map((rect) => rect.line))],
+      timeLeft: Math.min(...of('time').map(({ left }) => left)),
+      // The pair and the date end to end, with the line's gap between them, against the line.
+      together: sum('name') + canvas.measureText(' ').width + sum('start') + sum('time'),
+      gap: Number.parseFloat(getComputedStyle(root).columnGap) || 0,
+      width: box.width,
+    }
+  })
+  const label = `${where}: line ${drawn.nameLastLine} of the name`
+  expect.soft(drawn.startLines, `${where}: the session's start on one line`).toHaveLength(1)
+  expect.soft(drawn.timeLines, `${where}: the date on one line`).toHaveLength(1)
+  const [startLine] = drawn.startLines
+  const [timeLine] = drawn.timeLines
+  const start: StartPlace = startLine === drawn.nameLastLine ? 'after the name' : 'own line'
+  if (start === 'after the name')
+    expect
+      .soft(
+        Math.abs(drawn.startLeft - drawn.nameRight - drawn.space),
+        `${label}: the start right after the name, a space apart`,
+      )
+      .toBeLessThanOrEqual(1)
+  else {
+    // Only a start that cannot follow the name's last line in the head's column stands under it.
+    expect
+      .soft(startLine, `${label}: the start on the line after the name's`)
+      .toBe(drawn.nameLastLine + 1)
+    expect
+      .soft(
+        drawn.lastLineWidth + drawn.space + drawn.startWidth,
+        `${label}: the start left the name's line in a column of ${drawn.room}px`,
+      )
+      .toBeGreaterThan(drawn.room - 0.5)
+    expect
+      .soft(Math.abs(drawn.startLeft - drawn.nameLeft), `${label}: the start under the name`)
+      .toBeLessThanOrEqual(1)
+  }
+  if (timeLine === startLine) {
+    expect
+      .soft(drawn.timeLeft, `${where}: the date after the start`)
+      .toBeGreaterThan(drawn.startRight)
+    return { date: 'its line', start }
+  }
+  expect.soft(timeLine, `${where}: the date on its own line under the pair`).toBe(startLine + 1)
+  expect
+    .soft(
+      Math.abs(drawn.timeLeft - drawn.nameLeft),
+      `${where}: the date starts where the name does`,
+    )
+    .toBeLessThanOrEqual(1)
+  // Under the pair only where the pair and the date do not fit one line.
+  expect
+    .soft(drawn.together + drawn.gap, `${where}: the date left a line it fits beside the pair`)
+    .toBeGreaterThan(drawn.width - 1)
+  return { date: 'own line', start }
+}
