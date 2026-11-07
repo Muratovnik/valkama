@@ -13,6 +13,10 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     clearMocks: true,
+    // Off until vitejs/vite-plugin-vue#873 is fixed: with Vitest's persistent module cache an
+    // SFC read from the cache never registers the owner of its `<style scoped src>`, so a
+    // change to the shared CSS file alone (`reach.css`) fails every suite that loads it.
+    fsModuleCache: false,
     projects: [
       {
         test: {
