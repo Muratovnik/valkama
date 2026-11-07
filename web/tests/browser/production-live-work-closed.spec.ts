@@ -46,3 +46,36 @@ test('at 390 a closed group head, a pinned closed epic and a closed item at work
   await expect(atWork.locator('.nav-row-lead')).toHaveCount(1)
   await expect(atWork.locator('.nav-row-lead .work-dots')).toBeVisible()
 })
+
+/** Where a row's number stands across the panel. */
+async function numberLeft(page: Page, reference: string) {
+  const box = await liveRow(page, reference, '.side-panel-body')
+    .locator('.nav-row-number')
+    .boundingBox()
+  if (box === null) throw new Error(`no number for ${reference}`)
+  return box.x
+}
+
+/**
+ * A closed item at the top level loses its lead; the same item nested under an epic or a group
+ * keeps it, and its number stands one level-step right of its parent's, as the open items do.
+ */
+test('at 390 a closed top-level item has no lead, and nested closed items keep theirs one step in', async ({
+  page,
+}) => {
+  await openPanel(page)
+  await expect(liveRow(page, 'MAIN-7', '.side-panel-body').locator('.nav-row-lead')).toHaveCount(0)
+  for (const reference of ['MAIN-50', 'MAIN-62']) {
+    await expect(liveRow(page, reference, '.side-panel-body').locator('.nav-row-lead')).toHaveCount(
+      1,
+    )
+  }
+  // A level-two item under the epic stands one step right of the epic's number, as an open one does.
+  const step = (await numberLeft(page, 'MAIN-9')) - (await numberLeft(page, 'MAIN-4'))
+  const nested = (await numberLeft(page, 'MAIN-50')) - (await numberLeft(page, 'MAIN-4'))
+  expect(Math.abs(nested - step)).toBeLessThanOrEqual(1)
+  // A level-three item stands one step right of its level-two parent, as the open group's child does.
+  const groupStep = (await numberLeft(page, 'MAIN-61')) - (await numberLeft(page, 'MAIN-60'))
+  const grandchild = (await numberLeft(page, 'MAIN-62')) - (await numberLeft(page, 'MAIN-61'))
+  expect(Math.abs(grandchild - groupStep)).toBeLessThanOrEqual(1)
+})
