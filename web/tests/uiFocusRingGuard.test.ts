@@ -14,6 +14,22 @@ const styled = (css: string) => [
   },
 ]
 
+// The ring stands on line 6: the script's `"<style>"` string is no style block.
+const pill = (width: string) => [
+  {
+    file: 'future/Pill.vue',
+    source: [
+      '<script setup>',
+      'const s = "<style>"',
+      '</script>',
+      '<template><p /></template>',
+      '<style scoped>',
+      `.a:focus-visible { outline: ${width} solid var(--color-focus-ring); }`,
+      '</style>',
+    ].join('\n'),
+  },
+]
+
 test('a focus ring that writes its own width is refused, however it writes it', () => {
   for (const css of [
     '.a:focus-visible { outline: 2px solid var(--color-focus-ring); }',
@@ -32,12 +48,11 @@ test('a focus ring that writes its own width is refused, however it writes it', 
     '.a:focus-visible { .icon { outline: 2px solid; } }',
     '.a { & :focus-visible { outline: 2px solid } }',
     '.a:hover, .a:focus-visible { outline: 2px solid; }',
-  ])
-    assert.deepEqual(
-      scanFocusRingWidths(styled(css)),
-      [`future/Row.vue: writes the width of 1 focus ring(s) itself; ${RING}`],
-      css,
-    )
+  ]) {
+    const found = scanFocusRingWidths(styled(css))
+    assert.equal(found.length, 1, css)
+    assert.match(found[0] ?? '', /^future\/Row\.vue:\d+: writes the width of a focus ring itself; /)
+  }
   const sheet = [
     {
       file: 'future/ring.css',
@@ -45,7 +60,38 @@ test('a focus ring that writes its own width is refused, however it writes it', 
     },
   ]
   assert.deepEqual(scanFocusRingWidths(sheet), [
-    `future/ring.css: writes the width of 2 focus ring(s) itself; ${RING}`,
+    `future/ring.css:1: writes the width of a focus ring itself; ${RING}`,
+    `future/ring.css:1: writes the width of a focus ring itself; ${RING}`,
+  ])
+})
+
+test('a component is read through its parsed style blocks, so a "<style>" in its script hides no ring', () => {
+  assert.deepEqual(scanFocusRingWidths(pill('2px')), [
+    `future/Pill.vue:6: writes the width of a focus ring itself; ${RING}`,
+  ])
+  assert.deepEqual(scanFocusRingWidths(pill('var(--size-focus-ring)')), [])
+})
+
+test('a refused ring is reported on its own line, in whichever style block it stands', () => {
+  const source = [
+    '<template><p /></template>',
+    '<style>.a { color: red; }</style>',
+    '<style scoped>',
+    '.b:focus-visible { outline: 2px solid; }',
+    '</style>',
+  ].join('\n')
+  assert.deepEqual(scanFocusRingWidths([{ file: 'future/Row.vue', source }]), [
+    `future/Row.vue:4: writes the width of a focus ring itself; ${RING}`,
+  ])
+})
+
+test('a style block the stylesheet parser cannot read does not hide the blocks after it', () => {
+  const source = [
+    '<style>.a { color: red;</style>',
+    '<style scoped>.b:focus-visible { outline: 2px solid; }</style>',
+  ].join('\n')
+  assert.deepEqual(scanFocusRingWidths([{ file: 'future/Row.vue', source }]), [
+    `future/Row.vue:2: writes the width of a focus ring itself; ${RING}`,
   ])
 })
 

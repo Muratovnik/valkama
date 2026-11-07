@@ -12,6 +12,7 @@
  */
 import { parse as parseCss } from 'postcss'
 import selectorParser from 'postcss-selector-parser'
+import { parse as parseSfc } from 'vue/compiler-sfc'
 
 import { uncommented } from './comments.mjs'
 
@@ -53,40 +54,46 @@ function forFocus(declaration) {
   return false
 }
 
-/** The style a file authors: a stylesheet whole, a component's `<style>` blocks. */
+/**
+ * The style blocks a file authors, each with the line its content starts on. A component's
+ * blocks come from its SFC parse, so a `<style>` written inside its script is no block.
+ */
 function stylesOf(file, source) {
   const code = uncommented(file, source)
-  return file.endsWith('.css')
-    ? code
-    : [...code.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map(([, css]) => css).join('\n')
+  if (file.endsWith('.css')) return [{ css: code, line: 1 }]
+  return parseSfc(code).descriptor.styles.map(({ content, loc }) => ({
+    css: content,
+    line: loc.start.line,
+  }))
 }
 
 export function scanFocusRingWidths(sources) {
   const violations = []
   for (const { file, source } of sources) {
     if (!/\.(?:vue|css)$/.test(file)) continue
-    let tree
-    try {
-      tree = parseCss(stylesOf(file, source))
-    } catch {
-      // A sheet that is no stylesheet draws no ring, and the style linter refuses it.
-      continue
+    const blocks = []
+    for (const { css, line } of stylesOf(file, source)) {
+      try {
+        blocks.push({ tree: parseCss(css), line })
+      } catch {
+        // A block that is no stylesheet draws no ring, and the style linter refuses it.
+      }
     }
+    // A custom property any block of the file sets to a width counts in every block of it.
     const literal = new Set()
-    tree.walkDecls(/^--/, (declaration) => {
-      if (LITERAL_WIDTH.test(declaration.value)) literal.add(declaration.prop)
-    })
-    let rings = 0
-    tree.walkDecls(/^outline(?:-width)?$/i, (declaration) => {
-      if (!forFocus(declaration)) return
-      const { value } = declaration
-      if (LITERAL_WIDTH.test(value) || readProperties(value).some((name) => literal.has(name)))
-        rings += 1
-    })
-    if (rings)
-      violations.push(
-        `${file}: writes the width of ${rings} focus ring(s) itself; a focus ring's width is var(--size-focus-ring)`,
-      )
+    for (const { tree } of blocks)
+      tree.walkDecls(/^--/, (declaration) => {
+        if (LITERAL_WIDTH.test(declaration.value)) literal.add(declaration.prop)
+      })
+    for (const { tree, line } of blocks)
+      tree.walkDecls(/^outline(?:-width)?$/i, (declaration) => {
+        if (!forFocus(declaration)) return
+        const { value } = declaration
+        if (LITERAL_WIDTH.test(value) || readProperties(value).some((name) => literal.has(name)))
+          violations.push(
+            `${file}:${line + declaration.source.start.line - 1}: writes the width of a focus ring itself; a focus ring's width is var(--size-focus-ring)`,
+          )
+      })
   }
   return violations
 }
