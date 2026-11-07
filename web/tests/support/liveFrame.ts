@@ -88,3 +88,53 @@ export function busyFrame(): LiveFrame {
     1,
   )
 }
+
+/**
+ * The busy frame with closed rows of the kinds the phone's list keeps a lead for: a closed group
+ * head with an open child, a pinned closed epic with a child, and a closed item a session is
+ * still on. Under them a closed item nests at the second and the third level, for the nested
+ * cases a spec states once their lead is decided.
+ */
+export function closedFrame(): LiveFrame {
+  const frame = busyFrame()
+  frame.spaces[0].rows.push(
+    liveRow('MAIN-50', {
+      parent: 'MAIN-4',
+      title: 'Closed child of the epic',
+      is_terminal: true,
+      state_name: 'Done',
+    }),
+    liveRow('MAIN-60', {
+      title: 'Closed group with children',
+      is_terminal: true,
+      state_name: 'Done',
+    }),
+    liveRow('MAIN-61', { parent: 'MAIN-60', title: 'Open child of a closed group', state: 'held' }),
+    liveRow('MAIN-62', {
+      parent: 'MAIN-61',
+      title: 'Closed grandchild',
+      is_terminal: true,
+      state_name: 'Done',
+    }),
+    liveRow('MAIN-70', {
+      kind: 'epic',
+      title: 'Pinned closed epic',
+      pinned: true,
+      is_terminal: true,
+      state_name: 'Done',
+    }),
+    liveRow('MAIN-71', {
+      parent: 'MAIN-70',
+      title: 'Open child of the pinned epic',
+      state: 'waiting',
+    }),
+    liveRow('MAIN-51', {
+      title: 'Closed item still at work',
+      is_terminal: true,
+      state_name: 'Done',
+      state: 'working',
+      agents: 1,
+    }),
+  )
+  return frame
+}
