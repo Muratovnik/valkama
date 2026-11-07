@@ -5,6 +5,13 @@
  */
 
 import { uncommented } from './comments.mjs'
+import {
+  coarsePointerQueries,
+  conditionsOf,
+  FINGER_QUERY_OWNER,
+  isFingerQuery,
+  WIDTH_FEATURE,
+} from './finger.mjs'
 import { staleEntries } from './lines.mjs'
 import { SEMANTIC_COLOR_REFERENCE } from './semantic-colors.mjs'
 
@@ -130,41 +137,6 @@ const viewportQueryOwners = new Set([
   'widgets/app-nav/components/AppNav.vue',
   'shared/ui/overlayHost.css',
 ])
-
-/**
- * The one other question about the window: whether a finger presses, which is a coarse pointer
- * or a phone-wide screen. A finger is as wide in any box a control stands in, so that one asks
- * the window, once, in `reach.css`, and every control takes its target from there. Four more
- * files asked it in their own words and the rule did not see them: it read only the first
- * condition of a query list, and the width stood second, after `(pointer: coarse)`.
- *
- * The owner may ask that one list and nothing beside it. Holding only that `(pointer: coarse)`
- * stood somewhere in it let `(pointer: coarse), (width <= 4000px)` through: a different window
- * question asked in the finger's name.
- */
-const FINGER_QUERY_OWNER = 'shared/ui/reach.css'
-const FINGER_QUERY = ['(pointer: coarse)', '(width <= 620px)']
-
-/** A window-width feature: `(width <= 620px)`, `(min-width: 40rem)`, `(400px < width)`. */
-const WIDTH_FEATURE = /(?<![\w-])(?:min-|max-)?(?:device-)?width(?![\w-])/i
-
-/** The conditions of a query list, split at the commas that stand outside every bracket. */
-function conditionsOf(list) {
-  const conditions = ['']
-  let depth = 0
-  for (const character of list) {
-    if (character === '(') depth += 1
-    else if (character === ')') depth -= 1
-    if (character === ',' && depth === 0) conditions.push('')
-    else conditions[conditions.length - 1] += character
-  }
-  return conditions.map((condition) => condition.trim())
-}
-
-/** Whether a list is the finger query, condition by condition and in its order, spaces and case aside. */
-const isFingerQuery = (conditions) =>
-  conditions.join(',').replaceAll(/\s+/g, '').toLowerCase() ===
-  FINGER_QUERY.join(',').replaceAll(' ', '')
 
 /** The `@media` query lists in which any condition asks how wide the window is. */
 function widthQueries(source) {
@@ -454,6 +426,7 @@ export function scanUiSources(sources) {
     violations.push(
       ...offScaleWeights(file, code),
       ...viewportQueries(file, code),
+      ...coarsePointerQueries(file, code),
       ...localColors(file, code),
       ...tintedSurfaces(file, code),
     )
