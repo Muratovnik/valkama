@@ -239,6 +239,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A closed item in the Work list leaves its title the room its empty lead held on a phone.** The
+  panel's closed rows drop the sign's column, so the title gets 48px more at 320 and 390 px; an open
+  row keeps its column.
 - Focus stays where you put it while an action waits on the server. A reply sent, then a click
   into the comment field before the answer came, used to take focus to the new reply, and what
   was typed next went nowhere; now the field keeps focus and the letters. The same holds for an
