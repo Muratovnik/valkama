@@ -1428,11 +1428,14 @@ place is kept as wide as the asking needs on two lines beside the answers. On a 
 a phone's it is the line above them, which those two hold where they are offered; where neither
 is, that line stands for the asking alone, as tall as one line of its words and the row's gap,
 so that the asking moves nothing when it comes. The comment's press stands on the buttons' line
-where it fits beside the two answers, and only where it does not, at 320px, first on the place's
-line, which takes the rest of that line, what it holds wrapping inside it. Either way the press
-takes no line of its own: kept on the buttons' line at 320px it stood alone between the place
-and the buttons, and leading the place at 390px it stood alone over the buttons where the place
-held nothing but the asking's room. The asking changes none of this, so it moves the press
+where it fits beside the two answers, and only in a row narrower than the press, the gap and the
+wider language's two answers, 286.4px, as a card's at 320 and 340px, first on the place's line,
+which takes the rest of that line, what it holds wrapping inside it. There, on a question
+waiting in its card, the place holds nothing but the room kept for the asking, so the press
+stands over the buttons with nothing drawn beside it until the asking comes; that room is a line
+of the row anyway, so the press adds none. Kept on the buttons' line in such a row it took a line
+alone between the place and the buttons, and leading the place in a row where it fits beside the
+buttons it stood alone over them. The asking changes none of this, so it moves the press
 nowhere. Kept beside the controls as a room of its own, the asking sent the two answers to the
 next line where everything else fitted. What stands before the answers keeps the row's start
 at every width. A row nothing can be declined from, the one under a list an agent put under its
@@ -1461,7 +1464,7 @@ choose or send without being meant, or take away what was just opened.
 A comment is one quiet press away and explains a choice without standing in for one. The press
 is a glyph with no line of its own: for a field at the end of the line naming it, its field
 opening under the options, and for the whole question at the left end of the row of buttons, its
-field opening above them; on a phone too narrow for it beside the buttons, at the start of the
+field opening above them; in a row too narrow for it beside the buttons, at the start of the
 line above them. A question of one field offers only the second, since for the person
 both would say the same; one an older answer has on its field stays to be read and changed. Once
 written the glyph is filled and says so in its words, and the comment closes only empty. Opening

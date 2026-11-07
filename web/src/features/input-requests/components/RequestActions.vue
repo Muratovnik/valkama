@@ -30,9 +30,10 @@
  * question, on the row's left end, as what comes before all of this. The way to the task and
  * the read of its status stand after it, at the row's start at every width. On a phone's row
  * the place is the line above the buttons, and the comment's press stands on the buttons' line
- * where it fits beside the two answers. Where it does not, at 320px, it stands first on the
- * place's line instead, and the place takes the rest of that line, its controls wrapping inside
- * it: kept on the buttons' line there it took a line alone between the place and the buttons.
+ * where it fits beside the two answers. Where it does not, at 320 and 340px, it stands first
+ * on the place's line instead, and the place takes the rest of that line, its controls
+ * wrapping inside it: kept on the buttons' line there it took a line alone between the place
+ * and the buttons.
  * Led by the press at every phone's width, the place left the press alone over the buttons
  * where it held nothing but the asking's room, and put «Проверить статус» on a line of its own.
  *
@@ -261,14 +262,16 @@ defineExpose({ focusWayOut })
   }
 }
 
-/* Too narrow for the press beside the two answers of a question that waits: 18rem is the press,
-   the gap and the wider of the two languages' pairs, «Don't answer» held twice. There the press
-   stands first on the place's line, which takes the rest of that line, no narrower than its
-   widest control, which would otherwise lie over the buttons beside it. Wrapping fills a line
-   before the next and never sends a control back, so the row cannot find out for itself that
-   the press does not fit where it stands: the width is written here, and the row's test
-   (`requestRow.ts`) measures the fit at 320, 390 and 430px in both languages. */
-@container (width < 18rem) {
+/* Too narrow for the press beside the two answers of a question that waits: the press (28px),
+   the gap (8px) and the wider of the two languages' pairs, «Don't answer» held twice in English
+   (250.4px), are 286.4px, rounded up to 17.92rem so that a row they just fit keeps the press
+   beside them, as a card's at 360px (287px) does, and none they miss leaves it alone. There
+   the press stands first on the place's line, which takes the rest of that line, no narrower
+   than its widest control, which would otherwise lie over the buttons beside it. Wrapping fills
+   a line before the next and never sends a control back, so the row cannot find out for itself
+   that the press does not fit where it stands: the width is written here, and the row's test
+   (`requestRow.ts`) measures the fit at 320, 360, 390 and 430px in both languages. */
+@container (width < 17.92rem) {
   .request-actions:has(.request-lead.is-room) {
     .request-lead {
       flex: 1 1 0;

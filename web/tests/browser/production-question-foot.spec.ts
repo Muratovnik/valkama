@@ -1,6 +1,6 @@
 /**
  * The row of controls at the foot of a question, read off the built page in every state it has,
- * in both languages, at a laptop's width and three phones': waiting, after a send that failed,
+ * in both languages, at a laptop's width and four phones': waiting, after a send that failed,
  * after the deadline, in the list of everything waiting, and while an answer is changed.
  *
  * Every line of the row holds a control, but for the one place the step of declining needs
@@ -12,8 +12,8 @@
  * keeps the row's start at every width; the row is one line wherever its controls and the
  * asking fit on one; and the step moves nothing, its words drawn where the way to the task and
  * Check status stood, on one line where that place allows. On a phone the way to the task
- * stands in that place, and the comment's glyph never takes a line of its own: it stands beside
- * the buttons where it fits there, at 390 and 430, and only where it does not, at 320, first on
+ * stands in that place, and the comment's glyph never adds a line of its own: it stands beside
+ * the buttons where it fits there, at 360 to 430, and only where it does not, at 320, first on
  * the place's line.
  */
 import { expect } from '@playwright/test'
@@ -25,7 +25,7 @@ import { centre, expectRow, expectStep, near } from './requestRow.ts'
 import { test } from './test.ts'
 
 const LOCALES = ['en', 'ru'] as const
-const WIDTHS = [1280, 430, 390, 320] as const
+const WIDTHS = [1280, 430, 390, 360, 320] as const
 type Locale = (typeof LOCALES)[number]
 
 const LATE = '44444444-4444-4444-8444-444444444449'

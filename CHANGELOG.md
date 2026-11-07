@@ -651,11 +651,11 @@ checkouts are therefore distinguishable even at the same version.
   between its parts on a phone: a line no longer ends with a dot, the date no longer has the
   decision's first word beside it, and a decision too long for the date's line starts a line
   of its own.
-- On a phone, the comment's press on a question no longer takes a line of its own. It stands
-  beside the buttons where it fits there, and at 320px, where it does not, at the start of the
-  line above them: beside «Open task» in the list of questions waiting for an answer, beside
-  «Check status» past the deadline or after a send that failed, or beside the room kept for
-  Don't answer to ask whether it is meant. At 320px the row of a question in its card, and of
+- On a phone, the comment's press on a question no longer adds a line of its own. It stands
+  beside the buttons where it fits there, and on the narrowest phones, where it does not, at the
+  start of the line above them: beside «Open task» in the list of questions waiting for an
+  answer, beside «Check status» past the deadline or after a send that failed, or over the room
+  kept for Don't answer to ask whether it is meant. At 320px the row of a question in its card, and of
   one waiting in that list, is two lines instead of three, and one past its deadline in that
   list in Russian three instead of four.
 - The panel that opens a session no longer ends a message with one word alone on a phone:
