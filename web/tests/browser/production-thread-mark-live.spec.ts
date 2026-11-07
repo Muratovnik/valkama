@@ -117,7 +117,19 @@ const placements = (page: Page) =>
       range.selectNodeContents(node)
       return [...range.getClientRects()].filter((rect) => rect.width > 0)
     }
-    const lines = (node: Element) => new Set(drawn(node).map((rect) => Math.round(rect.top))).size
+    // A rect starts a line when it begins below the middle of the line before. An agent's
+    // session, in the metadata font, stands a pixel lower than the name on the same line, and
+    // counted by rounded tops a one-line name read as two, as long as a name that wrapped.
+    const lines = (node: Element) => {
+      let count = 0
+      let middle = Number.NEGATIVE_INFINITY
+      for (const rect of drawn(node).sort((one, other) => one.top - other.top))
+        if (rect.top > middle) {
+          count += 1
+          middle = (rect.top + rect.bottom) / 2
+        }
+      return count
+    }
     const read = (line: Element) => {
       const box = line.getBoundingClientRect()
       const who = line.querySelector('.meta-who')
@@ -210,20 +222,22 @@ for (const locale of ['ru', 'en'] as const)
     const opened = await openAsked(page, locale, 1280)
     const before = await placements(page)
     expect(offRule(before), 'before the rename').toEqual([])
-    expect(of(before, 'Which parser')?.own, 'the long author keeps the mark off its line').toBe(
-      true,
-    )
+    // The head prints the start of a session, so a long author is one with a long name.
+    expect(
+      of(before, 'Should the digest')?.own,
+      'the long author keeps the mark off its line',
+    ).toBe(true)
     const comments = opened.backend.item.comments
     const at = (id: number) => comments.find((entry) => entry.id === id)
     // The long author shortened and the short one lengthened: the line keeps its width.
-    Object.assign(at(31) ?? {}, { author: SHORT })
-    Object.assign(at(38) ?? {}, { author: ASKER })
+    Object.assign(at(51) ?? {}, { author: SHORT })
+    Object.assign(at(38) ?? {}, { author: AGENT })
     await readAgain(page, opened, locale)
-    await expect(opened.thread('Which parser').locator('.meta-who')).toHaveText(SHORT)
+    await expect(opened.thread('Should the digest').locator('.meta-who')).toHaveText(SHORT)
     const after = await placements(page)
     expect(offRule(after), 'after the rename').toEqual([])
     // Renamed short, the author has room for the mark beside the date.
-    expect(of(after, 'Which parser')?.own, 'the mark beside the date').toBe(false)
+    expect(of(after, 'Should the digest')?.own, 'the mark beside the date').toBe(false)
     expect(await opened.pageErrors()).toEqual([])
   })
 

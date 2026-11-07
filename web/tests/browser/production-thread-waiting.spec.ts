@@ -110,6 +110,19 @@ const metaOf = (meta: Locator) =>
       range.selectNodeContents(node)
       return [...range.getClientRects()].filter((rect) => rect.width > 0)
     }
+    // A rect starts a line when it begins below the middle of the line before. An agent's
+    // session, in the metadata font, stands a pixel lower than the name on the same line, and
+    // counted by rounded tops a one-line name read as two, as long as a name that wrapped.
+    const lines = (node: Node) => {
+      let count = 0
+      let middle = Number.NEGATIVE_INFINITY
+      for (const rect of drawn(node).sort((one, other) => one.top - other.top))
+        if (rect.top > middle) {
+          count += 1
+          middle = (rect.top + rect.bottom) / 2
+        }
+      return count
+    }
     const [author] = drawn(first)
     const [time] = drawn(when)
     const mark = line.querySelector('.meta-after')
@@ -136,7 +149,7 @@ const metaOf = (meta: Locator) =>
     return {
       authorLeft: author.left - box.left,
       authorTop: author.top - box.top,
-      authorLines: new Set(drawn(who).map((rect) => Math.round(rect.top))).size,
+      authorLines: lines(who),
       timeTop: time.top - box.top,
       box: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
       marks: marks.map(({ left, right, top, bottom }) => ({ left, right, top, bottom })),
