@@ -14,13 +14,7 @@ is complete on its own.
 
 - Read `README.md` before changing a tool. `CONTRIBUTING.md` states the same
   gates for a human contributor.
-- Read progressively. Locate before you read — `rg -n` for the symbol or the
-  message, `git diff --stat` and `git log --oneline -- <path>` for what changed —
-  then open the range you act on (`Read` with `offset` and `limit`,
-  `sed -n 'a,bp'`), not the whole file. Read a whole file only when it is short or
-  all of it can change your conclusion, and do not read again a range that has
-  not changed since you read it, unless a compaction of your context dropped it.
-  `DESIGN.md` is about 100 KB: find the passage by its component, token or
+- `DESIGN.md` is about 100 KB: find the passage by its component, token or
   `**Label:**` and read that passage; read a whole section of it only when your
   change is to that section's rules.
 - `server/skill/valkama` is the skill clients install to work the planning
