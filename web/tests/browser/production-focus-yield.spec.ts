@@ -10,6 +10,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
+import { frames } from './frames.ts'
 import { asked, openQuestion, QUESTION_ID, send } from './questionBackend.ts'
 import { answeredElsewhere, inTheList, pair } from './questionPress.ts'
 import { test } from './test.ts'
@@ -18,11 +19,7 @@ import { talkedOn } from './threadFixtures.ts'
 const doNothing = () => {}
 
 /** Two frames after the last change, for whatever the answer moves to have moved. */
-const settled = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
-  )
+const settled = (page: Page) => frames(page.locator(':root'))
 
 /** The card with its discussion, every write of it held until the test lets it go. */
 async function heldThread(page: Page) {

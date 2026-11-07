@@ -8,6 +8,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { focusColour } from './editorPage.ts'
+import { frames } from './frames.ts'
 import { asked, openQuestion, question, routeField, send } from './questionBackend.ts'
 import { inTheList, pair } from './questionPress.ts'
 import { test } from './test.ts'
@@ -287,9 +288,7 @@ for (const locale of ['en', 'ru'] as const)
       .press('Enter')
     const sent = card.locator('.request-foot .request-error')
     await expect(sent).toBeFocused()
-    await page.evaluate(
-      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-    )
+    await frames(page.locator(':root'))
     expect(await outline(sent)).toBe('solid')
     expect(await ringCut(sent)).toBe(0)
     await shot(page, `send-failed-ring-${locale}-390`)

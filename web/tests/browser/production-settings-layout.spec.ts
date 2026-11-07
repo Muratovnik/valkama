@@ -5,6 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installAlerts, READINESS_CASES } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
+import { frames } from './frames.ts'
 import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -238,9 +239,7 @@ async function expectFoldOnEdge(page: Page, toggle: Locator, column: Locator, wh
   const held = async (state: string) => {
     await expect(toggle).toHaveAttribute('aria-expanded', state)
     // A frame drawn first: Chromium answers a path's old box for the frame its `d` changed in.
-    await page.evaluate(
-      () => new Promise((drawn) => requestAnimationFrame(() => requestAnimationFrame(drawn))),
-    )
+    await frames(page.locator(':root'))
     const mark = await startOf(toggle, true)
     expect
       .soft(Math.abs(mark - edge), `${what}, expanded ${state}: ${mark} against ${edge}`)

@@ -4,6 +4,7 @@ import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platfo
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { frames } from './frames.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
   attachedDataScopeId,
@@ -304,9 +305,7 @@ test('the finder top edge crosses no label behind it at 1440, 1024 and 390 wide'
     await expect
       .poll(async () => {
         const first = JSON.stringify(await dialog.boundingBox())
-        await page.evaluate(
-          () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-        )
+        await frames(page.locator(':root'))
         const animations = await page.evaluate(() => document.getAnimations().length)
         return animations === 0 && first === JSON.stringify(await dialog.boundingBox())
       })

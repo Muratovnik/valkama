@@ -10,16 +10,14 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { frames } from './frames.ts'
 import { openBroadField, settledCamera, zoomOutButton } from './graphFieldCamera.ts'
 import { movedSince, picture } from './graphPixels.ts'
 import type { Box } from './graphPixels.ts'
 import { test } from './test.ts'
 
 /** Two frames, so a change has painted. */
-const painted = (page: Page) =>
-  page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+const painted = (page: Page) => frames(page.locator(':root'))
 
 /**
  * What of a header is someone else's than the fold's: each line of its words, read by a

@@ -15,6 +15,7 @@ import { listEntry, openList } from './commentListBackend.ts'
 import { LINK } from './documentBackend.ts'
 import { openFromCard } from './documentFocusMoves.ts'
 import { openCard } from './editorPage.ts'
+import { frames } from './frames.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { asked, openQuestion, send } from './questionBackend.ts'
 import { test } from './test.ts'
@@ -35,10 +36,7 @@ async function act(control: Locator, input: Input) {
 
 /** What the browser draws round `target` now, read two frames after the move settled. */
 const ringOf = async (page: Page, target: Locator) => {
-  await page.evaluate(
-    () =>
-      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
-  )
+  await frames(page.locator(':root'))
   return target.evaluate((node) => ({
     visible: node.matches(':focus-visible'),
     outline: getComputedStyle(node).outlineStyle,

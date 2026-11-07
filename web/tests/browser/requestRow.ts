@@ -1,6 +1,8 @@
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
+import { frames } from './frames.ts'
+
 /*
  * The row of controls at the foot of a question or of a list under a comment
  * (`RequestActions`), read off the built page: what is drawn on each of its lines, where the two
@@ -234,11 +236,7 @@ const heldRoom = (row: Locator) =>
 
 const pairOf = (measured: Row) => measured.members.filter((member) => !member.lead)
 
-const nextFrames = (scope: Locator) =>
-  scope.evaluate(
-    () =>
-      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
-  )
+const nextFrames = (scope: Locator) => frames(scope)
 
 /** The step of declining, raised by the press: nothing moves, and its words stand where the
  *  controls before the pair stood, on one line where that place allows. */

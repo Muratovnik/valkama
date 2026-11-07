@@ -1,6 +1,8 @@
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
+import { frames } from './frames.ts'
+
 /**
  * Each row as drawn: how many lines its words take, the centre of the first of them (a Range
  * over the first text drawn), and for each icon at the row's end the centre of its strokes (the
@@ -61,14 +63,7 @@ export async function expectIconsOnFirstLine(
   icons: string,
   what: string,
 ): Promise<Measured> {
-  await rows
-    .first()
-    .evaluate(
-      () =>
-        new Promise<void>((done) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => done())),
-        ),
-    )
+  await frames(rows.first())
   const measured = await lineEnds(rows, words, icons)
   expect(measured.length, `${what}: rows`).toBeGreaterThan(0)
   for (const [index, row] of measured.entries())

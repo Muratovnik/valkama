@@ -18,6 +18,7 @@ import { chainOf, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
 import { serve } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
+import { frames } from './frames.ts'
 import { openPlanFor } from './openSessionFixtures.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -175,9 +176,7 @@ for (const width of [1280, 390]) {
  * frame is drawn: Chromium answers a path's old box for the frame its `d` changed in.
  */
 async function chevronOn(toggle: Locator, edge: number, what: string): Promise<number> {
-  await toggle.evaluate(
-    () => new Promise((drawn) => requestAnimationFrame(() => requestAnimationFrame(drawn))),
-  )
+  await frames(toggle)
   const [chevron] = await boxes(toggle.locator('svg path'))
   const left = chevron?.left ?? Number.NaN
   // Soft, so that one run names every disclosure standing off its edge, in either state.

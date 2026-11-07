@@ -8,14 +8,12 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { answersTap, boxes, openList } from './commentListBackend.ts'
+import { frames } from './frames.ts'
 import { test } from './test.ts'
 
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready)
-  await page.evaluate(
-    () =>
-      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
-  )
+  await frames(page.locator(':root'))
 }
 
 type Rect = { bottom: number; left: number; right: number; top: number }

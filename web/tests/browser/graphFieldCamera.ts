@@ -8,6 +8,7 @@ import type { Page } from '@playwright/test'
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { graphRoute } from './chainFixtures.ts'
+import { frames } from './frames.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 export const broadModel = broadSpace().model
@@ -60,9 +61,7 @@ export async function settledCamera(page: Page) {
   await expect
     .poll(async () => {
       const first = await read()
-      await page.evaluate(
-        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-      )
+      await frames(page.locator(':root'))
       return first === (await read())
     })
     .toBe(true)

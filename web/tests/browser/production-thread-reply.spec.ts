@@ -10,6 +10,7 @@ import type { Locator, Page } from '@playwright/test'
 import { expectStripOnColumn } from './confirmStrip.ts'
 import { openCard } from './editorPage.ts'
 import { launchedSessionId } from './executionFixtures.ts'
+import { frames } from './frames.ts'
 import { sessionHead } from './metaLine.ts'
 import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
@@ -182,9 +183,7 @@ async function openHeads(page: Page, locale: Locale, width: number) {
   await page.evaluate(() => document.fonts.ready)
   await thread.evaluate((node) => node.scrollIntoView({ block: 'start' }))
   await page.mouse.move(0, 0)
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+  await frames(page.locator(':root'))
   const replies = await thread.locator('.reply-meta').all()
   return {
     card,

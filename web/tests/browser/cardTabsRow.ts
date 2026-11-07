@@ -10,6 +10,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
+import { frames } from './frames.ts'
 import { projectScope } from './planningFixtures.ts'
 
 export async function openCard(page: Page, width: number, locale: 'en' | 'ru' = 'ru') {
@@ -75,9 +76,7 @@ export async function still(strip: Locator) {
   await expect
     .poll(async () => {
       const first = await scrolled(strip)
-      await strip.evaluate(
-        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-      )
+      await frames(strip)
       return first === (await scrolled(strip))
     })
     .toBe(true)

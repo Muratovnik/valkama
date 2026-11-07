@@ -13,6 +13,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { centre, openBoard, serve } from './boardPage.ts'
+import { frames } from './frames.ts'
 import { test } from './test.ts'
 
 const REFUSAL = 'MAIN-402 is at revision 2, not 1'
@@ -160,10 +161,7 @@ for (const shape of [
     await ENDINGS['lower in its own column'](page, where)
     await expect.poll(() => writes.length).toBe(1)
     // A card that was going to open has started to by the time two frames are drawn.
-    await page.evaluate(
-      () =>
-        new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null)))),
-    )
+    await frames(page.locator(':root'))
     await expect(page.locator('.drawer')).toHaveCount(0)
   })
 

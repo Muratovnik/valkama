@@ -13,6 +13,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { frames } from './frames.ts'
 import { IN_VSCODE, openPlanFor, shortHolderCard } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
@@ -69,9 +70,7 @@ async function openCard(page: Page, locale: 'en' | 'ru', width: number, follower
   await page.evaluate(() => document.fonts.ready)
   await page.mouse.move(0, 0)
   // Two frames, so a measurement reads the state the line has come to rest in.
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+  await frames(page.locator(':root'))
   return drawer
 }
 

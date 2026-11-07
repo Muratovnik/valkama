@@ -13,6 +13,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
+import { frames } from './frames.ts'
 import {
   blockedWorkItem,
   identity,
@@ -100,13 +101,7 @@ function answerLater() {
 }
 
 /** Whatever a read that has answered was going to do has been done and painted. */
-const afterPaint = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise((done) => {
-        requestAnimationFrame(() => requestAnimationFrame(done))
-      }),
-  )
+const afterPaint = (page: Page) => frames(page.locator(':root'))
 
 /** The first line of the question stands in view, under the tabs, with the keyboard on its field. */
 async function expectBroughtToQuestion(page: Page) {

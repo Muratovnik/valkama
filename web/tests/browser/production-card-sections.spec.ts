@@ -5,6 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
+import { frames } from './frames.ts'
 import { projectScope } from './planningFixtures.ts'
 import { pressWhereItStands } from './stuckPress.ts'
 import { test } from './test.ts'
@@ -39,9 +40,7 @@ async function framesOfTabs(tabs: Locator, act: () => Promise<void>): Promise<nu
   })
   await act()
   // Past a paint, so that a place lost after the press has reached a frame.
-  await tabs.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+  await frames(tabs)
   return sampler.evaluate((running) => running.stop())
 }
 

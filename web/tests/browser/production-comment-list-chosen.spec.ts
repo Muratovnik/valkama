@@ -9,6 +9,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { boxes, openList } from './commentListBackend.ts'
+import { frames } from './frames.ts'
 import { asked, mixedField, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -16,10 +17,7 @@ const FOLDED = 'Rewrite the reader'
 
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready)
-  await page.evaluate(
-    () =>
-      new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
-  )
+  await frames(page.locator(':root'))
 }
 
 /** The left edge of the first line of words drawn in an element, through a Range. */

@@ -14,6 +14,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { frames } from './frames.ts'
 import { camera, openBroadField, settledCamera } from './graphFieldCamera.ts'
 import { movedSince, picture } from './graphPixels.ts'
 import type { Box } from './graphPixels.ts'
@@ -259,10 +260,7 @@ const ringStyle = (control: Locator) =>
   })
 
 /** Two frames, so a change has painted. */
-const painted = (page: Page) =>
-  page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+const painted = (page: Page) => frames(page.locator(':root'))
 
 /**
  * The header's rings and faces in one state: none at rest or under the pointer, where the

@@ -11,6 +11,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
+import { frames } from './frames.ts'
 import { test } from './test.ts'
 import { reply, root } from './threadFixtures.ts'
 
@@ -84,10 +85,7 @@ async function openAsked(page: Page, locale: Locale, width: number, more: Row[] 
 }
 
 /** Two frames, so a measurement reads the state the page has come to rest in. */
-const settle = (page: Page) =>
-  page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+const settle = (page: Page) => frames(page.locator(':root'))
 
 /**
  * A meta line as drawn, by Ranges over its text rather than by boxes: where the author's first

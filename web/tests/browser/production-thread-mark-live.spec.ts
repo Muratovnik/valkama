@@ -11,6 +11,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
+import { frames } from './frames.ts'
 import { test } from './test.ts'
 import { reply, root } from './threadFixtures.ts'
 
@@ -58,10 +59,7 @@ const asked = () => [
   }),
 ]
 
-const settle = (page: Page) =>
-  page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
+const settle = (page: Page) => frames(page.locator(':root'))
 
 async function openAsked(page: Page, locale: Locale, width: number) {
   const errors: string[] = []
