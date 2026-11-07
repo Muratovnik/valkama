@@ -9,6 +9,8 @@
  * the fold, a button of its own above the link. The lead is one width on every row, so
  * a level's signs stand in one column and its numbers in the next; the number's column
  * is as wide as the list's longest number (`NavWorkTree`), so its titles start at one x.
+ * On a phone a closed item has no sign and no fold, so it has no lead at all: its number
+ * stands a lead to the left of the open rows' numbers, and its title takes the room.
  *
  * The sign: three dots that run while the session works on the item, held still while it
  * holds the item and works on others, a ring while it waits for a person, and nothing for
@@ -114,6 +116,10 @@ const pinned = computed(() => props.row.pinned)
 const head = computed(() => Boolean(props.fold))
 const headAtWork = computed(() => head.value && sign.value !== null)
 const touch = computed(() => props.size === 'touch')
+/** A closed item on a phone has no sign and no fold, so its lead has nothing to hold: it goes. */
+const leadless = computed(
+  () => touch.value && props.row.is_terminal && !head.value && sign.value === null,
+)
 const depthStyle = computed(() => ({ '--nav-row-depth': props.depth }))
 
 /** A plain press opens the card in place; with a modifier it is the browser's, as on any link. */
@@ -138,6 +144,7 @@ function press(event: MouseEvent) {
       'nav-row-at-work': headAtWork,
       'nav-row-touch': touch,
       'nav-row-has-pin': pinShown,
+      'nav-row-leadless': leadless,
     }"
     :style="depthStyle"
     @pointerenter="hold(true)"
@@ -145,7 +152,10 @@ function press(event: MouseEvent) {
     @focusin="hold(true)"
     @focusout="hold(false)"
   >
-    <span class="nav-row-lead">
+    <span
+      v-if="!leadless"
+      class="nav-row-lead"
+    >
       <button
         v-if="fold"
         :id="fold.id"
@@ -263,6 +273,16 @@ function press(event: MouseEvent) {
     --nav-work-pin-sight: hidden;
 
     grid-template-columns: var(--nav-row-lead) minmax(0, 1fr) auto;
+  }
+
+  /* A closed row on a phone holds no lead: its track and the gap after it go, so its title
+     takes the room (`leadless`). Nested so it outranks the pin's column above. */
+  &.nav-row-leadless {
+    grid-template-columns: minmax(0, 1fr);
+
+    &.nav-row-has-pin {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
   }
 
   /* Focus anywhere in the row, not only the keyboard's: a pin that hid while focus was

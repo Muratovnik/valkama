@@ -57,6 +57,7 @@ interface Box {
 
 interface RowBoxes {
   depth: string
+  leadless: boolean
   meta: Box | null
   pin: Box | null
   reference: string
@@ -86,6 +87,7 @@ function rows(page: Page, within: string) {
         reference:
           row.querySelector('.nav-row-link')?.getAttribute('aria-label')?.split(' ')[0] ?? '',
         depth: row.style.getPropertyValue('--nav-row-depth'),
+        leadless: row.classList.contains('nav-row-leadless'),
       }
     }),
   ) as Promise<RowBoxes[]>
@@ -99,6 +101,16 @@ function byLevel(all: RowBoxes[], pick: (row: RowBoxes) => number | null) {
     levels.set(row.depth, [...(levels.get(row.depth) ?? []), { reference: row.reference, value }])
   }
   return levels
+}
+
+/**
+ * A closed row on a phone has no lead, so its title stands one lead to the left of the open
+ * rows' titles: each kind starts at one edge of its own there. Elsewhere a level shares one.
+ */
+function titlesOneEdge(all: RowBoxes[], width: number) {
+  const groups =
+    width > 760 ? [all] : [all.filter((row) => !row.leadless), all.filter((row) => row.leadless)]
+  for (const group of groups) oneEdge(group, (row) => row.title.left, 'title')
 }
 
 function oneEdge(all: RowBoxes[], pick: (row: RowBoxes) => number | null, what: string) {
@@ -124,7 +136,7 @@ for (const width of [1280, 390])
       )
     // The fixture puts numbers of one, two and three digits side by side.
     expect(new Set(numbers)).toEqual(new Set([1, 2, 3]))
-    oneEdge(all, (row) => row.title.left, 'title')
+    titlesOneEdge(all, width)
   })
 
 /** Whatever lies over a point of the focused row's ring, above its link, and draws there. */
