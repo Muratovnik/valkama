@@ -65,7 +65,13 @@ export function scanFocusRingWidths(sources) {
   const violations = []
   for (const { file, source } of sources) {
     if (!/\.(?:vue|css)$/.test(file)) continue
-    const tree = parseCss(stylesOf(file, source))
+    let tree
+    try {
+      tree = parseCss(stylesOf(file, source))
+    } catch {
+      // A sheet that is no stylesheet draws no ring, and the style linter refuses it.
+      continue
+    }
     const literal = new Set()
     tree.walkDecls(/^--/, (declaration) => {
       if (LITERAL_WIDTH.test(declaration.value)) literal.add(declaration.prop)
