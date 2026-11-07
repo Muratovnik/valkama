@@ -1,5 +1,5 @@
 /**
- * Where a lane heading's actions stand, from widths alone. The widths are hand-made, in 64ths of
+ * Where a lane heading's actions stand, from widths alone. The widths are hand-made, in sixty-fourths of
  * a pixel as the heading gives them: a line of 352px, a gap of 12px, actions of 80px, and the
  * state, the counts and a note of the sizes a phone's heading draws.
  */

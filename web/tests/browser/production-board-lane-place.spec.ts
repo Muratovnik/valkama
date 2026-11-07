@@ -30,7 +30,7 @@ const [NARROW, WIDE, STEP] = [320, 1440, 2]
 const PARTS = ['lane-toggle', 'lane-state', 'lane-counts', 'lane-elsewhere', 'lane-actions']
 
 /**
- * Every heading as drawn: its place, its height in the 64ths of a pixel layout works in, and the
+ * Every heading as drawn: its place, its height in the sixty-fourths of a pixel layout works in, and the
  * parts on each of its rows, top to bottom; a part whose middle falls inside a row found already
  * stands on it. Runs in the page, and scrolls the board to its first states or its middle ones
  * first.

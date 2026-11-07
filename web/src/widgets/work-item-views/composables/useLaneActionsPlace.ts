@@ -27,7 +27,7 @@ export interface LaneHeadParts {
 /** Where a finger presses, the actions stand a reach apart, wider than under a pointer. */
 const coarse = typeof matchMedia === 'undefined' ? undefined : matchMedia('(pointer: coarse)')
 
-/** A length in the 64ths of a pixel layout works in. */
+/** A length in the sixty-fourths of a pixel layout works in. */
 const units = (pixels: number) => Math.round(pixels * 64)
 
 const width = (element: Element) => units(element.getBoundingClientRect().width)

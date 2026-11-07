@@ -15,7 +15,7 @@
  *
  * The parts are laid on lines as flex lays them: a part starts a line when it and
  * the gap before it do not fit after the parts already there, and a part that
- * fits exactly stays. The widths come in whole units — the 64ths of a pixel
+ * fits exactly stays. The widths come in whole units — the sixty-fourths of a pixel
  * layout itself works in — so the sums here are the sums flex makes, with no
  * tolerance either way. A heading once foretold its lines with half a pixel to
  * spare, said they fitted where flex wrapped them, and kept whichever answer the
