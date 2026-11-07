@@ -137,8 +137,13 @@ const viewportQueryOwners = new Set([
  * the window, once, in `reach.css`, and every control takes its target from there. Four more
  * files asked it in their own words and the rule did not see them: it read only the first
  * condition of a query list, and the width stood second, after `(pointer: coarse)`.
+ *
+ * The owner may ask that one list and nothing beside it. Holding only that `(pointer: coarse)`
+ * stood somewhere in it let `(pointer: coarse), (width <= 4000px)` through: a different window
+ * question asked in the finger's name.
  */
 const FINGER_QUERY_OWNER = 'shared/ui/reach.css'
+const FINGER_QUERY = ['(pointer: coarse)', '(width <= 620px)']
 
 /** A window-width feature: `(width <= 620px)`, `(min-width: 40rem)`, `(400px < width)`. */
 const WIDTH_FEATURE = /(?<![\w-])(?:min-|max-)?(?:device-)?width(?![\w-])/i
@@ -156,8 +161,10 @@ function conditionsOf(list) {
   return conditions.map((condition) => condition.trim())
 }
 
-/** The finger's half of that query: a pointer as coarse as a finger. */
-const isCoarse = (condition) => /^\(\s*pointer\s*:\s*coarse\s*\)$/i.test(condition)
+/** Whether a list is the finger query, condition by condition and in its order, spaces and case aside. */
+const isFingerQuery = (conditions) =>
+  conditions.join(',').replaceAll(/\s+/g, '').toLowerCase() ===
+  FINGER_QUERY.join(',').replaceAll(' ', '')
 
 /** The `@media` query lists in which any condition asks how wide the window is. */
 function widthQueries(source) {
@@ -351,10 +358,7 @@ function offScaleWeights(file, source) {
 function viewportQueries(file, source) {
   if (viewportQueryOwners.has(file)) return []
   const asked = widthQueries(source)
-  const finger =
-    file === FINGER_QUERY_OWNER &&
-    asked.length === 1 &&
-    asked[0].some((condition) => isCoarse(condition))
+  const finger = file === FINGER_QUERY_OWNER && asked.length === 1 && isFingerQuery(asked[0])
   return finger
     ? []
     : asked.map(() => `${file}: ask the container how much room there is, not the window`)

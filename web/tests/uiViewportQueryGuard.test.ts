@@ -45,8 +45,26 @@ test('reach.css holds the one finger query, and only that one', () => {
   assert.deepEqual(asked(REACH, '@media (width <= 620px) { .reach { color: inherit; } }'), [
     `${REACH}: ${WINDOW}`,
   ])
+  // Spelled with other spaces or capitals it is still the one query.
+  assert.deepEqual(
+    asked(REACH, '@media (Pointer:coarse) ,\n  (width<=620px) { .reach { inset: 0; } }'),
+    [],
+  )
   // The same query anywhere else is a window question like any other.
   assert.deepEqual(asked('shared/ui/EntryHead.vue', FINGER), [`shared/ui/EntryHead.vue: ${WINDOW}`])
+})
+
+test('reach.css may ask the finger query only as written, not a list that merely holds a coarse pointer', () => {
+  for (const query of [
+    '(pointer: coarse), (width <= 4000px)',
+    '(pointer: coarse), (width <= 620px), (min-width: 1px)',
+    '(width <= 620px), (pointer: coarse)',
+    '(pointer: coarse), (max-width: 620px)',
+    '(pointer: coarse), (hover: none), (width <= 620px)',
+  ]) {
+    const css = `@media ${query} { .reach::before { inset: 0; } }`
+    assert.deepEqual(asked(REACH, css), [`${REACH}: ${WINDOW}`], query)
+  }
 })
 
 test('the tree asks the window only where it may', () => {
