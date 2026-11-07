@@ -3,8 +3,9 @@
  * languages: in its talk's heads and in its system events.
  *
  * Under a start the time of an entry takes a line of its own on a phone, and the ring a key put
- * round the start's link crossed the tops of its digits by 2px at 320–430px: the ring stands on
- * the words there, clear of the line under it.
+ * round the start's link crossed the tops of its digits by 2px at 320–430px: the link reaches
+ * no lower than the words there, and the ring keeps a gap off them as round any link, clear of
+ * the line under it. Drawn on the words, with no gap, it read as their underline.
  *
  * The system events printed an author's session whole, 36 characters in the interface font,
  * where every other surface prints its start in the metadata font, the whole id in its tooltip
@@ -57,14 +58,17 @@ async function openTalk(page: Page, locale: Locale, width: number) {
 /**
  * Where a key's ring round the start's link ends below, and where the ink of the time's digits
  * starts, read off the time's own font: the top of its words' box, less what of it lies above
- * its digits' tops.
+ * its digits' tops. The ring is read two frames after the focus: under reduced motion every
+ * property still changes by a transition, and read at once the ring stood at the initial 0px
+ * off its box and 3px wide, which kept a ring that crossed the digits from being seen.
  */
-const ringOverTime = (head: Locator) =>
-  head.evaluate((root) => {
+async function ringOverTime(head: Locator) {
+  await head.locator('.meta-session a').focus()
+  await frames(head)
+  return head.evaluate((root) => {
     const link = root.querySelector<HTMLElement>('.meta-session a')
     const time = root.querySelector<HTMLElement>('.meta-when')
     if (!link || !time?.firstChild) throw new Error('A linked start and a time')
-    link.focus()
     const ring = getComputedStyle(link)
     const box = [...link.getClientRects()].at(-1)
     const range = document.createRange()
@@ -76,15 +80,18 @@ const ringOverTime = (head: Locator) =>
     if (!box || !context) throw new Error('A drawn link')
     context.font = getComputedStyle(time).font
     const drawn = context.measureText(time.textContent ?? '')
+    const inside = box.bottom + Number.parseFloat(ring.outlineOffset)
     return {
-      ringBottom:
-        box.bottom + Number.parseFloat(ring.outlineOffset) + Number.parseFloat(ring.outlineWidth),
+      // Between the bottom of the start's words and the inner edge of the ring.
+      gap: inside - start.bottom,
+      ringBottom: inside + Number.parseFloat(ring.outlineWidth),
       ringed: link.matches(':focus-visible'),
       inkTop: words.top + drawn.fontBoundingBoxAscent - drawn.actualBoundingBoxAscent,
       // By the words, not the link's box, whose reach below is what is measured.
       under: words.top - start.top > start.height / 2,
     }
   })
+}
 
 for (const locale of ['en', 'ru'] as const)
   for (const width of [320, 390])
@@ -101,10 +108,12 @@ for (const locale of ['en', 'ru'] as const)
       // Each of them on a phone, the time under the start.
       const under = drawn.filter((head) => head.under)
       expect(under.length, `${locale} at ${width}: times under a start`).toBeGreaterThan(0)
-      for (const { inkTop, ringBottom } of under)
+      for (const { gap, inkTop, ringBottom } of under) {
         expect(ringBottom, `${locale} at ${width}: the ring over the digits`).toBeLessThanOrEqual(
           inkTop,
         )
+        expect(gap, `${locale} at ${width}: the ring off the words`).toBeGreaterThanOrEqual(1)
+      }
     })
 
 const EVENTS = { en: 'System events', ru: 'Системные события' } as const

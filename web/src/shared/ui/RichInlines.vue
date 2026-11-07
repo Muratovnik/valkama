@@ -233,8 +233,9 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
    its scroller scrolls, and on a text's last line a pixel of it showed «Show all» a pixel
    short; above, nothing scrolls. Each line of a wrapped reference is drawn whole, with
    its own padding and focus ring. Where a line under it holds words at once, as the time
-   under a session's start does, the host sets `--rich-reference-below` to 0: the reach and
-   the ring then end at the words. */
+   under a session's start does, the host sets `--rich-reference-below` to 0, and the reach
+   ends at the words; its ring stands off them by `--rich-reference-ring`, as far as the line
+   under them leaves room for. */
 .rich-reference {
   --reference-below: var(--rich-reference-below, var(--space-half));
 
@@ -243,7 +244,7 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
   box-decoration-break: clone;
 
   &:focus-visible {
-    outline-offset: var(--reference-below);
+    outline-offset: var(--rich-reference-ring, var(--reference-below));
   }
 
   &.identifier {
