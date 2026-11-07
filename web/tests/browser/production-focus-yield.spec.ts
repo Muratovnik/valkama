@@ -3,7 +3,8 @@
  * answered. A reply sent, then a click into the comment field while the write was out: the
  * answer took focus to the new reply, and the letters typed after it went nowhere. Focus moved
  * by the person since the action began stays where they put it; with nothing moved, the
- * landing is where it always was.
+ * landing is where it always was. A question's deadline passing is held to the same: it moves
+ * focus only off what it disabled.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -242,3 +243,60 @@ for (const locale of ['en', 'ru'] as const)
         expect(await outline(next)).toBe(RING[input])
       })
     }
+
+/**
+ * A deadline passing disables the form, and focus in it goes to the question, which says why;
+ * `production-question-step` holds that. Focus the person put on a control the deadline leaves
+ * as it was, the reply icon of the card or the task number over the list's card, stays there.
+ */
+const PASSED = /The deadline has passed/u
+
+/** The page's clock under the test's hand, and a deadline a minute and a half away on it. */
+async function soonDue(page: Page, width: number) {
+  await setUp(page, 'en', width)
+  await page.clock.install()
+  return new Date(Date.now() + 90_000).toISOString()
+}
+
+/** Shift+Tab goes back from where focus stands, so the keys start in the form; a press anywhere. */
+async function startIn(input: Input, control: Locator) {
+  if (input === 'key') await control.focus()
+}
+
+for (const width of [1280, 390])
+  for (const input of INPUTS) {
+    const where = `after ${input} at ${width}`
+
+    test(`in the card, a deadline passing leaves focus on the reply icon, ${where}`, async ({
+      page,
+    }) => {
+      const expires = await soonDue(page, width)
+      const { card } = await openQuestion(page, [asked({ expires_at: expires })])
+      const reply = card.locator('.entry-head').getByRole('button', { name: 'Reply', exact: true })
+      await startIn(input, card.getByRole('radio', { name: 'Move them', exact: true }))
+      await moveFocusBy(input, page, reply, card)
+      await page.clock.fastForward('02:00')
+      await expect(card).toHaveAccessibleDescription(PASSED)
+      await settled(page)
+      await expect(reply).toBeFocused()
+    })
+
+    test(`in the list, a deadline passing leaves focus on the task number, ${where}`, async ({
+      page,
+    }) => {
+      const expires = await soonDue(page, width)
+      const [upper, lower] = pair(2, 2)
+      upper.request.expires_at = expires
+      const opened = await openQuestion(page, [upper, lower])
+      const { top } = await inTheList(page, opened, 'Needs my answer')
+      const number = top
+        .locator('.request-context')
+        .getByRole('link', { name: 'MAIN-264', exact: true })
+      await startIn(input, top.getByRole('radio', { name: 'Choice 1', exact: true }))
+      await moveFocusBy(input, page, number, top)
+      await page.clock.fastForward('02:00')
+      await expect(top).toHaveAccessibleDescription(PASSED)
+      await settled(page)
+      await expect(number).toBeFocused()
+    })
+  }

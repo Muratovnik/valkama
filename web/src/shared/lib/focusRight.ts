@@ -15,10 +15,14 @@
  */
 import { inputCount, recordInput } from '@/shared/lib/pressFocus.ts'
 
-/** The page itself has focus: what held it went, or nothing has taken it yet. */
+/**
+ * The page itself has focus: what held it went, or nothing has taken it yet. A control that was
+ * disabled under focus counts as gone: the browser drops focus from it only when it next draws
+ * the page, and until then it holds a focus nothing can use.
+ */
 export function focusOnNothing(): boolean {
   const active = document.activeElement
-  return active === null || active === document.body
+  return active === null || active === document.body || active.matches(':disabled')
 }
 
 /** The count of input when focus last came to an element by the person's hand, so far as told. */

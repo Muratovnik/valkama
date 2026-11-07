@@ -90,6 +90,18 @@ it('focus fallen to the page, by a removal or a press on nothing, takes it from 
   expect(document.activeElement).toBe(landing)
 })
 
+it('a control disabled under focus holds it for nobody, and one marked busy keeps it', () => {
+  const held = document.body.appendChild(document.createElement('button'))
+  held.focus()
+  held.setAttribute('aria-disabled', 'true')
+  land(NO_FOCUS_RIGHT)
+  expect(document.activeElement).toBe(held)
+  held.disabled = true
+  land(NO_FOCUS_RIGHT)
+  expect(document.activeElement).toBe(landing)
+  held.remove()
+})
+
 it('each action has its own right: the press that begins one leaves the one before', () => {
   const first = grantFocus()
   press(field)

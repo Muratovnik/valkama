@@ -145,11 +145,14 @@ watch(waiting, async (now) => {
   await nextTick()
   NO_FOCUS_RIGHT.take(focusOutcome)
 })
-/** A deadline disables what had focus, so focus goes to the question, which says why. */
+/**
+ * A deadline disables the form, so focus in it goes to the question, which says why. What the
+ * deadline leaves, the reply icon or the task number, keeps the focus the person put on it.
+ */
 watch(pastDue, async (past) => {
   if (!past || !card.value?.contains(document.activeElement)) return
   await nextTick()
-  focusOn(deadlineLine.value)
+  NO_FOCUS_RIGHT.take(() => focusOn(deadlineLine.value))
 })
 /** In the list its title names the question; in a card's discussion, its author and time. */
 const labelledBy = computed(() => (props.standalone ? titleId : metaId))

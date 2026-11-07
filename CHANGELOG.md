@@ -245,7 +245,9 @@ checkouts are therefore distinguishable even at the same version.
   answered question, where focus you moved to its task number or its reply icon while the answer
   was out stays there and the list of everything waiting does not move on from it. It holds for
   the list moving on, a refresh, a mark of a thread and the steps of opening a session too. With
-  focus left where it was, it lands as before.
+  focus left where it was, it lands as before. A question's deadline passing no longer takes
+  focus off its reply icon or its task number; from the form it closes, focus still goes to the
+  question, which says the deadline has passed.
 - An agent's session id stays whole in the head of a comment, a reply and a question. On a
   phone the head of a reply broke it after its hyphen, «kolo 019a2b3c-» over «4d5e»; the
   line now breaks between the name and the id, as between any two words. The head prints the
