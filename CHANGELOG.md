@@ -641,7 +641,7 @@ checkouts are therefore distinguishable even at the same version.
   that phrase whole: where it does not fit beside the time, the time moves to the line under
   it, rather than the agent's name breaking off onto a second line beside the time. An answer
   recorded before Valkama could tell who gave it no longer calls its author an agent: it
-  reads «Answered by user».
+  reads «Answered by user», and a question declined then «Declined by user».
 - A resolved thread's line, «Resolved · you · 13 Aug, 14:00 · Moved to MAIN-14», breaks only
   between its parts on a phone: a line no longer ends with a dot, the date no longer has the
   decision's first word beside it, and a decision too long for the date's line starts a line

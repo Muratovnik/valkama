@@ -71,7 +71,10 @@ const closing = computed(() => {
   const { status, answered_by: by, by_person: person } = props.request
   if (status === 'answered') return ''
   if (status === 'declined' && person) return t('requests.youDeclined')
-  if (status === 'declined' && by) return t('requests.agentDeclined', { actor: actorName(by) })
+  if (status === 'declined' && by) {
+    const declined = person === false ? 'requests.agentDeclined' : 'requests.declinedBy'
+    return t(declined, { actor: actorName(by) })
+  }
   const state = t(`requests.${status}`)
   if (!by) return state
   const signed = person === false ? 'requests.agentResolved' : 'requests.resolvedBy'

@@ -64,6 +64,12 @@ test('the card says "you" only of a write this interface made, whatever the writ
     }),
     ended('5', 'Answered here', { ...answered, answered_by: 'this client', by_person: true }),
     ended('6', 'Declined here', { status: 'declined', answered_by: 'user', by_person: true }),
+    // From before calls were recorded: nothing proved it an agent's, nor the person's here.
+    ended('7', 'Declined before calls', {
+      status: 'declined',
+      answered_by: 'user',
+      by_person: null,
+    }),
   ])
   const outcome = (prompt: string) => card.filter({ hasText: prompt }).locator('.request-state')
   await expect(outcome('Answered by a script')).toContainText('Answered by agent user')
@@ -72,7 +78,13 @@ test('the card says "you" only of a write this interface made, whatever the writ
   await expect(outcome('Answered in a session')).toContainText('Answered by agent codex')
   await expect(outcome('Answered here')).toContainText('You answered')
   await expect(outcome('Declined here')).toContainText('You declined')
-  for (const prompt of ['Answered by a script', 'Declined by a script', 'Withdrawn by a script'])
+  await expect(outcome('Declined before calls')).toHaveText(/^\s*Declined by user(?:\s·\s|\s*$)/u)
+  for (const prompt of [
+    'Answered by a script',
+    'Declined by a script',
+    'Withdrawn by a script',
+    'Declined before calls',
+  ])
     await expect(card.filter({ hasText: prompt })).not.toContainText('You ')
   // A question always comes from an agent, and one may sign it with the person's name.
   await expect(
