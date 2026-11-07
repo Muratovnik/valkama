@@ -8,12 +8,15 @@
  * was added to wrote the title straight into the template, as the next one most likely will.
  *
  * So a template may not write a title as text. A `{{ … }}` whose expression names `title`
- * (`{{ title }}`, `{{ item.title }}`, `{{ title(entry) }}`), outside a quoted string, is
- * refused unless the file registers it below with what it is: a title held to one line that
- * ends in an ellipsis breaks nowhere, and a heading the interface writes itself is not a
- * work item's title. The element the directive sits on holds no text of its own, so a
- * title drawn through it is never seen here. A registered interpolation that is gone is
- * refused too, so the register says what the tree holds.
+ * (`{{ title }}`, `{{ item.title }}`, `{{ title(entry) }}`, `{{ `${item.title} ·` }}`),
+ * outside the words of a quoted string, is refused unless the file registers it below with
+ * what it is: a title held to one line that ends in an ellipsis breaks nowhere, and a heading
+ * the interface writes itself is not a work item's title. An entry is one place: the second
+ * `{{ title }}` of a file is registered as `{{ title }} #2`, with a reason of its own, since
+ * the pinned title and the heading of one drawer are two answers. The element the directive
+ * sits on holds no text of its own, so a title drawn through it is never seen here. A
+ * registered interpolation that is gone is refused too, so the register says what the tree
+ * holds.
  *
  * A title that reaches the template under another name is not seen here: an option's
  * `label` (`SearchCombobox`, which draws every option through the directive), a run of the
@@ -25,7 +28,8 @@
 const TEMPLATE = /<template\b[^>]*>([\s\S]*)<\/template>/
 const HTML_COMMENT = /<!--[\s\S]*?-->/g
 const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g
-const QUOTED = /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/g
+/** A quoted string from its opening quote. */
+const QUOTED = /^(?:'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")/
 const NAMES_TITLE = /(?<![\w$])title(?![\w$])/
 
 const ONE_LINE = 'held to one line with an ellipsis, so it breaks nowhere'
@@ -49,9 +53,10 @@ export const UNBROKEN_TITLES = new Map([
   ['pages/settings/components/SettingsGroup.vue {{ title }}', "a settings group's heading"],
   ['shared/ui/BrandMark.vue {{ title }}', "the mark's SVG title, which is not drawn"],
   ['shared/ui/DataEmptyState.vue {{ title }}', "an empty state's heading"],
+  ['shared/ui/DrawerFrame.vue {{ title }}', `the pinned title is ${ONE_LINE}`],
   [
-    'shared/ui/DrawerFrame.vue {{ title }}',
-    `the pinned title is ${ONE_LINE}; the heading's text is its slot's, where the card draws its title through the directive`,
+    'shared/ui/DrawerFrame.vue {{ title }} #2',
+    "the heading's words where its slot is left empty, which no drawer does: the card, the one drawer, draws its title in the slot through the directive",
   ],
   ['shared/ui/MarkdownSuggestions.vue {{ row.title }}', `a suggestion is ${ONE_LINE}`],
   [
@@ -84,17 +89,73 @@ export const UNBROKEN_TITLES = new Map([
     'widgets/work-item-inspector/components/InspectorRefusal.vue {{ notice.title }}',
     "a refusal's heading",
   ],
-  ['widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }}', "a lane's state"],
+  [
+    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }}',
+    `the epic's title over its lane is ${ONE_LINE}`,
+  ],
 ])
 
 const expressionOf = (body) => body.trim().replaceAll(/\s+/g, ' ')
 
-/** Each `{{ … }}` of a template that names a title, as written. */
+/**
+ * An expression with the words of its strings taken out: what a template literal puts in its
+ * `${…}` is code again, and stays.
+ */
+function codeOf(expression, start = 0, substitution = false) {
+  let code = ''
+  let depth = 0
+  let index = start
+  while (index < expression.length) {
+    const character = expression[index]
+    if (character === "'" || character === '"') {
+      const words = QUOTED.exec(expression.slice(index))?.[0] ?? expression.slice(index)
+      code += "''"
+      index += words.length
+      continue
+    }
+    if (character === '`') {
+      const literal = templateCode(expression, index)
+      code += literal.code
+      index = literal.end
+      continue
+    }
+    if (character === '{') depth += 1
+    else if (character === '}') {
+      if (substitution && depth === 0) return { code, end: index }
+      depth -= 1
+    }
+    code += character
+    index += 1
+  }
+  return { code, end: index }
+}
+
+/** A template literal from its backtick: no words, and the code of each `${…}`. */
+function templateCode(expression, start) {
+  let code = "''"
+  let index = start + 1
+  while (index < expression.length && expression[index] !== '`') {
+    if (expression.startsWith('${', index)) {
+      const inner = codeOf(expression, index + 2, true)
+      code += ` ${inner.code} `
+      index = inner.end + 1
+    } else index += expression[index] === '\\' ? 2 : 1
+  }
+  return { code, end: index + 1 }
+}
+
+/** Each `{{ … }}` of a template that names a title, as written, the second of one as `#2`. */
 function titlesIn(source) {
   const template = TEMPLATE.exec(source)?.[1]?.replaceAll(HTML_COMMENT, '') ?? ''
+  const seen = new Map()
   return [...template.matchAll(INTERPOLATION)]
     .map((match) => expressionOf(match[1]))
-    .filter((expression) => NAMES_TITLE.test(expression.replaceAll(QUOTED, "''")))
+    .filter((expression) => NAMES_TITLE.test(codeOf(expression).code))
+    .map((expression) => {
+      const place = (seen.get(expression) ?? 0) + 1
+      seen.set(expression, place)
+      return place === 1 ? `{{ ${expression} }}` : `{{ ${expression} }} #${place}`
+    })
 }
 
 export function scanTitleBreaks(sources, register = UNBROKEN_TITLES) {
@@ -102,12 +163,12 @@ export function scanTitleBreaks(sources, register = UNBROKEN_TITLES) {
   const seen = new Set()
   for (const { file, source } of sources) {
     if (!file.endsWith('.vue')) continue
-    for (const expression of titlesIn(source)) {
-      const key = `${file} {{ ${expression} }}`
+    for (const place of titlesIn(source)) {
+      const key = `${file} ${place}`
       seen.add(key)
       if (register.has(key)) continue
       violations.push(
-        `${file}: writes {{ ${expression} }} as text; a title is one word to the browser across each '/', and breaks in the middle of one at a phone's width, so draw it with v-slash-breaks (shared/ui/slashBreaks.ts), or register it in title-breaks.mjs with why it need not break`,
+        `${file}: writes ${place} as text; a title is one word to the browser across each '/', and breaks in the middle of one at a phone's width, so draw it with v-slash-breaks (shared/ui/slashBreaks.ts), or register it in title-breaks.mjs with why it need not break`,
       )
     }
   }

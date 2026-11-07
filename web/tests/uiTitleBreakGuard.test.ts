@@ -73,3 +73,34 @@ test('the register lets through only what it names, and names only what the tree
   assert.match(scanTitleBreaks(drawn('<h3 />'), register).join('\n'), /no longer writes; drop it/u)
   for (const reason of UNBROKEN_TITLES.values()) assert.ok(reason.length > 0)
 })
+
+test('a title inside a template literal is a title written as text', () => {
+  for (const template of [
+    '<span>{{ `${item.title} · ${count}` }}</span>',
+    '<span>{{ `${`#${node.title}`}` }}</span>',
+    "<span>{{ `${t('a')}: ${row?.title ?? ''}` }}</span>",
+  ]) {
+    const violations = scanTitleBreaks(drawn(template), new Map())
+    assert.match(violations.join('\n'), /draw it with v-slash-breaks/u, template)
+  }
+  for (const template of [
+    '<span>{{ `title: ${count}` }}</span>',
+    "<span>{{ `${t('item.title')} ${count}` }}</span>",
+    "<span>{{ '`' + subtitle }}</span>",
+  ])
+    assert.deepEqual(scanTitleBreaks(drawn(template), new Map()), [], template)
+})
+
+test('an entry lets through one place, and the second of an expression is its own', () => {
+  const twice = drawn('<p>{{ title }}</p><h2>{{ title }}</h2>')
+  const first = new Map([['future/Row.vue {{ title }}', 'the pinned words']])
+  const refused = scanTitleBreaks(twice, first)
+  assert.equal(refused.length, 1)
+  assert.ok(refused[0].startsWith('future/Row.vue: writes {{ title }} #2 as text'), refused[0])
+  const both = new Map([...first, ['future/Row.vue {{ title }} #2', 'the heading']])
+  assert.deepEqual(scanTitleBreaks(twice, both), [])
+  assert.match(
+    scanTitleBreaks(drawn('<p>{{ title }}</p>'), both).join('\n'),
+    /registers future\/Row.vue \{\{ title \}\} #2, which the tree no longer writes/u,
+  )
+})
