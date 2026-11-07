@@ -60,7 +60,7 @@ for (const locale of ['en', 'ru'] as const) {
       page,
     }) => {
       const meta = await openChanged(page, locale, by, 390)
-      expect(await expectDateHeld(meta, `${locale} at 390`)).toBe('own line')
+      expect(await expectDateHeld(meta, `${locale} at 390`, { phrase: true })).toBe('own line')
     })
   }
 
@@ -68,7 +68,7 @@ for (const locale of ['en', 'ru'] as const) {
     page,
   }) => {
     const meta = await openChanged(page, locale, LONG, 1500)
-    expect(await expectDateHeld(meta, `${locale} at 1500`)).toBe('own line')
+    expect(await expectDateHeld(meta, `${locale} at 1500`, { phrase: true })).toBe('own line')
   })
 }
 

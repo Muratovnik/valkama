@@ -268,7 +268,7 @@ for (const width of [1500, 390]) {
     ])
     const reply = card.locator('.request-reply-meta')
     await expect(reply).toContainText(long)
-    await expectDateHeld(reply, 'the answer in force')
+    await expectDateHeld(reply, 'the answer in force', { phrase: true })
     const asking = card.locator('.request-meta')
     await expect(asking).toContainText(long)
     await expectDateHeld(asking, 'the question')
