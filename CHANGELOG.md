@@ -398,8 +398,8 @@ checkouts are therefore distinguishable even at the same version.
   appear, and the title keeps the words it showed. A short title keeps its state beside it
   and its counts and icons on one line below, rather than leaving the icons a line of their
   own. A window widened or narrowed to a width, or opened before its font arrived, draws
-  the row the same either way, and resizing it no longer has the browser log a
-  ResizeObserver error at each width where a row changes its layout. Where nothing can
+  the row the same either way, and resizing it no longer adds an error to the browser's
+  console at each width where a row changes its layout. Where nothing can
   hover they stay up, far enough apart to tap. Tab or Shift+Tab along an epic's row held
   at the top of the board no longer scrolls the board back to the lane's start, and the
   focus ring around the row's arrow and icons shows whole there and at the board's edges,

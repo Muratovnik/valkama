@@ -53,7 +53,7 @@ typography:
   metadata:
     fontFamily: "'Cascadia Mono', Consolas, monospace"
     fontSize: "0.8125rem"
-    lineHeight: 1.4
+    lineHeight: 1.3
 rounded:
   control: "8px"
   panel: "10px"
@@ -979,8 +979,10 @@ the arrow: a line from the row's edge stood 4px left of the arrow. The indent,
 28px (the arrow's 4px inset, its 16px and their 8px gap), shortens every
 wrapped line, so the row takes a line more across at most the 28px of width
 above each width where lines from the edge would first fit it in one line
-fewer. That happens up to 890px, in lanes with an epic and without: three lines
-for two, or four for three where a long title also names work out of sight.
+fewer. That happens up to 890px in Russian under a finger (849px with a mouse;
+in English 802px under a finger, 782px with a mouse), in lanes with an epic and
+without: three lines for two, or four for three where a long title also names
+work out of sight.
 They come up under the pointer and when the keyboard reaches them, in a place
 kept for them, so nothing shifts or is covered; where nothing can hover they
 stay, a finger's reach apart. A pointer's press on the row does not leave them
