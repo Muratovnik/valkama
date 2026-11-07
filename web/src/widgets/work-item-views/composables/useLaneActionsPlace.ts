@@ -12,6 +12,7 @@ import type { Ref, WatchSource } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
+import { placeDue, placeRead } from '@/widgets/work-item-views/composables/lanePlaceReads.ts'
 import { layoutOf } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
 import type { LaneLayout } from '@/widgets/work-item-views/utils/laneActionsPlace.ts'
 
@@ -99,7 +100,9 @@ export function useLaneActionsPlace(
   // after the browser's own has taken the lane's size: read in its turn, a new place still changed
   // the lane too late to be told, so it is read in the next frame. The lane is laid out again some
   // way before it comes into sight, so the frame it keeps its old place is not seen unless it is
-  // brought straight into view from far off. The words are watched below and the font listened for.
+  // brought straight into view from far off. Until it is read, the place is due (`lanePlaceReads`),
+  // so what must stand clear of a heading waits for it. The words are watched below and the font
+  // listened for.
   watch(
     board,
     () => {
@@ -109,11 +112,22 @@ export function useLaneActionsPlace(
   )
   const measure = computed(() => head.value?.querySelector<HTMLElement>(':scope > .lane-measure'))
   let pending = 0
+  const readLater = () => {
+    pending = 0
+    read()
+    placeRead()
+  }
   useResizeObserver(measure, () => {
-    cancelAnimationFrame(pending)
-    pending = requestAnimationFrame(read)
+    if (pending) cancelAnimationFrame(pending)
+    else placeDue()
+    pending = requestAnimationFrame(readLater)
   })
-  onBeforeUnmount(() => cancelAnimationFrame(pending))
+  onBeforeUnmount(() => {
+    if (!pending) return
+    cancelAnimationFrame(pending)
+    pending = 0
+    placeRead()
+  })
   // A font that comes in after the heading was read changes every width read without always
   // resizing the boxes watched: a heading read in the fallback kept a place the font undid.
   useEventListener(

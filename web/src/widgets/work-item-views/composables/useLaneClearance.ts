@@ -15,6 +15,8 @@ import type { Ref } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
+import { afterPlaces, placesDue } from '@/widgets/work-item-views/composables/lanePlaceReads.ts'
+
 /** The latest request owns the board's position: an earlier one still settling gives way. */
 let latest = 0
 
@@ -49,17 +51,29 @@ function clear(target: Element): boolean {
 /**
  * Keeps `target` clear of its lane's heading after a scroll that brought it into view: once the
  * scroll is done, before it is drawn, and on the next frames, once the board has said what it
- * shows out of sight after that scroll and the heading has taken its height.
+ * shows out of sight after that scroll and the heading has taken its height. A lane the scroll
+ * laid out again reads its heading's place a frame later still, and a new place moves the board's
+ * content (`lanePlaceReads`): so the tile is cleared again each time the places due have been
+ * read, until a frame passes with none due.
  */
 export function clearOfHeading(target: Element) {
   latest += 1
   const mine = latest
+  const live = () => mine === latest && target.isConnected
+  const settled = () => {
+    if (!live()) return
+    clear(target)
+    requestAnimationFrame(() => {
+      if (live() && placesDue()) afterPlaces(settled)
+    })
+  }
   let passes = 3
   const pass = () => {
-    if (mine !== latest || !target.isConnected) return
+    if (!live()) return
     clear(target)
     passes -= 1
     if (passes > 0) requestAnimationFrame(pass)
+    else afterPlaces(settled)
   }
   queueMicrotask(pass)
 }
