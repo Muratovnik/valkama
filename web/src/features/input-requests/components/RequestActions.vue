@@ -29,12 +29,12 @@
  * What the host puts in the slot stands first in the row: the press of the comment on the
  * question, on the row's left end, as what comes before all of this. The way to the task and
  * the read of its status stand after it, at the row's start at every width. On a phone's row
- * the comment's press leads them on their line where it and they fit it (`useLeadPlace`): kept
- * on the buttons' line it left «Open task» a line alone above them, and at 320px took a line
- * alone itself, three lines for four controls. Where they do not fit it, or where nothing is
- * offered there, it keeps the buttons' line: taken up anyway, it was left a line alone above
- * them once the place broke onto a line of its own, a line more. The asking changes none of the
- * widths this is read from, so it moves the press nowhere.
+ * the comment's press always stands first on the place's line, whether the place holds those
+ * two or only the asking's room, and the place takes the rest of that line, its controls
+ * wrapping inside it: the press never takes a line of its own. Kept on the buttons' line it
+ * left «Open task» a line alone above them, and at 320px took a line alone itself, three lines
+ * for four controls; let up only where the place fitted beside it, it was still left alone
+ * where the place broke onto a line of its own.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -47,8 +47,6 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-
-import { useLeadPlace } from '@/features/input-requests/composables/useLeadPlace.ts'
 
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -81,7 +79,6 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const root = ref<HTMLElement | null>(null)
-const { leads: pressLeads } = useLeadPlace(root)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
 const asksTwo = computed(() => props.waiting || props.changing)
@@ -128,7 +125,6 @@ defineExpose({ focusWayOut })
   <div
     ref="root"
     class="request-actions"
-    :class="{ 'press-leads': pressLeads }"
   >
     <slot />
     <!-- What comes before the two answers, and the place their asking takes. -->
@@ -195,9 +191,6 @@ defineExpose({ focusWayOut })
 
 <style scoped>
 .request-actions {
-  /* What the place keeps for the asking, read as it is by `useLeadPlace`. */
-  --request-room: 12rem;
-
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
@@ -224,7 +217,7 @@ defineExpose({ focusWayOut })
 /* Wide enough for the asking on two lines, the height of the controls beside it, or on a line of
    its own; the same in every language, since the words do not set it. */
 .request-lead.is-room {
-  min-inline-size: min(var(--request-room), 100%);
+  min-inline-size: min(12rem, 100%);
 
   &::before {
     content: attr(data-room);
@@ -260,21 +253,31 @@ defineExpose({ focusWayOut })
 }
 
 /* As narrow as a phone, the place is the line above the buttons, and the comment's press, first
-   in the row, stays on theirs. */
+   in the row, stands at its start: the place takes the rest of the line beside it, on no line
+   apart, and the buttons go to the next line unless all of it fits on one. */
 @container (width <= 30rem) {
+  /* No narrower than its widest control, which would otherwise lie over the buttons beside it. */
   .request-lead {
-    flex-basis: 100%;
+    flex: 1 1 0;
+    grid-template-columns: minmax(min-content, 1fr);
     order: -1;
   }
 
-  /* Where it and the controls in the place fit one line, the comment's press stands at the start
-     of their line, and the place takes what it leaves of the line. */
-  .press-leads :slotted(*) {
+  :slotted(*) {
     order: -1;
   }
 
-  .press-leads .request-lead {
-    flex-basis: auto;
+  /* With controls in the place, the press stands on the axis of their first line: centred on a
+     place of two lines it stood between them, on a line of its own. */
+  .request-actions:has(.request-lead-controls > *) {
+    .request-lead {
+      align-self: flex-start;
+    }
+
+    :slotted(*) {
+      align-self: flex-start;
+      margin-block-start: calc(var(--size-control-height) / 2 - var(--size-control-inline) / 2);
+    }
   }
 }
 
