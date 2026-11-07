@@ -10,8 +10,8 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
-import { asked, openQuestion, send } from './questionBackend.ts'
-import { inTheList, pair } from './questionPress.ts'
+import { asked, openQuestion, QUESTION_ID, send } from './questionBackend.ts'
+import { answeredElsewhere, inTheList, pair } from './questionPress.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -172,7 +172,7 @@ async function landed(page: Page, state: Locator) {
 /** A card's question answered by `input`, its write held until `letGo` is called. */
 async function heldCard(page: Page, locale: Locale, width: number, input: Input) {
   await setUp(page, locale, width)
-  const { card, requests } = await openQuestion(page, [asked()])
+  const { card, requests, stream } = await openQuestion(page, [asked()])
   let letGo = doNothing
   requests.holdWrites(new Promise<void>((done) => (letGo = done)))
   await card.getByRole('radio', { name: 'Move them', exact: true }).click()
@@ -180,7 +180,7 @@ async function heldCard(page: Page, locale: Locale, width: number, input: Input)
   const reply = card
     .locator('.entry-head')
     .getByRole('button', { name: WORDS[locale].reply, exact: true })
-  return { card, letGo: () => letGo(), reply }
+  return { card, letGo: () => letGo(), reply, requests, stream }
 }
 
 /** Two questions in the list, the upper one answered by `input` with its write held. */
@@ -220,6 +220,24 @@ for (const locale of ['en', 'ru'] as const)
         await landed(page, card.locator('.request-state'))
         await expect(card).toBeFocused()
         expect(await outline(card)).toBe(RING[input])
+      })
+
+      test(`in the card, an answer from elsewhere while ours is out lands on the question at once, ${where}`, async ({
+        page,
+      }) => {
+        const { card, letGo, requests, stream } = await heldCard(page, locale, width, input)
+        requests.settle(QUESTION_ID, { ...answeredElsewhere, answers: { route: 'keep' } })
+        await stream.signal('agents')
+        // The form went with the poll, and focus with it: to the question, not to the page.
+        await landed(page, card.locator('.request-state'))
+        await expect(card).toBeFocused()
+        expect(await outline(card)).toBe(RING[input])
+        // Our own write, refused now, still lands on why, ringed as its input asks.
+        letGo()
+        const reason = card.locator('.request-foot').getByRole('alert')
+        await expect(reason).toBeFocused()
+        await settled(page)
+        expect(await outline(reason)).toBe(RING[input])
       })
 
       test(`in the list, focus moved to the task number stays there, ${where}`, async ({

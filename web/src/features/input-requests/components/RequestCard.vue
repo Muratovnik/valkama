@@ -136,12 +136,13 @@ useStepAttention(card, declining, stepBack)
 const waiting = computed(() => request.value.status === 'pending')
 const inForm = computed(() => waiting.value || changing.value)
 /**
- * The question stopped waiting. The person's own write or read moves focus through its right in
- * `settled`, so this covers a change from elsewhere only: focus moves when it fell to the page,
- * where what held it went; a control that stays keeps the focus the person put on it.
+ * The question stopped waiting, and focus moves only when it fell to the page, where what held
+ * it went; a control that stays keeps the focus the person put on it. The person's own write or
+ * read moves focus through its right in `settled`. A change from elsewhere while that write is
+ * out moves it at once all the same, under no right, so the write's right still stands.
  */
 watch(waiting, async (now) => {
-  if (now || busy.value || !card.value?.contains(document.activeElement)) return
+  if (now || !card.value?.contains(document.activeElement)) return
   await nextTick()
   NO_FOCUS_RIGHT.take(focusOutcome)
 })
