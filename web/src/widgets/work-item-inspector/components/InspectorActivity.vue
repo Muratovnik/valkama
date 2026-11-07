@@ -17,6 +17,7 @@ import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import SessionStart from '@/shared/ui/SessionStart.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -159,11 +160,10 @@ function referenceValue(entry: ActivityEntry) {
             class="entry-author"
           >
             {{ actorName(entry.author) }}
-            <span
+            <SessionStart
               v-if="actorSession(entry.author)"
-              class="entry-session"
-              >{{ actorSession(entry.author) }}</span
-            >
+              :session="actorSession(entry.author)"
+            />
           </p>
         </li>
       </ol>
@@ -260,9 +260,5 @@ function referenceValue(entry: ActivityEntry) {
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
-}
-
-.entry-session {
-  font-variant-numeric: tabular-nums;
 }
 </style>

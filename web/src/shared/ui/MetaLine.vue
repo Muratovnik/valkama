@@ -18,13 +18,9 @@
  * basis, so a name shorter than 14ch still shares the line with a time beside it that fits,
  * and the room the name leaves goes before the time, so the time ends a line it shares.
  *
- * The session an agent wrote from follows its name as every surface prints a session: its
- * start (`sessionStart`), one token in the metadata font, with the whole id in its tooltip.
- * Where the server knows the session the start is the link to it that the id is in prose
- * (`RichInlines`), so a finger reaches the whole id too. The whole id is 36 characters, about
- * 274px in that font, wider than a head's column on a phone, where it broke inside itself on
- * two lines of its own; the start keeps to one line there. It is one of the name's words for
- * the state below.
+ * The session an agent wrote from follows its name as every surface prints a session
+ * (`SessionStart`): its start, one token, the link to the whole id where the server knows it.
+ * It is one of the name's words for the state below.
  *
  * The name and the start are one: a no-break space holds the start to the name's last word, and
  * the pair keeps the time's line only where it fits there whole, its whole width the basis the
@@ -56,27 +52,12 @@ import { computed, onMounted, onUpdated, ref, useTemplateRef } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
-import { sessionStart } from '@/shared/lib/actor.ts'
-import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
-import type { RichInline } from '@/shared/lib/richText.ts'
-import RichInlines from '@/shared/ui/RichInlines.vue'
+import SessionStart from '@/shared/ui/SessionStart.vue'
 
 const props = defineProps<{ when: string; after?: string; phrase?: boolean; session?: string }>()
 
 /** The no-break space that holds the session to the name: a space in the template is dropped there. */
 const apart = computed(() => (props.session ? '\u{A0}' : ''))
-const start = computed(() => sessionStart(props.session ?? ''))
-/** The start as a reference of its own, which the layers above answer for as the whole id. */
-const drawn = computed((): RichInline[] => [
-  { kind: 'reference', reference: { kind: 'session', value: start.value }, code: false },
-])
-provideReferenceLinks((reference, parent) => {
-  const whole = props.session
-  if (!whole || reference.kind !== 'session' || reference.value !== start.value)
-    return parent(reference)
-  const link = parent({ kind: 'session', value: whole })
-  return link && { ...link, title: `${link.title}\n${whole}` }
-})
 
 const line = useTemplateRef<HTMLElement>('line')
 /** The state starts a line of its own rather than follow the time. */
@@ -148,12 +129,11 @@ useEventListener(
       class="meta-who"
       :class="{ 'is-unit': session || phrase }"
       ><slot />{{ apart
-      }}<span
+      }}<SessionStart
         v-if="session"
         class="meta-session"
-        :title="session"
-        ><RichInlines :nodes="drawn" /></span
-    ></span>
+        :session="session"
+    /></span>
     <span class="meta-when">{{ when }}</span>
     <span
       v-if="after"
@@ -189,16 +169,6 @@ useEventListener(
   &.is-unit {
     flex-basis: auto;
   }
-}
-
-/* Set solid, so the line's own leading decides its height. At 13px the browser rounds the
-   metadata font's ascent to 12px against the interface font's 13, and with the line's leading
-   the id's box reached a pixel past the name's: a line holding it stood 17.9px, one without
-   16.9px. Its letters keep the name's baseline. */
-.meta-session {
-  font-family: var(--font-family-mono);
-  line-height: var(--line-height-flat);
-  white-space: nowrap;
 }
 
 .meta-when {
