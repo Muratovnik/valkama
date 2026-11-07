@@ -2,7 +2,12 @@
  * The two Feature-Sliced rules: a file imports only from a layer below its own,
  * and a slice never imports a sibling slice. Plus the runtime cycle check, which
  * is what is left once downward-only imports make a cross-layer cycle impossible.
+ *
+ * Both read a file without its comments: an import a comment shows, or one commented out, is
+ * no import at all, and it named a direction and an edge until now.
  */
+
+import { uncommented } from './comments.mjs'
 
 const LAYERS = ['app', 'pages', 'widgets', 'features', 'entities', 'shared']
 
@@ -25,7 +30,8 @@ export function scanImportDirection(sources) {
     if (rank === -1) continue
     // A dynamic `import()` is an import too. A lazy view changes when its code
     // downloads, not which layer it belongs to, and this scan used to skip it.
-    for (const match of source.matchAll(/(?:from\s+|import\(\s*)['"]@\/([^'"]+)['"]/g)) {
+    const code = uncommented(file, source)
+    for (const match of code.matchAll(/(?:from\s+|import\(\s*)['"]@\/([^'"]+)['"]/g)) {
       const [targetLayer, targetSlice] = match[1].split('/')
       const targetRank = LAYERS.indexOf(targetLayer)
       if (targetRank === -1) continue
@@ -67,10 +73,11 @@ function resolveAliasTarget(specifier, known) {
  * each other's types are not a cycle in any sense that can break initialization
  * order. A mixed statement still counts: one value specifier keeps the edge.
  */
-function runtimeAliasTargets(source) {
+function runtimeAliasTargets(file, source) {
   const targets = []
-  for (const match of source.matchAll(/from\s+['"]@\/([^'"]+)['"]/g)) {
-    const before = source.slice(0, match.index)
+  const code = uncommented(file, source)
+  for (const match of code.matchAll(/from\s+['"]@\/([^'"]+)['"]/g)) {
+    const before = code.slice(0, match.index)
     const keyword = Math.max(before.lastIndexOf('import'), before.lastIndexOf('export'))
     if (keyword === -1) continue
     if (/^(?:import|export)\s+type\b/.test(before.slice(keyword))) continue
@@ -108,7 +115,7 @@ export function scanImportCycles(sources) {
   const imports = new Map(
     sources.map(({ file, source }) => [
       file,
-      runtimeAliasTargets(source)
+      runtimeAliasTargets(file, source)
         .map((specifier) => resolveAliasTarget(specifier, known))
         .filter((target) => target !== null && target !== file),
     ]),

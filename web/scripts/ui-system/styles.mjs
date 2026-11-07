@@ -4,6 +4,7 @@
  * every token declared is used and every token used is declared.
  */
 
+import { uncommented } from './comments.mjs'
 import { staleEntries } from './lines.mjs'
 import { SEMANTIC_COLOR_REFERENCE } from './semantic-colors.mjs'
 
@@ -191,19 +192,6 @@ const AREA_DECLARATION =
  * anywhere else, `background` and the `mask` shorthand included, it stays refused.
  */
 const MASK_IMAGE = /(?:^|[{;])\s*(?:-webkit-)?mask-image\s*:[^;{}]*/gi
-
-/**
- * The source as the browser runs it: no style, markup or script comment. A comment cannot
- * change a verdict either way: one standing between a block's `{` and its `mask-image` hid
- * the declaration from the pattern above, and one that names a gradient drew none.
- * A `//` after a colon is a URL's, not a comment.
- */
-function uncommented(source) {
-  return source
-    .replaceAll(/\/\*[\s\S]*?\*\//g, ' ')
-    .replaceAll(/<!--[\s\S]*?-->/g, ' ')
-    .replaceAll(/(?<![:/\\])\/\/.*$/gm, ' ')
-}
 
 const SOURCE_RULES = [
   {
@@ -451,8 +439,9 @@ export function scanUiSources(sources) {
   for (const { file, source } of sources) {
     const component = file.endsWith('.vue')
     // Every rule reads the file as it runs, so a comment that explains a rule never trips it
-    // and one beside a declaration never hides it.
-    const code = uncommented(source)
+    // and one beside a declaration never hides it: one standing between a block's `{` and its
+    // `mask-image` hid the declaration, and one that named a gradient drew none.
+    const code = uncommented(file, source)
     for (const rule of SOURCE_RULES) {
       if (rule.component && !component) continue
       if (rule.owners?.has(file)) continue

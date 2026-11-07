@@ -6,6 +6,7 @@
  * disguise. A control's height comes from the scale, not from a literal.
  */
 
+import { uncommented } from './comments.mjs'
 import { SEMANTIC_COLOR_NAMES } from './semantic-colors.mjs'
 
 /**
@@ -135,6 +136,9 @@ function drawnLines(file, source) {
     const value = match[1]
     if (!/\b(?:solid|dashed|double)\b/i.test(value)) continue
     if (/\btransparent\b/i.test(value) && !LINE_TOKENS.test(value)) continue
+    // Nor is one of no width: the reset that gives every element a solid style to colour later
+    // (`base.css`) draws nothing. Its comment hid it from this count until comments were read out.
+    if (/(?:^|\s)0(?:px)?(?=\s|$)/.test(value)) continue
     drawn += 1
     if (!LINE_TOKENS.test(value)) {
       violations.push(
@@ -165,7 +169,8 @@ export function scanBorderBudget(sources, budget = LINE_BUDGET) {
   const violations = staleEntries(sources, budget, 'LINE_BUDGET')
   for (const { file, source } of sources) {
     if (!/\.(?:vue|css)$/.test(file)) continue
-    const reading = drawnLines(file, source)
+    // A line in a comment is not drawn, and the ledger counts what is.
+    const reading = drawnLines(file, uncommented(file, source))
     violations.push(...reading.violations)
     const allowed = budget.get(file) ?? 0
     if (reading.drawn === allowed) continue
@@ -248,8 +253,7 @@ export function scanHiddenRules(sources) {
   const violations = []
   for (const { file, source } of sources) {
     if (!/\.(?:vue|css)$/.test(file)) continue
-    const css = source.replaceAll(/\/\*[\s\S]*?\*\//g, '')
-    for (const { selector, body } of eachRule(css)) {
+    for (const { selector, body } of eachRule(uncommented(file, source))) {
       const declarations = ownDeclarations(body)
       if (!HAIRLINE_SEAM_GAP.test(declarations) || !RULE_AS_GROUND.test(declarations)) continue
       const rule = (selector.split('\n').pop() ?? '').trim().replaceAll(/\s+/g, ' ')
@@ -312,7 +316,7 @@ export function scanControlSizes(sources, budget = CONTROL_SIZE_BUDGET) {
     if (!/\.(?:vue|css)$/.test(file)) continue
     if (file === 'app/styles/tokens.css') continue
     let literals = 0
-    for (const [, value] of source.matchAll(CONTROL_SIZE_DECLARATION)) {
+    for (const [, value] of uncommented(file, source).matchAll(CONTROL_SIZE_DECLARATION)) {
       const size = Number(value)
       if (size < CONTROL_BAND.low || size > CONTROL_BAND.high) continue
       literals += 1
