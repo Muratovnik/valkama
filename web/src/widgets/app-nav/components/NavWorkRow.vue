@@ -9,8 +9,9 @@
  * the fold, a button of its own above the link. The lead is one width on every row, so
  * a level's signs stand in one column and its numbers in the next; the number's column
  * is as wide as the list's longest number (`NavWorkTree`), so its titles start at one x.
- * On a phone a closed item has no sign and no fold, so it has no lead at all: its number
- * stands a lead to the left of the open rows' numbers, and its title takes the room.
+ * On a phone a closed top-level item with no sign and no fold has no lead at all: its number
+ * stands a lead to the left of the open rows' numbers, and its title takes the room. Nested
+ * items keep their lead.
  *
  * The sign: three dots that run while the session works on the item, held still while it
  * holds the item and works on others, a ring while it waits for a person, and nothing for
@@ -116,9 +117,14 @@ const pinned = computed(() => props.row.pinned)
 const head = computed(() => Boolean(props.fold))
 const headAtWork = computed(() => head.value && sign.value !== null)
 const touch = computed(() => props.size === 'touch')
-/** A closed item on a phone has no sign and no fold, so its lead has nothing to hold: it goes. */
+/**
+ * A closed top-level item on a phone has no sign and no fold, so its lead has nothing to hold:
+ * it goes. Nested items keep theirs, and so do heads and rows with a sign. Depth 1 is the top
+ * level (`NavWorkTree` passes it to the spaces' own rows).
+ */
 const leadless = computed(
-  () => touch.value && props.row.is_terminal && !head.value && sign.value === null,
+  () =>
+    touch.value && props.depth === 1 && props.row.is_terminal && !head.value && sign.value === null,
 )
 const depthStyle = computed(() => ({ '--nav-row-depth': props.depth }))
 
