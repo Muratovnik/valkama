@@ -35,6 +35,10 @@
  * 320–370px or two beside a long name at 320px, the start stands on a line of its own under the
  * name, from its left edge, and the time under it.
  *
+ * A head that says who in a phrase, «Answered by agent kolo», passes `phrase`: the phrase is one
+ * unit as the name and its start are, so the time keeps its line only beside the whole phrase.
+ * On the name's 14ch the line broke inside it beside the time, «Answered by agent» over «kolo».
+ *
  * `after` is a short state of the entry, «пока без ответа», said after the time, a dot between.
  * It comes after the time, so the time stands where it stands without it. It stays beside the
  * time only where the name keeps the lines it has without it; otherwise it starts a line of its
@@ -57,7 +61,7 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 
-const props = defineProps<{ when: string; after?: string; session?: string }>()
+const props = defineProps<{ when: string; after?: string; phrase?: boolean; session?: string }>()
 
 /** The no-break space that holds the session to the name: a space in the template is dropped there. */
 const apart = computed(() => (props.session ? '\u{A0}' : ''))
@@ -142,7 +146,7 @@ useEventListener(
   >
     <span
       class="meta-who"
-      :class="{ 'has-session': session }"
+      :class="{ 'is-unit': session || phrase }"
       ><slot />{{ apart
       }}<span
         v-if="session"
@@ -182,7 +186,7 @@ useEventListener(
   margin-inline-end: auto;
   overflow-wrap: anywhere;
 
-  &.has-session {
+  &.is-unit {
     flex-basis: auto;
   }
 }

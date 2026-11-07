@@ -50,11 +50,16 @@ const when = computed(() => {
 const answerTime = computed(() =>
   props.request.history.length ? t('requests.changedAt', { time: when.value }) : when.value,
 )
-/** "You" is the server's word about the call that closed this: a name is only what it signed. */
+/**
+ * "You" is the server's word about the call that closed this, and so is "agent": a name is only
+ * what it signed. With no call behind the answer, as before calls were recorded, it is a name.
+ */
 const replier = computed(() => {
   const { answered_by: by, by_person: person } = props.request
   if (person) return t('requests.youAnswered')
-  return by ? t('requests.agentAnswered', { actor: actorName(by) }) : t('requests.answered')
+  if (!by) return t('requests.answered')
+  const signed = person === false ? 'requests.agentAnswered' : 'requests.answeredBy'
+  return t(signed, { actor: actorName(by) })
 })
 const structured = computed(() => isStructured(props.request.fields))
 /** One text field reads as the sentence it is, with nothing to tell it from. */
@@ -92,6 +97,7 @@ const closing = computed(() => {
         class="request-reply-meta request-state"
         role="status"
         :when="answerTime"
+        phrase
         >{{ replier }}</MetaLine
       >
       <RequestSummary

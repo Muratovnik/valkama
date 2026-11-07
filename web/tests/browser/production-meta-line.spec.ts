@@ -1,8 +1,9 @@
 /**
  * An agent's name over an answer that was changed, in both languages. "changed · {time}"
  * takes most of a phone's line, and the name squeezed into what it left stood a word or two
- * to a line, broken inside its words; with a wide card the time keeps the end of the name's
- * first line.
+ * to a line, broken inside its words. The name stands in a phrase, «Answered by agent …», which
+ * is one unit: a phrase wider than the card's line, even at 1500, wraps by its own words and
+ * leaves the time a line under it, as a name with its session does.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -63,11 +64,11 @@ for (const locale of ['en', 'ru'] as const) {
     })
   }
 
-  test(`${locale}: a long name over a changed answer keeps the time on its first line at 1500`, async ({
+  test(`${locale}: a long name over a changed answer wraps by its words at 1500, the time under it`, async ({
     page,
   }) => {
     const meta = await openChanged(page, locale, LONG, 1500)
-    expect(await expectDateHeld(meta, `${locale} at 1500`)).toBe('first line')
+    expect(await expectDateHeld(meta, `${locale} at 1500`)).toBe('own line')
   })
 }
 

@@ -21,6 +21,7 @@ export type DatePlace = 'first line' | 'own line'
  * entry's head, under nothing, wherever icons took the rest of that line. A name with an
  * agent's session is owed its whole width with the session's start, which is one with it
  * (`expectSessionWithName`), so beside a time it does not fit with it takes a line of its own.
+ * So is a phrase that says who, «Answered by agent kolo».
  */
 export async function expectDateHeld(meta: Locator, where: string): Promise<DatePlace> {
   const line = await meta.evaluate((root, minCh) => {
@@ -62,7 +63,7 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
       left: box.left,
       nameLeft: Math.min(...whose.map((rect) => rect.left)),
       right: box.right,
-      session: who.querySelector('.meta-session') !== null,
+      unit: who.classList.contains('is-unit'),
       whenLeft: whenBox.left,
       whenRight: whenBox.right,
       whenTop: whenBox.top,
@@ -77,7 +78,7 @@ export async function expectDateHeld(meta: Locator, where: string): Promise<Date
   ).toBeGreaterThan(line.width)
   const place: DatePlace = Math.abs(line.whenTop - line.nameTop) <= 2 ? 'first line' : 'own line'
   const room = line.width - line.whenWidth - line.gap
-  const owed = line.session ? line.nameWidth : Math.min(line.minimum, line.nameWidth)
+  const owed = line.unit ? line.nameWidth : Math.min(line.minimum, line.nameWidth)
   // A pixel either side of the threshold is the browser's rounding, not a decision.
   if (Math.abs(room - owed) > 1) {
     expect(place, `${where}: the date's line, with ${room}px left beside it`).toBe(

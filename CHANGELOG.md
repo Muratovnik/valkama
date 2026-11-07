@@ -637,6 +637,11 @@ checkouts are therefore distinguishable even at the same version.
 - An epic's row held at the top of the board no longer hides the first 4 px of the tile coming
   out from under it, and in high-contrast mode the tiles passing beside it no longer show as
   stripes at its sides.
+- The line over a question's answer that says who gave it, «Answered by agent kolo», keeps
+  that phrase whole: where it does not fit beside the time, the time moves to the line under
+  it, rather than the agent's name breaking off onto a second line beside the time. An answer
+  recorded before Valkama could tell who gave it no longer calls its author an agent: it
+  reads «Answered by user».
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
