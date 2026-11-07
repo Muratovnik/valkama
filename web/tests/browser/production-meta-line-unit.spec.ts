@@ -23,14 +23,18 @@ const KNOWN = launchedSessionId
 /** A long agent name, one hyphen in it, that fits a phone's line alone but not with a date. */
 const LONG = 'retrospective-reviewer'
 
-/** The card's talk with a session behind every agent, a long name in a reply, and a root that
- *  still waits for its reply. */
+/** The card's talk with a session behind every agent, a long name in a reply, a report and a
+ *  root, and a root that still waits for its reply. Beside a root's two icons at 390 and a
+ *  report's three at 430 the long name and its start are wider than the head's column, its
+ *  last word and the start are not: the line breaks inside the name, and a start held by an
+ *  ordinary space broke off under the whole name there. */
 function talk() {
   const authors: Record<number, string> = {
     3: `elko (session ${UNKNOWN})`,
     5: `elko (session ${KNOWN})`,
     8: `kolo (session ${UNKNOWN})`,
     9: `${LONG} (session ${UNKNOWN})`,
+    10: `${LONG} (session ${KNOWN})`,
   }
   const rows = talkedOn().map((row) =>
     row.id in authors ? { ...row, author: authors[row.id] } : row,
@@ -46,6 +50,7 @@ function talk() {
       awaits_reply: true,
       answered: false,
     }),
+    root(14, 'A root under a long name.', { author: `${LONG} (session ${KNOWN})` }),
   ]
 }
 

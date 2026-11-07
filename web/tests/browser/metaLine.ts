@@ -154,8 +154,9 @@ type StartPlace = 'after the name' | 'own line'
  * or, where the pair does not fit beside it, on a line of its own under it, starting where the
  * name starts. Never the date on the first line with the start on a line below it, which is how
  * «kolo» stood over «019a2b3c-4d5e» beside the date on a phone. The start takes a line of its
- * own under the name only where the name's last line and the start are wider than the head's
- * column, as beside three icons at 320. Lines are counted by what is drawn: a rect starts a line
+ * own under the name only where even the name's last unbreakable piece, after its last space or
+ * hyphen, with the no-break space and the start is wider than the head's column, as beside three
+ * icons at 320; that width is measured apart from the layout under test. Lines are counted by what is drawn: a rect starts a line
  * when it begins below the middle of the line before, since the start, in the metadata font,
  * stands a pixel lower than the name on the same line.
  */
@@ -201,11 +202,33 @@ export async function expectSessionWithName(
     const of = (kind: string) => placed.filter((rect) => rect.kind === kind)
     const lastLine = Math.max(...of('name').map((rect) => rect.line))
     const onLast = of('name').filter((rect) => rect.line === lastLine)
+    // The name's last piece no line may break inside, after its last space or hyphen, and the
+    // no-break space after it, laid out on one line of their own in the name's font, apart from
+    // the head: the name's last line as laid out is the whole name once the line breaks between
+    // the name and the start, and would excuse that break.
+    const piece =
+      texts
+        .map((text) => text.data)
+        .join('')
+        .trim()
+        .match(/[^\s-]+-?/gu)
+        ?.at(-1) ?? ''
+    const probe = document.createElement('span')
+    probe.textContent = `${piece}\u{A0}`
+    probe.style.cssText = 'position: absolute; visibility: hidden; white-space: pre'
+    who.append(probe)
+    const pieceWidth = probe.getBoundingClientRect().width
+    probe.remove()
     const canvas = document.createElement('canvas').getContext('2d')
     if (!canvas) throw new Error('No canvas')
     const style = getComputedStyle(who)
     canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
     const sum = (kind: string) => of(kind).reduce((total, rect) => total + rect.width, 0)
+    // The start is one token that never wraps: its width is how far it is drawn. A range over a
+    // start that is a link returns the link's box beside its text, so a sum counts it twice.
+    const startLeft = Math.min(...of('start').map(({ left }) => left))
+    const startRight = Math.max(...of('start').map(({ right }) => right))
+    const startWidth = startRight - startLeft
     const box = root.getBoundingClientRect()
     return {
       // The name's left edge: where its first line starts.
@@ -216,18 +239,17 @@ export async function expectSessionWithName(
       ),
       nameLastLine: lastLine,
       nameRight: Math.max(...onLast.map(({ right }) => right)),
-      lastLineWidth: onLast.reduce((total, rect) => total + rect.width, 0),
-      // The head's column the pair has: the name's box, which takes the line where it wraps.
-      room: who.getBoundingClientRect().width,
-      startWidth: sum('start'),
+      piece,
+      pieceWidth,
+      startWidth,
       space: canvas.measureText(' ').width,
       startLines: [...new Set(of('start').map((rect) => rect.line))],
-      startLeft: Math.min(...of('start').map(({ left }) => left)),
-      startRight: Math.max(...of('start').map(({ right }) => right)),
+      startLeft,
+      startRight,
       timeLines: [...new Set(of('time').map((rect) => rect.line))],
       timeLeft: Math.min(...of('time').map(({ left }) => left)),
       // The pair and the date end to end, with the line's gap between them, against the line.
-      together: sum('name') + canvas.measureText(' ').width + sum('start') + sum('time'),
+      together: sum('name') + canvas.measureText(' ').width + startWidth + sum('time'),
       gap: Number.parseFloat(getComputedStyle(root).columnGap) || 0,
       width: box.width,
     }
@@ -252,10 +274,10 @@ export async function expectSessionWithName(
       .toBe(drawn.nameLastLine + 1)
     expect
       .soft(
-        drawn.lastLineWidth + drawn.space + drawn.startWidth,
-        `${label}: the start left the name's line in a column of ${drawn.room}px`,
+        drawn.pieceWidth + drawn.startWidth,
+        `${label}: the start alone though «${drawn.piece}» and it fit the column of ${drawn.width}px`,
       )
-      .toBeGreaterThan(drawn.room - 0.5)
+      .toBeGreaterThan(drawn.width - 0.5)
     expect
       .soft(Math.abs(drawn.startLeft - drawn.nameLeft), `${label}: the start under the name`)
       .toBeLessThanOrEqual(1)

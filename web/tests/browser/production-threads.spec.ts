@@ -225,7 +225,7 @@ test('what opens more of a thread is bare, and starts where its text does', asyn
 })
 
 for (const width of [1500, 390]) {
-  test(`a long name leaves the date where it stands on the line beside it at ${width}`, async ({
+  test(`a long name with a session wraps by its words and the date takes a line under it at ${width}`, async ({
     page,
   }) => {
     const { backend, drawer } = await openTalkedOn(page, width)
@@ -238,8 +238,9 @@ for (const width of [1500, 390]) {
     const thread = threadOf(drawer, 'Who wrote this?')
     await expect(thread.locator('.reply')).toHaveCount(1)
     await expect(drawer).toHaveCSS('transform', 'none')
-    await expectDateHeld(thread.locator('.thread-meta'), 'the root')
-    await expectDateHeld(thread.locator('.reply-meta'), 'the reply')
+    // No head has the room for the whole name and its start beside the date.
+    expect(await expectDateHeld(thread.locator('.thread-meta'), 'the root')).toBe('own line')
+    expect(await expectDateHeld(thread.locator('.reply-meta'), 'the reply')).toBe('own line')
   })
 }
 
