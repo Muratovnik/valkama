@@ -359,9 +359,12 @@ and only fades the end of a strip that scrolls on past it.
   pointer area, and it is spent only where there is no label to widen the box —
   an icon button, a tag in a card foot, a 22px switch — where the extra pixels
   go on a hit area rather than on the drawing: under a finger or on a phone-wide
-  screen an icon button or a toggle shown as its glyph alone (`VButton`, `ToggleChip`,
-  one rule in `reach.css`) answers a press across the target around what it draws, and
-  its row keeps its height. The rail's own buttons and a card head's 28px copy-link icon
+  screen an icon button or a toggle shown as its glyph alone (`VButton`, `ToggleChip`)
+  answers a press across the target around what it draws, and its row keeps its height;
+  a line of inline icons too close together to reach grows each icon's box instead.
+  Whether a finger presses is asked once, in `reach.css`, and every control takes its
+  target from there; `check:ui-system` refuses a window width anywhere else in a query
+  list. The rail's own buttons and a card head's 28px copy-link icon
   do not reach yet. The floor everything clears is
   WCAG 2.5.8 at 24px; 44 is the 2.5.5 AAA figure and this product spends it
   wherever a control has no label of its own to widen the box, which is where

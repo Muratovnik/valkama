@@ -131,6 +131,41 @@ const viewportQueryOwners = new Set([
 ])
 
 /**
+ * The one other question about the window: whether a finger presses, which is a coarse pointer
+ * or a phone-wide screen. A finger is as wide in any box a control stands in, so that one asks
+ * the window, once, in `reach.css`, and every control takes its target from there. Four more
+ * files asked it in their own words and the rule did not see them: it read only the first
+ * condition of a query list, and the width stood second, after `(pointer: coarse)`.
+ */
+const FINGER_QUERY_OWNER = 'shared/ui/reach.css'
+
+/** A window-width feature: `(width <= 620px)`, `(min-width: 40rem)`, `(400px < width)`. */
+const WIDTH_FEATURE = /(?<![\w-])(?:min-|max-)?(?:device-)?width(?![\w-])/i
+
+/** The conditions of a query list, split at the commas that stand outside every bracket. */
+function conditionsOf(list) {
+  const conditions = ['']
+  let depth = 0
+  for (const character of list) {
+    if (character === '(') depth += 1
+    else if (character === ')') depth -= 1
+    if (character === ',' && depth === 0) conditions.push('')
+    else conditions[conditions.length - 1] += character
+  }
+  return conditions.map((condition) => condition.trim())
+}
+
+/** The finger's half of that query: a pointer as coarse as a finger. */
+const isCoarse = (condition) => /^\(\s*pointer\s*:\s*coarse\s*\)$/i.test(condition)
+
+/** The `@media` query lists in which any condition asks how wide the window is. */
+function widthQueries(source) {
+  return [...source.matchAll(/@media\b([^{;]*)\{/gi)]
+    .map(([, list]) => conditionsOf(list))
+    .filter((conditions) => conditions.some((condition) => WIDTH_FEATURE.test(condition)))
+}
+
+/**
  * The meaning colours, which mark a state and never fill a surface.
  *
  * The family is declared once, in `semantic-colors.mjs`. It used to be a
@@ -324,13 +359,17 @@ function offScaleWeights(file, source) {
   return violations
 }
 
-/** Every window-width query in a file that is not allowed to ask. */
+/** Every window-width query in a file that is not allowed to ask, wherever its list asks it. */
 function viewportQueries(file, source) {
-  return viewportQueryOwners.has(file)
+  if (viewportQueryOwners.has(file)) return []
+  const asked = widthQueries(source)
+  const finger =
+    file === FINGER_QUERY_OWNER &&
+    asked.length === 1 &&
+    asked[0].some((condition) => isCoarse(condition))
+  return finger
     ? []
-    : [...source.matchAll(/@media\s*\(\s*(?:width|min-width|max-width)/gi)].map(
-        () => `${file}: ask the container how much room there is, not the window`,
-      )
+    : asked.map(() => `${file}: ask the container how much room there is, not the window`)
 }
 
 /** Literal colors, named in the message so the fix does not need a second look. */
