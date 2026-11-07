@@ -233,7 +233,7 @@ for (const locale of ['en', 'ru'] as const)
       await card.evaluate((node) => node.scrollIntoView({ block: 'start' }))
       await page.mouse.move(0, 0)
       await shot(page, `session-question-${locale}-${width}`)
-      // The start reached under a finger opens the session, which says its whole id.
+      // The start reached by a press opens the session, which says its whole id.
       await thread.locator('.reply-meta').first().getByRole('button', { name: KNOWN_START }).click()
       await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()
     })
@@ -253,3 +253,17 @@ for (const locale of ['en', 'ru'] as const)
       }
     })
   }
+
+// A finger's tap, not a mouse's click: a press that answered a mouse alone passed a click.
+test.describe('under a finger', () => {
+  test.use({ hasTouch: true })
+
+  for (const locale of ['en', 'ru'] as const)
+    test(`${locale} at 390: a tap on a known session's start opens it, which says its whole id`, async ({
+      page,
+    }) => {
+      const { thread } = await openHeads(page, locale, 390)
+      await thread.locator('.reply-meta').first().getByRole('button', { name: KNOWN_START }).tap()
+      await expect(page.getByRole('dialog').filter({ hasText: KNOWN })).toBeVisible()
+    })
+})
