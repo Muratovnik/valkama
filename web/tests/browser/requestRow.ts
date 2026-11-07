@@ -13,6 +13,10 @@ import { frames } from './frames.ts'
 /** The gap a row keeps between its controls. */
 const GAP = 8
 
+/** How wide the place before the answers stays where the asking can come, in rems: the same in
+ *  every language, since its words do not set it. */
+const ASKING_ROOM_REM = 12
+
 type Edge = { bottom: number; left: number; right: number; top: number }
 
 /**
@@ -49,7 +53,15 @@ const membersOf = (row: Locator) =>
     const room = held && { bottom: held.bottom, left: held.left, right: held.right, top: held.top }
     const line = lead ? Number.parseFloat(getComputedStyle(lead, '::before').lineHeight) : 0
     const apart = lead !== null && getComputedStyle(lead).order === '-1'
-    return { apart, row: { bottom, left, right, top }, members, room, line }
+    // A rem, for the room the place keeps where the asking can come into it.
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+    const asks = lead instanceof HTMLElement && lead.dataset.room !== undefined
+    // The controls offered in the place, seen or hidden while the asking stands over them.
+    const offered = [...(lead?.querySelectorAll('button') ?? [])]
+      .filter((button) => button.getClientRects().length > 0)
+      .map((button) => button.getBoundingClientRect().width)
+    const row = { bottom, left, right, top }
+    return { apart, asks, rem, row, members, offered, room, line }
   })
 type Row = Awaited<ReturnType<typeof membersOf>>
 
@@ -166,12 +178,42 @@ function expectOnOneLine(members: Row['members'], what: string) {
   for (const other of rest) expect(near(other, first ?? other), what).toBe(true)
 }
 
+const pairOf = (measured: Row) => measured.members.filter((member) => !member.lead)
+
+/** How wide these controls are side by side. */
+const across = (members: Row['members']) =>
+  members.reduce((sum, { box }) => sum + box.right - box.left, GAP * (members.length - 1))
+
 /** Whether these controls fit side by side across the row. */
-function fitAcross(members: Row['members'], { row }: Row) {
-  const widths = members.map(({ box }) => box.right - box.left)
-  return (
-    widths.reduce((sum, width) => sum + width, GAP * (widths.length - 1)) <= row.right - row.left
-  )
+const fitAcross = (members: Row['members'], { row }: Row) => across(members) <= row.right - row.left
+
+/**
+ * Whether the comment's glyph leads the place's line on a phone's row: where it, the gap and the
+ * place fit the row, the place as wide as the controls offered there, seen or under the asking,
+ * or as the room it keeps where the asking can come, whichever is wider. A pixel either side is
+ * the browser's rounding.
+ */
+function glyphLeads(measured: Row, slotted: Row['members']) {
+  const room = measured.asks ? ASKING_ROOM_REM * measured.rem : 0
+  const { offered } = measured
+  const controls = offered.reduce((sum, width) => sum + width, GAP * (offered.length - 1))
+  const needs = across(slotted) + GAP + Math.max(controls, room)
+  const width = measured.row.right - measured.row.left
+  return Math.abs(needs - width) <= 1 ? undefined : needs < width
+}
+
+/** Where the place holds no control or the glyph does not lead it: the glyph is on the buttons'
+ *  line, those are one line where they fit across, and the pair is one line wherever. */
+function expectGlyphBelow(measured: Row, placed: Row['members'], what: string) {
+  const rest = measured.members.filter((member) => !placed.includes(member))
+  if (fitAcross(rest, measured)) expectOnOneLine(rest, `${what}: the buttons are one line`)
+  else expectOnOneLine(pairOf(measured), `${what}: the pair is one line`)
+  if (placed.length === 0) return
+  const above = Math.max(...placed.map(({ box }) => box.bottom))
+  for (const member of rest)
+    expect(member.box.top, `${what}: ${member.name} under the place`).toBeGreaterThanOrEqual(
+      above - 1,
+    )
 }
 
 function expectOneLineWhereItFits(measured: Row, asking: number, what: string) {
@@ -180,25 +222,29 @@ function expectOneLineWhereItFits(measured: Row, asking: number, what: string) {
       expectOnOneLine(measured.members, `${what}: one line, as everything fits`)
     return
   }
-  // As narrow as a phone's, the place before the buttons is the line above theirs: each of the
-  // two is one line where its controls fit. The comment's glyph leads the place's line where the
-  // place holds controls, and stands on the buttons' line where it holds only the asking's room.
+  // As narrow as a phone's, the place before the buttons is the line above theirs. The comment's
+  // glyph leads the place's line where it and the place's controls fit that line, and keeps the
+  // buttons' line otherwise, or where the place holds only the asking's room: taken up anyway,
+  // it was left a line alone over a place broken onto a line of its own.
   const inPlace = measured.members.filter((member) => member.placed)
-  const glyphAbove = inPlace.length > 0
+  const slotted = measured.members.filter((member) => member.slotted)
+  const leads = measured.offered.length > 0 && slotted.length > 0 && glyphLeads(measured, slotted)
+  if (leads === undefined) {
+    expectOnOneLine(pairOf(measured), `${what}: the pair is one line`)
+    return
+  }
+  if (!leads) {
+    expectGlyphBelow(measured, inPlace, what)
+    return
+  }
   // A place of controls is no line apart where all of it fits on one with the buttons.
-  if (glyphAbove && fitsOneLine(measured, asking)) {
+  if (inPlace.length > 0 && fitsOneLine(measured, asking)) {
     expectOnOneLine(measured.members, `${what}: one line, as everything fits`)
     return
   }
-  const placed = measured.members.filter(
-    (member) => member.placed || (glyphAbove && member.slotted),
-  )
-  const rest = measured.members.filter((member) => !placed.includes(member))
-  if (fitAcross(placed, measured)) expectOnOneLine(placed, `${what}: the place is one line`)
-  if (fitAcross(rest, measured)) expectOnOneLine(rest, `${what}: the buttons are one line`)
-  const above = Math.max(...placed.map(({ box }) => box.bottom))
-  for (const member of rest)
-    expect(member.box.top, `${what}: the buttons under the place`).toBeGreaterThanOrEqual(above)
+  const placed = [...slotted, ...inPlace]
+  expectOnOneLine(placed, `${what}: the glyph leads the place, on one line`)
+  expectGlyphBelow(measured, placed, what)
 }
 
 /**
@@ -244,8 +290,6 @@ const heldRoom = (row: Locator) =>
         return { name, room: button.getBoundingClientRect().width - words - padding }
       }),
   )
-
-const pairOf = (measured: Row) => measured.members.filter((member) => !member.lead)
 
 const nextFrames = (scope: Locator) => frames(scope)
 

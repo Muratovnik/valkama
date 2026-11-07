@@ -10,9 +10,8 @@
  * since nobody should refuse without seeing the end of what will not go: it takes the place of
  * the way to the task and the read of its status, which a press would end the step on anyway,
  * and that place is kept as wide as the asking needs on two lines. On a row as narrow as a
- * phone's that place is the line above the buttons, which those two hold, the comment's press
- * leading them, and which stays the asking's alone only where neither is offered: there the
- * comment's press keeps the line of the buttons, since it is a glyph with no line of its own. Under them it fell out of the window
+ * phone's that place is the line above the buttons, which those two hold, and which stays the
+ * asking's alone only where neither is offered. Under them it fell out of the window
  * with a foot at the window's edge, and no scroll can bring it back without ending the step.
  * Kept beside the controls as a room of its own, it sent the two to the next line where
  * everything else fitted.
@@ -30,8 +29,12 @@
  * What the host puts in the slot stands first in the row: the press of the comment on the
  * question, on the row's left end, as what comes before all of this. The way to the task and
  * the read of its status stand after it, at the row's start at every width. On a phone's row
- * the comment's press leads them on their line: kept on the buttons' line it left «Open task»
- * a line alone above them, and at 320px took a line alone itself, three lines for four controls.
+ * the comment's press leads them on their line where it and they fit it (`useLeadPlace`): kept
+ * on the buttons' line it left «Open task» a line alone above them, and at 320px took a line
+ * alone itself, three lines for four controls. Where they do not fit it, or where nothing is
+ * offered there, it keeps the buttons' line: taken up anyway, it was left a line alone above
+ * them once the place broke onto a line of its own, a line more. The asking changes none of the
+ * widths this is read from, so it moves the press nowhere.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -44,6 +47,8 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useLeadPlace } from '@/features/input-requests/composables/useLeadPlace.ts'
 
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -76,6 +81,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const root = ref<HTMLElement | null>(null)
+const { leads: pressLeads } = useLeadPlace(root)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
 const asksTwo = computed(() => props.waiting || props.changing)
@@ -122,7 +128,7 @@ defineExpose({ focusWayOut })
   <div
     ref="root"
     class="request-actions"
-    :class="{ 'has-lead-controls': standalone || refreshable }"
+    :class="{ 'press-leads': pressLeads }"
   >
     <slot />
     <!-- What comes before the two answers, and the place their asking takes. -->
@@ -189,6 +195,9 @@ defineExpose({ focusWayOut })
 
 <style scoped>
 .request-actions {
+  /* What the place keeps for the asking, read as it is by `useLeadPlace`. */
+  --request-room: 12rem;
+
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
@@ -215,7 +224,7 @@ defineExpose({ focusWayOut })
 /* Wide enough for the asking on two lines, the height of the controls beside it, or on a line of
    its own; the same in every language, since the words do not set it. */
 .request-lead.is-room {
-  min-inline-size: min(12rem, 100%);
+  min-inline-size: min(var(--request-room), 100%);
 
   &::before {
     content: attr(data-room);
@@ -258,13 +267,13 @@ defineExpose({ focusWayOut })
     order: -1;
   }
 
-  /* Controls in the place: the comment's press stands at the start of their line, and the place
-     takes what it leaves of the line. */
-  .has-lead-controls :slotted(*) {
+  /* Where it and the controls in the place fit one line, the comment's press stands at the start
+     of their line, and the place takes what it leaves of the line. */
+  .press-leads :slotted(*) {
     order: -1;
   }
 
-  .has-lead-controls .request-lead {
+  .press-leads .request-lead {
     flex-basis: auto;
   }
 }
