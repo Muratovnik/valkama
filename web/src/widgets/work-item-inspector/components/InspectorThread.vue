@@ -65,6 +65,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -296,12 +297,11 @@ defineExpose({ revealQuestion })
       </li>
     </template>
   </ol>
-  <p
+  <DataEmptyState
     v-else
-    class="thread-empty"
-  >
-    {{ emptyLine }}
-  </p>
+    :title="emptyLine"
+    inline
+  />
   <p
     v-if="hiddenCount"
     class="thread-hidden"
@@ -359,12 +359,6 @@ defineExpose({ revealQuestion })
 }
 
 .thread-tail-flag {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.thread-empty {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

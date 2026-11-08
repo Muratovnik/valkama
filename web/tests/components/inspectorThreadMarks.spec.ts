@@ -325,7 +325,7 @@ describe('the filter', () => {
   it('says when nothing is open', async () => {
     const wrapper = open(card([root(1, { resolution: MARK })]))
     await getButton(wrapper, 'Unresolved 0').trigger('click')
-    expect(wrapper.get('.thread-empty').text()).toBe('No unresolved threads.')
+    expect(wrapper.get('.data-empty').text()).toBe('No unresolved threads.')
     expect(wrapper.get('.thread-hidden').text()).toContain('1 resolved thread hidden')
   })
 

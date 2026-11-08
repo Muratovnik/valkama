@@ -669,8 +669,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   does on an open. A panel opened by no input, from an address or a reload, holds
   focus on what it is read with until a Tab, so that no control stands ringed for
   something nobody pressed and the keys that scroll work at once.
-- **Empty and error states:** one shared state component explains what is
-  absent, why it matters, and the next valid action when one exists.
+- **Empty and error states:** one shared state component (`DataEmptyState`)
+  explains what is absent, why it matters, and the next valid action when one
+  exists. It stands in the middle of the space the data would fill when a whole
+  panel, tab or column is empty, smaller (`compact`) where that space is small,
+  and as one quiet line at the start of a section (`inline`) when the absence
+  sits among other content, as a section of a card does. A section does not
+  write its own muted paragraph for it.
 - **Icons and badges:** application glyphs come from the central icon owner;
   local SVGs and per-screen badge shapes are prohibited.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short

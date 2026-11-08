@@ -240,14 +240,14 @@ for (const width of [1280, 390]) {
     const detail = attempt.locator('.attempt-context').getByRole('button')
     await expectFoldOnEdge(detail, fact ?? Number.NaN, 'attempt')
 
-    // Memory's technical details under the line that names its source, once it has searched.
+    // Memory's technical details under the field's hint, which names the folder searched.
     await drawer.getByRole('tab', { name: /Memory/u }).click()
     const form = drawer.locator('.memory-form')
     await form.getByRole('textbox').fill('store')
     await form.getByRole('button').click()
     const technical = drawer.locator('.memory .disclosure').getByRole('button')
     await expect(technical).toBeVisible()
-    const [source] = await wordsLeft(drawer.locator('.memory p.quiet').first())
+    const [source] = await wordsLeft(drawer.locator('.memory-hint'))
     await expectFoldOnEdge(technical, source ?? Number.NaN, 'memory')
   })
 }

@@ -7,6 +7,7 @@ import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorM
 
 import { fetchMemoryProviders, searchMemory } from '@/shared/api/memoryApi.ts'
 import type { MemoryProviders, MemorySearch } from '@/shared/api/memoryApi.ts'
+import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { memoryProviders, memorySearch } from '../browser/memoryFixtures.ts'
@@ -34,21 +35,15 @@ describe('InspectorMemory source identity', () => {
       .mockResolvedValue(memorySearch as MemorySearch)
   })
 
-  it('identifies the project document search before searching', async () => {
+  it('names the folder it searches under the field, and nothing more, before searching', async () => {
     const wrapper = mountMemory()
     await flushPromises()
-    const source = wrapper.get('.memory-source')
-    expect(source.text()).toContain('Project document search')
-    expect(source.text()).toContain(`${projectId}/docs`)
-    expect(source.text()).toContain('C:/projects/sample/docs')
-    expect(source.text()).toContain('Markdown project documents')
+    expect(wrapper.get('.memory-hint').text()).toBe('Searches C:/projects/sample/docs')
+    expect(wrapper.find('.memory-source').exists()).toBe(false)
     expect(searchMemory).not.toHaveBeenCalled()
-    // The source is set up through the projects CLI, as the text says; no
-    // Settings screen configures it, so the panel offers no link to one.
-    expect(source.find('a').exists()).toBe(false)
   })
 
-  it('keeps the actual unavailable source and repair visible without reporting zero matches', async () => {
+  it('says in one line why a project cannot be searched and leads to the check that repairs it', async () => {
     vi.mocked(fetchMemoryProviders).mockResolvedValue({
       ...memoryProviders,
       providers: [{ ...memoryProviders.providers[1], project_id: projectId }],
@@ -62,14 +57,37 @@ describe('InspectorMemory source identity', () => {
     } as MemorySearch)
     const wrapper = mountMemory()
     await flushPromises()
-    expect(wrapper.get('.memory-source').text()).toContain('docs/ does not exist')
-    expect(wrapper.get('.memory-source').text()).toContain('Valkama projects CLI')
+    const source = wrapper.get('.memory-source')
+    expect(source.classes()).toContain('data-empty')
+    expect(source.get('.empty-title').text()).toBe('The project has no docs/ folder to search.')
+    const repair = source.get('a')
+    expect(repair.text()).toBe('Diagnostics')
+    expect(parsePlatformRoute(repair.attributes('href') ?? '')).toMatchObject({
+      module_id: 'settings',
+      scope: { kind: 'project', project_ref: { project_id: projectId } },
+      state: { section: 'diagnostics' },
+    })
     await wrapper.get('input').setValue('decision')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(wrapper.text()).not.toContain('Nothing matched.')
-    expect(wrapper.text()).toContain('Markdown project documents')
+    expect(wrapper.get('.memory-source .empty-title').text()).toBe(
+      'The project has no docs/ folder to search.',
+    )
   })
+
+  it('names a project the registry does not hold', async () => {
+    vi.mocked(fetchMemoryProviders).mockResolvedValue({
+      ...memoryProviders,
+      providers: [],
+    } as MemoryProviders)
+    const wrapper = mountMemory()
+    await flushPromises()
+    expect(wrapper.get('.memory-source .empty-title').text()).toBe(
+      'The project is not registered with Valkama.',
+    )
+  })
+
   it('retries failed provider discovery in place without losing search input', async () => {
     vi.mocked(fetchMemoryProviders)
       .mockReset()
@@ -78,18 +96,14 @@ describe('InspectorMemory source identity', () => {
     const wrapper = mountMemory()
     await wrapper.get('input').setValue('release decision')
     await flushPromises()
-    expect(wrapper.get('.memory-source').text()).not.toContain(
-      'Checking the registered project source',
-    )
     expect(wrapper.get('.memory-source').text()).toContain(
-      'The project source could not be checked',
+      "The project's documents could not be checked.",
     )
     await wrapper.get('.memory-source button').trigger('click')
     await flushPromises()
     expect(fetchMemoryProviders).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('.memory-source').text()).toContain('C:/projects/sample/docs')
-    expect(wrapper.get('.memory-source').text()).not.toContain('could not be checked')
-    expect(wrapper.find('.memory-source button').exists()).toBe(false)
+    expect(wrapper.find('.memory-source').exists()).toBe(false)
+    expect(wrapper.get('.memory-hint').text()).toBe('Searches C:/projects/sample/docs')
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('release decision')
   })
 

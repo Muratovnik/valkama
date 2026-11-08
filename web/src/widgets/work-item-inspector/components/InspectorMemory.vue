@@ -17,15 +17,21 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useMemorySource } from '@/widgets/work-item-inspector/utils/memorySource.ts'
+import {
+  memorySourceGap,
+  useMemorySource,
+} from '@/widgets/work-item-inspector/utils/memorySource.ts'
 
 import { searchMemory } from '@/shared/api/memoryApi.ts'
 import type { MemoryResult } from '@/shared/api/memoryApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
@@ -47,7 +53,7 @@ const provider = ref('')
 const source = ref('')
 const capabilities = ref<readonly string[]>([])
 const health = ref('')
-const reason = ref('')
+const reason = ref<{ code: string; message: string } | null>(null)
 const searched = ref(false)
 const {
   failed: sourceFailed,
@@ -55,15 +61,31 @@ const {
   loading: sourceLoading,
   located,
 } = useMemorySource(() => props.projectId)
-const activeProvider = computed(() => provider.value || located.value?.provider_id || '')
-const providerName = computed(() =>
-  activeProvider.value === 'markdown-knowledge'
-    ? t('memory.markdownProvider')
-    : activeProvider.value,
+/**
+ * Why search cannot answer for this project, in one line, or nothing when it can. The last
+ * search knows best; before one, the project's listing does. A project the listing does not
+ * name is one Valkama has not registered.
+ */
+const sourceGap = computed(() => {
+  if (sourceLoading.value || !props.projectId) return ''
+  if (searched.value)
+    return health.value === 'ready' ? '' : memorySourceGap(t, reason.value?.code, reason.value)
+  if (sourceFailed.value) return ''
+  if (!located.value) return memorySourceGap(t, 'project_unregistered', null)
+  return located.value.health === 'ready'
+    ? ''
+    : memorySourceGap(t, located.value.reason?.code, located.value.reason)
+})
+/** Diagnostics checks every project's knowledge folder and says how to repair it. */
+const diagnostics = computed(() =>
+  serializePlatformRoute({
+    module_id: 'settings',
+    scope: { kind: 'project', project_ref: { project_id: props.projectId } },
+    state: { section: 'diagnostics' },
+  }),
 )
-const sourceUnavailable = computed(
-  () => (searched.value ? health.value : located.value?.health) === 'unavailable',
-)
+/** The folder a search reads, once it is known. */
+const sourceRoot = computed(() => (searched.value && source.value) || located.value?.root || '')
 
 watch(
   () => props.projectId,
@@ -81,9 +103,9 @@ const attached = computed(() => props.item.refs.filter((entry) => entry.kind ===
 
 const searchable = computed(() => Boolean(props.projectId) && query.value.trim().length > 0)
 
-/** What the field says: where it searches, or why it cannot. */
+/** What the field says: the folder it searches, once that is known. */
 const searchHint = computed(() =>
-  props.projectId ? t('memory.searchHint') : t('memory.noProject'),
+  sourceRoot.value ? t('memory.searchIn', { root: sourceRoot.value }) : t('memory.searchHint'),
 )
 const searchHintId = useId()
 
@@ -106,7 +128,7 @@ async function search() {
     source.value = answer.root
     capabilities.value = answer.capabilities
     health.value = answer.health
-    reason.value = answer.reason?.message ?? ''
+    reason.value = answer.reason
     searched.value = true
   } catch (error) {
     if (props.projectId !== searchedProject) return
@@ -130,52 +152,6 @@ function when(value: string): string {
       level="panel"
       >{{ t('memory.heading') }}</SectionHeading
     >
-    <p class="quiet">{{ t('memory.intro') }}</p>
-
-    <div
-      v-if="projectId"
-      class="memory-source"
-    >
-      <strong class="memory-label">{{ t('memory.searchProvider') }}</strong>
-      <p class="quiet">{{ t('memory.documentSource', { project: projectId }) }}</p>
-      <p
-        v-if="providerName"
-        class="quiet"
-      >
-        {{ providerName }}
-      </p>
-      <p
-        v-if="located?.root"
-        class="memory-id"
-      >
-        {{ located.root }}
-      </p>
-      <p
-        v-if="sourceLoading"
-        class="quiet"
-      >
-        {{ t('memory.sourcePending') }}
-      </p>
-      <p
-        v-else-if="sourceFailed"
-        class="memory-error"
-      >
-        {{ t('memory.sourceFailed') }}
-      </p>
-      <p
-        v-else-if="sourceUnavailable"
-        class="memory-error"
-      >
-        {{ reason || located?.reason?.message || t('memory.unavailable') }}
-      </p>
-      <VButton
-        v-if="sourceFailed"
-        @click="loadSource()"
-        >{{ t('memory.sourceRetry') }}</VButton
-      >
-      <p class="quiet">{{ t('memory.sourceSetup') }}</p>
-    </div>
-
     <ul
       v-if="attached.length"
       class="memory-list"
@@ -192,14 +168,50 @@ function when(value: string): string {
         }}</span>
       </li>
     </ul>
-    <p
+    <DataEmptyState
       v-else
-      class="quiet"
-    >
-      {{ t('memory.none') }}
-    </p>
+      :title="t('memory.none')"
+      inline
+    />
 
-    <template v-if="writable">
+    <DataEmptyState
+      v-if="writable && !projectId"
+      :title="t('memory.noProject')"
+      inline
+    />
+    <template v-else-if="writable">
+      <DataEmptyState
+        v-if="sourceFailed && !searched"
+        class="memory-source"
+        :title="t('memory.sourceFailed')"
+        inline
+      >
+        <template #action>
+          <VButton
+            size="inline"
+            variant="ghost"
+            @click="loadSource()"
+            >{{ t('memory.sourceRetry') }}</VButton
+          >
+        </template>
+      </DataEmptyState>
+      <DataEmptyState
+        v-else-if="sourceGap"
+        class="memory-source"
+        :title="sourceGap"
+        inline
+      >
+        <template #action>
+          <a
+            class="memory-repair"
+            :href="diagnostics"
+            >{{ t('memory.openDiagnostics')
+            }}<VIcon
+              name="chevron-right"
+              :size="15"
+          /></a>
+        </template>
+      </DataEmptyState>
       <form
         class="memory-form"
         @submit.prevent="search"
@@ -209,7 +221,7 @@ function when(value: string): string {
           :label="t('memory.search')"
           :describedby="searchHintId"
           :maxlength="120"
-          :disabled="!projectId || busy"
+          :disabled="busy"
         />
         <VButton
           type="submit"
@@ -231,13 +243,6 @@ function when(value: string): string {
       >
         {{ failure }}
       </p>
-      <p
-        v-else-if="searched"
-        class="quiet"
-      >
-        {{ t('memory.source', { source: source || providerName }) }}
-        <span v-if="health !== 'ready'"> · {{ reason || t('memory.unavailable') }}</span>
-      </p>
 
       <VDisclosure
         v-if="searched && !failure"
@@ -245,7 +250,6 @@ function when(value: string): string {
       >
         <template #summary>{{ t('memory.technicalDetails') }}</template>
         <p>{{ t('memory.provider', { provider, capabilities: capabilityList }) }}</p>
-        <p>{{ source }}</p>
       </VDisclosure>
       <ul
         v-if="results.length"
@@ -271,12 +275,11 @@ function when(value: string): string {
           </VButton>
         </li>
       </ul>
-      <p
+      <DataEmptyState
         v-else-if="searched && !failure && health === 'ready'"
-        class="quiet"
-      >
-        {{ t('memory.noResults') }}
-      </p>
+        :title="t('memory.noResults')"
+        inline
+      />
     </template>
   </section>
 </template>
@@ -285,14 +288,6 @@ function when(value: string): string {
 .memory {
   display: grid;
   gap: var(--space-heading-content);
-}
-
-.memory-source {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-control);
 }
 
 .quiet {
@@ -354,6 +349,21 @@ function when(value: string): string {
   gap: var(--space-label-value) var(--space-2);
   align-items: end;
   margin-top: var(--space-heading-content);
+}
+
+/* A way to another screen, drawn as the product draws one (the portfolio's binding repair). */
+.memory-repair {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  color: var(--color-accent);
+  font-size: var(--font-size-dense);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .memory-hint {
