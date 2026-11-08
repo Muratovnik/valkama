@@ -181,11 +181,13 @@ test('a comment on a field goes under it with its own name, and is sent beside t
 }) => {
   const { card, requests } = await openQuestion(page, [asked({ fields: [routeField, ticks] })])
   await card.getByRole('radio', { name: 'Move them', exact: true }).check()
-  const toggle = card.getByRole('button', { name: /^Comment on this field: Route/u })
+  const toggle = card.getByRole('button', { name: /^Comment on the question: Route/u })
   await toggle.focus()
   await page.keyboard.press('Enter')
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(card.getByRole('textbox', { name: /^Comment on this field: Route/u })).toBeFocused()
+  await expect(
+    card.getByRole('textbox', { name: /^Comment on the question: Route/u }),
+  ).toBeFocused()
   await page.keyboard.type('Why this one')
   await send(card).click()
   expect(requests.writes[0]?.body).toMatchObject({
@@ -210,10 +212,12 @@ for (const width of [390, 1280]) {
     // A comment on a field is signed as the comment on the question is, in words on screen.
     const fieldNote = answers.nth(0).locator('blockquote')
     await expect(fieldNote.locator('.request-answer-note-label')).toHaveText(
-      'Comment on this field',
+      'Comment on this question',
     )
     await expect(fieldNote).toContainText('Threads serve the digest too.')
-    await expect(card.locator('.request-reply-note-label')).toHaveText('Comment on the question')
+    await expect(card.locator('.request-reply-note-label')).toHaveText(
+      'Comment on the block of questions',
+    )
     await expect(answers.nth(2).locator('.request-option.is-chosen')).toContainText(
       'Only after acceptance',
     )
@@ -226,7 +230,7 @@ for (const width of [390, 1280]) {
     await expect(version).toContainText('Route: Keep the comments')
     await expect(version).toContainText('Areas: With nothing')
     await expect(version).toContainText('Go ahead: Yes')
-    await expect(version).toContainText('Comment on the question: First thoughts')
+    await expect(version).toContainText('Comment on the block of questions: First thoughts')
     await expectNoSilentClipping(page, `Previous answers at ${width}px`)
   })
 

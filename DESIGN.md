@@ -1380,7 +1380,18 @@ many, and a thread marked in that view stays under the reader's hands until the 
 changes, as a question answered does. A reply whose question could not be read stands on
 its own and says so: not knowing what it answers is no reason to hide what it says.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
-task it is and the way there. Selecting does nothing but select, nothing is chosen for
+task it is and the way there. There each request is a block of questions under a head, the
+project, the task's number, which is the way to the task, and the title, that stays at the top of
+the list while any of the block is in view, over the block's own ground to its edges, and leaves
+with the block's end; what else sticks there, a review's count, stands under it, and focus never
+stays under either. A rail of short bars stands in the dialog's start inset, one per question, a
+review's titled group or a block with none shown, the blocks a bar's pitch apart: the bar of the
+question being read is longer and in full ink, a bar names its question to the pointer and a
+reader, and a press brings that question up under the head; the rail is one Tab stop walked by
+the arrows, and Enter takes focus to where the question is answered. Each bar answers across the
+inset and 24px of height until the rail would outgrow the list, then they give up height alike. A
+phone-wide window draws no rail: its 16px inset is narrower than a target and stands on the
+screen's edge, which a finger swipes for the system. Selecting does nothing but select, nothing is chosen for
 the person, recommended or not, and Send is what sends. Every choice is a full-width row
 whatever their number: its label, a quiet word on the recommended one, and as much of
 its description as leaves the labels scannable, so that the first screen still says what
@@ -1422,28 +1433,27 @@ so that Send is Send again by the time it is pressed. The step lasts only while 
 its question: a press or focus landing outside it ends it, so a page holds one step at most, and
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
 person pressed no longer stands where they left it. What is asked lies on nothing, so that a
-person refuses seeing the end of what will not go, and moves nothing: it takes the place of the
-way to the task and Check status, since a press on either would end the step anyway, and that
+person refuses seeing the end of what will not go, and moves nothing: it takes the place of
+Check status, since a press on it would end the step anyway, and that
 place is kept as wide as the asking needs on two lines beside the answers. On a row as narrow as
-a phone's it is the line above them, which those two hold where they are offered; where neither
-is, that line stands for the asking alone, as tall as one line of its words and the row's gap,
-so that the asking moves nothing when it comes. The comment's press stands on the buttons' line
+a phone's it is the line above them, which Check status holds where it is offered; where it
+is not, that line stands for the asking alone, as tall as one line of its words and the row's gap,
+so that the asking moves nothing when it comes. The way to the task is the number in the head of
+the block, not a button here. In the row under a list an agent put under its comment, the
+comment's press stands on the buttons' line
 where it fits beside the two answers, and only in a row narrower than the press, the gap and the
 wider language's two answers, 286.4px, as a card's at 320 and 340px, first on the place's line,
-which takes the rest of that line, what it holds wrapping inside it. There, on a question
-waiting in its card, the place holds nothing but the room kept for the asking, so the press
-stands over the buttons with nothing drawn beside it until the asking comes; that room is a line
-of the row anyway, so the press adds none. Kept on the buttons' line in such a row it took a line
-alone between the place and the buttons, and leading the place in a row where it fits beside the
-buttons it stood alone over them. The asking changes none of this, so it moves the press
-nowhere. Kept beside the controls as a room of its own, the asking sent the two answers to the
+which takes the rest of that line, what it holds wrapping inside it. Kept on the buttons' line in
+such a row it took a line alone between the place and the buttons. Kept beside the controls as a
+room of its own, the asking sent the two answers to the
 next line where everything else fitted. What stands before the answers keeps the row's start
 at every width. A row nothing can be declined from, the one under a list an agent put under its
 comment, is the same row and keeps no place for an asking it never shows: each of its lines holds
 a control, and its way on holds room for no word but its own. The comment's press at the start of
-either row keeps its drawn box and, under a finger or on a phone's width, reaches 44px past it
+that row keeps its drawn box and, under a finger or on a phone's width, reaches 44px past it
 (`reach.css`), so its ground, its ring and a forced palette's frame stay on the sheet it stands on;
-on the line of a field's label it grows its box instead, since rows stand right under it.
+on the line of a field's label and in an entry's head it grows its box instead, since rows stand
+right under it.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A list under a comment is not held to that: its marks go with one send, and a send with
@@ -1462,10 +1472,12 @@ leaves its card open, and a press on the scrim that does not close takes no focu
 surface. It is not a rule of the whole interface: those are the places where the press would
 choose or send without being meant, or take away what was just opened.
 A comment is one quiet press away and explains a choice without standing in for one. The press
-is a glyph with no line of its own: for a field at the end of the line naming it, its field
-opening under the options, and for the whole question at the left end of the row of buttons, its
-field opening above them; in a row too narrow for it beside the buttons, at the start of the
-line above them. A question of one field offers only the second, since for the person
+is a glyph with no line of its own: for one question, at the end of the line naming it, its field
+opening under the options, «Comment on this question»; for the whole block of questions, at the
+end of the first line of the block's head, its field opening at the block's end above the
+buttons, «Comment on the block of questions», heard with the block's title. Among the buttons it
+read as one more of them and said nothing of which block it was on, and «the question» named a
+block of several. A block of one question offers only the second, since for the person
 both would say the same; one an older answer has on its field stays to be read and changed. Once
 written the glyph is filled and says so in its words, and the comment closes only empty. Opening
 anything moves nothing already read: an option's description goes on from where its excerpt

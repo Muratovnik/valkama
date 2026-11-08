@@ -8,7 +8,7 @@
  * other word, so that nothing moves: the way back stands in the very box of the press, and
  * pressing again without moving only goes back. The asking moves nothing and lies on nothing,
  * since nobody should refuse without seeing the end of what will not go: it takes the place of
- * the way to the task and the read of its status, which a press would end the step on anyway,
+ * the read of its status, which a press would end the step on anyway,
  * and that place is kept as wide as the asking needs on two lines. On a row as narrow as a
  * phone's that place is the line above the buttons, which those two hold, and which stays the
  * asking's alone only where neither is offered. Under them it fell out of the window
@@ -26,9 +26,10 @@
  * together, at its end. Wrapped one by one, Send stood alone under Don't answer once Check
  * status had joined the row, and Save under Cancel on a phone.
  *
- * What the host puts in the slot stands first in the row: the press of the comment on the
- * question, on the row's left end, as what comes before all of this. The way to the task and
- * the read of its status stand after it, at the row's start at every width. On a phone's row
+ * What the host puts in the slot stands first in the row: the press of the comment on a list
+ * under a comment, on the row's left end, as what comes before all of this. The read of its
+ * status stands after it, at the row's start at every width. A question's block has no press
+ * here: its comment is in its head, and the way to its task is the number in that head. On a phone's row
  * the place is the line above the buttons, and the comment's press stands on the buttons' line
  * where it fits beside the two answers. Where it does not, at 320 and 340px, it stands first
  * on the place's line instead, and the place takes the rest of that line, its controls
@@ -62,7 +63,6 @@ const props = withDefaults(
     /** It stopped waiting, in a list it can be taken out of. */
     dismissable: boolean
     refreshable: boolean
-    standalone: boolean
     waiting: boolean
     /** Somebody waits on the answer, so it can be refused. */
     declinable?: boolean
@@ -74,7 +74,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   'dismiss': []
   'onward': []
-  'open': []
   'refresh': []
   'way-out': []
 }>()
@@ -89,7 +88,7 @@ const offersWayOut = computed(() => props.changing || props.declinable)
 /** The words that keep the asking's place while it can be asked, unseen. */
 const askingRoom = computed(() => (declines.value ? t('requests.declineAsked') : undefined))
 /** Something stands before the two answers, or their asking needs the place. */
-const leads = computed(() => declines.value || props.standalone || props.refreshable)
+const leads = computed(() => declines.value || props.refreshable)
 const wayOutDisabled = computed(() => !props.changing && props.disabled)
 const wayOut = computed(() => {
   if (props.changing) {
@@ -136,12 +135,6 @@ defineExpose({ focusWayOut })
       :data-room="askingRoom"
     >
       <div class="request-lead-controls">
-        <VButton
-          v-if="standalone"
-          variant="ghost"
-          @click="emit('open')"
-          >{{ t('requests.openTask') }}</VButton
-        >
         <VButton
           v-if="refreshable"
           :aria-disabled="busyMark"

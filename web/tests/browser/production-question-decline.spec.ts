@@ -166,12 +166,14 @@ test('spaces in the comment are nothing written, and words are', async ({ page }
       fields: [{ ...choices(2), required: false }],
     }),
   ])
-  await card.getByRole('button', { name: 'Comment on the question', exact: true }).click()
+  await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
   await page.keyboard.insertText('   ')
   await send(card).click()
   await pause(150)
   expect(writesTo(requests)).toEqual([])
-  await card.getByRole('textbox', { name: 'Comment on the question', exact: true }).fill('A word')
+  await card
+    .getByRole('textbox', { name: 'Comment on the block of questions', exact: true })
+    .fill('A word')
   await send(card).click()
   await expect(card.locator('.request-reply')).toContainText('A word')
   expect(writesTo(requests)).toEqual([UPPER])
@@ -254,11 +256,11 @@ test('choosing or writing takes the step back, so that the place of Send sends a
   // Opening the comment moves the buttons, which ends the step by itself.
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
-  await top.getByRole('button', { name: 'Comment on the question', exact: true }).click()
+  await top.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
   await expect(back(top)).toHaveCount(0)
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
-  await top.getByRole('textbox', { name: 'Comment on the question', exact: true }).focus()
+  await top.getByRole('textbox', { name: 'Comment on the block of questions', exact: true }).focus()
   await expect(back(top)).toBeVisible()
   await page.keyboard.insertText('A word')
   await expect(back(top)).toHaveCount(0)

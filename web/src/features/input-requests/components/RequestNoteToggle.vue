@@ -7,11 +7,13 @@
  *
  * Where a finger presses, which every control asks in one place (`reach.css`), it answers
  * across `--size-control-target`. On the line of a field's label or a review's point it grows
- * its own box to that (`reach-grow`), since rows stand right under it. At the left end of a
- * question's or a list's buttons (`reach`) it keeps its drawn box and reaches past it instead:
- * grown there, centred on the boxes' axis, its ground, its ring and a forced palette's frame
- * stood 3px outside the comment's sheet on a phone. Asked for a coarse pointer alone, the grown
- * box stood 28px on a phone-wide window under a mouse, beside an entry's icons of 44.
+ * its own box to that (`reach-grow`), since rows stand right under it, and so it does in the
+ * head of an entry. At the left end of a list's buttons (`reach`) it keeps its drawn box and
+ * reaches past it instead: grown there, centred on the boxes' axis, its ground, its ring and a
+ * forced palette's frame stood 3px outside the comment's sheet on a phone. So it does at the
+ * end of the head of a block of questions that sticks, which grown stood a line taller on a
+ * phone. Asked for a coarse pointer alone, the grown box stood 28px on a phone-wide window
+ * under a mouse, beside an entry's icons of 44.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

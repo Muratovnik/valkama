@@ -147,10 +147,12 @@ describe('changing an answer', () => {
     await press(wrapper, 'Change answer')
     expect(checkedLabels(wrapper)).toEqual(['Keep'])
     expect(
-      (textareaNamed(wrapper, 'Comment on this field: Route').element as HTMLTextAreaElement).value,
+      (textareaNamed(wrapper, 'Comment on the question: Route').element as HTMLTextAreaElement)
+        .value,
     ).toBe('Why')
     expect(
-      (textareaNamed(wrapper, 'Comment on the question').element as HTMLTextAreaElement).value,
+      (textareaNamed(wrapper, 'Comment on the block of questions').element as HTMLTextAreaElement)
+        .value,
     ).toBe('Whole')
     expect(wrapper.text()).not.toContain('Send')
     const save = buttonNamed(wrapper, 'Save change')

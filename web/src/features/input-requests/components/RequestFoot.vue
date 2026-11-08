@@ -4,8 +4,9 @@
  * thrown away, and why the last write did not go through.
  *
  * A form answered row by row is long, so its foot stays in sight at the bottom edge of the
- * panel that scrolls it while any of the form is (`stuck`), with Send and the comment on the
- * question under the hand. Over it stands how many points are still undecided: the question
+ * panel that scrolls it while any of the form is (`stuck`), with Send under the hand. The
+ * comment on a list under a comment stands first in its row (`note`); a question's block has
+ * its comment in its head. Over it stands how many points are still undecided: the question
  * can be sent so, and the agent reads them as undecided, which is said before and not after.
  */
 import { computed, ref } from 'vue'
@@ -28,10 +29,7 @@ const props = withDefaults(
     dismissable: boolean
     /** Why the last write did not go through; empty while nothing failed. */
     error: string
-    /** The comment on the question can be opened from here, how it stands, and what it is on. */
-    note: { disabled: boolean; open: boolean; written: boolean; title?: string } | null
     refreshable: boolean
-    standalone: boolean
     /** The form is long enough to keep this in sight while it scrolls. */
     stuck: boolean
     /** Points of a review shown with no decision. */
@@ -43,10 +41,18 @@ const props = withDefaults(
     declinable?: boolean
     /** What the strip's way on says, where it discards something other than an answer. */
     discardWord?: string
+    /** The comment on the list can be opened from here, how it stands, and what it is on. */
+    note?: { disabled: boolean; open: boolean; title: string; written: boolean } | null
     /** What Send says, where it sends something other than an answer. */
     sendWord?: string
   }>(),
-  { cancelMessage: undefined, declinable: true, discardWord: undefined, sendWord: undefined },
+  {
+    cancelMessage: undefined,
+    declinable: true,
+    discardWord: undefined,
+    note: null,
+    sendWord: undefined,
+  },
 )
 const emit = defineEmits<{
   'discard': []
@@ -54,7 +60,6 @@ const emit = defineEmits<{
   'keep': []
   'note': []
   'onward': []
-  'open': []
   'refresh': []
   'way-out': []
 }>()
@@ -103,11 +108,9 @@ defineExpose({
       :dismissable="dismissable"
       :refreshable="refreshable"
       :send-word="sendWord"
-      :standalone="standalone"
       :waiting="waiting"
       @dismiss="emit('dismiss')"
       @onward="emit('onward')"
-      @open="emit('open')"
       @refresh="emit('refresh')"
       @way-out="emit('way-out')"
     >
@@ -115,7 +118,7 @@ defineExpose({
         v-if="note"
         :disabled="note.disabled"
         :open="note.open"
-        :title="note.title ?? t('requests.questionNote')"
+        :title="note.title"
         :written="note.written"
         reach
         @press="emit('note')"
@@ -150,7 +153,7 @@ defineExpose({
    keeps between its rows, carried with it. */
 .request-foot.is-stuck {
   position: sticky;
-  inset-block-end: 0;
+  inset-block-end: var(--size-stuck-bottom, 0);
   z-index: 1;
   padding-block: var(--space-2) var(--space-3);
   margin-block-end: calc(-1 * var(--space-3));

@@ -70,10 +70,6 @@ test('the options are a radio group by the keyboard, and Tab reaches Send', asyn
   await expect(group.getByRole('radio', { name: 'Move them', exact: true })).toBeChecked()
   expect(requests.writes).toEqual([])
   await page.keyboard.press('Tab')
-  await expect(
-    card.getByRole('button', { name: 'Comment on the question', exact: true }),
-  ).toBeFocused()
-  await page.keyboard.press('Tab')
   await expect(card.getByRole('button', { name: "Don't answer", exact: true })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(send(card)).toBeFocused()
@@ -171,11 +167,14 @@ test('several fields go through one form, and a refused one takes focus', async 
 
 test('a comment on the question opens under the options and answers nothing', async ({ page }) => {
   const { card, requests } = await openQuestion(page, [asked()])
-  const own = card.getByRole('button', { name: 'Comment on the question', exact: true })
+  const own = card.getByRole('button', { name: /^Comment on the block of questions: /u })
   await expect(own).toHaveAttribute('aria-expanded', 'false')
   await own.click()
   await expect(own).toHaveAttribute('aria-expanded', 'true')
-  const field = card.getByRole('textbox', { name: 'Comment on the question', exact: true })
+  const field = card.getByRole('textbox', {
+    name: 'Comment on the block of questions',
+    exact: true,
+  })
   await expect(field).toBeFocused()
   await page.keyboard.insertText('Neither: *ask* me later')
   await send(card).click()
@@ -192,8 +191,11 @@ test('a comment on the question opens under the options and answers nothing', as
 
 test('an empty comment closes again, and one with text in it never hides it', async ({ page }) => {
   const { card } = await openQuestion(page, [asked()])
-  const own = card.getByRole('button', { name: /^Comment on the question/u })
-  const field = card.getByRole('textbox', { name: 'Comment on the question', exact: true })
+  const own = card.getByRole('button', { name: /^Comment on the block of questions/u })
+  const field = card.getByRole('textbox', {
+    name: 'Comment on the block of questions',
+    exact: true,
+  })
   await own.click()
   await own.click()
   await expect(field).toHaveCount(0)
@@ -243,7 +245,7 @@ for (const failure of [503, 'abort'] as const) {
   }) => {
     const { drawer, card, requests } = await openQuestion(page, [asked()])
     await card.getByRole('radio', { name: 'Move them', exact: true }).check()
-    await card.getByRole('button', { name: 'Comment on the question', exact: true }).click()
+    await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
     await page.keyboard.insertText('And quickly')
     requests.failNext(failure)
     await send(card).click()
@@ -252,7 +254,7 @@ for (const failure of [503, 'abort'] as const) {
     await expect(reason).toBeFocused()
     await expect(card.getByRole('radio', { name: 'Move them', exact: true })).toBeChecked()
     await expect(
-      card.getByRole('textbox', { name: 'Comment on the question', exact: true }),
+      card.getByRole('textbox', { name: 'Comment on the block of questions', exact: true }),
     ).toHaveValue('And quickly')
     await expect(card.locator('.request-state')).toHaveCount(0)
     await expect(navCount(page)).toHaveText('1')
@@ -278,7 +280,7 @@ test('an answer from another window folds it and keeps the note without pretendi
   page,
 }) => {
   const { drawer, card, requests, stream } = await openQuestion(page, [asked()])
-  await card.getByRole('button', { name: 'Comment on the question', exact: true }).click()
+  await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
   await page.keyboard.insertText('What I was writing')
   requests.settle(QUESTION_ID, {
     status: 'answered',
@@ -380,7 +382,7 @@ test('the hub shows the same widget, and an answer there reaches the card', asyn
   await send(hubCard).click()
   await expect(hubCard.locator('.request-option.is-chosen')).toContainText('Keep the comments')
   await expect(navCount(page)).toHaveCount(0)
-  await hubCard.getByRole('button', { name: 'Open task', exact: true }).click()
+  await hubCard.locator('.request-header').getByRole('link').click()
   await expect(card.locator('.request-option.is-chosen')).toContainText('Keep the comments')
 })
 
@@ -402,7 +404,7 @@ test('a question long unanswered at phone width is not clipped, open or folded',
       ],
     }),
   ])
-  await card.getByRole('button', { name: 'Comment on the question', exact: true }).click()
+  await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
   await expectNoSilentClipping(page, 'Question open at 390px')
   await card.getByRole('radio').first().check()
   await send(card).click()

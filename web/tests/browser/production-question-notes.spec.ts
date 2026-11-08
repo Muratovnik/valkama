@@ -7,12 +7,14 @@ import type { Locator } from '@playwright/test'
 
 import { answersTap } from './commentListBackend.ts'
 import { box, settledBox } from './editorPage.ts'
+import { workItem } from './planningFixtures.ts'
 import { asked, mixedField, openQuestion, routeField, send } from './questionBackend.ts'
 import { test } from './test.ts'
 
-const ON_FIELD = 'Comment on this field: Route'
-const ON_QUESTION = 'Comment on the question'
-const ON_SECOND = 'Comment on this field: Option'
+const ON_FIELD = 'Comment on the question: Route'
+/** The comment on the whole block: its press is named by the block's title as well. */
+const ON_QUESTION = 'Comment on the block of questions'
+const ON_SECOND = 'Comment on the question: Option'
 const SEVERAL = { fields: [routeField, mixedField] }
 const ONE = { fields: [routeField] }
 const middle = (bounds: { height: number; y: number }) => bounds.y + bounds.height / 2
@@ -21,6 +23,11 @@ const fillOf = (button: Locator) =>
   button.locator('svg').evaluate((glyph) => getComputedStyle(glyph).fill)
 const named = (scope: Locator, role: 'button' | 'textbox', name: string) =>
   scope.getByRole(role, { name, exact: true })
+/** The press of the comment on the block, whatever the block's title. */
+const blockPress = (scope: Locator, written = false) =>
+  scope.getByRole('button', {
+    name: new RegExp(`^${ON_QUESTION}: .+${written ? ': written' : ''}$`, 'u'),
+  })
 
 for (const [width, target, finger] of [
   [1280, 24, false],
@@ -32,9 +39,11 @@ for (const [width, target, finger] of [
     await page.setViewportSize({ width, height: 1400 })
     const { card } = await openQuestion(page, [asked(SEVERAL)])
     const onField = named(card, 'button', ON_FIELD)
-    const onQuestion = named(card, 'button', ON_QUESTION)
+    const onQuestion = blockPress(card)
+    // Named by the block it is on, which a list of several blocks needs to tell them apart.
+    await expect(onQuestion).toHaveAccessibleName(`${ON_QUESTION}: ${workItem.title}`)
     for (const [press, title] of [
-      [onField, 'Comment on this field'],
+      [onField, 'Comment on this question'],
       [onQuestion, ON_QUESTION],
     ] as const) {
       await expect(press).toHaveText('')
@@ -42,12 +51,14 @@ for (const [width, target, finger] of [
       await expect(press).toHaveAttribute('title', title)
       await expect(press).toHaveAttribute('aria-expanded', 'false')
     }
-    // The label's press grows its own box to the target, since rows stand right under it; the
-    // one at the buttons' start keeps its drawn box and reaches past it where a finger presses.
-    const size = await box(onField)
-    expect(size.width).toBeGreaterThanOrEqual(target)
-    expect(size.height).toBeGreaterThanOrEqual(target)
-    expect(await answersTap(onQuestion), 'the foot press takes a 44 px tap').toBe(finger)
+    // Both grow their own box to the target where a finger presses: the label's, since rows
+    // stand right under it, and the block's, as the other icons of the entry's head do.
+    for (const press of [onField, onQuestion]) {
+      const size = await box(press)
+      expect(size.width).toBeGreaterThanOrEqual(target)
+      expect(size.height).toBeGreaterThanOrEqual(target)
+    }
+    expect(await answersTap(onQuestion), 'the head press takes a 44 px tap').toBe(finger)
     // At the right end of the line naming the field, over the toggles of the rows under it, and
     // no line of its own under the options.
     const legend = await box(card.locator('legend').first())
@@ -61,22 +72,20 @@ for (const [width, target, finger] of [
     )
     const second = await box(named(card, 'button', ON_SECOND))
     expect(Math.abs(across(second) - across(chevron))).toBeLessThanOrEqual(1)
-    // On the left end of the row of buttons, over the radios, and nothing is drawn for it above:
-    // at 390px it fits beside the two answers (`production-question-foot.spec.ts` holds 320px).
+    // In the head of the block, on the axis of its line, and none in the row of buttons.
     const question = await box(onQuestion)
-    const onward = await box(send(card))
-    expect(Math.abs(middle(question) - middle(onward))).toBeLessThanOrEqual(1)
-    const radio = await box(card.getByRole('radio').first())
-    expect(Math.abs(across(question) - across(radio))).toBeLessThanOrEqual(1)
+    const head = await box(card.locator('.request-meta'))
+    expect(Math.abs(middle(question) - middle(head))).toBeLessThanOrEqual(1)
+    await expect(card.locator('.request-foot .request-note-toggle')).toHaveCount(0)
     await expect(card.locator('.request-fields > .request-note')).toHaveCount(0)
   })
 
-  test(`a comment on the question opens above the buttons and moves none, at ${width}`, async ({
+  test(`a comment on the block opens above the buttons and moves none, at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 1400 })
     const { card } = await openQuestion(page, [asked(SEVERAL)])
-    const onQuestion = named(card, 'button', ON_QUESTION)
+    const onQuestion = blockPress(card)
     const before = await box(send(card))
     const toggle = await box(onQuestion)
     await onQuestion.click()
@@ -94,16 +103,20 @@ for (const [width, target, finger] of [
 
 test('a comment written says so in its words and its shape, and stays open', async ({ page }) => {
   const { card } = await openQuestion(page, [asked(SEVERAL)])
-  for (const [button, editor, title] of [
-    [ON_FIELD, ON_FIELD, 'Comment on this field: written'],
-    [ON_QUESTION, ON_QUESTION, 'Comment on the question: written'],
+  for (const [press, written, editor, title] of [
+    [
+      named(card, 'button', ON_FIELD),
+      named(card, 'button', `${ON_FIELD}: written`),
+      ON_FIELD,
+      'Comment on this question: written',
+    ],
+    [blockPress(card), blockPress(card, true), ON_QUESTION, `${ON_QUESTION}: written`],
   ] as const) {
-    const press = named(card, 'button', button)
     const empty = await fillOf(press)
     await press.click()
     const text = named(card, 'textbox', editor)
     await text.fill('Because of the digest')
-    const pressed = named(card, 'button', `${button}: written`)
+    const pressed = written
     await expect(pressed).toHaveAttribute('title', title)
     await expect(pressed).toHaveAttribute('aria-expanded', 'true')
     expect(await fillOf(pressed)).not.toBe(empty)
@@ -118,8 +131,8 @@ test('one field has one comment: the question’s, and its press says nothing el
   page,
 }) => {
   const { card } = await openQuestion(page, [asked(ONE)])
-  await expect(card.getByRole('button', { name: /^Comment on this field/u })).toHaveCount(0)
-  await expect(named(card, 'button', ON_QUESTION)).toBeVisible()
+  await expect(card.getByRole('button', { name: /^Comment on the question:/u })).toHaveCount(0)
+  await expect(blockPress(card)).toBeVisible()
 })
 
 test('a comment an older answer has on its one field stays to read and to change', async ({
@@ -154,7 +167,7 @@ test('the keyboard meets the presses in the order they are read, and comes back 
 }) => {
   const { card } = await openQuestion(page, [asked(SEVERAL)])
   const onField = named(card, 'button', ON_FIELD)
-  const onQuestion = named(card, 'button', ON_QUESTION)
+  const onQuestion = blockPress(card)
   await onField.focus()
   await page.keyboard.press('Tab')
   await expect(card.getByRole('radio', { name: 'Keep the comments', exact: true })).toBeFocused()
@@ -167,17 +180,19 @@ test('the keyboard meets the presses in the order they are read, and comes back 
   await expect(fieldText).toHaveCount(0)
   await expect(onField).toBeFocused()
 
+  // The block's press is read in its head, before its fields, with the head's other icons.
   await onQuestion.focus()
   await page.keyboard.press('Tab')
-  await expect(card.getByRole('button', { name: "Don't answer", exact: true })).toBeFocused()
+  await expect(page.locator(':focus')).toHaveAccessibleName('Reply')
   await page.keyboard.press('Shift+Tab')
   await expect(onQuestion).toBeFocused()
   await page.keyboard.press('Enter')
   const questionText = named(card, 'textbox', ON_QUESTION)
   await expect(questionText).toBeFocused()
-  // The field stands right before its press: one step away, and one back.
+  // Its field is the block's last, right before the buttons.
   await page.keyboard.press('Tab')
-  await expect(onQuestion).toBeFocused()
+  await expect(card.getByRole('button', { name: "Don't answer", exact: true })).toBeFocused()
+  await onQuestion.focus()
   await page.keyboard.press('Enter')
   await expect(questionText).toHaveCount(0)
   await expect(onQuestion).toBeFocused()
@@ -192,6 +207,6 @@ test.describe('under a coarse pointer', () => {
     const { width, height } = await box(named(card, 'button', ON_FIELD))
     expect(width).toBeGreaterThanOrEqual(44)
     expect(height).toBeGreaterThanOrEqual(44)
-    expect(await answersTap(named(card, 'button', ON_QUESTION))).toBe(true)
+    expect(await answersTap(blockPress(card))).toBe(true)
   })
 })

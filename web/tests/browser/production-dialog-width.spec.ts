@@ -32,6 +32,14 @@ const contentLeft = (box: Locator) =>
     )
   })
 
+/** The left edge inside a box's border, where its own inset is measured from. */
+const innerLeft = (box: Locator) =>
+  box.evaluate((node) =>
+    Math.round(
+      node.getBoundingClientRect().left + Number.parseFloat(getComputedStyle(node).borderLeftWidth),
+    ),
+  )
+
 async function openQuestions(page: Page, width: number) {
   await page.setViewportSize({ width, height: 844 })
   const { drawer } = await openQuestion(page, [asked({ fields: [crowdedField] })])
@@ -51,9 +59,10 @@ test('on a phone the questions take the whole width, and an option its share of 
   expect(await across(dialog)).toEqual({ left: 0, width: 390 })
   const frame = dialog.locator('.dialog-frame')
   await expect(frame).toHaveCSS('border-radius', '0px')
-  // Head, body and foot keep one inset, so the title stands over the first line of the list.
+  // Head, body and foot keep one inset, so the title stands over the first line of the list. The
+  // list's start inset is the column its rail of questions takes in a wider window.
   const body = dialog.locator('.dialog-frame-body')
-  await expect(body).toHaveCSS('padding-left', '16px')
+  expect(await contentLeft(body)).toBe((await innerLeft(frame)) + 16)
   const title = await across(dialog.getByRole('heading', { name: 'Needs my answer' }))
   expect(title.left).toBe(await contentLeft(body))
   // What an option says has most of the window, not half of it.
@@ -66,8 +75,11 @@ test('in a wide window the questions float at their own width, inset as before',
 }) => {
   const dialog = await openQuestions(page, 1500)
   expect(await across(dialog)).toEqual({ left: 430, width: 640 })
-  await expect(dialog.locator('.dialog-frame')).toHaveCSS('border-radius', '10px')
-  await expect(dialog.locator('.dialog-frame-body')).toHaveCSS('padding-left', '24px')
+  const frame = dialog.locator('.dialog-frame')
+  await expect(frame).toHaveCSS('border-radius', '10px')
+  expect(await contentLeft(dialog.locator('.dialog-frame-body'))).toBe(
+    (await innerLeft(frame)) + 24,
+  )
 })
 
 test('on a phone the finder takes the width too, and still stands just under the top', async ({

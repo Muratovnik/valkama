@@ -2,7 +2,8 @@
 /**
  * The points of a review under one heading, with how many of them are decided. Its heading
  * folds the group away and brings it back; it starts open and never folds by itself, so no
- * point is answered unseen. A run of points with no heading stands as it is.
+ * point is answered unseen. A run of points with no heading stands as it is. A titled group is
+ * one question of its block to the rail of the list (`RequestRail`).
  *
  * The heading's words start where its rows start, as the review's count above them does, and
  * its chevron ends the line after the count, pointing down while the group is folded and up
@@ -33,6 +34,7 @@ const bodyId = `${id}-body`
     v-if="title !== null"
     class="request-group"
     :aria-labelledby="id"
+    :data-rail-question="title"
   >
     <SectionHeading
       as="h4"

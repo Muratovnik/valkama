@@ -1,8 +1,14 @@
 <script setup lang="ts">
 /**
  * One question, the same wherever it is answered: in a card's discussion, where it
- * reads as a comment, and in the list of everything waiting (`standalone`), which adds
- * whose task it is and the way to it.
+ * reads as a comment, and in the list of everything waiting (`standalone`), which adds whose
+ * task it is and the way to it in a head that stays in sight while the block scrolls.
+ *
+ * A question asked here is one block of questions, its fields: what acts on the whole block,
+ * the comment on it, stands in the block's head, at the end of its first line beside what the
+ * host puts there, and never among the buttons of its foot, where it read as one more of them
+ * and said nothing of which block it was on. In the list that head is the one that sticks
+ * (`RequestHeader`), and what sticks under it (a review's count) is told its height.
  *
  * Selecting does nothing but select, and nothing is chosen for the person: Send is what
  * sends, every kind of field goes through it, and a send that fails keeps all of it with
@@ -12,7 +18,9 @@
  * where the host's own icons (`actions`) stand beside it. The same form opens on the answer in
  * force, and Save does nothing until the form says something else. Cancel with something
  * changed asks first, with focus on the way back, and Escape from inside is that same Cancel.
- * While the form stands the icon keeps its room, so the time beside it does not move.
+ * While the form stands the time beside the icon does not move: in a card the comment on the
+ * block takes the icon's room, and in the list, where that comment is in the head that sticks,
+ * the icon keeps its room unseen.
  *
  * Folding takes the controls that had focus away, whoever answered, so focus goes to the
  * question, described by how it ended: the person stays on the question they were in, and
@@ -32,6 +40,7 @@ import RequestAnswerFields from '@/features/input-requests/components/RequestAns
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import RequestFoot from '@/features/input-requests/components/RequestFoot.vue'
 import RequestHeader from '@/features/input-requests/components/RequestHeader.vue'
+import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
@@ -93,6 +102,13 @@ const { focus, focusOn, focusOutcome, holdsFocus, reveal } = useRequestFocus(car
 const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
 const foot = ref<InstanceType<typeof RequestFoot> | null>(null)
+const header = ref<InstanceType<typeof RequestHeader> | null>(null)
+/** What sticks to the panel's top under the head of the block, a review's count, stands under it. */
+const headHeight = computed(() =>
+  props.standalone && header.value
+    ? { '--request-head-height': `${header.value.height}px` }
+    : undefined,
+)
 
 const {
   busy,
@@ -169,11 +185,12 @@ const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
 const busyMark = computed(() => busy.value || undefined)
-/** The press of the comment on the question, which stands in the foot while there is a form. */
+/** The press of the comment on the block, which stands in its head while there is a form. */
 const noteToggle = computed(() =>
   inForm.value && supported.value
     ? {
         disabled: fieldsDisabled.value,
+        name: t('requests.questionNoteName', { title: request.value.title }),
         open: answerFields.value?.noteOpen ?? false,
         written: answerFields.value?.noteWritten ?? false,
       }
@@ -269,13 +286,29 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     :aria-busy="busyMark"
     :aria-labelledby="labelledBy"
     :aria-describedby="describedBy"
+    :style="headHeight"
+    :data-rail-label="request.title"
+    data-rail-block
   >
     <RequestHeader
       v-if="standalone"
+      ref="header"
       :entry="entry"
       :title-id="titleId"
       @select="emit('select', $event)"
-    />
+    >
+      <template #actions>
+        <!-- It reaches past its box rather than growing it: grown, it made the head that sticks
+             a line taller on a phone, over a title of four lines there already. -->
+        <RequestNoteToggle
+          v-if="noteToggle"
+          v-bind="noteToggle"
+          :title="t('requests.questionNote')"
+          reach
+          @press="pressNote"
+        />
+      </template>
+    </RequestHeader>
     <EntryHead>
       <MetaLine
         :id="metaId"
@@ -285,8 +318,14 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
         >{{ authorName }}</MetaLine
       >
       <template #actions>
+        <RequestNoteToggle
+          v-if="noteToggle && !standalone"
+          v-bind="noteToggle"
+          :title="t('requests.questionNote')"
+          @press="pressNote"
+        />
         <EntryAction
-          v-if="changeable || changing"
+          v-else-if="changeable || changing"
           class="request-change"
           icon="edit"
           :class="{ 'is-away': changing }"
@@ -369,18 +408,14 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       :disabled="sendDisabled"
       :dismissable="standalone && !inForm"
       :error="errorText"
-      :note="noteToggle"
       :refreshable="canRefresh"
-      :standalone="standalone"
       :stuck="answerFields?.structured ?? false"
       :undecided="answerFields?.undecided ?? 0"
       :waiting="waiting"
       @discard="change.end"
       @dismiss="emit('dismiss', entry)"
       @keep="change.keep"
-      @note="pressNote"
       @onward="pressOnward"
-      @open="emit('select', entry.target)"
       @refresh="refresh"
       @way-out="pressWayOut"
     />
@@ -388,13 +423,21 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 </template>
 
 <style scoped>
-/* A sheet on its ground, as a comment is, in the discussion and in the list alike. */
+/* A sheet on its ground, as a comment is, in the discussion and in the list alike. Its inset is
+   handed to the head that sticks, which covers it to the sheet's edges, and where the panel
+   keeps what sticks to its top is kept under another name, for what sticks under that head
+   (`RequestAnswerFields`) to stand below it by the head's height, which the head measures and
+   which is none where no head sticks. */
 .request-card {
+  --request-sheet-inset: var(--space-3);
+  --request-stuck-base: var(--size-stuck-top, 0px);
+  --request-head-height: 0px;
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3);
+  padding: calc(var(--request-sheet-inset));
   background: var(--color-surface-sheet);
   border-radius: var(--radius-card);
   scroll-margin-top: var(--space-4);

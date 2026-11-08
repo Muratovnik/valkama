@@ -151,7 +151,7 @@ describe('your own option', () => {
   it('is not offered on a text field, which is its author’s own words already', () => {
     const wrapper = card(asked([why]))
     expect(wrapper.text()).not.toContain(OWN)
-    expect(wrapper.findAll('button[aria-label^="Comment on this field"]')).toHaveLength(0)
+    expect(wrapper.findAll('button[aria-label^="Comment on the question:"]')).toHaveLength(0)
   })
 
   // A yes or no used to share one row; a row that opens a field cannot stand beside another.
@@ -241,7 +241,7 @@ describe('your own option', () => {
 describe('comments', () => {
   it('a comment on the field opens and closes on one press while it is empty', async () => {
     const wrapper = card(asked([route, areas]))
-    const name = 'Comment on this field: Route'
+    const name = 'Comment on the question: Route'
     expect(buttonNamed(wrapper, name).attributes('aria-expanded')).toBe('false')
     await press(wrapper, name)
     expect(buttonNamed(wrapper, name).attributes('aria-expanded')).toBe('true')
@@ -260,8 +260,8 @@ describe('comments', () => {
     const entry = asked([route, why])
     vi.mocked(answerInputRequest).mockResolvedValue(given([route, why], {}))
     const wrapper = card(entry)
-    await press(wrapper, 'Comment on this field: Route')
-    await textareaNamed(wrapper, 'Comment on this field: Route').setValue('Because of the digest')
+    await press(wrapper, 'Comment on the question: Route')
+    await textareaNamed(wrapper, 'Comment on the question: Route').setValue('Because of the digest')
     await send(wrapper)
     expect(answerInputRequest).not.toHaveBeenCalled()
     expect(wrapper.get('[role="radiogroup"]').attributes('aria-invalid')).toBe('true')
@@ -279,8 +279,8 @@ describe('comments', () => {
     vi.mocked(answerInputRequest).mockResolvedValue(given([route], {}))
     const wrapper = card(entry)
     expect(wrapper.text()).toContain('Route · Required')
-    await press(wrapper, 'Comment on the question')
-    await textareaNamed(wrapper, 'Comment on the question').setValue('On the whole')
+    await press(wrapper, /^Comment on the block of questions: /u)
+    await textareaNamed(wrapper, 'Comment on the block of questions').setValue('On the whole')
     expect(wrapper.text()).toContain('Route · Required')
     await send(wrapper)
     expect(answerInputRequest).not.toHaveBeenCalled()
@@ -336,8 +336,10 @@ describe('an answered question', () => {
       }),
     )
     const field = present(wrapper.findAll('.request-answer')[0], 'field')
-    expect(field.get('blockquote').text()).toBe('Comment on this fieldField words')
-    expect(wrapper.get('.request-reply-note').text()).toBe('Comment on the questionQuestion words')
+    expect(field.get('blockquote').text()).toBe('Comment on this questionField words')
+    expect(wrapper.get('.request-reply-note').text()).toBe(
+      'Comment on the block of questionsQuestion words',
+    )
   })
 
   it('reads an older answer whose comment stood in for a field as a field with no answer', () => {
