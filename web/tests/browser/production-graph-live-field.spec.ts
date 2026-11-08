@@ -107,7 +107,7 @@ async function searchWith(page: Page, working: string, reference: string) {
   await serveSpace(page, () => ({ [working]: { state: 'working' } }))
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
-  await page.getByPlaceholder('Reference, title, label…').fill(reference)
+  await page.getByPlaceholder('Filter: reference, title…').fill(reference)
   await expect(
     page.locator('.flow-node-card .flow-node-id').getByText(reference, { exact: true }),
   ).toBeVisible()

@@ -17,6 +17,10 @@
  * Such a group stands last, because its head holds the whole list for its own: while
  * the group is still below the fold the head waits at the list's lower edge, so what it
  * offers is in sight as the list opens, however many values stand above it.
+ *
+ * A list can be one step of several. A row that leads to another list says so with a chevron
+ * and is no value, so it carries no `aria-selected`; the list it led to has its group's name as
+ * the row back, the first the arrows reach.
  */
 import { computed } from 'vue'
 
@@ -28,12 +32,23 @@ interface OptionGroup {
   name: string
   options: readonly {
     key: string
-    selected: boolean
     text: string
     detail?: string
+    /** The glyph in the check's place, for a row that does something rather than choose. */
+    icon?: string
     /** The option names a work item kind, and its word takes that kind's colour. */
     kind?: string
+    /** What a screen reader says of the row where its word alone says too little; it starts with the word. */
+    name?: string
+    /** The row leads to a list of its own, and says so with a chevron at its end. */
+    next?: boolean
+    /** Absent for a row that is no value, which a press does not choose but follows. */
+    selected?: boolean
   }[]
+  /** The group's name is a row too, the way back to the list this one was opened from. */
+  back?: { key: string; name: string }
+  /** No head: the group's rows say what they are, and its name labels it for a screen reader. */
+  bare?: boolean
   choices?: readonly {
     key: string
     name: string
@@ -64,6 +79,12 @@ const rows = computed(() => {
   return props.groups.map((group) => ({
     group,
     headingId: `${props.id}-group-${group.id}`,
+    // A bare group has no head to be named by, so it carries its name itself.
+    labelledBy: group.bare ? undefined : `${props.id}-group-${group.id}`,
+    label: group.bare ? group.name : undefined,
+    // Absent rather than false: the attribute is what the style reads.
+    bare: group.bare || undefined,
+    back: group.back ? { option: group.back, place: place++ } : undefined,
     choices: (group.choices ?? []).map((option) => ({ option, place: place++ })),
     options: group.options.map((option) => ({ option, place: place++ })),
   }))
@@ -71,6 +92,12 @@ const rows = computed(() => {
 
 /** Absent rather than false: the attribute is what the style reads. */
 const highlighted = (place: number) => place === props.highlight || undefined
+
+/**
+ * The way back is no value, chosen or not: a screen reader that said «not selected» of it
+ * would be saying something untrue, so the attribute is absent.
+ */
+const NO_VALUE = undefined
 </script>
 
 <template>
@@ -87,10 +114,36 @@ const highlighted = (place: number) => place === props.highlight || undefined
       :key="row.group.id"
       class="option-group"
       role="group"
-      :aria-labelledby="row.headingId"
+      :aria-labelledby="row.labelledBy"
+      :aria-label="row.label"
+      :data-bare="row.bare"
     >
-      <div class="option-group-head">
+      <div
+        v-if="!row.group.bare"
+        class="option-group-head"
+      >
         <div
+          v-if="row.back"
+          :id="optionId(row.back.place)"
+          class="option-back"
+          role="option"
+          tabindex="-1"
+          :aria-label="row.back.option.name"
+          :aria-selected="NO_VALUE"
+          :data-highlighted="highlighted(row.back.place)"
+          @pointermove="emit('update:highlight', row.back.place)"
+          @click="emit('choose', row.back.option.key)"
+          @keydown.enter="emit('choose', row.back.option.key)"
+        >
+          <VIcon
+            class="option-back-icon"
+            name="chevron-left"
+            :size="14"
+          />
+          <span :id="row.headingId">{{ row.group.name }}</span>
+        </div>
+        <div
+          v-else
           :id="row.headingId"
           class="option-group-name"
           role="presentation"
@@ -127,6 +180,7 @@ const highlighted = (place: number) => place === props.highlight || undefined
         class="option-row"
         role="option"
         tabindex="-1"
+        :aria-label="entry.option.name"
         :aria-selected="entry.option.selected"
         :data-highlighted="highlighted(entry.place)"
         @pointermove="emit('update:highlight', entry.place)"
@@ -135,7 +189,8 @@ const highlighted = (place: number) => place === props.highlight || undefined
       >
         <VIcon
           class="option-check"
-          name="check"
+          :name="entry.option.icon ?? 'check'"
+          :data-glyph="entry.option.icon && 'own'"
           :size="14"
         />
         <span
@@ -148,6 +203,12 @@ const highlighted = (place: number) => place === props.highlight || undefined
           class="option-detail"
           >{{ entry.option.detail }}</span
         >
+        <VIcon
+          v-if="entry.option.next"
+          class="option-next"
+          name="chevron-right"
+          :size="14"
+        />
       </div>
     </div>
   </div>
@@ -204,6 +265,42 @@ const highlighted = (place: number) => place === props.highlight || undefined
   padding: var(--space-1) var(--space-2) var(--space-half);
   color: var(--color-text-tertiary);
   font: var(--font-label);
+}
+
+/* A group with no head of its own stands apart by air, where a head would have stood. */
+.option-group[data-bare] {
+  padding-top: var(--space-1);
+}
+
+/* The group's name as the way back: the name's own word and place, a chevron before it, and a
+   row's reach and highlight. Its word starts where the rows' words do, past the check's place. */
+.option-back {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--size-control-inline);
+  padding: 0 var(--space-2);
+  color: var(--color-text-tertiary);
+  font: var(--font-label);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  &[data-highlighted] {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+    outline: 1px solid var(--color-focus-ring);
+    outline-offset: -1px;
+  }
+}
+
+.option-back-icon {
+  flex: 0 0 auto;
 }
 
 /* A pressed segment's look, as a choice among two is: a track and its chosen word. */
@@ -277,9 +374,21 @@ const highlighted = (place: number) => place === props.highlight || undefined
   flex: 0 0 auto;
   visibility: hidden;
 
-  .option-row[aria-selected='true'] & {
+  .option-row[aria-selected='true'] &,
+  &[data-glyph] {
     visibility: visible;
   }
+
+  &[data-glyph] {
+    color: var(--color-text-muted);
+  }
+}
+
+/* A row that leads to a list keeps its chevron at the row's end, where a count would stand. */
+.option-next {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  color: var(--color-text-tertiary);
 }
 
 /* The words take what they need and no more, so a count stands beside what it counts. Grown to

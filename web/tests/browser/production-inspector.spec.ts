@@ -144,7 +144,7 @@ test('an unsent comment survives browser Back, global search and a reload until 
     })
   const findAndOpen = async () => {
     await page.keyboard.press('Control+k')
-    const finder = page.getByRole('dialog', { name: 'Find a task', exact: true })
+    const finder = page.getByRole('dialog', { name: 'Go to a task', exact: true })
     await finder.getByRole('combobox').fill(blockedWorkItem.reference)
     await expect(finder.getByRole('option')).toContainText(blockedWorkItem.title)
     await page.keyboard.press('ArrowDown')

@@ -172,7 +172,7 @@ describe('one filter for every view', () => {
     await nextTick()
     expect(wrapper.emitted('state')?.at(-1)).toEqual([{ view: 'list', kind: 'epic' }])
     expect(list.props('items').map((item) => item.reference)).toEqual(['MAIN-1', 'MAIN-2'])
-    expect(wrapper.get('.workspace-chips').text()).toBe('Kind: Epic')
+    expect(wrapper.get('.workspace-chips .filter-chip').text()).toBe('Kind: Epic')
     // The list marks the glyph already in the filter as the way back out of it.
     expect(list.props('filter')).toEqual({ text: '', kind: ['epic'] })
     // The same mark clicked again takes it out.

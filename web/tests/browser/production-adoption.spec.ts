@@ -81,7 +81,7 @@ test('root keyboard finder opens the exact attached result with partial coverage
   )
   await expect(page.locator('.work-item-board')).toBeVisible()
   await page.keyboard.press('Control+k')
-  const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+  const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
   const search = dialog.getByRole('combobox')
   await expect(search).toBeFocused()
   await search.fill('MAIN-264')

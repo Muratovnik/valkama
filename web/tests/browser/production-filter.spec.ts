@@ -52,7 +52,7 @@ for (const width of [1440, 1024]) {
     expect(geometry.oneLine, 'one row of controls').toBe(true)
     expect(geometry.height).toBeLessThanOrEqual(84)
     // The field has room for its whole hint here.
-    await expect(field(page)).toHaveAttribute('placeholder', 'Reference, title, label…')
+    await expect(field(page)).toHaveAttribute('placeholder', 'Filter: reference, title…')
     // The one primary action ends the row.
     expect(geometry.last).toContain('workspace-action')
     // A filter does not make the bar taller.
@@ -90,6 +90,7 @@ test('the grouped board says its epics as rows on the counts line, where a phone
 test('a filter survives a reload and Back, because the address holds it', async ({ page }) => {
   await open(page)
   await field(page).click()
+  await page.getByRole('option', { name: 'Label', exact: true }).click()
   await page.getByRole('option', { name: 'phase-1' }).click()
   await page.keyboard.press('Escape')
   await field(page).fill('MAIN-26')
@@ -140,7 +141,10 @@ test('the bar’s keyboard: `/`, ↓ and Enter, Escape one step at a time, ← a
   await page.keyboard.type('phase')
   await page.keyboard.press('ArrowDown')
   await expect(field(page)).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.getByRole('option')).toHaveText(['phase-1'])
+  await expect(page.getByRole('option')).toHaveText([
+    'phase-1',
+    'Search for “phase” in all projects',
+  ])
   await page.keyboard.press('Enter')
   await expect(chips(page)).toHaveText(['Label: phase-1'])
   await expect(field(page)).toHaveValue('')
@@ -235,6 +239,7 @@ test('on a phone the view, the filter and the action share the first line', asyn
     Math.min(...first.map((box) => box.bottom)),
   )
   await field(page).click()
+  await page.getByRole('option', { name: 'Label', exact: true }).click()
   await page.getByRole('option', { name: 'phase-1' }).click()
   await page.keyboard.press('Escape')
   await expect(chips(page)).toHaveText(['Label: phase-1'])
@@ -247,7 +252,7 @@ test('on a phone the field’s hint fits it, and the grouping says its word unti
   await open(page, 390, 844)
   // The whole hint was cut to half a word; the short one fits, and the
   // field's name stays whole.
-  await expect(field(page)).toHaveAttribute('placeholder', 'Search, filter')
+  await expect(field(page)).toHaveAttribute('placeholder', 'Filter')
   await expect(field(page)).toHaveAccessibleName('Filter work')
   const hint = await field(page).evaluate((input: HTMLInputElement) => {
     const style = getComputedStyle(input)

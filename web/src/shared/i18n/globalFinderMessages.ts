@@ -1,8 +1,8 @@
 export const globalFinderMessages = {
   en: {
     finder: {
-      title: 'Find a task',
-      trigger: 'Find a task',
+      title: 'Go to a task',
+      trigger: 'Go to a task',
       scope: 'All mapped projects',
       searchLabel: 'Search tasks by reference or title',
       placeholder: 'Task reference or title…',
@@ -43,8 +43,8 @@ export const globalFinderMessages = {
   },
   ru: {
     finder: {
-      title: 'Найти задачу',
-      trigger: 'Найти задачу',
+      title: 'Перейти к задаче',
+      trigger: 'Перейти к задаче',
       scope: 'Все связанные проекты',
       searchLabel: 'Поиск задач по номеру или названию',
       placeholder: 'Номер или название задачи…',

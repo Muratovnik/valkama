@@ -920,21 +920,37 @@ hold them beside a usable filter. A usable filter is as wide as a phone's, 108px
 with the longest words: where the row cannot hold the grouping's word beside that,
 the word rides the counts' line instead of becoming a glyph, and where the view's
 segments and the action cannot either, the bar takes its phone form. The filter's
-hint names both things it does, and is whole where it fits and short where it would
-be cut. The field is the way into the filter's menu, with no button of its own: a
+hint starts with «Filter:» and names what it narrows by, so it does not read as the
+search over every project, «Go to a task» in the navigation; it is whole where it fits
+and short where it would be cut. The field is the way into the filter's menu, with no button of its own: a
 press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
-itself does not, since Tab passes through to what the menu would cover. Typing
-narrows the menu, and with no value left it draws nothing, so a search by number
-keeps the work in sight. The menu stands as tall as the window
+itself does not, since Tab passes through to what the menu would cover. The menu takes
+two steps, as Linear's does: it opens on the facets — state, kind, priority, holder,
+label — under the two presets, and a facet's row, marked with a chevron, steps into
+that facet's values. Every value of every facet at once was a list a real space's
+labels made thousands of rows long. The values' step heads its list with the facet's
+name as the way back; ← or Backspace from the start of the text goes back too, and
+the highlight lands on the facet it left. Typing in the facets' step still finds a
+value of any facet, the fast path for a reader who knows the word, and a pick made
+that way lands in its facet's step with the value highlighted. Text always ends the
+menu with «Search for "…" in all projects», which hands it to the finder; with no
+value left that row is all the menu holds, one row tall, and Escape takes it away.
+The menu stands as tall as the window
 lets it, down to 8px over its foot. A group's head stays in sight while its values scroll, and
 the label group's head says how the labels picked combine, «all» or «any», where the
-space has two to combine. That group stands last, as the longest list, and until the list
-reaches it its head waits at the menu's lower edge, so on a real space, with seven states and
-four kinds over it, the choice is in sight as the menu opens, on a short window too. The menu
+space has two to combine. Where typed text offers that group beside others it stands last, as the
+longest list, and until the list reaches it its head waits at the menu's lower edge, so the
+choice is in sight as the menu opens, on a short window too. The menu once
 stood 420px tall with the head 37px under it, and the spec passed on a fixture of few entries.
 The arrows reach that choice as they reach a value, because
 a list has one focus and it stays in the field. The chips say the same in a word
-between two labels. On a phone the grouping gives its word up to the reset while a filter is on, so
+between two labels. A facet's value is «is» until its chip says otherwise: the chip
+starts with its operator, «=», a pressed toggle that turns to «≠» and the chip's words
+to «Label: not ui», so the work must not carry that value; work nobody holds is not held
+by the holder named. Linear asks for the operator the same way, on the chip, rather than
+on every pick as GitLab's three steps do. The menu marks a value negated with the chip's
+cross in its check's place, and a press there takes it out whichever way it was in. In the
+address a negated value rides its facet's own key behind `%-`, which no older link holds. On a phone the grouping gives its word up to the reset while a filter is on, so
 the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and

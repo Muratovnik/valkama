@@ -97,7 +97,7 @@ test('a malformed address shows its own text as text, at the width of a phone', 
   await expect(main.locator('img')).toHaveCount(0)
   await expectNoSilentClipping(page, '.work-item-link')
   expect(dialogs).toEqual([])
-  await main.getByRole('button', { name: 'Find a task' }).click()
+  await main.getByRole('button', { name: 'Go to a task' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
 })
 

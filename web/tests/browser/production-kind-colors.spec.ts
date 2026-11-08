@@ -8,7 +8,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { boardId } from '../fixtures/board.ts'
-import { field as filterField, menu as valuesMenu } from './filterPage.ts'
+import { openFacet, menu as valuesMenu } from './filterPage.ts'
 import {
   colorOf,
   contrastOf,
@@ -49,7 +49,7 @@ async function openSettings(page: Page) {
 }
 
 const filterMenu = async (page: Page) => {
-  await filterField(page).click()
+  await openFacet(page, 'Kind')
   return valuesMenu(page)
 }
 
@@ -192,7 +192,7 @@ test('a search result leads with its kind in its colour, at rest and highlighted
     }),
   )
   await openList(page)
-  await page.getByRole('button', { name: 'Find a task' }).click()
+  await page.getByRole('button', { name: 'Go to a task' }).click()
   await page.getByRole('combobox').last().fill('MAIN')
   const rows = page.getByRole('option')
   await expect(rows).toHaveCount(2)

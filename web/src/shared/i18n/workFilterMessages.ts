@@ -16,11 +16,17 @@ export const workFilterMessages = {
   en: {
     filter: {
       label: 'Filter work',
-      placeholder: 'Reference, title, label…',
+      placeholder: 'Filter: reference, title…',
       // Where the field is too narrow for the whole hint, a phone's bar.
-      placeholderShort: 'Search, filter',
+      placeholderShort: 'Filter',
       clearText: 'Clear the text',
       menuLabel: 'Facets to filter by',
+      facets: 'Filter by',
+      back: '{facet}: back to the facets',
+      everywhere: {
+        group: 'All projects',
+        row: 'Search for “{text}” in all projects',
+      },
       labelsMatch: {
         all: {
           text: 'all',
@@ -45,6 +51,9 @@ export const workFilterMessages = {
         holder: 'Holder',
       },
       chip: '{facet}: {value}',
+      chipNot: '{facet}: not {value}',
+      negate: 'Is not: {name}',
+      excluded: '{value}, excluded',
       remove: 'Remove from filter: {name}',
       open: '{open} open of {total}',
       matched: '{matched} of {open} open',
@@ -59,10 +68,16 @@ export const workFilterMessages = {
   ru: {
     filter: {
       label: 'Фильтр работы',
-      placeholder: 'Номер, название, метка…',
-      placeholderShort: 'Поиск, фильтр',
+      placeholder: 'Фильтр: номер, название…',
+      placeholderShort: 'Фильтр',
       clearText: 'Очистить текст',
       menuLabel: 'Признаки для фильтра',
+      facets: 'Фильтр по признаку',
+      back: '{facet}: назад к признакам',
+      everywhere: {
+        group: 'Все проекты',
+        row: 'Искать «{text}» во всех проектах',
+      },
       labelsMatch: {
         all: {
           text: 'все',
@@ -87,6 +102,9 @@ export const workFilterMessages = {
         holder: 'Ответственный',
       },
       chip: '{facet}: {value}',
+      chipNot: '{facet}: не {value}',
+      negate: 'Не равно: {name}',
+      excluded: '{value}, исключено',
       remove: 'Убрать из фильтра: {name}',
       open: '{open}\u{A0}открытая из {total} | {open}\u{A0}открытые из {total} | {open}\u{A0}открытых из {total}',
       matched:

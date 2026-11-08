@@ -16,36 +16,56 @@ type StateCategory = (typeof STATE_CATEGORIES)[number]
 type WorkItemKind = (typeof WORK_ITEM_KINDS)[number]
 type WorkItemPriority = (typeof PRIORITIES)[number]
 
-export interface WorkFilter {
+/** The values a facet is narrowed to, facet by facet. */
+interface FacetValues {
+  /** State categories. */
+  category?: StateCategory[]
+  /** Holders, named as `actorName` names them. */
+  holder?: string[]
+  /** Kinds. */
+  kind?: WorkItemKind[]
+  /** Labels. */
+  labels?: string[]
+  /** Priorities. */
+  priority?: WorkItemPriority[]
+}
+
+/**
+ * The facets' own fields are what an item must be: any of these state
+ * categories, kinds, priorities or holders, and every one of these labels, each
+ * narrowing further, or any one under `labelsMatch`.
+ */
+export interface WorkFilter extends FacetValues {
   /** A substring of the reference or the title; blank for none. */
   text: string
-  /** Any of these state categories. */
-  category?: StateCategory[]
   /** Held by somebody and not yet finished. */
   held?: true
-  /** Held by any of these holders, named as `actorName` names them. */
-  holder?: string[]
-  /** Any of these kinds. */
-  kind?: WorkItemKind[]
-  /** Every one of these labels, each narrowing further, or any one under `labelsMatch`. */
-  labels?: string[]
   /** One of the labels will do. Absent, every one of them has to be on the item. */
   labelsMatch?: 'any'
-  /** Any of these priorities. */
-  priority?: WorkItemPriority[]
+  /**
+   * What an item must not be, «не равно»: none of these values, in any facet.
+   * A value is in one of the two lists at most. Absent rather than empty.
+   */
+  not?: FacetValues
   /** Startable right now, as the server answers it. */
   ready?: true
 }
 
-/** One thing a reader can add to the filter or take out of it. */
+/**
+ * One thing a reader can add to the filter or take out of it. A facet's value
+ * may be negated: the item must not carry it.
+ */
 export type WorkFilterToken =
   | { facet: 'ready' }
   | { facet: 'held' }
-  | { facet: 'category'; value: StateCategory }
-  | { facet: 'kind'; value: WorkItemKind }
-  | { facet: 'priority'; value: WorkItemPriority }
-  | { facet: 'labels'; value: string }
-  | { facet: 'holder'; value: string }
+  | { facet: 'category'; value: StateCategory; not?: true }
+  | { facet: 'kind'; value: WorkItemKind; not?: true }
+  | { facet: 'priority'; value: WorkItemPriority; not?: true }
+  | { facet: 'labels'; value: string; not?: true }
+  | { facet: 'holder'; value: string; not?: true }
+
+/** A token of a facet's value, the kind that can be negated. */
+export type ValueToken = Extract<WorkFilterToken, { value: string }>
 
 /** How the labels picked combine, as a reader chooses it. */
 export type LabelsMatch = 'all' | 'any'
@@ -72,10 +92,25 @@ function labelsHold(item: WorkItemBrief, filter: WorkFilter): boolean {
 }
 
 /**
+ * Whether an item is any of the values the filter says it must not be. Work
+ * nobody holds is not held by the holder named, so it passes «holder is not».
+ */
+function excluded(item: WorkItemBrief, not: FacetValues | undefined): boolean {
+  return (
+    Boolean(not?.category?.includes(item.state.category)) ||
+    Boolean(not?.kind?.includes(item.kind)) ||
+    Boolean(not?.priority?.includes(item.priority)) ||
+    Boolean(not?.labels?.some((label) => item.labels.includes(label))) ||
+    (item.claim_ref !== '' && Boolean(not?.holder?.includes(actorName(item.claim_ref))))
+  )
+}
+
+/**
  * Whether an item passes: every facet present must hold (AND across facets),
  * any one value of a facet will do (OR within it), except labels, where each
  * label picked must be on the item (AND), because a click on a second label
- * is read as "and this one too", until the reader says any one will do.
+ * is read as "and this one too", until the reader says any one will do. A
+ * value negated keeps out every item that carries it, whatever else holds.
  */
 export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): boolean {
   const text = filter.text.trim().toLocaleLowerCase()
@@ -96,51 +131,97 @@ export function matchesWorkFilter(item: WorkItemBrief, filter: WorkFilter): bool
     (item.claim_ref === '' || !filter.holder.includes(actorName(item.claim_ref)))
   )
     return false
-  return true
+  return !excluded(item, filter.not)
 }
 
-/** The filter's facet tokens in a stable order: flags, then each list facet. */
+/** The filter's facet tokens in a stable order: flags, then each list facet, its values before those negated. */
 export function filterTokens(filter: WorkFilter): WorkFilterToken[] {
   const tokens: WorkFilterToken[] = []
   if (filter.ready) tokens.push({ facet: 'ready' })
   if (filter.held) tokens.push({ facet: 'held' })
-  for (const facet of LIST_FACETS)
+  for (const facet of LIST_FACETS) {
     for (const value of filter[facet] ?? []) tokens.push({ facet, value } as WorkFilterToken)
+    for (const value of filter.not?.[facet] ?? [])
+      tokens.push({ facet, value, not: true } as WorkFilterToken)
+  }
   return tokens
 }
+
+/** The values of the token's facet in the token's own list: the facet's, or its negated ones. */
+const listOf = (filter: WorkFilter, token: ValueToken): readonly string[] =>
+  (token.not ? filter.not?.[token.facet] : filter[token.facet]) ?? []
 
 export function hasToken(filter: WorkFilter, token: WorkFilterToken): boolean {
   return token.facet === 'ready' || token.facet === 'held'
     ? filter[token.facet] === true
-    : ((filter[token.facet] as readonly string[] | undefined)?.includes(token.value) ?? false)
+    : listOf(filter, token).includes(token.value)
 }
 
-/** A new filter with the token in it; the filter itself is never changed. */
+/** Whether the token's value is in the filter either way, as it is or negated. */
+const hasValue = (filter: WorkFilter, token: ValueToken) =>
+  [...listOf(filter, { ...token, not: true }), ...(filter[token.facet] ?? [])].includes(token.value)
+
+/** The lists with the facet's set to `values`; an emptied list is dropped, not left as []. */
+function setList<Lists extends FacetValues>(lists: Lists, facet: ListFacet, values: string[]) {
+  const next: Lists = { ...lists }
+  if (values.length) Object.assign(next, { [facet]: values })
+  else delete next[facet]
+  return next
+}
+
+/** A new filter whose list of the token's kind is `values`; an emptied `not` is dropped too. */
+function withList(filter: WorkFilter, token: ValueToken, values: string[]): WorkFilter {
+  if (!token.not) return setList(filter, token.facet, values)
+  const next: WorkFilter = { ...filter, not: setList(filter.not ?? {}, token.facet, values) }
+  if (!Object.keys(next.not ?? {}).length) delete next.not
+  return next
+}
+
+/**
+ * A new filter with the token in it; the filter itself is never changed. A value
+ * in the other list moves, since an item cannot both be and not be it.
+ */
 export function addToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
   if (hasToken(filter, token)) return filter
   if (token.facet === 'ready' || token.facet === 'held') return { ...filter, [token.facet]: true }
-  const values = (filter[token.facet] as readonly string[] | undefined) ?? []
-  return { ...filter, [token.facet]: [...values, token.value] }
+  const other = { ...token, not: token.not ? undefined : true } as ValueToken
+  const rest = removeToken(filter, other)
+  return withList(rest, token, [...listOf(rest, token), token.value])
 }
 
 /** A new filter without the token; an emptied facet is dropped, not left as []. */
 export function removeToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
-  const next: WorkFilter = { ...filter }
   if (token.facet === 'ready' || token.facet === 'held') {
+    const next: WorkFilter = { ...filter }
     delete next[token.facet as FlagFacet]
     return next
   }
-  const values = ((filter[token.facet] as readonly string[] | undefined) ?? []).filter(
-    (value) => value !== token.value,
-  )
-  if (values.length) Object.assign(next, { [token.facet]: values })
-  else delete next[token.facet]
-  return next
+  return listOf(filter, token).includes(token.value)
+    ? withList(
+        filter,
+        token,
+        listOf(filter, token).filter((value) => value !== token.value),
+      )
+    : filter
 }
 
-/** What a click on a filterable mark does: add it, or take it out again. */
+/**
+ * What a click on a filterable mark or a menu value does: add it, or take it
+ * out again, whichever way it was in, negated included.
+ */
 export function toggleToken(filter: WorkFilter, token: WorkFilterToken): WorkFilter {
-  return hasToken(filter, token) ? removeToken(filter, token) : addToken(filter, token)
+  if (token.facet === 'ready' || token.facet === 'held')
+    return hasToken(filter, token) ? removeToken(filter, token) : addToken(filter, token)
+  if (!hasValue(filter, token)) return addToken(filter, token)
+  return removeToken(removeToken(filter, { ...token, not: undefined } as ValueToken), {
+    ...token,
+    not: true,
+  })
+}
+
+/** «Не равно» switched on a chip: the value moves to the other list, at its end. */
+export function negateToken(filter: WorkFilter, token: ValueToken): WorkFilter {
+  return addToken(filter, { ...token, not: token.not ? undefined : true } as ValueToken)
 }
 
 /** A new filter that reads its labels this way; all is the absence of the field. */
@@ -224,6 +305,14 @@ const unescapeValue = (value: string) => value.replaceAll('%2C', ',').replaceAll
  */
 const LABELS_ANY = '%any'
 
+/**
+ * What a negated value starts with, inside its facet's own key: `labels=ui,%-agent`
+ * is «ui, and not agent». A link made before values could be negated never holds it,
+ * because each `%` of a value is written `%25`, so every old link reads as it did,
+ * and the manifest needs no key of its own for it.
+ */
+const NOT_MARK = '%-'
+
 const VALID_VALUES: Record<ListFacet, ((value: string) => boolean) | null> = {
   category: (value) => (STATE_CATEGORIES as readonly string[]).includes(value),
   kind: (value) => (WORK_ITEM_KINDS as readonly string[]).includes(value),
@@ -252,13 +341,27 @@ export function readWorkFilter(state: RouteState | undefined): WorkFilter {
       raw = raw.slice(LABELS_ANY.length + 1)
     }
     if (raw === '') continue
-    const valid = VALID_VALUES[facet]
-    const values = [...new Set(raw.split(',').map((value) => unescapeValue(value)))].filter(
-      (value) => value !== '' && (valid === null || valid(value)),
-    )
-    if (values.length) Object.assign(filter, { [facet]: values })
+    readFacet(filter, facet, raw)
   }
   return filter
+}
+
+/**
+ * One facet's key into the filter: its values, and those after the not mark. A
+ * value in both reads as itself.
+ */
+function readFacet(filter: WorkFilter, facet: ListFacet, raw: string) {
+  const valid = VALID_VALUES[facet]
+  const kept = (value: string) => value !== '' && (valid === null || valid(value))
+  const read = (parts: readonly string[]) =>
+    [...new Set(parts.map((part) => unescapeValue(part)))].filter((value) => kept(value))
+  const parts = raw.split(',')
+  const values = read(parts.filter((part) => !part.startsWith(NOT_MARK)))
+  const not = read(
+    parts.filter((part) => part.startsWith(NOT_MARK)).map((part) => part.slice(NOT_MARK.length)),
+  ).filter((value) => !values.includes(value))
+  if (values.length) Object.assign(filter, { [facet]: values })
+  if (not.length) filter.not = { ...filter.not, [facet]: not }
 }
 
 /** The UTF-8 size of a state, measured as the manifest bound measures it. */
@@ -272,16 +375,30 @@ function cutText(text: string, units: number): string {
 }
 
 /** Whole values, joined, that fit in one state value. A value is never cut. */
-function joinWithin(values: readonly string[], chars: number): { kept: number; value: string } {
+function joinWithin(parts: readonly string[], chars: number): { kept: number; value: string } {
   let value = ''
   let kept = 0
-  for (const raw of values) {
-    const next = value ? `${value},${escapeValue(raw)}` : escapeValue(raw)
+  for (const part of parts) {
+    const next = value ? `${value},${part}` : part
     if (next.length > chars) break
     value = next
     kept += 1
   }
   return { kept, value }
+}
+
+/** A facet's values as the state writes them: as they are, then those negated. */
+const facetParts = (filter: WorkFilter, facet: ListFacet) => [
+  ...(filter[facet] ?? []).map((value) => escapeValue(value)),
+  ...(filter.not?.[facet] ?? []).map((value) => `${NOT_MARK}${escapeValue(value)}`),
+]
+
+/** The facet's last value as the state writes it, the first to go when the state is too long. */
+function lastToken(filter: WorkFilter, facet: ListFacet): ValueToken | undefined {
+  const negated = filter.not?.[facet]?.at(-1)
+  if (negated !== undefined) return { facet, value: negated, not: true } as ValueToken
+  const value = filter[facet]?.at(-1)
+  return value === undefined ? undefined : ({ facet, value } as ValueToken)
 }
 
 function encodeFilter(filter: WorkFilter): { complete: boolean; entries: RouteState } {
@@ -293,7 +410,7 @@ function encodeFilter(filter: WorkFilter): { complete: boolean; entries: RouteSt
   if (filter.ready) entries[WORK_FILTER_STATE_KEYS.ready] = true
   if (filter.held) entries[WORK_FILTER_STATE_KEYS.held] = true
   for (const facet of LIST_FACETS) {
-    const values = filter[facet] ?? []
+    const values = facetParts(filter, facet)
     const mark = facet === 'labels' && filter.labelsMatch === 'any' ? `${LABELS_ANY},` : ''
     const { kept, value } = joinWithin(values, ROUTE_STATE_VALUE_CHARS - mark.length)
     if (kept < values.length) complete = false
@@ -325,17 +442,14 @@ export function writeWorkFilter(
   let { complete, entries } = encodeFilter(current)
   while (stateBytes({ ...base, ...entries }) > maxBytes) {
     complete = false
-    const longest = LIST_FACETS.filter((facet) => current[facet]?.length).sort(
+    const longest = LIST_FACETS.filter((facet) => lastToken(current, facet)).sort(
       (left, right) =>
         String(entries[WORK_FILTER_STATE_KEYS[right]] ?? '').length -
         String(entries[WORK_FILTER_STATE_KEYS[left]] ?? '').length,
     )[0]
-    if (longest) {
-      const values = current[longest] ?? []
-      current = removeToken(current, {
-        facet: longest,
-        value: values.at(-1),
-      } as WorkFilterToken)
+    const last = longest && lastToken(current, longest)
+    if (last) {
+      current = removeToken(current, last)
     } else if (current.text) {
       const over = stateBytes({ ...base, ...entries }) - maxBytes
       current = { ...current, text: cutText(current.text, current.text.length - Math.max(1, over)) }

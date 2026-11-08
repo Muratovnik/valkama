@@ -180,6 +180,61 @@ describe('the work bar', () => {
     })
   })
 
+  it('switches a chip’s value to «is not» and back, the chip keeping its place and focus', async () => {
+    const wrapper = bar({ filter: { text: '', labels: ['ui'], ready: true }, filtered: true })
+    // A preset is no value of a facet, and has no operator.
+    expect(wrapper.findAll('.workspace-chips .filter-chip-operator')).toHaveLength(1)
+    const operator = wrapper.get('.workspace-chips .filter-chip-operator')
+    expect(operator.text()).toBe('=')
+    expect(operator.attributes('aria-pressed')).toBe('false')
+    expect(operator.attributes('aria-label')).toBe('Is not: Label: ui')
+    ;(operator.element as HTMLButtonElement).focus()
+    await operator.trigger('click')
+    expect(wrapper.emitted<[WorkFilter]>('update:filter')?.at(-1)?.[0]).toEqual({
+      text: '',
+      ready: true,
+      not: { labels: ['ui'] },
+    })
+    const switched = wrapper.get('.workspace-chips .filter-chip-operator')
+    expect(switched.text()).toBe('≠')
+    expect(switched.attributes('aria-pressed')).toBe('true')
+    expect(document.activeElement).toBe(switched.element)
+    const chip = wrapper.findAll('.workspace-chips .filter-chip').at(-1)
+    expect(chip?.text()).toBe('Label: not ui')
+    expect(chip?.attributes('aria-label')).toBe('Remove from filter: Label: not ui')
+
+    await switched.trigger('click')
+    expect(wrapper.emitted<[WorkFilter]>('update:filter')?.at(-1)?.[0]).toEqual({
+      text: '',
+      ready: true,
+      labels: ['ui'],
+    })
+  })
+
+  it('says «and» before a negated label even where any label will do', () => {
+    const wrapper = bar({
+      filter: { text: '', labels: ['ui', 'api'], labelsMatch: 'any', not: { labels: ['old'] } },
+      filtered: true,
+    })
+    expect(wrapper.findAll('.filter-chip-join').map((word) => word.text())).toEqual(['or', 'and'])
+  })
+
+  it('marks a negated value in the menu as in the filter, and a press takes it out', async () => {
+    const wrapper = bar({
+      filter: { text: '', not: { kind: ['bug'] } },
+      filtered: true,
+      items: [],
+    })
+    await wrapper.get('input[role="combobox"]').trigger('click')
+    const kind = wrapper.findAll('[role="option"]').find((option) => option.text() === 'Kind')
+    await kind?.trigger('click')
+    const bug = wrapper.findAll('[role="option"]').find((option) => option.text() === 'Bug')
+    expect(bug?.attributes('aria-selected')).toBe('true')
+    expect(bug?.attributes('aria-label')).toBe('Bug, excluded')
+    await bug?.trigger('click')
+    expect(wrapper.emitted<[WorkFilter]>('update:filter')?.at(-1)?.[0]).toEqual({ text: '' })
+  })
+
   it('leaves the grouped board’s epics to the lanes, and says nothing is left out of the graph', async () => {
     const wrapper = bar({ grouping: 'epic' })
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
@@ -199,5 +254,15 @@ describe('the work bar', () => {
     expect(wrapper.get('.workspace-figures').text()).toBe('2 open of 3')
     await chip.trigger('click')
     expect(wrapper.emitted('exit-chain')).toHaveLength(1)
+  })
+
+  it('passes the filter’s search over every project up to the page', async () => {
+    const wrapper = bar()
+    await wrapper.get('input[role="combobox"]').setValue('MAIN-9')
+    const row = wrapper
+      .findAll('[role="option"]')
+      .find((option) => option.text() === 'Search for “MAIN-9” in all projects')
+    await row?.trigger('click')
+    expect(wrapper.emitted('find')).toEqual([['MAIN-9']])
   })
 })

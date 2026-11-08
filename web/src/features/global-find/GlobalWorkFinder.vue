@@ -31,8 +31,10 @@ const props = withDefaults(
     open: boolean
     /** The projects the app already lists, so a result can name its project by title. */
     projects?: readonly { project_id: string; title: string }[]
+    /** Text to search for as it opens, handed over by another search; blank keeps the last one. */
+    text?: string
   }>(),
-  { projects: () => [] },
+  { projects: () => [], text: '' },
 )
 const emit = defineEmits<{ close: []; select: [target: PlanningTarget] }>()
 const { t } = useI18n()
@@ -163,6 +165,15 @@ function submit() {
   const first = opensOnEnter(result.value)
   if (first) select(first.target)
 }
+
+// Declared ahead of the search, so the search that opening starts is already for this text.
+watch(
+  [() => props.open, () => props.text],
+  ([open, text]) => {
+    if (open && text) query.value = text
+  },
+  { immediate: true, flush: 'sync' },
+)
 
 watch(
   [query, () => props.open, retry],

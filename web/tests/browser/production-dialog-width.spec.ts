@@ -77,7 +77,7 @@ test('on a phone the finder takes the width too, and still stands just under the
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.keyboard.press('Control+k')
-  const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+  const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
   // Where it rests, once it has stepped up from just below.
   await expect(dialog).toHaveCSS('transform', 'none')
   expect(await across(dialog)).toEqual({ left: 0, width: 390 })

@@ -101,3 +101,13 @@ export const menuLabels = (page: Page) =>
           `${row.getAttribute('aria-selected') === 'true' ? '+' : ''}${row.textContent?.trim()}`,
       ),
     )
+
+/**
+ * The menu stepped into one facet's values: the field pressed where the menu is not open yet,
+ * then the facet's row. The menu opens on the facets.
+ */
+export async function openFacet(page: Page, facet: string) {
+  if (!(await menu(page).isVisible())) await field(page).click()
+  await menu(page).getByRole('option', { name: facet, exact: true }).click()
+  await expect(menu(page).getByRole('option', { name: 'Back to the facets' })).toHaveText(facet)
+}

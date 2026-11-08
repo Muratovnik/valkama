@@ -13,6 +13,8 @@ export function useGlobalWorkActions(
   cardQuestionAsked: Readonly<Ref<boolean>>,
 ) {
   const finderOpen = ref(false)
+  /** What the finder opens searching for; blank opens it on the search it last held. */
+  const finderText = ref('')
   const requestsOpen = ref(false)
   const pendingRequestCount = ref<PendingCount | null>(null)
 
@@ -21,6 +23,17 @@ export function useGlobalWorkActions(
     finderOpen.value = false
     requestsOpen.value = false
   }
+
+  /** The finder, searching for text a surface hands it: the board filter's last row. */
+  function findText(text: string) {
+    finderText.value = text
+    finderOpen.value = true
+  }
+
+  // A text handed over is for that one opening; Ctrl+K later opens on what was left there.
+  watch(finderOpen, (open) => {
+    if (!open) finderText.value = ''
+  })
 
   // Asked before this ran, on the load the address came in with, or any time later.
   watch(
@@ -54,5 +67,5 @@ export function useGlobalWorkActions(
 
   onMounted(() => window.addEventListener('keydown', findShortcut))
   onBeforeUnmount(() => window.removeEventListener('keydown', findShortcut))
-  return { finderOpen, requestsOpen, pendingRequestCount, openTarget }
+  return { finderOpen, finderText, findText, requestsOpen, pendingRequestCount, openTarget }
 }

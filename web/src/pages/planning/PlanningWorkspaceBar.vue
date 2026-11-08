@@ -33,6 +33,7 @@ import WorkFilterField from '@/features/work-filter/WorkFilterField.vue'
 import {
   EMPTY_WORK_FILTER,
   filterTokens,
+  negateToken,
   removeToken,
 } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -71,6 +72,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'create': []
   'exit-chain': []
+  /** Search every project for the filter's text, from the last row of its menu. */
+  'find': [text: string]
   'group': [grouping: BoardGrouping]
   'view': [mode: PlanningViewMode]
 }>()
@@ -191,6 +194,7 @@ function removeChip(token: WorkFilterToken) {
         :held="heldCount"
         :items="items"
         @chips="focusChips"
+        @find="(text) => emit('find', text)"
       />
       <VButton
         v-if="writable"
@@ -218,6 +222,7 @@ function removeChip(token: WorkFilterToken) {
           :labels-any="labelsAny"
           :tokens="tokens"
           @leave="focusField"
+          @negate="(token) => (filter = negateToken(filter, token))"
           @remove="removeChip"
         />
       </div>

@@ -19,6 +19,7 @@ import {
   labelledSpace,
   menu,
   menuLabels,
+  openFacet,
   openSpace,
   shownTiles,
   words,
@@ -35,8 +36,15 @@ async function active(page: Page) {
   return page.locator(`[id="${id}"]`)
 }
 
-/** ↓ from the field until the highlight stands on «all», as far as the walk has to go. */
+/** ↓ from the field to the labels' row, into it, and on until the highlight stands on «all». */
 async function walkToChoice(page: Page) {
+  for (let step = 0; step < 10; step += 1) {
+    await page.keyboard.press('ArrowDown')
+    const row = await active(page)
+    const text = await row.textContent()
+    if (text?.trim() === 'Label') break
+  }
+  await page.keyboard.press('Enter')
   for (let step = 0; step < 40; step += 1) {
     await page.keyboard.press('ArrowDown')
     const row = await active(page)
@@ -49,7 +57,7 @@ async function walkToChoice(page: Page) {
 async function bothPicked(page: Page, width = 1440) {
   await openSpace(page, { width })
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
-  await field(page).click()
+  await openFacet(page, 'Label')
   await pick(page, 'ui')
   await pick(page, 'board')
   await expect(chips(page)).toHaveText(['Label: ui', 'Label: board'])
@@ -91,7 +99,7 @@ test('one label needs no word, and taking a chip out keeps the reading', async (
   await expect(chips(page)).toHaveText(['Label: ui'])
   await expect(words(page)).toHaveCount(0)
   await expect.poll(() => shownTiles(page)).toEqual(['MAIN-402', 'MAIN-403'])
-  await field(page).click()
+  await openFacet(page, 'Label')
   await expect(anyOf(page)).toHaveAttribute('aria-selected', 'true')
 })
 
@@ -117,7 +125,7 @@ test('Reset takes the reading out with the labels', async ({ page }) => {
   await page.keyboard.press('Escape')
   await page.locator('.workspace-figures').getByRole('button', { name: 'Reset' }).click()
   await expect.poll(() => addressState(page)).toEqual({ view: 'kanban' })
-  await field(page).click()
+  await openFacet(page, 'Label')
   await expect(allOf(page)).toHaveAttribute('aria-selected', 'true')
   await expect(menu(page).locator('.option-row[aria-selected="true"]')).toHaveCount(0)
 })
@@ -126,7 +134,7 @@ test('the list reads the same answer', async ({ page }) => {
   await openSpace(page, { state: { view: 'list', labels: '%any,ui,board' } })
   await expect(page.locator('.work-item-list tbody tr')).toHaveCount(3)
   await expect(words(page)).toHaveText(['or'])
-  await field(page).click()
+  await openFacet(page, 'Label')
   await allOf(page).click()
   await expect(page.locator('.work-item-list tbody tr')).toHaveCount(1)
 })
@@ -138,7 +146,7 @@ test('the graph reads the same answer', async ({ page }) => {
     page.locator('.flow-node-card .flow-node-id').getByText(reference, { exact: true })
   await expect(card('MAIN-403')).toBeVisible()
   await expect(card('MAIN-404')).toBeVisible()
-  await field(page).click()
+  await openFacet(page, 'Label')
   await allOf(page).click()
   await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
   await expect(card('MAIN-402')).toBeVisible()
@@ -161,7 +169,7 @@ test('a label pressed in a card joins in the reading in force', async ({ page })
   await page.setViewportSize({ width: 1500, height: 900 })
   await installDiscussionBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  await field(page).click()
+  await openFacet(page, 'Label')
   await anyOf(page).click()
   await page.keyboard.press('Escape')
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
@@ -230,7 +238,7 @@ test('with one label in the space there is nothing to combine, and no choice', a
     labels: item.reference === 'MAIN-402' ? ['ui'] : [],
   }))
   await openSpace(page, { items })
-  await field(page).click()
+  await openFacet(page, 'Label')
   await expect(page.getByRole('option', { name: 'ui', exact: true })).toBeVisible()
   await expect(anyOf(page)).toHaveCount(0)
 })
