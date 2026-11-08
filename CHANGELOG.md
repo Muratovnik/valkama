@@ -10,6 +10,70 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **The rail is as wide as you drag it.** Its right edge drags between 200 and 480 px (260 to
+  start), the arrow keys step it by 16 px and Home and End take it to either end; the width
+  is kept on the device. On a window 760 px wide or narrower the rail stays its icons alone.
+- **One hint for everything.** Every hint in the interface is now the same card, shown on
+  hover and on keyboard focus and closed by Escape, in place of the browser's own tooltip; a
+  label cut short shows its whole text only when it is cut. A check refuses a browser
+  tooltip coming back.
+- **A reason beside a recommendation.** A question's option, or a verdict's recommended
+  answer, takes `why` next to `recommended`: the «recommended» mark then shows it on hover,
+  focus or press. `why` without a recommendation is refused, and the Valkama skill asks an
+  agent to give one whenever it recommends.
+- **Process friction in a summary.** `set_work_item_summary`, `report_work_item` and the
+  batch's `summary` take `friction`, up to 4000 characters; the card shows it last, quietly,
+  and hides `none`. *Rolling back:* a 2.6.0 server refuses to read an item whose summary
+  carries `friction` («work_item.summary has unknown field(s): friction»); lists and search
+  still work. Remove the field from such summaries before pinning 2.6.0.
+- **The Work filter in two steps.** Its menu opens on the presets and the facets — state,
+  kind, priority, holder, label — and a facet steps into its values, with the facet's name as
+  the way back; typing on the first step still finds a value of any facet. A chip's «=»
+  turns into «≠», so a value can be kept out («Label: not ui»); old links read as before.
+  Text that matches nothing ends the menu with «Search for "…" in all projects».
+- **Questions you can move through.** In the questions dialog each block's head stays at the
+  top while its questions scroll, with the block's comment button in it, and a rail of bars
+  down the left takes you to any question, from the pointer or the keyboard.
+- **The card's facts each have a row.** State, priority, epic, who works on it, subscribers
+  and labels stand on named rows; the priority changes where it stands, and labels are added
+  with «+» and removed with the «×» on a chip.
+
+### Changed
+
+- **A healthy connection shows nothing.** The rail's refresh button appears only when the
+  connection is lost, with what happened; the board and the activity refresh themselves.
+- **A work item's marks read in one order everywhere:** its kind, its number, then the rest,
+  on the board, in the list, on the graph, on the hover card, in the card's head and in
+  «Go to a task», and each glyph sits centred on the letters beside it. A board tile no
+  longer says who claimed it in words: the holder is a glyph with a hint.
+- **Hovering the graph no longer dims everything else.**
+- **Every empty state is the same component,** a quiet line at the top of a section or a
+  centred block where a whole view is empty, with an action where one exists. An unavailable
+  memory source says why and links to Settings → Diagnostics.
+- **Obvious actions are icons:** refresh, edit, add, remove, close and re-check, each with its
+  words in the hint; an action that sends, commits or carries a count keeps its words.
+- **«Find a task» is now «Go to a task»,** and the board's field hint starts with «Filter:»,
+  so the two no longer read as one.
+- **Clearer questions.** The comment buttons say what they comment on — this question or the
+  block of questions — and the task's number in a block's head is its link, so the separate
+  «Open task» is gone. The dialog speaks of blocks of questions.
+- **A step's row shows where and how a session runs as icons,** beside the name at the row's
+  own weight. Cursor shows its own mark, and an editor Valkama knows no mark for shows a
+  neutral editor glyph rather than another product's.
+- **Less explanatory text:** the line under Settings' section switch and the memory section's
+  introduction are gone; a discussion's heading counts its threads with a bare number.
+
+### Fixed
+
+- **A field's hint no longer flickers** when the pointer crosses the gap between its label
+  and the field.
+- **Escape on a hint's «?» reaches the dialog around it** while the hint is closed.
+- **Parts that stick to the top of a dialog's list stick at its top,** not 24 px below it,
+  and a control the keyboard reaches is scrolled out from under them.
+
+
 ## [2.6.0](https://github.com/Muratovnik/valkama/compare/v2.5.0...v2.6.0) - 2026-11-08
 
 ### Added
