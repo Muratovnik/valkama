@@ -153,7 +153,7 @@ defineExpose({ focusLast })
         class="filter-chip-join"
         >{{ chip.join }}</span
       >
-      <span class="filter-chip-pill">
+      <span class="filter-chip-pill reach-grow">
         <ToggleChip
           v-if="chip.operator"
           v-tooltip="chip.operator.name"
@@ -227,8 +227,13 @@ defineExpose({ focusLast })
 }
 
 /* The operator is the product's toggle, pressed as every toggle is, drawn at the chip's
-   height and in its words' size, on the pill's fill rather than a fill of its own. */
+   height and in its words' size, on the pill's fill rather than a fill of its own. Its sign
+   is all it shows, and the chip it opens onto leaves it no room to reach into: a reach would
+   take the chip's own presses. So under a finger or at a phone's width the pill grows both
+   boxes to the target (`reach-grow`, `reach.css`), the sign's square and the chip's height. */
 .filter-chip-operator {
+  justify-content: center;
+  min-width: var(--size-control-inline);
   min-height: var(--size-control-inline);
   font: var(--font-detail);
   background: transparent;
@@ -288,3 +293,5 @@ defineExpose({ focusLast })
   }
 }
 </style>
+
+<style scoped src="@/shared/ui/reach.css"></style>
