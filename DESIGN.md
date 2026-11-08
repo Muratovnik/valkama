@@ -1382,8 +1382,9 @@ what was written in another thread stays there as a draft the card asks about be
 leaving. A resolved comment or report folds to its mark and the first line of its root, in
 the muted ink and with no sign of success, because the mark says the discussion stopped and
 nothing about whether it went well; it opens with an icon that stays where it is, and it
-stays open while a form is left in it. The heading counts what is unresolved whichever way
-the view is set. The unresolved view hides marked threads and closed questions and says how
+stays open while a form is left in it. The heading counts the entries at the top of the
+list as a bare number, a reply being part of its entry; the unresolved count stands once,
+on the filter, whichever way the view is set. The unresolved view hides marked threads and closed questions and says how
 many, and a thread marked in that view stays under the reader's hands until the view
 changes, as a question answered does. A reply whose question could not be read stands on
 its own and says so: not knowing what it answers is no reason to hide what it says.

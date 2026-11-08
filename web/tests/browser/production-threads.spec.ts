@@ -324,7 +324,7 @@ test('the unresolved view counts, hides and brings back, and is the same after a
 }) => {
   const { drawer } = await openTalkedOn(page)
   const heading = drawer.locator('.section-header').filter({ hasText: 'Discussion' })
-  await expect(heading).toContainText('3 unresolved')
+  await expect(heading.locator('.section-header-count')).toHaveText('4')
   const view = drawer.getByRole('radiogroup', { name: 'Threads to show' })
   const all = view.getByRole('radio', { name: 'All', exact: true })
   const open = view.getByRole('radio', { name: 'Unresolved 3' })
@@ -337,7 +337,7 @@ test('the unresolved view counts, hides and brings back, and is the same after a
   await expect(open).toHaveAttribute('aria-checked', 'true')
   await expect(drawer.getByRole('article', { name: /^Resolved/u })).toHaveCount(0)
   await expect(drawer.locator('.thread-hidden')).toContainText('1 resolved thread hidden')
-  await expect(heading).toContainText('3 unresolved')
+  await expect(heading.locator('.section-header-count')).toHaveText('4')
 
   await page.reload()
   await expect(open).toHaveAttribute('aria-checked', 'true')
@@ -349,7 +349,7 @@ test('the unresolved view counts, hides and brings back, and is the same after a
   await expect(all).toHaveAttribute('aria-checked', 'true')
 })
 
-test('the unresolved count is what the view shows, a waiting question among it', async ({
+test('the unresolved count on the filter is what the view shows, a waiting question among it', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
@@ -358,7 +358,8 @@ test('the unresolved count is what the view shows, a waiting question among it',
   await page.reload()
   await expect(card).toBeVisible()
   const heading = drawer.locator('.section-header').filter({ hasText: 'Discussion' })
-  await expect(heading).toContainText('5 threads · 4 unresolved')
+  await expect(heading.locator('.section-header-count')).toHaveText('5')
+  await expect(heading).not.toContainText('unresolved')
   const open = drawer.getByRole('radio', { name: 'Unresolved 4' })
   await open.click()
   await expect(drawer.locator('.thread > li')).toHaveCount(4)

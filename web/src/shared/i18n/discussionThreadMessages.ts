@@ -4,8 +4,6 @@ export const discussionThreadMessages = {
       filter: 'Threads to show',
       filterAll: 'All',
       filterUnresolved: 'Unresolved {n}',
-      threadCount: '{n} thread | {n} threads',
-      unresolvedCount: '{n} unresolved',
       hidden: '{n} resolved thread hidden | {n} resolved threads hidden',
       showAll: 'Show all',
       noneUnresolved: 'No unresolved threads.',
@@ -45,8 +43,6 @@ export const discussionThreadMessages = {
       filter: 'Какие ветки показывать',
       filterAll: 'Все',
       filterUnresolved: 'Неразобранные {n}',
-      threadCount: '{n} ветка | {n} ветки | {n} веток',
-      unresolvedCount: '{n} неразобранная | {n} неразобранных | {n} неразобранных',
       hidden:
         'Скрыта {n} разобранная ветка | Скрыты {n} разобранные ветки | Скрыто {n} разобранных веток',
       showAll: 'Показать все',
