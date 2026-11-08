@@ -299,11 +299,8 @@ defineExpose({ actionCell })
     </div>
     <div class="card-row card-holder">
       <span class="card-row-label card-holder-label">{{ holderLabel }}</span>
-      <!-- The hint is the holder's, not the row's: the row's actions are controls of their own. -->
-      <div
-        v-tooltip="holderTitle"
-        class="card-row-value card-holder-value"
-      >
+      <div class="card-row-value card-holder-value">
+        <!-- A session's link says the holder in its own hint; a bare name carries it here. -->
         <ExecutorLink
           v-if="holderExecutor?.session"
           class="card-holder-link"
@@ -313,6 +310,7 @@ defineExpose({ actionCell })
         />
         <span
           v-else-if="holder"
+          v-tooltip="holderTitle"
           class="card-holder-name"
           >{{ holderName(holder) }}</span
         >

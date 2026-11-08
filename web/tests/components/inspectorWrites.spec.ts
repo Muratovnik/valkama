@@ -235,7 +235,7 @@ describe('inspector writes and their refusals', () => {
     const lease = wrapper.get('.card-holder [data-dimension="claim-lease"]')
     expect(lease.attributes('data-state')).toBe('stale')
     expect(lease.attributes('data-tone')).toBe('warning')
-    expect(hintOf(wrapper.get('.card-holder-value'))).toBe(
+    expect(hintOf(wrapper.get('.card-holder-name'))).toBe(
       'codex\nClaim: Stale — the session behind it is gone',
     )
     expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
@@ -294,7 +294,7 @@ describe('inspector writes and their refusals', () => {
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
     const holder = wrapper.get('.card-holder-value')
     // The date is the activity format, which this harness's i18n leaves blank.
-    expect(hintOf(holder)).toMatch(
+    expect(hintOf(holder.get('.card-holder-name'))).toMatch(
       /^codex\nClaim: Live — until .*, unless the session shows a sign of life$/u,
     )
     expect(holder.text()).toContain('unless the session shows a sign of life')

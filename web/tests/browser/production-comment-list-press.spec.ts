@@ -67,6 +67,8 @@ async function pressOnSheet(page: Page, { finger = false, forced = false } = {})
   const rest = await drawnOf(toggle)
   for (const part of ['box', 'ground', 'outline'] as const)
     expectOnSheet(rest.sheet, rest[part], `at rest, its ${part}`)
+  // A finger raises no hint, so its reach is probed before the pointer or the keyboard does.
+  expect(!finger || (await answersTap(toggle)), 'a 44 px tap').toBe(true)
   await toggle.hover()
   await settle(page)
   const hovered = await drawnOf(toggle)
@@ -82,7 +84,6 @@ async function pressOnSheet(page: Page, { finger = false, forced = false } = {})
   expect(focused.ring, 'the keyboard rings it').toBe(true)
   expect(focused.outline, 'its ring').not.toBeNull()
   expectOnSheet(focused.sheet, focused.outline, 'its keyboard ring')
-  expect(!finger || (await answersTap(toggle)), 'a 44 px tap').toBe(true)
   return toggle
 }
 

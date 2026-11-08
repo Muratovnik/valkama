@@ -275,7 +275,10 @@ test('a holder nobody can press is the same line, and the stale mark stays besid
   const holder = row(drawer, 'Исполняет')
   await expect(holder.value.locator('.card-holder-name')).toHaveText('codex')
   await expect(holder.value.locator('.card-holder-stale')).toBeVisible()
-  await expect(drawer.locator('.card-holder-value')).toHaveAttribute('data-tooltip', /^codex\n/u)
+  await expect(holder.value.locator('.card-holder-name')).toHaveAttribute(
+    'data-tooltip',
+    /^codex\n/u,
+  )
   const labelWords = await wordsOf(holder.label)
   const nameWords = await wordsOf(holder.value.locator('.card-holder-name'))
   expect(Math.abs(nameWords.middle - labelWords.middle)).toBeLessThanOrEqual(1.5)
@@ -332,7 +335,7 @@ test('on a phone a long holder gives way with an ellipsis and stays whole in its
   await expect(name).toHaveCSS('text-overflow', 'ellipsis')
   const cut = await name.evaluate((node) => node.scrollWidth > node.clientWidth)
   expect(cut, 'a name wider than the line is cut').toBe(true)
-  await expect(drawer.locator('.card-holder-value')).toHaveAttribute(
+  await expect(holder.locator('button.open-action')).toHaveAttribute(
     'data-tooltip',
     /a-coordinator-with-a-name-long-enough-to-run-out/u,
   )

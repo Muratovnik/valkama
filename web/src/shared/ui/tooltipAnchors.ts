@@ -54,10 +54,13 @@ const words = (text: string) =>
     .split(/[\s\p{P}\p{S}]+/u)
     .filter(Boolean)
 
-/** Whether every word of the hint is already in the name, so a description would repeat it. */
-function repeats(text: string, name: string) {
-  const named = new Set(words(name))
-  return words(text).every((word) => named.has(word))
+/**
+ * Whether every word of the hint is already said, so a description would repeat it: in the
+ * name, or in the value a separator or slider reads out with it.
+ */
+function repeats(text: string, element: HTMLElement, name: string) {
+  const said = new Set(words(`${name} ${element.getAttribute('aria-valuetext') ?? ''}`))
+  return words(text).every((word) => said.has(word))
 }
 
 /** What names the element apart from this directive, as a browser would find it. */
@@ -126,7 +129,7 @@ function file(
   const names = before?.names === true || !nameOf(element, before)
   let describes: string | null = null
   if (names) element.setAttribute('aria-label', text)
-  else if (!repeats(text, nameOf(element, before))) {
+  else if (!repeats(text, element, nameOf(element, before))) {
     if (!before?.describes) serial += 1
     describes = before?.describes ?? `tooltip-${serial}`
     tooltipDescriptions.set(describes, text)
