@@ -14,6 +14,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, openList, serve } from './boardPage.ts'
+import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
 /** Marks every visible element that is told apart by its ground alone; returns how many. */
@@ -209,8 +210,11 @@ test('in the forced palette the connection’s dot stays, the one mark of a narr
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' })
   await installBackend(page)
+  const stream = await installStreamDouble(page)
   await serve(page)
   await openBoard(page, {})
+  // The connection shows only while it is lost.
+  await stream.drop()
   const dot = page.locator('.nav-refresh .connection-dot')
   await expect(dot).toBeVisible()
   // The palette paints the button's words in its ink; the dot is drawn in the same ink,

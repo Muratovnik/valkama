@@ -25,9 +25,10 @@ const props = withDefaults(
     /**
      * Where it stands against what it sizes: across the left edge of a drawer; just inside a
      * pane, which leaves the scrollbar of the pane before it free; in the gap before a
-     * dialog's pane; and inside the left edge of the window's end, for a pane folded away.
+     * dialog's pane; inside the left edge of the window's end, for a pane folded away; and
+     * across the right edge of the rail, which is sized by its end.
      */
-    at?: 'across' | 'inside' | 'gap' | 'end'
+    at?: 'across' | 'inside' | 'gap' | 'end' | 'after'
     /** What it sizes, when that has an id to name. */
     controls?: string
     /** What it sizes is folded away: that thing's name, and the words for its state. */
@@ -112,6 +113,10 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
   &.at-end {
     inset-inline-start: -12px;
     justify-content: flex-end;
+  }
+
+  &.at-after {
+    inset-inline: auto -6px;
   }
 
   &:focus-visible {

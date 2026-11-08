@@ -24,6 +24,7 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 import CountBadge from '@/shared/ui/CountBadge.vue'
 import SidePanel from '@/shared/ui/SidePanel.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -83,10 +84,10 @@ const elsewhere = computed(() => store.frame?.elsewhere ?? 0)
       />
     </div>
     <button
+      v-tooltip:right="countWords"
       class="nav-work-rail"
       type="button"
       :aria-label="countWords"
-      :title="countWords"
       :aria-expanded="panelOpen"
       @click="panelOpen = true"
     >

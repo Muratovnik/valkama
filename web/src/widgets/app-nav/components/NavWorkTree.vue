@@ -37,6 +37,7 @@ import { liveTree, rowNumber } from '@/widgets/app-nav/utils/liveTree.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { ShownSpace } from '@/shared/lib/liveWorkRows.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 /** Which space and card are on show, so their rows can say so. */
@@ -111,6 +112,8 @@ const elsewhereWords = computed(() =>
   t('liveWork.elsewhere', { count: props.elsewhere }, props.elsewhere),
 )
 
+/** A name cut short says itself beside the rail; the phone's panel has no room beside it. */
+const nameHint = (entry: SpaceTree) => (touch.value ? null : entry.label)
 const foldLabel = (entry: SpaceTree) => t('liveWork.group', { name: entry.label })
 const unplacedWords = (entry: SpaceTree) =>
   t('liveWork.unplaced', { count: entry.space.unplaced }, entry.space.unplaced)
@@ -176,12 +179,12 @@ function escape(event: KeyboardEvent) {
         <div class="nav-tree-head">
           <button
             :id="entry.fold"
+            v-tooltip="foldLabel(entry)"
             class="nav-tree-fold"
             type="button"
             :aria-expanded="!entry.folded"
             :aria-controls="entry.branch"
             :aria-label="foldLabel(entry)"
-            :title="foldLabel(entry)"
             @click="toggle(entry)"
           >
             <VIcon
@@ -192,17 +195,17 @@ function escape(event: KeyboardEvent) {
           </button>
           <a
             v-if="entry.href"
+            v-tooltip:right.clipped="nameHint(entry)"
             class="nav-tree-space-name nav-tree-space-link"
             :href="entry.href"
             :aria-current="spaceCurrent(entry)"
-            :title="entry.label"
             @click="pressSpace($event, entry)"
             >{{ entry.label }}</a
           >
           <span
             v-else
+            v-tooltip:right="t('liveWork.noProject')"
             class="nav-tree-space-name"
-            :title="t('liveWork.noProject')"
             >{{ entry.label }}</span
           >
         </div>

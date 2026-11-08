@@ -182,6 +182,7 @@ export const en = {
   },
   navigation: {
     home: 'Go to Work',
+    resize: 'Navigation width',
   },
   language: {
     label: 'Language',

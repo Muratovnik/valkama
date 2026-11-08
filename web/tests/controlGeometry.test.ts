@@ -100,8 +100,8 @@ test('a control states its own subject, so nothing captions it twice', () => {
   // The connection strip is the refresh control; the word under the state was
   // the button's own name printed inside it, and it cost the dot its alignment.
   assert.doesNotMatch(navConnection, /refresh\.label/)
-  // Its tooltip names the refresh, after the lost connection when there is one.
-  assert.match(navConnection, /:title="title"/)
+  // Its hint names the refresh, after the lost connection it is there for.
+  assert.match(navConnection, /v-tooltip:right="hint"/)
   assert.match(navConnection, /t\('refresh\.title'\)/)
   assert.match(
     navConnection,
@@ -112,7 +112,7 @@ test('a control states its own subject, so nothing captions it twice', () => {
 test('settings is a destination in the navigation, not a footer beside the connection', () => {
   const navigation = /<nav[\s\S]*?<\/nav>/.exec(nav)?.[0] ?? ''
   assert.match(navigation, /systemModules/)
-  const utility = /<div class="nav-utility">[\s\S]*?<\/div>/.exec(nav)?.[0] ?? ''
+  const utility = /<div\s+class="nav-utility"[\s\S]*?<\/div>/.exec(nav)?.[0] ?? ''
   assert.doesNotMatch(utility, /systemModules/)
   assert.match(utility, /<NavConnectionButton/)
 })

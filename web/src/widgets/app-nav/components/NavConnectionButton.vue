@@ -1,6 +1,21 @@
+<script lang="ts">
+/**
+ * Whether the connection is in trouble, which is the only time the rail shows this
+ * control: a healthy one keeps everything up to date by itself, so a dot saying so and a
+ * refresh nobody needs stood at the foot of every page. The rail asks the same question
+ * to draw the foot the control stands in.
+ */
+export const connectionTroubled = (connection: string) => connection === 'reconnecting'
+</script>
+
 <script setup lang="ts">
 /**
- * Whether the app is connected, and the button that asks it to catch up.
+ * Whether the app has lost its connection, and the button that asks it to catch up.
+ *
+ * It shows only while the connection is lost: connected, the streams bring every change
+ * as it happens, and connecting is the moment a page opens, so the control would only
+ * stand there or flash. What stays is the status line below, out of sight, which is how
+ * assistive technology hears the loss once, as it happens.
  *
  * One control, not a control beside a status line: the state is what a refresh is
  * about, so the dot, the word and the action are one target. The button is the
@@ -14,16 +29,20 @@
  * the views, which moved the board and the graph down by its height for as long
  * as the server was away and asked for a refresh the app does by itself.
  *
+ * The word names the control at every width, so it is its name outright: on a narrow
+ * rail the word is not drawn, and a name taken from the content would be nothing.
+ *
  * On a narrow rail the word is hidden and the dot is all there is, and a phone
  * cannot hover. So there, pressing the dot while the connection is lost opens
  * the sentence in a panel, and the panel keeps the refresh: the press used to be
  * the refresh alone, and a lost connection could not be explained by the rail.
  */
-import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import InfoTip from '@/shared/ui/InfoTip.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -32,16 +51,13 @@ const props = withDefaults(
   { connection: 'connecting', refreshing: false },
 )
 
-const emit = defineEmits<{ refresh: [] }>()
+const emit = defineEmits<{ refresh: []; settled: [] }>()
 const { t } = useI18n()
-const noticeId = useId()
-const lost = computed(() => props.connection === 'reconnecting')
-/** What the tooltip and assistive technology are told while the connection is lost. */
+const lost = computed(() => connectionTroubled(props.connection))
+/** What the status line says while the connection is lost. */
 const notice = computed(() => (lost.value ? t('connection.lost') : ''))
-const describedBy = computed(() => (lost.value ? noticeId : undefined))
-const title = computed(() =>
-  lost.value ? `${notice.value} ${t('refresh.title')}` : t('refresh.title'),
-)
+/** The hint, and the description assistive technology reads: the loss, then the action. */
+const hint = computed(() => `${notice.value} ${t('refresh.title')}`)
 
 /**
  * Whether the rail hides the word, which is when the press opens the sentence.
@@ -59,19 +75,29 @@ function measure() {
 /** The press opens the sentence: lost on a narrow rail, where the word is not there to say it. */
 const opensSentence = computed(() => lost.value && compact.value)
 
+/** The control comes and goes with the loss, so the observer follows the element there is. */
 let observer: ResizeObserver | undefined
-onMounted(() => {
+watch(control, (element) => {
+  observer?.disconnect()
+  if (!element) return
   measure()
-  if (typeof ResizeObserver !== 'undefined' && control.value) {
-    observer = new ResizeObserver(measure)
-    observer.observe(control.value)
-  }
+  if (typeof ResizeObserver === 'undefined') return
+  observer = new ResizeObserver(measure)
+  observer.observe(element)
 })
 onBeforeUnmount(() => observer?.disconnect())
 
-// The sentence says the connection is lost; once it is back the panel has nothing to say.
+/**
+ * The connection is back: the panel has nothing left to say and the control goes. Focus on
+ * either would fall to the page's start, so it goes to the rail's own place, the entry on show.
+ */
 watch(lost, (now) => {
-  if (!now) tip.value?.close()
+  if (now) return
+  const panelId = control.value?.getAttribute('aria-controls')
+  const panel = panelId ? document.querySelector(`#${CSS.escape(panelId)}`) : null
+  const held = [control.value, panel].some((place) => place?.contains(document.activeElement))
+  tip.value?.close()
+  if (held) emit('settled')
 })
 
 function press(toggle: (event?: Event) => void, event: MouseEvent) {
@@ -81,7 +107,10 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
 </script>
 
 <template>
-  <div class="nav-tip">
+  <div
+    v-if="lost"
+    class="nav-tip"
+  >
     <InfoTip
       ref="tip"
       :label="notice"
@@ -91,13 +120,13 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
       <template #trigger="{ toggle, popup }">
         <button
           ref="control"
+          v-tooltip:right="hint"
           type="button"
           class="nav-refresh"
           :class="{ refreshing }"
           :data-tone="statePresentation('connection-lifecycle', connection).tone"
           :disabled="refreshing"
-          :title="title"
-          :aria-describedby="describedBy"
+          :aria-label="t(`status.${connection}`)"
           :aria-controls="popup.controls"
           :aria-expanded="popup.expanded"
           @click="press(toggle, $event)"
@@ -127,7 +156,6 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
     </InfoTip>
   </div>
   <p
-    :id="noticeId"
     class="visually-hidden"
     role="status"
   >

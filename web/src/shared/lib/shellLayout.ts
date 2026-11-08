@@ -7,6 +7,19 @@ export const INSPECTOR_MIN_WIDTH = 360
 export const INSPECTOR_MAX_WIDTH = 720
 export const INSPECTOR_KEYBOARD_STEP = 16
 
+/**
+ * The rail, dragged or stepped by its right edge: the width it starts at, the narrowest and
+ * the widest a reader can make it, and the room it always leaves the workspace beside it, so
+ * that at 761px the default still fits. At 760px and narrower it is its icons alone and has
+ * no edge to drag, which `AppNav`'s style block says with the same number.
+ */
+export const NAV_WIDTH_STORAGE_KEY = 'valkama-navigation-width'
+export const NAV_DEFAULT_WIDTH = 260
+export const NAV_MIN_WIDTH = 200
+export const NAV_MAX_WIDTH = 480
+export const NAV_WORKSPACE_ROOM = 500
+export const NAV_ICONS_ONLY_WIDTH = 760
+
 export const DRAWER_MIN_WIDTH = 440
 export const DRAWER_DEFAULT_WIDTH = 650
 export const DRAWER_MAX_WIDTH = 960
