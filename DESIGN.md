@@ -718,7 +718,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   field's hint stands under the row and is named by `describedby`; inside the
   frame it put the button level with the hint, under what the button acts on. A
   date keeps the platform picker inside that field, because
-  the native control is already localized and keyboard-complete. Six screens
+  the native control is already localized and keyboard-complete. A label passes
+  the pointer to its control, so its box reaches down to the control and the
+  pointer crossing from one to the other never leaves them: across a gap the
+  control's hover went out and came back. Six screens
   had written their own text field and no two agreed on the fill, the hairline
   or the radius; `check:ui-system` rejects a new `<input>` or `<textarea>`
   outside the primitive, and lets a checkbox, a radio and the search box

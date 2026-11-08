@@ -93,7 +93,14 @@ const describedBy = computed(
   min-width: 0;
 }
 
+/* The label reaches down to its control. A label passes the pointer to the control it
+   names, so the control is hovered while the pointer is on its label and on itself; with
+   the row gap between the two, a pointer travelling from one to the other crossed a strip
+   that was neither, and the control's edge went out and came back. The label's own box
+   now covers that strip and the margin gives the row its room back, so nothing moves. */
 .field-label {
+  padding-block-end: var(--space-label-value);
+  margin-block-end: calc(-1 * var(--space-label-value));
   color: var(--color-text-muted);
   font: var(--font-field-label);
 }
