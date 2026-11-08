@@ -56,7 +56,6 @@ function selectSection(section: SettingsSection) {
         :tabs="tabs"
         @update:model-value="selectSection"
       />
-      <p class="settings-page-intro">{{ t(`settings.sectionIntro.${activeSection}`) }}</p>
     </header>
 
     <TabPanel
@@ -91,13 +90,6 @@ function selectSection(section: SettingsSection) {
   justify-content: flex-start;
   align-items: center;
   min-width: 0;
-
-  .settings-page-intro {
-    max-width: 72ch;
-    margin: 0;
-    color: var(--color-text-muted);
-    font: var(--font-note);
-  }
 }
 
 .settings-page-panel {

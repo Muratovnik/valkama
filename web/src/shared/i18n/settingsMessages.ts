@@ -11,10 +11,6 @@ export const settingsMessages = {
         general: 'General',
         diagnostics: 'Diagnostics',
       },
-      sectionIntro: {
-        general: 'Local preferences for this device.',
-        diagnostics: 'Checks the whole installation, regardless of the selected project.',
-      },
       interface: 'Interface',
       system: 'System',
       interfaceIntro: 'Language and other local display preferences.',
@@ -41,10 +37,6 @@ export const settingsMessages = {
       section: {
         general: 'Общие',
         diagnostics: 'Диагностика',
-      },
-      sectionIntro: {
-        general: 'Локальные параметры этого устройства.',
-        diagnostics: 'Проверка всей установки, независимо от выбранного проекта.',
       },
       interface: 'Интерфейс',
       system: 'Система',

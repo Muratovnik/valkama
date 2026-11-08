@@ -26,16 +26,10 @@ test('Settings sections share one measure and one compact control lane', async (
   expect(Math.abs((generalBox?.width ?? 0) - (pageBox?.width ?? 0))).toBeLessThan(2)
 
   const sectionControl = page.getByRole('tablist', { name: 'Settings section' })
-  const sectionIntro = page.locator('.settings-page-intro')
   const sectionControlBox = await sectionControl.boundingBox()
-  const sectionIntroBox = await sectionIntro.boundingBox()
   expect(Math.abs((sectionControlBox?.x ?? 0) - (pageBox?.x ?? 0))).toBeLessThan(2)
-  expect(
-    (sectionIntroBox?.x ?? 0) - ((sectionControlBox?.x ?? 0) + (sectionControlBox?.width ?? 0)),
-  ).toBeGreaterThanOrEqual(23)
-  expect(
-    (sectionIntroBox?.x ?? 0) - ((sectionControlBox?.x ?? 0) + (sectionControlBox?.width ?? 0)),
-  ).toBeLessThanOrEqual(25)
+  // The section's own heading is the switch: no line beside it restates it.
+  await expect(page.locator('.settings-page-head p')).toHaveCount(0)
 
   const controlLefts = await page
     .locator('.settings-general-control, .settings-alerts-control')

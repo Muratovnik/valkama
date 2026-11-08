@@ -304,7 +304,8 @@ export const en = {
   },
   health: {
     heading: 'Installation health',
-    intro: 'Environment problems and clear steps to resolve them.',
+    intro:
+      'Problems across the whole installation, whatever project is selected, and steps to resolve them.',
     recheck: 'Check again',
     checking: 'Checking…',
     loading: 'Checking this installation',
