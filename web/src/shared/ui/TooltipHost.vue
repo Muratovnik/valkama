@@ -273,6 +273,15 @@ onBeforeUnmount(stopHearing)
 
 <!-- The hint is portalled out of this component, so its surface is not scoped. -->
 <style>
+/* A hint is read, never pressed: a press where it stands lands on what it covers. One the
+   keyboard held up took a finger's tap inside the reach of the control below it. Its
+   placement wrapper is the library's and as large as the hint, so it lets the pointer
+   through as well. */
+[data-reka-popper-content-wrapper]:has(> .tooltip-hint),
+.tooltip-hint {
+  pointer-events: none;
+}
+
 .tooltip-hint {
   z-index: 120;
   max-inline-size: min(20rem, var(--reka-tooltip-content-available-width));
