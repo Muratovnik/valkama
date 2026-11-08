@@ -203,7 +203,7 @@ test('focus an overlay gives back after Escape does not bring the card up', asyn
 
   // Something opens over the card: it goes, since the pointer could not tell it to.
   await page.keyboard.press('Control+k')
-  const finder = page.getByRole('dialog', { name: 'Find', exact: false })
+  const finder = page.getByRole('dialog', { name: 'Go to a task' })
   await expect(finder).toBeVisible()
   await expect(shown).toHaveCount(0)
 
@@ -236,7 +236,7 @@ test('focus given back to a reference the pointer rests on does not bring the ca
   await expect(shown).toBeVisible()
 
   await page.keyboard.press('Control+k')
-  const finder = page.getByRole('dialog', { name: 'Find', exact: false })
+  const finder = page.getByRole('dialog', { name: 'Go to a task' })
   await expect(finder).toBeVisible()
   await expect(shown).toHaveCount(0)
   await page.keyboard.press('Escape')
@@ -270,14 +270,14 @@ test('a surface opening over a card the pointer holds up closes it', async ({ pa
   )
   await page.keyboard.press('Control+k')
   expect(await stillUp).toBe(0)
-  await expect(page.getByRole('dialog', { name: 'Find', exact: false })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Go to a task' })).toBeVisible()
 })
 
 test('a surface opening while the card still waits calls it off', async ({ page }) => {
   const { entry } = await openReported(page)
   await rest(page, reference(entry, 'MAIN-12'))
   await page.keyboard.press('Control+k')
-  await expect(page.getByRole('dialog', { name: 'Find', exact: false })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Go to a task' })).toBeVisible()
   expect(await cardsAfterTheDelay(page)).toBe(0)
 })
 

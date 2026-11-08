@@ -129,17 +129,44 @@ test('a neighbour takes the card over at once; after a pause it waits again', as
   expect(await opening).toBeGreaterThanOrEqual(450)
 })
 
-test('down a list, the card passes to the reference it had covered', async ({ page }) => {
+test('down a list, the card keeps the pointer over the reference it covers', async ({ page }) => {
   const { entry } = await openReported(page)
-  await rest(page, reference(entry, 'MAIN-14'))
+  const held = reference(entry, 'MAIN-15')
+  await rest(page, held)
   const shown = card(page)
-  await expect(shown).toContainText('MAIN-14')
-  const below = await middle(reference(entry, 'MAIN-15'))
-  // It hangs below the reference, so the next one in the list is under it.
-  const covering = await shown.boundingBox()
-  expect(covering?.y ?? 900).toBeLessThan(below.y)
-  await page.mouse.move(below.x, below.y, { steps: 6 })
   await expect(shown).toContainText('MAIN-15')
+  // Whichever side it hangs on, it covers the list's next line on that side.
+  const side = (await shown.getAttribute('data-side')) as 'top' | 'bottom'
+  expect(['top', 'bottom']).toContain(side)
+  const neighbour = { top: 'MAIN-14', bottom: 'MAIN-16' }[side]
+  const covered = reference(entry, neighbour)
+  const under = await middle(covered)
+  const covering = await shown.boundingBox()
+  const from = await held.boundingBox()
+  expect(covering).not.toBeNull()
+  expect(from).not.toBeNull()
+  const box = covering ?? { x: 0, y: 0, width: 0, height: 0 }
+  const start = from ?? { x: 0, y: 0, width: 0, height: 0 }
+  expect(under.x).toBeGreaterThan(box.x)
+  expect(under.x).toBeLessThan(box.x + box.width)
+  expect(under.y).toBeGreaterThan(box.y)
+  expect(under.y).toBeLessThan(box.y + box.height)
+
+  // Onto the card past the end of the references, then along it to the covered one's
+  // place: the card stays, or nothing next to a reference could ever be reached on it.
+  const edge = { top: box.y + box.height - 8, bottom: box.y + 8 }[side]
+  await page.mouse.move(start.x + start.width - 2, start.y + start.height / 2, { steps: 2 })
+  await page.mouse.move(start.x + start.width + 40, edge, { steps: 6 })
+  await page.mouse.move(under.x, under.y, { steps: 6 })
+  expect(await cardsAfterTheDelay(page)).toBe(1)
+  await expect(shown).toContainText('MAIN-15')
+
+  // Once the card is gone the covered reference is a reference like any other.
+  await page.mouse.move(5, 5, { steps: 6 })
+  await expect(shown).toHaveCount(0)
+  await coolDown()
+  await rest(page, covered)
+  await expect(card(page)).toContainText(neighbour)
   await expect(page.locator(CARD)).toHaveCount(1)
 })
 
