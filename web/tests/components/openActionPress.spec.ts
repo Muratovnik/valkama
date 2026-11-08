@@ -224,7 +224,11 @@ describe('a session long silent', () => {
   it('still says it runs, and the panel warns before anything can be pressed', async () => {
     answerPlans(silentInBrowser)
     const wrapper = await openPanel()
-    expect(wrapper.get('button.open-action').text()).toContain('Terminal · running')
+    expect(
+      wrapper
+        .findAll('button.open-action .open-action-mark')
+        .map((mark) => mark.attributes('title')),
+    ).toEqual(['Terminal', 'running'])
     const panel = document.querySelector('[role="dialog"]')?.textContent ?? ''
     expect(panel).toContain('Last sign of it:')
     // In the units every span of the app takes; the exact span is the browser spec's, on its clock.

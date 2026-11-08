@@ -1525,10 +1525,14 @@ graph as they are. A wrapped line of facts starts without a dot, because the dot
 stands in the room each fact's margin takes from the line, which the line clips.
 A holder with a session behind them is the way to it, in the card's head and on its
 steps, as a parent is at the head of its rows in «Agents», and in an attempt, a link and the session dialog the same button does
-it: the holder's name, which gives way, and where the session opens, which does not. A
-terminal has its glyph and no product has a logo; a running session says so («Терминал ·
-идёт»), and while the owner's "always open in" decides, the place says that too
-(«VS Code · по настройке»), because a setting that overrides the rule must not hide it.
+it: the holder's name, in the weight of the line it stands on, and where the session
+opens, which does not give way. The place, a running session and the owner's "always
+open in" deciding are glyphs after the name, each named for a screen reader and in its
+hover hint: the place by the glyph Settings gives that client, a running session by the
+activity glyph in the success ink, and the setting by the settings glyph, because a
+setting that overrides the rule must not hide it. A place with no glyph stays a word. In
+words the whole run, «VS Code · идёт», read as a second, louder value beside a name of
+the same size.
 A name too long for the line ends in an ellipsis at twelve characters or takes a line of
 its own, and an action's own words are never cut. What the button says is the server's
 plan, read before any press and run by none, once for all the buttons of one session,

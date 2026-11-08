@@ -15,6 +15,7 @@ import {
   agentsInEveryState,
   CRASHED,
   IN_VSCODE,
+  markNames,
   openPlanFor,
   shortHolderCard,
 } from './openSessionFixtures.ts'
@@ -159,7 +160,9 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   await showAgents(page)
   const head = page.locator('.drawer .card-holder')
   const firstAgent = page.locator('.drawer .agents .agent-group').first()
-  await expect(firstAgent.locator('button.open-action')).toContainText('VS Code · running')
+  await expect
+    .poll(() => markNames(firstAgent.locator('button.open-action')))
+    .toEqual(['VS Code', 'running'])
   lost.add(IN_VSCODE)
 
   await head.locator('button.open-action').focus()
@@ -172,7 +175,11 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   await expect(firstAgent.locator('.open-action-still')).toContainText('session gone')
   await expect(firstAgent.locator('button.open-action')).toHaveCount(0)
   // Another session's row is left as it was.
-  await expect(page.locator('.drawer .agents .agent-group').nth(1)).toContainText('Claude Desktop')
+  await expect
+    .poll(() =>
+      markNames(page.locator('.drawer .agents .agent-group').nth(1).locator('button.open-action')),
+    )
+    .toContain('Claude Desktop')
   // Focus stays on the holder, now on the way to why it opens nothing.
   await expect(head.locator('.open-action-why')).toBeFocused()
   await page.keyboard.press('Enter')
@@ -185,8 +192,10 @@ for (const locale of ['en', 'ru'] as const)
       page,
     }) => {
       await openCard(page, { always: 'claude-desktop', locale, width })
-      const head = page.locator('.drawer .card-holder button.open-action')
-      await expect(head).toContainText(locale === 'en' ? 'by your setting' : 'по настройке')
+      const head = page.locator('.drawer .card-holder-value button.open-action')
+      await expect
+        .poll(() => markNames(head))
+        .toContain(locale === 'en' ? 'by your setting' : 'по настройке')
       const name = head.locator('.open-action-name')
       await expect(name).toHaveText('claude · 6f1c2a8e-0000')
       const cut = await name.evaluate((node) => node.scrollWidth > node.clientWidth)
@@ -358,7 +367,7 @@ test('a holder’s name and what keeps it from opening are told apart', async ({
 for (const locale of ['en', 'ru'] as const)
   test(`the holder is as wide as its words at 1500px, in ${locale}`, async ({ page }) => {
     await openCard(page, { always: 'claude-desktop', locale, width: 1500 })
-    const head = page.locator('.drawer .card-holder button.open-action')
+    const head = page.locator('.drawer .card-holder-value button.open-action')
     const fit = await head.evaluate((button) => {
       const rects: DOMRect[] = []
       const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
@@ -367,6 +376,9 @@ for (const locale of ['en', 'ru'] as const)
         range.selectNodeContents(at)
         if (at.textContent?.trim()) rects.push(...range.getClientRects())
       }
+      // The place and the rest stand as glyphs, which are the words' end as much as a letter.
+      for (const mark of button.querySelectorAll('.open-action-mark'))
+        rects.push(mark.getBoundingClientRect())
       const box = button.getBoundingClientRect()
       const middles = rects.map((rect) => rect.top + rect.height / 2)
       return {

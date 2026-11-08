@@ -4,6 +4,8 @@
  * answer at once; the server's plan, read beside it, is the one that holds, because
  * it alone knows what a row older than the place record comes to, what is installed
  * here and whether a client still keeps the session. A click still plans for itself.
+ * Where a button stands, its place and state are glyphs named by these words; where
+ * nothing can be pressed, the words stand.
  *
  * | The plan or the record says | The button says | A press |
  * | --- | --- | --- |
@@ -25,6 +27,9 @@ import type { PlaceName, Translate } from '@/features/session-open/placeWords.ts
 import type { Executor } from '@/shared/api/executorModel.ts'
 import type { OpenPlace, OpenPlan } from '@/shared/api/openPlanModel.ts'
 import type { AlwaysChoice } from '@/shared/lib/settings.ts'
+import type { IconName } from '@/shared/lib/uiSystem.ts'
+import type { ControlIconName } from '@/shared/ui/choiceControls.ts'
+import { placeIcon } from '@/shared/ui/placeIcon.ts'
 
 export interface OpenFacts {
   /** What the card's read says; absent where a surface's read names no holder. */
@@ -43,6 +48,11 @@ export interface OpenView {
    * reason every session that would open there shares (`missingPlaces`).
    */
   missing: string
+  /**
+   * The place's name as the server spells it (`vscode`, `terminal`, `custom` for the owner's
+   * command), which its glyph is drawn by; empty where `text` names no place.
+   */
+  place: string
   /** Whether a press does anything. */
   pressable: boolean
   /** A press shows where it runs and what can be done, rather than opening it. */
@@ -51,8 +61,6 @@ export interface OpenView {
   setting: boolean
   /** The state worth saying beside the place; only running is. */
   state: string
-  /** Glyph for a place that is a terminal. */
-  terminal: boolean
   /** The place's word, or what stands instead of one; empty until something is known. */
   text: string
   /** The phrase for being there, for a sentence; empty until a place is known. */
@@ -62,11 +70,11 @@ export interface OpenView {
 const NO_VIEW = {
   hint: '',
   missing: '',
+  place: '',
   pressable: true,
   running: false,
   setting: false,
   state: '',
-  terminal: false,
   text: '',
   where: '',
 } satisfies OpenView
@@ -75,8 +83,8 @@ function atPlace(t: Translate, place: PlaceName, live: boolean, extra: Partial<O
   const key = placeKey(place)
   return {
     ...NO_VIEW,
+    place: key ? place.opened_host || place.opened_in : '',
     state: live ? t('open.state.live') : '',
-    terminal: place.opened_in === 'terminal',
     text: key ? t(key) : '',
     where: key ? whereWords(t, place) : '',
     ...extra,
@@ -146,7 +154,13 @@ function fromRecord(t: Translate, facts: OpenFacts, live: boolean): OpenView {
   const { executor, opening } = facts
   if (opening?.always)
     return opening.always === 'custom'
-      ? { ...NO_VIEW, setting: true, hint: t('open.hint.command'), text: t('open.settings.custom') }
+      ? {
+          ...NO_VIEW,
+          setting: true,
+          hint: t('open.hint.command'),
+          place: 'custom',
+          text: t('open.settings.custom'),
+        }
       : bySetting(t, PLACE_OF_SETTING[opening.always], live)
   const recorded = executor && executor.opened_in !== 'headless' && executor.opened_in !== ''
   if (recorded) {
@@ -175,6 +189,35 @@ export function openView(t: Translate, facts: OpenFacts): OpenView {
   const live = state === 'live'
   // The plan answers for the rule; the owner's own command takes no plan at all.
   return plan && opening?.always !== 'custom' ? fromPlan(t, plan, live) : fromRecord(t, facts, live)
+}
+
+/** One thing a button says beside its name, as a glyph named by its words. */
+export interface OpenMark {
+  key: 'place' | 'live' | 'setting'
+  /** What the glyph stands for: its accessible name and its hover hint. */
+  label: string
+  /** The place's glyph, as Settings draws a client (`placeIcon`). */
+  client?: ControlIconName
+  /** The glyph of anything else. */
+  glyph?: IconName
+  /** A place no glyph stands for, which says its word instead. */
+  word?: boolean
+}
+
+/** What stands beside a button's name: where it opens, that the session runs, and that a setting chose the place. */
+export function openMarks(t: Translate, view: OpenView): OpenMark[] {
+  const marks: OpenMark[] = []
+  if (view.text) {
+    const client = placeIcon(view.place)
+    marks.push(
+      client
+        ? { key: 'place', label: view.text, client }
+        : { key: 'place', label: view.text, word: true },
+    )
+  }
+  if (view.state) marks.push({ key: 'live', label: view.state, glyph: 'activity' })
+  if (view.setting) marks.push({ key: 'setting', label: t('open.mark.setting'), glyph: 'settings' })
+  return marks
 }
 
 /**
