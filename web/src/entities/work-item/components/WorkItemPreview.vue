@@ -3,8 +3,9 @@
  * A work item as the card a reference in text shows while the pointer rests on
  * it: what the item is and where it stands, without opening it.
  *
- * Its reference first, then what is news about it — a priority or a kind that is
- * not the ordinary one — and its state, with what it waits on if anything does;
+ * Its head as every surface reads an item: a kind that is not the ordinary one,
+ * the reference, a priority that is not the ordinary one, and its state, with
+ * what it waits on if anything does (`MarkHead`);
  * the whole title, wrapped wherever it has to be; who holds it and how far its
  * steps are; and when it last changed or closed, after the project it comes
  * from when that is not the open one. Each fact is the facet registry's
@@ -24,7 +25,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { drawMarks } from '@/entities/work-item/components/drawMarks.ts'
+import { drawMarks, MarkHead } from '@/entities/work-item/components/drawMarks.ts'
 import IdentityNote from '@/entities/work-item/components/IdentityNote.vue'
 import WorkItemCopyButtons from '@/entities/work-item/components/WorkItemCopyButtons.vue'
 import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCopy.ts'
@@ -59,20 +60,19 @@ const copied = useWorkItemCopy(() => props.reference)
     :data-read="read"
   >
     <p class="preview-head">
-      <span class="preview-reference">
-        <WorkItemCopyButtons
-          :reference="reference"
-          :copy-link="copied.copyLink"
-          :copy-reference="copied.copyReference"
-        />
-      </span>
-      <span
-        v-if="head.length"
-        class="preview-head-marks"
-        aria-hidden="true"
+      <MarkHead
+        class="preview-head-run"
+        :marks="head"
+        :run="{ surface: 'preview', unspoken: true, words: preview.words }"
       >
-        <component :is="drawMarks(head, { surface: 'preview', words: preview.words })" />
-      </span>
+        <span class="preview-reference">
+          <WorkItemCopyButtons
+            :reference="reference"
+            :copy-link="copied.copyLink"
+            :copy-reference="copied.copyReference"
+          />
+        </span>
+      </MarkHead>
       <IdentityNote
         :text="copied.note.value"
         :failed="copied.failed.value"
@@ -144,14 +144,22 @@ const copied = useWorkItemCopy(() => props.reference)
   margin: 0;
 }
 
+/* Its marks are trimmed to their letters, to centre on the state beside them; the
+   line stays a line of text tall, as the card's other lines are. Trimmed, it fell to
+   the letters' height and took 11px out of a card that then hung over the next
+   reference with its own number under the pointer. */
+.preview-facts {
+  min-block-size: 1lh;
+}
+
 .preview-reference {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
 }
 
-/* Hidden as one from assistive technology, and laid out as what it holds. */
-.preview-head-marks {
+/* The head is laid out as what it holds, on the line with the note after it. */
+.preview-head-run {
   display: contents;
 }
 

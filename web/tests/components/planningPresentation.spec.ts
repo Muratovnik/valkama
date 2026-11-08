@@ -82,21 +82,26 @@ describe('Planning semantic presentation', () => {
     expect(wrapper.get('.list-claim').attributes('title')).toBe('Previously responsible: claude')
   })
 
-  it('marks a stale claim on the tile, and only while the work is open', async () => {
+  it('says the holder and a stale claim with one glyph, and only while the work is open', async () => {
     const wrapper = mount(WorkItemTile, {
       props: { item: workItem({ claim_ref: 'codex', claim_state: 'live' }) },
       global: { plugins: [i18n()] },
     })
+    // A glyph, its words the hover and the name: no name and no «Stale claim» on the sheet.
+    const holder = () => wrapper.get('.tile-facts [data-facet="holder"]')
+    expect(holder().find('svg').exists()).toBe(true)
+    expect(holder().get('.facet-word').classes()).toContain('facet-word-hidden')
+    expect(holder().text()).toBe('Held by codex')
+    expect(holder().attributes('title')).toBe('Held by codex')
+    expect(holder().attributes('data-tone')).toBe('neutral')
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
-    // The holder is named, not introduced: «Responsible:» was a word on every held tile.
-    expect(wrapper.get('.tile-facts [data-facet="holder"]').text()).toBe('codex')
-    expect(wrapper.text()).not.toContain('Responsible')
 
     await wrapper.setProps({ item: workItem({ claim_ref: 'codex', claim_state: 'stale' }) })
-    const mark = wrapper.get('.tile-line [data-dimension="claim-lease"]')
-    expect(mark.attributes('data-state')).toBe('stale')
-    expect(mark.text()).toBe('Stale claim')
-    expect(wrapper.get('.tile-facts [data-facet="holder"]').text()).toBe('codex')
+    expect(holder().text()).toBe('Held by codex — the claim is stale')
+    expect(holder().attributes('title')).toBe('Held by codex — the claim is stale')
+    expect(holder().attributes('data-tone')).toBe('warning')
+    expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Stale claim')
 
     await wrapper.setProps({
       item: workItem({
@@ -105,12 +110,11 @@ describe('Planning semantic presentation', () => {
         state: { ...workItem().state, is_terminal: true },
       }),
     })
-    // Finished work: the claim is history, so neither the mark nor the holder is printed.
-    expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
+    // Finished work: the claim is history, so the holder is not printed.
     expect(wrapper.find('[data-facet="holder"]').exists()).toBe(false)
   })
 
-  it('prints priority and kind as glyphs only when they differ from the norm', async () => {
+  it('prints kind and priority as glyphs around the reference, only when they differ from the norm', async () => {
     const wrapper = mount(WorkItemTile, {
       attachTo: document.body,
       props: { item: workItem({ priority: 'urgent', kind: 'improvement' }) },
@@ -130,6 +134,11 @@ describe('Planning semantic presentation', () => {
     expect(wrapper.get('.tile-line').findAll('button')).toHaveLength(0)
     const described = wrapper.get('.tile-open').attributes('aria-describedby') ?? ''
     expect(described.split(' ')).toContain(wrapper.get('.tile-lead').attributes('id'))
+    // The kind, the reference, the priority: the order every surface reads an item in.
+    const head = wrapper
+      .findAll('.tile-lead [data-facet], .tile-lead .tile-reference')
+      .map((part) => part.attributes('data-facet') ?? 'reference')
+    expect(head).toEqual(['kind', 'reference', 'priority'])
 
     await wrapper.setProps({ item: workItem({ priority: 'high' }) })
     expect(wrapper.get('[data-facet="priority"]').attributes('data-tone')).toBe('warning')
@@ -137,7 +146,8 @@ describe('Planning semantic presentation', () => {
 
     // Medium and a plain task are the norm: nothing on the line but the reference.
     await wrapper.setProps({ item: workItem({ priority: 'medium' }) })
-    expect(wrapper.find('.tile-lead').exists()).toBe(false)
+    expect(wrapper.find('.tile-lead [data-facet]').exists()).toBe(false)
+    expect(wrapper.get('.tile-lead').attributes('id')).toBeUndefined()
     expect(wrapper.get('.tile-line').text()).toBe('QA-340')
     wrapper.unmount()
   })

@@ -96,6 +96,14 @@ describe('WorkItemPreview', () => {
     expect(wrapper.get('time').attributes('datetime')).toBe(UPDATED)
   })
 
+  it('reads its head as every surface does: the kind, the reference, then the rest', () => {
+    const wrapper = card({ item: { ...CLAIMED, priority: 'urgent' }, waitingOn: 'MAIN-12' })
+    const head = wrapper
+      .findAll('.preview-head [data-facet], .preview-head .preview-reference')
+      .map((part) => part.attributes('data-facet') ?? 'reference')
+    expect(head).toEqual(['kind', 'reference', 'priority', 'readiness'])
+  })
+
   it('prints nothing for nobody, no steps and an ordinary priority', () => {
     const wrapper = card({ item: item({ priority: 'medium' }, 'backlog') })
     expect(wrapper.find('[data-facet="holder"]').exists()).toBe(false)
@@ -152,8 +160,13 @@ describe('WorkItemPreview', () => {
 
   it('hides its facts from assistive technology and brings hover text only to its controls', () => {
     const wrapper = card({ item: { ...CLAIMED, priority: 'urgent' }, waitingOn: 'MAIN-12' })
-    for (const line of ['.preview-head-marks', '.preview-title', '.preview-facts', '.preview-when'])
+    for (const line of ['.preview-title', '.preview-facts', '.preview-when'])
       expect(wrapper.get(line).attributes('aria-hidden'), line).toBe('true')
+    // Every mark of the head is hidden; the number's two buttons between them are not.
+    const marks = wrapper.findAll('.preview-head [data-facet]')
+    expect(marks.length).toBeGreaterThan(0)
+    for (const mark of marks) expect(mark.element.closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(wrapper.get('.head-reference').element.closest('[aria-hidden]')).toBeNull()
     expect(wrapper.attributes('aria-hidden')).toBeUndefined()
     expect(wrapper.findAll('[title]').map((node) => node.element.tagName)).toEqual([
       'BUTTON',

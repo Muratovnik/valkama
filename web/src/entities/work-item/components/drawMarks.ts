@@ -24,9 +24,22 @@
  * A pressed mark is out of the Tab order inside a container that is one Tab
  * stop; every other mark, and a pressed one anywhere else, has the default
  * order, which is the attribute being absent.
+ *
+ * A glyph stands on the middle of the lowercase letters of the line it is on, on
+ * every surface, by one rule: it is drawn in a box that is a line of text of its
+ * own (`facet-glyph-box`, or the mark itself when the glyph is all it shows), centred on that line's letters as an inline image is
+ * (`vertical-align: middle`), and the box lines up with the word beside it by
+ * their shared baseline. Each surface used to centre its glyphs its own way — the
+ * hover card on the first baseline, which stood a glyph on the baseline 2px above
+ * its word's middle, the card on the trimmed word, the tile on the box — and a fix
+ * in one never reached the others.
+ *
+ * The head of a work item — its kind, its number, then the rest of its run — is
+ * `drawHead`, and `MarkHead` for a template: the host draws the number, a word or
+ * a control of its own, and hands it in; where it stands is the registry's order.
  */
 import { createCommentVNode, h } from 'vue'
-import type { VNode } from 'vue'
+import type { FunctionalComponent, VNode, VNodeArrayChildren } from 'vue'
 
 import '@/entities/work-item/components/facetMarks.css'
 import type { MarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
@@ -57,6 +70,12 @@ export interface MarkRun {
   solo?: boolean
   /** False inside a container that is one Tab stop. */
   tabbable?: boolean
+  /**
+   * A head's marks are said elsewhere — a hover card's are its reference's
+   * description — so they are hidden from assistive technology; the number the
+   * host hands in is not.
+   */
+  unspoken?: boolean
   onFilter?: (token: WorkFilterToken) => void
 }
 
@@ -109,11 +128,14 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
 }
 
 /**
- * A word on a card stands on its letters, which the glyphs and dots beside it centre on.
- * Other surfaces keep the box they had.
+ * A surface whose lines centre a mark against a state's word — the card and the hover
+ * card — trims a mark's word and its glyph's line to their letters, as the state trims
+ * its own, so all of them centre on the same middle and stand on one baseline. Other
+ * surfaces line a mark up by its baseline or beside marks alone, and keep the box.
  */
+const trims = (surface: FacetSurface) => surface === 'card' || surface === 'preview'
 const wordClass = (surface: FacetSurface) =>
-  surface === 'card' ? 'facet-word trimmed-word' : 'facet-word'
+  trims(surface) ? 'facet-word trimmed-word' : 'facet-word'
 
 /** What a mark draws beside its glyph: its short words, its word alone, or its word. */
 function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolean): VNode[] {
@@ -170,21 +192,42 @@ function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolea
   }
 }
 
-const markShape = (mark: FacetMark, filters: boolean) =>
-  `facet-mark${mark.quiet ? ' quiet' : ''}${filters ? ' filters' : ''}`
+/**
+ * A glyph with no word on screen beside it, not a button, on a surface that keeps
+ * its lines' boxes: the mark itself is the glyph's line (`.glyph-alone`) and spends
+ * no box inside it. A tile draws three of them, a hundred tiles at a time.
+ */
+const isGlyphAlone = (mark: FacetMark, run: MarkRun, filters: boolean) =>
+  mark.form === 'glyph' && mark.glyph !== null && !filters && !trims(run.surface)
+
+const markShape = (mark: FacetMark, filters: boolean, alone = false) =>
+  `facet-mark${mark.quiet ? ' quiet' : ''}${filters ? ' filters' : ''}${alone ? ' glyph-alone' : ''}`
+
+/**
+ * The glyph in a line of its own: the box is a line of the surface's text — trimmed
+ * to its letters where the surface trims its words — and the glyph is centred on
+ * that line's letters, so the box lines up with a word by baseline and the glyph
+ * stands on the word's middle, on one line or the first of several. A glyph alone
+ * is centred so in the mark's own line, with no box.
+ */
+function drawGlyph(mark: FacetMark, run: MarkRun, alone: boolean): VNode[] {
+  if (!mark.glyph || mark.form === 'word') return []
+  const glyph = iconGlyph(mark.glyph, { class: 'facet-glyph', size: 14, strokeWidth: 2 })
+  if (alone) return [glyph]
+  const box = trims(run.surface) ? 'facet-glyph-box trimmed-word' : 'facet-glyph-box'
+  return [h('span', { 'class': box, 'aria-hidden': 'true' }, [glyph])]
+}
 
 function drawMark(mark: FacetMark, run: MarkRun): VNode {
   const whole = run.words.say(mark.text)
   const filters = run.filterable === true && mark.filter !== null
-  const glyph =
-    mark.glyph && mark.form !== 'word'
-      ? [iconGlyph(mark.glyph, { class: 'facet-glyph', size: 14, strokeWidth: 2 })]
-      : []
+  const alone = isGlyphAlone(mark, run, filters)
+  const glyph = drawGlyph(mark, run, alone)
   return h(
     filters ? 'button' : 'span',
     {
       ...markProps(mark, run, whole, filters),
-      'class': `${markShape(mark, filters)}${run.solo ? ' facet-marks' : ''}`,
+      'class': `${markShape(mark, filters, alone)}${run.solo ? ' facet-marks' : ''}`,
       'data-surface': run.solo ? run.surface : undefined,
     },
     [...glyph, ...markWordsOf(mark, whole, run, filters)],
@@ -241,16 +284,52 @@ function drawEntry(mark: FacetMark, run: MarkRun): VNode {
   return drawMark(mark, run)
 }
 
+const runClass = (run: MarkRun) => `facet-marks${run.fold ? ' fold' : ''}${run.fit ? ' fit' : ''}`
+
 /** The run: its marks on a line of their own, for a host to place. */
 export function drawMarks(marks: readonly FacetMark[], run: MarkRun): VNode {
   const [only] = marks
-  if (run.solo && only && marks.length === 1) return drawEntry(only, run)
-  return h(
-    'span',
-    {
-      'class': `facet-marks${run.fold ? ' fold' : ''}${run.fit ? ' fit' : ''}`,
-      'data-surface': run.surface,
-    },
-    marks.map((mark) => drawEntry(mark, run)),
-  )
+  return run.solo && only && marks.length === 1
+    ? drawEntry(only, run)
+    : h(
+        'span',
+        { 'class': runClass(run), 'data-surface': run.surface },
+        marks.map((mark) => drawEntry(mark, run)),
+      )
 }
+
+/**
+ * A work item's head: its kind, then its number, which the host draws and hands
+ * in, then the rest of the run in the registry's order. Every surface that names
+ * an item with its marks draws it here, so the number stands after the kind and
+ * before everything else wherever it is read.
+ */
+export function drawHead(
+  marks: readonly FacetMark[],
+  run: MarkRun,
+  reference: VNodeArrayChildren,
+): VNode {
+  const part = (facets: readonly FacetMark[]) => {
+    const drawn = facets.map((mark) => drawEntry(mark, run))
+    return run.unspoken && drawn.length
+      ? [h('span', { 'class': 'facet-head-part', 'aria-hidden': 'true' }, drawn)]
+      : drawn
+  }
+  return h('span', { 'class': `${runClass(run)} facet-head`, 'data-surface': run.surface }, [
+    ...part(marks.filter((mark) => mark.facet === 'kind')),
+    ...reference,
+    ...part(marks.filter((mark) => mark.facet !== 'kind')),
+  ])
+}
+
+/**
+ * `drawHead` for a template, where the number is the default slot: a host's own
+ * word or control, written in the host's template and styled by it. It is still a
+ * component instance, so a host drawn a hundred times at once, a tile, calls
+ * `drawHead` itself.
+ */
+export const MarkHead: FunctionalComponent<{ marks: readonly FacetMark[]; run: MarkRun }> = (
+  props,
+  { slots },
+) => drawHead(props.marks, props.run, slots.default?.() ?? [])
+MarkHead.props = ['marks', 'run']

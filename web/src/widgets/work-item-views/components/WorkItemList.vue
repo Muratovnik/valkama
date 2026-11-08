@@ -16,10 +16,11 @@
  * Enter on it or a click anywhere in a row opens the card, and closing the
  * card brings focus back to the row it was opened from (`useListKeys.ts`).
  *
- * Every facet a row prints comes from the facet registry, in its words: the
- * priority and the kind lead the reference as glyphs, in two slots of their
- * own so a reference stands where the one above it does; the priority column
- * says the default quietly; the holder column says nobody with a dash, never
+ * Every facet a row prints comes from the facet registry, in its words, and in
+ * the order every surface reads an item in: the kind leads the reference as a
+ * glyph, in a slot of its own so a reference stands where the one above it does;
+ * the priority column says the priority, the default quietly, and where that
+ * column has folded away the priority's glyph follows the reference instead; the holder column says nobody with a dash, never
  * «Можно брать», which is the norm of the backlog and the queue preset's to
  * ask; an open blocker is the one readiness a row says. The glyphs and the
  * labels filter, out of the Tab order: the row stays one stop, and the bar
@@ -249,10 +250,6 @@ useListKeys(root, {
         >
           <td class="list-cell list-ref-cell">
             <component
-              :is="lead(item, 'priority')"
-              class="list-slot"
-            />
-            <component
               :is="lead(item, 'kind')"
               class="list-slot"
             />
@@ -265,6 +262,11 @@ useListKeys(root, {
             >
               {{ item.reference }}
             </button>
+            <component
+              :is="lead(item, 'priority')"
+              v-if="folded('priority')"
+              class="list-after"
+            />
           </td>
           <td class="list-cell list-title">
             <span
@@ -350,7 +352,7 @@ useListKeys(root, {
    reference's heading there rather than over the glyphs. */
 .work-item-list {
   --list-slot-size: var(--size-control-inline);
-  --list-reference-start: calc(var(--space-3) + 2 * (var(--list-slot-size) + var(--space-1)));
+  --list-reference-start: calc(var(--space-3) + var(--list-slot-size) + var(--space-1));
 
   height: 100%;
   min-height: 0;
@@ -432,16 +434,26 @@ useListKeys(root, {
   white-space: normal;
 }
 
-/* The priority and the kind lead the reference, each in a slot of its own
-   whether or not it has a glyph, so every reference starts where the one
-   above it does. A slot is a line tall: the 28px a filtering glyph is hit by
-   reaches past it into the row's own padding rather than heightening it. */
+/* The kind leads the reference in a slot of its own whether or not it has a
+   glyph, so every reference starts where the one above it does. A slot is a
+   line tall: a filtering glyph's 28px reaches into the row's padding. A filled
+   slot stands on the row's baseline, which puts its glyph on the middle of the
+   reference's letters; an empty one on that middle, or it would heighten the row. */
 .list-slot {
   place-content: center center;
-  vertical-align: middle;
+  vertical-align: baseline;
   inline-size: var(--list-slot-size);
   block-size: 1lh;
   margin-inline-end: var(--space-1);
+
+  &:empty {
+    vertical-align: middle;
+  }
+}
+
+/* The priority's glyph after the reference, where its column has folded away. */
+.list-after {
+  margin-inline-start: var(--space-1);
 }
 
 /* An open blocker and the labels, on their own line under the title. */

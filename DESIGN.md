@@ -588,6 +588,18 @@ and only fades the end of a strip that scrolls on past it.
   of an entry's head, a review's point and a field's label. An option's press
   that opens its description ends its label the same way, in a question and in
   a list under a comment, where a margin had left it 1.5px above the first line.
+- A work item's marks read in one order on every surface, and one owner draws them
+  (`FacetMarks`, `MarkHead`, `drawMarks.ts`): the kind, the number, then the priority,
+  the state, the readiness, the labels, the holder, the parent and the steps
+  (`FACET_ORDER`). A surface chooses which marks it prints, never their order, so a
+  tile, a list row, a graph node and the hover card read the kind, the number, the
+  priority, and the card's head the kind and the number. A search result still lays
+  out its own lead, the priority first, and is the one surface that does. A mark's glyph stands in a box that is a line of the mark's
+  text, centred on the middle of its lowercase letters as an inline image centres, and
+  the mark lines that box up with its word by their baseline; so the glyph stands on
+  the letters' middle on every surface, and on the first line of a word that wraps.
+  Centred on the line box instead, a glyph stood 1px high on a tile, 2–3.5px off in
+  the hover card and up to 3px off on the graph, a different amount on each.
 - What a block in a column draws first stands on the column's edge. A row or a bare
   inline control whose fill keeps an inset under the pointer, `--space-fill-inset`, stands
   that inset outside the column as a negative margin, so its words start where the heading
@@ -969,16 +981,20 @@ On a phone the list's folded orders are one choice in the title's heading, in th
 heading's font and with the least around it, and an order's name is never cut: the
 longest takes a line of its own under the title's sort.
 Cards do not reserve empty tag or source regions.
-A board tile prints exceptions, not defaults. Its first line is a priority
-glyph when the priority is not medium, a kind glyph when the item is not a
-plain task, the reference, and at its end only what stops the work — the open
+A board tile prints exceptions, not defaults. Its first line is a kind glyph
+when the item is not a plain task, the reference, a priority glyph when the
+priority is not medium, and at its end only what stops the work — the open
 blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
-«Ждёт MAIN-12»), a stale claim; the line never wraps, and an exception short
-of room keeps its glyph and says its words on hover. The title follows, at most
-three lines, then the labels on one line — as many whole ones as it holds, up
-to three, then «+N», which opens the card like the rest of the sheet — then
-the holder and the steps when there are any, the steps only while the item is
-open. Only the title takes the full ink and the row-title weight; a finished
+«Ждёт MAIN-12»); the line never wraps, and an exception short of room keeps
+its glyph and says its words on hover. The title follows, at most three lines,
+then the labels on one line — as many whole ones as it holds, up to three, then
+«+N», which opens the card like the rest of the sheet — then the holder and the
+steps when there are any, the steps only while the item is open. The holder is
+its glyph alone, in the warning tone when the claim is stale; its words, «Держит
+claude · 5937aa01-1234» and «… — захват устарел», are its hover text and what a
+screen reader hears, and the hover card and the card say the name and the stale
+claim in full. Printed as a name and a «Захват устарел» beside it, the holder was
+the loudest line of a tile after the title and stood it 28px taller. Only the title takes the full ink and the row-title weight; a finished
 item's takes the muted ink, so a column of a thousand closed items does not stand
 level with the work still open. On a tile and a list row a label is its word, in
 the tertiary ink: a press filters, and its 28px pointer box reaches past the line
@@ -992,8 +1008,8 @@ never printed: they are the norm of the columns that hold them. The title is
 the open target, stretched over the whole sheet, so the sheet opens wherever it
 is clicked and stays one Tab stop; the chips lie above it as filter buttons out
 of the Tab order. The priority and kind glyphs are read, not pressed, as on a
-graph node: each spends its 14px and no 28px pointer box, the two keep the
-line's own small gap, and the list, the card and the filter's menu filter by
+graph node: each spends its 14px and no 28px pointer box, keeps the line's own
+small gap from the reference, and the list, the card and the filter's menu filter by
 them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
@@ -1055,17 +1071,18 @@ taken out of the page again, so a sort, a filter, the keyboard and find in page
 reach all of them once it has settled.
 A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
-row leads its reference with the priority (but medium) and the kind (but a
-task) in two fixed glyph slots, so references align whether or not a row has
-glyphs, and the reference's heading starts where they do; the priority column
-says every priority as its word alone, in its tone, since the glyph already
-leads the row, and medium quietly, because a blank cell in a sortable column
+row leads its reference with the kind (but a task) in one fixed glyph slot, so
+references align whether or not a row has a glyph, and the reference's heading
+starts where the slot does; the priority column says every priority as its word
+alone, in its tone, and medium quietly, and only where that column has folded away
+for want of room does the priority (but medium) follow the reference as its
+glyph, because a blank cell in a sortable column
 reads as unknown; the holder column
 says nobody with a dash, never «Workable»; the labels sit under the title
 from 900px of list; an open blocker is named, «Waiting on MAIN-12», wherever it
 lives. A graph node leads with the kind, says its state as a dot and a name
 in the hue of its chain edge, says workable quietly in the state's place and
-never in heavier ink, and puts high or urgent at its foot; its glyphs are read,
+never in heavier ink, and reads high or urgent after its reference; its glyphs are read,
 not pressed, since the card is one button. A search result leads with the
 same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
@@ -1138,7 +1155,11 @@ beginning at reading size — with its members edged in the selection accent, a
 chip naming the branch that lets it go, and the branch in the address; focus
 goes to the graph, never to the page. The field is one Tab stop: the arrows
 walk to the nearest node their way, Home and End to the first and last as the
-field is read, and the camera follows. Zoomed out past reading, the graph draws each node as a block of its
+field is read, and the camera follows. The node the keyboard stands on lights its
+lineage and the rest of the field recedes; a pointer over a node lights nothing and
+dims nothing — the node takes its hover ground and every other node and line stays as
+it was, since a field that dimmed under a passing pointer only got in the way.
+Zoomed out past reading, the graph draws each node as a block of its
 state's colour with its reference, so the whole of a long chain reads as an
 overview. Under the map, one line gives the figures the key does not — the work under the
 root, how much is open, how much can be taken — and a second answers whether and

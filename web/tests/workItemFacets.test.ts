@@ -316,11 +316,14 @@ describe('holder', () => {
     })
   })
 
-  test('a holder is its short name, and only a stale claim has a tone', () => {
+  test('a tile holder is a glyph whose words say who holds it, and only a stale claim has a tone', () => {
+    const params = { holder: 'claude · 5937aa01-1234' }
     const mark = only(facetMarks('holder', 'tile', held))
-    assert.deepEqual(mark.text, { literal: 'claude · 5937aa01-1234' })
+    assert.equal(mark.form, 'glyph')
+    assert.deepEqual(mark.text, { key: 'workItem.facet.heldBy', params })
     assert.equal(semanticStatePresentation(mark.tone).tone, 'neutral')
     const stale = only(facetMarks('holder', 'tile', { ...held, claim_state: 'stale' }))
+    assert.deepEqual(stale.text, { key: 'workItem.facet.heldStale', params })
     assert.equal(semanticStatePresentation(stale.tone).tone, 'warning')
   })
 })
@@ -363,7 +366,7 @@ describe('parent and steps', () => {
 })
 
 const lead = (surface: FacetSurface, subject: WorkItemBrief) =>
-  (['priority', 'kind'] as const).flatMap((facet) => leadMarks(facet, surface, subject))
+  (['kind', 'priority'] as const).flatMap((facet) => leadMarks(facet, surface, subject))
 
 describe('the glyphs that lead a reference', () => {
   test('the list leads with every priority but the default, and says it in its column in words', () => {
@@ -385,8 +388,8 @@ describe('the glyphs that lead a reference', () => {
     assert.deepEqual(
       marks.map((mark) => [mark.facet, mark.glyph, mark.filter]),
       [
-        ['priority', 'priority-urgent', { facet: 'priority', value: 'urgent' }],
         ['kind', 'kind-improvement', { facet: 'kind', value: 'improvement' }],
+        ['priority', 'priority-urgent', { facet: 'priority', value: 'urgent' }],
       ],
     )
     assert.deepEqual(lead('list', item({ kind: 'task' })), [])
@@ -412,30 +415,26 @@ test('a subject that knows only its kind, priority and state prints those and no
     state: { name: 'Review', category: 'review' as const },
   }
   assert.deepEqual(
-    surfaceMarks('finder', found).map((mark) => [mark.facet, mark.value]),
-    [
-      ['priority', 'urgent'],
-      ['kind', 'bug'],
-      ['state', 'review'],
-    ],
+    surfaceMarks('finder', found).map((mark) => `${mark.facet}:${mark.value}`),
+    ['kind:bug', 'priority:urgent', 'state:review'],
   )
   // Nothing it does not carry is guessed: no labels, no steps, no readiness.
   assert.deepEqual(
     surfaceMarks('tile', found).map((mark) => mark.facet),
-    ['priority', 'kind'],
+    ['kind', 'priority'],
   )
 })
 
-test('a surface reads its marks out in one order, the lead marks first', () => {
+test('every surface reads its marks in one order, the kind first, whatever order a host asks', () => {
   const subject = item({ kind: 'bug', priority: 'urgent', labels: ['x'] })
-  assert.deepEqual(
-    surfaceMarks('tile', subject, { waitingOn: 'MAIN-7' }).map((mark) => mark.facet),
-    ['priority', 'kind', 'readiness', 'labels'],
-  )
-  assert.deepEqual(
-    surfaceMarks('tile', subject, {}, ['kind', 'priority']).map((mark) => mark.facet),
-    ['kind', 'priority'],
-  )
+  // A host chooses which facets a run holds, never their order: asked backwards.
+  const backwards = ['labels', 'readiness', 'state', 'priority', 'kind'] as const
+  const asked = (surface: FacetSurface) =>
+    surfaceMarks(surface, subject, { waitingOn: 'MAIN-7' }, backwards).map((mark) => mark.facet)
+  assert.deepEqual(asked('tile'), ['kind', 'priority', 'readiness', 'labels'])
+  assert.deepEqual(asked('list'), ['kind', 'priority', 'state', 'readiness', 'labels'])
+  assert.deepEqual(asked('graph'), ['kind', 'priority', 'readiness'])
+  assert.deepEqual(asked('preview'), ['kind', 'priority', 'state', 'readiness'])
 })
 
 test('a tile and a graph node read their glyphs; the list and the card filter by them', () => {
@@ -448,8 +447,8 @@ test('a tile and a graph node read their glyphs; the list and the card filter by
   const label = { facet: 'labels', value: 'x' }
   assert.deepEqual(filters('tile'), [null, null, label])
   assert.deepEqual(filters('graph'), [null, null])
-  assert.deepEqual(filters('list').slice(0, 2), [urgent, improvement])
-  assert.deepEqual(filters('card'), [urgent, improvement, label])
+  assert.deepEqual(filters('list').slice(0, 2), [improvement, urgent])
+  assert.deepEqual(filters('card'), [improvement, urgent, label])
   // The glyph the list leads its reference with filters as its column does.
   assert.deepEqual(leadMarks('priority', 'list', subject)[0]?.filter, urgent)
 })
@@ -468,5 +467,5 @@ test('only kind, priority and labels filter, as the owner decided', () => {
   const filtering = surfaceMarks('card', subject, { parentReference: 'MAIN-3' })
     .filter((mark) => mark.filter !== null)
     .map((mark) => mark.facet)
-  assert.deepEqual(filtering, ['priority', 'kind', 'labels'])
+  assert.deepEqual(filtering, ['kind', 'priority', 'labels'])
 })

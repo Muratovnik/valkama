@@ -39,9 +39,6 @@ const { minZoom = GRAPH_ZOOM_MIN } = defineProps<{
 const emit = defineEmits<{
   'init': []
   'node-click': [id: string]
-  'node-enter': [id: string]
-  'node-leave': [id: string]
-  'pane-leave': []
 }>()
 
 /**
@@ -83,10 +80,7 @@ const PRESS_SLOP = 4
     :pane-click-distance="PRESS_SLOP"
     :apply-default="false"
     @init="emit('init')"
-    @node-mouse-enter="({ node }) => emit('node-enter', node.id)"
-    @node-mouse-leave="({ node }) => emit('node-leave', node.id)"
     @node-click="({ node }) => emit('node-click', node.id)"
-    @pane-mouse-leave="emit('pane-leave')"
   >
     <template #edge-routed="{ id, data, markerEnd }">
       <slot

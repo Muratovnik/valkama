@@ -118,7 +118,7 @@ describe('the preview card', () => {
     const marks = surfaceMarks('preview', full, { parentReference: 'MAIN-1', waitingOn: 'MAIN-2' })
     assert.deepEqual(
       marks.map((mark) => mark.facet),
-      ['priority', 'kind', 'state', 'readiness', 'holder', 'steps'],
+      ['kind', 'priority', 'state', 'readiness', 'holder', 'steps'],
     )
     assert.ok(marks.every((mark) => mark.form === 'glyph-word'))
   })

@@ -240,29 +240,25 @@ test('at the fold the title keeps 36 characters, the references align and nobody
     )
     return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
   })
-  // A row says its priority once: the glyph leads the reference, and the
-  // column says the word, in the colour the glyph has.
+  // A row says its priority once: while its column is shown, the column says the
+  // word in its tone, and the reference leads with the kind alone.
   const priority = await list.evaluate((element) =>
     [...element.querySelectorAll('tbody tr')].map((row) => {
-      const glyph = row.querySelector(
-        '.list-ref-cell .facet-mark[data-facet="priority"] .facet-glyph',
-      )
       const column = row.querySelector<HTMLElement>(
         'td:not(.list-ref-cell) .facet-mark[data-facet="priority"]',
       )
-      const word = column
       return {
         glyphs: row.querySelectorAll('.facet-mark[data-facet="priority"] .facet-glyph').length,
         tone: column?.dataset.tone ?? null,
-        glyph: glyph ? getComputedStyle(glyph).color : null,
-        word: word ? getComputedStyle(word).color : null,
+        word: column ? getComputedStyle(column).color : null,
       }
     }),
   )
-  expect(Math.max(...priority.map((row) => row.glyphs))).toBe(1)
+  expect(Math.max(...priority.map((row) => row.glyphs))).toBe(0)
   const hued = priority.filter((row) => row.tone === 'warning' || row.tone === 'danger')
+  const plain = priority.find((row) => row.word && !hued.includes(row))
   expect(hued.length).toBeGreaterThan(0)
-  for (const row of hued) expect(row.word).toBe(row.glyph)
+  for (const row of hued) expect(row.word).not.toBe(plain?.word)
   expect(measured.characters).toBeGreaterThanOrEqual(36)
   // Rows with and without glyphs, and every reference starts at one edge.
   expect(measured.glyphs.length).toBeGreaterThan(1)

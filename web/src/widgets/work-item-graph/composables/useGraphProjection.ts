@@ -14,20 +14,16 @@
  * or a title is laid on the placed field by id instead (`drawn`), and `placed`
  * keeps the geometry the last layout gave.
  *
- * Focus is kept while what it lights is drawn: a hover that survived a change
+ * Focus is kept while what it lights is drawn: a focus that survived a change
  * of scope would light an unrelated node, so a new scope clears it, and a new
- * layout clears it only when its node is gone.
+ * layout clears it only when its node is gone. A pointer lights nothing.
  */
 
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 
 import { useGraphFrames } from '@/widgets/work-item-graph/composables/useGraphFrames.ts'
-import {
-  activeGraphFocus,
-  createGraphFocus,
-  reduceGraphFocus,
-} from '@/widgets/work-item-graph/utils/graphFocus.ts'
+import { createGraphFocus, reduceGraphFocus } from '@/widgets/work-item-graph/utils/graphFocus.ts'
 import type {
   GraphFocusContext,
   GraphFocusEvent,
@@ -104,8 +100,6 @@ export type GraphProjection = {
   /** The drawn frames, with today's counts. */
   frames: ComputedRef<PlacedFrame[]>
   hiddenDone: ComputedRef<number>
-  /** The card a pointer's hover holds, lit or behind the keyboard's focus. */
-  hovered: ComputedRef<string | null>
   live: ComputedRef<Readonly<Record<string, LiveWork>>>
   openTotal: ComputedRef<number>
   pending: Ref<boolean>
@@ -327,12 +321,12 @@ export function useGraphProjection(
   )
   // A new layout of the same field keeps what is lit while it is still drawn.
   watch(placed, (geometry) => {
-    const lit = [focus.value.hovered, focus.value.focused].filter((id) => id !== null)
+    const lit = focus.value.focused
     const ids = new Set([
       ...(geometry?.nodes.map((node) => node.work_item_id) ?? []),
       ...(geometry?.frames.map((frame) => frame.id) ?? []),
     ])
-    if (lit.some((id) => !ids.has(id))) resetFocus()
+    if (lit !== null && !ids.has(lit)) resetFocus()
   })
 
   function retry() {
@@ -354,13 +348,13 @@ export function useGraphProjection(
    * cycle reachable through dependency/discovery edges. Unrelated work dims.
    *
    * A branch of the chain the card chose stays lit instead, with the links
-   * inside it, until it is let go: the keyboard walking it keeps it lit, and
-   * only a pointer resting on a node shows that node's lineage for a moment.
+   * inside it, until it is let go: the keyboard walking it keeps it lit. A
+   * pointer resting on a node lights nothing and dims nothing.
    */
   const focusSet = computed(() => {
     if (!placed.value) return null
     const pinned = branch()
-    if (pinned && focus.value.active !== 'hover') {
+    if (pinned) {
       const edges = placed.value.edges.filter(
         (edge) => pinned.has(edge.source) && pinned.has(edge.target),
       )
@@ -368,7 +362,7 @@ export function useGraphProjection(
     }
     const selection = selected()
     const selectedVisible = placed.value.nodes.some((node) => node.work_item_id === selection)
-    const active = activeGraphFocus(focus.value) ?? (selectedVisible ? selection : null)
+    const active = focus.value.focused ?? (selectedVisible ? selection : null)
     return active === null ? null : neighborhood(placed.value.edges, active)
   })
 
@@ -396,7 +390,6 @@ export function useGraphProjection(
     folded: (frameId) => frameNow(frameId)?.folded ?? false,
     frames,
     hiddenDone,
-    hovered: computed(() => focus.value.hovered),
     live: computed(() => input().live ?? {}),
     measure: (now) => {
       headers.value = now
