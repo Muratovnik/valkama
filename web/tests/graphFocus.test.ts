@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
 import {
-  activeGraphFocus,
   createGraphFocus,
   graphFocusContextKey,
   reduceGraphFocus,
@@ -19,62 +18,31 @@ const context = (showDone = false, version = 1): GraphFocusContext => ({
   showDone,
 })
 
-test('pointer leave clears the node in both Open Only and All projections', () => {
+test('blur clears the focused node in both Open Only and All projections', () => {
   for (const showDone of [false, true]) {
     let state = createGraphFocus(context(showDone))
-    state = reduceGraphFocus(state, { type: 'pointer-enter', id: '12' })
-    assert.equal(activeGraphFocus(state), '12')
-    state = reduceGraphFocus(state, { type: 'pointer-leave', id: '12' })
-    assert.equal(activeGraphFocus(state), null)
+    state = reduceGraphFocus(state, { type: 'focus', id: '12' })
+    assert.equal(state.focused, '12')
+    state = reduceGraphFocus(state, { type: 'blur', id: '12' })
+    assert.equal(state.focused, null)
   }
 })
 
-test('id-guarded leave and blur cannot clear a newer pointer or focus target', () => {
+test('an id-guarded blur cannot clear a newer focus target', () => {
   let state = createGraphFocus(context())
-  state = reduceGraphFocus(state, { type: 'pointer-enter', id: '12' })
-  state = reduceGraphFocus(state, { type: 'pointer-enter', id: '13' })
-  state = reduceGraphFocus(state, { type: 'pointer-leave', id: '12' })
-  assert.equal(state.hovered, '13')
-
   state = reduceGraphFocus(state, { type: 'focus', id: '21' })
   state = reduceGraphFocus(state, { type: 'focus', id: '22' })
   state = reduceGraphFocus(state, { type: 'blur', id: '21' })
   assert.equal(state.focused, '22')
 })
 
-test('pointer and keyboard focus remain separate and the active input modality wins visually', () => {
-  let state = createGraphFocus(context())
-  state = reduceGraphFocus(state, { type: 'pointer-enter', id: '12' })
-  state = reduceGraphFocus(state, { type: 'focus', id: '21' })
-  assert.equal(state.hovered, '12')
-  assert.equal(state.focused, '21')
-  assert.equal(activeGraphFocus(state), '21')
-  state = reduceGraphFocus(state, { type: 'pointer-enter', id: '12' })
-  assert.equal(activeGraphFocus(state), '12')
-  state = reduceGraphFocus(state, { type: 'pointer-leave', id: '12' })
-  assert.equal(state.focused, '21')
-  assert.equal(activeGraphFocus(state), '21')
-})
-
-test('field leave clears only transient hover, while reset clears every focus on context changes', () => {
-  let state = createGraphFocus(context())
-  state = reduceGraphFocus(state, { type: 'pointer-enter', id: '12' })
-  state = reduceGraphFocus(state, { type: 'focus', id: '21' })
-  state = reduceGraphFocus(state, { type: 'field-leave' })
-  assert.equal(state.hovered, null)
-  assert.equal(state.focused, '21')
-  assert.equal(state.active, 'focus')
-
-  const next = context(true, 2)
-  state = reduceGraphFocus(state, { type: 'reset', context: next })
-  assert.deepEqual(state, { ...next, hovered: null, focused: null, active: null })
-  assert.notEqual(graphFocusContextKey(context()), graphFocusContextKey(next))
-  assert.notEqual(graphFocusContextKey(next), graphFocusContextKey({ ...next, open: false }))
+test('the focus state holds no pointer hover, so a pointer cannot light or dim the field', () => {
+  const state = reduceGraphFocus(createGraphFocus(context()), { type: 'focus', id: '21' })
+  assert.deepEqual(Object.keys(state).sort(), [...Object.keys(context()), 'focused'].sort())
 })
 
 test('space and scope changes reset a newer projection instead of carrying stale focus', () => {
   let state = createGraphFocus(context())
-  state = reduceGraphFocus(state, { type: 'pointer-enter', id: '12' })
   state = reduceGraphFocus(state, { type: 'focus', id: '21' })
   const next: GraphFocusContext = {
     ...context(true, 9),
@@ -83,8 +51,9 @@ test('space and scope changes reset a newer projection instead of carrying stale
     epicId: '42',
   }
   state = reduceGraphFocus(state, { type: 'reset', context: next })
-  assert.deepEqual(state, { ...next, hovered: null, focused: null, active: null })
+  assert.deepEqual(state, { ...next, focused: null })
   assert.notEqual(graphFocusContextKey(context()), graphFocusContextKey(next))
+  assert.notEqual(graphFocusContextKey(next), graphFocusContextKey({ ...next, open: false }))
   assert.notEqual(
     graphFocusContextKey(context()),
     graphFocusContextKey({ ...context(), space: 'beta' }),

@@ -35,7 +35,6 @@ import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vu
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
 import { useGraphGroundTap } from '@/widgets/work-item-graph/composables/useGraphGroundTap.ts'
-import { useGraphHover } from '@/widgets/work-item-graph/composables/useGraphHover.ts'
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
 import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
@@ -92,7 +91,6 @@ const {
   emptySpace,
   focusSet,
   hiddenDone,
-  hovered,
   live,
   measure,
   openTotal,
@@ -290,16 +288,6 @@ const {
   reveal,
 })
 
-/**
- * A pointer resting on a card lights its lineage, and moving on to the next card
- * passes the field straight to that one's; a frame is ground and lights nothing.
- */
-const hover = useGraphHover({
-  apply: applyFocus,
-  accepts: (id) => cardById.value.has(id),
-  hovered: () => hovered.value,
-})
-
 function onNodeClick(id: string) {
   // Mouse and keyboard activation both arrive once through Vue Flow. A frame's
   // header holds its own two buttons, so a press on a frame opens nothing here.
@@ -329,10 +317,6 @@ function onFrameFocus(target: string) {
 function toggleFrame(frameId: string) {
   holdFrame(frameId)
   toggle(frameId)
-}
-
-function onFieldPointerLeave() {
-  hover.leaveField()
 }
 </script>
 
@@ -373,15 +357,14 @@ function onFieldPointerLeave() {
       @reveal="showDone = true"
     />
 
-    <!-- Hover cleanup only: leaving the canvas with a pointer clears the hover -->
-    <!-- highlight. Nothing here is reachable or actionable by pointer alone. -->
-    <!-- eslint-disable-next-line vuejs-accessibility/mouse-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
+    <!-- The field's keys: the arrows, Home and End walk its nodes, which are the -->
+    <!-- focusable controls inside it; the field itself is no control. -->
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
     <div
       v-show="!emptyKind"
       ref="canvas"
       class="graph-canvas"
       :class="[{ settled: fitted }]"
-      @mouseleave="onFieldPointerLeave"
       @keydown="onKeydown"
     >
       <div class="graph-legend-place">
@@ -411,10 +394,7 @@ function onFieldPointerLeave() {
         :motion="motion"
         :style="{ '--graph-comet-stroke-scale': cometStrokeScale }"
         @init="onFlowInit"
-        @node-enter="hover.enter"
-        @node-leave="hover.leave"
         @node-click="onNodeClick"
-        @pane-leave="onFieldPointerLeave"
       >
         <template #edge="edgeProps">
           <GraphEdge

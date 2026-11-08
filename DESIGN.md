@@ -1091,7 +1091,11 @@ beginning at reading size — with its members edged in the selection accent, a
 chip naming the branch that lets it go, and the branch in the address; focus
 goes to the graph, never to the page. The field is one Tab stop: the arrows
 walk to the nearest node their way, Home and End to the first and last as the
-field is read, and the camera follows. Zoomed out past reading, the graph draws each node as a block of its
+field is read, and the camera follows. The node the keyboard stands on lights its
+lineage and the rest of the field recedes; a pointer over a node lights nothing and
+dims nothing — the node takes its hover ground and every other node and line stays as
+it was, since a field that dimmed under a passing pointer only got in the way.
+Zoomed out past reading, the graph draws each node as a block of its
 state's colour with its reference, so the whole of a long chain reads as an
 overview. Under the map, one line gives the figures the key does not — the work under the
 root, how much is open, how much can be taken — and a second answers whether and

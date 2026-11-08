@@ -168,7 +168,7 @@ describe('a frame that changes no structure', () => {
   it('keeps a lit line lit', async () => {
     const { input, projection, scope } = open()
     await finish()
-    projection.applyFocus({ type: 'pointer-enter', id: 'a' })
+    projection.applyFocus({ type: 'focus', id: 'a' })
     expect(projection.focusSet.value?.ids.has('c')).toBe(true)
     input.nodes = input.nodes.map((entry) =>
       entry.work_item_id === 'a'

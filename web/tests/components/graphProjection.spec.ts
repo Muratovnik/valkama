@@ -181,14 +181,14 @@ describe('graph worker lifecycle', () => {
     scope.stop()
   })
 
-  it('retains selected context after hover leaves without triggering a layout', async () => {
+  it('retains selected context after keyboard focus leaves without triggering a layout', async () => {
     const { projection, selected, scope } = openProjection()
     finish(0)
     await settle()
     selected.value = item.work_item_id
     expect(projection.focusSet.value?.ids.has(item.work_item_id)).toBe(true)
-    projection.applyFocus({ type: 'pointer-enter', id: item.work_item_id })
-    projection.applyFocus({ type: 'pointer-leave', id: item.work_item_id })
+    projection.applyFocus({ type: 'focus', id: item.work_item_id })
+    projection.applyFocus({ type: 'blur', id: item.work_item_id })
     expect(projection.focusSet.value?.ids.has(item.work_item_id)).toBe(true)
     expect(workers).toHaveLength(1)
     expect(workers[0].runs).toHaveLength(1)
