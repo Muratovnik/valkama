@@ -12,6 +12,9 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
+import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
+
 import { installBackend } from './backend.ts'
 import { centre, openBoard, serve } from './boardPage.ts'
 import { frames } from './frames.ts'
@@ -85,21 +88,34 @@ const ENDINGS: Record<string, (page: Page, where: Locator) => Promise<void>> = {
 }
 
 /**
- * Where a hand aims at a tile: where it stands once it has stopped. A tile below one the
- * library read away from its stack glides up into the room it left for 150 ms after the
- * release, and a press aimed at it mid-glide came down on the stack between two tiles.
+ * Where a hand aims at a tile: where it stands once the board has stopped. A tile below one
+ * the library read away from its stack glides up into the room it left for 150 ms after the
+ * release, and a press aimed at it mid-glide came down on the stack between two tiles; a
+ * neighbour gliding down past a tile that came in above it lay over that tile, and the
+ * press opened the neighbour.
  */
 async function aimAt(target: Locator) {
-  await expect.poll(() => target.evaluate(drift)).toBe(0)
+  await expect.poll(() => target.evaluate(standsClear)).toBe(true)
   return centre(target)
 }
 
-/** How far `node` moves up or down over the next two frames. */
-function drift(node: Element) {
+/**
+ * Whether `node` held its place over the next two frames, nothing on the board is still
+ * gliding, and the middle of `node` is `node` itself rather than something lying over it.
+ */
+function standsClear(node: Element) {
   const top = node.getBoundingClientRect().top
-  return new Promise<number>((done) => {
+  return new Promise<boolean>((done) => {
     requestAnimationFrame(() =>
-      requestAnimationFrame(() => done(node.getBoundingClientRect().top - top)),
+      requestAnimationFrame(() => {
+        const box = node.getBoundingClientRect()
+        const board = node.closest('.work-item-board') ?? document.body
+        const gliding = board
+          .getAnimations({ subtree: true })
+          .some((animation) => animation.playState === 'running')
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+        done(box.top === top && !gliding && hit !== null && node.contains(hit))
+      }),
     )
   })
 }
@@ -112,9 +128,14 @@ async function clickOnce(page: Page, reference: string) {
   await page.mouse.up()
 }
 
-async function expectCard(page: Page, before: string) {
+/** The work item whose card the address names, if any. */
+const openedCard = (page: Page) =>
+  planningWorkItemRef(parsePlatformRoute(page.url()).entity)?.reference
+
+/** The card that opened is `reference`'s, not a neighbour's a stray press landed on. */
+async function expectCard(page: Page, reference: string) {
   await expect(page.locator('.drawer')).toBeVisible()
-  expect(page.url()).not.toBe(before)
+  await expect.poll(() => openedCard(page)).toBe(reference)
 }
 
 for (const shape of [
@@ -139,13 +160,12 @@ for (const shape of [
       }) => {
         await board(page)
         const where = whereOf(page)
-        const before = page.url()
         await end(page, where)
         await expect(page.locator('body > .sortable-fallback')).toHaveCount(0)
         // The release opened nothing.
         await expect(page.locator('.drawer')).toHaveCount(0)
         await clickOnce(page, next)
-        await expectCard(page, before)
+        await expectCard(page, next)
       })
 
   for (const next of [HELD, OTHER])
@@ -154,13 +174,12 @@ for (const shape of [
     }) => {
       const writes = await board(page, { message: REFUSAL })
       const where = whereOf(page)
-      const before = page.url()
       await ENDINGS['in another column, read by the board'](page, where)
       await expect.poll(() => writes.length).toBe(1)
       await expect(page.locator('.notice')).toContainText(REFUSAL)
       await expect(page.locator('.drawer')).toHaveCount(0)
       await clickOnce(page, next)
-      await expectCard(page, before)
+      await expectCard(page, next)
     })
 
   test(`${shape.name}: a browser that does send the release’s click opens nothing with it`, async ({
@@ -186,42 +205,56 @@ for (const shape of [
     await expect(page.locator('.drawer')).toHaveCount(0)
   })
 
-  test(`${shape.name}: a key pressed before the release’s task is done still opens a tile`, async ({
-    page,
-  }) => {
-    await board(page)
-    const where = whereOf(page)
-    const before = page.url()
-    // The browser hears a press ahead of a task the page has queued: on a busy board the
-    // task queued at a release ran 30–47 ms later, behind an Enter pressed at 26 ms. A task
-    // queued here, as the release begins, runs ahead of the board's, so its Enter (the key
-    // going down, then the click it makes) comes at that point every time.
-    await page.evaluate((other) => {
-      const enter = () => {
-        const open = document.querySelector<HTMLElement>(`[data-reference="${other}"] .tile-open`)
-        open?.focus()
-        open?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-        open?.click()
-      }
-      window.addEventListener('pointerup', () => setTimeout(enter), { capture: true, once: true })
-    }, OTHER)
-    await ENDINGS['back where it was picked up'](page, where)
-    await expect(page.locator('.drawer')).toBeVisible()
-    expect(page.url()).not.toBe(before)
-  })
+  // The browser hears a press ahead of a task the page has queued: on a busy board the task
+  // queued at a release ran 30–47 ms later, behind an Enter pressed at 26 ms. A task queued
+  // here, as the release begins, runs ahead of the board's, so its press (the key or the
+  // pointer going down, then the click it makes) comes at that point every time.
+  for (const press of ['key', 'pointer'] as const)
+    test(`${shape.name}: a ${press} pressed before the release’s task is done still opens a tile`, async ({
+      page,
+    }) => {
+      await board(page)
+      const where = whereOf(page)
+      await page.evaluate(
+        ({ other, press }) => {
+          const down = () => {
+            const open = document.querySelector<HTMLElement>(
+              `[data-reference="${other}"] .tile-open`,
+            )
+            if (!open) return
+            if (press === 'key') {
+              open.focus()
+              open.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+            } else {
+              const at = { bubbles: true, isPrimary: true, pointerType: 'mouse' }
+              open.dispatchEvent(new PointerEvent('pointerdown', at))
+              open.dispatchEvent(new PointerEvent('pointerup', at))
+            }
+            open.click()
+          }
+          window.addEventListener('pointerup', () => setTimeout(down), {
+            capture: true,
+            once: true,
+          })
+        },
+        { other: OTHER, press },
+      )
+      await ENDINGS['back where it was picked up'](page, where)
+      await expect(page.locator('.drawer')).toBeVisible()
+      await expect.poll(() => openedCard(page)).toBe(OTHER)
+    })
 
   test(`${shape.name}: a press with a hand’s shake in it is a click, not a drag`, async ({
     page,
   }) => {
     await board(page)
-    const before = page.url()
     const { x, y } = await centre(page.locator(`[data-reference="${HELD}"] .tile-open`))
     await page.mouse.move(x, y)
     await page.mouse.down()
     await page.mouse.move(x + 2, y + 1)
     await page.mouse.up()
     await expect(page.locator('.drawer')).toBeVisible()
-    expect(page.url()).not.toBe(before)
+    await expect.poll(() => openedCard(page)).toBe(HELD)
   })
 
   test(`${shape.name}: after a drag the keyboard still moves and opens a tile`, async ({
@@ -229,7 +262,6 @@ for (const shape of [
   }) => {
     const writes = await board(page)
     const where = whereOf(page)
-    const before = page.url()
     await ENDINGS['back where it was picked up'](page, where)
     const open = tile(where, OTHER).locator('.tile-open')
     await open.focus()
@@ -237,6 +269,6 @@ for (const shape of [
     await expect.poll(() => writes.length).toBe(1)
     await expect(open).toBeFocused()
     await page.keyboard.press('Enter')
-    await expectCard(page, before)
+    await expectCard(page, OTHER)
   })
 }
