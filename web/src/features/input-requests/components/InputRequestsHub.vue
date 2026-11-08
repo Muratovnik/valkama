@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestList from '@/features/input-requests/components/RequestList.vue'
+import RequestRail from '@/features/input-requests/components/RequestRail.vue'
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
@@ -73,6 +74,9 @@ watch(
       @draft="(key, value) => (drafts[key] = value)"
       @select="emit('select', $event)"
     />
+    <template #rail="{ scroller }">
+      <RequestRail :scroller="scroller" />
+    </template>
     <template #pane>
       <slot name="pane" />
     </template>

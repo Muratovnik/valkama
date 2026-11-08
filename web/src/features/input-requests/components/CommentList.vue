@@ -304,7 +304,6 @@ const detailsOf = (option: string) =>
         :note="noteToggle"
         :refreshable="canRefresh"
         :send-word="t('requests.list.send')"
-        :standalone="false"
         :stuck="false"
         :undecided="0"
         :waiting="waiting"

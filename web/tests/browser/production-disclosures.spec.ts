@@ -23,13 +23,13 @@ const look = (button: Locator) =>
 const startOf = (target: Locator) => target.evaluate((node) => node.getBoundingClientRect().left)
 
 for (const width of [1500, 390])
-  test(`a question's comment press is bare beside the buttons at ${width}`, async ({ page }) => {
+  test(`a block's comment press is bare in its head at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const { card, drawer } = await openQuestion(page, [asked()])
     await expect(drawer).toHaveCSS('transform', 'none')
-    const name = 'Comment on the question'
-    const toggle = await look(card.getByRole('button', { name, exact: true }))
-    expect(toggle.ground, name).toBe(BARE)
+    const name = /^Comment on the block of questions: /u
+    const toggle = await look(card.getByRole('button', { name }))
+    expect(toggle.ground, String(name)).toBe(BARE)
     const send = await look(card.locator('.request-onward'))
     expect(send.ground).not.toBe(BARE)
   })

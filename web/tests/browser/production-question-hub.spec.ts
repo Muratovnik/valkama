@@ -56,8 +56,11 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
   ])
   const touched = card('The touched question')
   await touched.getByRole('radio', { name: 'Keep the comments', exact: true }).check()
-  await touched.getByRole('button', { name: 'Comment on the question', exact: true }).click()
-  const note = touched.getByRole('textbox', { name: 'Comment on the question', exact: true })
+  await touched.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+  const note = touched.getByRole('textbox', {
+    name: 'Comment on the block of questions',
+    exact: true,
+  })
   await note.fill(WRITTEN)
   await expect(note).toBeFocused()
 
@@ -124,8 +127,10 @@ test('a send refused because the question closed keeps the promise that the draf
   ])
   const touched = card('The touched question')
   await touched.getByRole('radio', { name: 'Keep the comments', exact: true }).check()
-  await touched.getByRole('button', { name: 'Comment on the question', exact: true }).click()
-  await touched.getByRole('textbox', { name: 'Comment on the question', exact: true }).fill(WRITTEN)
+  await touched.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+  await touched
+    .getByRole('textbox', { name: 'Comment on the block of questions', exact: true })
+    .fill(WRITTEN)
   requests.settle(TOUCHED, answeredThere)
   await send(touched).click()
   await expect(touched.getByRole('alert')).toHaveText(
@@ -145,7 +150,7 @@ test('a question the keyboard is in stays when answered elsewhere, even with not
     listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
   ])
   const touched = card('The touched question')
-  await touched.getByRole('button', { name: 'Comment on the question', exact: true }).focus()
+  await touched.getByRole('button', { name: /^Comment on the block of questions: /u }).focus()
   requests.settle(TOUCHED, answeredThere)
   await page.clock.runFor(POLL)
   await expect(touched).toBeFocused()
@@ -224,7 +229,7 @@ test('a refresh that fails rings its sentence clear of the words, as the list ri
 })
 
 for (const locale of ['en', 'ru'] as const) {
-  test(`in ${locale} the comment on the question opens over the buttons, at the card's step`, async ({
+  test(`in ${locale} the comment on the block opens over the buttons, at the card's step`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1500, height: 900 })
@@ -233,7 +238,7 @@ for (const locale of ['en', 'ru'] as const) {
       listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
     ])
     const touched = card('The touched question')
-    // Every part open: the own option's text and the question's comment.
+    // Every part open: the own option's text and the block's comment.
     await touched.getByRole('radio').last().check()
     await touched.locator('.request-note-toggle').click()
     const field = await touched.locator('.request-field').boundingBox()
@@ -243,8 +248,8 @@ for (const locale of ['en', 'ru'] as const) {
     // Its own words say what it is, and a rule drawn for it alone would be one line too many.
     await expect(note).toHaveCSS('border-top-width', '0px')
     expect(Math.round((zone?.y ?? 0) - (field?.y ?? 0) - (field?.height ?? 0))).toBe(12)
-    // The buttons follow it at the card's own step, with no room left empty between; in
-    // Russian the two answers take the line under «Open task», as one pair.
+    // The buttons follow it at the card's own step, with no room left empty between, and the
+    // two answers stand on one line, as one pair.
     expect(Math.round((row?.y ?? 0) - (zone?.y ?? 0) - (zone?.height ?? 0))).toBe(12)
     const [wayOut, onward] = await touched.locator('.request-held').all()
     const first = await wayOut?.boundingBox()

@@ -342,7 +342,7 @@ describe('the difference between two answers', () => {
       'p10 · p10-steps +lock −glob',
       'p12 put off → accepted',
       'p15 comment: Frozen until spring',
-      `Comment on the question: ${'x'.repeat(59)}…`,
+      `Comment on the block of questions: ${'x'.repeat(59)}…`,
     ])
     expect(diffText(offered, { field: p13, part: 'value', from: undefined, to: 'accept' }, t)).toBe(
       'P13 — → accepted',

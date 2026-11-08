@@ -85,12 +85,14 @@ afterEach(async () => {
 })
 
 describe('human input requests', () => {
-  it('shows task navigation in the inbox and omits the dead link inside the task itself', async () => {
+  // The number in the head of a block is the way to its task: a button in the foot said it again.
+  it('leads to the task from the head of its block in the inbox, and not from inside the task', async () => {
     const wrapper = card()
-    expect(buttons(wrapper, 'Open task')).toHaveLength(0)
+    expect(wrapper.find('.request-header').exists()).toBe(false)
     const inbox = hub()
     await flushPromises()
-    expect(button(inbox, 'Open task').exists()).toBe(true)
+    expect(inbox.get('.request-header .rich-reference').text()).toBe('TASK-7')
+    expect(buttons(inbox, 'Open task')).toHaveLength(0)
   })
 
   // Yes/No is one click on a visible radio, with nothing chosen at first and no

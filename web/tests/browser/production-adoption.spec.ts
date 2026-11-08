@@ -165,9 +165,8 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await expect(choice).not.toHaveAttribute('aria-invalid')
   await expectNoSilentClipping(page, 'Question at 390px')
   await page.screenshot({ path: testInfo.outputPath('question-narrow.png') })
-  // Past the comment, on the question, and the way not to answer at all.
-  await page.keyboard.press('Tab')
-  await page.keyboard.press('Tab')
+  // Past the way not to answer at all: the comment on the block stands in its head, and the
+  // way to the task is the number there.
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await expect(dialog.getByRole('button', { name: 'Send', exact: true })).toBeFocused()
@@ -197,8 +196,8 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await page.getByRole('button', { name: /^Needs my answer/ }).click()
   await expect(dialog.locator('.request-state')).toContainText('You answered')
   await expect(dialog.locator('.request-option.is-chosen')).toContainText('No')
-  const task = dialog.getByRole('button', { name: 'Open task', exact: true })
-  await task.click()
+  // The number in the head of the block is the way to its task.
+  await dialog.locator('.request-header').getByRole('link').click()
   const inCard = page.locator('.drawer .request-card')
   await expect(inCard.locator('.request-state')).toContainText('You answered')
   await page.reload()
