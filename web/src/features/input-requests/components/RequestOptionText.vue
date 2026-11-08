@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * What a row of options says: its label, a quiet word on the recommended one, as much of
- * its description as `optionDescriptions` leaves, and in an answered question whether it
- * was the one chosen.
+ * What a row of options says: its label, a quiet word on the recommended one, which shows
+ * why when the asker said (`RequestAdvice`), as much of its description as
+ * `optionDescriptions` leaves, and in an answered question whether it was the one chosen.
  *
  * A label is markdown as a description is: an agent writes `code` in both, and a label drawn
  * as plain text showed its backticks. It stays on its line, with no link in it in a form.
@@ -12,11 +12,14 @@
  * button would join the option's name. So a reference here is the text it was, and the
  * same reference opens from the description's own press, outside the label. In an answered
  * question there is no radio to conflict with, and it opens where it stands (`live`). A link
- * written in a label is its words there for the same reason.
+ * written in a label is its words there for the same reason. The one press here is the why
+ * of a recommendation, which only shows text: the control is named by the label alone
+ * (`aria-labelledby`), so its words do not join the name.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import RequestAdvice from '@/features/input-requests/components/RequestAdvice.vue'
 import type { DescriptionView } from '@/features/input-requests/utils/optionDescriptions.ts'
 
 import type { InputRequestOption } from '@/shared/api/inputRequestModel.ts'
@@ -37,6 +40,8 @@ const props = defineProps<{
   view: DescriptionView
   /** A mark drawn in the control's place says it is chosen, so the word is left to a reader. */
   quietMark?: boolean
+  /** Whether the press on the recommendation's why is a tab stop, as the row's toggle is. */
+  tabStop?: number
 }>()
 const { t } = useI18n()
 provideReferenceLinks((reference, parent) => (props.live ? parent(reference) : null))
@@ -69,12 +74,14 @@ const label = computed(() => {
         class="request-option-label"
         ><RichInlines :nodes="label"
       /></span>
-      <span
+      <RequestAdvice
         v-if="option.recommended"
         :id="noteId"
         class="request-option-note"
-        >{{ t('requests.recommended') }}</span
-      >
+        :tab-stop="tabStop"
+        :text="t('requests.recommended')"
+        :why="option.why"
+      />
       <span
         v-if="chosenMark"
         class="request-option-mark"

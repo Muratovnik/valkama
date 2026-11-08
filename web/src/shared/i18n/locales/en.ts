@@ -949,6 +949,7 @@ export const en = {
     summaryDone: 'What was done',
     summaryNext: 'What comes next',
     summaryWhy: 'Why this way',
+    summaryFriction: 'Flow friction',
     summarySave: 'Save summary',
     summaryUpdate: 'Update summary',
     links: 'Related work',
