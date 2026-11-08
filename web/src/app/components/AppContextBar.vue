@@ -199,8 +199,9 @@ const selectedResourceValue = computed(() =>
 }
 
 /* The bar measures the space it was given, not the window: the rail beside it
-   takes 260px or 64px, so the same window hands the bar two different widths
-   and a viewport threshold could only ever describe one of them. */
+   is its 64px icons or any width from 200 to 480px the operator drags it to, so
+   the same window hands the bar many widths and a viewport threshold could only
+   ever describe one of them. */
 @container main (width <= 764px) {
   .context-bar {
     grid-template-columns: minmax(0, 1fr) auto;

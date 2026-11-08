@@ -122,10 +122,10 @@ const colorOwners = new Set([
 /**
  * Files allowed to ask the window how wide it is.
  *
- * Everything else asks its container. The rail is 260px or 64px depending on a
- * state the window knows nothing about, the inspector's width is dragged by the
- * operator, and a dialog stops growing at 640px — so a viewport threshold names
- * the wrong box almost everywhere it appears, by up to 196px in the shell.
+ * Everything else asks its container. The rail is its 64px icons or any width
+ * from 200 to 480px the operator drags it to, the inspector's width is dragged by
+ * the operator too, and a dialog stops growing at 640px — so a viewport threshold
+ * names the wrong box almost everywhere it appears, by up to 416px in the shell.
  *
  * The two exceptions are the elements that size *themselves*: the rail decides
  * its own width, and the drawer decides its own. A container query cannot
