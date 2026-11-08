@@ -163,6 +163,8 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   await page.emulateMedia({ forcedColors: 'none' })
   await openBoard(page, { labels: 'coordinator' })
   await page.getByRole('combobox', { name: 'Filter work' }).click()
+  // The menu opens on the facets; the labels' choice stands in their own step.
+  await page.getByRole('option', { name: 'Label', exact: true }).click()
   await expect(page.locator('.option-choices')).toBeVisible()
   const filtered = await sweep(page)
   for (const kind of ['filter-chip', 'option-choices'])

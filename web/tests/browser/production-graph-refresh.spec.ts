@@ -153,6 +153,7 @@ test('a new filter keeps the zoom the operator chose', async ({ page }) => {
 
   // A state picked from the filter's menu, then the filter reset.
   await page.getByRole('combobox', { name: 'Filter work' }).click()
+  await page.getByRole('option', { name: 'State', exact: true }).click()
   await page.getByRole('option', { name: 'In progress' }).click()
   await page.keyboard.press('Escape')
   await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
