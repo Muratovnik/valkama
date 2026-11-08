@@ -23,8 +23,10 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const { locale, t, te } = useI18n()
 const report = ref<DoctorReport | null>(null)
@@ -136,10 +138,14 @@ onMounted(load)
         <p class="health-intro">{{ t('health.intro') }}</p>
       </div>
       <VButton
+        v-tooltip="recheckLabel"
+        variant="ghost"
+        :aria-label="recheckLabel"
         :disabled="loading"
+        icon
         @click="load"
       >
-        {{ recheckLabel }}
+        <VIcon name="refresh" />
       </VButton>
     </header>
 

@@ -735,6 +735,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   label, which is how a disabled button looks. Hover is the same weight one step
   further from the ground; disabled is one look for every weight, a step toward
   the ground with a quieter label that still reads at 4.5:1.
+- **Actions as icons:** an obvious action is its icon alone — refresh, close, copy,
+  edit, remove, add, open in another window, fold and unfold: a ghost `VButton` with
+  `icon`, its words as the hint and the `aria-label`, and under a finger or at phone
+  width a press target of `--size-control-target` (`icon` reaches by itself; an
+  `inline` one is given `reach`). An action keeps its words when it commits or sends
+  something, confirms a destruction, is the one primary action of a form or a surface,
+  is the way out of a failure or an empty state, or has an icon that would need a
+  legend. A panel opened by a finger keeps its words too: a finger gets no hint.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
   alternatives" — view switches, chart encodings, ledger filters, a card's
   sections. Picking a value — the board's view, the graph's filter, a chain's

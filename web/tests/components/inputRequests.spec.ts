@@ -43,7 +43,7 @@ type Wrapper = ReturnType<typeof mount>
 const wrappers: Wrapper[] = []
 const plugins = (locale: 'en' | 'ru' = 'en') => [createI18n({ legacy: false, locale, messages })]
 const buttons = (wrapper: Wrapper, name: string) =>
-  wrapper.findAll('button').filter((control) => control.text() === name)
+  wrapper.findAll('button').filter((b) => (b.attributes('aria-label') ?? b.text()) === name)
 const button = (wrapper: Wrapper, name: string) => present(buttons(wrapper, name)[0], name)
 const describedMessage = (wrapper: Wrapper, control: { attributes: (name: string) => unknown }) =>
   wrapper.get(`#${String(present(control.attributes('aria-describedby'), 'aria-describedby'))}`)

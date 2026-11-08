@@ -117,15 +117,14 @@ function when(value: string): string {
           #actions
         >
           <VButton
+            v-tooltip="t('workItem.related.add')"
             variant="ghost"
+            :aria-label="t('workItem.related.add')"
             :disabled="busy"
+            icon
             @click="add"
           >
-            <VIcon
-              name="plus"
-              :size="16"
-            />
-            {{ t('workItem.related.add') }}
+            <VIcon name="plus" />
           </VButton>
         </template>
       </SectionHeader>
