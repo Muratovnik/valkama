@@ -8,12 +8,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { ControlIconName } from '@/shared/ui/choiceControls.ts'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
+import { placeIcon } from '@/shared/ui/placeIcon.ts'
 
 const drawn = (name: ControlIconName) => mount(ControlIcon, { props: { name } }).html()
 
 describe('the glyph of a place to open in', () => {
   const places: ControlIconName[] = [
     'vscode',
+    'cursor',
     'claude',
     'codex',
     'terminal',
@@ -27,4 +29,17 @@ describe('the glyph of a place to open in', () => {
       expect(drawn(one as ControlIconName)).not.toBe(drawn(other as ControlIconName))
     },
   )
+})
+
+// A product's mark stands for that product only. Windsurf, JetBrains and an unnamed IDE drew
+// VS Code's glyph while it was a neutral editor; with a mark there, they would have drawn a
+// logo that is not theirs.
+describe('a place with no mark of its own', () => {
+  const marked = ['vscode', 'cursor', 'claude-desktop', 'codex-app'] as const
+
+  it.each(['windsurf', 'jetbrains', 'ide'])('%s draws the neutral editor', (place) => {
+    const glyph = placeIcon(place)
+    expect(glyph).toBe('editor')
+    for (const product of marked) expect(glyph).not.toBe(placeIcon(product))
+  })
 })

@@ -1,6 +1,7 @@
 export type ControlIconName =
   | 'language'
   | 'vscode'
+  | 'editor'
   | 'terminal'
   | 'command'
   | 'cursor'

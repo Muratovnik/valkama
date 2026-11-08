@@ -58,7 +58,6 @@ import {
   Menu,
   MessageSquare,
   Monitor,
-  MousePointer2,
   Network,
   PanelRightOpen,
   Pause,
@@ -96,6 +95,22 @@ function disclosureGlyph(name: string, path: string): Component {
   return (props: Record<string, unknown>) => h(drawn, { ...props, overflow: 'visible' })
 }
 
+/**
+ * A client's own mark, as a place to open in: one filled shape in the glyph's colour, never the
+ * vendor's colours. A mark is drawn on the 24-unit square edge to edge, where a Lucide glyph keeps
+ * 2 units clear on every side, so it is scaled into the same 20-unit field about the square's
+ * centre and stands as large as the outlines beside it. Only a mark whose vendor allows a
+ * single-colour rendering in another product's interface is drawn (DESIGN.md, Icons and badges).
+ */
+function clientMark(name: string, path: string): Component {
+  return createLucideIcon(name, [
+    [
+      'path',
+      { d: path, fill: 'currentColor', stroke: 'none', transform: 'translate(2 2) scale(0.8333)' },
+    ],
+  ])
+}
+
 /** Manifest-owned icon keys. An unknown key intentionally gets one generic glyph. */
 const ICONS: Record<string, Component> = {
   'activity': Activity,
@@ -113,7 +128,8 @@ const ICONS: Record<string, Component> = {
   'check': Check,
   // The two agent clients get their own neutral glyph rather than the unknown
   // circle they were falling back to: a session row that says "codex" beside a
-  // question mark reports a client the interface does not recognise.
+  // question mark reports a client the interface does not recognise. Not their
+  // marks: Anthropic's and OpenAI's rules allow no recoloured or redrawn mark.
   'claude': Asterisk,
   'codex': SquareTerminal,
   'chevron-down': ChevronDown,
@@ -123,14 +139,20 @@ const ICONS: Record<string, Component> = {
   'close': X,
   'client': Monitor,
   'copy': Copy,
-  'cursor': MousePointer2,
+  // Cursor's cube, from Simple Icons 16.37.0 (path data CC0-1.0), which traces the 2D cube
+  // of cursor.com/brand; that page gives the cube in one light and one dark colour.
+  'cursor': clientMark(
+    'cursor',
+    'M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23',
+  ),
   'database': Database,
   // What a disclosure draws before its words: shut, and open.
   'disclosure-closed': disclosureGlyph('disclosure-closed', 'm0 18 6-6-6-6'),
   'disclosure-open': disclosureGlyph('disclosure-open', 'm0 9 6 6 6-6'),
   'document': FileText,
   // An editor, as a place a session or a file opens in: VS Code and its kin share it, and
-  // an agent's own app takes its client's glyph above.
+  // an agent's own app takes its client's glyph above. VS Code keeps it rather than its
+  // mark: Microsoft's rules allow the icon in its blue, or white for contrast, only.
   'editor': CodeXml,
   // Changing what is written: a document in the owner's editor, an answer in its form.
   'edit': SquarePen,

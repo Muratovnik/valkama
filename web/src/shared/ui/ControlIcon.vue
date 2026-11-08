@@ -10,8 +10,11 @@ const props = defineProps<{ name: ControlIconName }>()
 const iconMap: Record<ControlIconName, IconName> = {
   'language': 'language',
   // A place to open in draws its kind: an editor, an agent's app, a terminal. Every one of
-  // them drew the same monitor, so VS Code and Claude Desktop read alike in a list.
+  // them drew the same monitor, so VS Code and Claude Desktop read alike in a list. A client
+  // whose vendor allows a single-colour mark draws that mark (`cursor`); `editor` is any
+  // other editor, which must never borrow one product's mark. VS Code draws it too.
   'vscode': 'editor',
+  'editor': 'editor',
   'terminal': 'terminal',
   'command': 'settings',
   'cursor': 'cursor',
