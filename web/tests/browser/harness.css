@@ -163,3 +163,16 @@
   min-height: calc(24px + 2 * var(--space-2));
   padding: var(--space-2) var(--space-3);
 }
+
+/* The hint of the middle control stands above it, over the lower half of the first. */
+.hints-harness {
+  display: grid;
+  gap: var(--space-half);
+  justify-items: start;
+  padding: var(--space-12);
+
+  .hints-under {
+    width: 240px;
+    height: 48px;
+  }
+}

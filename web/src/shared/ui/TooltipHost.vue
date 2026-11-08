@@ -12,7 +12,9 @@
  * What the library cannot know is decided here:
  * - The pointer shows a hint after the delay, and the next one at once while one is up. A
  *   finger shows none, and nor does a pointer with a button down: it is dragging.
- * - Focus shows a hint when a key moved it there, as it shows a ring; a press does not.
+ * - Focus shows a hint when a key moved it there, as it shows a ring; a press does not. It is
+ *   the focused element's own hint or none: a control inside a hinted element is not that
+ *   element, and one with a hint of another kind, a why tip's, would raise two at once.
  * - A hint in `clipped` mode shows only while its text is cut, measured as it would show.
  * - A reference's preview wins: no hint shows on a reference, or while its card is up, and
  *   either one opening closes the other.
@@ -102,7 +104,7 @@ function request(next: boolean) {
   }
   const element = anchor
   if (!element?.isConnected || !shows(element)) return
-  const reached = heldByFocus ? element.contains(document.activeElement) : element.matches(':hover')
+  const reached = heldByFocus ? element === document.activeElement : element.matches(':hover')
   if (!reached) return
   shown.value = element
   open.value = true
@@ -164,17 +166,22 @@ useEventListener(
   },
   { capture: true },
 )
+/** The element focus is on, when it has a hint of its own. */
+const focusedAnchor = (target: EventTarget | null) => {
+  const element = tooltipAnchorOf(target)
+  return element === target ? element : null
+}
+
 useEventListener(document, 'focusin', (event: FocusEvent) => {
-  const element = tooltipAnchorOf(event.target)
+  const element = focusedAnchor(event.target)
   if (!element || !keyed) return
   pointAt(element)
   heldByFocus = true
   root?.onOpen()
 })
 useEventListener(document, 'focusout', (event: FocusEvent) => {
-  const element = tooltipAnchorOf(event.target)
+  const element = focusedAnchor(event.target)
   if (!element || element !== anchor || !heldByFocus) return
-  if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget)) return
   heldByFocus = false
   close()
 })
