@@ -93,16 +93,18 @@ product. The look was first pointed at with a reference application's mood;
 that reference was a direction for the mood, not a specification, and
 matching it is not a criterion anywhere in this document. No third-party brand
 assets (logos, proprietary typefaces, names) are used, with one narrow exception:
-an agent client's or editor's own mark (VS Code, Codex, Claude, Cursor) may stand
-for that product as a client or a place to open in, and nowhere else. It is drawn
-by the icon owner in the ordinary icon colour, one flat shape sized like the
-glyphs beside it, never in the vendor's colours, and only when the vendor's
-published brand rules allow a single-colour mark in another product's interface;
-its path comes from the vendor or a set with a stated licence, recorded beside
-it. Today that is Cursor alone: Microsoft allows the VS Code icon only in its
-blue (white for contrast), Anthropic only in materials it approves, and OpenAI
-publishes no Codex mark, so those three keep a neutral glyph. A place with no
-mark of its own keeps a neutral glyph and never borrows another product's.
+an agent client's or editor's own mark may stand for that product as a client or
+a place to open in, and nowhere else. It is the vendor's own drawing, unchanged,
+filled in the ordinary icon colour and never the vendor's colours, sized like the
+glyphs beside it by the icon owner, which records its source beside it. Three are
+drawn. Cursor's cube, which its brand page gives in single colours. VS Code's
+icon in Microsoft's white variant, which Microsoft allows "only when there isn't
+enough contrast otherwise": the blue's darkest band has 2.5:1 on a list, 1.8:1 on
+a control and 1.5:1 on a highlighted row, under the 3:1 WCAG 1.4.11 asks of a
+graphic. Codex's icon as OpenAI draws it in one colour on its own Codex page.
+Claude keeps a neutral glyph, because Anthropic allows its marks only in
+materials it approves. A place with no mark of its own keeps a neutral glyph and
+never borrows another product's.
 
 This is an application, not a themed dashboard. The shell is dark throughout;
 hierarchy comes from tonal steps, typography, and a small set of colours that

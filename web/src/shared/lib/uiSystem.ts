@@ -352,6 +352,7 @@ export type IconName =
   | 'database'
   | 'document'
   | 'editor'
+  | 'vscode'
   | 'external-link'
   | 'filters'
   | 'info'

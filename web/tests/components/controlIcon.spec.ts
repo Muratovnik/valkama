@@ -15,6 +15,7 @@ const drawn = (name: ControlIconName) => mount(ControlIcon, { props: { name } })
 describe('the glyph of a place to open in', () => {
   const places: ControlIconName[] = [
     'vscode',
+    'editor',
     'cursor',
     'claude',
     'codex',
