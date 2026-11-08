@@ -341,7 +341,7 @@ async function framesOfHead(page: Page, act: () => Promise<unknown>) {
         return node?.checkVisibility({ opacityProperty: true }) ? node : null
       }
       frames.push({
-        facts: shown('.card-facts') !== null,
+        facts: shown('.card-facts-block') !== null,
         name: shown('.drawer-frame-name')?.textContent ?? null,
         reference: shown('.head-reference')?.getBoundingClientRect().x ?? null,
         tabs: shown('.drawer-frame-tabs')?.getBoundingClientRect().y ?? null,

@@ -50,6 +50,8 @@ const props = withDefaults(
     options: readonly ChoiceOption[]
     disabled?: boolean
     error?: string
+    /** The label for assistive technology only, where the field stands in a line that names it. */
+    hideLabel?: boolean
     hint?: string
     /** How many values it may hold; nothing more is offered once it holds them. */
     max?: number
@@ -64,6 +66,7 @@ const props = withDefaults(
     createLabel: undefined,
     disabled: false,
     error: '',
+    hideLabel: false,
     hint: '',
     max: Number.POSITIVE_INFINITY,
     maxlength: 200,
@@ -187,6 +190,12 @@ function remove(index: number) {
   field.value?.$el.focus()
 }
 
+/** Focus in the field and the list open, for a host that shows the field on a press of its own. */
+function show() {
+  field.value?.$el.focus()
+  opened(true)
+}
+
 /**
  * A press anywhere in the box but on a chip is a press on the field, which opens the
  * list the way the field's own press does.
@@ -198,6 +207,8 @@ function pressBox(event: MouseEvent) {
   input.focus()
   input.click()
 }
+
+defineExpose({ show })
 </script>
 
 <template>
@@ -206,6 +217,7 @@ function pressBox(event: MouseEvent) {
     :label="label"
     :hint="hint"
     :error="error"
+    :hide-label="hideLabel"
   >
     <ComboboxRoot
       ref="root"

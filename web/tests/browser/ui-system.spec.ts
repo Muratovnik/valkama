@@ -397,16 +397,21 @@ test('inspector textareas fit their content from the lines they ask for up to a 
 test('inspector facts and section headings keep a shared spacing rhythm', async ({ page }) => {
   await page.goto('/tests/browser/harness.html?lang=en&surface=work-item')
   const drawer = page.locator('.drawer')
-  // The facts are one line of marks, not a grid of labels over values: what
-  // shares the facts line's first row shares its centre, chip and words alike.
+  // Each fact is named beside its value, not over it: the name stands on the words of the
+  // value's chip, so the two share a line to within a pixel and a half, and what shares the
+  // value's line shares its centre.
   await expect(drawer.locator('.card-facts').first()).toBeVisible()
-  const firstRow = await drawer.locator('.card-facts > *').evaluateAll((elements) => {
-    const boxes = elements.map((element) => element.getBoundingClientRect())
-    const rowEnd = boxes[0].bottom
-    return boxes.filter((box) => box.top < rowEnd).map((box) => box.top + box.height / 2)
-  })
+  const firstRow = await drawer
+    .locator('.card-facts .card-row-label, .card-facts .card-row-value > *')
+    .evaluateAll((elements) => {
+      const boxes = elements.map((element) => element.getBoundingClientRect())
+      const rowEnd = boxes[1].bottom
+      return boxes.filter((box) => box.top < rowEnd).map((box) => box.top + box.height / 2)
+    })
   expect(firstRow.length).toBeGreaterThan(1)
-  expect(Math.max(...firstRow) - Math.min(...firstRow)).toBeLessThan(1)
+  expect(Math.max(...firstRow) - Math.min(...firstRow)).toBeLessThan(1.5)
+  const [, ...values] = firstRow
+  expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1)
   const gaps = await drawer.evaluate((element) =>
     [
       ['.description-heading h3', '.description-copy'],

@@ -304,9 +304,12 @@
   }
 }
 
+/* A chip that can be taken off keeps room at its end for its ×, which `LabelChip` places there
+   and sets the room of. */
 .chip-face {
   max-width: 100%;
-  padding: var(--space-hair) var(--space-2);
+  padding: var(--space-hair) calc(var(--space-2) + var(--chip-face-room, 0px)) var(--space-hair)
+    var(--space-2);
   white-space: nowrap;
   background: var(--color-chip-face);
   overflow: hidden;

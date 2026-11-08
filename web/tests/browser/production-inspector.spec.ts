@@ -236,7 +236,7 @@ for (const width of [1440, 390]) {
     // Read down: the title, the facts and the text all move by the distance scrolled.
     const body = drawer.locator('.drawer-frame-body')
     await body.hover()
-    const moved = [drawer.locator('h2').first(), drawer.locator('.card-facts')]
+    const moved = [drawer.locator('h2').first(), drawer.locator('.card-facts-block')]
     const probe = drawer.locator('.drawer-frame-content .overview > :first-child')
     const before = await Promise.all([...moved, probe].map((part) => topOf(part)))
     await page.mouse.wheel(0, 30)

@@ -21,6 +21,7 @@ import {
   FOLDER_LINK,
   heldCard,
   IN_VSCODE,
+  markNames,
   openPlanFor,
   RESUME_COMMAND,
   SESSION_LINK,
@@ -219,8 +220,8 @@ test('with "always open in" on, the head says where and that the setting chose i
   page,
 }) => {
   await openCard(page, { always: 'cursor' })
-  const head = page.locator('.drawer .card-holder button.open-action')
-  await expect(head).toContainText('Cursor · running · by your setting')
+  const head = page.locator('.drawer .card-holder-value button.open-action')
+  await expect.poll(() => markNames(head)).toEqual(['Cursor', 'running', 'by your setting'])
   await expect(head).toHaveAttribute('aria-label', /in Cursor — by your setting/u)
 })
 
@@ -259,16 +260,15 @@ const wordsOf = (target: Locator) =>
   })
 
 for (const locale of ['en', 'ru'] as const)
-  test(`the last holder of finished work stands as far from its label as a holder does, in ${locale}`, async ({
+  test(`the last holder of finished work starts where the head's other values do, in ${locale}`, async ({
     page,
   }) => {
     await openCard(page, { closed: true, locale })
     // The drawer has stopped sliding in, so the two readings below share one place.
     await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
-    const holder = page.locator('.drawer .card-holder')
-    const name = await wordsOf(holder.locator('.open-action-name'))
-    const label = await wordsOf(holder.locator('.card-holder-label'))
-    expect(name.left - label.right).toBeCloseTo(8, 0)
+    const name = await wordsOf(page.locator('.drawer .card-holder-value .open-action-name'))
+    const state = await page.locator('.drawer .card-facts .card-row-value').boundingBox()
+    expect(name.left).toBeCloseTo(state?.x ?? 0, 0)
   })
 
 test('the card with its holders passes the accessibility rules, panel open or not', async ({
@@ -325,9 +325,10 @@ for (const locale of ['en', 'ru'] as const)
 
     test(`"always open in" reads whole at ${width}px in ${locale}`, async ({ page }, info) => {
       await openCard(page, { always: 'vscode-insiders', locale, width })
-      await expect(page.locator('.drawer .card-holder')).toContainText(
-        locale === 'en' ? 'by your setting' : 'по настройке',
-      )
+      const head = page.locator('.drawer .card-holder-value button.open-action')
+      await expect
+        .poll(() => markNames(head))
+        .toContain(locale === 'en' ? 'by your setting' : 'по настройке')
       await expectNoSilentClipping(page, `always at ${width}px in ${locale}`)
       await page.screenshot(shot(info, `always-${locale}-${width}.png`))
     })
@@ -353,7 +354,9 @@ for (const locale of ['en', 'ru'] as const)
         }),
       )
       const dialog = page.getByRole('dialog').last()
-      await expect(dialog.locator('button.open-action')).toContainText('Claude Desktop')
+      await expect
+        .poll(() => markNames(dialog.locator('button.open-action')))
+        .toContain('Claude Desktop')
       await settled(page)
       await page.screenshot(shot(info, `dialog-${locale}-${width}.png`))
       await expect(dialog.locator('button.open-action')).toBeVisible()

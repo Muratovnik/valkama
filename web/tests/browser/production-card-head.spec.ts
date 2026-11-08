@@ -41,7 +41,7 @@ async function openCard(page: Page, width: number) {
     }),
   )
   const drawer = page.locator('.drawer')
-  await expect(drawer.locator('.card-facts')).toBeVisible()
+  await expect(drawer.locator('.card-facts-block')).toBeVisible()
   return { drawer, moves }
 }
 
@@ -75,7 +75,7 @@ for (const width of [1440, 1024, 390]) {
     await expect(identity.locator('.identity-updated')).toBeVisible({ visible: !stacked })
 
     // The facts start high in the drawer and say the state once, as its menu.
-    expect((await topOf(lead.locator('.card-facts'))) - top).toBeLessThanOrEqual(180)
+    expect((await topOf(lead.locator('.card-facts-block'))) - top).toBeLessThanOrEqual(180)
     await expect(drawer.getByText('Перевести в', { exact: true })).toHaveCount(0)
     await expect(
       lead.getByRole('combobox', { name: 'Состояние: Dev. Перевести в другое' }),
@@ -86,8 +86,8 @@ for (const width of [1440, 1024, 390]) {
     const actions = lead.locator('.write-actions button')
     await expect(actions).toHaveText(['Забрать себе'])
     const action = await box(actions)
-    const facts = await box(lead.locator('.card-facts'))
-    const holder = await box(lead.locator('.card-holder'))
+    const facts = await box(lead.locator('.card-facts-block'))
+    const holder = await box(lead.locator('.card-holder-value'))
     const labels = await box(lead.locator('.card-labels'))
     // Wide: at the end of the holder's row, above the labels, its top and height the
     // row's. Narrow: under the labels, as wide as the facts.
@@ -98,7 +98,7 @@ for (const width of [1440, 1024, 390]) {
     expect(action.height).toBe(36)
 
     // Labels are buttons that filter, each its own Tab stop.
-    const chips = lead.locator('.card-labels button')
+    const chips = lead.locator('.card-labels button.label-chip')
     await expect(chips).toHaveCount(2)
     await expect(chips.first()).toHaveAttribute('aria-label', 'Фильтр: метка platform')
 
@@ -265,7 +265,7 @@ for (const width of [1440, 1024, 390]) {
     // The one action, in reach, and Close beside it.
     await expect(pinnedAction).toBeVisible()
     await expect(pinnedAction).toHaveText('Забрать себе')
-    await expect(drawer.locator('.card-facts')).not.toBeInViewport()
+    await expect(drawer.locator('.card-facts-block')).not.toBeInViewport()
 
     // The sections keep one row, and each one the arrows reach is brought into view.
     const tabs = drawer.locator('.inspector-tabs').getByRole('tab')
@@ -414,13 +414,14 @@ for (const width of [1440, 390]) {
     page,
   }) => {
     const drawer = await openLongCard(page, width)
-    // This item stands in no epic. An empty cell still takes a gap, and where the row is
-    // full it wraps to a row of its own, which reads as a blank line under the facts. The
-    // state and priority make the first row, the holder the one under it.
+    // This item stands in no epic, so no row names one: an empty row would still take its
+    // gap and read as a blank line among the facts. Every row there is has a value.
+    const names = await drawer.locator('.card-row-label').allTextContents()
+    expect(names).not.toContain('Эпик')
     const widths = await drawer
-      .locator('.card-facts > *, .card-holder')
+      .locator('.card-row-value')
       .evaluateAll((facts) => facts.map((fact) => fact.getBoundingClientRect().width))
-    expect(widths).toHaveLength(3)
+    expect(widths).toHaveLength(names.length)
     expect(Math.min(...widths)).toBeGreaterThan(0)
   })
 }

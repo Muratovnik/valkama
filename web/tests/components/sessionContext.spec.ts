@@ -62,8 +62,12 @@ function mountDialog(shown: ResolvedRef = context, locale: 'en' | 'ru' = 'en') {
   })
 }
 
+/**
+ * The button with these words, the newest where two have them: the dialog's own «Open
+ * session» shows its place as a glyph, so its words alone match the panel's action opened over it.
+ */
 const button = (name: string) => {
-  const found = [...document.querySelectorAll('button')].find(
+  const found = [...document.querySelectorAll('button')].findLast(
     (node) => node.textContent?.trim() === name,
   )
   if (!found) throw new Error(`no button "${name}"`)

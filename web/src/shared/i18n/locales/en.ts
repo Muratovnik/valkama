@@ -903,6 +903,8 @@ export const en = {
       takeover: 'The takeover was refused',
       tick: 'The step was not updated',
       attach: 'The reference was not attached',
+      priority: 'The priority was not changed',
+      labels: 'The labels were not changed',
       generic: 'The service refused this action',
       conflict: 'The work changed while it was open. It has been reloaded; try again.',
       reason: 'The service said: {reason}',

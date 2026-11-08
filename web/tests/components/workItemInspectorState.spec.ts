@@ -335,13 +335,11 @@ describe('WorkItemInspector resource state', () => {
       const head = wrapper.get('.frame-head')
       const holderFact = head.get('.card-holder')
       expect(holderFact.text()).toContain(claimed ? holder : 'No active claim')
-      // The label stands on the screen, so nothing hidden says it a second time, and on
-      // finished work that nobody held there is nobody to label.
+      // The label stands on the screen, so nothing hidden says it a second time. Every row
+      // of the head is named, finished work that nobody held among them.
       expect(holderFact.find('.visually-hidden').exists()).toBe(false)
-      const label = holderFact.find('.card-holder-label')
-      if (!terminal) expect(label.text()).toBe('Held by')
-      else if (claimed) expect(label.text()).toBe('Previously responsible')
-      else expect(label.exists()).toBe(false)
+      const label = holderFact.get('.card-holder-label')
+      expect(label.text()).toBe(terminal ? 'Previously responsible' : 'Held by')
       expect(wrapper.text().split(claimed ? holder : 'No active claim')).toHaveLength(2)
       const actions = head.findAll('.write-actions button').map((button) => button.text())
       expect(actions).toEqual(action)

@@ -78,7 +78,7 @@ const PRESSES: Press[] = [
     bringUp: async (d) => d.locator('.card-action').getByRole('button').click(),
   },
   { where: 'the title', scrollTo: 0, text: (d) => d.locator('.drawer-frame-name') },
-  { where: 'the facts', scrollTo: 0, text: (d) => d.locator('.card-facts .facet-word').first() },
+  { where: 'the facts', scrollTo: 0, text: (d) => d.locator('.card-facts .card-row-label') },
   { where: 'the text, read down', scrollTo: 400, text: BODY_TEXT },
   { where: 'the text, read on with the keys', scrollTo: 400, readOn: true, text: BODY_TEXT },
 ]

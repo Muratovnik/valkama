@@ -1327,21 +1327,28 @@ in one tertiary line — the kind (glyph and word, in its own colour), the refer
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
-Back and Close. The scroller holds the rest and moves it 1:1: the title, three rows of
-facts 12px apart, the tabs, the content. The first row is what the item is now: the
-state as its own transition menu, said once, so a move the server refuses leaves the
-chip naming where the item is, then a question waiting for its answer, the priority
-glyph and word, and the epic. The second is who is on it: a label in the quiet ink,
-«Исполняет», or «Ранее отвечал» on finished work, then the holder as bare words,
-shortened to its name and the start of its session with the whole value and its lease
-in a tooltip and a warning dot once nobody is behind it. A plate there read as one more
-chip of the row above. Under it, as a note on that row, «Подписаны» in the same quiet
-ink names the other sessions that follow the item, each as its claim's holder would print,
-a name moving to the next line whole and one wider than the line wrapping between its own
-words, read whole with no ellipsis, since plain words offer no hover to a keyboard or a
-finger; with nobody following there is no such line. The third row is the labels, and an item with none
-has no such row and none of its room. Every fact stands at one height, the state chip's, so a wrap
-adds a row of that height and never a half step.
+Back and Close. The scroller holds the rest and moves it 1:1: the title, the facts, the
+tabs, the content. The facts are rows 4px apart, each led by its name in the quiet ink in
+one column, «Состояние», «Приоритет», «Эпик», «Исполняет» or «Ранее отвечал», «Подписаны»
+and «Метки», with the value on the name's baseline; a run of chips with no names read as
+one heap of state, priority, holder and tags. The state is its own transition menu, said
+once, so a move the server refuses leaves the chip naming where the item is, then a
+question waiting for its answer. The priority is a menu as well, urgent to low, each
+choice saying what it means; on an item the client cannot change both are plain marks.
+The epic is its reference. The holder is bare words, shortened to its name and the start
+of its session with the whole value and its lease in a tooltip and a warning dot once
+nobody is behind it; a plate there read as one more chip. «Подписаны» names the other
+sessions that follow the item, each as its claim's holder would print, a name moving to
+the next line whole and one wider than the line wrapping between its own words, read whole
+with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
+following there is no such row. The labels row ends in «+», which opens a field over the
+space's labels, the most used first, that also takes a new one; Escape gives the «+» back
+with nothing attached. Each label shows its × at its end under the pointer or keyboard
+focus, always on a touch screen, with the room for it kept at rest so no chip grows when
+it appears. A read-only item with no labels has no such row. The labels stay under the
+title, not above it: the title is what the card is found by, and editing controls over
+it would push it down by however many labels wrap. Every value stands at one height, the
+state chip's, so a wrap adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
 labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —
@@ -1566,10 +1573,14 @@ graph as they are. A wrapped line of facts starts without a dot, because the dot
 stands in the room each fact's margin takes from the line, which the line clips.
 A holder with a session behind them is the way to it, in the card's head and on its
 steps, as a parent is at the head of its rows in «Agents», and in an attempt, a link and the session dialog the same button does
-it: the holder's name, which gives way, and where the session opens, which does not. A
-terminal has its glyph and no product has a logo; a running session says so («Терминал ·
-идёт»), and while the owner's "always open in" decides, the place says that too
-(«VS Code · по настройке»), because a setting that overrides the rule must not hide it.
+it: the holder's name, in the weight of the line it stands on, and where the session
+opens, which does not give way. The place, a running session and the owner's "always
+open in" deciding are glyphs after the name, each named for a screen reader and in its
+hover hint: the place by the glyph Settings gives that client, a running session by the
+activity glyph in the success ink, and the setting by the settings glyph, because a
+setting that overrides the rule must not hide it. A place with no glyph stays a word. In
+words the whole run, «VS Code · идёт», read as a second, louder value beside a name of
+the same size.
 A name too long for the line ends in an ellipsis at twelve characters or takes a line of
 its own, and an action's own words are never cut. What the button says is the server's
 plan, read before any press and run by none, once for all the buttons of one session,

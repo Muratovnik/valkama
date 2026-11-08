@@ -1,0 +1,163 @@
+/* Three columns: the labels, as wide as the longest of them, the facts, and the action at the
+   end of the holder's row. A row is no box of its own, so its label and its fact share the
+   block's columns and every fact starts at one edge. Auto-placed, so a row that is absent
+   leaves no track and none of the room around it. */
+.card-facts-block {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-4);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.card-row {
+  display: contents;
+}
+
+/* The quiet ink a label takes, one line, on its fact's line: the row's items share a
+   baseline, so the label stands on the words of the chip, the name or the first label. */
+.card-row-label {
+  grid-column: 1;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  white-space: nowrap;
+
+  /* A chip centres its word trimmed to the letters on the row's middle, so the name beside it,
+     trimmed too (`.trimmed-word`), does the same: the baseline the grid takes through a mark's
+     menu stands a pixel under the mark's word. On the first line's middle, not the row's, where
+     a phone wraps the question under the state. */
+  &.beside-chip {
+    align-self: start;
+    margin-block-start: calc(var(--size-control-height-compact) / 2 - 0.5ex);
+  }
+}
+
+/* Each fact stands at the chip's height, so a row is as high whichever fact is in it. */
+.card-row-value {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--size-control-height-compact);
+  margin: 0;
+}
+
+/* A chip is as wide as what it names, not the row. */
+.card-state,
+.card-priority {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+/* The menu clips its value to a line, and a mark's word is trimmed to its letters: centred on
+   a line's height, the letters' tops stood a pixel above it. A state's chip keeps this height. */
+.card-priority-value {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+.card-fact {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The holder's words take one line beside the action; only where they cannot does the name
+   give way. */
+.card-holder-value {
+  flex-wrap: nowrap;
+  grid-column: 2;
+  gap: var(--space-2);
+}
+
+/* The words start where a plain holder's do: the margin takes back the inset its fill keeps
+   under the pointer. The name takes the ink a value has, against the label's quiet one. */
+.card-holder-link {
+  --color-open-action-name: var(--color-text);
+
+  margin-inline-start: calc(-1 * var(--space-fill-inset));
+}
+
+.card-holder-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-holder-stale {
+  flex: none;
+}
+
+.card-action {
+  grid-column: 3;
+  align-self: center;
+
+  &:empty {
+    display: none;
+  }
+}
+
+/* Who else follows the item. The names wrap between them, never inside one, and a line that
+   wraps starts where the first name does. A name wider than the whole line wraps between its
+   own words and is read whole, with no ellipsis: the line is plain words, which a keyboard or
+   a finger cannot hover for a title. */
+.card-subscriber-list {
+  gap: var(--space-1) var(--space-2);
+  align-content: center;
+  align-items: baseline;
+}
+
+.card-subscriber {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
+}
+
+/* A word moves to the next line whole; only one wider than the line breaks inside itself. */
+.card-subscriber-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.card-labels {
+  flex: 1 1 auto;
+}
+
+.card-missing {
+  grid-column: 1 / -1;
+}
+
+/* A note on the rows rather than a row: closer to them than they are to the tabs. */
+.card-usage {
+  grid-column: 1 / -1;
+
+  &:empty {
+    display: none;
+  }
+}
+
+/* A phone-wide drawer: the one action stands under everything else, at the full width a thumb
+   reaches. In the document it stays next to the holder it is about. */
+@container drawer (width < 520px) {
+  .card-facts-block {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .card-holder-value {
+    grid-column: 2 / -1;
+  }
+
+  .card-action {
+    grid-column: 1 / -1;
+    order: 1;
+  }
+}

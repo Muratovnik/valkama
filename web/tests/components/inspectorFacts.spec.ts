@@ -155,17 +155,78 @@ describe('the state as the menu that moves it', () => {
     const idle = facts(item())
     idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
     idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'todo')
-    expect(idle.emitted('move')).toEqual([['dev']])
+    expect(idle.emitted('fact')).toEqual([[{ state: 'dev' }]])
 
     const busy = facts(item(), { busy: true })
     busy.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
-    expect(busy.emitted('move')).toBeUndefined()
+    expect(busy.emitted('fact')).toBeUndefined()
   })
 
   it('is a plain state where nothing can move it', () => {
     const wrapper = facts(item(), { writable: false })
     expect(wrapper.findComponent(choiceStub).exists()).toBe(false)
     expect(wrapper.get('.card-state').attributes('data-dimension')).toBe('work-item-state')
+  })
+})
+
+/** The second menu of the head: the state's is the first. */
+const priorityMenu = (wrapper: ReturnType<typeof facts>) => wrapper.findAllComponents(choiceStub)[1]
+
+/** What the head's rows are called, top to bottom. */
+const rowLabels = (wrapper: ReturnType<typeof facts>) =>
+  wrapper.findAll('.card-row-label').map((label) => label.text())
+
+describe('the priority as the menu that changes it', () => {
+  it('offers the four priorities, most pressing first, each with what it means', () => {
+    const menu = priorityMenu(facts(item()))
+    expect(menu.props('modelValue')).toBe('medium')
+    expect(menu.props('label')).toBe('Priority: Medium. Change it')
+    expect(menu.props('options')).toEqual([
+      { value: 'urgent', label: 'Urgent', description: 'blocks work or loses data' },
+      { value: 'high', label: 'High', description: 'serious; could block work' },
+      {
+        value: 'medium',
+        label: 'Medium',
+        description: 'noticeably affects work, with a workaround',
+      },
+      { value: 'low', label: 'Low', description: 'minor' },
+    ])
+  })
+
+  it('asks for another priority, not for the one it has, and not while a write is in flight', () => {
+    const idle = facts(item())
+    priorityMenu(idle).vm.$emit('update:modelValue', 'medium')
+    priorityMenu(idle).vm.$emit('update:modelValue', 'urgent')
+    expect(idle.emitted('fact')).toEqual([[{ priority: 'urgent' }]])
+
+    const busy = facts(item(), { busy: true })
+    priorityMenu(busy).vm.$emit('update:modelValue', 'urgent')
+    expect(busy.emitted('fact')).toBeUndefined()
+  })
+
+  it('is the plain mark where the card cannot write', () => {
+    const wrapper = facts(item({ priority: 'high' }), { writable: false })
+    expect(wrapper.findComponent(choiceStub).exists()).toBe(false)
+    expect(wrapper.get('[data-facet="priority"]').text()).toBe('High')
+  })
+})
+
+describe('each fact in a row that says what it is', () => {
+  it('labels the state, the priority, the epic, the holder and the labels', () => {
+    const record = item({ labels: ['platform'], parent_id: '00000000-0000-4000-8000-000000000099' })
+    const wrapper = mount(InspectorFacts, {
+      props: { item: record, workflow, busy: false, writable: true, parentReference: 'MAIN-9' },
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+        stubs: { ChoiceSelect: choiceStub, VIcon: true },
+      },
+    })
+    expect(rowLabels(wrapper)).toEqual(['State', 'Priority', 'Epic', 'Held by', 'Labels'])
+  })
+
+  it('has no labels row where there are none and none can be attached', () => {
+    expect(rowLabels(facts(item()))).toContain('Labels')
+    expect(rowLabels(facts(item(), { writable: false }))).not.toContain('Labels')
   })
 })
 
@@ -194,7 +255,7 @@ describe('the marks beside the state', () => {
 
   it('adds a pressed label to the filter', async () => {
     const wrapper = facts(item({ labels: ['platform', 'phase-1'] }))
-    const chips = wrapper.findAll('.card-labels button')
+    const chips = wrapper.findAll('.card-labels .label-chip')
     expect(chips.map((chip) => chip.attributes('aria-label'))).toEqual([
       'Filter: label platform',
       'Filter: label phase-1',
@@ -202,5 +263,21 @@ describe('the marks beside the state', () => {
     expect(chips.every((chip) => chip.attributes('tabindex') === undefined)).toBe(true)
     await chips[1].trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'phase-1' }]])
+  })
+
+  it('takes a label off with the × in its chip, and offers none where it cannot write', async () => {
+    const wrapper = facts(item({ labels: ['platform', 'phase-1'] }))
+    const remove = wrapper.findAll('.card-labels .label-chip-remove')
+    expect(remove.map((button) => button.attributes('aria-label'))).toEqual([
+      'Remove label platform',
+      'Remove label phase-1',
+    ])
+    await remove[0].trigger('click')
+    expect(wrapper.emitted('fact')).toEqual([[{ labels: ['phase-1'] }]])
+    expect(wrapper.emitted('filter')).toBeUndefined()
+
+    const read = facts(item({ labels: ['platform'] }), { writable: false })
+    expect(read.find('.label-chip-remove').exists()).toBe(false)
+    expect(read.find('.card-labels button[aria-label="Add a label"]').exists()).toBe(false)
   })
 })

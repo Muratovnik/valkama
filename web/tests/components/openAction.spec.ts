@@ -34,15 +34,21 @@ import {
   windowSteps,
 } from '../support/openActionHarness.ts'
 
-/** What the button is called, what it shows, and its tooltip. */
+/**
+ * What the button is called, what it shows, and its tooltip. What it shows is the name, then
+ * each glyph by the words it is named and hinted by, which are the words it stands for.
+ */
 function read(wrapper: ReturnType<typeof mountAction>) {
   const button = wrapper.get('button.open-action')
+  const marks = button.findAll('.open-action-mark').map((mark) => {
+    expect(mark.attributes('role')).toBe('img')
+    expect(mark.attributes('title')).toBe(mark.attributes('aria-label'))
+    return mark.attributes('aria-label')
+  })
   return {
     name: button.attributes('aria-label'),
-    shown: button
-      .findAll('.open-action-words > span')
-      .map((part) => part.text())
-      .join(' '),
+    shown: [button.get('.open-action-name').text(), marks.join(' · ')].filter(Boolean).join(' '),
+    glyphs: button.findAll('.open-action-mark').map((mark) => mark.attributes('data-mark')),
     title: button.attributes('title'),
   }
 }
@@ -128,7 +134,11 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(read(wrapper).shown).toBe(`${NAME} Terminal · running`)
     expect(read(wrapper).name).toContain('is running in a terminal')
-    expect(wrapper.find('.open-action svg').exists()).toBe(true)
+    // The place and that it runs are glyphs: the button's words are its name alone.
+    expect(read(wrapper).glyphs).toEqual(['place', 'live'])
+    expect(wrapper.get('button.open-action .open-action-words').text()).toBe(NAME)
+    expect(wrapper.find('.open-action [data-mark="place"] svg').exists()).toBe(true)
+    expect(read(wrapper).title).toContain('running')
 
     const pressed = wrapper.get('button.open-action').element as HTMLElement
     pressed.focus()

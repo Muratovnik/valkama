@@ -29,6 +29,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useOpenCardModel } from '@/pages/planning/composables/useOpenCardModel.ts'
 import {
   groupingOf,
   viewOf,
@@ -206,14 +207,7 @@ const {
   write: (state) => emit('state', state),
 })
 
-const openRecord = computed(() =>
-  model.value?.work_items.find((item) => item.reference === open.value),
-)
-/** The open item's epic, by reference: the card's facts line names it. */
-const parentReference = computed(() => {
-  const parent = openRecord.value?.parent_id
-  return model.value?.work_items.find((item) => item.work_item_id === parent)?.reference ?? null
-})
+const { openRecord, parentReference } = useOpenCardModel(model, open)
 /** The card on show: every way of closing the panel asks it about its drafts first. */
 const card = useTemplateRef<InstanceType<typeof WorkItemInspector>>('card')
 const closePanel = () => card.value?.close()

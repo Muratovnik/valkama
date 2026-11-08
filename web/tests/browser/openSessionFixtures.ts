@@ -2,7 +2,18 @@
  * A card with every kind of holder a click can or cannot reach, and the plan the server
  * would answer for each: the record's words are the same ones its real read carries.
  */
+import type { Locator } from '@playwright/test'
+
 import { identity } from './planningFixtures.ts'
+
+/**
+ * What a session button says beside its name, in order: the place, that the session runs and
+ * that a setting chose the place, each a glyph named for a reader rather than words on the line.
+ */
+export const markNames = (button: Locator) =>
+  button
+    .locator('.open-action-mark')
+    .evaluateAll((marks) => marks.map((mark) => mark.getAttribute('aria-label') ?? ''))
 
 const session = (end: number) => `6f1c2a8e-0000-4000-8000-${String(end).padStart(12, '0')}`
 
