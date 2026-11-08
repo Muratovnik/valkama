@@ -3,15 +3,17 @@
  * One work item as a sheet: its reference, its title, and only the facts that
  * change what a reader would do next.
  *
- * The first line is the item's identity and its exceptions: a priority glyph
- * when the priority is not the ordinary medium, a kind glyph when it is not a
- * plain task, the reference, and on the right only what stops the work — an
- * open blocker, «Ждёт MAIN-12», and a claim whose session is gone. It never
- * wraps; a mark short of room keeps its glyph. Below it the title, at most
- * three lines with the whole of it on hover; the labels on one line, up to
- * three whole chips and «+N» for the rest, which opens the card like the rest
- * of the sheet; and who holds the item and how far its steps are, only when
- * there is something to say.
+ * The first line is the item's head and what stops it: a kind glyph when it is
+ * not a plain task, the reference, a priority glyph when the priority is not the
+ * ordinary medium — the order every surface reads an item in (`drawHead`) — and
+ * on the right only an open blocker, «⛔ MAIN-12». It never wraps; a mark short of
+ * room keeps its glyph. Below it the title, at most three lines with the whole of
+ * it on hover; the labels on one line, up to three whole chips and «+N» for the
+ * rest, which opens the card like the rest of the sheet; and, only when there is
+ * something to say, a holder glyph and how far its steps are. The holder is a
+ * glyph whose hover names who holds it, and says when the claim is stale, in the
+ * stale tone: the name and «Захват устарел» as words were the longest things on
+ * the sheet after its title, and the card and the hover card say both in full.
  *
  * Three tones rank what is on it, and only one thing leads: the title in the
  * full ink at the row-title weight; the holder and what stops the work in the
@@ -37,10 +39,10 @@
  * they stand for, so a press on them opens the card itself: for a pointer the
  * sheet is one target, and the keyboard's way in stays the open target.
  */
-import { computed, useId, useTemplateRef } from 'vue'
+import { computed, h, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { drawMarks } from '@/entities/work-item/components/drawMarks.ts'
+import { drawHead, drawMarks } from '@/entities/work-item/components/drawMarks.ts'
 import { useLabelFit } from '@/entities/work-item/composables/useLabelRoom.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { surfaceMarks } from '@/entities/work-item/utils/facets.ts'
@@ -49,7 +51,6 @@ import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
 const props = withDefaults(
@@ -84,11 +85,11 @@ const emit = defineEmits<{
 }>()
 const open = () => emit('open', props.item.reference)
 
-const { t, locale } = useI18n()
+const { locale } = useI18n()
 const id = useId()
 
 /** The runs of the tile, in reading order; the registry decides each mark. */
-const LEAD: readonly FacetId[] = ['priority', 'kind']
+const LEAD: readonly FacetId[] = ['kind', 'priority']
 const EXCEPTIONS: readonly FacetId[] = ['readiness']
 const LABELS: readonly FacetId[] = ['labels']
 const FACTS: readonly FacetId[] = ['holder', 'steps']
@@ -99,6 +100,9 @@ const context = computed<FacetContext>(() => ({ waitingOn: props.waitingOn }))
 const leadRun = computed(() => surfaceMarks('tile', props.item, context.value, LEAD))
 const exceptionRun = computed(() => surfaceMarks('tile', props.item, context.value, EXCEPTIONS))
 const factRun = computed(() => surfaceMarks('tile', props.item, context.value, FACTS))
+/** The number the head holds between its marks: read by the open target, not twice. */
+const referenceNode = () =>
+  h('span', { 'class': 'tile-reference', 'aria-hidden': 'true' }, props.item.reference)
 
 /** The chips keep one line: as many as it has room for, and «+N» for the rest. */
 const room = useLabelFit(useTemplateRef<HTMLElement>('labelLine'), {
@@ -126,13 +130,10 @@ const labelKey = computed(() =>
   labelRun.value.map((mark) => mark.value).join(String.fromCodePoint(0)),
 )
 
-/** A finished item's former holder is history, not a claim to act on. */
-const staleClaim = computed(
-  () => props.item.claim_state === 'stale' && !props.item.state.is_terminal,
-)
-const exceptions = computed(() => exceptionRun.value.length > 0 || staleClaim.value)
+const exceptions = computed(() => exceptionRun.value.length > 0)
 
-const leadId = `${id}-lead`
+/** The head names its marks to the open target only when it has any beside the reference. */
+const leadId = computed(() => (leadRun.value.length ? `${id}-lead` : undefined))
 const exceptionsId = `${id}-exceptions`
 const factsId = `${id}-facts`
 /**
@@ -142,7 +143,7 @@ const factsId = `${id}-facts`
  */
 const describedBy = computed(() => {
   const ids = [
-    leadRun.value.length ? leadId : '',
+    leadId.value ?? '',
     exceptions.value ? exceptionsId : '',
     factRun.value.length ? factsId : '',
     props.hintId ?? '',
@@ -158,37 +159,20 @@ const describedBy = computed(() => {
   >
     <span class="tile-line">
       <component
-        :is="drawMarks(leadRun, { surface: 'tile', words })"
-        v-if="leadRun.length"
+        :is="drawHead(leadRun, { surface: 'tile', words }, [referenceNode()])"
         :id="leadId"
-        v-memo="[leadRun, locale]"
+        v-memo="[leadRun, locale, props.item.reference]"
         class="tile-lead"
         @click="open"
       />
-      <span
-        class="tile-reference"
-        aria-hidden="true"
-        >{{ props.item.reference }}</span
-      >
-      <span
+      <component
+        :is="drawMarks(exceptionRun, { fold: true, surface: 'tile', words })"
         v-if="exceptions"
         :id="exceptionsId"
+        v-memo="[exceptionRun, locale]"
         class="tile-exceptions"
-      >
-        <component
-          :is="drawMarks(exceptionRun, { fold: true, surface: 'tile', words })"
-          v-memo="[exceptionRun, locale]"
-          @click="open"
-        />
-        <SemanticState
-          v-if="staleClaim"
-          class="tile-stale"
-          dimension="claim-lease"
-          state="stale"
-          :label="t('workItem.lease.mark')"
-          @click="open"
-        />
-      </span>
+        @click="open"
+      />
     </span>
     <button
       class="tile-open"
@@ -297,7 +281,8 @@ const describedBy = computed(() => {
 
 /* The glyphs and a folded exception say on hover what they stand for; both
    come before the open target, which would otherwise lie over them and take
-   the pointer. A press on them opens the card all the same. */
+   the pointer. A press on them, or on the reference between them, opens the
+   card all the same. */
 .tile-lead,
 .tile-exceptions {
   position: relative;
@@ -305,38 +290,32 @@ const describedBy = computed(() => {
   cursor: pointer;
 }
 
-/* Two bare glyphs keep the line's own gap: the wider one between marks was
-   room between the 28px pointer boxes they no longer have. */
+/* The glyphs and the reference between them keep the line's own gap: the wider
+   one between marks was room between the 28px pointer boxes they no longer have.
+   The head keeps its width, and the exceptions give way.
+
+   The reference is set in the line's own figures, as the blocker's reference at
+   its end is. Tabular figures line digits up in a column, and nothing here is one:
+   the glyphs before a reference vary from tile to tile, and what follows it stands
+   at the line's end. They cost a four-digit reference six pixels, which is the
+   difference in a desktop column between a blocker's reference shown whole and
+   folded to its glyph, where the key is three letters; a longer key still folds,
+   as any exception short of room does. The head keeps the line's tertiary ink for
+   it, and its glyphs take their own. */
 .tile-line > .tile-lead {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: nowrap;
   column-gap: var(--space-1);
-}
-
-/* The reference is set in the line's own figures, as the blocker's reference
-   at its end is. Tabular figures line digits up in a column, and nothing here
-   is one: the glyphs before a reference vary from tile to tile, and what
-   follows it stands at the line's end. They cost a four-digit reference six
-   pixels, which is the difference in a desktop column between a blocker's
-   reference shown whole and folded to its glyph, where the key is three
-   letters; a longer key still folds, as any exception short of room does. */
-.tile-reference {
-  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
   white-space: nowrap;
 }
 
 .tile-exceptions {
-  display: flex;
   flex: 0 1 auto;
-  gap: var(--space-2);
-  align-items: center;
   min-width: 0;
   margin-inline-start: auto;
   overflow: hidden;
-}
-
-.tile-stale {
-  flex: 0 0 auto;
 }
 
 /* The title is the open target, and its box is stretched over the whole sheet,

@@ -186,24 +186,25 @@ describe('the facets a list row prints', () => {
     expect(cells(wrapper, 1)[4].text()).toBe('—')
   })
 
-  it('leads every reference with two glyph slots, filled or not, and drops the kind word', async () => {
+  it('leads every reference with one kind slot, filled or not, and drops the kind word', async () => {
     const wrapper = await rows([
       boardItem(1, 'backlog', { kind: 'improvement', priority: 'urgent' }),
       boardItem(2, 'backlog', { kind: 'task', priority: 'medium' }),
     ])
     for (const index of [0, 1])
-      expect(cells(wrapper, index)[0].findAll('.list-slot')).toHaveLength(2)
+      expect(cells(wrapper, index)[0].findAll('.list-slot')).toHaveLength(1)
     const glyphs = (index: number) =>
       cells(wrapper, index)[0]
         .findAll('.facet-mark')
         .map((mark) => mark.attributes('data-facet'))
-    expect(glyphs(0)).toEqual(['priority', 'kind'])
+    // The priority column says the priority, so the reference leads with the kind alone.
+    expect(glyphs(0)).toEqual(['kind'])
     expect(glyphs(1)).toEqual([])
     // The kind is the glyph; the title says only the title.
     expect(cells(wrapper, 0)[1].text()).toBe('Item 1')
   })
 
-  it('says each priority once a row: its glyph before the reference, its word in the column', async () => {
+  it('says each priority once a row: its word in the column, and no glyph beside the reference', async () => {
     const wrapper = await rows([
       boardItem(1, 'backlog', { priority: 'medium' }),
       boardItem(2, 'backlog', { priority: 'high' }),
@@ -218,16 +219,35 @@ describe('the facets a list row prints', () => {
     ] as const) {
       const column = cells(wrapper, index)[3].get('.facet-mark')
       expect(column.text()).toBe(word)
-      // The word alone, in the tone its glyph has before the reference.
+      // The word alone, in the tone its glyph has where the column folds away.
       expect(column.classes()).toContain('facet-word-alone')
       expect(column.attributes('data-tone')).toBe(tone)
       const glyphs = wrapper
         .findAll('tbody tr')
         [index].findAll('.facet-mark[data-facet="priority"] .facet-glyph')
-      expect(glyphs).toHaveLength(1)
+      expect(glyphs).toHaveLength(0)
     }
     for (const index of [0, 1, 2])
       expect(cells(wrapper, index)[3].find('.facet-glyph').exists()).toBe(false)
+  })
+
+  it('where the priority column folds away, its glyph follows the reference, after the kind', async () => {
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    // A list of 700px folds the state, the priority and the holder columns.
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 700,
+    })
+    try {
+      const wrapper = await rows([boardItem(1, 'backlog', { kind: 'bug', priority: 'urgent' })])
+      const head = cells(wrapper, 0)[0]
+        .findAll('[data-facet], .list-open')
+        .map((part) => part.attributes('data-facet') ?? 'reference')
+      expect(head).toEqual(['kind', 'reference', 'priority'])
+      wrapper.unmount()
+    } finally {
+      if (width) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width)
+    }
   })
 
   it('filters by a glyph without opening the row, and keeps the row one Tab stop', async () => {

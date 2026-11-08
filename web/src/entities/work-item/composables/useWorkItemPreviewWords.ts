@@ -31,8 +31,8 @@ export interface WorkItemPreviewSubject {
   waitingOn?: string | null
 }
 
-/** The marks before the title, after the reference, in reading order. */
-const HEAD: readonly FacetId[] = ['priority', 'kind', 'state', 'readiness']
+/** The head's marks: the kind before the reference, the rest after it (`drawHead`). */
+const HEAD: readonly FacetId[] = ['kind', 'priority', 'state', 'readiness']
 /** Who holds it and how far its steps are. */
 const FACTS: readonly FacetId[] = ['holder', 'steps']
 

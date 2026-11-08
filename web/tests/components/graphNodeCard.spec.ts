@@ -76,14 +76,16 @@ describe('a graph node', () => {
     expect(plain.get('.flow-node-state .semantic-state').text()).toBe('Dev')
   })
 
-  it('leads its reference with the kind and ends its foot with high or urgent, as glyphs that do not filter', () => {
+  it('reads its head as every surface does — kind, reference, high or urgent — as glyphs that do not filter', () => {
     const wrapper = card({
       node: node('dev', { priority: 'urgent', kind: 'bug', claim_ref: 'codex' }),
     })
-    const facets = (selector: string) =>
-      wrapper.findAll(`${selector} [data-facet]`).map((mark) => mark.attributes('data-facet'))
-    expect(facets('.flow-node-meta')).toEqual(['kind'])
-    expect(facets('.flow-node-owner')).toEqual(['priority'])
+    const head = wrapper
+      .findAll('.flow-node-meta [data-facet], .flow-node-meta .flow-node-id')
+      .map((part) => part.attributes('data-facet') ?? 'reference')
+    expect(head.slice(0, 3)).toEqual(['kind', 'reference', 'priority'])
+    // The foot names who holds it and nothing else.
+    expect(wrapper.findAll('.flow-node-owner [data-facet]')).toHaveLength(0)
     expect(wrapper.get('.flow-node-owner').text()).toContain('codex')
     // The card is the one button; nothing inside it is another control.
     expect(wrapper.findAll('button')).toHaveLength(1)

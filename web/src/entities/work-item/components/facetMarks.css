@@ -15,10 +15,13 @@
   font: var(--font-detail);
 }
 
+/* A mark lines its glyph box and its word up by their baseline, which is what puts
+   the glyph on the middle of the word's letters (`.facet-glyph-box` below), on a
+   word of one line or the first line of a long one. */
 .facet-mark {
   display: inline-flex;
   gap: var(--space-1);
-  align-items: center;
+  align-items: baseline;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -31,8 +34,10 @@
     position: relative;
 
     /* A glyph is 14px; the target is the 28px a line of content may spend,
-       centred on it, so neighbouring glyphs do not share a hit area. */
+       centred on it, so neighbouring glyphs do not share a hit area. Its glyph box
+       and its word are one line each, so centring them keeps their baseline. */
     justify-content: center;
+    align-items: center;
     min-inline-size: var(--size-control-inline);
     min-block-size: var(--size-control-inline);
     border-radius: var(--radius-status);
@@ -151,14 +156,27 @@
   }
 }
 
-/* A mark lines up with the text beside it on its first item, and the first
-   item was the glyph, whose lower edge stood in for a baseline: the word sat
-   two pixels above the row. A zero-width letter ahead of the glyph, centred as
-   the word is, gives the mark a letter's baseline; it takes no room, and it
+/* The glyph's line: a box that is a line of the mark's text, holding a zero-width
+   letter for its baseline and the glyph centred on the middle of that line's
+   lowercase letters, as an inline image centres (`vertical-align: middle`: the
+   baseline plus half an x-height). It lines up with the word beside it by that
+   baseline, and with the text beside the mark as any line of text does, so the
+   glyph stands on the letters' middle on every surface and every line, the first
+   of a word that wraps included. It takes no room beyond the glyph, and the letter
    says nothing to a screen reader. */
-.facet-mark::before {
-  content: '\200b' / '';
-  margin-inline-end: calc(-1 * var(--space-1));
+.facet-glyph-box {
+  display: inline-block;
+  flex: none;
+  white-space: nowrap;
+
+  &::before {
+    content: '\200b' / '';
+  }
+
+  .facet-glyph {
+    display: inline;
+    vertical-align: middle;
+  }
 }
 
 /* One line of chips: a chip with no room is not drawn at all — the registry
@@ -176,6 +194,34 @@
   .facet-mark {
     flex: none;
   }
+}
+
+/* A mark that is its glyph alone, its word out of sight, is that line itself: the
+   same letter and the same centring as a glyph box, and no box inside the mark. */
+.facet-mark.glyph-alone {
+  display: inline-block;
+  white-space: nowrap;
+
+  &::before {
+    content: '\200b' / '';
+  }
+
+  .facet-glyph {
+    display: inline;
+    vertical-align: middle;
+  }
+}
+
+/* A head lines its marks and the number up by their baseline: the number is often set in
+   another face (a mono reference on the graph and in the cards), and two lines of one
+   height in two faces centred on each other stood their words a pixel apart. */
+.facet-head {
+  align-items: baseline;
+}
+
+/* A head's marks hidden from assistive technology, laid out as the marks they hold. */
+.facet-head-part {
+  display: contents;
 }
 
 /* The glyph alone on screen, its word still read out. */
@@ -223,11 +269,8 @@
 
 /* The card is where an item is read in full, and a word there is read whole: a long
    holder wraps under its glyph instead of ending in an ellipsis that only a screen
-   reader could see past. The glyph stays with the first line. */
-.facet-marks[data-surface='preview'] .facet-mark {
-  align-items: first baseline;
-}
-
+   reader could see past. The glyph stays with the first line, by the baseline every
+   mark lines up on. */
 .facet-marks[data-surface='preview'] .facet-word:not(.facet-word-hidden) {
   overflow-wrap: anywhere;
   white-space: normal;
@@ -237,7 +280,6 @@
 
 /* A glyph is tertiary ink unless its tone says more. */
 .facet-glyph {
-  flex: 0 0 auto;
   color: var(--color-text-tertiary);
 
   .facet-mark[data-tone='info'] & {

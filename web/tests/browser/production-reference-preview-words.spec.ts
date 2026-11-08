@@ -31,9 +31,13 @@ for (const width of [1500, 390]) {
     const cut = await holder.evaluate((word) => ({
       clipped: word.scrollWidth > word.clientWidth + 1,
       ellipsis: getComputedStyle(word).textOverflow,
-      lines: Math.round(
-        word.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(word).lineHeight),
-      ),
+      // Counted by the lines its letters stand on: the word is trimmed to its letters,
+      // so its box is no whole number of lines tall.
+      lines: (() => {
+        const range = document.createRange()
+        range.selectNodeContents(word)
+        return new Set([...range.getClientRects()].map((line) => Math.round(line.top))).size
+      })(),
     }))
     expect(cut.clipped).toBe(false)
     expect(cut.ellipsis).not.toBe('ellipsis')

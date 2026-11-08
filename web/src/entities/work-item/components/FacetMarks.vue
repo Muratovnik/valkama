@@ -2,8 +2,9 @@
 /**
  * A run of a work item's marks, for a surface that holds a few of them: the
  * registry's answer for this item and this surface, drawn by `drawMarks`. A
- * host picks which facets go in this run — a tile puts priority and kind before
- * its reference and the exceptions after it — and the rest is not its decision.
+ * host picks which facets go in this run, and the rest is not its decision: not
+ * their order, and not where the item's number stands. Given the number as its
+ * slot, the run is the item's head (`drawHead`): the kind, the number, the rest.
  *
  * A run of label chips that must keep one line fits: as many whole chips as
  * the line has room for, then «+N». The room comes from the line's width and
@@ -11,9 +12,9 @@
  * handed to the registry, which still says which chips print and what the
  * count says.
  */
-import { computed, useTemplateRef } from 'vue'
+import { computed, useSlots, useTemplateRef } from 'vue'
 
-import { drawMarks } from '@/entities/work-item/components/drawMarks.ts'
+import { drawHead, drawMarks } from '@/entities/work-item/components/drawMarks.ts'
 import { useLabelFit } from '@/entities/work-item/composables/useLabelRoom.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { FACET_ORDER, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
@@ -59,6 +60,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ filter: [token: WorkFilterToken] }>()
+const slots = useSlots()
 
 const words = useMarkWords()
 
@@ -88,17 +90,19 @@ const marks = computed(() =>
     : surfaceMarks(props.surface, props.item, asked.value, props.facets),
 )
 
-const draw = () =>
-  drawMarks(marks.value, {
+const draw = () => {
+  const run = {
     filter: props.filter,
     filterable: props.filterable,
     fit: props.fit,
     fold: props.fold,
-    onFilter: (token) => emit('filter', token),
+    onFilter: (token: WorkFilterToken) => emit('filter', token),
     surface: props.surface,
     tabbable: props.tabbable,
     words,
-  })
+  }
+  return slots.default ? drawHead(marks.value, run, slots.default()) : drawMarks(marks.value, run)
+}
 </script>
 
 <template>

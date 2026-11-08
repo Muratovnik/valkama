@@ -12,6 +12,8 @@ export const workItemFacetMessages = {
     facet: {
       ready: 'Workable',
       held: 'Assigned',
+      heldBy: 'Held by {holder}',
+      heldStale: 'Held by {holder} — the claim is stale',
       waiting: 'Waiting on {reference}',
       steps: '{done}/{total}',
       moreLabels: '+{count}',
@@ -37,6 +39,8 @@ export const workItemFacetMessages = {
     facet: {
       ready: 'Можно брать',
       held: 'Назначено',
+      heldBy: 'Держит {holder}',
+      heldStale: 'Держит {holder} — захват устарел',
       waiting: 'Ждёт {reference}',
       steps: '{done}/{total}',
       moreLabels: '+{count}',

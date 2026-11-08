@@ -193,8 +193,11 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     list: { form: 'chips', limit: 2, minWidth: 900 },
     card: { form: 'chips' },
   },
+  // A tile says that somebody holds the item, as a glyph whose hover names who and
+  // whether the claim is stale; the name and «Захват устарел» as words were the
+  // longest things on the sheet after its title. The card and the hover card say both.
   holder: {
-    tile: { form: 'glyph-word', openOnly: true },
+    tile: { form: 'glyph', openOnly: true },
     list: { form: 'word', always: true },
     graph: { form: 'glyph-word' },
     card: { form: 'glyph-word', always: true },
@@ -216,10 +219,19 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   },
 }
 
-/** The facets in the order a surface reads them out, lead marks first. */
+/**
+ * The one order every surface reads a work item's marks in: what the item is —
+ * its kind, then its number, which the host draws and `drawHead` places right
+ * after the kind — then how much it asks (priority), where it stands (state,
+ * readiness), its labels, who holds it, its parent and its steps. A host chooses
+ * which facets a run holds and never their order: `surfaceMarks` sorts them by
+ * this list. Surfaces used to order them each their own way — the tile and the
+ * list put the priority before the kind and both before the number, the hover
+ * card the number first, the graph the priority at its foot.
+ */
 export const FACET_ORDER: readonly FacetId[] = [
-  'priority',
   'kind',
+  'priority',
   'state',
   'readiness',
   'labels',
@@ -435,6 +447,14 @@ function readinessMark(value: string, rule: FacetRule, context: FacetContext): F
  */
 function holderText(item: FacetSubject, surface: FacetSurface): FacetText {
   const holder = holderRef(item)
+  // A glyph alone says its words on hover, where a bare name would not say what it is.
+  if (holder && surface === 'tile') {
+    const stale = item.claim_state === 'stale' && !item.state.is_terminal
+    return {
+      key: stale ? 'workItem.facet.heldStale' : 'workItem.facet.heldBy',
+      params: { holder: holderName(holder) },
+    }
+  }
   if (holder && item.state.is_terminal)
     return { key: 'workItem.previousHolder', params: { holder: holderName(holder) } }
   if (holder) return { literal: holderName(holder) }
@@ -573,12 +593,17 @@ export function leadMarks(
     .map((mark) => ({ ...mark, form: 'glyph' }))
 }
 
-/** Every mark a surface prints for an item, facet by facet in reading order. */
+/**
+ * Every mark a surface prints for an item from the facets it asks for, in the one
+ * reading order (`FACET_ORDER`) whatever order they were asked in.
+ */
 export function surfaceMarks(
   surface: FacetSurface,
   item: FacetSubject,
   context: FacetContext = {},
   facets: readonly FacetId[] = FACET_ORDER,
 ): FacetMark[] {
-  return facets.flatMap((facet) => facetMarks(facet, surface, item, context))
+  return FACET_ORDER.filter((facet) => facets.includes(facet)).flatMap((facet) =>
+    facetMarks(facet, surface, item, context),
+  )
 }

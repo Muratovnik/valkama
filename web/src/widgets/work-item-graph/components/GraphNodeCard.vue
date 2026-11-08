@@ -17,7 +17,7 @@ import { useLiveWord } from '@/widgets/work-item-graph/composables/useGraphMotio
 import type { LiveWork, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
-import { holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { holderRef } from '@/entities/work-item/utils/facets.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -98,12 +98,14 @@ const ownerLabel = computed(() =>
  */
 const holder = computed(() => holderRef(node))
 
-/** The kind leads; high or urgent waits at the foot, as a second glyph on line one cut the state short. */
-const KIND = ['kind'] as const
+/**
+ * The head reads as every surface reads an item: the kind, the reference, high or
+ * urgent, then the state or what stands in its place, which gives way first when
+ * the line is full. High and urgent used to wait at the card's foot, the one
+ * surface that put the priority after the holder.
+ */
+const HEAD = ['kind', 'priority'] as const
 const STATE = ['state', 'readiness'] as const
-const PRIORITY = ['priority'] as const
-const asksAttention = computed(() => printsFacet('priority', 'graph', node))
-const leadsKind = computed(() => printsFacet('kind', 'graph', node))
 
 /** The field's one Tab stop takes Tab; the arrows reach the rest. */
 const tabIndex = computed(() => (tabbable ? 0 : -1))
@@ -178,18 +180,18 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
       <span class="flow-node-line">
         <span class="flow-node-meta">
           <FacetMarks
-            v-if="leadsKind"
+            class="flow-node-head"
             surface="graph"
             :item="node"
-            :facets="KIND"
-            lead
-          />
-          <span class="flow-node-id">{{ node.reference }}</span>
-          <span
-            v-if="root"
-            class="flow-node-root"
-            >{{ t('graph.rootMark') }}</span
+            :facets="HEAD"
           >
+            <span class="flow-node-id">{{ node.reference }}</span>
+            <span
+              v-if="root"
+              class="flow-node-root"
+              >{{ t('graph.rootMark') }}</span
+            >
+          </FacetMarks>
           <FacetMarks
             class="flow-node-state"
             surface="graph"
@@ -211,7 +213,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         :title="node.title"
       />
       <span
-        v-if="holder || asksAttention || live"
+        v-if="holder || live"
         class="flow-node-owner"
       >
         <template v-if="holder">
@@ -226,12 +228,6 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
           v-if="live"
           :live="live"
           :still="still"
-        />
-        <FacetMarks
-          class="flow-node-priority"
-          surface="graph"
-          :item="node"
-          :facets="PRIORITY"
         />
       </span>
     </template>
@@ -351,6 +347,14 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
   overflow: hidden;
 }
 
+/* The kind, the reference and high or urgent keep their room; the state gives way. */
+.flow-node-head {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  column-gap: var(--space-2);
+}
+
 .flow-node-id {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
@@ -366,16 +370,10 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
   color: var(--color-text-muted);
 }
 
-/* Who holds it, and at the far end a priority that asks for attention. Beside
-   live work the row drops «Claimed by»: the live word already says a session is
-   at the item, and the word, the name and the priority have one line of a card
-   between them. Only the name gives way, so whatever the four words, some of it
-   stays; the accessible name keeps the label and the whole name. */
-.flow-node-priority {
-  flex: 0 0 auto;
-  margin-inline-start: auto;
-}
-
+/* Who holds it. Beside live work the row drops «Claimed by»: the live word already
+   says a session is at the item, and the word and the name have one line of a card
+   between them. Only the name gives way, so whatever the words, some of it stays;
+   the accessible name keeps the label and the whole name. */
 .flow-node-owner {
   display: inline-flex;
   gap: var(--space-1);
