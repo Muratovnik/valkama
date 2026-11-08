@@ -10,10 +10,11 @@
  * `InspectorThread`, which takes the questions as a list and stands them among the
  * comments, so a read of them that failed is said here: not knowing is not none.
  *
- * How many threads there are and how many are still open stand in the heading whichever
- * way the list is filtered (`useThreadFilter`), both counted in threads: a question is one,
- * a reply is part of one. The first number used to count every entry, replies included,
- * beside a second that counted threads, so «11 · 5 unresolved» compared two units.
+ * The heading counts what the list holds, one for each entry standing at its top level: a
+ * question is one, a reply is part of the entry it answers. It is a bare number, as every
+ * section of the card counts. It used to say «20 threads · 18 unresolved»: «thread» named
+ * nothing the reader could see when no entry had a reply, and the unresolved count stood
+ * again on the filter right under it, which keeps saying it whichever way it is set.
  *
  * A person writes comments here, in the shared markdown editor. Work reports are
  * how agents write, through their tools, and the thread shows them. The form
@@ -102,13 +103,7 @@ const {
   filter: threadFilter,
   options: filterOptions,
 } = useThreadFilter(() => threadGroups(props.item.comments, props.questions))
-const headingCount = computed(() => {
-  const { threads, unresolved: open } = counts.value
-  if (!threads) return ''
-  return open
-    ? `${t('threads.threadCount', threads)} · ${t('threads.unresolvedCount', open)}`
-    : threads
-})
+const headingCount = computed(() => counts.value.threads || '')
 
 const suggest = workItemSuggest(
   () => props.item.planning_space_id,

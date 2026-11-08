@@ -9,6 +9,7 @@ import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -153,12 +154,11 @@ function cancel() {
       :text="item.description"
       :lines="12"
     />
-    <p
+    <DataEmptyState
       v-else
-      class="description-copy empty"
-    >
-      {{ t('workItem.noDescription') }}
-    </p>
+      :title="t('workItem.noDescription')"
+      inline
+    />
   </section>
 </template>
 
@@ -173,9 +173,5 @@ function cancel() {
   margin: 0;
   font: var(--font-editor);
   overflow-wrap: anywhere;
-
-  &.empty {
-    color: var(--color-text-muted);
-  }
 }
 </style>

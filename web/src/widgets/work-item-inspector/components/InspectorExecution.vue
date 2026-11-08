@@ -179,12 +179,11 @@ function evidence(attempt: Execution): string {
     >
       {{ error }}
     </p>
-    <p
+    <DataEmptyState
       v-else-if="!executions.length"
-      class="quiet"
-    >
-      {{ t('execution.none') }}
-    </p>
+      :title="t('execution.none')"
+      compact
+    />
 
     <template v-else>
       <HistoryFilterBar

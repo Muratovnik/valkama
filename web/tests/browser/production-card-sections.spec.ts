@@ -318,7 +318,7 @@ for (const width of [1440, 390]) {
     const { drawer, sections, tabs } = await cardReadDown(page, width, 700)
     await pressWhereItStands(page, sections.nth(1))
     await expect(drawer.locator('.overview')).toBeHidden()
-    const memory = drawer.locator('.memory-source')
+    const memory = drawer.locator('.memory-hint')
     const frames = await framesOfTabs(tabs, async () => {
       await pressWhereItStands(page, sections.nth(2))
       await expect(memory).toContainText('C:/projects/sample/docs')

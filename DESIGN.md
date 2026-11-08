@@ -692,8 +692,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   element nothing else names, else its description when it says more than the name. A
   reference's preview card wins over it. A hint is words; anything with a control in it
   is `InfoTip`.
-- **Empty and error states:** one shared state component explains what is
-  absent, why it matters, and the next valid action when one exists.
+- **Empty and error states:** one shared state component (`DataEmptyState`)
+  explains what is absent, why it matters, and the next valid action when one
+  exists. It stands in the middle of the space the data would fill when a whole
+  panel, tab or column is empty, smaller (`compact`) where that space is small,
+  and as one quiet line at the start of a section (`inline`) when the absence
+  sits among other content, as a section of a card does. A section does not
+  write its own muted paragraph for it.
 - **Icons and badges:** application glyphs come from the central icon owner;
   local SVGs and per-screen badge shapes are prohibited.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
@@ -741,7 +746,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   field's hint stands under the row and is named by `describedby`; inside the
   frame it put the button level with the hint, under what the button acts on. A
   date keeps the platform picker inside that field, because
-  the native control is already localized and keyboard-complete. Six screens
+  the native control is already localized and keyboard-complete. A label passes
+  the pointer to its control, so its box reaches down to the control and the
+  pointer crossing from one to the other never leaves them: across a gap the
+  control's hover went out and came back. Six screens
   had written their own text field and no two agreed on the fill, the hairline
   or the radius; `check:ui-system` rejects a new `<input>` or `<textarea>`
   outside the primitive, and lets a checkbox, a radio and the search box
@@ -1397,8 +1405,9 @@ what was written in another thread stays there as a draft the card asks about be
 leaving. A resolved comment or report folds to its mark and the first line of its root, in
 the muted ink and with no sign of success, because the mark says the discussion stopped and
 nothing about whether it went well; it opens with an icon that stays where it is, and it
-stays open while a form is left in it. The heading counts what is unresolved whichever way
-the view is set. The unresolved view hides marked threads and closed questions and says how
+stays open while a form is left in it. The heading counts the entries at the top of the
+list as a bare number, a reply being part of its entry; the unresolved count stands once,
+on the filter, whichever way the view is set. The unresolved view hides marked threads and closed questions and says how
 many, and a thread marked in that view stays under the reader's hands until the view
 changes, as a question answered does. A reply whose question could not be read stands on
 its own and says so: not knowing what it answers is no reason to hide what it says.

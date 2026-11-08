@@ -9,6 +9,7 @@ import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -229,13 +230,11 @@ function close() {
       >
         {{ searchError }}
       </p>
-      <p
+      <DataEmptyState
         v-else-if="hasQuery && !eligible.length"
-        class="picker-note"
-        role="status"
-      >
-        {{ t('workItem.related.noResults') }}
-      </p>
+        :title="t('workItem.related.noResults')"
+        inline
+      />
       <ul
         v-if="eligible.length"
         class="picker-results"

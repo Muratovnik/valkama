@@ -221,3 +221,33 @@ for (const width of [390, 1440]) {
     expect(hintBox?.y ?? 0).toBeGreaterThanOrEqual((field?.y ?? 0) + (field?.height ?? 0))
   })
 }
+
+test('a field stays hovered while the pointer moves from its label down to it', async ({
+  page,
+}) => {
+  // A label passes the pointer to its control. The row gap between them used to be
+  // neither, so the field's edge went out on the way down and came back.
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await installBackend(page)
+  await openCard(page)
+  const drawer = page.locator('.drawer')
+  await drawer
+    .locator('.drawer-frame-tabs')
+    .getByRole('tab', { name: /Memory/iu })
+    .click()
+  const input = drawer.locator('.memory-form').getByRole('textbox')
+  const label = drawer.locator('.memory-form .field-label')
+  const words = await label.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    return range.getBoundingClientRect().bottom
+  })
+  const box = (await input.boundingBox()) ?? { x: Number.NaN, y: Number.NaN }
+  const x = box.x + 12
+  const hovered = () => input.evaluate((node) => node.matches(':hover'))
+  expect(box.y - words).toBeGreaterThan(4)
+  for (const y of [words - 4, (words + box.y) / 2, box.y + 4]) {
+    await page.mouse.move(x, y)
+    expect(await hovered(), `at ${y.toFixed(1)}px`).toBe(true)
+  }
+})

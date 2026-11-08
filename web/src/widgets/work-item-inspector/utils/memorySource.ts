@@ -62,3 +62,20 @@ export function provideMemorySource(projectId: () => string) {
 export function useMemorySource(projectId: () => string) {
   return inject(MEMORY_SOURCE, null) ?? readMemorySource(projectId)
 }
+
+/** The reasons the server gives for a project it cannot search, by the code it sends. */
+const GAP_CODES = new Set(['knowledge_root_absent', 'project_unmapped', 'project_unregistered'])
+
+/**
+ * Why a project's documents cannot be searched, in the reader's language. The server's code
+ * decides; its sentence is English and stands only for a code this view does not know.
+ */
+export function memorySourceGap(
+  t: (key: string) => string,
+  code: string | undefined,
+  reason: { message: string } | null | undefined,
+) {
+  return code && GAP_CODES.has(code)
+    ? t(`memory.gap.${code}`)
+    : reason?.message || t('memory.unavailable')
+}

@@ -12,6 +12,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import { sourceDocument } from '@/shared/lib/textReferences.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
@@ -189,12 +190,11 @@ function when(value: string): string {
           </li>
         </ul>
       </section>
-      <p
+      <DataEmptyState
         v-if="!groups.length"
-        class="quiet"
-      >
-        {{ t('workItem.noLinks') }}
-      </p>
+        :title="t('workItem.noLinks')"
+        inline
+      />
       <RelatedWorkPicker
         :key="item.work_item_id"
         initial-kind="relates-to"
@@ -213,7 +213,6 @@ function when(value: string): string {
         :title="t('workItem.refs')"
         :count="item.refs.length || ''"
       />
-      <p class="quiet">{{ t('workItem.refsIntro') }}</p>
       <ul
         v-if="item.refs.length || item.source"
         class="ref-list"
@@ -251,12 +250,12 @@ function when(value: string): string {
           }}</span>
         </li>
       </ul>
-      <p
+      <DataEmptyState
         v-else
-        class="quiet"
-      >
-        {{ t('workItem.noRefs') }}
-      </p>
+        :title="t('workItem.noRefs')"
+        :description="t('workItem.refsIntro')"
+        inline
+      />
     </section>
   </div>
 </template>
@@ -269,12 +268,6 @@ function when(value: string): string {
 .relation-section {
   display: grid;
   gap: var(--space-heading-content);
-}
-
-.quiet {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 /* A group is a caption over its rows, and the rows hang directly under it:
