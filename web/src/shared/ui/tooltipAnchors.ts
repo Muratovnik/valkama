@@ -3,9 +3,10 @@
  * of the window (`TooltipHost`). It takes the place of the `title` attribute, which the
  * browser draws in its own font and colours, late, and never when the text is cut short.
  *
- * The directive files the text against the element and marks it, and nothing more: no
- * wrapper, no listener, no popup per element. `TooltipHost` finds the marked element under
- * the pointer or the focus from listeners of its own, as `ReferencePreview` does.
+ * The directive files the text against the element and marks it with the words, as
+ * `data-tooltip`, and nothing more: no wrapper, no listener, no popup per element.
+ * `TooltipHost` finds the marked element under the pointer or the focus from listeners of
+ * its own, as `ReferencePreview` does.
  *
  *     <button v-tooltip="t('refresh.title')">              always, above
  *     <a v-tooltip:right.clipped="name">{{ name }}</a>     only while its text is cut, at the right
@@ -141,7 +142,7 @@ function file(
       describedBy(element).filter((id) => id !== before.describes),
     )
   }
-  element.dataset.tooltip = ''
+  element.dataset.tooltip = text
   // The popup library closes a hint whose pointer, on the hint, stands over another one.
   element.dataset.graceAreaTrigger = ''
   tooltips.set(element, { clipped, describes, names, side, text })

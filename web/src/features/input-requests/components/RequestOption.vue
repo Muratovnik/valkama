@@ -29,6 +29,7 @@ import type { DescriptionView } from '@/features/input-requests/utils/optionDesc
 import type { InputRequestOption } from '@/shared/api/inputRequestModel.ts'
 import LineEnd from '@/shared/ui/LineEnd.vue'
 import RichText from '@/shared/ui/RichText.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -101,11 +102,11 @@ const describedBy = computed(() => {
       class="request-option-end"
     >
       <VButton
+        v-tooltip="toggleLabel"
         class="request-option-toggle"
         variant="text"
         size="compact"
         :tabindex="toggleStop"
-        :title="toggleLabel"
         :aria-expanded="open"
         :aria-label="`${toggleLabel}: ${option.label}`"
         icon

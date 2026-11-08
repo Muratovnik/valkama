@@ -70,7 +70,7 @@ for (const width of [1280, 390] as const) {
       name: 'Comment on the block of questions: Third block',
       exact: true,
     })
-    await expect(press).toHaveAttribute('title', 'Comment on the block of questions')
+    await expect(press).toHaveAttribute('data-tooltip', 'Comment on the block of questions')
     await expect(dialog.locator('.request-foot .request-note-toggle')).toHaveCount(0)
     // The number in the head is the way to the task; no button says it again.
     await expect(head.getByRole('link', { name: /MAIN-264/u })).toBeVisible()
@@ -126,7 +126,7 @@ test('a bar for each question at the start edge goes to it, under the head that 
   await expect(bars).toHaveCount(QUESTIONS.length)
   for (const [index, label] of QUESTIONS.entries()) {
     await expect(bars.nth(index)).toHaveAccessibleName(label)
-    await expect(bars.nth(index)).toHaveAttribute('title', label)
+    await expect(bars.nth(index)).toHaveAttribute('data-tooltip', label)
   }
   await expect(rail.getByRole('group', { name: 'Third block' }).getByRole('button')).toHaveCount(3)
   // In the start inset, left of the words, which stand where the dialog's head's words do.

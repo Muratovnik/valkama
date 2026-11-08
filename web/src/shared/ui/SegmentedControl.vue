@@ -33,6 +33,7 @@
 import { computed } from 'vue'
 
 import type { TabIds } from '@/shared/ui/tabIds.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 // The segment shape stays inline: naming it would have to be exported for the
 // generic component's own declaration, and an export nothing imports is dead
@@ -149,12 +150,12 @@ function move(event: KeyboardEvent) {
       v-for="option in options"
       v-bind="segmentRole(option)"
       :key="option.value"
+      v-tooltip="option.title"
       type="button"
       class="segmented-option"
       :class="{ active: isCurrent(option) }"
       :tabindex="tabStop(option)"
       :disabled="option.disabled"
-      :title="option.title"
       :aria-describedby="option.describedBy"
       @click="select(option)"
       @keydown="move"

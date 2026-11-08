@@ -15,6 +15,7 @@ import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useIns
 import { isEstimated, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const emit = defineEmits<{ details: [] }>()
 
@@ -60,9 +61,9 @@ const explanation = computed(() => {
 <template>
   <button
     v-if="facts.length"
+    v-tooltip="explanation"
     class="usage-line"
     type="button"
-    :title="explanation"
     :aria-description="explanation"
     @click="emit('details')"
   >

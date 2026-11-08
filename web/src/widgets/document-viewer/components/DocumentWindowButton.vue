@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 
 import { documentPageHref } from '@/shared/api/documentPage.ts'
 import type { DocumentPageAddress } from '@/shared/api/documentPage.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -26,9 +27,9 @@ function open() {
 
 <template>
   <VButton
+    v-tooltip="label"
     variant="ghost"
     :aria-label="label"
-    :title="label"
     icon
     @click="open"
   >

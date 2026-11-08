@@ -18,6 +18,7 @@ import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { doneState, workItem } from '../browser/planningFixtures.ts'
+import { hintOf } from '../support/hint.ts'
 import { present } from '../support/present.ts'
 
 vi.mock('@/shared/api/planningApi.ts', () => ({ createWorkItem: vi.fn() }))
@@ -157,7 +158,7 @@ describe('WorkItemComposer priority', () => {
       const wrapper = mountComposer(locale)
       const trigger = wrapper.get(`.choice-trigger[aria-label="${label}"]`)
       // The chosen value starts at medium, the default the model gives.
-      expect(trigger.get('.choice-title').attributes('title'), locale).toBe(options[1]?.[1])
+      expect(hintOf(trigger.get('.choice-title')), locale).toBe(options[1]?.[1])
       await trigger.trigger('keydown', { key: 'Enter' })
       await flushPromises()
       for (const [name, hover] of options) {
@@ -167,7 +168,7 @@ describe('WorkItemComposer priority', () => {
           ),
           `${locale} option ${name}`,
         )
-        expect(option.getAttribute('title'), `${locale} ${name}`).toBe(hover)
+        expect(hintOf(option), `${locale} ${name}`).toBe(hover)
       }
       wrapper.unmount()
     }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 /**
  * One thing that can be done to an entry of a discussion: replying, its mark, changing an
  * answer. An entry is what a reader came for, so what can be done to it recedes. It is an
@@ -21,11 +22,11 @@ defineProps<{
 
 <template>
   <VButton
+    v-tooltip="label"
     class="entry-action"
     variant="ghost"
     size="inline"
     :disabled="disabled"
-    :title="label"
     :aria-label="label"
     icon
   >

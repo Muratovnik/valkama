@@ -13,6 +13,7 @@ import InspectorIdentity from '@/widgets/work-item-inspector/components/Inspecto
 import { messages } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -185,7 +186,7 @@ describe('a note on the identity line', () => {
 
     expect(shown(wrapper)).toEqual({ date: false, kind: false, words: false })
     expect(glyph(wrapper)).toBe('check')
-    expect(wrapper.get('.identity-note').attributes('title')).toBe('Link copied')
+    expect(hintOf(wrapper.get('.identity-note'))).toBe('Link copied')
     expect(note(wrapper).text()).toBe('Link copied')
   })
 })

@@ -11,6 +11,7 @@ import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages
 import { messages } from '@/shared/i18n/index.ts'
 
 import { deferred, getButton, workItemFixture } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 import { present } from '../support/present.ts'
 import { asRoot } from '../support/threads.ts'
 
@@ -65,7 +66,7 @@ describe('checklist-linked comments', () => {
     await wrapper.get('textarea[aria-label="Comment"]').setValue('Existing plain draft')
     // The action names its step, so a row of identical icons stays distinguishable.
     const action = wrapper.get('button[aria-label="Discuss step “Second step”"]')
-    expect(action.attributes('title')).toBe('Discuss step')
+    expect(hintOf(action)).toBe('Discuss step')
     expect(action.element.closest('[role="checkbox"]')).toBeNull()
     expect(action.attributes('type')).toBe('button')
     await action.trigger('click')

@@ -71,7 +71,7 @@ test('a long path gives up its start, at the narrowest the pane stands', async (
   await settled(drawer)
   const path = pane.getByRole('button', { name: `Copy the path ${LONG_PATH}` })
   await expect(path).toBeVisible()
-  await expect(path).toHaveAttribute('title', `Copy the path ${LONG_PATH}`)
+  await expect(path).toHaveAttribute('data-tooltip', `Copy the path ${LONG_PATH}`)
   await inWindow(page, path)
   expect(await path.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
   // Two rows however long the path: the way out beside the title, the actions under it.

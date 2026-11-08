@@ -37,6 +37,7 @@ import { suffixTarget } from '@/shared/lib/textReferences.ts'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import { pageWasTouched } from '@/shared/ui/overlayStack.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -261,9 +262,9 @@ async function copyPath() {
         #start
       >
         <VButton
+          v-tooltip="backTitle"
           variant="ghost"
           :aria-label="backTitle"
-          :title="backTitle"
           icon
           @click="back"
         >
@@ -274,10 +275,10 @@ async function copyPath() {
         <p class="document-where">
           <span class="document-project">{{ project }} ·</span>
           <button
+            v-tooltip="copyTitle"
             class="document-path"
             type="button"
             :aria-label="copyTitle"
-            :title="copyTitle"
             @click="copyPath"
           >
             <bdi>{{ path }}</bdi>
@@ -287,9 +288,9 @@ async function copyPath() {
       <template #actions>
         <VButton
           v-if="canRefresh"
+          v-tooltip="refreshTitle"
           variant="ghost"
           :aria-label="refreshLabel"
-          :title="refreshTitle"
           icon
           @click="refresh"
         >

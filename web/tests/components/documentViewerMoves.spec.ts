@@ -25,6 +25,7 @@ import {
   viewer,
   viewerSuite,
 } from '../support/documentViewer.ts'
+import { hintOf } from '../support/hint.ts'
 
 vi.mock('@/shared/api/documentApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/documentApi.ts')>()),
@@ -180,10 +181,10 @@ describe('moving between documents', () => {
     view.open({ project: 'demo', path: 'docs/plan.md', suffix: '' })
     await flushPromises()
     await nextTick()
-    expect(link()?.title).toBe('Open in VS Code: src/a.ts, line 42')
+    expect(hintOf(link())).toBe('Open in VS Code: src/a.ts, line 42')
     editor.value = 'Cursor'
     await nextTick()
-    expect(link()?.title).toBe('Open in Cursor: src/a.ts, line 42')
+    expect(hintOf(link())).toBe('Open in Cursor: src/a.ts, line 42')
     link()?.click()
     await flushPromises()
     expect(openFile).toHaveBeenCalledWith({
@@ -219,7 +220,7 @@ describe('moving between documents', () => {
 
 const linkTitles = () =>
   [...(surface()?.querySelectorAll<HTMLElement>('.document-text .rich-reference') ?? [])].map(
-    (button) => button.getAttribute('title'),
+    (button) => hintOf(button),
   )
 const CONFIRMED = { status: 'file', project: 'demo', markdown: true }
 

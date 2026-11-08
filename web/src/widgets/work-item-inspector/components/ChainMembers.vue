@@ -34,6 +34,7 @@ import { holderName } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -235,8 +236,8 @@ defineExpose({ restoreView, reveal, view })
             >
               <span class="chain-row-reference">{{ member.reference }}</span>
               <span
+                v-tooltip.clipped="member.title"
                 class="chain-row-title"
-                :title="member.title"
                 >{{ member.title }}</span
               >
               <span
@@ -255,8 +256,8 @@ defineExpose({ restoreView, reveal, view })
               </span>
               <span
                 v-if="holder(group, member)"
+                v-tooltip.clipped="holderTitle(group, member)"
                 class="chain-row-detail chain-row-holder"
-                :title="holderTitle(group, member)"
                 >{{ holder(group, member) }}</span
               >
               <span

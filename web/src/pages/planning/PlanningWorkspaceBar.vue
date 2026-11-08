@@ -42,6 +42,7 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -198,9 +199,9 @@ function removeChip(token: WorkFilterToken) {
       />
       <VButton
         v-if="writable"
+        v-tooltip="t('workItem.create')"
         class="workspace-action"
         variant="primary"
-        :title="t('workItem.create')"
         reach
         @click="emit('create')"
       >

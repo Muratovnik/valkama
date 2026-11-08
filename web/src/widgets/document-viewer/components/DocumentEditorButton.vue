@@ -18,6 +18,7 @@ import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 
 import { opens, useDocumentOpener } from '@/entities/project-document/documentLinks.ts'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -80,10 +81,10 @@ async function press() {
 <template>
   <VButton
     v-if="offered"
+    v-tooltip="title"
     variant="ghost"
     :aria-label="label"
     :aria-busy="busyMark"
-    :title="title"
     icon
     @click="press"
   >

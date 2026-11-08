@@ -317,7 +317,7 @@ test('a window of 1024px keeps the grouping’s word on the row, and its name', 
   const grouping = page.getByRole('button', { name: GROUPING })
   await expect(grouping.locator('.grouping-word')).toBeVisible()
   await expect(grouping.locator('.grouping-glyph')).toBeHidden()
-  await expect(grouping).toHaveAttribute('title', GROUPING)
+  await expect(grouping).toHaveAttribute('data-tooltip', GROUPING)
   const box = await grouping.boundingBox()
   expect(box?.height).toBe(36)
   const field = await page.locator('.filter-box').boundingBox()

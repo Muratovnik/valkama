@@ -22,6 +22,7 @@ import { tokenKey, tokenName } from '@/features/work-filter/filterOptions.ts'
 import type { ValueToken, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -155,20 +156,20 @@ defineExpose({ focusLast })
       <span class="filter-chip-pill">
         <ToggleChip
           v-if="chip.operator"
+          v-tooltip="chip.operator.name"
           class="filter-chip-operator"
           :pressed="chip.operator.pressed"
           :aria-label="chip.operator.name"
-          :title="chip.operator.name"
           @toggle="emit('negate', chip.operator.token)"
         >
           {{ chip.operator.sign }}
         </ToggleChip>
         <button
+          v-tooltip="chip.removeName"
           class="filter-chip"
           type="button"
           :aria-describedby="chip.describedBy"
           :aria-label="chip.removeName"
-          :title="chip.removeName"
           @click="remove(index)"
           @keydown="keydown($event, index)"
         >

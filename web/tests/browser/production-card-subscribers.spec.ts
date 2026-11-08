@@ -123,7 +123,7 @@ for (const locale of ['ru', 'en'] as const)
       const names = line.locator('.card-subscriber')
       // The holder's own spelling: the client, then the start of the session.
       await expect(names).toHaveText(['codex · 019a3c2e-5b7d'])
-      await expect(names.first()).toHaveAttribute('title', ONE_LABEL)
+      await expect(names.first()).toHaveAttribute('data-tooltip', ONE_LABEL)
 
       const block = await box(drawer.locator('.card-facts-block'))
       const [holderWords] = await drawnLines(drawer.locator('.card-holder-label'))
@@ -187,8 +187,8 @@ test('a subscriber is named by its label, and the holder among them by it too', 
     'codex · 019a3c2e-5b7d,',
     'codex agent 3f2a9c4e1b7d6a05 · 0f1e2d3c-4b5a',
   ])
-  await expect(names.first()).toHaveAttribute('title', ONE_LABEL)
-  await expect(names.last()).toHaveAttribute('title', digest)
+  await expect(names.first()).toHaveAttribute('data-tooltip', ONE_LABEL)
+  await expect(names.last()).toHaveAttribute('data-tooltip', digest)
   await expect(drawer.locator('.card-subscribers')).not.toContainText('gemini')
 })
 
@@ -336,7 +336,7 @@ for (const width of [390, 320])
     expect(drawn.cut).toBe(false)
     await expect(long).not.toHaveCSS('text-overflow', 'ellipsis')
     // The whole label, the session's full id with it, is still its title, as the holder's is.
-    await expect(long).toHaveAttribute('title', CODEX_AGENT.label)
+    await expect(long).toHaveAttribute('data-tooltip', CODEX_AGENT.label)
     const short = await nameLayout(drawer.locator('.card-subscriber').last())
     expect(short.lines).toBe(1)
   })

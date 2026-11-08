@@ -20,6 +20,7 @@ import {
 } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const { t } = useI18n()
@@ -153,9 +154,9 @@ const models = computed(() =>
         <li
           v-for="row in kinds"
           :key="row.key"
+          v-tooltip="row.title"
           class="work-usage-row"
           :class="{ 'is-part': row.part, 'is-total': row.total }"
-          :title="row.title"
         >
           <span class="work-usage-name">{{ row.label }}</span>
           <span

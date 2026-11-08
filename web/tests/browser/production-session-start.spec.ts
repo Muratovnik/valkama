@@ -202,12 +202,12 @@ for (const locale of ['en', 'ru'] as const)
     ] as const) {
       const start = author(name)
       await expect(start).toHaveText(whole.slice(0, 13))
-      await expect(start).toHaveAttribute('title', whole)
+      await expect(start).toHaveAttribute('data-tooltip', whole)
       await expect(start).toHaveCSS('font-family', mono)
     }
     // A link only to a session the server knows, which says the whole id as well.
     await expect(author('kolo').getByRole('button')).toHaveAttribute(
-      'title',
+      'data-tooltip',
       new RegExp(KNOWN, 'u'),
     )
     await expect(author('elko').locator('a')).toHaveCount(0)

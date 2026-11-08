@@ -6,6 +6,7 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{
@@ -19,18 +20,18 @@ const { t } = useI18n()
 
 <template>
   <button
+    v-tooltip="t('workItem.head.copyReference', { reference })"
     class="head-reference"
     type="button"
-    :title="t('workItem.head.copyReference', { reference })"
     :aria-label="t('workItem.head.copyReference', { reference })"
     @click="copyReference"
   >
     {{ reference }}
   </button>
   <button
+    v-tooltip="t('workItem.head.copyLink', { reference })"
     class="identity-link"
     type="button"
-    :title="t('workItem.head.copyLink', { reference })"
     :aria-label="t('workItem.head.copyLink', { reference })"
     @click="copyLink"
   >

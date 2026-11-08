@@ -7,6 +7,7 @@ import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deferred } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 import {
   answerPlans,
   buttonNamed,
@@ -225,9 +226,7 @@ describe('a session long silent', () => {
     answerPlans(silentInBrowser)
     const wrapper = await openPanel()
     expect(
-      wrapper
-        .findAll('button.open-action .open-action-mark')
-        .map((mark) => mark.attributes('title')),
+      wrapper.findAll('button.open-action .open-action-mark').map((mark) => hintOf(mark)),
     ).toEqual(['Terminal', 'running'])
     const panel = document.querySelector('[role="dialog"]')?.textContent ?? ''
     expect(panel).toContain('Last sign of it:')

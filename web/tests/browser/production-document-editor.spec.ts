@@ -58,7 +58,7 @@ test.describe('over a card', () => {
     await page.keyboard.press('Tab')
     await expect(editor).toBeFocused()
     await expect(editor).toHaveAttribute(
-      'title',
+      'data-tooltip',
       'Open this file in VS Code at the line you are reading',
     )
     await page.keyboard.press('Enter')

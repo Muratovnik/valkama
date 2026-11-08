@@ -116,7 +116,7 @@ async function expectIcons(actions: Locator, where: string) {
       glyphs: node.querySelectorAll('svg').length,
       label: node.getAttribute('aria-label') ?? '',
       opacity: getComputedStyle(node).opacity,
-      title: node.getAttribute('title') ?? '',
+      title: (node as HTMLElement).dataset.tooltip ?? '',
       words: node.textContent?.trim() ?? '',
     }))
     expect(look.words, `${where}: words on a press`).toBe('')

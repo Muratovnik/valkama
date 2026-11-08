@@ -36,6 +36,7 @@ import type { SessionFamily } from '@/shared/lib/settings.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
 import InfoTip from '@/shared/ui/InfoTip.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -116,15 +117,11 @@ const view = computed(() =>
   }),
 )
 const spoken = computed(() => openName(t, view.value, { action: props.action, name: props.name }))
-/** The name says where it opens and whether a setting chose that; that it runs it does not. */
-const tooltip = computed(() =>
-  [spoken.value, view.value.state, view.value.hint, props.detail].filter(Boolean).join('\n'),
-)
-const description = computed(() =>
-  [view.value.state, view.value.hint, props.detail].filter(Boolean).join('\n'),
-)
 /** Nothing to press, so nothing to name it by: why, and who it is. */
 const standing = computed(() => [view.value.hint, props.detail].filter(Boolean).join('\n'))
+const description = computed(() => [view.value.state, standing.value].filter(Boolean).join('\n'))
+/** The name says where it opens and whether a setting chose that; that it runs it does not. */
+const tooltip = computed(() => [spoken.value, description.value].filter(Boolean).join('\n'))
 /**
  * A program this computer lacks, which the surface says once: the row then says only who
  * it is, or what a press would have done, and its mark says why.
@@ -221,11 +218,11 @@ function finished(outcome: Outcome) {
   >
     <VButton
       v-if="view.pressable"
+      v-tooltip="tooltip"
       class="open-action"
       :class="{ named: !nameWhole }"
       :variant="variant"
       :size="size"
-      :title="tooltip"
       :aria-label="spoken"
       :aria-description="description"
       :aria-busy="busyMark"
@@ -244,11 +241,11 @@ function finished(outcome: Outcome) {
           <span
             v-for="mark in marks"
             :key="mark.key"
+            v-tooltip="mark.label"
             class="open-action-mark"
             role="img"
             :class="{ word: mark.word }"
             :aria-label="mark.label"
-            :title="mark.label"
             :data-mark="mark.key"
           >
             <ControlIcon
@@ -274,15 +271,16 @@ function finished(outcome: Outcome) {
         </span>
       </span>
     </VButton>
+    <!-- The words carry the hint, not the line: the why is a control of its own. -->
     <span
       v-else
       class="open-action-still"
       :class="{ 'named': !nameWhole, 'text-inset': textInset }"
-      :title="standing"
     >
       <span class="open-action-words">
         <span
           v-if="stillName"
+          v-tooltip="standing"
           class="open-action-name"
           :class="{ who: !nameWhole }"
           >{{ stillName }}</span
@@ -291,7 +289,10 @@ function finished(outcome: Outcome) {
         <span
           class="open-action-place standing"
           :class="{ bare: marked }"
-          ><template v-if="!marked">{{ markWords }}</template
+          ><span
+            v-if="!marked"
+            v-tooltip="standing"
+            >{{ markWords }}</span
           ><InfoTip
             class="open-action-tip"
             :label="view.hint"

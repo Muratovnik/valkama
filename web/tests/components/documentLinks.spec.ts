@@ -27,6 +27,7 @@ import {
   weak,
   words,
 } from '../support/documentLinks.ts'
+import { hintOf } from '../support/hint.ts'
 
 vi.mock('@/shared/api/documentApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/documentApi.ts')>()),
@@ -83,7 +84,7 @@ describe('how few questions a text costs', () => {
     const { wrapper } = underShell(layered(() => nodes.value))
     await flushPromises()
     const button = wrapper.get('.rich-reference')
-    expect(button.attributes('title')).toContain('сервер Valkama не ответил')
+    expect(hintOf(button)).toContain('сервер Valkama не ответил')
     // The failure itself re-renders, and neither that nor the next render starts a storm.
     expect(resolve).toHaveBeenCalledTimes(1)
     nodes.value = [...nodes.value]
@@ -100,7 +101,7 @@ describe('how few questions a text costs', () => {
     nodes.value = [...nodes.value]
     await flushPromises()
     expect(resolve).toHaveBeenCalledTimes(3)
-    expect(wrapper.get('.rich-reference').attributes('title')).toContain('пока не умеет')
+    expect(hintOf(wrapper.get('.rich-reference'))).toContain('пока не умеет')
   })
 
   it('remembers a request the server itself refused, which would only be refused again', async () => {
@@ -111,7 +112,7 @@ describe('how few questions a text costs', () => {
     nodes.value = [...nodes.value]
     await flushPromises()
     expect(resolve).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('.rich-reference').attributes('title')).toContain('не открывает')
+    expect(hintOf(wrapper.get('.rich-reference'))).toContain('не открывает')
   })
 
   it('in a space with no root asks once, then copies a relative path and resolves an absolute one', async () => {
@@ -131,9 +132,9 @@ describe('how few questions a text costs', () => {
     expect(resolve).toHaveBeenCalledTimes(2)
     expect(resolve.mock.calls[1]?.[1]).toEqual(['C:/work/x.md'])
     const buttons = wrapper.findAll('.rich-reference')
-    expect(buttons[0]?.attributes('title')).toContain('у пространства нет корня проекта')
+    expect(hintOf(buttons[0])).toContain('у пространства нет корня проекта')
     expect(wrapper.find('code.rich-code').text()).toBe('web/src')
-    expect(buttons.at(-1)?.attributes('title')).not.toContain('нет корня')
+    expect(hintOf(buttons.at(-1))).not.toContain('нет корня')
   })
 
   it('with no space at all asks only about what needs no root', async () => {
@@ -141,7 +142,7 @@ describe('how few questions a text costs', () => {
     const { wrapper } = underShell(layered(() => [strong('docs/a.md'), strong('~/x.md')], {}))
     await flushPromises()
     expect(resolve.mock.calls.flatMap(([, paths]) => paths)).toEqual(['~/x.md'])
-    expect(wrapper.findAll('.rich-reference')[0]?.attributes('title')).toContain('нет корня')
+    expect(hintOf(wrapper.findAll('.rich-reference')[0])).toContain('нет корня')
   })
 
   it('never sends a network path, and copies it', async () => {
@@ -150,7 +151,7 @@ describe('how few questions a text costs', () => {
     await flushPromises()
     expect(resolve).not.toHaveBeenCalled()
     const button = wrapper.get('.rich-reference')
-    expect(button.attributes('title')).toContain('сетевой путь')
+    expect(hintOf(button)).toContain('сетевой путь')
     await button.trigger('click')
     await flushPromises()
     expect(writeText).toHaveBeenCalledExactlyOnceWith(String.raw`\\server\share\x`)
@@ -176,13 +177,13 @@ describe('what an answer makes of a candidate', () => {
     const { wrapper } = drawn([strong('a/two.md'), strong('a/out.md'), strong('a/gone.md')])
     await flushPromises()
     const buttons = wrapper.findAll('.rich-reference')
-    expect(buttons.map((button) => button.attributes('title'))).toEqual([
+    expect(buttons.map((button) => hintOf(button))).toEqual([
       'Скопировать путь a/two.md — такой путь есть в нескольких проектах',
       'Скопировать путь a/out.md — он вне проектов Valkama',
       'Скопировать путь a/gone.md — такого пути нет',
     ])
     for (const button of buttons) {
-      expect(button.attributes('aria-label')).toBe(button.attributes('title'))
+      expect(button.attributes('aria-label')).toBe(hintOf(button))
       expect(button.classes()).toContain('copies')
     }
   })
@@ -196,7 +197,7 @@ describe('what an answer makes of a candidate', () => {
     await flushPromises()
     const buttons = wrapper.findAll('.rich-reference')
     expect(buttons[0]?.text()).toBe('docs/v1.')
-    expect(buttons[0]?.attributes('title')).toBe('Открыть папку в VS Code: docs/v1.')
+    expect(hintOf(buttons[0])).toBe('Открыть папку в VS Code: docs/v1.')
     // Both exist: the tail is prose, and stands after the control.
     expect(buttons[1]?.text()).toBe('docs/both.md')
     expect(wrapper.text()).toContain('docs/both.md.')
@@ -238,7 +239,7 @@ describe('what an answer makes of a candidate', () => {
       editor: 'Cursor',
     })
     await flushPromises()
-    const titles = wrapper.findAll('.rich-reference').map((b) => b.attributes('title'))
+    const titles = wrapper.findAll('.rich-reference').map((b) => hintOf(b))
     expect(titles).toEqual([
       'Открыть документ в Valkama: docs/a.md',
       'Открыть в Cursor: src/a.ts, строка 42',

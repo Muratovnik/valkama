@@ -16,6 +16,7 @@ import {
 import { choiceValueCodec, decodeChoiceValue, encodeChoiceValue } from '@/shared/ui/choiceControls'
 import type { ChoiceOption } from '@/shared/ui/choiceControls'
 import ControlIcon from '@/shared/ui/ControlIcon.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -130,9 +131,9 @@ function updateOpen(value: boolean) {
               :selected="selected"
             >
               <strong
+                v-tooltip="selected?.title"
                 class="choice-title"
                 :class="{ placeholder: !selected }"
-                :title="selected?.title"
                 >{{ selected?.label || placeholder }}</strong
               >
               <small
@@ -184,12 +185,12 @@ function updateOpen(value: boolean) {
             <SelectItem
               v-for="option in filtered"
               :key="option.value"
+              v-tooltip="option.title"
               class="choice-option"
               :class="{ 'has-icon': option.icon }"
               :value="optionToken(option.value)"
               :disabled="option.disabled"
               :text-value="`${option.label} ${option.description ?? ''}`"
-              :title="option.title"
             >
               <ControlIcon
                 v-if="option.icon"

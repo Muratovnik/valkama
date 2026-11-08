@@ -305,7 +305,7 @@ test('a header gives its title three lines of the card’s width and keeps the r
   expect(shape.lines).toBe(3)
   expect(shape.width).toBeGreaterThan(200)
   expect(await title.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true)
-  await expect(title).toHaveAttribute('title', LONG_TITLE)
+  await expect(title).toHaveAttribute('data-tooltip', LONG_TITLE)
 })
 
 test('a header with every group in its counts stays whole and clear of its edge', async ({

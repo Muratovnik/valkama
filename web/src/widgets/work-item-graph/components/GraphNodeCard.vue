@@ -24,6 +24,7 @@ import { holderName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const {
   node,
@@ -144,6 +145,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
     :connectable="false"
   />
   <button
+    v-tooltip="blockTitle"
     class="flow-node-card nopan"
     type="button"
     :data-tone="statePresentation('work-item-node-marker', markerState).tone"
@@ -157,7 +159,6 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
       marked,
     }"
     :aria-label="accessibleName"
-    :title="blockTitle"
     :data-walk-target="node.work_item_id"
     :tabindex="tabIndex"
     @focus="emit('focus', node.work_item_id)"
@@ -202,15 +203,15 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         </span>
         <span
           v-if="parentReference"
+          v-tooltip="`${t('workItem.parent')} ${parentReference}`"
           class="flow-node-epic"
-          :title="`${t('workItem.parent')} ${parentReference}`"
           >{{ parentReference }}</span
         >
       </span>
       <span
         v-slash-breaks="node.title"
+        v-tooltip.clipped="node.title"
         class="flow-node-title"
-        :title="node.title"
       />
       <span
         v-if="holder || live"

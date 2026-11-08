@@ -14,6 +14,7 @@ import type { LiveWork, PlacedNode } from '@/widgets/work-item-graph/utils/graph
 import { i18n } from '@/shared/i18n/index.ts'
 
 import { boardItem } from '../fixtures/board.ts'
+import { hintOf } from '../support/hint.ts'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -104,7 +105,7 @@ describe('a card with live work', () => {
     expect(wrapper.find('.work-dots').exists()).toBe(false)
     const button = wrapper.get('.flow-node-card')
     expect(button.attributes('aria-label')).toContain('working')
-    expect(button.attributes('title')).toContain('working')
+    expect(hintOf(button)).toContain('working')
   })
 })
 

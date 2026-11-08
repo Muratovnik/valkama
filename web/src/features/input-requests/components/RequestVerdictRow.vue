@@ -46,6 +46,7 @@ import LineEnd from '@/shared/ui/LineEnd.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -212,11 +213,11 @@ defineExpose({ focus })
         class="request-point-end request-point-toggles"
       >
         <VButton
+          v-tooltip="toggleLabel"
           class="request-point-toggle"
           variant="text"
           size="compact"
           :tabindex="toggleStop"
-          :title="toggleLabel"
           :aria-controls="detailShown"
           :aria-expanded="open"
           :aria-label="`${toggleLabel}: ${name}`"
@@ -242,12 +243,12 @@ defineExpose({ focus })
       />
       <LineEnd class="request-point-end request-point-tools reach-grow">
         <VButton
+          v-tooltip="t('requests.ownVariant')"
           class="request-point-own"
           variant="text"
           size="inline"
           :class="{ 'is-chosen': ownChosen }"
           :disabled="disabled"
-          :title="t('requests.ownVariant')"
           :aria-expanded="ownChosen"
           :aria-label="t('requests.review.ownOption', { field: name })"
           icon

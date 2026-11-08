@@ -67,5 +67,5 @@ test('its facts are hidden from assistive technology, and only its controls have
   await expect(previews).toHaveCount(STATES.length)
   for (const title of await page.locator('.work-item-preview .preview-title').all())
     await expect(title).toHaveAttribute('aria-hidden', 'true')
-  await expect(page.locator('.preview-harness [title]:not(button)')).toHaveCount(0)
+  await expect(page.locator('.preview-harness [data-tooltip]:not(button)')).toHaveCount(0)
 })

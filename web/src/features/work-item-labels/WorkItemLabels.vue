@@ -19,6 +19,7 @@ import LabelChip from '@/entities/work-item/components/LabelChip.vue'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -155,10 +156,10 @@ watch(
       <VButton
         v-else
         ref="plus"
+        v-tooltip="t('workItem.head.addLabel')"
         variant="ghost"
         size="inline"
         :aria-label="t('workItem.head.addLabel')"
-        :title="t('workItem.head.addLabel')"
         icon
         @click="openField"
       >

@@ -14,6 +14,7 @@ import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 import { messages } from '@/shared/i18n/index.ts'
 import { DEFAULT_SETTINGS } from '@/shared/lib/settings.ts'
 
+import { hintOf } from '../support/hint.ts'
 import {
   answerPlans,
   desktop,
@@ -42,14 +43,14 @@ function read(wrapper: ReturnType<typeof mountAction>) {
   const button = wrapper.get('button.open-action')
   const marks = button.findAll('.open-action-mark').map((mark) => {
     expect(mark.attributes('role')).toBe('img')
-    expect(mark.attributes('title')).toBe(mark.attributes('aria-label'))
+    expect(hintOf(mark)).toBe(mark.attributes('aria-label'))
     return mark.attributes('aria-label')
   })
   return {
     name: button.attributes('aria-label'),
     shown: [button.get('.open-action-name').text(), marks.join(' · ')].filter(Boolean).join(' '),
     glyphs: button.findAll('.open-action-mark').map((mark) => mark.attributes('data-mark')),
-    title: button.attributes('title'),
+    title: hintOf(button),
   }
 }
 
@@ -197,7 +198,7 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(wrapper.find('button.open-action').exists()).toBe(false)
     expect(wrapper.text()).toContain('No window · running')
-    expect(wrapper.get('.open-action-still').attributes('title')).toContain(
+    expect(hintOf(wrapper.get('.open-action-still [data-tooltip]'))).toContain(
       'it is stopped from its attempt',
     )
     wrapper.unmount()
@@ -209,7 +210,7 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(wrapper.find('button.open-action').exists()).toBe(false)
     expect(wrapper.get('.open-action-still .open-action-place').text()).toBe('session gone')
-    const why = wrapper.get('.open-action-still').attributes('title')
+    const why = hintOf(wrapper.get('.open-action-still [data-tooltip]'))
     expect(why).toContain('The client no longer has this session.')
     expect(why).toContain('A copy is kept in Valkama.')
     wrapper.unmount()
@@ -281,8 +282,8 @@ describe('what stands before any press', () => {
     await flushPromises()
     const button = wrapper.get('button.open-action')
     expect(button.get('.open-action-name').text()).toBe('claude · 6f1c2a8e-0000')
-    expect(button.attributes('title')).toContain(holder)
-    expect(button.attributes('title')).toContain('Responsible')
+    expect(hintOf(button)).toContain(holder)
+    expect(hintOf(button)).toContain('Responsible')
   })
 })
 

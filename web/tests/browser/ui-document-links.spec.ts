@@ -100,7 +100,10 @@ test.describe('a path as a control', () => {
     page,
   }) => {
     const run = await open(page)
-    await expect(control(page, 'C:/work/probe')).toHaveAttribute('title', /вне проектов Valkama/)
+    await expect(control(page, 'C:/work/probe')).toHaveAttribute(
+      'data-tooltip',
+      /вне проектов Valkama/,
+    )
     await tabTo(page, 'C:/work/probe')
     await page.keyboard.press('Enter')
     await expect(page.locator('[role="status"]')).toHaveText('Путь скопирован')
@@ -161,7 +164,7 @@ test.describe('a path as a control', () => {
     await page.emulateMedia({ forcedColors: 'active' })
     await open(page)
     const copying = control(page, 'C:/work/probe')
-    await expect(copying).toHaveAttribute('title', /вне проектов/)
+    await expect(copying).toHaveAttribute('data-tooltip', /вне проектов/)
     const line = (name: string) =>
       control(page, name).evaluate((node) => {
         const style = getComputedStyle(node)

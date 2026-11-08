@@ -64,9 +64,14 @@ function close(restoreFocus = false) {
   if (restoreFocus) anchor.value?.focus()
 }
 
-/** Escape closes an open panel and returns focus to the control that opened it. */
-function dismiss() {
-  if (isOpen.value) close(true)
+/**
+ * Escape closes an open panel and returns focus to the control that opened it. A closed one
+ * lets the key go on to the dialog or panel around it.
+ */
+function dismiss(event: KeyboardEvent) {
+  if (!isOpen.value) return
+  event.stopPropagation()
+  close(true)
 }
 
 /** Focus leaving both the control and its panel closes the panel. */
@@ -119,7 +124,7 @@ defineExpose({ close })
     ref="root"
     class="info-tip"
     @focusout="closeWhenFocusLeaves"
-    @keydown.esc.stop="dismiss"
+    @keydown.esc="dismiss"
   >
     <slot
       name="trigger"
@@ -152,7 +157,7 @@ defineExpose({ close })
         :aria-label="panelName"
         :style="panelStyle"
         @focusout="closeWhenFocusLeaves"
-        @keydown.esc.stop="dismiss"
+        @keydown.esc="dismiss"
       >
         <slot />
       </div>

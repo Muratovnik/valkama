@@ -59,6 +59,7 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { optionGroupItemId } from '@/shared/ui/choiceControls.ts'
 import OptionGroups from '@/shared/ui/OptionGroups.vue'
 import { isStrayPress } from '@/shared/ui/strayPress.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -459,10 +460,10 @@ defineExpose({ focus: focusText })
       />
       <VButton
         v-if="filter.text"
+        v-tooltip="t('workItem.filter.clearText')"
         size="inline"
         variant="ghost"
         :aria-label="t('workItem.filter.clearText')"
-        :title="t('workItem.filter.clearText')"
         icon
         @click="clearText"
         ><VIcon

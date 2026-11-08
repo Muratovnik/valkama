@@ -168,7 +168,7 @@ describe('WorkItemPreview', () => {
     for (const mark of marks) expect(mark.element.closest('[aria-hidden="true"]')).not.toBeNull()
     expect(wrapper.get('.head-reference').element.closest('[aria-hidden]')).toBeNull()
     expect(wrapper.attributes('aria-hidden')).toBeUndefined()
-    expect(wrapper.findAll('[title]').map((node) => node.element.tagName)).toEqual([
+    expect(wrapper.findAll('[data-tooltip]').map((node) => node.element.tagName)).toEqual([
       'BUTTON',
       'BUTTON',
     ])

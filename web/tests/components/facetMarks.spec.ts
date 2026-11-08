@@ -15,6 +15,7 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { boardItem } from '../fixtures/board.ts'
+import { hintOf } from '../support/hint.ts'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -47,7 +48,7 @@ describe('FacetMarks', () => {
     // The word is in the DOM, visually hidden, and the hover text says it too.
     expect(priority.get('.facet-word').text()).toBe('Urgent')
     expect(priority.get('.facet-word').classes()).toContain('facet-word-hidden')
-    expect(priority.attributes('title')).toBe('Urgent — blocks work or loses data')
+    expect(hintOf(priority)).toBe('Urgent — blocks work or loses data')
     expect(priority.find('svg').exists()).toBe(true)
     expect(wrapper.get('[data-facet="kind"] .facet-word').text()).toBe('Bug')
   })
@@ -69,7 +70,7 @@ describe('FacetMarks', () => {
         { item: boardItem(1, 'backlog', { priority }), surface: 'card', facets: ['priority'] },
         locale,
       ).get('[data-facet="priority"]')
-      expect(mark.attributes('title'), `${locale} ${priority}`).toBe(hover)
+      expect(hintOf(mark), `${locale} ${priority}`).toBe(hover)
     }
   })
 
@@ -119,7 +120,7 @@ describe('FacetMarks', () => {
       expect(mark.find('svg').exists()).toBe(true)
       // Heard and hovered: the sentence.
       expect(mark.get('.facet-word-hidden').text()).toBe(sentence)
-      expect(mark.attributes('title')).toBe(sentence)
+      expect(hintOf(mark)).toBe(sentence)
     }
   })
 
@@ -129,13 +130,13 @@ describe('FacetMarks', () => {
     const loose = marks({ item, context, surface: 'list', facets: ['readiness'] })
     expect(loose.get('.facet-marks').classes()).not.toContain('fold')
     // Unfolded, a glyph shown with its word needs no hover text.
-    expect(loose.get('[data-facet="readiness"]').attributes('title')).toBeUndefined()
+    expect(hintOf(loose.get('[data-facet="readiness"]'))).toBeUndefined()
     const folded = marks({ item, context, surface: 'list', facets: ['readiness'], fold: true })
     expect(folded.get('.facet-marks').classes()).toContain('fold')
     const mark = folded.get('[data-facet="readiness"]')
     // The word stays in the mark, so a screen reader still reads it out.
     expect(mark.get('.facet-word').text()).toBe('Waiting on MAIN-7')
-    expect(mark.attributes('title')).toBe('Waiting on MAIN-7')
+    expect(hintOf(mark)).toBe('Waiting on MAIN-7')
   })
 
   it('gives the graph one quiet label for workable, the same words the queue uses', () => {
@@ -216,9 +217,7 @@ describe('FacetMarks', () => {
       await glyph.trigger('click')
     }
     // The glyph keeps its word as the pointer's hover text, not a filter's name.
-    expect(wrapper.get('[data-facet="priority"]').attributes('title')).toBe(
-      'High — serious; could block work',
-    )
+    expect(hintOf(wrapper.get('[data-facet="priority"]'))).toBe('High — serious; could block work')
     expect(wrapper.emitted('filter')).toBeUndefined()
     await wrapper.get('.label-chip').trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'ui' }]])

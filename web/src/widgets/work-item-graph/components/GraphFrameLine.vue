@@ -22,6 +22,7 @@ import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const {
@@ -98,8 +99,8 @@ useResizeObserver(
       <span
         v-if="epic"
         ref="name"
+        v-tooltip.clipped="epic.reference"
         class="graph-frame-reference"
-        :title="epic.reference"
         >{{ epic.reference }}</span
       >
       <span

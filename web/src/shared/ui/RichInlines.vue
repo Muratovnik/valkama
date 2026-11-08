@@ -31,6 +31,7 @@ import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
 import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
 import { SLASH_BREAK, slashPieces } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
@@ -160,12 +161,12 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
     ><template v-else-if="linkFor(node.reference)"
       ><a
         v-reference-preview="previewFor(node.reference)"
+        v-tooltip="hoverTitle(node.reference)"
         class="rich-reference"
         :class="{ identifier: isId(node), copies: linkFor(node.reference)?.copies }"
         :href="hrefOf(node.reference)"
         :role="roleOf(node.reference)"
         :tabindex="tabStopOf(node.reference)"
-        :title="hoverTitle(node.reference)"
         :aria-description="describedAs(node.reference)"
         :aria-label="nameOf(node)"
         :aria-busy="busyOf(node.reference)"

@@ -15,6 +15,8 @@ import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
+import { hintOf } from '../support/hint.ts'
+
 const COUNTS = { held: 1, matchedClosed: 0, matchedOpen: 2, open: 2, total: 3 }
 const GROUPING = 'button[aria-label="Group the board by epic"]'
 
@@ -76,7 +78,7 @@ describe('the work bar', () => {
     expect(grouping.classes()).toContain('toggle-chip')
     expect(wrapper.find('[role="switch"]').exists()).toBe(false)
     expect(grouping.attributes('aria-pressed')).toBe('true')
-    expect(grouping.attributes('title')).toBe('Group the board by epic')
+    expect(hintOf(grouping)).toBe('Group the board by epic')
     expect(grouping.text()).toBe('By epic')
     await grouping.trigger('click')
     expect(wrapper.emitted('group')).toEqual([['none']])

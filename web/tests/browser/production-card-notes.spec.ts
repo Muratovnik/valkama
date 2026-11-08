@@ -49,7 +49,7 @@ async function expectNoteWhole(
   await expect(drawer.locator('.card-identity [role="status"]')).toHaveText(sentence)
   const shown = drawer.locator('.card-identity .identity-note')
   await expect(shown).toBeVisible()
-  await expect(shown).toHaveAttribute('title', sentence)
+  await expect(shown).toHaveAttribute('data-tooltip', sentence)
   // A failure keeps a glyph of its own, so it never reads as done.
   const mark = shown.locator('.identity-note-glyph')
   await expect(mark).toBeVisible()

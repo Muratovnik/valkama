@@ -10,6 +10,7 @@
 import { drawChip } from '@/entities/work-item/components/drawMarks.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -48,10 +49,10 @@ const chip = () =>
   >
     <component :is="chip()" />
     <button
+      v-tooltip="removeLabel"
       class="label-chip-remove"
       type="button"
       :aria-label="removeLabel"
-      :title="removeLabel"
       @click.stop="emit('remove', label)"
     >
       <VIcon

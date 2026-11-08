@@ -30,6 +30,7 @@ import { useI18n } from 'vue-i18n'
 import { useEventListener, useMutationObserver, useResizeObserver } from '@vueuse/core'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   /** The panel that scrolls the list. */
@@ -284,10 +285,10 @@ function keep(bar: unknown, block: number, mark: number) {
         v-for="(mark, m) in block.marks"
         :key="m"
         :ref="(bar) => keep(bar, b, m)"
+        v-tooltip="mark.label"
         type="button"
         class="request-rail-bar"
         :class="{ 'is-current': isCurrent(mark) }"
-        :title="mark.label"
         :aria-label="mark.label"
         :aria-current="currentMark(mark)"
         :tabindex="stopOf(mark)"

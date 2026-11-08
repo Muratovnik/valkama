@@ -86,6 +86,7 @@ describe('v-tooltip for assistive technology', () => {
     const span = wrapper.get('span').element
     expect(tooltipOf(link)).toMatchObject({ side: 'right', clipped: true })
     expect(tooltipOf(span)).toMatchObject({ side: 'top', clipped: false, text: 'Why' })
+    expect(span.dataset.tooltip).toBe('Why')
     expect(tooltipAnchorOf(link.querySelector('b'))).toBe(link)
     values.cut.value = true
     values.name.value = ''

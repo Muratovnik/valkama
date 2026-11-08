@@ -55,6 +55,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -317,8 +318,8 @@ useListKeys(root, {
           >
             <component
               :is="word(item, HOLDER)"
+              v-tooltip="holderOf(item)"
               class="list-claim"
-              :title="holderOf(item)"
             />
           </td>
           <td

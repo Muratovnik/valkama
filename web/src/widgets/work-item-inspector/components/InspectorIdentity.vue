@@ -42,6 +42,7 @@ import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCop
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { sourceDocument } from '@/shared/lib/textReferences.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -151,9 +152,9 @@ const updated = computed(() => {
     >
     <button
       v-if="sourceLink && anchorShown"
+      v-tooltip="sourceLink.title"
       class="identity-source"
       type="button"
-      :title="sourceLink.title"
       :aria-label="sourceLink.title"
       :aria-busy="sourceBusy"
       @click="pressSource"

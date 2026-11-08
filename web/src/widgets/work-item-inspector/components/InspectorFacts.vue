@@ -48,6 +48,7 @@ import { holderName } from '@/shared/lib/actor.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -296,12 +297,13 @@ defineExpose({ actionCell })
         </span>
       </div>
     </div>
-    <div
-      class="card-row card-holder"
-      :title="holderTitle"
-    >
+    <div class="card-row card-holder">
       <span class="card-row-label card-holder-label">{{ holderLabel }}</span>
-      <div class="card-row-value card-holder-value">
+      <!-- The hint is the holder's, not the row's: the row's actions are controls of their own. -->
+      <div
+        v-tooltip="holderTitle"
+        class="card-row-value card-holder-value"
+      >
         <ExecutorLink
           v-if="holderExecutor?.session"
           class="card-holder-link"
@@ -357,8 +359,8 @@ defineExpose({ actionCell })
         <span
           v-for="follower in followers"
           :key="follower.label"
+          v-tooltip="follower.label"
           class="card-subscriber"
-          :title="follower.label"
           ><template
             v-for="(word, at) in follower.words"
             :key="at"

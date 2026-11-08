@@ -119,9 +119,9 @@ test('a block carries no sign of its own, and its name and tooltip say the state
   await expect(page.locator('.graph-legend-held')).toHaveCount(0)
   const working = page.locator('.flow-node-card').filter({ hasText: LONGEST[0] })
   await expect(working).toHaveAccessibleName(/ · working$/u)
-  await expect(working).toHaveAttribute('title', /working/u)
+  await expect(working).toHaveAttribute('data-tooltip', /working/u)
   const held = page.locator('.flow-node-card').filter({ hasText: LONGEST[1] })
-  await expect(held).toHaveAttribute('title', /held/u)
+  await expect(held).toHaveAttribute('data-tooltip', /held/u)
 })
 
 test('with the motion stopped, a block keeps the state in its name and the frame its count', async ({
@@ -135,7 +135,7 @@ test('with the motion stopped, a block keeps the state in its name and the frame
   await expect(page.locator('.graph-comet')).toHaveCount(0)
   await expect(page.locator('.graph-frame-working').first()).toContainText('1')
   await expect(page.locator('.flow-node-card').filter({ hasText: LONGEST[0] })).toHaveAttribute(
-    'title',
+    'data-tooltip',
     /working/u,
   )
 })

@@ -32,7 +32,6 @@ const props = withDefaults(
      * two rows tall.
      */
     size?: 'default' | 'compact' | 'inline'
-    title?: string
     type?: 'button' | 'submit'
     variant?: 'primary' | 'secondary' | 'ghost' | 'text' | 'danger'
   }>(),
@@ -40,7 +39,6 @@ const props = withDefaults(
     variant: 'secondary',
     type: 'button',
     disabled: false,
-    title: undefined,
     size: 'default',
     icon: false,
     reach: false,
@@ -57,7 +55,6 @@ const reaching = computed(() => props.reach || (props.icon && props.size !== 'in
     :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon, 'reach': reaching }]"
     :type="type"
     :disabled="disabled"
-    :title="title"
   >
     <slot />
   </button>

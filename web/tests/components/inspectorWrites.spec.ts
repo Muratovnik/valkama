@@ -13,6 +13,7 @@ import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 import { getButton, workItemFixture } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 import {
   choose,
   DONE,
@@ -234,7 +235,7 @@ describe('inspector writes and their refusals', () => {
     const lease = wrapper.get('.card-holder [data-dimension="claim-lease"]')
     expect(lease.attributes('data-state')).toBe('stale')
     expect(lease.attributes('data-tone')).toBe('warning')
-    expect(wrapper.get('.card-holder').attributes('title')).toBe(
+    expect(hintOf(wrapper.get('.card-holder-value'))).toBe(
       'codex\nClaim: Stale — the session behind it is gone',
     )
     expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
@@ -291,9 +292,9 @@ describe('inspector writes and their refusals', () => {
 
     // A live lease is no warning: it is the holder's tooltip, read out with the name.
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
-    const holder = wrapper.get('.card-holder')
+    const holder = wrapper.get('.card-holder-value')
     // The date is the activity format, which this harness's i18n leaves blank.
-    expect(holder.attributes('title')).toMatch(
+    expect(hintOf(holder)).toMatch(
       /^codex\nClaim: Live — until .*, unless the session shows a sign of life$/u,
     )
     expect(holder.text()).toContain('unless the session shows a sign of life')

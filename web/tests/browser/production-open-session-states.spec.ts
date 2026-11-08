@@ -218,7 +218,7 @@ for (const [locale, silent] of [
     page,
   }) => {
     await openCard(page, { clock: '2026-08-13T08:30:00Z', locale })
-    await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
+    await page.locator(`.step-holder button.open-action[data-tooltip*="${CRASHED}"]`).click()
     await expect(page.locator('.open-panel')).toContainText(silent)
   })
 
@@ -256,7 +256,7 @@ for (const [locale, agentSpan, silentSpan] of [
     expect(await linesOf(agent, agentSpan)).toBe(1)
 
     await page.locator('.drawer .inspector-tabs').getByRole('tab').first().click()
-    await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
+    await page.locator(`.step-holder button.open-action[data-tooltip*="${CRASHED}"]`).click()
     const panel = page.locator('.open-panel')
     await expect(panel).toContainText(silentSpan)
     expect(await linesOf(panel, silentSpan)).toBe(1)
