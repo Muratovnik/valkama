@@ -29,6 +29,7 @@ CONTRACT_REVIEW = [
         "options": [],
         "group": "Checks",
         "recommended": "accept",
+        "why": "All fourteen were the same rule.",
         "description": "Fourteen refusals last week were false alarms.",
     },
     {
@@ -67,7 +68,12 @@ CONTRACT_REVIEW = [
         "required": True,
         "under": {"field": "p13", "option": "accept"},
         "options": [
-            {"id": "per_block", "label": "vue/max-lines-per-block", "recommended": True},
+            {
+                "id": "per_block",
+                "label": "vue/max-lines-per-block",
+                "recommended": True,
+                "why": "The rule already exists; no file moves.",
+            },
             {"id": "css_file", "label": "Styles in CSS files"},
             {"id": "split_first", "label": "Split the files first"},
         ],
@@ -384,7 +390,7 @@ class SchemaRefusalTests(ReviewCase):
             (
                 [verdict("p1", colour="red")],
                 "each field requires id, label, type, required and options and may add"
-                " description, group, under and recommended",
+                " description, group, under, recommended and why",
             ),
         ]
         for fields, refusal in cases:

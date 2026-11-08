@@ -150,6 +150,37 @@ describe('input request wire contract', () => {
     expect(validateInputRequestDetail(noted).request.note).toBe('Words')
   })
 
+  it('reads the why of a recommended option and verdict, and refuses a why with no recommendation', () => {
+    const entry = requestEntry()
+    const envelope = { interface_version: 'valkama-planning-requests', ...entry }
+    const keep = { id: 'keep', label: 'Keep', recommended: true, why: 'Nothing to migrate' }
+    const choice = { id: 'route', label: 'Route', type: 'choice', required: true, options: [keep] }
+    const verdict = {
+      id: 'p1',
+      label: 'P1',
+      type: 'verdict',
+      required: false,
+      options: [],
+      recommended: 'accept',
+      why: 'It held',
+    }
+    const asked = (fields: unknown[]) => ({ ...envelope, request: { ...entry.request, fields } })
+    expect(validateInputRequestDetail(asked([choice, verdict])).request.fields).toEqual([
+      choice,
+      verdict,
+    ])
+    const unrecommended = { id: 'keep', label: 'Keep', why: 'Nothing to migrate' }
+    const unadvised = { ...verdict, recommended: undefined }
+    for (const fields of [
+      [{ ...choice, options: [unrecommended] }],
+      [{ ...choice, options: [{ ...keep, recommended: false }] }],
+      [{ ...choice, options: [{ ...keep, why: '' }] }],
+      [unadvised],
+    ]) {
+      expect(() => validateInputRequestDetail(asked(fields))).toThrow()
+    }
+  })
+
   it('refuses malformed targets, duplicate field IDs and contradictory answer states', () => {
     const entry = requestEntry()
     const envelope = { interface_version: 'valkama-planning-requests', ...entry }

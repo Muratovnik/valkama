@@ -994,8 +994,15 @@ these groups, and applies them in this order:
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `comment_work_item` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
-| `summary` | `{done, next, why?, list?}` | `set_work_item_summary` |
+| `summary` | `{done, next, why?, friction?, list?}` | `set_work_item_summary` |
 | `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
+
+A summary or a report is `done` and `next`, with `why` only when the choice is not
+obvious and `friction`, what hindered the work itself: `none` or a line per
+hindrance. Each is text of at most 4000 characters, kept apart in every read, so a
+closing summary's friction stands on its own line instead of ending its `done`. The
+same four keys go to `set_work_item_summary`, `report_work_item` and
+`POST /api/planning/work-item/report`.
 
 Each step is the write its single tool makes, with the same guards, events,
 revision bumps and refusals, so a closing transition is judged after the ticks
@@ -1768,7 +1775,7 @@ Fields have stable IDs and one of five types: `text`, `choice`, `multi_choice`,
 `boolean` or `verdict`. A required boolean can be answered `false`; omission is
 different. There is no implicit permission grant or automatic execution resume.
 
-A field is `{id, label, type, required, options}` and may add four keys:
+A field is `{id, label, type, required, options}` and may add five keys:
 
 | Key | Value | Rule |
 | --- | --- | --- |
@@ -1776,11 +1783,12 @@ A field is `{id, label, type, required, options}` and may add four keys:
 | `group` | text of 1 to 200 characters | the fields of one group stand together, and the interface draws them as one section under that heading |
 | `under` | `{field, option}` | the field is shown and answered only while the answer of `field` holds `option`; see below |
 | `recommended` | `accept`, `later` or `reject` | on a `verdict` only; a `choice` and a `multi_choice` recommend on their options |
+| `why` | markdown of 1 to 8000 characters | beside `recommended` only: why the asker recommends that verdict. The interface shows it where the person points at or focuses the recommendation |
 
 A question holds 1 to 40 fields, a field at most 20 options, and the fields of one
 question fit in 64 KiB as stored; a refusal names the limit. What a field or an
 option was not given it does not say on the way back, and a question written
-without the four keys is what it always was. The published schema of
+without the five keys is what it always was. The published schema of
 `create_work_item_request` names every key, so an agent reads them from the server
 whatever its skill says.
 
@@ -1810,6 +1818,7 @@ Two points of a review, one with its steps and one with its way under `accept`:
 ```json
 [{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
   "options": [], "group": "Checks", "recommended": "accept",
+  "why": "All fourteen were the same rule.",
   "description": "Fourteen refusals last week were false alarms."},
  {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
   "under": {"field": "p4", "option": "accept"},
@@ -1820,7 +1829,8 @@ Two points of a review, one with its steps and one with its way under `accept`:
   "required": false, "options": [], "group": "Web code", "recommended": "accept"},
  {"id": "p13-way", "label": "How", "type": "choice", "required": true,
   "under": {"field": "p13", "option": "accept"},
-  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
+               "why": "The rule already exists; no file moves."},
               {"id": "css_file", "label": "Styles in CSS files"},
               {"id": "split_first", "label": "Split the files first"}]}]
 ```
@@ -1844,9 +1854,11 @@ nothing written:
 | more than one level | `field x: under names y, which stands under z; one level: put it under z` |
 | another group than the parent's | `field p4-steps: a field under p4 stands in p4's group; leave group out` |
 | `recommended` on a field that is no verdict | `field p11: recommended on a field is for a verdict; in a choice put it on the option` |
+| `why` on a field without `recommended` | `field p4: why says why recommended; give recommended or leave why out` |
+| `why` on an option not recommended | `option keep: why says why it is recommended; give recommended: true or leave why out` |
 | a group split by another | `group Checks is split by Web code: fields of one group stand together` |
 | more than 40 fields | `fields must contain between 1 and 40 fields` |
-| a key a field does not take | `each field requires id, label, type, required and options and may add description, group, under and recommended` |
+| a key a field does not take | `each field requires id, label, type, required and options and may add description, group, under, recommended and why` |
 
 A field without a group between two fields of one group splits it as well, and the
 refusal names that field: `group Checks is split by p7, which has no group: fields
@@ -1861,9 +1873,12 @@ of one group stand together`. An answer is refused the same way:
 In the first, the parent reads as its answer: its verdict, its chosen option ids,
 `own variant`, or `unanswered`.
 
-An option is `{id, label, description?, recommended?}` and takes no other key.
+An option is `{id, label, description?, recommended?, why?}` and takes no other key.
 `description` is markdown of 1 to 8000 characters and `recommended` a boolean, true
-on at most one option of a `choice` and on any number of a `multi_choice`.
+on at most one option of a `choice` and on any number of a `multi_choice`. `why` is
+markdown of 1 to 8000 characters on an option whose `recommended` is true, and
+nowhere else: why the asker recommends it. A list under a comment takes the same
+option.
 
 `answer_work_item_request` and `POST /api/modules/planning/request/answer` take
 `answers` and an optional `note` of at most 8000 characters. A comment over an open

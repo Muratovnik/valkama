@@ -6,13 +6,17 @@ import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 const FIELD_ID = /^[a-z][a-z0-9_-]{0,63}$/u
 const text = (max: number) => z.string().max(max)
 const identifier = boundedText(FIELD_ID, 64)
+/** Markdown: why the asker recommends an option or a verdict, read on the recommendation's mark. */
+const why = z.string().min(1).max(8000).optional()
 const optionSchema = strictObject({
   id: identifier,
   label: z.string().min(1).max(200),
   /** Markdown, and it may run to several paragraphs: the widget folds what would crowd the labels. */
   description: z.string().min(1).max(8000).optional(),
   recommended: z.boolean().optional(),
-})
+  /** Only on an option recommended. */
+  why,
+}).refine((option) => option.why === undefined || option.recommended === true, 'Invalid why')
 /** The three words a review's line is answered with; the interface names them in the person's language. */
 export const VERDICTS = ['accept', 'later', 'reject'] as const
 /** The most fields one question holds, and so the most keys an answer's parts can have. */
@@ -32,11 +36,14 @@ const fieldSchema = strictObject({
   under: strictObject({ field: identifier, option: identifier }).optional(),
   /** What a verdict's draft is filled with; a choice recommends on its options. */
   recommended: z.enum(VERDICTS).optional(),
+  /** Only beside `recommended`. */
+  why,
 }).refine((field) => {
   const choice = field.type === 'choice' || field.type === 'multi_choice'
   return (
     (choice ? field.options.length > 0 : field.options.length === 0) &&
     (field.recommended === undefined || field.type === 'verdict') &&
+    (field.why === undefined || field.recommended !== undefined) &&
     new Set(field.options.map((option) => option.id)).size === field.options.length
   )
 }, 'Invalid field options')

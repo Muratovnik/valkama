@@ -143,6 +143,20 @@ _RESOLUTION = {
     " declined. Leave it out when the thread says it. Not together with reopen.",
 }
 _REOPEN = {"type": "boolean", "description": "true removes the mark. Not together with resolution."}
+#: Why the asker recommends an option or a verdict, which the owner reads on the mark.
+_WHY = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": request_model.MAX_OPTION_DESCRIPTION,
+    "description": "Markdown: why you recommend it, shown where the owner points at the"
+    " recommendation. Give it whenever you recommend; taken only beside recommended.",
+}
+#: What got in the way of the work, kept apart from what the work did.
+_FRICTION = {
+    "type": "string",
+    "description": "What hindered the work itself: none, or one line per hindrance. A"
+    " closing summary ends its friction here, not in done, next or why.",
+}
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
 _LIST = {
@@ -163,6 +177,7 @@ _LIST = {
                     "label": _STR,
                     "description": _STR,
                     "recommended": _BOOL,
+                    "why": _WHY,
                 },
                 "required": ["id", "label"],
             },
@@ -680,7 +695,7 @@ TOOLS = [
             "id": _REFERENCE,
             "summary": {
                 "type": "object",
-                "properties": {"done": _STR, "next": _STR, "why": _STR},
+                "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
                 "required": ["done", "next"],
             },
             "list": _LIST,
@@ -700,7 +715,7 @@ TOOLS = [
             "id": _REFERENCE,
             "report": {
                 "type": "object",
-                "properties": {"done": _STR, "next": _STR, "why": _STR},
+                "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
                 "required": ["done", "next"],
             },
             "make_current": _BOOL,
@@ -926,7 +941,13 @@ TOOLS = [
             },
             "summary": {
                 "type": "object",
-                "properties": {"done": _STR, "next": _STR, "why": _STR, "list": _LIST},
+                "properties": {
+                    "done": _STR,
+                    "next": _STR,
+                    "why": _STR,
+                    "friction": _FRICTION,
+                    "list": _LIST,
+                },
                 "required": ["done", "next"],
             },
             "transition": {
@@ -999,6 +1020,7 @@ _REQUEST_FIELD = {
             "description": "On a verdict only: what the asker recommends. A choice or"
             " multi_choice recommends on its options.",
         },
+        "why": _WHY,
         "options": {
             "type": "array",
             "maxItems": 20,
@@ -1018,6 +1040,7 @@ _REQUEST_FIELD = {
                         "description": "The option the asker recommends. At most one in a"
                         " choice field; any number in a multi_choice field.",
                     },
+                    "why": _WHY,
                 },
                 "required": ["id", "label"],
             },
