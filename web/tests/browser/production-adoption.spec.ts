@@ -179,7 +179,7 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await expect(answered).toBeFocused()
   await expect(answered).toHaveCSS('outline-style', 'solid')
   await expect(
-    dialog.getByText('Waiting for an answer: 0 — the questions below have closed.'),
+    dialog.getByText('Waiting for an answer: 0 — the blocks of questions below have closed.'),
   ).toBeVisible()
   expect(requests.writes).toEqual([
     {

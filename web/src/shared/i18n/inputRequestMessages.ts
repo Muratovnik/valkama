@@ -5,7 +5,7 @@ export const inputRequestMessages = {
   en: {
     requests: {
       title: 'Needs my answer',
-      scope: 'Pending questions across mapped projects',
+      scope: 'Pending blocks of questions across mapped projects',
       close: 'Close questions',
       loading: 'Checking questions…',
       error: 'Questions could not be refreshed. Your drafts are kept.',
@@ -16,7 +16,7 @@ export const inputRequestMessages = {
       countIncomplete: 'Waiting for an answer: {count}+',
       countUnknown: 'could not be checked',
       empty: 'No questions need your answer.',
-      noneWaiting: 'Waiting for an answer: 0 — the questions below have closed.',
+      noneWaiting: 'Waiting for an answer: 0 — the blocks of questions below have closed.',
       partialEmpty: 'No questions in the sources checked. Some sources are unavailable.',
       partial: 'Results are incomplete. Some sources are unavailable.',
       truncated: 'Only the first 100 requests are shown.',
@@ -102,7 +102,7 @@ export const inputRequestMessages = {
   ru: {
     requests: {
       title: 'Ждут моего ответа',
-      scope: 'Открытые вопросы во всех связанных проектах',
+      scope: 'Открытые блоки вопросов во всех связанных проектах',
       close: 'Закрыть вопросы',
       loading: 'Проверка вопросов…',
       error: 'Не удалось обновить вопросы. Черновики сохранены.',
@@ -113,7 +113,7 @@ export const inputRequestMessages = {
       countIncomplete: 'Ждут ответа: {count}+',
       countUnknown: 'не удалось проверить',
       empty: 'Нет вопросов, ожидающих вашего ответа.',
-      noneWaiting: 'Ждут ответа: 0 — вопросы ниже уже закрыты.',
+      noneWaiting: 'Ждут ответа: 0 — блоки вопросов ниже уже закрыты.',
       partialEmpty: 'В проверенных источниках вопросов нет. Некоторые источники недоступны.',
       partial: 'Результаты неполные. Некоторые источники недоступны.',
       truncated: 'Показаны только первые 100 запросов.',

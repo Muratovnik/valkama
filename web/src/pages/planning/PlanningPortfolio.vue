@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -51,7 +52,10 @@ function bindingRecoveryRoute(projectId: string) {
           :state="project.binding_state"
         />
       </header>
-      <ul class="project-spaces">
+      <ul
+        v-if="project.planning_spaces.length"
+        class="project-spaces"
+      >
         <li
           v-for="space in project.planning_spaces"
           :key="`${space.space_ref.data_scope_id}:${space.space_ref.space_key}`"
@@ -66,13 +70,12 @@ function bindingRecoveryRoute(projectId: string) {
             t('platform.planning.workItemCount', { count: space.work_item_count })
           }}</span>
         </li>
-        <li
-          v-if="!project.planning_spaces.length"
-          class="space-none"
-        >
-          {{ t('platform.planning.noSpaces') }}
-        </li>
       </ul>
+      <DataEmptyState
+        v-else
+        :title="t('platform.planning.noSpaces')"
+        inline
+      />
       <VButton
         v-if="project.binding_state === 'mapped'"
         class="open-project"
@@ -149,7 +152,7 @@ function bindingRecoveryRoute(projectId: string) {
   font-size: var(--font-size-dense);
 }
 
-:is(.space-count, .space-none) {
+.space-count {
   color: var(--color-text-muted);
   font-size: var(--font-size-meta);
 }

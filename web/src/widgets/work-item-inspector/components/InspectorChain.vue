@@ -27,6 +27,7 @@ import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainFo
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -233,12 +234,11 @@ defineExpose({ restore, reveal, view })
       </template>
     </SectionHeader>
 
-    <p
+    <DataEmptyState
       v-if="!readable"
-      class="chain-quiet"
-    >
-      {{ t('workItem.chain.primaryOnly') }}
-    </p>
+      :title="t('workItem.chain.primaryOnly')"
+      inline
+    />
 
     <p
       v-if="!chain && loading"

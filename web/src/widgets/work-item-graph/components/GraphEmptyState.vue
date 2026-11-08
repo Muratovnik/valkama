@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * Why the field is empty, and the control that would fill it.
+ * Why the field is empty, and the control that would fill it, said through the shared
+ * empty state: this decides which empty it is and what it offers, never how it looks.
  *
  * Two different empties: a space with no work at all, and a space whose work is
  * all done and hidden. The second names what is hidden and offers it, so an
@@ -9,6 +10,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -25,37 +27,27 @@ const action = computed(() => t('graph.showDone', { count: props.count }))
 </script>
 
 <template>
-  <p
-    v-if="kind === 'space'"
+  <DataEmptyState
     class="graph-empty"
+    :title="message"
   >
-    {{ message }}
-  </p>
-  <div
-    v-else
-    class="graph-empty graph-empty-reveal"
-  >
-    <span>{{ message }}</span>
-    <VButton
-      size="inline"
-      @click="emit('reveal')"
+    <template
+      v-if="kind === 'open'"
+      #action
     >
-      {{ action }}
-    </VButton>
-  </div>
+      <VButton
+        size="inline"
+        @click="emit('reveal')"
+      >
+        {{ action }}
+      </VButton>
+    </template>
+  </DataEmptyState>
 </template>
 
 <style scoped>
+/* It stands where the field would, in the room the field would take. */
 .graph-empty {
-  padding: var(--space-7) 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-note);
-}
-
-.graph-empty-reveal {
-  display: flex;
-  gap: var(--space-4);
-  align-items: center;
+  flex: 1 1 auto;
 }
 </style>

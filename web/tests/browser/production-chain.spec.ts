@@ -272,7 +272,7 @@ test('an attached store item says where a chain is read, and asks for none', asy
   )
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
-  await expect(section.locator('.chain-quiet')).toHaveText(
+  await expect(section.locator('.data-empty')).toHaveText(
     'The chain is available only for work items of the primary store.',
   )
   await page.locator('.drawer').screenshot(shot(info, 'chain-attached-390.png'))

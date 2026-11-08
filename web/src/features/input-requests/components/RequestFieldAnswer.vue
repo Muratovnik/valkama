@@ -24,6 +24,7 @@ import { fieldOptions } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 
 import type { InputAnswers, InputRequestField } from '@/shared/api/inputRequestModel.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RichText from '@/shared/ui/RichText.vue'
 
 const props = defineProps<{
@@ -75,12 +76,11 @@ const { isOpen, toggle } = useOpenedOptions()
         class="request-answer-text"
         :source="textValue"
       />
-      <p
+      <DataEmptyState
         v-else
-        class="request-answer-none"
-      >
-        {{ t('requests.noAnswer') }}
-      </p>
+        :title="t('requests.noAnswer')"
+        inline
+      />
     </template>
     <template v-else>
       <!-- A list drawn with no marks loses its role in some browsers, so the role stays said. -->
@@ -113,12 +113,11 @@ const { isOpen, toggle } = useOpenedOptions()
           </RequestOption>
         </li>
       </ul>
-      <p
+      <DataEmptyState
         v-if="!given"
-        class="request-answer-none"
-      >
-        {{ t('requests.noAnswer') }}
-      </p>
+        :title="t('requests.noAnswer')"
+        inline
+      />
     </template>
     <blockquote
       v-if="note"
@@ -156,12 +155,6 @@ const { isOpen, toggle } = useOpenedOptions()
   padding: 0;
   margin: 0;
   list-style: none;
-}
-
-.request-answer-none {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 /* A quote under the field, set in as a reply to a prompt is, and signed as the comment on

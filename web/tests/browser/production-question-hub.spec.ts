@@ -88,7 +88,7 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
   // Nothing waits any more, and the list says so of the question it kept, not that there is
   // none: «No questions need your answer» stood over a question.
   await expect(dialog.locator('.request-status')).toHaveText(
-    'Waiting for an answer: 0 — the questions below have closed.',
+    'Waiting for an answer: 0 — the blocks of questions below have closed.',
   )
   // It stays across the next read too, until the person removes it.
   await page.clock.runFor(POLL)

@@ -470,7 +470,7 @@ describe('the chain section of a card', () => {
     const attached = await open(ROOT, { writable: false })
     expect(asked).toHaveLength(2)
     // The section stays, and says where a chain can be read instead.
-    expect(section(attached).get('.chain-quiet').text()).toBe(
+    expect(section(attached).get('.data-empty').text()).toBe(
       'The chain is available only for work items of the primary store.',
     )
     expect(section(attached).find('.chain-summary-line').exists()).toBe(false)
@@ -483,6 +483,6 @@ describe('the chain section of a card', () => {
     vi.mocked(fetchWorkItem).mockResolvedValue(leaf)
     const wrapper = await open(leaf, { writable: false })
     expect(asked).toHaveLength(0)
-    expect(section(wrapper).get('.chain-quiet').text()).toContain('primary store')
+    expect(section(wrapper).get('.data-empty').text()).toContain('primary store')
   })
 })
