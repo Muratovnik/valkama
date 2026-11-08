@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.6.0](https://github.com/Muratovnik/valkama/compare/v2.5.0...v2.6.0) - 2026-11-08
+
 ### Added
 
 - **How much work an item actually took, and what it would cost at API prices.** The server
