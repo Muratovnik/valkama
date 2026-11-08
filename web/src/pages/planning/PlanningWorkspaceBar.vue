@@ -71,6 +71,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'create': []
   'exit-chain': []
+  /** Search every project for the filter's text, from the last row of its menu. */
+  'find': [text: string]
   'group': [grouping: BoardGrouping]
   'view': [mode: PlanningViewMode]
 }>()
@@ -191,6 +193,7 @@ function removeChip(token: WorkFilterToken) {
         :held="heldCount"
         :items="items"
         @chips="focusChips"
+        @find="(text) => emit('find', text)"
       />
       <VButton
         v-if="writable"

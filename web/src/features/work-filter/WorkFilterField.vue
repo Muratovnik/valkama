@@ -14,16 +14,19 @@
  * The menu opens to what a person did: a press in the field, `/`, ↓ or a letter
  * typed, and never because focus arrived. Tab passes through on its way to what
  * lies behind the menu, and focus also comes back here on its own, when a card
- * closes or the window returns; so nothing here listens for focus at all. Typing
- * narrows the menu, and with no value left to offer it draws nothing, which leaves
- * the work in sight for a search by number. It stands as tall as the window lets it
- * (`useMenuRoom`).
+ * closes or the window returns; so nothing here listens for focus at all. It
+ * opens on the facets, the presets over them, and a facet's row steps into its
+ * values (`stepGroups`). Typing there still finds a value of any facet; inside a
+ * facet it narrows that facet's values. Text ends the menu with a row that hands
+ * it to the search over every project, the one thing this filter cannot do. It
+ * stands as tall as the window lets it (`useMenuRoom`).
  *
  * The keyboard: `/` anywhere outside a text field comes here and opens the menu;
- * ↓ opens it and moves through it; Enter picks the highlighted value; Escape
+ * ↓ opens it and moves through it; Enter takes the highlighted row; Escape
  * closes the menu, then clears the text, then leaves the field — one step per
- * press; ← from the start of the text reaches the chips, and Backspace there
- * takes the last one out.
+ * press; ← or Backspace from the start of the text steps from a facet's values
+ * back to the facets, and from there ← reaches the chips and Backspace takes
+ * the last one out.
  *
  * The menu is drawn in place rather than portalled, under the nearest
  * positioned ancestor: this root where there is room, the bar on a phone.
@@ -33,7 +36,8 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
-import { filterGroups, narrowGroups, picked } from '@/features/work-filter/filterOptions.ts'
+import { filterGroups, picked, stepGroups } from '@/features/work-filter/filterOptions.ts'
+import type { FilterStep } from '@/features/work-filter/filterOptions.ts'
 import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
 import WorkFilterPresets from '@/features/work-filter/WorkFilterPresets.vue'
 
@@ -65,6 +69,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   /** ← from the start of the text: the chips, wherever the host shows them. */
   chips: []
+  /** The menu's last row: search every project for the text, which this filter cannot. */
+  find: [text: string]
 }>()
 
 const filter = defineModel<WorkFilter>('filter', { required: true })
@@ -118,9 +124,11 @@ function focusText() {
 const open = ref(false)
 /** The highlighted option by its place in `options`; -1 for none. */
 const highlight = ref(-1)
+/** The facets, or the values of the one picked; a menu opens on the facets. */
+const step = ref<FilterStep>('facets')
 
 const groups = computed(() =>
-  narrowGroups(
+  stepGroups(
     filterGroups({
       categories: props.categories,
       filter: filter.value,
@@ -128,29 +136,44 @@ const groups = computed(() =>
       items: props.items,
       t,
     }),
+    step.value,
     filter.value.text,
+    t,
   ),
 )
 /** What the menu offers in reading order, which is the order the arrows walk. */
 const entries = computed(() =>
-  groups.value.flatMap((group) => [...(group.choices ?? []), ...group.options]),
+  groups.value.flatMap((group) => [
+    ...(group.back ? [group.back] : []),
+    ...(group.choices ?? []),
+    ...group.options,
+  ]),
 )
-/** With nothing to offer, the menu is no empty frame over the work a search found. */
+/** With nothing to offer, the menu is no empty frame over the work. */
 const shown = computed(() => open.value && entries.value.length > 0)
 /**
  * The groups as the list draws them: each value's word and whether it is in.
  * A closed menu draws none of them. A space's labels made it a list of some
  * two thousand nodes that the board built, out of sight, before its first tile
- * could show; it is built when it opens instead.
+ * could show; it is built when it opens instead, and then only for the step
+ * on show.
  */
 const menuGroups = computed(() =>
   (open.value ? groups.value : []).map((group) => ({
-    ...group,
+    id: group.id,
+    name: group.name,
+    bare: group.bare,
+    back: group.back && {
+      key: group.back.key,
+      name: t('workItem.filter.back', { facet: group.name }),
+    },
     options: group.options.map((option) => ({
       key: option.key,
       text: option.text,
       detail: option.detail,
       kind: option.kind,
+      icon: option.action.do === 'find' ? 'search' : undefined,
+      next: option.action.do === 'open',
       selected: picked(filter.value, option),
     })),
     choices: group.choices?.map((choice) => ({
@@ -193,6 +216,34 @@ function openMenu(first: boolean) {
 function closeMenu() {
   open.value = false
   highlight.value = -1
+  step.value = 'facets'
+}
+
+/** The place of the row with this key, once the list is drawn, highlighted and in sight. */
+function highlightKey(key: string) {
+  void nextTick(() => {
+    highlight.value = entries.value.findIndex((candidate) => candidate.key === key)
+    reveal()
+  })
+}
+
+/**
+ * Into a facet's values, or back out to the facets. The list starts from its top,
+ * the highlight on the first value going in and on the facet left coming out, so
+ * the arrows go on from where the reader was.
+ */
+function goTo(next: FilterStep) {
+  const from = step.value
+  step.value = next
+  void nextTick(() => {
+    const list = root.value?.querySelector<HTMLElement>(`[id="${menuId}"]`)
+    if (list) list.scrollTop = 0
+    highlight.value =
+      next === 'facets'
+        ? entries.value.findIndex((entry) => entry.key === `open:${from}`)
+        : entries.value.findIndex((entry) => 'action' in entry && entry.action.do === 'pick')
+    reveal()
+  })
 }
 
 /** A press in the field opens the menu and leaves an open one as it is. */
@@ -217,10 +268,13 @@ function move(step: 1 | -1) {
 }
 
 /**
- * Pick a value: in it goes, or out if it was in. Text typed to find the value
+ * Take a row. A value goes in, or out if it was in. Text typed to find the value
  * was a search of the menu, not of the work, so it goes with the pick, and the
- * highlight stays on that value as the list grows back around it. How the labels
- * combine is no value: the text stays.
+ * highlight stays on that value as the list grows back around it: in its own
+ * facet's step, where a value found from the facets lands, so the pick is in
+ * sight beside the facet's other values. How the labels combine is no value:
+ * the text stays. A facet's row steps in, the back row steps out, and the last
+ * row hands the text to the search over every project.
  */
 function choose(key: string) {
   const entry = entries.value.find((candidate) => candidate.key === key)
@@ -229,16 +283,37 @@ function choose(key: string) {
     filter.value = setLabelsMatch(filter.value, entry.match)
     return
   }
-  const next = toggleToken(filter.value, entry.token)
+  const { action } = entry
+  switch (action.do) {
+    case 'open': {
+      goTo(action.facet)
+      return
+    }
+    case 'back': {
+      goTo('facets')
+      return
+    }
+    case 'find': {
+      const text = filter.value.text.trim()
+      closeMenu()
+      emit('find', text)
+      return
+    }
+    default: {
+      pick(action.token, key)
+    }
+  }
+}
+
+function pick(token: WorkFilterToken, key: string) {
+  const next = toggleToken(filter.value, token)
   if (!filter.value.text) {
     filter.value = next
     return
   }
   filter.value = { ...next, text: '' }
-  void nextTick(() => {
-    highlight.value = entries.value.findIndex((candidate) => candidate.key === key)
-    reveal()
-  })
+  if (token.facet !== 'ready' && token.facet !== 'held') step.value = token.facet
+  highlightKey(key)
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +353,14 @@ function escape(field: HTMLInputElement) {
   else field.blur()
 }
 
+/** ← or Backspace from the start of the text, in a facet's values: back to the facets. */
+function stepKey(event: KeyboardEvent, field: HTMLInputElement): boolean {
+  if (!shown.value || step.value === 'facets' || !caretAtStart(field)) return false
+  if (event.key !== 'ArrowLeft' && event.key !== 'Backspace') return false
+  goTo('facets')
+  return true
+}
+
 /** The keys that reach the chips from the start of the text. */
 function chipKey(event: KeyboardEvent, field: HTMLInputElement): boolean {
   if (!caretAtStart(field) || !tokens.value.length) return false
@@ -302,7 +385,7 @@ function keydown(event: KeyboardEvent) {
     event.stopPropagation()
     escape(field)
   } else if (event.key === 'Tab') closeMenu()
-  else if (menuKey(event) || chipKey(event, field)) event.preventDefault()
+  else if (menuKey(event) || stepKey(event, field) || chipKey(event, field)) event.preventDefault()
 }
 
 /** `/` focuses the field from anywhere a key is not already text. */

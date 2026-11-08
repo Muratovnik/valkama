@@ -80,11 +80,8 @@ const {
 // The destination an address names starts downloading before the module list settles.
 watch(activeModule, prefetchModule, { immediate: true })
 
-const { finderOpen, requestsOpen, pendingRequestCount, openTarget } = useGlobalWorkActions(
-  writeRoute,
-  questionsAsked,
-  cardQuestionAsked,
-)
+const { finderOpen, finderText, findText, requestsOpen, pendingRequestCount, openTarget } =
+  useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked)
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
   mainContent.value?.focus()
@@ -344,6 +341,7 @@ usePlatformEntryRestore({
           :locale="locale"
           @connection="(state) => (planningConnection = state)"
           @entity="openEntity"
+          @find="findText"
           @notice="(message) => say(message, 'refused')"
           @open-project="openProject"
           @question-taken="cardQuestionTaken"
@@ -363,6 +361,7 @@ usePlatformEntryRestore({
   <GlobalWorkFinder
     v-if="documentPage === null"
     :open="finderOpen"
+    :text="finderText"
     :projects="contextReady?.projects ?? []"
     @close="finderOpen = false"
     @select="openTarget"

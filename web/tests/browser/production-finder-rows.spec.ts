@@ -67,7 +67,7 @@ for (const { width, titleBeside } of [
     )
     await expect(page.locator('.work-item-board')).toBeVisible()
     await page.keyboard.press('Control+k')
-    const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+    const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
     await dialog.getByRole('combobox').fill('main')
     const results = dialog.getByRole('option')
     await expect(results).toHaveCount(3)

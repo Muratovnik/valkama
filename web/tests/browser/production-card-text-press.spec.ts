@@ -215,7 +215,7 @@ for (const key of ['Tab', 'Shift+Tab']) {
     await installBackend(page)
     await page.goto(BOARD)
     await page.keyboard.press('Control+k')
-    const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+    const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
     await expect(dialog.getByRole('combobox')).toBeFocused()
     const box = await dialog.boundingBox()
     await page.mouse.click((box?.x ?? 0) + 6, (box?.y ?? 0) + (box?.height ?? 0) - 6)

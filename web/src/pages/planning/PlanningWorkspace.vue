@@ -75,6 +75,7 @@ const emit = defineEmits<{
   'create': []
   'exit-branch': []
   'exit-chain': []
+  'find': [text: string]
   'group': [grouping: BoardGrouping]
   'open': [reference: string]
   'place': [move: BoardMove]
@@ -248,6 +249,7 @@ defineExpose({ toggleFilter })
       @update:filter="setFilter"
       @create="emit('create')"
       @exit-chain="emit('exit-chain')"
+      @find="(text) => emit('find', text)"
       @group="(value) => emit('group', value)"
       @view="(mode) => emit('view', mode)"
     />

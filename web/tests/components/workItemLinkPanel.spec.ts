@@ -65,7 +65,7 @@ describe('the page behind a work item address that led nowhere', () => {
       scope: { project_ref: { project_id: PROJECT } },
       entity: { kind: 'planning-space' },
     })
-    await button(wrapper, 'Find a task').trigger('click')
+    await button(wrapper, 'Go to a task').trigger('click')
     expect(wrapper.emitted('find')).toHaveLength(1)
     await button(wrapper, 'Go to Work').trigger('click')
     expect(wrapper.emitted('home')).toHaveLength(1)
@@ -77,7 +77,7 @@ describe('the page behind a work item address that led nowhere', () => {
     expect(wrapper.text()).toContain('There is no space NOPE')
     expect(wrapper.text()).toContain('NOPE-1 cannot be opened here')
     expect(wrapper.text()).not.toContain('Open space')
-    button(wrapper, 'Find a task')
+    button(wrapper, 'Go to a task')
   })
 
   it('repeats a malformed address as inert text, and only so much of it', async () => {

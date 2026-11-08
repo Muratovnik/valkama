@@ -1,7 +1,8 @@
 /**
  * The filter's menu opens to what a person did, in the field itself, and to nothing else:
  * not to Tab, not to focus coming back when a card or a dialog closes or the window returns.
- * Typing narrows it, and with nothing left to offer it leaves the work in sight.
+ * It opens on the facets and steps into one facet's values. Typing narrows it, and the text's
+ * own row, the search over every project, ends it.
  */
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
@@ -16,11 +17,13 @@ import {
   field,
   menu,
   menuLabels,
+  openFacet,
   openSpace,
   shownTiles,
 } from './filterPage.ts'
 import { test } from './test.ts'
 
+const everywhere = (text: string) => `Search for “${text}” in all projects`
 const expanded = (page: Page, value: 'false' | 'true') =>
   expect(field(page)).toHaveAttribute('aria-expanded', value)
 
@@ -29,19 +32,23 @@ async function board(page: Page, width = 1440, height = 900) {
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
 }
 
-test('there is no Filter button; a press in the field opens every group, picked values marked', async ({
+test('there is no Filter button; a press in the field opens the facets, a facet its values, picked ones marked', async ({
   page,
 }) => {
   await board(page)
   await expect(page.getByRole('button', { name: 'Filter', exact: true })).toHaveCount(0)
-  await expect(field(page)).toHaveAttribute('placeholder', 'Reference, title, label…')
+  await expect(field(page)).toHaveAttribute('placeholder', 'Filter: reference, title…')
   await expanded(page, 'false')
   await expect(menu(page)).toBeHidden()
 
   await field(page).click()
   await expanded(page, 'true')
-  for (const group of ['Quick filters', 'State', 'Kind', 'Priority', 'Label'])
+  for (const group of ['Quick filters', 'Filter by'])
     await expect(menu(page).getByRole('group', { name: group, exact: true })).toBeVisible()
+  await expect(menu(page).getByRole('group')).toHaveCount(2)
+  await expect(field(page)).toBeFocused()
+
+  await openFacet(page, 'Label')
   await expect(field(page)).toBeFocused()
 
   await page.getByRole('option', { name: 'ui', exact: true }).click()
@@ -84,16 +91,18 @@ test('focus that comes back by itself does not open the menu', async ({ page }) 
   await board(page)
 
   // Reset takes the button that did it away and hands the caret to the field.
-  await field(page).click()
+  await openFacet(page, 'Label')
   await page.getByRole('option', { name: 'ui', exact: true }).click()
   await page.keyboard.press('Escape')
   await page.locator('.workspace-figures').getByRole('button', { name: 'Reset' }).click()
   await expect(field(page)).toBeFocused()
   await expanded(page, 'false')
 
-  // The chips hand it back as well.
-  await field(page).click()
+  // The chips hand it back as well. The first ← steps back out of the labels.
+  await openFacet(page, 'Label')
   await page.getByRole('option', { name: 'ui', exact: true }).click()
+  await page.keyboard.press('ArrowLeft')
+  await expect(menu(page).getByRole('option', { name: 'Label', exact: true })).toBeVisible()
   await page.keyboard.press('ArrowLeft')
   await expect(chips(page).last()).toBeFocused()
   await page.keyboard.press('Escape')
@@ -148,37 +157,82 @@ test('the window leaving closes the menu, and its return does not open it', asyn
   await expanded(page, 'true')
 })
 
-test('text narrows the menu and the work; a number leaves no frame and the work in sight', async ({
+test('text narrows the menu and the work; a number leaves the search over every project, and Escape the work in sight', async ({
   page,
 }) => {
   await board(page)
   await field(page).click()
   await page.keyboard.type('boa')
-  await expect(page.getByRole('option')).toHaveText(['board'])
+  await expect(page.getByRole('option')).toHaveText(['board', everywhere('boa')])
 
   await field(page).fill('MAIN-402')
   await expect.poll(() => shownTiles(page)).toEqual(['MAIN-402'])
-  await expanded(page, 'false')
-  await expect(menu(page)).toBeHidden()
-  await expect(page.getByRole('option')).toHaveCount(0)
+  // No value holds the number: the one row left is the search for it everywhere, one row tall.
+  await expect(page.getByRole('option')).toHaveText([everywhere('MAIN-402')])
+  const row = await boxOf(menu(page))
+  expect(row.height).toBeLessThan(48)
   await expect(field(page)).not.toHaveAttribute('aria-activedescendant', /.*/u)
-  // The press lands on the tile rather than on anything over it.
+
+  // Enter has nothing to take: no card, no chip, no search, and the text stays.
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.drawer')).toHaveCount(0)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(chips(page)).toHaveCount(0)
+  await expect(field(page)).toHaveValue('MAIN-402')
+
+  // The press lands on the tile rather than on anything over it, once Escape took the row away.
+  await page.keyboard.press('Escape')
+  await expect(menu(page)).toBeHidden()
   const reached = await page.locator('[data-reference="MAIN-402"]').evaluate((tile) => {
     const { left, top, width, height } = tile.getBoundingClientRect()
     return tile.contains(document.elementFromPoint(left + width / 2, top + height / 2))
   })
   expect(reached).toBe(true)
-
-  // Enter has nothing to take: no card, no chip, and the text stays.
-  await page.keyboard.press('Enter')
-  await expect(page.locator('.drawer')).toHaveCount(0)
-  await expect(chips(page)).toHaveCount(0)
-  await expect(field(page)).toHaveValue('MAIN-402')
   await expect.poll(() => addressState(page)).toEqual({ view: 'kanban', query: 'MAIN-402' })
 
-  // Letters typed away bring the list back when it has something again.
+  // Letters typed away bring the list back with them.
   await field(page).fill('board')
-  await expect(page.getByRole('option')).toHaveText(['board'])
+  await expect(page.getByRole('option')).toHaveText(['board', everywhere('board')])
+})
+
+test('the menu’s last row opens the search over every project on the text', async ({ page }) => {
+  await board(page)
+  await field(page).fill('MAIN-402')
+  await page.keyboard.press('ArrowUp')
+  await expect(page.getByRole('option', { name: everywhere('MAIN-402') })).toHaveAttribute(
+    'data-highlighted',
+    'true',
+  )
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('combobox')).toHaveValue('MAIN-402')
+  // The board's own filter is as it was.
+  await expect.poll(() => addressState(page)).toEqual({ view: 'kanban', query: 'MAIN-402' })
+})
+
+test('the keyboard steps into a facet and back out of it', async ({ page }) => {
+  await board(page)
+  await field(page).focus()
+  await page.keyboard.press('ArrowDown')
+  // The last facet: no holder works here, so the walk is the two presets and four facets.
+  await expect(menu(page).getByRole('option')).toHaveCount(6)
+  for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown')
+  // The row the field names as active, the one a screen reader is told of.
+  const isActive = async (name: string) =>
+    expect(field(page)).toHaveAttribute(
+      'aria-activedescendant',
+      (await menu(page).getByRole('option', { name, exact: true }).getAttribute('id')) ?? '',
+    )
+  await isActive('Label')
+  await page.keyboard.press('Enter')
+  await expect(menu(page).getByRole('option', { name: 'Back to the facets' })).toHaveText('Label')
+  // In on the first value, past the way back and the labels' choice.
+  await isActive('board')
+  await page.keyboard.press('Backspace')
+  await isActive('Label')
+  await expect(menu(page).getByRole('group', { name: 'Filter by', exact: true })).toBeVisible()
+  await expect(chips(page)).toHaveCount(0)
 })
 
 test('a letter typed in a closed field opens the menu', async ({ page }) => {
@@ -209,9 +263,11 @@ test('Escape takes one step per press, and the list does not come back with the 
   await page.keyboard.press('Escape')
   await expect(field(page)).not.toBeFocused()
 
-  // With no menu in sight, the first press is the text's.
+  // Text typed into a closed field opens the menu, on its search row at least.
   await field(page).fill('MAIN-402')
-  await expanded(page, 'false')
+  await expanded(page, 'true')
+  await page.keyboard.press('Escape')
+  await expect(field(page)).toHaveValue('MAIN-402')
   await page.keyboard.press('Escape')
   await expect(field(page)).toHaveValue('')
   await expanded(page, 'false')
@@ -220,6 +276,7 @@ test('Escape takes one step per press, and the list does not come back with the 
 test('× takes the text and opens nothing that was not open', async ({ page }) => {
   await board(page)
   await field(page).fill('MAIN-402')
+  await page.keyboard.press('Escape')
   await expanded(page, 'false')
   await page.getByRole('button', { name: 'Clear the text' }).click()
   await expect(field(page)).toHaveValue('')
@@ -349,8 +406,7 @@ test('a long list of labels scrolls under a head that stays, and the arrows stay
     return { ...item, labels: at < 0 ? [] : labels.slice(at * 20, (at + 1) * 20) }
   })
   await openSpace(page, { items })
-  await field(page).click()
-  await expect(menu(page)).toBeVisible()
+  await openFacet(page, 'Label')
 
   const list = menu(page)
   const head = list.getByRole('group', { name: 'Label', exact: true }).locator('.option-group-head')
@@ -361,10 +417,17 @@ test('a long list of labels scrolls under a head that stays, and the arrows stay
   const headBox = await boxOf(head)
   expect(headBox.y).toBeGreaterThanOrEqual(listBox.y)
   expect(headBox.y).toBeLessThan(listBox.y + 8)
-  await expect(head.getByRole('option')).toHaveCount(2)
-  await expect(head.getByRole('option').first()).toBeInViewport()
+  // The way back and the two choices.
+  await expect(head.getByRole('option')).toHaveCount(3)
+  await expect(head.getByRole('option', { name: /^Labels: /u }).first()).toBeInViewport()
 
-  // Walking back up, the highlighted row is never under that head.
+  // Walking back up from the last label, the highlighted row is never under that head. The
+  // highlight came in on the first label: up past the choice and the way back, round to the last.
+  for (let step = 0; step < 4; step += 1) await page.keyboard.press('ArrowUp')
+  await expect(list.getByRole('option', { name: 'label-59' })).toHaveAttribute(
+    'data-highlighted',
+    'true',
+  )
   for (let step = 0; step < 8; step += 1) {
     await page.keyboard.press('ArrowUp')
     const covered = await page.evaluate(() => {
@@ -379,13 +442,21 @@ test('a long list of labels scrolls under a head that stays, and the arrows stay
   }
 })
 
-test('the open menu passes the accessibility checks', async ({ page }) => {
+test('the open menu passes the accessibility checks at either step', async ({ page }) => {
   await board(page)
+  const axe = async () => {
+    const results = await new AxeBuilder({ page })
+      .include('.work-filter')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+    return results.violations.map((violation) => violation.id)
+  }
   await field(page).click()
   await expect(menu(page)).toBeVisible()
-  const results = await new AxeBuilder({ page })
-    .include('.work-filter')
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze()
-  expect(results.violations.map((violation) => violation.id)).toEqual([])
+  expect(await axe()).toEqual([])
+  await openFacet(page, 'Label')
+  expect(await axe()).toEqual([])
+  await page.keyboard.type('u')
+  await expect(page.getByRole('option', { name: everywhere('u') })).toBeVisible()
+  expect(await axe()).toEqual([])
 })

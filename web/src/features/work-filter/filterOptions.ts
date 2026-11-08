@@ -1,5 +1,6 @@
 /**
- * What the filter's menu offers and what a picked token is called.
+ * What the filter's menu offers at each of its two steps and what a picked
+ * token is called.
  *
  * The values come from the work the bar counts — the labels and holders that
  * are actually there, the states the workflow has — so the menu never offers
@@ -26,19 +27,41 @@ type Translate = (key: string, params?: Record<string, unknown>) => string
 type StateCategory = WorkItemBrief['state']['category']
 type ValueFacet = Exclude<WorkFilterToken['facet'], 'ready' | 'held'>
 
-type FilterGroupId = 'presets' | ValueFacet
+type FilterGroupId = 'presets' | 'facets' | 'everywhere' | ValueFacet
+
+/**
+ * Where the menu stands: the list of facets, with the presets over it, or one
+ * facet's values. A reader picks the facet first, as Linear and GitLab ask,
+ * because every value of every facet at once was a list a space's labels made
+ * thousands long.
+ */
+export type FilterStep = 'facets' | ValueFacet
+
+/** What a row does when it is taken. */
+type FilterAction =
+  /** The value goes into the filter, or out if it was in. */
+  | { do: 'pick'; token: WorkFilterToken }
+  /** The menu steps into the facet's values. */
+  | { do: 'open'; facet: ValueFacet }
+  /** The menu steps back to the facets. */
+  | { do: 'back' }
+  /** The text goes to the search over every project. */
+  | { do: 'find' }
 
 export interface FilterOption {
+  action: FilterAction
   /** Unique across the menu, and stable while the value is offered. */
   key: string
   /** The value's own word: «Высокий», `coordinator`, «Назначено». */
   text: string
-  token: WorkFilterToken
   /** A count beside the word, where one says something: how many are held. */
   detail?: string
   /** The kind this value is, whose colour its word takes. */
   kind?: string
 }
+
+/** A value row, the one kind of row a facet's group holds. */
+type ValueOption = FilterOption & { action: { do: 'pick' } }
 
 /** A way the labels picked can combine, offered in the head of their group. */
 interface FilterChoice {
@@ -55,15 +78,22 @@ export interface FilterGroup {
   id: FilterGroupId
   name: string
   options: FilterOption[]
+  /** The group's name is the way back to the facets, the first row the arrows reach. */
+  back?: FilterOption
+  /** No head: its one row says what it is, and the name only labels it for a screen reader. */
+  bare?: boolean
   /** Offered ahead of the values, and walked ahead of them. */
   choices?: FilterChoice[]
 }
 
+/** A group of values, as `filterGroups` makes them. */
+type ValueGroup = Omit<FilterGroup, 'options'> & { options: ValueOption[] }
+
 /**
  * The menu's facets, in the order a reader narrows by them: the closed vocabularies every space
  * has, then who holds the work, then the labels, the longest list and the one whose head offers a
- * choice. That head waits at the menu's lower edge until the list reaches it (`OptionGroups`), so
- * how labels combine is in sight as the menu opens wherever the group stands.
+ * choice. Where text finds values of several facets at once, that head waits at the menu's lower
+ * edge until the list reaches it (`OptionGroups`), so how labels combine stays in sight.
  */
 const GROUP_ORDER: readonly ValueFacet[] = ['category', 'kind', 'priority', 'holder', 'labels']
 
@@ -146,6 +176,8 @@ function valuesOf(
   }
 }
 
+const pick = (token: WorkFilterToken) => ({ do: 'pick', token }) as const
+
 /**
  * Every group the menu offers, with the presets first. A value already in the
  * filter stays offered, so picking it again is how it comes out.
@@ -158,16 +190,16 @@ export function filterGroups(input: {
   held: number | null
   items: readonly WorkItemBrief[]
   t: Translate
-}): FilterGroup[] {
+}): ValueGroup[] {
   const { t } = input
-  const presets: FilterGroup = {
+  const presets: ValueGroup = {
     id: 'presets',
     name: t('workItem.filter.presets'),
     options: WORK_FILTER_PRESETS.map((preset) => {
       const token = preset.tokens[0] as WorkFilterToken
       return {
         key: tokenKey(token),
-        token,
+        action: pick(token),
         text: t(preset.label),
         ...(token.facet === 'held' && input.held !== null ? { detail: String(input.held) } : {}),
       }
@@ -184,7 +216,7 @@ export function filterGroups(input: {
       options: values.map((value) => {
         const token = { facet, value } as WorkFilterToken
         const kind = facet === 'kind' ? { kind: value } : {}
-        return { key: tokenKey(token), token, text: tokenValue(token, t), ...kind }
+        return { key: tokenKey(token), action: pick(token), text: tokenValue(token, t), ...kind }
       }),
       ...choicesOf(facet, values, t),
     }
@@ -198,23 +230,79 @@ export function filterGroups(input: {
  * priorities). A group narrowed to some of its values leaves its choices out,
  * so ↓ and Enter take the value found rather than a choice nobody typed.
  */
-export function narrowGroups(groups: readonly FilterGroup[], text: string): FilterGroup[] {
+function narrowGroups<Group extends FilterGroup>(groups: readonly Group[], text: string): Group[] {
   const needle = text.trim().toLocaleLowerCase()
-  if (!needle) return [...groups]
-  return groups
-    .map((group) =>
-      group.name.toLocaleLowerCase().includes(needle)
-        ? group
-        : {
-            id: group.id,
-            name: group.name,
-            options: group.options.filter((option) =>
-              option.text.toLocaleLowerCase().includes(needle),
-            ),
-          },
-    )
-    .filter((group) => group.options.length)
+  return needle
+    ? groups
+        .map((group) =>
+          group.name.toLocaleLowerCase().includes(needle) ? group : narrowValues(group, needle),
+        )
+        .filter((group) => group.options.length)
+    : [...groups]
 }
 
-/** Whether a token is in the filter, as an option reads it. */
-export const picked = (filter: WorkFilter, option: FilterOption) => hasToken(filter, option.token)
+/** A group with only the values whose word holds the needle, and without its choices. */
+function narrowValues<Group extends FilterGroup>(group: Group, needle: string): Group {
+  const narrowed: Group = {
+    ...group,
+    options: group.options.filter((option) => option.text.toLocaleLowerCase().includes(needle)),
+  }
+  delete narrowed.choices
+  return narrowed
+}
+
+/**
+ * The menu at its step. With no text, the facets: the presets, then one row per
+ * facet that steps into its values. Typed text in the facets' step still finds a
+ * value of any facet, the fast path for someone who knows the word; in a facet's
+ * step it narrows that facet's values. Text always ends the menu with the way to
+ * search for it in every project, which the board's filter cannot do.
+ */
+export function stepGroups(
+  groups: readonly ValueGroup[],
+  step: FilterStep,
+  text: string,
+  t: Translate,
+): FilterGroup[] {
+  const needle = text.trim()
+  const everywhere: FilterGroup[] = needle
+    ? [
+        {
+          id: 'everywhere',
+          name: t('workItem.filter.everywhere.group'),
+          bare: true,
+          options: [
+            {
+              key: 'everywhere',
+              text: t('workItem.filter.everywhere.row', { text: needle }),
+              action: { do: 'find' },
+            },
+          ],
+        },
+      ]
+    : []
+  const facet = step === 'facets' ? undefined : groups.find((group) => group.id === step)
+  if (facet) {
+    const values = needle ? narrowValues(facet, needle.toLocaleLowerCase()) : facet
+    const back: FilterOption = { key: 'back', text: facet.name, action: { do: 'back' } }
+    return [{ ...values, back }, ...everywhere]
+  }
+  if (needle) return [...narrowGroups(groups, needle), ...everywhere]
+  const presets = groups.filter((group) => group.id === 'presets')
+  const steps: FilterGroup = {
+    id: 'facets',
+    name: t('workItem.filter.facets'),
+    options: groups
+      .filter((group) => group.id !== 'presets')
+      .map((group) => ({
+        key: `open:${group.id}`,
+        text: group.name,
+        action: { do: 'open', facet: group.id as ValueFacet },
+      })),
+  }
+  return [...presets, steps]
+}
+
+/** Whether a value row's token is in the filter; a row that is no value is not chosen at all. */
+export const picked = (filter: WorkFilter, option: FilterOption) =>
+  option.action.do === 'pick' ? hasToken(filter, option.action.token) : undefined

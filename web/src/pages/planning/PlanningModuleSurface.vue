@@ -89,6 +89,8 @@ const emit = defineEmits<{
   /** The space's own stream, or null when no space is open and the shell's own connection speaks. */
   'connection': [state: PlanningConnectionState | null]
   'entity': [entity?: EntityRef]
+  /** Search every project for this text: the finder is the app's, not the module's. */
+  'find': [text: string]
   'notice': [message: string]
   'open-project': [projectId: string]
   'question-taken': []
@@ -456,6 +458,7 @@ defineExpose({ refresh, selectedId })
       @create="composerOpen = true"
       @exit-chain="narrow(null)"
       @exit-branch="exitBranch"
+      @find="(text) => emit('find', text)"
       @group="(next) => emit('state', withGrouping(route.state, next))"
       @open="(reference) => openItem(reference)"
       @place="placeItem"

@@ -180,7 +180,7 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
     await page.goto(boardRoute())
     await expect(page.locator('.work-item-board')).toBeVisible()
     await page.keyboard.press('Control+k')
-    const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+    const dialog = page.getByRole('dialog', { name: 'Go to a task', exact: true })
     await dialog.getByRole('combobox').fill('main')
     return dialog.getByRole('option').locator('.command-title')
   },

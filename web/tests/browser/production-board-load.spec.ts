@@ -359,6 +359,9 @@ test('a closed filter menu draws none of its options', async ({ page }) => {
   // before the first tile could show.
   await expect(menu.locator('[role="option"]')).toHaveCount(0)
   await page.getByRole('combobox', { name: 'Filter work' }).click()
+  // It opens on the facets; the labels are built when their step is taken.
+  await expect(menu.locator('[role="option"]', { hasText: 'agent-packets' })).toHaveCount(0)
+  await menu.getByRole('option', { name: 'Label', exact: true }).click()
   await expect(menu.locator('[role="option"]', { hasText: 'agent-packets' })).toBeVisible()
 })
 

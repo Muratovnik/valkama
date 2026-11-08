@@ -28,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'connection': [state: 'connecting' | 'live' | 'reconnecting' | null]
   'entity': [entity?: EntityRef]
+  'find': [text: string]
   'locale': [value: string]
   'notice': [message: string]
   'open-project': [projectId: string, moduleId?: ModuleId]
@@ -59,6 +60,7 @@ defineExpose({ openCardId, refresh })
     @question-taken="emit('question-taken')"
     @connection="(state) => emit('connection', state)"
     @entity="(entity) => emit('entity', entity)"
+    @find="(text) => emit('find', text)"
     @state="(state) => emit('state', state)"
     @notice="(message) => emit('notice', message)"
     @open-project="(id) => emit('open-project', id)"

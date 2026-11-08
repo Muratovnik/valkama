@@ -200,4 +200,14 @@ describe('the work bar', () => {
     await chip.trigger('click')
     expect(wrapper.emitted('exit-chain')).toHaveLength(1)
   })
+
+  it('passes the filter’s search over every project up to the page', async () => {
+    const wrapper = bar()
+    await wrapper.get('input[role="combobox"]').setValue('MAIN-9')
+    const row = wrapper
+      .findAll('[role="option"]')
+      .find((option) => option.text() === 'Search for “MAIN-9” in all projects')
+    await row?.trigger('click')
+    expect(wrapper.emitted('find')).toEqual([['MAIN-9']])
+  })
 })
