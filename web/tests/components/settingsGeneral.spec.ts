@@ -8,6 +8,8 @@ import SettingsGeneral from '@/pages/settings/components/SettingsGeneral.vue'
 
 import { OPEN_PLACES } from '@/shared/api/openPlanModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import { placeIcon } from '@/shared/ui/placeIcon.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -70,6 +72,24 @@ describe('SettingsGeneral opening sessions and files', () => {
     expect(values(wrapper, `Codex: ${FALLBACK}`)).not.toContain('claude-desktop')
     expect(values(wrapper, 'Other clients: Always open in')).toEqual(['', 'custom'])
     expect(select(wrapper, 'Editor for files').props('modelValue')).toBe('vscode')
+  })
+
+  // Settings kept a copy of the table once, so a better glyph for a client reached a
+  // session's open action and not its choice here, or the other way round.
+  it('draws each place by the one table every other surface reads', () => {
+    const wrapper = mountGeneral()
+    const options = [`Claude Code: ${FALLBACK}`, `Codex: ${FALLBACK}`, 'Editor for files'].flatMap(
+      (label) => select(wrapper, label).props('options') as ChoiceOption[],
+    )
+    expect(options.length).toBeGreaterThan(10)
+    for (const { value, icon } of options) {
+      expect(icon, value).toBeDefined()
+      expect(icon, value).toBe(placeIcon(value))
+    }
+    const always = select(wrapper, 'Other clients: Always open in').props(
+      'options',
+    ) as ChoiceOption[]
+    expect(always.find(({ value }) => value === 'custom')?.icon).toBe(placeIcon('custom'))
   })
 
   it('does not offer what is not installed, and says what a chosen one comes to', async () => {
