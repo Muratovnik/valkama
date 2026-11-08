@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) - 2026-11-08
+
 ### Added
 
 - **The rail is as wide as you drag it.** Its right edge drags between 200 and 480 px (260 to
