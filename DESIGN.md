@@ -703,7 +703,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   truncated name needs. For assistive technology it is what `title` was: the name of an
   element nothing else names, else its description when it says more than the name. A
   reference's preview card wins over it. A hint is words; anything with a control in it
-  is `InfoTip`.
+  is `InfoTip`. `check:ui-system` refuses a `title` an element or a component's root
+  would get.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
