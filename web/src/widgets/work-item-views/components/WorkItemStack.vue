@@ -39,7 +39,7 @@ import type { SortableEvent } from 'sortablejs'
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 import { ordersByClosing, rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
-import { endDropClickWait } from '@/widgets/work-item-views/utils/dropClick.ts'
+import { afterRelease, endDropClickWait } from '@/widgets/work-item-views/utils/dropClick.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -158,13 +158,10 @@ function landedIn(event: SortableEvent): HTMLElement {
   return under
 }
 
-/**
- * A release's click, in a browser that sends one, comes in the same task as the release. So
- * the end of that task is where the release is over, however quickly the next press follows.
- */
+/** Until the release is over (`afterRelease`), a click is that release, not a press of its own. */
 function release() {
   releasing = true
-  setTimeout(() => {
+  afterRelease(() => {
     releasing = false
     endDropClickWait()
   })

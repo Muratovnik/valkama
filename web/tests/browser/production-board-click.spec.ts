@@ -165,6 +165,30 @@ for (const shape of [
     await expect(page.locator('.drawer')).toHaveCount(0)
   })
 
+  test(`${shape.name}: a key pressed before the release’s task is done still opens a tile`, async ({
+    page,
+  }) => {
+    await board(page)
+    const where = whereOf(page)
+    const before = page.url()
+    // The browser hears a press ahead of a task the page has queued: on a busy board the
+    // task queued at a release ran 30–47 ms later, behind an Enter pressed at 26 ms. A task
+    // queued here, as the release begins, runs ahead of the board's, so its Enter (the key
+    // going down, then the click it makes) comes at that point every time.
+    await page.evaluate((other) => {
+      const enter = () => {
+        const open = document.querySelector<HTMLElement>(`[data-reference="${other}"] .tile-open`)
+        open?.focus()
+        open?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        open?.click()
+      }
+      window.addEventListener('pointerup', () => setTimeout(enter), { capture: true, once: true })
+    }, OTHER)
+    await ENDINGS['back where it was picked up'](page, where)
+    await expect(page.locator('.drawer')).toBeVisible()
+    expect(page.url()).not.toBe(before)
+  })
+
   test(`${shape.name}: a press with a hand’s shake in it is a click, not a drag`, async ({
     page,
   }) => {
