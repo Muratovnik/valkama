@@ -72,7 +72,6 @@ import {
   Settings,
   SquareKanban,
   SquarePen,
-  SquareTerminal,
   TableProperties,
   Terminal,
   TrendingUp,
@@ -96,19 +95,30 @@ function disclosureGlyph(name: string, path: string): Component {
 }
 
 /**
- * A client's own mark, as a place to open in: one filled shape in the glyph's colour, never the
- * vendor's colours. A mark is drawn on the 24-unit square edge to edge, where a Lucide glyph keeps
- * 2 units clear on every side, so it is scaled into the same 20-unit field about the square's
- * centre and stands as large as the outlines beside it. Only a mark whose vendor allows a
- * single-colour rendering in another product's interface is drawn (DESIGN.md, Icons and badges).
+ * A client's own mark, as a place to open in: its vendor's shapes, unchanged, filled in the
+ * glyph's colour and never the vendor's colours. A mark drawn edge to edge on its square is placed
+ * in the 20-unit field a Lucide glyph keeps clear of its 24-unit square's edges, so it stands as
+ * large as the outlines beside it; `fit` is that placement. Only a mark whose vendor allows it, or
+ * that the owner chose under the vendor's own rule, is drawn (DESIGN.md, the brand exception).
  */
-function clientMark(name: string, path: string): Component {
-  return createLucideIcon(name, [
-    [
+function clientMark(
+  name: string,
+  fit: string,
+  paths: readonly (readonly [d: string, evenOdd: boolean])[],
+): Component {
+  return createLucideIcon(
+    name,
+    paths.map(([d, evenOdd]) => [
       'path',
-      { d: path, fill: 'currentColor', stroke: 'none', transform: 'translate(2 2) scale(0.8333)' },
-    ],
-  ])
+      {
+        d,
+        fill: 'currentColor',
+        stroke: 'none',
+        transform: fit,
+        ...(evenOdd ? { 'fill-rule': 'evenodd', 'clip-rule': 'evenodd' } : {}),
+      },
+    ]),
+  )
 }
 
 /** Manifest-owned icon keys. An unknown key intentionally gets one generic glyph. */
@@ -126,12 +136,27 @@ const ICONS: Record<string, Component> = {
   'card': PanelRightOpen,
   'chain': Network,
   'check': Check,
-  // The two agent clients get their own neutral glyph rather than the unknown
-  // circle they were falling back to: a session row that says "codex" beside a
-  // question mark reports a client the interface does not recognise. Not their
-  // marks: Anthropic's and OpenAI's rules allow no recoloured or redrawn mark.
+  // Claude keeps a neutral glyph of its own rather than the unknown circle: a session row that
+  // says "claude" beside a question mark reports a client the interface does not recognise.
+  // Not its mark: Anthropic allows its marks only in materials it approves, and never recoloured.
   'claude': Asterisk,
-  'codex': SquareTerminal,
+  // Codex's own icon as OpenAI draws it in one colour: the cloud with a prompt in it, served
+  // by chatgpt.com/codex (retrieved 2026-11-08) and the same in the Codex app 26.1103. It is
+  // drawn on a 20-unit square, which takes the place of Lucide's 24.
+  'codex': clientMark('codex', 'scale(1.2)', [
+    [
+      'M13.334 11.417C13.701 11.4172 13.9989 11.715 13.9991 12.082C13.9991 12.4491 13.7011 12.7468 13.334 12.7471H10.834C10.4667 12.7471 10.169 12.4493 10.169 12.082C10.1691 11.7149 10.4668 11.417 10.834 11.417H13.334Z',
+      false,
+    ],
+    [
+      'M6.74222 7.34569C7.05709 7.15708 7.46546 7.25942 7.65433 7.57421L8.77542 9.44237C8.98061 9.78481 8.98081 10.2133 8.77542 10.5557L7.65433 12.4248C7.46553 12.7393 7.05697 12.8414 6.74222 12.6533C6.42734 12.4644 6.32486 12.0551 6.5137 11.7402L7.55765 9.99901L6.5137 8.2578C6.32498 7.94291 6.42739 7.53459 6.74222 7.34569Z',
+      false,
+    ],
+    [
+      'M7.79788 1.78026C9.31113 1.37492 10.8493 1.79464 11.9385 2.75878C13.365 2.46738 14.9091 2.87391 16.0176 3.98241C17.1255 5.09072 17.5303 6.63371 17.2393 8.05956C18.2041 9.14893 18.6251 10.6875 18.2198 12.2012C17.8139 13.715 16.6793 14.837 15.2989 15.2978C14.8382 16.6783 13.7171 17.8128 12.2032 18.2187C10.6893 18.6244 9.15004 18.2033 8.06058 17.2383C6.63475 17.5294 5.09176 17.1246 3.98343 16.0166C2.87526 14.9084 2.46879 13.3647 2.7598 11.9385C1.79537 10.8489 1.37594 9.31012 1.78128 7.79686C2.18691 6.28323 3.31979 5.16038 4.70023 4.69921C5.1613 3.31879 6.28422 2.18595 7.79788 1.78026ZM11.1094 3.79979C10.3375 3.08594 9.23002 2.77333 8.14261 3.06444C7.05488 3.3559 6.25114 4.18036 5.93949 5.18456C5.82791 5.54387 5.54587 5.82695 5.18656 5.93846C4.18211 6.24995 3.35702 7.05347 3.06546 8.14159C2.77429 9.22936 3.08701 10.3376 3.80081 11.1094C4.05589 11.3856 4.15916 11.771 4.0762 12.1377C3.844 13.1631 4.1275 14.2798 4.92386 15.0762C5.72013 15.8721 6.83591 16.1552 7.86136 15.9228L8.00003 15.9004C8.32338 15.868 8.64895 15.9747 8.89066 16.1982C9.66269 16.9123 10.7707 17.225 11.8584 16.9336C12.9458 16.6421 13.749 15.8179 14.0606 14.8135L14.1094 14.6826C14.243 14.3859 14.4987 14.1571 14.8135 14.0596C15.8182 13.7481 16.644 12.9452 16.9356 11.8574C17.2269 10.7698 16.9131 9.66163 16.1993 8.88964C15.9438 8.61338 15.8408 8.22731 15.9239 7.86034C16.1562 6.83493 15.873 5.71912 15.0772 4.92284C14.2807 4.12638 13.1643 3.8428 12.1387 4.07518C11.7718 4.1584 11.3858 4.05506 11.1094 3.79979Z',
+      true,
+    ],
+  ]),
   'chevron-down': ChevronDown,
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
@@ -141,18 +166,18 @@ const ICONS: Record<string, Component> = {
   'copy': Copy,
   // Cursor's cube, from Simple Icons 16.37.0 (path data CC0-1.0), which traces the 2D cube
   // of cursor.com/brand; that page gives the cube in one light and one dark colour.
-  'cursor': clientMark(
-    'cursor',
-    'M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23',
-  ),
+  'cursor': clientMark('cursor', 'translate(2 2) scale(0.8333)', [
+    [
+      'M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23',
+      false,
+    ],
+  ]),
   'database': Database,
   // What a disclosure draws before its words: shut, and open.
   'disclosure-closed': disclosureGlyph('disclosure-closed', 'm0 18 6-6-6-6'),
   'disclosure-open': disclosureGlyph('disclosure-open', 'm0 9 6 6 6-6'),
   'document': FileText,
-  // An editor, as a place a session or a file opens in: VS Code and its kin share it, and
-  // an agent's own app takes its client's glyph above. VS Code keeps it rather than its
-  // mark: Microsoft's rules allow the icon in its blue, or white for contrast, only.
+  // An editor with no mark of its own, as a place a session or a file opens in.
   'editor': CodeXml,
   // Changing what is written: a document in the owner's editor, an answer in its form.
   'edit': SquarePen,
@@ -180,6 +205,18 @@ const ICONS: Record<string, Component> = {
   'skills': LibraryBig,
   'settings': Settings,
   'terminal': Terminal,
+  // VS Code's icon is Microsoft's white variant (visual-studio-code-icons.zip, version
+  // 2021-06-21, from code.visualstudio.com/brand): its outline, unchanged, in the glyph's colour.
+  // Microsoft asks for the blue icon and the white one "only when there isn't enough contrast
+  // otherwise". Its darkest band, #0065A9, has 2.51:1 on a list or a card (#252525), 1.78:1 on a
+  // control (#3d3d3d) and 1.54:1 on a highlighted row (#464646), under the 3:1 a graphic needs
+  // (WCAG 1.4.11); #007ACC falls short on the last two as well.
+  'vscode': clientMark('vscode', 'translate(2 2) scale(0.2)', [
+    [
+      'M70.9119 99.5723C72.4869 100.189 74.2828 100.15 75.8725 99.3807L96.4604 89.4231C98.624 88.3771 100 86.1762 100 83.7616V16.2392C100 13.8247 98.624 11.6238 96.4604 10.5774L75.8725 0.619067C73.7862 -0.389991 71.3446 -0.142885 69.5135 1.19527C69.252 1.38636 69.0028 1.59985 68.769 1.83502L29.3551 37.9795L12.1872 24.88C10.5891 23.6607 8.35365 23.7606 6.86938 25.1178L1.36302 30.1525C-0.452603 31.8127 -0.454583 34.6837 1.35854 36.3466L16.2471 50.0001L1.35854 63.6536C-0.454583 65.3164 -0.452603 68.1876 1.36302 69.8477L6.86938 74.8824C8.35365 76.2395 10.5891 76.34 12.1872 75.1201L29.3551 62.0207L68.769 98.1651C69.3925 98.7923 70.1246 99.2645 70.9119 99.5723ZM75.0152 27.1813L45.1092 50.0001L75.0152 72.8189V27.1813Z',
+      true,
+    ],
+  ]),
   'table': TableProperties,
   // A work item's facets. A plain task and a medium priority have no glyph:
   // the norm is not drawn.

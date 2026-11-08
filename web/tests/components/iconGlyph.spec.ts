@@ -60,17 +60,24 @@ describe('a glyph drawn as a plain element', () => {
     expect(lost).toEqual([])
   })
 
-  // A client's mark is the one filled shape among outlines: it takes the glyph's colour and
-  // nothing of the vendor's, and stands in the 20-unit field a Lucide outline keeps clear.
-  it('draws a client mark as one shape in the glyph colour, inside the outlines field', () => {
-    const svg = mount({ render: () => iconGlyph('cursor', { size: 24 }) }).get('svg')
+  // A client's mark is its vendor's filled shapes among outlines: they take the glyph's colour
+  // and nothing of the vendor's, and stand in the field a Lucide outline keeps clear.
+  it.each([
+    ['cursor', 1, 'translate(2 2) scale(0.8333)'],
+    ['vscode', 1, 'translate(2 2) scale(0.2)'],
+    ['codex', 3, 'scale(1.2)'],
+  ])('draws the %s mark in the glyph colour, placed in the outlines field', (name, count, fit) => {
+    const svg = mount({ render: () => iconGlyph(name, { size: 24 }) }).get('svg')
     const shapes = svg.findAll('*')
-    expect(shapes).toHaveLength(1)
-    const [mark] = shapes
-    expect(mark?.attributes('fill')).toBe('currentColor')
-    expect(mark?.attributes('stroke')).toBe('none')
-    expect(svg.html()).not.toMatch(/#[\da-f]{3,6}\b|rgb\(/iu)
-    expect(mark?.attributes('transform')).toBe('translate(2 2) scale(0.8333)')
+    expect(shapes).toHaveLength(count)
+    for (const shape of shapes) {
+      expect(shape.element.tagName).toBe('path')
+      expect(shape.attributes('d')).toMatch(/^M-?[.\d]+.{40,}$/su)
+      expect(shape.attributes('fill')).toBe('currentColor')
+      expect(shape.attributes('stroke')).toBe('none')
+      expect(shape.attributes('transform')).toBe(fit)
+    }
+    expect(svg.html()).not.toMatch(/#[\da-f]{3,6}\b|rgb\(|url\(|<mask|<filter|gradient/iu)
   })
 
   it('keeps the host class and the defaults of the component that wraps it', () => {
