@@ -39,6 +39,7 @@ import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
+import TooltipHost from '@/shared/ui/TooltipHost.vue'
 
 const { t, te, locale } = useI18n()
 const { act: actOnNotice, current: currentNotice, dismiss: dismissNotice, say } = useShellNotice()
@@ -390,6 +391,7 @@ usePlatformEntryRestore({
     @dismiss="dismissNotice"
   />
   <ReferencePreview />
+  <TooltipHost />
 </template>
 
 <style scoped>

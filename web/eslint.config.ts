@@ -687,9 +687,9 @@ export default ts.config(
     // in the block — the search field, the viewport, the options and their
     // icons. Splitting the block in two would scope the trigger and leave the
     // popup global, which is the same exception written twice.
-    // `TooltipPortal` does the same to the reference preview, whose whole block
-    // is that one popup's surface.
-    files: ['src/shared/ui/ChoiceSelect.vue', 'src/shared/ui/ReferencePreview.vue'],
+    // `TooltipPortal` does the same to the reference preview and to the window's
+    // one tooltip, whose whole blocks are that one popup's surface.
+    files: ['src/shared/ui/ChoiceSelect.vue', 'src/shared/ui/{ReferencePreview,TooltipHost}.vue'],
     rules: { 'vue/enforce-style-attribute': 'off' },
   },
   {
