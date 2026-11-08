@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-import threading
 import time
 from collections.abc import Callable
 from typing import NamedTuple
@@ -496,7 +495,7 @@ def _report(line: str) -> None:
 def mcp_main() -> None:
     """Own the stdio session and its database handle."""
     conn = connect()
-    pulse: threading.Event | None = None
+    pulse: housekeeping.Pulse | None = None
     try:
         # Before the first request, and bounded: a lease that lapsed while no
         # session ran is released here rather than reported as held to the
@@ -515,7 +514,7 @@ def mcp_main() -> None:
         # out the window, or be the reason this process lingers.
         alert_emit.flush()
         if pulse is not None:
-            pulse.set()
+            pulse.stop()
         conn.close()
 
 

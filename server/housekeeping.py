@@ -77,6 +77,9 @@ USAGE_START_SECONDS = 5.0
 USAGE_PAUSE_SECONDS = 60.0
 #: Between its passes while history remains, which keeps it to a small share of the time.
 USAGE_BACKLOG_PAUSE_SECONDS = 5.0
+#: How long stopping the tick waits for one already under way. A tick gives up a busy
+#: liveness file after its own one-second timeout, so this is a bound, not a pause.
+PULSE_STOP_SECONDS = 5.0
 
 
 @dataclass
@@ -214,8 +217,26 @@ def start_sweep(conn: sqlite3.Connection, report: Callable[[str], None]) -> thre
     return thread
 
 
-def start_pulse(report: Callable[[str], None]) -> threading.Event:
-    """Tick in the background until the event this returns is set.
+@dataclass(frozen=True)
+class Pulse:
+    """The running tick and the event that ends it.
+
+    `stop` sets the event and waits out a tick already under way. Setting the event
+    alone let a surface return while a tick still held the liveness file and its
+    journal open, and whoever then removed the store's directory -- a test's temporary
+    home on Windows -- could not delete the journal.
+    """
+
+    event: threading.Event
+    thread: threading.Thread
+
+    def stop(self) -> None:
+        self.event.set()
+        self.thread.join(PULSE_STOP_SECONDS)
+
+
+def start_pulse(report: Callable[[str], None]) -> Pulse:
+    """Tick in the background until the pulse this returns is stopped.
 
     A failed tick says so once per distinct failure and the thread goes on: the
     next one may well land, and nothing here is worth a surface.
@@ -226,7 +247,7 @@ def start_pulse(report: Callable[[str], None]) -> threading.Event:
         target=_pulse, args=(store.db_path(), stop, report), name=PULSE_THREAD, daemon=True
     )
     thread.start()
-    return stop
+    return Pulse(stop, thread)
 
 
 def _pulse(path: str, stop: threading.Event, report: Callable[[str], None]) -> None:

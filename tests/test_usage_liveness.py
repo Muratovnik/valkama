@@ -178,14 +178,36 @@ class PulseTests(unittest.TestCase):
                     ticked.set()
 
                 with mock.patch.object(liveness, "tick", tick):
-                    stop = housekeeping.start_pulse(self.fail)
+                    pulse = housekeeping.start_pulse(self.fail)
                     self.assertTrue(ticked.wait(10))
-                    stop.set()
-                    for thread in threading.enumerate():
-                        if thread.name == housekeeping.PULSE_THREAD:
-                            thread.join(10)
-                            self.assertFalse(thread.is_alive())
+                    pulse.stop()
+                    self.assertFalse(pulse.thread.is_alive())
                 self.assertEqual(1, len(liveness.intervals(path)))
+
+    def test_stopping_waits_out_a_tick_under_way(self) -> None:
+        # A surface that returned while a tick still held the liveness file left its
+        # journal open, and a test's temporary home could not be removed on Windows.
+        entered = threading.Event()
+        finished = threading.Event()
+        release = threading.Event()
+
+        def tick(_path: str, _now: float) -> None:
+            entered.set()
+            release.wait(10)
+            finished.set()
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "valkama.sqlite3")
+            with (
+                mock.patch.dict(os.environ, {"VALKAMA_DB": path}),
+                mock.patch.object(liveness, "tick", tick),
+            ):
+                pulse = housekeeping.start_pulse(self.fail)
+                self.assertTrue(entered.wait(10))
+                threading.Timer(0.2, release.set).start()
+                pulse.stop()
+                self.assertTrue(finished.is_set())
+                self.assertFalse(pulse.thread.is_alive())
 
     def test_a_tick_that_fails_says_so_once_and_the_thread_goes_on(self) -> None:
         said: list[str] = []
@@ -202,14 +224,11 @@ class PulseTests(unittest.TestCase):
                 mock.patch.object(liveness, "tick", tick),
                 mock.patch.object(liveness, "TICK_SECONDS", 0.01),
             ):
-                stop = housekeeping.start_pulse(said.append)
+                pulse = housekeeping.start_pulse(said.append)
                 self.assertTrue(failed.wait(10))
                 # Long enough for the thread to come round several more times.
-                stop.wait(0.2)
-                stop.set()
-                for thread in threading.enumerate():
-                    if thread.name == housekeeping.PULSE_THREAD:
-                        thread.join(10)
+                pulse.event.wait(0.2)
+                pulse.stop()
         self.assertEqual(1, len(said), said)
         self.assertIn("the disk is full", said[0])
 

@@ -1533,6 +1533,6 @@ def serve_main(
             server.process_request(*waiting)
         server.serve_forever()
     finally:
-        pulse.set()
+        pulse.stop()
         usage.set()
         server.server_close()
