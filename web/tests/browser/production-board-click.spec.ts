@@ -6,7 +6,8 @@
  * with, and only that click or a later reading of another tile clears it. A release here
  * ends with no click at all, so the flag stood until the person's next click, on any tile,
  * and swallowed that. These presses come from a real pointer, in the built application,
- * and the click follows the release as closely as a test can make it.
+ * and the click follows the release as closely as a hand can: as soon as the tile it aims at
+ * stands still.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -83,9 +84,29 @@ const ENDINGS: Record<string, (page: Page, where: Locator) => Promise<void>> = {
   },
 }
 
-/** One press and release on the tile's title, with no move in between and no wait before it. */
+/**
+ * Where a hand aims at a tile: where it stands once it has stopped. A tile below one the
+ * library read away from its stack glides up into the room it left for 150 ms after the
+ * release, and a press aimed at it mid-glide came down on the stack between two tiles.
+ */
+async function aimAt(target: Locator) {
+  await expect.poll(() => target.evaluate(drift)).toBe(0)
+  return centre(target)
+}
+
+/** How far `node` moves up or down over the next two frames. */
+function drift(node: Element) {
+  const top = node.getBoundingClientRect().top
+  return new Promise<number>((done) => {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => done(node.getBoundingClientRect().top - top)),
+    )
+  })
+}
+
+/** One press and release on the tile's title, with no move in between and no wait after it stops. */
 async function clickOnce(page: Page, reference: string) {
-  const { x, y } = await centre(page.locator(`[data-reference="${reference}"] .tile-open`))
+  const { x, y } = await aimAt(page.locator(`[data-reference="${reference}"] .tile-open`))
   await page.mouse.move(x, y)
   await page.mouse.down()
   await page.mouse.up()
