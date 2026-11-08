@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { ModuleId, ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import CountBadge from '@/shared/ui/CountBadge.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -101,11 +102,11 @@ function currentState(module: ModuleManifest) {
       class="nav-entry"
     >
       <button
+        v-tooltip:right.clipped="moduleTitle(module)"
         type="button"
         class="nav-item"
         :class="[`module-${module.module_id}`, { 'has-fold': folds(module) }]"
         v-bind="currentState(module)"
-        :title="moduleTitle(module)"
         @pointerenter="emit('prefetch', module.module_id, 'hover')"
         @focus="emit('prefetch', module.module_id, 'focus')"
         @click="emit('navigate', module.module_id)"
@@ -126,12 +127,12 @@ function currentState(module: ModuleManifest) {
       <button
         v-if="disclosure && folds(module)"
         :id="disclosure.id"
+        v-tooltip:right="disclosure.label"
         class="nav-entry-fold"
         type="button"
         :aria-expanded="disclosure.expanded"
         :aria-controls="disclosure.controls"
         :aria-label="disclosure.label"
-        :title="disclosure.label"
         @click="emit('fold')"
       >
         <VIcon

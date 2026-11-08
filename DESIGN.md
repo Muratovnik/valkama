@@ -639,6 +639,18 @@ same way, not a record that could not be loaded. The context bar keeps the
 selected Planning space or operating scope and global activity controls in
 fixed, predictable positions.
 
+The rail's width is the reader's. Its right edge is a window splitter, the same edge a
+drawer is resized by: dragged, or stepped 16px by the arrow keys, Home and End taking it to
+its narrowest and widest. It starts at 260px, goes no narrower than 200px and no wider than
+480px or than leaves the workspace 500px, and keeps the width chosen across a reload. A
+name the rail still cuts short says itself in a hint beside the rail; a name it does not
+cut shows none. At 760px and narrower the rail is its icons alone and has no edge to drag.
+
+The connection's foot shows only while the connection is lost. Connected, the streams bring
+every change as it happens, so a green dot and a refresh nobody needed stood at the foot of
+every page; connecting is the moment a page opens, and showing it would only flash. Lost,
+the foot holds the state, the reason in its hint and the refresh, as below.
+
 In the Work list's phone panel (the navigation at most 760px wide), only a closed
 top-level item with no sign and no fold loses its lead column, so its title takes that
 room; a group's head with items shown under it, an item with a sign and a closed item
@@ -669,6 +681,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   does on an open. A panel opened by no input, from an address or a reload, holds
   focus on what it is read with until a Tab, so that no control stands ringed for
   something nobody pressed and the keys that scroll work at once.
+- **Hints:** a hint is `vTooltip` and its one host, `TooltipHost`, never the
+  `title` attribute, which the browser draws late, in its own font and colours, and
+  never for text cut short. It shows after a short rest of the pointer and at once on
+  focus a key brought, never for a finger, and goes with Escape, a press, the pointer
+  leaving or a scroll. It stands above its element unless the place asks for a side —
+  the rail's hints stand to its right, clear of the rows — and flips where the window
+  has no room. `clipped` shows it only while its element's text is cut, which is what a
+  truncated name needs. For assistive technology it is what `title` was: the name of an
+  element nothing else names, else its description when it says more than the name. A
+  reference's preview card wins over it. A hint is words; anything with a control in it
+  is `InfoTip`.
 - **Empty and error states:** one shared state component explains what is
   absent, why it matters, and the next valid action when one exists.
 - **Icons and badges:** application glyphs come from the central icon owner;

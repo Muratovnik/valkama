@@ -15,11 +15,18 @@
  * from a file that could not see them, which is the failure scoped styles exist
  * to prevent. Splitting the parts out is what made bringing the rules home
  * possible without this file growing past what one screen holds.
+ *
+ * Its width is the reader's: its right edge is a window splitter, dragged or stepped
+ * with the arrow keys between the narrowest and the widest the window leaves it, and
+ * kept for the next visit (`useDrawerWidth`, as a drawer's edge is). At 760px and
+ * narrower it is its icons alone, and has no edge to drag.
  */
-import { computed, useId } from 'vue'
+import { computed, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import NavConnectionButton from '@/widgets/app-nav/components/NavConnectionButton.vue'
+import NavConnectionButton, {
+  connectionTroubled,
+} from '@/widgets/app-nav/components/NavConnectionButton.vue'
 import NavModuleList from '@/widgets/app-nav/components/NavModuleList.vue'
 import NavWorkActions from '@/widgets/app-nav/components/NavWorkActions.vue'
 import NavWorkGroup from '@/widgets/app-nav/components/NavWorkGroup.vue'
@@ -34,8 +41,19 @@ import type {
   NavigationGroup,
 } from '@/shared/api/platformModuleContract.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import {
+  NAV_DEFAULT_WIDTH,
+  NAV_ICONS_ONLY_WIDTH,
+  NAV_MAX_WIDTH,
+  NAV_MIN_WIDTH,
+  NAV_WIDTH_STORAGE_KEY,
+  NAV_WORKSPACE_ROOM,
+} from '@/shared/lib/shellLayout.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 import BrandMark from '@/shared/ui/BrandMark.vue'
+import OverlayResizer from '@/shared/ui/OverlayResizer.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -119,6 +137,43 @@ const withinFor = (live: boolean) => live && liveWithin.value
 const toggleLive = () => navOpen.set('work', !navOpen.isOpen('work'))
 const foldFor = (live: boolean) => (live ? liveFold.value : null)
 
+const railId = `nav-rail-${useId()}`
+const {
+  beginResize,
+  drawerMaximum,
+  drawerMinimum,
+  drawerWidth,
+  resizeFromKeyboard,
+  resizing,
+  restoreDrawerWidth,
+  viewportWidth,
+} = useDrawerWidth({
+  active: () => !iconsOnly.value,
+  defaultWidth: () => NAV_DEFAULT_WIDTH,
+  edge: 'end',
+  maxWidth: (viewport) => Math.min(NAV_MAX_WIDTH, viewport - NAV_WORKSPACE_ROOM),
+  minWidth: () => NAV_MIN_WIDTH,
+  resizable: () => true,
+  storageKey: () => NAV_WIDTH_STORAGE_KEY,
+})
+restoreDrawerWidth()
+/** The same question the style block's one viewport query asks. */
+const iconsOnly = computed(() => viewportWidth.value <= NAV_ICONS_ONLY_WIDTH)
+/** Only a rail with words has a width to choose; with icons alone the style block's 64px stands. */
+const railStyle = computed(() =>
+  iconsOnly.value ? undefined : { '--size-navigation-width': `${drawerWidth.value}px` },
+)
+
+/** The foot is drawn only while it holds the lost connection's control. */
+const troubled = computed(() => connectionTroubled(props.connection))
+const rail = useTemplateRef<HTMLElement>('rail')
+/** The connection came back under focus: focus goes to the entry on show, else the first one. */
+function settle() {
+  const entries = rail.value?.querySelectorAll<HTMLElement>('.app-nav button, .app-nav a')
+  const current = rail.value?.querySelector<HTMLElement>('.app-nav [aria-current]')
+  ;(current ?? entries?.[0])?.focus()
+}
+
 /** A list reports what was chosen; the shell above decides what to do about it. */
 function forwardNavigate(module: ModuleId) {
   emit('navigate', module)
@@ -130,12 +185,18 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
 </script>
 
 <template>
-  <aside class="app-nav-shell">
+  <aside
+    :id="railId"
+    ref="rail"
+    class="app-nav-shell"
+    :class="{ 'is-resizing': resizing }"
+    :style="railStyle"
+  >
     <div class="nav-head">
       <button
+        v-tooltip:right="t('navigation.home')"
         class="app-brand"
         type="button"
-        :title="t('navigation.home')"
         @click="emit('home')"
       >
         <BrandMark
@@ -197,13 +258,29 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
       />
     </nav>
 
-    <div class="nav-utility">
+    <div
+      class="nav-utility"
+      :class="{ 'is-quiet': !troubled }"
+    >
       <NavConnectionButton
         :connection="connection"
         :refreshing="refreshing"
         @refresh="emit('refresh')"
+        @settled="settle"
       />
     </div>
+
+    <OverlayResizer
+      v-if="!iconsOnly"
+      at="after"
+      :label="t('navigation.resize')"
+      :controls="railId"
+      :minimum="drawerMinimum"
+      :maximum="drawerMaximum"
+      :now="drawerWidth"
+      @pointerdown="beginResize"
+      @keydown="resizeFromKeyboard"
+    />
   </aside>
 </template>
 
@@ -224,6 +301,14 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   color: var(--color-text-on-dark);
   background: var(--color-navigation);
   container: nav / inline-size;
+
+  /* While the edge is dragged the pointer crosses the rail's words, which neither select
+     nor change the cursor under it. */
+  &.is-resizing,
+  &.is-resizing * {
+    cursor: col-resize;
+    user-select: none;
+  }
 }
 
 /* No rule under the brand and none down the right edge of the rail. The rail,
@@ -294,11 +379,18 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   padding: var(--space-3) var(--space-3) var(--space-4);
   margin-top: auto;
   border-top: 1px solid var(--color-rule);
+
+  /* A healthy connection shows nothing here, and an empty foot draws no rule. */
+  &.is-quiet {
+    padding: 0;
+    border-top: 0;
+  }
 }
 
 /* The one viewport question in this component, and the reason `check:ui-system`
    names this file among the two that may ask: an element deciding its own width
-   cannot ask a container about it, because the container is itself. */
+   cannot ask a container about it, because the container is itself. Its number is
+   `NAV_ICONS_ONLY_WIDTH`, which takes the width the reader chose off the rail. */
 @media (width <= 760px) {
   .app-nav-shell {
     --size-navigation-width: 64px;

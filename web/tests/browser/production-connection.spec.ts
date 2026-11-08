@@ -1,6 +1,8 @@
 /**
  * Losing the server is background state: it is said where the connection is
- * already said, and it never moves the work on screen.
+ * already said, and it never moves the work on screen. A healthy connection says
+ * nothing at all: the rail's foot holds the connection and its refresh only while
+ * the connection is lost.
  *
  * A paragraph about paused updates used to be put into the flow above the
  * views when the stream dropped, which pushed the board's columns and the
@@ -38,7 +40,7 @@ for (const viewport of [
       const model = await response.text()
       await stream.deliver(model)
       const rail = page.locator('.nav-refresh')
-      await expect(rail).toHaveAttribute('data-tone', 'success')
+      await expect(rail).toHaveCount(0)
       const stage = page.locator('.workspace-stage')
       const drawn = page.locator(view === 'kanban' ? '.work-item-column' : '.vue-flow').first()
       // The graph's bar gains its options button once the field is laid out, 4px at a
@@ -57,10 +59,10 @@ for (const viewport of [
       expect(await place()).toEqual(before)
       // Said where the connection is said, and to assistive technology once.
       await expect(page.getByRole('status').filter({ hasText: LOST })).toHaveCount(1)
-      await expect(rail).toHaveAttribute('title', new RegExp(LOST.replaceAll('.', '\\.'), 'u'))
+      await expect(rail).toHaveAccessibleDescription(new RegExp(LOST.replaceAll('.', '\\.'), 'u'))
 
       await stream.deliver(model)
-      await expect(rail).toHaveAttribute('data-tone', 'success')
+      await expect(rail).toHaveCount(0)
       await expect(page.getByRole('status').filter({ hasText: LOST })).toHaveCount(0)
       expect(await place()).toEqual(before)
     })
@@ -100,12 +102,14 @@ test('a press on a lost connection on a narrow rail says why, and Escape closes 
   const response = await read
   await stream.deliver(await response.text())
   const rail = page.locator('.nav-refresh')
-  await expect(rail).toHaveAttribute('data-tone', 'success')
+  await expect(rail).toHaveCount(0)
 
   await stream.drop()
   await expect(rail).toHaveAttribute('data-tone', 'warning')
   await expect(page.locator('.connection-copy')).toBeHidden()
-  await expect(rail).toHaveAccessibleName(new RegExp(LOST.replaceAll('.', '\\.'), 'u'))
+  // Named by the state it shows, which the narrow rail does not draw, and described by why.
+  await expect(rail).toHaveAccessibleName('Reconnecting')
+  await expect(rail).toHaveAccessibleDescription(new RegExp(LOST.replaceAll('.', '\\.'), 'u'))
 
   await rail.click()
   const panel = page.getByRole('dialog').filter({ hasText: LOST })
@@ -147,4 +151,22 @@ test('on a wide rail a press on a lost connection refreshes and opens nothing', 
   await rail.click()
   await refreshed
   await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+/** The connection coming back takes the control away, and focus on it goes to the rail. */
+test('a connection regained under focus hands focus to the entry on show', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const stream = await installStreamDouble(page)
+  const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  const response = await read
+  const model = await response.text()
+  await stream.deliver(model)
+  await stream.drop()
+  const rail = page.locator('.nav-refresh')
+  await rail.focus()
+  await stream.deliver(model)
+  await expect(rail).toHaveCount(0)
+  await expect(page.locator('.app-nav .nav-item.module-planning')).toBeFocused()
 })

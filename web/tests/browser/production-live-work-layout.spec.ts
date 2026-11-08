@@ -189,8 +189,8 @@ test('the list scrolls by itself at 800px, and the rail’s head and foot stay p
     '.app-brand',
     '.work-action',
     '.nav-item.module-planning',
+    // The connection's foot is empty while the stream is live, so Settings is the last thing.
     '.nav-item.module-settings',
-    '.nav-refresh',
   ]
   const before = await Promise.all(
     still.map((selector) => page.locator(selector).first().boundingBox()),

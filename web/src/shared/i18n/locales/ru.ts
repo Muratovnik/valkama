@@ -181,6 +181,7 @@ export const ru = {
   },
   navigation: {
     home: 'К разделу «Работа»',
+    resize: 'Ширина навигации',
   },
   language: {
     label: 'Язык',

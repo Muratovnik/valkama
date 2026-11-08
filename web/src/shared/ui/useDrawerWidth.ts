@@ -11,13 +11,20 @@ import {
 /**
  * How wide a drawer stands: what the reader asked for by its grip or its keys, held
  * to what the window has room for, and kept for the next open.
+ *
+ * The edge is at the start of what it sizes for a drawer or a pane, which grows as the
+ * edge moves left; the rail is sized by its end, and grows as the edge moves right. The
+ * arrow keys follow the edge: the one that moves it outward widens.
  */
 export function useDrawerWidth(options: {
   /** Enter folds what this edge sizes away and brings it back at the width it had. */
   collapsible?: boolean
+  /** Which edge of what it sizes the grip stands on; the start unless said. */
+  edge?: 'start' | 'end'
   active: () => boolean
   defaultWidth: () => number
-  maxWidth: () => number
+  /** The widest it may stand, given how wide the window is. */
+  maxWidth: (viewportWidth: number) => number
   minWidth: () => number
   resizable: () => boolean
   storageKey: () => string
@@ -26,13 +33,18 @@ export function useDrawerWidth(options: {
   const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
   const resizing = ref(false)
   const collapsed = ref(false)
+  /** +1 when moving the edge right widens, -1 when moving it left does. */
+  const outward = options.edge === 'end' ? 1 : -1
   let resizeStartX = 0
   let resizeStartWidth = options.defaultWidth()
 
   const drawerMaximum = computed(() =>
     viewportWidth.value <= DRAWER_NARROW_BREAKPOINT
       ? viewportWidth.value
-      : Math.min(options.maxWidth(), viewportWidth.value - DRAWER_VIEWPORT_GUTTER),
+      : Math.min(
+          options.maxWidth(viewportWidth.value),
+          viewportWidth.value - DRAWER_VIEWPORT_GUTTER,
+        ),
   )
   const drawerMinimum = computed(() => Math.min(options.minWidth(), drawerMaximum.value))
   const drawerWidth = computed(() =>
@@ -70,7 +82,7 @@ export function useDrawerWidth(options: {
   function resizeFromPointer(event: PointerEvent) {
     preferredDrawerWidth.value = Math.min(
       drawerMaximum.value,
-      Math.max(drawerMinimum.value, resizeStartWidth + resizeStartX - event.clientX),
+      Math.max(drawerMinimum.value, resizeStartWidth + outward * (event.clientX - resizeStartX)),
     )
   }
 
@@ -96,8 +108,8 @@ export function useDrawerWidth(options: {
     const requested = new Map([
       ['Home', drawerMinimum.value],
       ['End', drawerMaximum.value],
-      ['ArrowLeft', drawerWidth.value + INSPECTOR_KEYBOARD_STEP],
-      ['ArrowRight', drawerWidth.value - INSPECTOR_KEYBOARD_STEP],
+      ['ArrowLeft', drawerWidth.value - outward * INSPECTOR_KEYBOARD_STEP],
+      ['ArrowRight', drawerWidth.value + outward * INSPECTOR_KEYBOARD_STEP],
     ])
     const target = requested.get(event.key)
     if (!options.active() || target === undefined) return

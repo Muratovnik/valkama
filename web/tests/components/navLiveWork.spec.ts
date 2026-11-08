@@ -16,8 +16,12 @@ import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 import { FADING_MS, useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { busyFrame, liveFrame, liveRow, liveSpace } from '../support/liveFrame.ts'
+
+/** The hint a row shows: its number and title, and the state when it has one. */
+const hintOf = (row: Element) => tooltipOf(row)?.text
 
 const SCOPE = '123e4567-e89b-42d3-a456-426614174000'
 const planning = {
@@ -115,7 +119,7 @@ describe('the order the frame came in', () => {
   it('prints a row by its number alone, the space being named above it', () => {
     const { wrapper } = rail(busyFrame())
     expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-number')?.textContent).toBe('12')
-    expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-link')?.getAttribute('title')).toBe(
+    expect(hintOf(row(wrapper, 'MAIN-12'))).toBe(
       'MAIN-12 Answer a review in one form\nworking, 2 agents',
     )
   })
@@ -238,9 +242,7 @@ describe('rows with no work moving', () => {
     const quiet = row(wrapper, 'MAIN-14')
     expect(quiet.classList).toContain('muted')
     expect(quiet.querySelector('.work-dots')).toBeNull()
-    expect(quiet.querySelector('.nav-row-link')?.getAttribute('title')).toMatch(
-      /^MAIN-14 Quiet claim\nмолчит с 03 нояб\.?$/u,
-    )
+    expect(hintOf(quiet)).toMatch(/^MAIN-14 Quiet claim\nмолчит с 03 нояб\.?$/u)
   })
 
   it('keeps the sign’s room on a pinned row with no work, and says why it is there', () => {
@@ -250,9 +252,7 @@ describe('rows with no work moving', () => {
     expect(idle.classList).toContain('muted')
     expect(idle.querySelector('.nav-row-lead')?.children).toHaveLength(0)
     expect(working.querySelector('.nav-row-lead')?.children).toHaveLength(1)
-    expect(idle.querySelector('.nav-row-link')?.getAttribute('title')).toBe(
-      'MAIN-20 Notes for the owner\nPinned · no work now · Backlog',
-    )
+    expect(hintOf(idle)).toBe('MAIN-20 Notes for the owner\nPinned · no work now · Backlog')
     expect(idle.querySelector('.nav-row-meta')).toBeNull()
     expect(idle.querySelector('.nav-row-pin')?.getAttribute('aria-label')).toBe(
       'Pinned to Work: press to remove the pin',

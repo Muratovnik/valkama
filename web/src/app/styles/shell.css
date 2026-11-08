@@ -25,9 +25,9 @@
 }
 
 /* Everything right of the rail measures against `main`, and the workspace panel
-   inside it against `workspace`. Neither is the viewport: the rail is 260px or
-   64px depending on a state the window knows nothing about, so a viewport
-   threshold describes the wrong box by up to 196px. */
+   inside it against `workspace`. Neither is the viewport: the rail is as wide as
+   the reader dragged it, 200px to 480px, or 64px of icons, so a viewport
+   threshold describes the wrong box by up to 416px. */
 .app-main {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
 import CountBadge from '@/shared/ui/CountBadge.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{ pendingCount: PendingCount | null }>()
@@ -14,10 +15,10 @@ const { t } = useI18n()
 <template>
   <div class="work-actions">
     <button
+      v-tooltip:right.clipped="t('finder.trigger')"
       class="work-action"
       type="button"
       aria-keyshortcuts="Control+k Meta+k"
-      :title="t('finder.trigger')"
       @click="emit('find')"
     >
       <VIcon
@@ -32,9 +33,9 @@ const { t } = useI18n()
       >
     </button>
     <button
+      v-tooltip:right.clipped="t('requests.title')"
       class="work-action"
       type="button"
-      :title="t('requests.title')"
       @click="emit('requests')"
     >
       <VIcon
