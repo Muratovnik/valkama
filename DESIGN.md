@@ -913,7 +913,13 @@ choice is in sight as the menu opens, on a short window too. The menu once
 stood 420px tall with the head 37px under it, and the spec passed on a fixture of few entries.
 The arrows reach that choice as they reach a value, because
 a list has one focus and it stays in the field. The chips say the same in a word
-between two labels. On a phone the grouping gives its word up to the reset while a filter is on, so
+between two labels. A facet's value is «is» until its chip says otherwise: the chip
+starts with its operator, «=», a pressed toggle that turns to «≠» and the chip's words
+to «Label: not ui», so the work must not carry that value; work nobody holds is not held
+by the holder named. Linear asks for the operator the same way, on the chip, rather than
+on every pick as GitLab's three steps do. The menu marks a value negated with the chip's
+cross in its check's place, and a press there takes it out whichever way it was in. In the
+address a negated value rides its facet's own key behind `%-`, which no older link holds. On a phone the grouping gives its word up to the reset while a filter is on, so
 the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and

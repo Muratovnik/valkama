@@ -119,15 +119,19 @@ function tokenValue(token: WorkFilterToken, t: Translate): string {
   }
 }
 
-/** What a chip says: «Метка: coordinator»; a preset by its own name. */
+/** What a chip says: «Метка: coordinator», «Метка: не coordinator»; a preset by its own name. */
 export function tokenName(token: WorkFilterToken, t: Translate): string {
   if (token.facet === 'ready' || token.facet === 'held') return tokenValue(token, t)
-  return t('workItem.filter.chip', {
+  return t(token.not ? 'workItem.filter.chipNot' : 'workItem.filter.chip', {
     facet: t(`workItem.filter.facet.${token.facet}`),
     value: tokenValue(token, t),
   })
 }
 
+/**
+ * A token's key, the same whether it is negated or not: a value is in the filter
+ * one way at most, and the chip that switches it keeps its place and its focus.
+ */
 export function tokenKey(token: WorkFilterToken): string {
   return 'value' in token ? `${token.facet}:${token.value}` : token.facet
 }
@@ -306,3 +310,17 @@ export function stepGroups(
 /** Whether a value row's token is in the filter; a row that is no value is not chosen at all. */
 export const picked = (filter: WorkFilter, option: FilterOption) =>
   option.action.do === 'pick' ? hasToken(filter, option.action.token) : undefined
+
+/** Whether a value row's value is in the filter negated, «не равно». */
+export function excluded(filter: WorkFilter, option: FilterOption): boolean {
+  const { action } = option
+  return action.do === 'pick' && 'value' in action.token
+    ? hasToken(filter, { ...action.token, not: true })
+    : false
+}
+
+/** The glyph in a row's check place: the search's own, or the chip's cross for a value negated. */
+export function rowIcon(option: FilterOption, negated: boolean): string | undefined {
+  if (option.action.do === 'find') return 'search'
+  return negated ? 'close' : undefined
+}

@@ -38,6 +38,8 @@ interface OptionGroup {
     icon?: string
     /** The option names a work item kind, and its word takes that kind's colour. */
     kind?: string
+    /** What a screen reader says of the row where its word alone says too little; it starts with the word. */
+    name?: string
     /** The row leads to a list of its own, and says so with a chevron at its end. */
     next?: boolean
     /** Absent for a row that is no value, which a press does not choose but follows. */
@@ -178,6 +180,7 @@ const NO_VALUE = undefined
         class="option-row"
         role="option"
         tabindex="-1"
+        :aria-label="entry.option.name"
         :aria-selected="entry.option.selected"
         :data-highlighted="highlighted(entry.place)"
         @pointermove="emit('update:highlight', entry.place)"

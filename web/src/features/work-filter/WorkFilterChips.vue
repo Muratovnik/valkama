@@ -1,6 +1,9 @@
 <script setup lang="ts">
 /**
- * The picked facets as chips, each one a button that takes itself out.
+ * The picked facets as chips, each one a button that takes itself out. A
+ * facet's value has a toggle before it, the operator (`ToggleChip`): «=» or,
+ * pressed, «≠», which turns the value into one the work must not carry — Linear's
+ * «is» and «is not», switched on the chip rather than asked for on every pick.
  *
  * They stand on the bar's line of state, beside the counts they explain,
  * rather than inside the field: at the widths the bar has, three chips left
@@ -16,8 +19,9 @@ import { useI18n } from 'vue-i18n'
 
 import { tokenKey, tokenName } from '@/features/work-filter/filterOptions.ts'
 
-import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+import type { ValueToken, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import ToggleChip from '@/shared/ui/ToggleChip.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -29,6 +33,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   /** Focus leaves the chips for the text, at its end. */
   leave: []
+  /** The value switched between «is» and «is not». */
+  negate: [token: ValueToken]
   remove: [token: WorkFilterToken]
 }>()
 
@@ -38,11 +44,15 @@ const id = useId()
 const chips = computed(() => {
   const firstLabel = props.tokens.findIndex((token) => token.facet === 'labels')
   const word = t(`workItem.filter.labelsMatch.${props.labelsAny ? 'any' : 'all'}.join`)
+  const and = t('workItem.filter.labelsMatch.all.join')
   return props.tokens.map((token, index) => {
     const name = tokenName(token, t)
     // The word before it, from the second label on, which also describes the chip.
-    const join = token.facet === 'labels' && index > firstLabel ? word : undefined
+    // A label negated is kept out whatever «any» lets in, so the word before it is always «and».
+    const joined = token.facet === 'labels' && token.not ? and : word
+    const join = token.facet === 'labels' && index > firstLabel ? joined : undefined
     const joinId = `${id}-join-${index}`
+    const value = 'value' in token ? token : undefined
     return {
       key: tokenKey(token),
       name,
@@ -50,7 +60,16 @@ const chips = computed(() => {
       joinId,
       describedBy: join && joinId,
       // Absent rather than false: the attribute is what the style reads.
-      preset: token.facet === 'ready' || token.facet === 'held' || undefined,
+      preset: value === undefined || undefined,
+      // The operator's name is the value's whole, so it says what it would switch.
+      operator: value && {
+        token: value,
+        pressed: value.not === true,
+        sign: value.not ? '≠' : '=',
+        name: t('workItem.filter.negate', {
+          name: tokenName({ ...value, not: undefined } as ValueToken, t),
+        }),
+      },
       removeName: t('workItem.filter.remove', { name }),
       token,
     }
@@ -133,22 +152,34 @@ defineExpose({ focusLast })
         class="filter-chip-join"
         >{{ chip.join }}</span
       >
-      <button
-        class="filter-chip"
-        type="button"
-        :aria-describedby="chip.describedBy"
-        :aria-label="chip.removeName"
-        :title="chip.removeName"
-        @click="remove(index)"
-        @keydown="keydown($event, index)"
-      >
-        <span class="filter-chip-name">{{ chip.name }}</span>
-        <VIcon
-          class="filter-chip-remove"
-          name="close"
-          :size="14"
-        />
-      </button>
+      <span class="filter-chip-pill">
+        <ToggleChip
+          v-if="chip.operator"
+          class="filter-chip-operator"
+          :pressed="chip.operator.pressed"
+          :aria-label="chip.operator.name"
+          :title="chip.operator.name"
+          @toggle="emit('negate', chip.operator.token)"
+        >
+          {{ chip.operator.sign }}
+        </ToggleChip>
+        <button
+          class="filter-chip"
+          type="button"
+          :aria-describedby="chip.describedBy"
+          :aria-label="chip.removeName"
+          :title="chip.removeName"
+          @click="remove(index)"
+          @keydown="keydown($event, index)"
+        >
+          <span class="filter-chip-name">{{ chip.name }}</span>
+          <VIcon
+            class="filter-chip-remove"
+            name="close"
+            :size="14"
+          />
+        </button>
+      </span>
     </li>
   </ul>
 </template>
@@ -180,8 +211,30 @@ defineExpose({ focusLast })
   font: var(--font-detail);
 }
 
+/* The chip and its operator as one shape: the fill and the corners are the pill's. */
+.filter-chip-pill {
+  display: inline-flex;
+  min-width: 0;
+  background: var(--color-surface-active);
+  border-radius: var(--radius-control);
+
+  /* A forced palette clears the fill, and two chips side by side read as one run of words. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+}
+
+/* The operator is the product's toggle, pressed as every toggle is, drawn at the chip's
+   height and in its words' size, on the pill's fill rather than a fill of its own. */
+.filter-chip-operator {
+  min-height: var(--size-control-inline);
+  font: var(--font-detail);
+  background: transparent;
+}
+
 /* The label chip's look — control fill, muted ink — one step up, because it
-   sits inside a field that already has the control fill. */
+   sits inside a field that already has the control fill. The fill is the pill's. */
 .filter-chip {
   display: inline-flex;
   gap: var(--space-1);
@@ -194,14 +247,13 @@ defineExpose({ focusLast })
   color: var(--color-text);
   font: var(--font-detail);
   white-space: nowrap;
-  background: var(--color-surface-active);
+  background: transparent;
   border-radius: var(--radius-control);
   cursor: pointer;
 
-  /* A forced palette clears the fill, and two chips side by side read as one run of words. */
-  @media (forced-colors: active) {
-    outline: 1px solid ButtonText;
-    outline-offset: -1px;
+  /* Beside the operator the sign already holds the start, so the words come closer. */
+  .filter-chip-operator + & {
+    padding-inline-start: 0;
   }
 
   &:hover .filter-chip-remove {

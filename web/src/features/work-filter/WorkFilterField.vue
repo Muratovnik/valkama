@@ -36,7 +36,13 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
-import { filterGroups, picked, stepGroups } from '@/features/work-filter/filterOptions.ts'
+import {
+  excluded,
+  filterGroups,
+  picked,
+  rowIcon,
+  stepGroups,
+} from '@/features/work-filter/filterOptions.ts'
 import type { FilterStep } from '@/features/work-filter/filterOptions.ts'
 import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
 import WorkFilterPresets from '@/features/work-filter/WorkFilterPresets.vue'
@@ -167,15 +173,20 @@ const menuGroups = computed(() =>
       key: group.back.key,
       name: t('workItem.filter.back', { facet: group.name }),
     },
-    options: group.options.map((option) => ({
-      key: option.key,
-      text: option.text,
-      detail: option.detail,
-      kind: option.kind,
-      icon: option.action.do === 'find' ? 'search' : undefined,
-      next: option.action.do === 'open',
-      selected: picked(filter.value, option),
-    })),
+    options: group.options.map((option) => {
+      // A value the work must not carry is in the filter too, marked as the chip's cross is.
+      const negated = excluded(filter.value, option)
+      return {
+        key: option.key,
+        text: option.text,
+        name: negated ? t('workItem.filter.excluded', { value: option.text }) : undefined,
+        detail: option.detail,
+        kind: option.kind,
+        icon: rowIcon(option, negated),
+        next: option.action.do === 'open',
+        selected: negated || picked(filter.value, option),
+      }
+    }),
     choices: group.choices?.map((choice) => ({
       key: choice.key,
       name: choice.name,
