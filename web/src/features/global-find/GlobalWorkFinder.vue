@@ -46,8 +46,12 @@ const failure = ref<string | null>(null)
 /** Enter was pressed before the rows arrived: open the first one when they do. */
 const pendingOpen = ref(false)
 const result = ref<GlobalPlanningSearch | null>(null)
-/** The glyphs before a result's reference, one slot each, so references align. */
-const LEAD = ['priority', 'kind'] as const
+/**
+ * The glyph before a result's reference, in a slot of its own so references align. The
+ * one reading order puts the kind before the reference and the priority after it, so the
+ * priority stands with the state on the line below.
+ */
+const LEAD = ['kind'] as const
 
 /** A reason line names this many sources and counts the rest. */
 const SOURCES_SHOWN = 3
@@ -258,7 +262,7 @@ function select(target: PlanningTarget) {
           ><FacetMarks
             surface="finder"
             :item="item.subject"
-            :facets="['state']"
+            :facets="['priority', 'state']"
           /><span aria-hidden="true"> · </span>{{ item.place }}</template
         >
         <template v-else>{{ item.detail }}</template>

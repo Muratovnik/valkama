@@ -72,11 +72,15 @@ describe('global task finder', () => {
     expect(option.text()).toContain('TASK-7')
     expect(option.text()).toContain('In progress')
     expect(option.text()).toContain('Read only')
-    // Urgent and the kind lead the reference as glyphs, their words in the name;
-    // the state is its dot; nothing in the row is a control of its own.
+    // The kind leads the reference as a glyph, its word in the name; urgent follows on
+    // the line below, before the state's dot, in the one reading order of the marks;
+    // nothing in the row is a control of its own.
     const lead = option.findAll('.command-head [data-facet]')
-    expect(lead.map((mark) => mark.attributes('data-tone'))).toEqual(['danger', 'neutral'])
-    expect(option.get('.command-head').text()).toBe('UrgentBugTASK-7')
+    expect(lead.map((mark) => mark.attributes('data-tone'))).toEqual(['neutral'])
+    expect(option.get('.command-head').text()).toBe('BugTASK-7')
+    const detail = option.findAll('.command-detail [data-facet]')
+    expect(detail.map((mark) => mark.attributes('data-facet'))).toEqual(['priority'])
+    expect(detail[0]?.attributes('data-tone')).toBe('danger')
     expect(option.get('.command-detail .semantic-state').attributes('data-tone')).toBe('info')
     expect(option.findAll('button')).toHaveLength(0)
     const input = wrapper.get('[role="combobox"]')
