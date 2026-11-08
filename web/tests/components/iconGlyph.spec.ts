@@ -60,6 +60,19 @@ describe('a glyph drawn as a plain element', () => {
     expect(lost).toEqual([])
   })
 
+  // A client's mark is the one filled shape among outlines: it takes the glyph's colour and
+  // nothing of the vendor's, and stands in the 20-unit field a Lucide outline keeps clear.
+  it('draws a client mark as one shape in the glyph colour, inside the outlines field', () => {
+    const svg = mount({ render: () => iconGlyph('cursor', { size: 24 }) }).get('svg')
+    const shapes = svg.findAll('*')
+    expect(shapes).toHaveLength(1)
+    const [mark] = shapes
+    expect(mark?.attributes('fill')).toBe('currentColor')
+    expect(mark?.attributes('stroke')).toBe('none')
+    expect(svg.html()).not.toMatch(/#[\da-f]{3,6}\b|rgb\(/iu)
+    expect(mark?.attributes('transform')).toBe('translate(2 2) scale(0.8333)')
+  })
+
   it('keeps the host class and the defaults of the component that wraps it', () => {
     const svg = mount(VIcon, { props: { name: 'kind-bug' }, attrs: { class: 'note-icon' } }).get(
       'svg',

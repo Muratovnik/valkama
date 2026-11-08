@@ -23,7 +23,8 @@ import {
   validateCustomCommand,
 } from '@/shared/lib/settings.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
-import type { ChoiceOption, ControlIconName } from '@/shared/ui/choiceControls.ts'
+import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import { placeIcon } from '@/shared/ui/placeIcon.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -44,20 +45,11 @@ onMounted(async () => {
 
 const isMissing = (place: string) => installed.value?.[place as OpenPlace] === false
 
-const ICONS: Record<OpenPlace | 'custom' | '', ControlIconName> = {
-  '': 'last-place',
-  'vscode': 'vscode',
-  'vscode-insiders': 'vscode',
-  'cursor': 'cursor',
-  'windsurf': 'vscode',
-  'terminal': 'terminal',
-  'claude-desktop': 'claude',
-  'codex-app': 'codex',
-  'custom': 'command',
-}
+/** A place's glyph is the one every other surface draws for it: `placeIcon` owns the table. */
+const glyph = (place: string) => placeIcon(place) ?? undefined
 
 function placeOption(place: OpenPlace): ChoiceOption {
-  return { value: place, label: t(`open.place.${place}`), icon: ICONS[place] }
+  return { value: place, label: t(`open.place.${place}`), icon: glyph(place) }
 }
 
 /**
@@ -78,11 +70,11 @@ function alwaysOptions(family: SessionFamily): ChoiceOption[] {
   const chosen = settings.value.sessions[family].always
   return offered(alwaysChoicesFor(family), chosen).map((choice) => {
     if (choice === 'custom')
-      return { value: choice, label: t('open.settings.custom'), icon: ICONS.custom }
+      return { value: choice, label: t('open.settings.custom'), icon: glyph(choice) }
     if (choice === '') {
       return family === 'other'
         ? { value: choice, label: t('open.settings.none'), icon: 'off' }
-        : { value: choice, label: t('open.settings.lastPlace'), icon: ICONS[''] }
+        : { value: choice, label: t('open.settings.lastPlace'), icon: 'last-place' }
     }
     return placeOption(choice)
   })

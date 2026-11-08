@@ -92,7 +92,17 @@ a contrast ratio, a count, a size — and never by resemblance to another
 product. The look was first pointed at with a reference application's mood;
 that reference was a direction for the mood, not a specification, and
 matching it is not a criterion anywhere in this document. No third-party brand
-assets (logos, proprietary typefaces, names) are used.
+assets (logos, proprietary typefaces, names) are used, with one narrow exception:
+an agent client's or editor's own mark (VS Code, Codex, Claude, Cursor) may stand
+for that product as a client or a place to open in, and nowhere else. It is drawn
+by the icon owner in the ordinary icon colour, one flat shape sized like the
+glyphs beside it, never in the vendor's colours, and only when the vendor's
+published brand rules allow a single-colour mark in another product's interface;
+its path comes from the vendor or a set with a stated licence, recorded beside
+it. Today that is Cursor alone: Microsoft allows the VS Code icon only in its
+blue (white for contrast), Anthropic only in materials it approves, and OpenAI
+publishes no Codex mark, so those three keep a neutral glyph. A place with no
+mark of its own keeps a neutral glyph and never borrows another product's.
 
 This is an application, not a themed dashboard. The shell is dark throughout;
 hierarchy comes from tonal steps, typography, and a small set of colours that
