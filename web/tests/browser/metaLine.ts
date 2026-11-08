@@ -145,9 +145,9 @@ export const sessionHead = (head: Locator) =>
       inside: rects.every((rect) => rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5),
       lines: lines(rects),
       lineHeight: who.getBoundingClientRect().height / lines(drawnIn(who)),
-      link: link && { role: link.getAttribute('role'), title: link.title },
+      link: link && { role: link.getAttribute('role'), title: link.dataset.tooltip ?? '' },
       overflow: root.scrollWidth - root.clientWidth,
-      title: session?.title ?? '',
+      title: session?.dataset.tooltip ?? '',
     }
   })
 

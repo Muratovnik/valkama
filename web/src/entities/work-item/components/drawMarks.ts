@@ -38,7 +38,7 @@
  * `drawHead`, and `MarkHead` for a template: the host draws the number, a word or
  * a control of its own, and hands it in; where it stands is the registry's order.
  */
-import { createCommentVNode, h } from 'vue'
+import { createCommentVNode, h, withDirectives } from 'vue'
 import type { FunctionalComponent, VNode, VNodeArrayChildren } from 'vue'
 
 import '@/entities/work-item/components/facetMarks.css'
@@ -50,6 +50,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import { iconGlyph } from '@/shared/ui/iconGlyph.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 /** How a surface places one run. */
 export interface MarkRun {
@@ -79,6 +80,10 @@ export interface MarkRun {
   onFilter?: (token: WorkFilterToken) => void
 }
 
+/** The element with its hover text in the window's one tooltip, when it has one. */
+const hinted = (node: VNode, hint: string | undefined) =>
+  hint ? withDirectives(node, [[vTooltip, hint]]) : node
+
 /** One label as a chip, as `LabelChip` and a run of marks both draw it. */
 export interface ChipDrawing {
   /** The label is in the filter now. */
@@ -107,13 +112,12 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
   const face = h('span', { class: 'chip-face' }, chip.label)
   if (!chip.filterable) return h('span', { class: `label-chip${extraClass}` }, [face])
   const name = chip.words.filterName('labels', chip.active, chip.label)
-  return h(
+  const button = h(
     'button',
     {
       'class': `label-chip filters${extraClass}`,
       'type': 'button',
       'aria-label': name,
-      'title': name,
       'data-active': chip.active || undefined,
       'tabindex': chip.tabbable ? undefined : -1,
       // The chip lies inside something that opens on a click; filtering must
@@ -125,6 +129,7 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
     },
     [face],
   )
+  return hinted(button, name)
 }
 
 /**
@@ -156,15 +161,28 @@ function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolea
 const isActive = (mark: FacetMark, run: MarkRun) =>
   mark.filter !== null && hasToken(run.filter ?? EMPTY_WORK_FILTER, mark.filter)
 
-/** What a mark is and does, whatever it draws inside: its tone, its name, its hover and its press. */
-function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolean) {
-  const { filter } = mark
-  const active = isActive(mark, run)
-  const name = filters ? run.words.filterName(mark.facet, active, whole) : undefined
+/** What a mark says on hover: its name or its word, and what a value means after it. */
+function markHint(mark: FacetMark, run: MarkRun, whole: string, filters: boolean) {
+  const name = filters ? run.words.filterName(mark.facet, isActive(mark, run), whole) : undefined
   const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
   // A glyph whose word may fold out of sight tells the pointer its word.
   const foldable = run.fold === true && mark.glyph !== null
   const hover = name ?? (glyphOnly || foldable || mark.short ? whole : undefined)
+  // What a value means follows the name the hover already gives it. A preview
+  // is the tooltip's own content and brings no hover text of its own.
+  return mark.hint === undefined || run.surface === 'preview'
+    ? hover
+    : run.words.say({
+        key: 'priorityMeaning.hint',
+        params: { priority: hover ?? whole, meaning: run.words.say(mark.hint) },
+      })
+}
+
+/** What a mark is and does, whatever it draws inside: its tone, its name and its press. */
+function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolean) {
+  const { filter } = mark
+  const active = isActive(mark, run)
+  const name = filters ? run.words.filterName(mark.facet, active, whole) : undefined
   return {
     'key': `${mark.facet}:${mark.value}`,
     'type': filters ? 'button' : undefined,
@@ -173,15 +191,6 @@ function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolea
     'data-kind': mark.ink,
     'data-active': active || undefined,
     'aria-label': name,
-    // What a value means follows the name the hover already gives it. A preview
-    // is the tooltip's own content and brings no hover text of its own.
-    'title':
-      mark.hint === undefined || run.surface === 'preview'
-        ? hover
-        : run.words.say({
-            key: 'priorityMeaning.hint',
-            params: { priority: hover ?? whole, meaning: run.words.say(mark.hint) },
-          }),
     'tabindex': filters && run.tabbable === false ? -1 : undefined,
     'onClick': filter
       ? (event: MouseEvent) => {
@@ -223,14 +232,17 @@ function drawMark(mark: FacetMark, run: MarkRun): VNode {
   const filters = run.filterable === true && mark.filter !== null
   const alone = isGlyphAlone(mark, run, filters)
   const glyph = drawGlyph(mark, run, alone)
-  return h(
-    filters ? 'button' : 'span',
-    {
-      ...markProps(mark, run, whole, filters),
-      'class': `${markShape(mark, filters, alone)}${run.solo ? ' facet-marks' : ''}`,
-      'data-surface': run.solo ? run.surface : undefined,
-    },
-    [...glyph, ...markWordsOf(mark, whole, run, filters)],
+  return hinted(
+    h(
+      filters ? 'button' : 'span',
+      {
+        ...markProps(mark, run, whole, filters),
+        'class': `${markShape(mark, filters, alone)}${run.solo ? ' facet-marks' : ''}`,
+        'data-surface': run.solo ? run.surface : undefined,
+      },
+      [...glyph, ...markWordsOf(mark, whole, run, filters)],
+    ),
+    markHint(mark, run, whole, filters),
   )
 }
 
@@ -245,13 +257,16 @@ export function drawWordCell([mark]: readonly FacetMark[], run: MarkRun): VNode 
   if (!mark) return createCommentVNode()
   const whole = run.words.say(mark.text)
   const filters = run.filterable === true && mark.filter !== null
-  return h(
-    filters ? 'button' : 'span',
-    {
-      ...markProps(mark, run, whole, filters),
-      class: `${markShape(mark, filters)} facet-word-alone`,
-    },
-    whole,
+  return hinted(
+    h(
+      filters ? 'button' : 'span',
+      {
+        ...markProps(mark, run, whole, filters),
+        class: `${markShape(mark, filters)} facet-word-alone`,
+      },
+      whole,
+    ),
+    markHint(mark, run, whole, filters),
   )
 }
 

@@ -14,6 +14,7 @@
  */
 import { computed, useId } from 'vue'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -48,6 +49,7 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
   <!-- The rule does not count separator among the interactive roles. -->
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
+    v-tooltip="folded?.state"
     class="overlay-resizer"
     role="separator"
     aria-orientation="vertical"
@@ -56,7 +58,6 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
     :aria-label="name"
     :aria-describedby="describedBy"
     :aria-valuetext="folded?.state"
-    :title="folded?.state"
     :aria-controls="controls"
     :aria-valuemin="minimum"
     :aria-valuemax="maximum"

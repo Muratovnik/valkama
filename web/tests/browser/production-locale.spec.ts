@@ -282,7 +282,7 @@ for (const width of [1280, 390]) {
     await answerFilePlans(page, true)
     const editor = page.getByRole('button', { name: 'Открыть в VS Code', exact: true })
     await expect(editor).toHaveAttribute(
-      'title',
+      'data-tooltip',
       'Открыть этот файл в VS Code на строке, которую вы читаете',
     )
     await editor.click()

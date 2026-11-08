@@ -28,7 +28,9 @@ const wrappers: Wrapper[] = []
 const global = { plugins: [createI18n({ legacy: false, locale: 'en', messages })] }
 const button = (wrapper: Wrapper, name: string) =>
   present(
-    wrapper.findAll('button').find((control) => control.text() === name),
+    wrapper
+      .findAll('button')
+      .find((control) => (control.attributes('aria-label') ?? control.text()) === name),
     name,
   )
 function mounted(wrapper: Wrapper) {

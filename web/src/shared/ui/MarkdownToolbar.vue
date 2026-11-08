@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import type { MarkdownTool } from '@/shared/lib/markdownEdits.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import type { TabIds } from '@/shared/ui/tabIds.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -83,10 +84,10 @@ const viewOptions = computed(() => [
       <VButton
         v-for="tool in tools"
         :key="tool.key"
+        v-tooltip="toolTitle(tool)"
         variant="ghost"
         size="inline"
         :disabled="toolsOff"
-        :title="toolTitle(tool)"
         :aria-label="tool.name"
         icon
         @mousedown.prevent

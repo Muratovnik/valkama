@@ -25,6 +25,7 @@
 import { computed } from 'vue'
 
 import { optionGroupItemId } from '@/shared/ui/choiceControls.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 interface OptionGroup {
@@ -158,13 +159,13 @@ const NO_VALUE = undefined
             v-for="entry in row.choices"
             :id="optionId(entry.place)"
             :key="entry.option.key"
+            v-tooltip="entry.option.title"
             class="option-choice"
             role="option"
             tabindex="-1"
             :aria-label="entry.option.name"
             :aria-selected="entry.option.selected"
             :data-highlighted="highlighted(entry.place)"
-            :title="entry.option.title"
             @pointermove="emit('update:highlight', entry.place)"
             @click="emit('choose', entry.option.key)"
             @keydown.enter="emit('choose', entry.option.key)"

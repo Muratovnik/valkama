@@ -51,6 +51,21 @@ describe('v-tooltip for assistive technology', () => {
     expect(described(button)).toEqual(['Go to Work'])
   })
 
+  it('adds nothing when the value a separator reads out already says the hint', async () => {
+    const { values, wrapper } = host(
+      '<div role="separator" tabindex="0" aria-label="Document" :aria-valuetext="value" v-tooltip="hint" />',
+      { hint: 'Folded. Enter shows it again', value: 'Folded. Enter shows it again' },
+    )
+    const edge = wrapper.get('[role="separator"]').element
+    expect(edge.hasAttribute('aria-describedby')).toBe(false)
+    expect(tooltipOf(edge)?.text).toBe('Folded. Enter shows it again')
+    // Once the value says something else, the hint is described again.
+    values.value.value = '40%'
+    values.hint.value = 'Drag to resize'
+    await nextTick()
+    expect(described(edge)).toEqual(['Drag to resize'])
+  })
+
   it('adds nothing when every word is already in the name', () => {
     const { wrapper } = host(
       '<a href="#" aria-label="MAIN-12 Answer a review — working, 2 agents" v-tooltip="hint">12 Answer a review</a>',
@@ -86,6 +101,7 @@ describe('v-tooltip for assistive technology', () => {
     const span = wrapper.get('span').element
     expect(tooltipOf(link)).toMatchObject({ side: 'right', clipped: true })
     expect(tooltipOf(span)).toMatchObject({ side: 'top', clipped: false, text: 'Why' })
+    expect(span.dataset.tooltip).toBe('Why')
     expect(tooltipAnchorOf(link.querySelector('b'))).toBe(link)
     values.cut.value = true
     values.name.value = ''

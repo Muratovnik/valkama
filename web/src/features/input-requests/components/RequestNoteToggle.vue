@@ -18,6 +18,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -44,12 +45,12 @@ const heardName = computed(() => said(props.name ?? props.title))
 
 <template>
   <VButton
+    v-tooltip="shownTitle"
     class="request-note-toggle"
     variant="text"
     size="inline"
     :class="{ 'is-written': written, reach, 'reach-grow': !reach }"
     :disabled="disabled"
-    :title="shownTitle"
     :aria-expanded="open"
     :aria-label="heardName"
     icon

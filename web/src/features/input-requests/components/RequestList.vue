@@ -40,7 +40,9 @@ import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   drafts: Record<string, RequestDraft>
@@ -204,7 +206,15 @@ defineExpose({ holdsFocus })
       </p>
       <!-- Not disabled while a read runs: the focused button would drop focus to
            the page, and a second press while one is running starts nothing. -->
-      <VButton @click="askRefresh">{{ t('requests.refresh') }}</VButton>
+      <VButton
+        v-tooltip="t('requests.refresh')"
+        variant="ghost"
+        :aria-label="t('requests.refresh')"
+        icon
+        @click="askRefresh"
+      >
+        <VIcon name="refresh" />
+      </VButton>
     </div>
     <p
       v-if="partial"

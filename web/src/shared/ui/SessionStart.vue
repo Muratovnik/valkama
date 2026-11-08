@@ -19,6 +19,7 @@ import { sessionStart } from '@/shared/lib/actor.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 /** The whole id of the session. */
 const props = defineProps<{ session: string }>()
@@ -37,8 +38,8 @@ provideReferenceLinks((reference, parent) => {
 
 <template>
   <span
+    v-tooltip="session"
     class="session-start"
-    :title="session"
     ><RichInlines :nodes="drawn"
   /></span>
 </template>

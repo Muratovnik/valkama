@@ -14,6 +14,7 @@
 import { computed, useId } from 'vue'
 
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -54,10 +55,10 @@ const indent = computed(() =>
           {{ title }}
         </h2>
         <VButton
+          v-tooltip="closeLabel"
           class="side-panel-close"
           variant="ghost"
           :aria-label="closeLabel"
-          :title="closeLabel"
           icon
           @click="emit('close')"
         >

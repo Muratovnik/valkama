@@ -21,6 +21,7 @@ import { plainText } from '@/shared/lib/richText.ts'
 import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSystem.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -271,10 +272,10 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
           /></label>
           <VButton
             v-if="writable"
+            v-tooltip="t('checklistComment.discuss')"
             class="step-discuss"
             variant="ghost"
             size="inline"
-            :title="t('checklistComment.discuss')"
             :aria-label="t('checklistComment.discussStep', { step: plainText(step.text) })"
             icon
             @click="discussStep(step.id)"

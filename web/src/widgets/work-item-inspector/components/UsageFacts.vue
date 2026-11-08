@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 /**
  * A few figures of work in one line, a dot between them. A wrapped line starts without a dot:
  * the dot stands in the room each fact's margin takes from the line, which the line clips.
@@ -24,8 +25,8 @@ withDefaults(
     <span
       v-for="fact in facts"
       :key="fact.key"
+      v-tooltip="fact.title"
       class="usage-fact"
-      :title="fact.title"
       ><span
         v-if="fact.label"
         class="usage-fact-label"

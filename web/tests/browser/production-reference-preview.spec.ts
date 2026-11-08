@@ -33,7 +33,7 @@ test('a reference at rest shows its card after half a second, on the tooltip sur
   const { entry } = await openReported(page)
   const link = reference(entry, 'MAIN-12')
   // No hover text of the browser's beside it: its old words are its description.
-  await expect(link).not.toHaveAttribute('title')
+  await expect(link).not.toHaveAttribute('data-tooltip')
   await expect(link).toHaveAttribute('aria-description', 'Open task MAIN-12')
 
   const opening = watchOpening(page)

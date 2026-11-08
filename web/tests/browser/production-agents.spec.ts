@@ -210,8 +210,8 @@ test('a group says its ambiguity once as a range of its rows, and a row keeps it
   await expect(section.locator('.agent').nth(0)).not.toContainText('ambiguous')
   await expect(section.locator('.agent').nth(1)).not.toContainText('ambiguous')
   await expect(section.locator('.agent').nth(2)).toContainText('wrote to this item')
-  await expect(section.locator('.agent').nth(0)).toHaveAttribute(
-    'title',
+  await expect(section.locator('.agent').nth(0).locator('.agent-name')).toHaveAttribute(
+    'data-tooltip',
     'ambiguous: the coordinator held 13 items',
   )
   await expect(section.locator('.agent').nth(1)).toHaveAttribute(

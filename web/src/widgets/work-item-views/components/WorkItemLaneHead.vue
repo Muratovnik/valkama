@@ -19,6 +19,7 @@ import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -153,10 +154,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         class="lane-actions"
       >
         <VButton
+          v-tooltip="openLabel"
           class="lane-action"
           variant="ghost"
           size="inline"
-          :title="openLabel"
           :aria-label="openLabel"
           icon
           reach
@@ -168,10 +169,10 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           />
         </VButton>
         <VButton
+          v-tooltip="chainLabel"
           class="lane-action"
           variant="ghost"
           size="inline"
-          :title="chainLabel"
           :aria-label="chainLabel"
           icon
           reach

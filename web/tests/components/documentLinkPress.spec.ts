@@ -36,6 +36,7 @@ import {
   unmountAll,
   weak,
 } from '../support/documentLinks.ts'
+import { hintOf } from '../support/hint.ts'
 import { firstAnswer, requestEntry } from '../support/inputRequests.ts'
 
 vi.mock('@/shared/api/documentApi.ts', async (original) => ({
@@ -119,7 +120,7 @@ describe('what a press does', () => {
     await flushPromises()
     const button = wrapper.get('.rich-reference')
     expect(button.attributes('aria-busy')).toBe('true')
-    expect(button.attributes('title')).toContain('ещё проверяет')
+    expect(hintOf(button)).toContain('ещё проверяет')
     await button.trigger('click')
     await button.trigger('click')
     expect(opened).not.toHaveBeenCalled()
@@ -169,7 +170,7 @@ describe('what a press does', () => {
     const { wrapper } = drawn([strong('src/a.ts:42'), weak('web/src')])
     await flushPromises()
     const buttons = wrapper.findAll('.rich-reference')
-    expect(buttons[0]?.attributes('title')).toBe(
+    expect(hintOf(buttons[0])).toBe(
       'Скопировать путь src/a.ts:42 — Valkama пока не умеет его открыть',
     )
     expect(buttons[0]?.classes()).toContain('copies')
@@ -288,7 +289,7 @@ describe('where the layer stands', () => {
     await flushPromises()
     const buttons = wrapper.findAll('.rich-reference')
     expect(buttons.map((button) => button.text())).toEqual(['docs/a.md', 'a1b2c3d'])
-    expect(buttons[1]?.attributes('title')).toBe('Показать коммит')
+    expect(hintOf(buttons[1])).toBe('Показать коммит')
     expect(resolve).toHaveBeenCalledExactlyOnceWith({ space: SPACE }, ['docs/a.md'])
   })
 

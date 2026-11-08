@@ -9,7 +9,9 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{ failure: { message: string; retryable: boolean } }>()
 const emit = defineEmits<{ dismiss: []; retry: [] }>()
@@ -28,10 +30,14 @@ const { t } = useI18n()
       >{{ t('graph.retry') }}</VButton
     >
     <VButton
+      v-tooltip="t('graph.chainDismiss')"
       variant="ghost"
+      :aria-label="t('graph.chainDismiss')"
+      icon
       @click="emit('dismiss')"
-      >{{ t('graph.chainDismiss') }}</VButton
     >
+      <VIcon name="close" />
+    </VButton>
   </div>
 </template>
 

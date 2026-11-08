@@ -18,6 +18,7 @@ import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -116,15 +117,14 @@ function when(value: string): string {
           #actions
         >
           <VButton
+            v-tooltip="t('workItem.related.add')"
             variant="ghost"
+            :aria-label="t('workItem.related.add')"
             :disabled="busy"
+            icon
             @click="add"
           >
-            <VIcon
-              name="plus"
-              :size="16"
-            />
-            {{ t('workItem.related.add') }}
+            <VIcon name="plus" />
           </VButton>
         </template>
       </SectionHeader>
@@ -173,11 +173,11 @@ function when(value: string): string {
             </button>
             <VButton
               v-if="writable"
+              v-tooltip="t('workItem.unlink')"
               class="link-remove"
               variant="ghost"
               size="inline"
               :disabled="busy"
-              :title="t('workItem.unlink')"
               :aria-label="t('workItem.related.remove', { reference: link.reference })"
               icon
               @click="remove(link)"

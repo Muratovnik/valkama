@@ -15,6 +15,8 @@ import {
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
 
+import { hintOf } from '../support/hint.ts'
+
 /**
  * A second pane inside one surface: what the surface was opened for stays mounted with any
  * draft in it, one Tab trap goes through both, and Escape in the pane closes the pane alone.
@@ -233,12 +235,13 @@ describe.each([
     await flushPromises()
     const edge = separator()
     expect(edge.getAttribute('aria-valuetext')).toBe(NAMES.folded)
-    expect(edge.getAttribute('title')).toBe(NAMES.folded)
+    expect(hintOf(edge)).toBe(NAMES.folded)
     // Seen as well as heard: the strip carries the pane's name, and is named by it, so a
     // voice command saying what it shows finds it; what it sizes is its description.
     expect(edge.querySelector('.overlay-resizer-name')?.textContent).toBe(NAMES.label)
     expect(edge.getAttribute('aria-label')).toBe(NAMES.label)
-    const purpose = edge.getAttribute('aria-describedby') ?? ''
+    // Its purpose first; the hint's words, when it has a hint, after them.
+    const [purpose] = (edge.getAttribute('aria-describedby') ?? '').split(' ')
     expect(document.querySelector(`[id="${purpose}"]`)?.textContent).toBe(NAMES.resize)
 
     edge.dispatchEvent(new PointerEvent('pointerdown', { button: 0, bubbles: true }))

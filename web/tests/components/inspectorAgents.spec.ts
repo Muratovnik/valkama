@@ -20,6 +20,7 @@ import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 
 // A group that can reach its session asks where a press on it would go. No server answers
 // here, so the plan fails the way an unreachable one does, without going to the network.
@@ -215,7 +216,7 @@ describe('the whole list', () => {
 
   it('shows every row at once, in the order given, with no toggle', () => {
     const wrapper = mountAgents(many)
-    const ids = wrapper.findAll('.agent-source .agent-id').map((id) => id.attributes('title'))
+    const ids = wrapper.findAll('.agent-source .agent-id').map((id) => hintOf(id))
     expect(ids).toEqual(many.map((row) => row.agent_id))
     expect(wrapper.findAll('button')).toHaveLength(0)
     expect(wrapper.text()).not.toContain('Show all')
@@ -231,7 +232,7 @@ describe('the whole list', () => {
     const wrapper = mountAgents(many.slice(0, 2))
     await wrapper.setProps({ agents: [agent({ agent_id: 'the-newest' }), ...many.slice(0, 2)] })
     expect(wrapper.findAll('.agent')).toHaveLength(3)
-    expect(wrapper.get('.agent-source .agent-id').attributes('title')).toBe('the-newest')
+    expect(hintOf(wrapper.get('.agent-source .agent-id'))).toBe('the-newest')
   })
 })
 
@@ -314,10 +315,7 @@ describe('rows of one parent', () => {
       '019a2b3c-4d5e',
       '019a2b3c-4d6f',
     ])
-    expect(two.findAll('.agent-group-id').map((id) => id.attributes('title'))).toEqual([
-      first,
-      second,
-    ])
+    expect(two.findAll('.agent-group-id').map((id) => hintOf(id))).toEqual([first, second])
   })
 })
 
@@ -391,7 +389,7 @@ describe('the ambiguity, said once for its group', () => {
   it("keeps an ambiguous row's exact count in its tooltip and its accessible description", () => {
     const wrapper = mountAgents([claimed('a', 19)])
     const item = wrapper.get('.agent')
-    expect(item.attributes('title')).toBe('ambiguous: the coordinator held 19 items')
+    expect(hintOf(item.get('.agent-name'))).toBe('ambiguous: the coordinator held 19 items')
     expect(item.attributes('aria-description')).toBe('ambiguous: the coordinator held 19 items')
   })
 

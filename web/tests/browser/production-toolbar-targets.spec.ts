@@ -51,7 +51,7 @@ async function shortReaches(within: Locator) {
             {
               name:
                 button.getAttribute('aria-label') ||
-                button.title ||
+                button.dataset.tooltip ||
                 (button.textContent ?? '').trim(),
               missed,
             },

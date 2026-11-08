@@ -33,6 +33,7 @@ import type { FrameHead } from '@/widgets/work-item-graph/utils/graphGeometry.ts
 import { foldIsTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const {
   frame,
@@ -155,11 +156,11 @@ function onOpenBlur() {
   >
     <GraphFrameFold
       v-if="foldShown"
+      v-tooltip="foldHint"
       :folded="frame.folded"
       :overview="overview"
       :aria-label="foldLabel"
       :aria-expanded="!frame.folded"
-      :title="foldHint"
       :data-walk-target="walked(foldTarget)"
       :tabindex="tabIndex(foldTarget)"
       @click="emit('toggle', frame.id)"
@@ -168,11 +169,11 @@ function onOpenBlur() {
     />
     <component
       :is="openTag"
+      v-tooltip="openHint"
       class="graph-frame-open"
       :class="{ folds: foldShown }"
       :type="openType"
       :aria-label="openName"
-      :title="openHint"
       :data-walk-target="openWalk"
       :tabindex="openTab"
       @click="onOpen"
@@ -192,9 +193,9 @@ function onOpenBlur() {
       <span
         v-if="!overview && epic"
         v-slash-breaks="title"
+        v-tooltip.clipped="title"
         class="graph-frame-title"
         :style="lineWidth"
-        :title="title"
       />
       <span
         v-if="overview && inside"

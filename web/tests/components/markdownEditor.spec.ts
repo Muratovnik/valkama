@@ -20,6 +20,8 @@ import { messages } from '@/shared/i18n/index.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
+import { hintOf } from '../support/hint.ts'
+
 const rows: EditorSuggestion[] = [
   { key: '1', reference: 'MAIN-12', title: 'Parser', detail: 'Doing' },
   { key: '2', reference: 'MAIN-13', title: 'Renderer', detail: 'Done' },
@@ -285,10 +287,10 @@ describe('MarkdownEditor', () => {
   it('draws real, named, titled buttons that cannot submit a form, in either language', () => {
     const names = (locale: 'en' | 'ru') =>
       mountEditor({ locale })
-        .wrapper.findAll('[role="group"] button[title]')
+        .wrapper.findAll('[role="group"] button[data-tooltip]')
         .map((button) => {
           expect(button.attributes('type')).toBe('button')
-          return [button.attributes('aria-label'), button.attributes('title')]
+          return [button.attributes('aria-label'), hintOf(button)]
         })
     expect(names('en')).toEqual([
       ['Link a task', 'Link a task'],
@@ -316,7 +318,7 @@ describe('MarkdownEditor', () => {
 
   it('turns the buttons off in preview and while the text is being sent', async () => {
     const { wrapper } = mountEditor()
-    const buttons = () => wrapper.findAll('[role="group"] button[title]')
+    const buttons = () => wrapper.findAll('[role="group"] button[data-tooltip]')
     expect(buttons().every((button) => button.attributes('disabled') === undefined)).toBe(true)
     await wrapper.setProps({ preview: true })
     expect(buttons().every((button) => button.attributes('disabled') !== undefined)).toBe(true)

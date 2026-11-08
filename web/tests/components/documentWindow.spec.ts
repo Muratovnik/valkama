@@ -17,6 +17,7 @@ import {
   surface,
   viewerSuite,
 } from '../support/documentViewer.ts'
+import { hintOf } from '../support/hint.ts'
 
 vi.mock('@/shared/api/documentApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/documentApi.ts')>()),
@@ -69,7 +70,7 @@ describe('another window for a document', () => {
   it('says what it does in its name and its tooltip', async () => {
     disk['docs/plan.md'] = file('docs/plan.md', '# The plan\n')
     await opened()
-    expect(control(NEW_WINDOW)?.getAttribute('title')).toBe(NEW_WINDOW)
+    expect(hintOf(control(NEW_WINDOW))).toBe(NEW_WINDOW)
   })
 
   it('is not there while the document cannot be shown', async () => {

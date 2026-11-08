@@ -34,6 +34,7 @@ import { useBranchText } from '@/widgets/work-item-inspector/utils/useBranchText
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   chain: WorkItemChain
@@ -95,9 +96,6 @@ const isFiltered = (lane: LaneDrawing) => props.filter === lane.lane.key
 const recedes = (lane: LaneDrawing) => props.filter !== null && !isFiltered(lane)
 
 const currentOf = (lane: LaneDrawing) => (isFiltered(lane) ? 'true' : undefined)
-
-/** The parent epic's title, where the lane has one, as the label's tooltip. */
-const titleOf = (lane: LaneDrawing) => lane.lane.title ?? undefined
 
 const positionOf = (lane: LaneDrawing) => position(cursorOf(lane.lane), lane.lane.members.length)
 
@@ -226,13 +224,13 @@ function countId(lane: LaneDrawing): string {
           >
           <button
             v-else
+            v-tooltip="lane.lane.title"
             class="branch-map-label chooses"
             type="button"
             :class="{ selected: isFiltered(lane) }"
             :aria-current="currentOf(lane)"
             :aria-label="t('workItem.chain.map.filterLane', { name: laneName(lane.lane) })"
             :aria-describedby="countId(lane)"
-            :title="titleOf(lane)"
             @click="emit('lane', lane.lane.key)"
           >
             {{ laneName(lane.lane) }}

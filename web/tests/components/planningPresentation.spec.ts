@@ -12,6 +12,8 @@ import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
+import { hintOf } from '../support/hint.ts'
+
 function workItem(overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
   return {
     work_item_id: '00000000-0000-4000-8000-000000000340',
@@ -79,7 +81,7 @@ describe('Planning semantic presentation', () => {
     expect(wrapper.get('.list-claim').text()).toBe('claude')
     await wrapper.setProps({ items: [{ ...item, state: { ...item.state, is_terminal: true } }] })
     expect(wrapper.get('.list-claim').text()).toBe('Previously responsible: claude')
-    expect(wrapper.get('.list-claim').attributes('title')).toBe('Previously responsible: claude')
+    expect(hintOf(wrapper.get('.list-claim'))).toBe('Previously responsible: claude')
   })
 
   it('says the holder and a stale claim with one glyph, and only while the work is open', async () => {
@@ -92,13 +94,13 @@ describe('Planning semantic presentation', () => {
     expect(holder().find('svg').exists()).toBe(true)
     expect(holder().get('.facet-word').classes()).toContain('facet-word-hidden')
     expect(holder().text()).toBe('Held by codex')
-    expect(holder().attributes('title')).toBe('Held by codex')
+    expect(hintOf(holder())).toBe('Held by codex')
     expect(holder().attributes('data-tone')).toBe('neutral')
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
 
     await wrapper.setProps({ item: workItem({ claim_ref: 'codex', claim_state: 'stale' }) })
     expect(holder().text()).toBe('Held by codex — the claim is stale')
-    expect(holder().attributes('title')).toBe('Held by codex — the claim is stale')
+    expect(hintOf(holder())).toBe('Held by codex — the claim is stale')
     expect(holder().attributes('data-tone')).toBe('warning')
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Stale claim')
@@ -169,13 +171,13 @@ describe('Planning semantic presentation', () => {
     expect(waiting.get('.facet-word-hidden').text()).toBe('Waiting on QA-12')
     expect(waiting.attributes('data-tone')).toBe('danger')
     // Folded short of room, the glyph still tells the pointer what it stands for.
-    expect(waiting.attributes('title')).toBe('Waiting on QA-12')
+    expect(hintOf(waiting)).toBe('Waiting on QA-12')
     // The open target names the item and is described by what stops it.
     const open = wrapper.get('.tile-open')
     const described = open.attributes('aria-describedby') ?? ''
     expect(described.split(' ')).toContain(wrapper.get('.tile-exceptions').attributes('id'))
     expect(open.text()).toContain('QA-340')
-    expect(open.attributes('title')).toBe('Centralize semantic presentation')
+    expect(hintOf(open)).toBe('Centralize semantic presentation')
   })
 
   it('gives ready and active ownership precedence over the workflow marker', async () => {

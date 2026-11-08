@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ reference: string }>()
@@ -47,10 +48,10 @@ async function toggle() {
 <template>
   <button
     v-if="pinned !== null"
+    v-tooltip="words"
     class="identity-pin"
     type="button"
     :class="{ pinned }"
-    :title="words"
     :aria-label="words"
     :aria-busy="busyMark"
     @click="toggle"

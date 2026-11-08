@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import { useScrolledPast } from '@/shared/lib/useScrolledPast.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -186,9 +187,9 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
       </div>
       <!-- The heading is the one in the scroller; this is the same words kept in sight. -->
       <p
+        v-tooltip.clipped="title"
         class="drawer-frame-pinned-title"
         aria-hidden="true"
-        :title="title"
       >
         {{ title }}
       </p>

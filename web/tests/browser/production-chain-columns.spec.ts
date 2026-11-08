@@ -355,7 +355,7 @@ test('a long holder is cut short, keeps its whole name in its tooltip, and takes
   const section = await openCard(page)
   const holder = section.locator('.chain-row[data-reference="MAIN-1082"] .chain-row-holder')
   await expect(holder).toBeVisible()
-  await expect(holder).toHaveAttribute('title', LONG_HOLDER_WHOLE)
+  await expect(holder).toHaveAttribute('data-tooltip', LONG_HOLDER_WHOLE)
   expect(await holder.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
   const box = await holder.boundingBox()
   expect(box?.width ?? Infinity).toBeLessThanOrEqual(160)

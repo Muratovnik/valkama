@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { GraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -35,11 +36,11 @@ const glyph = computed(() => (paused.value ? 'play' : 'pause'))
   <span class="graph-motion-place">
     <VButton
       v-if="offered"
+      v-tooltip="label"
       class="graph-motion-toggle"
       variant="ghost"
       size="compact"
       :aria-label="label"
-      :title="label"
       icon
       @click="emit('toggle')"
     >

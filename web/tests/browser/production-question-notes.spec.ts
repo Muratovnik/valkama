@@ -48,7 +48,7 @@ for (const [width, target, finger] of [
     ] as const) {
       await expect(press).toHaveText('')
       await expect(press.locator('svg')).toBeVisible()
-      await expect(press).toHaveAttribute('title', title)
+      await expect(press).toHaveAttribute('data-tooltip', title)
       await expect(press).toHaveAttribute('aria-expanded', 'false')
     }
     // Both grow their own box to the target where a finger presses: the label's, since rows
@@ -117,7 +117,7 @@ test('a comment written says so in its words and its shape, and stays open', asy
     const text = named(card, 'textbox', editor)
     await text.fill('Because of the digest')
     const pressed = written
-    await expect(pressed).toHaveAttribute('title', title)
+    await expect(pressed).toHaveAttribute('data-tooltip', title)
     await expect(pressed).toHaveAttribute('aria-expanded', 'true')
     expect(await fillOf(pressed)).not.toBe(empty)
     // Closes only empty, whatever the press.

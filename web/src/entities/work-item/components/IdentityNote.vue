@@ -15,6 +15,7 @@
  */
 import { computed } from 'vue'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -34,9 +35,9 @@ const glyph = computed(() => (props.failed ? 'alert' : 'check'))
 <template>
   <span
     v-if="text"
+    v-tooltip="text"
     class="identity-note"
     aria-hidden="true"
-    :title="text"
   >
     <VIcon
       class="identity-note-glyph"

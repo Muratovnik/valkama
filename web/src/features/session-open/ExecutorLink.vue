@@ -10,6 +10,7 @@ import OpenAction from '@/features/session-open/OpenAction.vue'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -40,8 +41,8 @@ const lines = computed(() => [props.holder, props.detail].filter(Boolean).join('
   />
   <span
     v-else
+    v-tooltip="holder"
     class="executor-link-name"
-    :title="holder"
     >{{ name }}</span
   >
 </template>

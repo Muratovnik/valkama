@@ -12,6 +12,7 @@
 import { useI18n } from 'vue-i18n'
 
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{
@@ -27,10 +28,10 @@ const { t } = useI18n()
 
 <template>
   <ToggleChip
+    v-tooltip="t('workItem.lanes.groupingLabel')"
     class="grouping"
     :class="{ filtered }"
     :aria-label="t('workItem.lanes.groupingLabel')"
-    :title="t('workItem.lanes.groupingLabel')"
     :pressed="pressed"
     :reach="filtered"
     @toggle="emit('toggle')"

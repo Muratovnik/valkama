@@ -114,8 +114,8 @@ function marks(page: Page): Promise<Mark[]> {
       const reference = frame.querySelector<HTMLElement>('.graph-frame-reference')
       const named = reference?.getBoundingClientRect()
       const target =
-        frame.querySelector('.graph-frame-open[data-walk-target]') ??
-        frame.querySelector('.graph-frame-fold')
+        frame.querySelector<HTMLElement>('.graph-frame-open[data-walk-target]') ??
+        frame.querySelector<HTMLElement>('.graph-frame-fold')
       if (!shown || !drawn || !dots || !header) throw new Error('a mark has its words and dots')
       const within = (part: DOMRect, outer: DOMRect = shown) =>
         part.width > 0 &&
@@ -138,7 +138,7 @@ function marks(page: Page): Promise<Mark[]> {
         referenceCut: reference !== null && reference.scrollWidth > reference.clientWidth + 1,
         header: header.height / scale,
         frame: (frame as HTMLElement).dataset.frame ?? '',
-        hint: target?.getAttribute('title') ?? '',
+        hint: target?.dataset.tooltip ?? '',
         name: target?.getAttribute('aria-label') ?? '',
         reference: reference?.textContent?.trim() ?? '',
       }

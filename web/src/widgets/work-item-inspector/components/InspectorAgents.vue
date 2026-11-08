@@ -43,6 +43,7 @@ import OpenAction from '@/features/session-open/OpenAction.vue'
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import RichText from '@/shared/ui/RichText.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{ agents: readonly WorkItemAgent[] }>()
 
@@ -177,8 +178,8 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
         />
         <span
           v-if="groups.length > 1"
+          v-tooltip="group.session"
           class="agent-group-id agent-id"
-          :title="group.session"
           >{{ group.shortSession }}</span
         >
       </div>
@@ -206,23 +207,26 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
           } in group.rows"
           :key="key"
           class="agent"
-          :title="hint"
           :aria-description="hint"
         >
+          <!-- The name carries the hint, not the row: the row holds links of its own. -->
           <RichText
             v-if="agent?.label"
+            v-tooltip="hint"
             class="agent-name"
             :source="agent.label"
             inline
           />
           <span
             v-else-if="agent"
+            v-tooltip="hint"
             class="agent-name"
             :class="{ 'agent-id': !agent.agent_type }"
             >{{ agent.agent_type || facts?.shortId }}</span
           >
           <span
             v-else
+            v-tooltip="hint"
             class="agent-name"
             :class="{ 'agent-id': runId }"
             >{{ runId || t('workItem.usage.ownRun') }}</span
@@ -249,8 +253,8 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
               <span class="agent-fact">
                 {{ t('workItem.agents.started') }}
                 <time
+                  v-tooltip="facts.started.full"
                   :datetime="facts.started.at"
-                  :title="facts.started.full"
                   >{{ facts.started.text }}</time
                 ><template v-if="facts.quiet">, {{ facts.quiet }}</template>
               </span>
@@ -260,8 +264,8 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
               >
                 {{ t('workItem.agents.ended') }}
                 <time
+                  v-tooltip="facts.ended.full"
                   :datetime="facts.ended.at"
-                  :title="facts.ended.full"
                   >{{ facts.ended.text }}</time
                 >
               </span>
@@ -271,8 +275,8 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
               >
                 {{ t('workItem.agents.lastActivity') }}
                 <time
+                  v-tooltip="facts.activity.full"
                   :datetime="facts.activity.at"
-                  :title="facts.activity.full"
                   >{{ facts.activity.text }}</time
                 >, {{ facts.ago }}
               </span>
@@ -297,8 +301,8 @@ const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
                 v-if="agent.label || agent.agent_type"
                 class="agent-fact"
                 ><span
+                  v-tooltip="agent.agent_id"
                   class="agent-id"
-                  :title="agent.agent_id"
                   >{{ facts.shortId }}</span
                 ></span
               >

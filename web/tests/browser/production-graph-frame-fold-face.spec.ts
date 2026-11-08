@@ -61,6 +61,9 @@ const inside = ([x, y]: [number, number], box: Box) =>
  * drawn first and the rest after it, since a fold the keyboard reaches may move the camera.
  */
 async function expectFaceOff(page: Page, head: Locator, state: string, enter: () => Promise<void>) {
+  // The shared hint the fold raises is a layer of its own, over whatever stands there; this
+  // measures what the fold itself draws.
+  await page.addStyleTag({ content: '.tooltip-hint { visibility: hidden !important; }' })
   await enter()
   await settledCamera(page)
   await painted(page)

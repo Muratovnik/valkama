@@ -19,6 +19,7 @@ import type { WorkItem, WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 
 const SESSION = '6f1c2a8e-0000-4000-8000-000000000001'
 const executor: Executor = {
@@ -166,7 +167,7 @@ describe('an agent on the card', () => {
     await flushPromises()
     const button = wrapper.get('button.open-action')
     expect(button.attributes('aria-label')).toBe('Open the parent session in VS Code')
-    expect(button.attributes('title')).toContain('The agent’s progress shows in its parent session')
+    expect(hintOf(button)).toContain('The agent’s progress shows in its parent session')
     expect(wrapper.getComponent(OpenAction).props('session')).toBe(SESSION)
   })
 

@@ -17,6 +17,7 @@ import type { ReferenceResolver } from '@/shared/lib/referenceLinks.ts'
 import RichText from '@/shared/ui/RichText.vue'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
+import { hintOf } from '../support/hint.ts'
 
 const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
 
@@ -56,15 +57,16 @@ describe('RichText', () => {
         : null,
     )
     const [held, plain] = wrapper.findAll('.rich-reference')
-    expect(held?.attributes('title')).toBeUndefined()
+    expect(hintOf(held)).toBeUndefined()
     expect(held?.attributes('aria-description')).toBe('Open MAIN-12')
     expect(held?.attributes()).toHaveProperty('data-reference-preview')
     expect(held?.attributes()).toHaveProperty('data-grace-area-trigger')
 
-    expect(plain?.attributes('title')).toBe('Open MAIN-13')
+    expect(hintOf(plain)).toBe('Open MAIN-13')
     expect(plain?.attributes('aria-description')).toBeUndefined()
     expect(plain?.attributes()).not.toHaveProperty('data-reference-preview')
-    expect(plain?.attributes()).not.toHaveProperty('data-grace-area-trigger')
+    // The popup library's mark on it is its hint's, which the preview leaves alone.
+    expect(plain?.attributes()).toHaveProperty('data-tooltip')
     // Its name is still its text: the preview adds no node to the line.
     expect(wrapper.text()).toBe('See MAIN-12 and MAIN-13.')
   })
@@ -153,7 +155,7 @@ describe('RichText', () => {
     )
     const buttons = wrapper.findAll('.rich-reference')
     expect(buttons.map((button) => button.text())).toEqual(['MAIN-12', 'a1b2c3d'])
-    expect(buttons[0]?.attributes('title')).toBe('Open MAIN-12')
+    expect(hintOf(buttons[0])).toBe('Open MAIN-12')
     // An id is compared character by character and set in the metadata font.
     expect(buttons[0]?.classes()).not.toContain('identifier')
     // Written as code, it keeps the code's ground, drawn inside the control.

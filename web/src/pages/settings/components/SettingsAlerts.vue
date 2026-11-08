@@ -21,7 +21,9 @@ import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ locale: string }>()
 const { t } = useI18n()
@@ -195,13 +197,17 @@ function readinessDetail(answer: AlertReadiness): string {
           </div>
           <VButton
             v-if="readiness"
+            v-tooltip="recheckLabel"
             class="settings-alerts-recheck"
             size="compact"
             variant="ghost"
+            :aria-label="recheckLabel"
             :aria-disabled="checkingMark"
+            icon
             @click="recheck"
-            >{{ recheckLabel }}</VButton
           >
+            <VIcon name="refresh" />
+          </VButton>
         </div>
       </SettingsRow>
 

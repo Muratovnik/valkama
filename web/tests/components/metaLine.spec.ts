@@ -3,6 +3,8 @@ import { expect, it } from 'vitest'
 
 import MetaLine from '@/shared/ui/MetaLine.vue'
 
+import { hintOf } from '../support/hint.ts'
+
 const line = (session?: string) =>
   mount(MetaLine, { props: { when: 'Aug 13', session }, slots: { default: 'kolo' } })
 
@@ -20,7 +22,7 @@ it('sets the session apart from the name by a no-break space, as a token of its 
 it('prints the start of a whole session id, the whole of it in its tooltip', () => {
   const session = line('019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b').get('.meta-session')
   expect(session.text()).toBe('019a2b3c-4d5e')
-  expect(session.attributes('title')).toBe('019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b')
+  expect(hintOf(session)).toBe('019a2b3c-4d5e-7f00-8a9b-0c1d2e3f4a5b')
   expect(session.find('a').exists()).toBe(false)
 })
 

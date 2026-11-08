@@ -51,7 +51,9 @@ import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -311,12 +313,17 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
         <div class="step-head">
           <strong class="step-label">{{ anchorLabel }}</strong>
           <VButton
+            v-tooltip="t('checklistComment.remove')"
             variant="ghost"
             size="inline"
+            :aria-label="t('checklistComment.remove')"
             :disabled="pending"
+            icon
+            reach
             @click="removeAnchor"
-            >{{ t('checklistComment.remove') }}</VButton
           >
+            <VIcon name="close" />
+          </VButton>
         </div>
         <blockquote class="step-quote">
           <p class="discussion-body">{{ anchor.text }}</p>

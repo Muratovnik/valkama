@@ -104,7 +104,7 @@ for (const place of ['browser', 'app'] as const) {
       const drawer = await openCard(page)
       const mark = drawer.locator('.identity-source')
       await expect(mark).toHaveAccessibleName(`Open the document in Valkama: ${ANCHOR}`)
-      await expect(mark).toHaveAttribute('title', `Open the document in Valkama: ${ANCHOR}`)
+      await expect(mark).toHaveAttribute('data-tooltip', `Open the document in Valkama: ${ANCHOR}`)
       await expect(mark.locator('svg.lucide-file-text')).toBeVisible()
       await page.evaluate(() => navigator.clipboard.writeText('untouched'))
 

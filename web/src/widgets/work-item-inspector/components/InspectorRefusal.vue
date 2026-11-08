@@ -22,7 +22,9 @@ import type { RefusalNotice } from '@/widgets/work-item-inspector/utils/useInspe
 
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ busy: boolean; notice: RefusalNotice }>()
 const emit = defineEmits<{ dismiss: []; force: []; guard: [name: string] }>()
@@ -54,11 +56,16 @@ function force() {
     <div class="refusal-head">
       <strong class="refusal-title">{{ notice.title }}</strong>
       <VButton
+        v-tooltip="t('workItem.refusal.dismiss')"
         variant="ghost"
         size="inline"
+        :aria-label="t('workItem.refusal.dismiss')"
+        icon
+        reach
         @click="emit('dismiss')"
-        >{{ t('workItem.refusal.dismiss') }}</VButton
       >
+        <VIcon name="close" />
+      </VButton>
     </div>
     <ul
       v-if="steps.length"

@@ -12,7 +12,9 @@ import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{ changed: []; refresh: [] }>()
@@ -53,6 +55,8 @@ useDraftSource('description', () => editing.value && draft.value !== props.item.
 const editLabel = computed(() =>
   t(props.item.description ? 'workItem.editDescription' : 'workItem.addDescription'),
 )
+/** Edit what is written, or add the first words: the icon the action is drawn as. */
+const editGlyph = computed(() => (props.item.description ? 'edit' : 'plus'))
 /** The button that opened the editor is gone with it, so focus goes where the writing is. */
 async function edit() {
   editing.value = true
@@ -102,10 +106,13 @@ function cancel() {
       >
         <VButton
           ref="opener"
+          v-tooltip="editLabel"
           variant="ghost"
+          :aria-label="editLabel"
+          icon
           @click="edit"
         >
-          {{ editLabel }}
+          <VIcon :name="editGlyph" />
         </VButton>
       </template>
     </SectionHeader>

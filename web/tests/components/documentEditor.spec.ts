@@ -33,6 +33,7 @@ import {
   refused,
   viewerSuite,
 } from '../support/documentViewer.ts'
+import { hintOf } from '../support/hint.ts'
 
 vi.mock('@/shared/api/documentApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/documentApi.ts')>()),
@@ -213,9 +214,7 @@ describe('what a press comes to', () => {
   it('opened: the opener says so, and nothing is copied', async () => {
     openFile.mockReturnValue(true)
     await shown()
-    expect(control(EDITOR)?.getAttribute('title')).toBe(
-      'Open this file in VS Code at the line you are reading',
-    )
+    expect(hintOf(control(EDITOR))).toBe('Open this file in VS Code at the line you are reading')
     await press()
     expect(copied).not.toHaveBeenCalled()
     expect(said).not.toHaveBeenCalled()

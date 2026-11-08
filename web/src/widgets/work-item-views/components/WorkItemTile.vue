@@ -52,6 +52,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -175,10 +176,10 @@ const describedBy = computed(() => {
       />
     </span>
     <button
+      v-tooltip="props.item.title"
       class="tile-open"
       type="button"
       :tabindex="props.tabStop"
-      :title="props.item.title"
       :aria-keyshortcuts="props.keyShortcuts"
       :aria-describedby="describedBy"
       @click="open"

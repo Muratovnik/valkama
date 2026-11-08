@@ -18,6 +18,8 @@ import { messages } from '@/shared/i18n/index.ts'
 import type { ResolvedRef } from '@/shared/types/reference.ts'
 import RichText from '@/shared/ui/RichText.vue'
 
+import { hintOf } from '../support/hint.ts'
+
 vi.mock('@/shared/api/api.ts', () => ({ fetchSessionContext: vi.fn() }))
 vi.mock('@/shared/api/planningGlobalSearchApi.ts', () => ({
   searchGlobalPlanningWorkItems: vi.fn(),
@@ -102,7 +104,7 @@ describe('the shell layer of reference links', () => {
     expect(buttons[0]?.element.tagName).toBe('A')
     expect(buttons[0]?.attributes('href')).toBe('/open/MAIN-12')
     // Its hover text is its card; its old words are what it says it does.
-    expect(buttons[0]?.attributes('title')).toBeUndefined()
+    expect(hintOf(buttons[0])).toBeUndefined()
     expect(buttons[0]?.attributes('aria-description')).toBe('Open task MAIN-12')
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValueOnce(
       search([found('MAIN-120'), found('MAIN-12')]),
