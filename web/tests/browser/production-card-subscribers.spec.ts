@@ -1,10 +1,11 @@
 /**
  * The sessions that follow an item without holding it, in the built application's card: one
- * line under the holder's, labelled in the holder label's quiet ink, each session printed as
- * the card prints a holder, from the label the server gives it, which is the text a claim of
- * that session records. The line starts on the column the head's other lines start on, a name
- * moves to the next line whole rather than breaking inside itself, one wider than the line wraps
- * between its words and is read whole, and nothing draws a plate or an edge around the words. A card nobody follows, or only its holder, has no such line.
+ * row under the holder's, named in the column and the quiet ink of the head's other names, each
+ * session printed as the card prints a holder, from the label the server gives it, which is the
+ * text a claim of that session records. The names start on the column the head's other values
+ * start on, a name moves to the next line whole rather than breaking inside itself, one wider
+ * than the line wraps between its words and is read whole, and nothing draws a plate or an edge
+ * around the words. A card nobody follows, or only its holder, has no such row.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -115,9 +116,9 @@ for (const locale of ['ru', 'en'] as const)
       page,
     }) => {
       const drawer = await openCard(page, locale, width, [follower(ONE, ONE_LABEL)])
-      const line = drawer.locator('.card-subscribers')
+      const line = drawer.locator('.card-subscriber-list')
       await expect(line).toBeVisible()
-      const label = line.locator('.card-holder-label')
+      const label = drawer.locator('.card-subscribers .card-row-label')
       await expect(label).toHaveText(LABEL[locale])
       const names = line.locator('.card-subscriber')
       // The holder's own spelling: the client, then the start of the session.
@@ -125,23 +126,23 @@ for (const locale of ['ru', 'en'] as const)
       await expect(names.first()).toHaveAttribute('title', ONE_LABEL)
 
       const block = await box(drawer.locator('.card-facts-block'))
-      const [holderWords] = await drawnLines(drawer.locator('.card-holder .card-holder-label'))
+      const [holderWords] = await drawnLines(drawer.locator('.card-holder-label'))
       const [labelWords] = await drawnLines(label)
-      // The drawn words, not the boxes: both lines start where the head's column starts.
-      expect(labelWords.left, `${at}: the line against the holder's`).toBeCloseTo(
+      // The drawn words, not the boxes: both names start where the head's column starts.
+      expect(labelWords.left, `${at}: the name against the holder's`).toBeCloseTo(
         holderWords.left,
         0,
       )
-      expect(labelWords.left, `${at}: the line against the column`).toBeCloseTo(block.x, 0)
+      expect(labelWords.left, `${at}: the name against the column`).toBeCloseTo(block.x, 0)
       // Under the holder's row, and before the labels' row.
-      const holder = await box(drawer.locator('.card-holder'))
+      const holder = await box(drawer.locator('.card-holder-value'))
       const labels = await box(drawer.locator('.card-labels'))
-      expect(labelWords.top).toBeGreaterThanOrEqual(holder.y + holder.height - 1)
+      expect(labelWords.top).toBeGreaterThanOrEqual(holder.bottom - 1)
       expect(labelWords.bottom).toBeLessThanOrEqual(labels.y)
-      // The name and the label share their line, a word's room apart.
+      // The followers and their name share a line, the followers on the values' edge.
       const [nameWords] = await drawnLines(names.first())
       expect(Math.abs(nameWords.top - labelWords.top)).toBeLessThanOrEqual(1.5)
-      expect(nameWords.left - labelWords.right).toBeCloseTo(8, 0)
+      expect(nameWords.left, `${at}: the names against the values`).toBeCloseTo(holder.x, 0)
       expect(await surround(line)).toEqual(BARE)
       expect(await surround(names.first())).toEqual(BARE)
     })
@@ -156,12 +157,14 @@ for (const locale of ['ru', 'en'] as const)
     ] as const)
       test(`${at}: where ${who}, there is no line and no room for one`, async ({ page }) => {
         const drawer = await openCard(page, locale, width, [...followers])
-        await expect(drawer.locator('.card-holder')).toBeVisible()
+        await expect(drawer.locator('.card-holder-value')).toBeVisible()
         await expect(drawer.locator('.card-subscribers')).toHaveCount(0)
-        const holder = await box(drawer.locator('.card-holder'))
-        const labels = await box(drawer.locator('.card-labels'))
-        // The rows keep the head's own room between them, 12px, and nothing more.
-        expect(labels.y - holder.bottom).toBeCloseTo(12, 0)
+        const holder = await box(drawer.locator('.card-holder-value'))
+        const labels = await box(
+          drawer.locator('.card-row-value').filter({ has: page.locator('.card-labels') }),
+        )
+        // The rows keep the head's own room between them, 4px, and nothing more.
+        expect(labels.y - holder.bottom).toBeCloseTo(4, 0)
       })
   }
 
@@ -253,26 +256,25 @@ const nameLayout = (name: Locator) =>
   })
 
 /**
- * Every name of the line, each judged against the line it stands in: whole when it fits a line
+ * Every name of the row, each judged against the room it stands in: whole when it fits a line
  * and on more lines only when it does not, broken only between its words while each word fits,
- * every line it starts begun where the label begins, and whether it moved on although its first
+ * every line it starts begun where the values begin, and whether it moved on although its first
  * word had room where the line before it ended, the case a name that broke inside itself shows.
  */
 async function namesOf(line: Locator) {
   const room = await box(line)
-  const [label] = await drawnLines(line.locator('.card-holder-label'))
-  let before = { right: label.right, top: label.top }
+  let before: { right: number; top: number } | null = null
   const read = []
   for (const name of await line.locator('.card-subscriber').all()) {
     const drawn = await nameLayout(name)
-    const moved = drawn.firstTop > before.top + 2
-    const starts = moved ? drawn.lineStarts : drawn.lineStarts.slice(1)
+    const moved = before !== null && drawn.firstTop > before.top + 2
+    const starts = moved || before === null ? drawn.lineStarts : drawn.lineStarts.slice(1)
     read.push({
       cut: drawn.cut || drawn.right > room.right + 0.5,
       lines: drawn.oneLine <= room.width ? drawn.lines === 1 : drawn.lines > 1,
       breaks: drawn.widestWord > room.width || drawn.breaksAtSpaces,
-      edge: starts.every((start) => Math.abs(start - label.left) <= 0.5),
-      forced: moved && room.right - before.right - 8 >= drawn.firstWord,
+      edge: starts.every((start) => Math.abs(start - room.x) <= 0.5),
+      forced: moved && room.right - (before?.right ?? room.x) - 8 >= drawn.firstWord,
     })
     before = { right: drawn.lastRight, top: drawn.lastTop }
   }
@@ -301,14 +303,14 @@ for (const locale of ['ru', 'en'] as const)
       page,
     }) => {
       const drawer = await openCard(page, locale, width, MIXED)
-      const line = drawer.locator('.card-subscribers')
+      const line = drawer.locator('.card-subscriber-list')
       await expect(line.locator('.card-subscriber')).toHaveCount(5)
       const names = await namesOf(line)
       const every = (key: 'cut' | 'lines' | 'breaks' | 'edge') => names.map((name) => name[key])
       expect(every('cut'), `${at}: nothing given way`).toEqual([false, false, false, false, false])
       expect(every('lines'), `${at}: whole on a line`).toEqual([true, true, true, true, true])
       expect(every('breaks'), `${at}: between words`).toEqual([true, true, true, true, true])
-      expect(every('edge'), `${at}: from the label's edge`).toEqual([true, true, true, true, true])
+      expect(every('edge'), `${at}: from the values' edge`).toEqual([true, true, true, true, true])
       expect(
         names.some((name) => name.forced),
         `${at}: a name the line had room to start`,
@@ -325,10 +327,12 @@ for (const width of [390, 320])
     const long = drawer.locator('.card-subscriber').first()
     await expect(long).toHaveText(`codex agent ${CODEX_ID} · 019a3c2e-5b7d,`)
     const drawn = await nameLayout(long)
-    const room = await box(drawer.locator('.card-subscribers'))
+    const room = await box(drawer.locator('.card-subscriber-list'))
     expect(drawn.oneLine).toBeGreaterThan(room.width)
     expect(drawn.lines).toBeGreaterThan(1)
-    expect(drawn.breaksAtSpaces).toBe(true)
+    // Between its words, unless a word is itself wider than the values' column, as a whole
+    // UUID is on a phone: that one alone breaks inside itself rather than run out of the row.
+    expect(drawn.widestWord > room.width || drawn.breaksAtSpaces).toBe(true)
     expect(drawn.cut).toBe(false)
     await expect(long).not.toHaveCSS('text-overflow', 'ellipsis')
     // The whole label, the session's full id with it, is still its title, as the holder's is.

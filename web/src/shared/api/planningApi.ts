@@ -419,6 +419,19 @@ export async function updateWorkItemDescription(input: {
   return validateWorkItemRecord(await write('/api/planning/work-item/update', { ...input }))
 }
 
+/**
+ * The facts a card changes in place: its priority, or its whole list of labels. The labels
+ * go with the revision they were read at, so one attached elsewhere in between is not lost.
+ */
+export async function updateWorkItemFacts(input: {
+  id: string
+  expected_revision?: number
+  labels?: readonly string[]
+  priority?: string
+}): Promise<WorkItem> {
+  return validateWorkItemRecord(await write('/api/planning/work-item/update', { ...input }))
+}
+
 export async function publishWorkItemReport(input: {
   id: string
   make_current: boolean

@@ -170,7 +170,7 @@ const {
   dismiss: dismissNotice,
   error: writeError,
   force,
-  moveTo,
+  changeFacts,
   notice,
   release,
   takeOver,
@@ -343,7 +343,7 @@ defineExpose({ close, openFrom })
         @claim="claim"
         @release="release"
         @take-over="takeover.ask"
-        @move="moveTo"
+        @fact="changeFacts"
         @filter="(token) => emit('filter', token)"
         @usage="section = 'agents'"
       />
@@ -426,7 +426,7 @@ defineExpose({ close, openFrom })
               @changed="reloaded"
               @hold-focus="holdFocus"
               @refresh="load"
-              @resume="moveTo"
+              @resume="(state) => changeFacts({ state })"
               @tick="tick"
             >
               <template #composition>

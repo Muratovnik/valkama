@@ -18,6 +18,7 @@ import {
   planningRefusal,
   tickChecklistStep,
   transitionWorkItem,
+  updateWorkItemFacts,
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
@@ -28,6 +29,9 @@ export interface StateMove {
   key: string
   name: string
 }
+
+/** What the card's head changes in place: the state, by its key, the priority or the labels. */
+export type FactChange = { state: string } | { priority: string } | { labels: string[] }
 
 /** A refused write as the card shows it: what was refused, why, and any override on offer. */
 export interface RefusalNotice {
@@ -172,6 +176,37 @@ export function useInspectorWrites(options: {
     })
   }
 
+  function changeFacts(change: FactChange) {
+    if ('state' in change) moveTo(change.state)
+    else if ('priority' in change) setPriority(change.priority)
+    else setLabels(change.labels)
+  }
+
+  function setPriority(priority: string) {
+    if (!priority || priority === options.item.value?.priority) return
+    void write(() => updateWorkItemFacts({ id: options.reference(), priority }), {
+      title: t('workItem.refusal.priority'),
+    })
+  }
+
+  /**
+   * The whole list, at the revision it was read at: a label attached or taken off elsewhere
+   * meanwhile is a conflict the card re-reads, not a change this one silently undoes.
+   */
+  function setLabels(labels: readonly string[]) {
+    const item = options.item.value
+    if (!item) return
+    void write(
+      () =>
+        updateWorkItemFacts({
+          id: options.reference(),
+          labels,
+          expected_revision: item.revision,
+        }),
+      { title: t('workItem.refusal.labels') },
+    )
+  }
+
   /**
    * A pointer, not a copy. Valkama records that this item names the document;
    * the provider is not asked to store anything, which is why a read-only
@@ -192,11 +227,11 @@ export function useInspectorWrites(options: {
 
   return {
     attachMemory,
+    changeFacts,
     claim,
     dismiss,
     error,
     force,
-    moveTo,
     notice,
     release,
     takeOver,

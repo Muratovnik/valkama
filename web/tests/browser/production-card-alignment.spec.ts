@@ -1,7 +1,8 @@
 /**
- * The identity line over a card's title and the row of facts under it, measured in the built
- * app. The texts of one line share a baseline, each icon or dot stands on the middle of the
- * lowercase letters beside it, within a pixel, and a word trimmed to its letters keeps them all.
+ * The identity line over a card's title and the rows of facts under it, measured in the built
+ * app. The texts of one line share a baseline, a row's name with its value's words, each icon or
+ * dot stands on the middle of the lowercase letters beside it, within a pixel, and a word trimmed
+ * to its letters keeps them all.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -139,7 +140,7 @@ async function openCard(page: Page, locale: 'ru' | 'en', width: number, head: He
 function trimmedWords(page: Page) {
   return page.evaluate(() => {
     const words = [
-      ...document.querySelectorAll<HTMLElement>('.drawer :is(.card-identity, .card-facts) *'),
+      ...document.querySelectorAll<HTMLElement>('.drawer :is(.card-identity, .card-facts-block) *'),
     ].filter(
       (element) =>
         getComputedStyle(element).textBoxTrim !== 'none' &&
@@ -272,42 +273,51 @@ for (const locale of ['ru', 'en'] as const) {
   }
 }
 
-/** The baseline of each word of the first row of facts, by the line of the row it wrapped to. */
+/**
+ * The baseline of each row's name and of the words of its value on the value's first line: the
+ * state and the question, the priority, the epic, the holder and the first labels.
+ */
 function factBaselines(page: Page) {
   return page.evaluate(() => {
     const canvas = document.createElement('canvas').getContext('2d')
     if (!canvas) throw new Error('no canvas')
-    const lines = new Map<number, { baseline: number; text: string }[]>()
-    for (const fact of document.querySelectorAll('.drawer .card-facts > *')) {
-      const word = fact.querySelector('.state-label, .facet-word:not(.facet-word-hidden)')
-      if (!word) throw new Error(`no word in ${fact.className}`)
+    const WORDS =
+      '.state-label, .facet-word:not(.facet-word-hidden), .open-action-name, .card-holder-name, .chip-face'
+    const measure = (word: Element) => {
       const range = document.createRange()
       range.selectNodeContents(word)
       const style = getComputedStyle(word)
       canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-      const baseline =
-        range.getBoundingClientRect().top + canvas.measureText('H').fontBoundingBoxAscent
-      const line = fact.getBoundingClientRect().top
-      const row = [...lines.keys()].find((top) => Math.abs(top - line) < 12) ?? line
-      lines.set(row, [
-        ...(lines.get(row) ?? []),
-        { baseline, text: word.textContent?.trim() ?? '' },
-      ])
+      const { top } = range.getBoundingClientRect()
+      return { baseline: top + canvas.measureText('H').fontBoundingBoxAscent, top }
     }
-    return [...lines.values()]
+    return [...document.querySelectorAll('.drawer .card-row')].map((row) => {
+      const label = row.querySelector('.card-row-label')
+      const words = [...row.querySelectorAll(`.card-row-value :is(${WORDS})`)]
+      if (!label || words.length === 0) throw new Error(`no words in ${row.className}`)
+      const firstLine = measure(words[0]).top
+      const onFirstLine = words.filter((word) => Math.abs(measure(word).top - firstLine) < 12)
+      return [label, ...onFirstLine].map((word) => ({
+        baseline: measure(word).baseline,
+        text: word.textContent?.trim() ?? '',
+      }))
+    })
   })
 }
 
 for (const locale of ['ru', 'en'] as const) {
   for (const width of [1280, 390]) {
-    test(`the words of one line of facts share a baseline, ${locale} at ${width}px`, async ({
+    test(`a row's name and its value's words share a baseline, ${locale} at ${width}px`, async ({
       page,
     }) => {
       await openCard(page, locale, width, FULL_HEAD)
       const lines = await factBaselines(page)
       console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
-      // State, question, priority and epic, however a phone's row wraps them.
-      expect(lines.flat()).toHaveLength(4)
+      // The state and the question, the priority, the epic, the holder and the labels, each
+      // with its name. A phone in English moves the question under the state, and the name
+      // stays on the state's line.
+      expect(lines).toHaveLength(5)
+      expect(lines[0]).toHaveLength(width === 390 && locale === 'en' ? 2 : 3)
       for (const [first, ...rest] of lines)
         for (const other of rest)
           expect(
@@ -336,7 +346,7 @@ test('a long word on the first row is cut short sideways, with an ellipsis, and 
   expect(await shapeOf(drawer.locator('.card-facts .state-label', { hasText: state }))).toEqual(
     shortened,
   )
-  const word = drawer.locator('.card-facts .card-fact .facet-word', { hasText: 'MAIN-12' })
+  const word = drawer.locator('.card-facts-block .card-fact .facet-word', { hasText: 'MAIN-12' })
   await word.evaluate((element) => {
     const fact = element.closest<HTMLElement>('.card-fact')
     if (fact) fact.style.maxWidth = '48px'
@@ -384,7 +394,7 @@ test.describe('at three device pixels', () => {
       page,
     }) => {
       const drawer = await openCard(page, 'ru', width, FULL_HEAD)
-      const row = () => drawer.locator('.card-facts').screenshot({ animations: 'disabled' })
+      const row = () => drawer.locator('.card-facts-block').screenshot({ animations: 'disabled' })
       const line = () => drawer.locator('.card-identity').screenshot({ animations: 'disabled' })
       const drawn = { line: await line(), row: await row() }
       await page.evaluate(() => {
