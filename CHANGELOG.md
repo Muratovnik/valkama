@@ -60,8 +60,12 @@ checkouts are therefore distinguishable even at the same version.
   block of questions — and the task's number in a block's head is its link, so the separate
   «Open task» is gone. The dialog speaks of blocks of questions.
 - **A step's row shows where and how a session runs as icons,** beside the name at the row's
-  own weight. Cursor shows its own mark, and an editor Valkama knows no mark for shows a
-  neutral editor glyph rather than another product's.
+  own weight.
+- **VS Code, Codex and Cursor show their own icons** wherever a place to open in is drawn:
+  in Settings, in a step's row and in «Open» actions. VS Code's is Microsoft's white variant,
+  since its blue falls below 3:1 on the interface's grounds, and every mark takes the colour
+  of the icons beside it. An editor with no mark of its own shows a neutral editor glyph
+  rather than another product's.
 - **Less explanatory text:** the line under Settings' section switch and the memory section's
   introduction are gone; a discussion's heading counts its threads with a bare number.
 
