@@ -45,6 +45,7 @@ import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
@@ -250,13 +251,13 @@ function laneGroup(lane: BoardLane): string {
           @chain="emit('chain', $event)"
         />
         <template v-if="isOpen(lane)">
-          <p
+          <DataEmptyState
             v-if="isEmpty(lane)"
             :id="bodyId(lane)"
             class="lane-quiet"
-          >
-            {{ t('workItem.lanes.empty') }}
-          </p>
+            :title="t('workItem.lanes.empty')"
+            inline
+          />
           <div
             v-else
             :id="bodyId(lane)"
@@ -407,12 +408,10 @@ function laneGroup(lane: BoardLane): string {
   }
 }
 
+/* The lane places the line; how it reads is the shared empty state's. */
 .lane-quiet {
   grid-column: 1 / -1;
-  padding-inline: var(--space-8);
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
+  margin-inline: var(--space-8);
 }
 
 /* Each cell is as tall as its own tiles, so a lane of one card is one card

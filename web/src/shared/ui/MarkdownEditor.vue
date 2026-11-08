@@ -30,6 +30,7 @@ import { useI18n } from 'vue-i18n'
 import { markdownEdit } from '@/shared/lib/markdownEdits.ts'
 import type { MarkdownTool, TextEdit } from '@/shared/lib/markdownEdits.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownFoot from '@/shared/ui/MarkdownFoot.vue'
 import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
 import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
@@ -353,12 +354,11 @@ defineExpose({
             v-if="hasText"
             :source="modelValue"
           />
-          <p
+          <DataEmptyState
             v-else
-            class="markdown-empty"
-          >
-            {{ t('editor.empty') }}
-          </p>
+            :title="t('editor.empty')"
+            inline
+          />
         </TabPanel>
       </div>
       <MarkdownFoot
@@ -470,10 +470,5 @@ defineExpose({
   &:focus-visible {
     outline: 0;
   }
-}
-
-.markdown-empty {
-  margin: 0;
-  color: var(--color-text-muted);
 }
 </style>

@@ -710,7 +710,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   panel, tab or column is empty, smaller (`compact`) where that space is small,
   and as one quiet line at the start of a section (`inline`) when the absence
   sits among other content, as a section of a card does. A section does not
-  write its own muted paragraph for it.
+  write its own muted paragraph for it. Two absences stay rows of their own
+  list: a popup's «no matches» line, because a list of choices may hold only
+  choices and a status there is refused, and the rail's «nobody is working»,
+  one of the rail's captions in the rail's ink and row height.
 - **Icons and badges:** application glyphs come from the central icon owner;
   local SVGs and per-screen badge shapes are prohibited.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
