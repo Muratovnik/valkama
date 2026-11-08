@@ -422,7 +422,7 @@ export async function updateWorkItemDescription(input: {
 export async function publishWorkItemReport(input: {
   id: string
   make_current: boolean
-  report: { done: string; next: string; why?: string }
+  report: { done: string; next: string; friction?: string; why?: string }
   author?: string
   expected_revision?: number
 }): Promise<WorkItem> {

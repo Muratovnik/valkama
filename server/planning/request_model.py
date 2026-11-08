@@ -41,7 +41,7 @@ _SINGLE = frozenset({"choice", "boolean", "verdict"})
 #: What a field under another may stand under: one whose answer names an option.
 _PARENTS = frozenset({"verdict", "choice", "multi_choice"})
 _FIELD_KEYS = frozenset({"id", "label", "type", "required", "options"})
-_FIELD_EXTRAS = frozenset({"description", "group", "under", "recommended"})
+_FIELD_EXTRAS = frozenset({"description", "group", "under", "recommended", "why"})
 #: How much of the prompt the compact form of a question quotes.
 QUESTION_PREVIEW = 160
 #: How much of a note or a written answer the compact form quotes, and how large one
@@ -54,7 +54,7 @@ MAX_CHANGE_QUOTE = 60
 #: What marks an option a change removed, as the contract writes it: U+2212, not a hyphen.
 MINUS = "\u2212"
 _KEY = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
-_OPTION_KEYS = frozenset({"id", "label", "description", "recommended"})
+_OPTION_KEYS = frozenset({"id", "label", "description", "recommended", "why"})
 
 
 def key(value: object) -> str:
@@ -82,7 +82,7 @@ def fields(value: object) -> list[dict]:
         ):
             raise model.PlanningError(
                 "each field requires id, label, type, required and options"
-                " and may add description, group, under and recommended"
+                " and may add description, group, under, recommended and why"
             )
         identity = key(raw["id"])
         if identity in earlier:
@@ -133,7 +133,7 @@ def fields(value: object) -> list[dict]:
 
 
 def _field_extras(raw: dict, identity: str, kind: str, earlier: dict[str, dict]) -> dict:
-    """The four keys a field may add, each only when it was given."""
+    """The five keys a field may add, each only when it was given."""
 
     extras: dict = {}
     if "description" in raw:
@@ -154,6 +154,12 @@ def _field_extras(raw: dict, identity: str, kind: str, earlier: dict[str, dict])
         if raw["recommended"] not in VERDICTS:
             raise model.PlanningError(f"field {identity}: recommended is accept, later or reject")
         extras["recommended"] = raw["recommended"]
+    if "why" in raw:
+        if "recommended" not in raw:
+            raise model.PlanningError(
+                f"field {identity}: why says why recommended; give recommended or leave why out"
+            )
+        extras["why"] = _why(raw["why"], "field.why")
     if "under" in raw:
         extras["under"] = _under(raw["under"], identity, earlier)
         parent = earlier[extras["under"]["field"]]
@@ -235,11 +241,11 @@ def _groups_stand_together(result: list[dict], by_id: dict[str, dict]) -> None:
 
 
 def _option(raw: object) -> dict:
-    """One choice: its id and label, and the two things it says only when given."""
+    """One choice: its id and label, and the three things it says only when given."""
 
     if not isinstance(raw, dict) or not {"id", "label"} <= set(raw) or set(raw) - _OPTION_KEYS:
         raise model.PlanningError(
-            "each option requires id and label and may add description and recommended"
+            "each option requires id and label and may add description, recommended and why"
         )
     option: dict = {
         "id": key(raw["id"]),
@@ -256,7 +262,23 @@ def _option(raw: object) -> dict:
         if not isinstance(raw["recommended"], bool):
             raise model.PlanningError("option.recommended must be boolean")
         option["recommended"] = raw["recommended"]
+    if "why" in raw:
+        if option.get("recommended") is not True:
+            raise model.PlanningError(
+                f"option {option['id']}: why says why it is recommended;"
+                " give recommended: true or leave why out"
+            )
+        option["why"] = _why(raw["why"], "option.why")
     return option
+
+
+def _why(raw: object, name: str) -> str:
+    """Why the asker recommends what it does: markdown, held to a description's rules."""
+
+    why = model.multiline_field(raw, name, limit=MAX_OPTION_DESCRIPTION)
+    if not why:
+        raise model.PlanningError(f"{name} is required when it is given")
+    return why
 
 
 def per_field(value: object, descriptors: list[dict], name: str, *, limit: int) -> dict:

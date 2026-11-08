@@ -5,7 +5,8 @@
  * only selects: Send is what sends.
  *
  * What the agent recommends is said in words while the row is undecided or decided otherwise;
- * eighteen identical words on rows that agree said nothing. The segment itself never shows it,
+ * eighteen identical words on rows that agree said nothing. The words show why when the agent
+ * said (`RequestAdvice`). The segment itself never shows it,
  * by colour or by mark, so a recommendation is not mistaken for a choice.
  *
  * An own variant is an icon beside the comment's, not a fourth segment, which a phone's width
@@ -28,6 +29,7 @@
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import RequestAdvice from '@/features/input-requests/components/RequestAdvice.vue'
 import RequestNote from '@/features/input-requests/components/RequestNote.vue'
 import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
@@ -197,7 +199,12 @@ defineExpose({ focus })
             :id="countId"
             >{{ t('requests.review.of', count) }}</span
           >
-          <span v-if="advice">{{ advice }}</span>
+          <RequestAdvice
+            v-if="advice"
+            :tab-stop="toggleStop"
+            :text="advice"
+            :why="field.why"
+          />
         </span>
       </div>
       <LineEnd

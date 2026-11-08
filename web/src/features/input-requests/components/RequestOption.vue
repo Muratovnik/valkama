@@ -92,6 +92,7 @@ const describedBy = computed(() => {
         :open="open"
         :quiet-mark="dense"
         :option="option"
+        :tab-stop="toggleStop"
         :view="view"
       />
     </component>

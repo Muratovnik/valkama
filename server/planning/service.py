@@ -233,7 +233,7 @@ _QUESTION_HITS = (
     " WHERE q.prompt LIKE ?"
     " OR EXISTS (SELECT 1 FROM json_tree("
     "CASE WHEN json_valid(q.fields_json) THEN q.fields_json END) f"
-    " WHERE f.key IN ('label','description') AND f.atom LIKE ?)"
+    " WHERE f.key IN ('label','description','why') AND f.atom LIKE ?)"
     " OR EXISTS (SELECT 1 FROM json_tree("
     "CASE WHEN json_valid(q.answers_json) THEN q.answers_json END) a"
     " WHERE a.type = 'text' AND a.atom LIKE ?)"

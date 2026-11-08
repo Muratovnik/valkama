@@ -101,7 +101,7 @@ and any of these groups, applied in this order:
 | `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | `comment_work_item`, in order |
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | `resolve_work_item_comment` |
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | `create_work_item_request` |
-| `summary` | `{"done": "…", "next": "…", "why": "…", "list": {"label": "…", "options": [...]}}` | `set_work_item_summary` |
+| `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | `set_work_item_summary` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | `transition_work_item` |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
@@ -123,7 +123,8 @@ A typical close, in one call:
  "checklist_ticks": [{"item_id": "…"}],
  "refs": [{"kind": "commit", "value": "3f2a9c1"}],
  "summary": {"done": "Parser accepts empty input; regression test added.",
-             "next": "Nothing; MAIN-14 covers the CLI message."},
+             "next": "Nothing; MAIN-14 covers the CLI message.",
+             "friction": "none"},
  "transition": {"state": "completed"}}
 ```
 
@@ -220,11 +221,13 @@ lists that holder's items.
 `prompt` and `fields`, each field
 `{"id": "…", "label": "…", "type": "text" | "choice" | "multi_choice" | "boolean" | "verdict", "required": true, "options": [{"id": "…", "label": "…"}]}`.
 A question holds 1 to 40 fields. An option also takes `description` (markdown, 1
-to 8000 characters) and `recommended` (a boolean, true on at most one option of a
-`choice`). A field also takes `description` (markdown, 1 to 8000 characters),
-`group` (1 to 200 characters; the fields of one group stand together), `under`
-(`{"field": "…", "option": "…"}`) and, on a `verdict` only, `recommended`
-(`accept`, `later` or `reject`). A `verdict` has `options: []` and is answered
+to 8000 characters), `recommended` (a boolean, true on at most one option of a
+`choice`) and, on a recommended option only, `why` (markdown, 1 to 8000
+characters: why you recommend it). A field also takes `description` (markdown, 1
+to 8000 characters), `group` (1 to 200 characters; the fields of one group stand
+together), `under` (`{"field": "…", "option": "…"}`) and, on a `verdict` only,
+`recommended` (`accept`, `later` or `reject`) with its `why`. Give `why` whenever
+you recommend; without `recommended` it is refused naming the option or field. A `verdict` has `options: []` and is answered
 `accept`, `later` or `reject`. A field `under` another names an earlier
 `verdict`, `choice` or `multi_choice` field that is under nothing itself, and an
 option of it (a verdict's word under a verdict); it leaves `group` out or repeats

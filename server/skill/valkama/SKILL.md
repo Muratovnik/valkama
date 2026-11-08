@@ -168,7 +168,8 @@ root's `comment_id` back to the agent that delegated.
 **A list under a comment.** When a report or a comment offers several findings
 for the owner to choose from, put them under it as `list`: `{"label": "What to
 take on", "options": [{"id": "a", "label": "Widen the check", "recommended":
-true}, …]}`, up to 20 options written as a question's options are.
+true, "why": "Two of the five misses are its."}, …]}`, up to 20 options written as
+a question's options are.
 `comment_work_item`, `report_work_item`, `set_work_item_summary` and the batch's
 `comment`, `comments` and `summary` take it, on a root only, and the comment and
 its list are one write; the answer adds `list_request_id`. It is a question of one
@@ -281,6 +282,9 @@ choosing it means, and `recommended`: at most one in a `choice`, any number in a
 `multi_choice`. A field may add a markdown `description`, a `group` (the heading
 its section stands under; the fields of one group stand together) and `under`
 (below); a `verdict` may add `recommended`: `accept`, `later` or `reject`.
+Whenever you recommend an option or a verdict, give `why` beside it: markdown on
+why that one, which the owner reads by pointing at the recommendation. It is
+taken only beside `recommended` (true on an option).
 
 **A review of many points** is one `verdict` field per proposal: the owner
 accepts it, puts it off or rejects it, and may comment on it or give an own
@@ -289,21 +293,26 @@ variant. The steps or the ways of a point are a field `under` it,
 and answered only while the point is accepted; a `group` per area replaces a
 field per executor. Everything the owner chooses from is an option: never a step
 in a label or a description, never `p4a` in a field shared by several points.
-Put `recommended` wherever you have one, because one button fills a draft from it.
+Put `recommended` wherever you have one, with its `why`, because one button fills a
+draft from it.
 Two points, one with its steps and one with its way:
 
 ```json
 [{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
-  "options": [], "group": "Checks", "recommended": "accept"},
+  "options": [], "group": "Checks", "recommended": "accept",
+  "why": "All fourteen false alarms came from one rule."},
  {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
   "under": {"field": "p4", "option": "accept"},
-  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true},
+  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true,
+               "why": "The marks show which cases the narrower rule must keep."},
               {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
  {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
-  "required": false, "options": [], "group": "Web code", "recommended": "accept"},
+  "required": false, "options": [], "group": "Web code", "recommended": "accept",
+  "why": "Six files passed 400 lines this month."},
  {"id": "p13-way", "label": "How", "type": "choice", "required": true,
   "under": {"field": "p13", "option": "accept"},
-  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true,
+               "why": "The rule already exists; no file moves."},
               {"id": "split_first", "label": "Split the files first"}]}]
 ```
 
@@ -391,8 +400,10 @@ anyone.
    completing: do it, or file it as an item of its own linked
    `discovered-from` this one and leave it off this checklist.
 2. Record the summary: `done` (what was done), `next` (what comes next) and
-   `why` only when the choice is not obvious. `set_work_item_summary`, or the
-   `summary` group.
+   `why` only when the choice is not obvious. When your instructions ask a
+   closing summary for flow friction, give it in `friction` (`none`, or a line
+   per hindrance), never at the end of `done` or `why`. `set_work_item_summary`,
+   or the `summary` group.
 3. Transition to the completed state, or to review when someone must check the
    result first. A state is named by its key or by a category that one state
    has (`completed`, `review`, `cancelled`); a name the workflow lacks is

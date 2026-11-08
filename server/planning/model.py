@@ -432,7 +432,11 @@ def new_checklist_item(text: object) -> dict:
 
 
 def summary(value: object, *, required: bool = True) -> dict | None:
-    """What was done, why when the choice is not obvious, and what comes next."""
+    """What was done, why when the choice is not obvious, and what comes next.
+
+    `friction` is what got in the way of the work itself, apart from the result:
+    `none`, or a line per hindrance. It is kept as given, `none` included.
+    """
 
     if value in (None, "", {}):
         if required:
@@ -445,7 +449,7 @@ def summary(value: object, *, required: bool = True) -> dict | None:
             raise PlanningError("work_item.summary is not valid JSON") from error
     if not isinstance(value, dict):
         raise PlanningError("work_item.summary must be an object")
-    unknown = set(value) - {"done", "why", "next"}
+    unknown = set(value) - {"done", "why", "next", "friction"}
     if unknown:
         raise PlanningError(f"work_item.summary has unknown field(s): {', '.join(sorted(unknown))}")
     record = {
@@ -457,6 +461,11 @@ def summary(value: object, *, required: bool = True) -> dict | None:
     why = value.get("why")
     if why:
         record["why"] = multiline_field(why, "work_item.summary.why", limit=4000)
+    friction = value.get("friction")
+    if friction is not None:
+        text = multiline_field(friction, "work_item.summary.friction", limit=4000)
+        if text:
+            record["friction"] = text
     return record
 
 

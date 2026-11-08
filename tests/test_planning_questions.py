@@ -31,6 +31,7 @@ CHOICE = {
             "label": "Keep it",
             "description": "**Costs** nothing now.\n\nA second paragraph.",
             "recommended": True,
+            "why": "Nothing to migrate, and MAIN-14 depends on it.",
         },
         {"id": "drop", "label": "Drop it"},
     ],
@@ -76,7 +77,7 @@ WEB_REQUEST_KEYS = {
     "comment_id",
 }
 #: Every key the web's strict schema must accept on a field, for the same reason:
-#: the four a field may add are on the way back only when they were given.
+#: the five a field may add are on the way back only when they were given.
 WEB_FIELD_KEYS = {
     "id",
     "label",
@@ -87,6 +88,7 @@ WEB_FIELD_KEYS = {
     "group",
     "under",
     "recommended",
+    "why",
 }
 COMPACT_KEYS = {
     "id",

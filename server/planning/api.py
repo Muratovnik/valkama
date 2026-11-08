@@ -826,7 +826,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         "questions",
         frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
     ),
-    ("summary", frozenset({"done", "next", "why", "list"})),
+    ("summary", frozenset({"done", "next", "why", "friction", "list"})),
     ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
 #: What a creation may do to the item it just made, after making it and in this

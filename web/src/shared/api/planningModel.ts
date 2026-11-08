@@ -143,6 +143,8 @@ const summarySchema = strictObject({
   done: blankable(4000),
   next: blankable(4000),
   why: blankable(4000).optional(),
+  /** What hindered the work itself: `none`, or a line per hindrance. */
+  friction: blankable(4000).optional(),
 })
 
 /**

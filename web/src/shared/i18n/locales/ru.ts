@@ -948,6 +948,7 @@ export const ru = {
     summaryDone: 'Что сделано',
     summaryNext: 'Что дальше',
     summaryWhy: 'Почему так',
+    summaryFriction: 'Трение процесса',
     summarySave: 'Сохранить сводку',
     summaryUpdate: 'Обновить сводку',
     links: 'Связанная работа',

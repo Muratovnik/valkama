@@ -130,7 +130,8 @@
                 "description": "**Costs** nothing now.\n\nA second paragraph.",
                 "id": "keep",
                 "label": "Keep it",
-                "recommended": true
+                "recommended": true,
+                "why": "Nothing to migrate, and MAIN-14 depends on it."
               },
               {
                 "id": "drop",
