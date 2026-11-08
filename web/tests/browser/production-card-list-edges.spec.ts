@@ -296,6 +296,8 @@ test("a chain's chevrons stay inside their press, its ring and the palette's ink
     expect(await toggle.evaluate(pressOf)).toEqual(INSIDE)
     // The palette's own colours, read under it: outside it they name other values.
     await page.emulateMedia({ forcedColors: 'active' })
+    // The palette's arrival is a change of colour, which reduced motion draws a frame later.
+    await frames(toggle)
     const system = await page.evaluate(() =>
       ['CanvasText', 'ButtonText', 'LinkText'].map((name) => {
         const probe = document.body.appendChild(document.createElement('span'))

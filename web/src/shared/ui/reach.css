@@ -11,7 +11,8 @@
  *   relative` only here, so a host that places it keeps its own position elsewhere.
  * - `.reach-grow` — a line of inline icons two pixels apart has no room around each to reach
  *   into, so each grows its own box to the target (`EntryHead`, `MarkdownToolbar`, a review
- *   point's presses in `RequestVerdictRow`).
+ *   point's presses in `RequestVerdictRow`, a Work filter chip's «=»/«≠» beside the chip it
+ *   opens onto in `WorkFilterChips`).
  * - `.reach-room` — a host that sets reaching icons apart reads `--reach-target`, the target
  *   each answers across: its inline box until a finger presses (`WorkItemLaneHead`), and so
  *   does a press that draws its own target, as a graph frame's fold does in the field's units

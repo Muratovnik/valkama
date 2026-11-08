@@ -159,10 +159,13 @@ const {
 restoreDrawerWidth()
 /** The same question the style block's one viewport query asks. */
 const iconsOnly = computed(() => viewportWidth.value <= NAV_ICONS_ONLY_WIDTH)
-/** Only a rail with words has a width to choose; with icons alone the style block's 64px stands. */
-const railStyle = computed(() =>
-  iconsOnly.value ? undefined : { '--size-navigation-width': `${drawerWidth.value}px` },
-)
+/**
+ * The width the reader chose, which only a rail with words stands at. It is handed to the style
+ * block rather than set as the width: an inline width outranks the viewport query, and between
+ * a window narrowing and this file hearing of it the rail stood at the chosen width over a
+ * workspace a phone leaves 130px.
+ */
+const railStyle = computed(() => ({ '--size-navigation-chosen-width': `${drawerWidth.value}px` }))
 
 /** The foot is drawn only while it holds the lost connection's control. */
 const troubled = computed(() => connectionTroubled(props.connection))
@@ -286,7 +289,9 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
 
 <style scoped>
 .app-nav-shell {
-  --size-navigation-width: 260px;
+  /* The width the reader chose, which the element's own style writes over. */
+  --size-navigation-chosen-width: 260px;
+  --size-navigation-width: var(--size-navigation-chosen-width);
 
   position: relative;
   z-index: 40;
