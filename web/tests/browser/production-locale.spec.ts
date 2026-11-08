@@ -194,6 +194,8 @@ test('Russian Work bar keeps its controls on one row and folds the presets at na
   await expect(presets).toBeHidden()
   await field.click()
   await expect(page.getByRole('group', { name: 'Быстрые фильтры' })).toBeVisible()
+  // The menu opens on the facets; a state is a step further in.
+  await page.getByRole('option', { name: 'Состояние', exact: true }).click()
   await page.getByRole('option', { name: 'В работе' }).click()
   await page.keyboard.press('Escape')
   await expect(page.locator('.workspace-chips .filter-chip')).toHaveText(['Состояние: В работе'])
