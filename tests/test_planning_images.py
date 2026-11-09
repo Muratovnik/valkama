@@ -311,6 +311,31 @@ class BackupTests(StoreCase):
         with self.assertRaises(images.ImageRefusedError):
             images.read(restored, sha(newer))
 
+    def test_no_upload_commits_between_the_rows_copied_and_the_pictures_copied(self) -> None:
+        images.store(self.conn, self.first, png(27))
+        other = sqlite3.connect(self.path, timeout=0.2)
+        other.row_factory = sqlite3.Row
+        self.addCleanup(other.close)
+        copy = store_backups._copy_pictures
+        attempts: list[str] = []
+
+        def upload_meanwhile(source: str, destination: str) -> None:
+            # Another process pastes a picture after VACUUM INTO and before the copy.
+            try:
+                images.store(other, self.second, png(28))
+                attempts.append("committed")
+            except sqlite3.OperationalError:
+                attempts.append("waited")
+            copy(source, destination)
+
+        with mock.patch.object(store_backups, "_copy_pictures", upload_meanwhile):
+            snapshot, _ = store_backups.verified_snapshot(
+                self.conn, "manual", locate=store._backups
+            )
+        self.assertEqual(["waited"], attempts)
+        self.assertEqual([sha(png(27))], sorted(os.listdir(store_backups.images_beside(snapshot))))
+        self.assertEqual([sha(png(27))], os.listdir(self.folder))
+
     def test_a_snapshot_missing_a_picture_or_holding_a_wrong_one_is_refused(self) -> None:
         data = png(21)
         images.store(self.conn, self.first, data)

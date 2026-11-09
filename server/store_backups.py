@@ -27,11 +27,12 @@ rows hold it: a file is intact when its bytes hash to its name.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from hashlib import sha256
 from typing import NamedTuple
 
@@ -100,13 +101,49 @@ def verify_pictures(snapshot_path: str, source: str) -> None:
             raise RuntimeError("a picture in the snapshot does not hold what its name says")
 
 
+@contextlib.contextmanager
+def _writes_held(conn: sqlite3.Connection, backups: BackupLocation) -> Iterator[None]:
+    """Hold off every other write to the store while its rows and pictures are copied.
+
+    The rows are copied by `VACUUM INTO`, which cannot run inside a transaction of
+    `conn`, and the pictures are files beside them; between the two an upload could
+    commit a picture the copied rows do not name, and a delete could take one they
+    do. So a second connection holds the store's write lock across the whole copy
+    and its check: `VACUUM INTO` only reads, which the lock allows, and every other
+    writer waits for it as it waits for any write. A store with no pictures, or with
+    no file, needs none of this.
+    """
+
+    database = next(
+        (str(row[2]) for row in conn.execute("PRAGMA database_list") if row[1] == "main"), ""
+    )
+    if not backups.images or not database:
+        yield
+        return
+    holder = sqlite3.connect(database, timeout=5)
+    try:
+        holder.execute("BEGIN IMMEDIATE")
+        yield
+    finally:
+        holder.rollback()
+        holder.close()
+
+
 def snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> str:
     """One clean copy of the database, keeping the last 5 snapshots per label.
 
     VACUUM INTO rather than a file copy: with WAL journaling the latest commits
     may still live in the -wal file, and a copy of the main file alone would be
-    a torn backup.
+    a torn backup. The pictures are copied and checked under the same write lock
+    (`_writes_held`).
     """
+
+    with _writes_held(conn, backups):
+        return _snapshot(conn, backups, label)
+
+
+def _snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> str:
+    """`snapshot`, for a caller that already holds the other writers off."""
     import datetime
     import uuid
 
@@ -117,10 +154,11 @@ def snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> s
         backups.directory, f"{backups.prefix}-{label}-{stamp}-{unique}.sqlite3"
     )
     conn.execute("VACUUM INTO ?", (destination,))
-    # After the rows: a picture is on disk before the row that names it commits,
-    # so every picture the copied rows name is there to be copied now.
+    # After the rows, and with no write since them: a picture is on disk before the
+    # row that names it commits, so every picture the copied rows name is there.
     if backups.images:
         _copy_pictures(backups.images, images_beside(destination))
+        verify_pictures(destination, backups.images)
     # Retention keeps the last 5 of THIS label, ordered by mtime. All three
     # properties are load-bearing, and a second label broke each of them:
     #
@@ -255,19 +293,19 @@ def verified_snapshot(
     stop each of them.
     """
 
-    integrity_check(conn, source="source store")
-    source_identity = logical_identity(conn)
-    reusable = reusable_snapshot(locate(), label)
-    if reusable is not None:
-        try:
-            if snapshot_identity(reusable) == source_identity:
-                verify_pictures(reusable, locate().images)
-                return reusable, source_identity
-        except (OSError, sqlite3.Error, RuntimeError):
-            set_aside(reusable)
-    backups = locate()
-    destination = snapshot(conn, backups, label)
-    if snapshot_identity(destination) != source_identity:
-        raise RuntimeError("snapshot does not match the exact logical source store")
-    verify_pictures(destination, backups.images)
-    return destination, source_identity
+    with _writes_held(conn, locate()):
+        integrity_check(conn, source="source store")
+        source_identity = logical_identity(conn)
+        reusable = reusable_snapshot(locate(), label)
+        if reusable is not None:
+            try:
+                if snapshot_identity(reusable) == source_identity:
+                    verify_pictures(reusable, locate().images)
+                    return reusable, source_identity
+            except (OSError, sqlite3.Error, RuntimeError):
+                set_aside(reusable)
+        backups = locate()
+        destination = _snapshot(conn, backups, label)
+        if snapshot_identity(destination) != source_identity:
+            raise RuntimeError("snapshot does not match the exact logical source store")
+        return destination, source_identity
