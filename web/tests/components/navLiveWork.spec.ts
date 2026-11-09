@@ -1,7 +1,8 @@
 /**
- * The rail's list of work going on now, as `kb`-free behaviour a reader relies on: the
- * frame's order drawn as it came, a row that left fading where it stood, the folds kept
- * on the device, and the rows that say a state other than work in words and no dots.
+ * The rail's list of work going on now, as `kb`-free behaviour a reader relies on: the work
+ * at hand freshest first with the quiet work folded and the pinned apart, a row that left
+ * fading where it stood, the folds kept on the device, and the rows that say a state other
+ * than work in words and no dots.
  */
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -90,26 +91,51 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('the order the frame came in', () => {
-  it('draws rows as the frame orders them and never sorts them itself', () => {
-    // Out of numeric order on purpose: the frame's order is the server's, by position.
+describe('the order of the list', () => {
+  it('lists the work going on now freshest first, the quiet work folded, the pinned apart', () => {
     const { wrapper } = rail(
       liveFrame([
         liveSpace('MAIN', [
-          liveRow('MAIN-9', { kind: 'epic', title: 'Later epic' }),
-          liveRow('MAIN-30', { parent: 'MAIN-9', state: 'working' }),
           liveRow('MAIN-4', { kind: 'epic', title: 'Earlier epic' }),
-          liveRow('MAIN-12', { parent: 'MAIN-4', state: 'held' }),
-          liveRow('MAIN-2', { state: 'waiting' }),
+          liveRow('MAIN-2', { state: 'waiting', updated_at: '2026-11-09T07:00:00Z' }),
+          liveRow('MAIN-12', {
+            parent: 'MAIN-4',
+            state: 'working',
+            updated_at: '2026-11-09T09:00:00Z',
+          }),
+          liveRow('MAIN-30', { state: 'working', updated_at: '2026-11-09T08:00:00Z' }),
+          liveRow('MAIN-8', { state: 'held', updated_at: '2026-11-09T06:00:00Z' }),
+          liveRow('MAIN-6', {
+            state: 'quiet',
+            quiet_since: '2026-11-01T00:00:00Z',
+            updated_at: '2026-11-09T10:00:00Z',
+          }),
+          liveRow('MAIN-21', { pinned: true }),
+          liveRow('MAIN-20', { pinned: true, state_name: 'Done', is_terminal: true }),
         ]),
         liveSpace('NEXT', [liveRow('NEXT-1', { state: 'working' })]),
       ]),
     )
-    expect(drawn(wrapper)).toEqual(['MAIN-9', 'MAIN-30', 'MAIN-4', 'MAIN-12', 'MAIN-2', 'NEXT-1'])
-    // A row stands in its parent's group, a level deeper; one with no parent at the space's.
-    const level = (reference: string) =>
-      row(wrapper, reference).style.getPropertyValue('--nav-row-depth')
-    expect([level('MAIN-9'), level('MAIN-30'), level('MAIN-2')]).toEqual(['1', '2', '1'])
+    const within = (selector: string) =>
+      wrapper
+        .findAll(`${selector} .nav-row-link`)
+        .map((link) => link.attributes('aria-label')?.split(' ')[0])
+    const main = '.nav-tree-space:first-child'
+    expect(within(`${main} .nav-tree-body > .nav-rows`)).toEqual(['MAIN-12', 'MAIN-30', 'MAIN-2'])
+    expect(within(`${main} .nav-quiet`)).toEqual(['MAIN-6', 'MAIN-8'])
+    expect(within(`${main} .nav-tree-pinned`)).toEqual(['MAIN-20', 'MAIN-21'])
+    // The epic is no row of its own: its title leads its item's row.
+    expect(drawn(wrapper)).not.toContain('MAIN-4')
+    expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-epic')?.textContent).toBe('Earlier epic')
+    expect(row(wrapper, 'MAIN-30').querySelector('.nav-row-epic')).toBeNull()
+    // Every row stands one step in from its space.
+    expect(
+      new Set(
+        wrapper
+          .findAll('.nav-work-list .nav-row')
+          .map((each) => (each.element as HTMLElement).style.getPropertyValue('--nav-row-depth')),
+      ),
+    ).toEqual(new Set(['1']))
     expect(wrapper.findAll('.nav-tree-space-name').map((name) => name.text())).toEqual([
       'MAIN · MAIN space',
       'NEXT · NEXT space',
@@ -120,8 +146,28 @@ describe('the order the frame came in', () => {
     const { wrapper } = rail(busyFrame())
     expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-number')?.textContent).toBe('12')
     expect(hintOf(row(wrapper, 'MAIN-12'))).toBe(
-      'MAIN-12 Answer a review in one form\nworking, 2 agents',
+      'MAIN-12 Answer a review in one form\npart of Structured answers\nworking, 2 agents',
     )
+  })
+})
+
+describe('the quiet work', () => {
+  it('starts folded under one row that counts it, and opens in place', async () => {
+    const { wrapper } = rail(busyFrame(), 'ru')
+    const more = wrapper.get('.nav-quiet-fold')
+    expect(more.text()).toBe('ещё 5\u{A0}тихих')
+    expect(more.attributes('aria-expanded')).toBe('false')
+    const quiet = wrapper.get(`#${more.attributes('aria-controls')}`)
+    expect(quiet.isVisible()).toBe(false)
+    await more.trigger('click')
+    expect(more.attributes('aria-expanded')).toBe('true')
+    expect(quiet.isVisible()).toBe(true)
+    // An opening is what the device keeps, since folded is where this row starts.
+    expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({
+      'quiet:MAIN': true,
+    })
+    await more.trigger('click')
+    expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({})
   })
 })
 
@@ -212,17 +258,18 @@ describe('folds', () => {
     expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({})
   })
 
-  it('folds the group around focus on Escape and gives focus to its fold', async () => {
+  it('folds the quiet rows, then the space, then the list on Escape, focus going to each fold', async () => {
     const { wrapper } = rail(busyFrame())
-    const link = row(wrapper, 'MAIN-12').querySelector<HTMLElement>('.nav-row-link')
+    const more = wrapper.get('.nav-quiet-fold')
+    await more.trigger('click')
+    const link = row(wrapper, 'MAIN-13').querySelector<HTMLElement>('.nav-row-link')
     link?.focus()
     link?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
-    const epicFold = row(wrapper, 'MAIN-4').querySelector<HTMLElement>('.nav-row-fold')
-    expect(epicFold?.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(epicFold)
+    expect(more.attributes('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(more.element)
     // Folded, the next Escape goes on to the space around it.
-    epicFold?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    more.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
     const spaceFold = wrapper.get('.nav-tree-fold').element
     expect(spaceFold.getAttribute('aria-expanded')).toBe('false')
@@ -242,7 +289,9 @@ describe('rows with no work moving', () => {
     const quiet = row(wrapper, 'MAIN-14')
     expect(quiet.classList).toContain('muted')
     expect(quiet.querySelector('.work-dots')).toBeNull()
-    expect(hintOf(quiet)).toMatch(/^MAIN-14 Quiet claim\nмолчит с 03 нояб\.?$/u)
+    expect(hintOf(quiet)).toMatch(
+      /^MAIN-14 Quiet claim\nчасть «Structured answers»\nмолчит с 03 нояб\.?$/u,
+    )
   })
 
   it('keeps the sign’s room on a pinned row with no work, and says why it is there', () => {
@@ -274,7 +323,11 @@ describe('rows with no work moving', () => {
   it('counts agents on no row in their space and outside every space', () => {
     const { wrapper } = rail(busyFrame(), 'ru')
     const notes = wrapper.findAll('.nav-tree-note').map((note) => note.text())
-    expect(notes).toEqual(['без задачи · 2\u{A0}агента', 'Вне пространств · 1\u{A0}агент'])
+    expect(notes).toEqual([
+      'без задачи · 2\u{A0}агента',
+      'Закреплённые',
+      'Вне пространств · 1\u{A0}агент',
+    ])
   })
 })
 

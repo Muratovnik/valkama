@@ -1,6 +1,6 @@
 /**
  * How the list of work going on now stands, measured rather than looked at: one grid
- * for every level's fold and sign, one column for a level's numbers whatever a row
+ * for the rows' signs and the quiet rows' fold, one column for the numbers whatever a row
  * carries, rows of one height that never wrap, controls as tall as their row, no ring
  * or edge on what the keyboard has not reached, a list that scrolls alone between a rail
  * head and foot that stay, and the phone's panel with its width, its rows and its focus.
@@ -14,13 +14,13 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, liveRow } from './liveWorkPage.ts'
+import { installLiveStreams, liveRow, openQuiet } from './liveWorkPage.ts'
 import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
 
-/** The busy frame and twenty more items under a third space, enough to scroll a rail. */
+/** The busy frame and twenty more items at work under a third space, enough to scroll a rail. */
 function tallFrame() {
   const frame = busyFrame()
   frame.spaces.push({
@@ -29,7 +29,7 @@ function tallFrame() {
     project_id: 'example-project',
     unplaced: 0,
     rows: Array.from({ length: 20 }, (_, index) =>
-      frameRow(`ZED-${index + 1}`, { state: index % 2 ? 'held' : 'working', agents: index % 3 }),
+      frameRow(`ZED-${index + 1}`, { state: index % 2 ? 'waiting' : 'working', agents: index % 3 }),
     ),
   })
   return frame
@@ -57,20 +57,24 @@ interface Measured {
   reference: string
 }
 
-/** Every row of a list as its boxes stand: where its lead and number start, how tall it is. */
+/**
+ * Every row of a list as its boxes stand: where its lead and number start, how tall it is.
+ * The quiet rows' fold counts as a row: its arrow stands in the lead's column and its words
+ * where the numbers start.
+ */
 function measure(page: Page, within: string) {
   return page.locator(within).evaluate((root) =>
-    [...root.querySelectorAll<HTMLElement>('.nav-row')].map((row) => {
-      const lead = row.querySelector('.nav-row-fold, .nav-row-lead')
-      const number = row.querySelector('.nav-row-number')
-      const title = row.querySelector('.nav-row-title')
+    [...root.querySelectorAll<HTMLElement>('.nav-row, .nav-quiet-fold')].map((row) => {
+      const lead = row.querySelector('.nav-row-lead, .nav-quiet-lead')
+      const number = row.querySelector('.nav-row-number, .nav-quiet-words')
+      const title = row.querySelector('.nav-row-title, .nav-quiet-words')
       const controls = [...row.querySelectorAll('button')].filter(
         (control) => getComputedStyle(control).display !== 'none',
       )
       return {
         reference:
-          row.querySelector('.nav-row-link')?.getAttribute('aria-label')?.split(' ')[0] ?? '',
-        depth: row.style.getPropertyValue('--nav-row-depth'),
+          row.querySelector('.nav-row-link')?.getAttribute('aria-label')?.split(' ')[0] ?? 'quiet',
+        depth: row.style.getPropertyValue('--nav-row-depth') || '1',
         height: row.getBoundingClientRect().height,
         leadless: row.classList.contains('nav-row-leadless'),
         lead: lead?.getBoundingClientRect().left ?? Number.NaN,
@@ -91,7 +95,13 @@ function oneColumn(rows: Measured[], pick: (row: Measured) => number) {
   return new Map([...levels].map(([depth, values]) => [depth, values[0]]))
 }
 
-function holdsTheGrid(rows: Measured[], rowHeight: number, step: number) {
+function holdsTheGrid(rows: Measured[], rowHeight: number) {
+  for (const row of rows) {
+    expect(Math.abs(row.height - rowHeight), row.reference).toBeLessThanOrEqual(0.5)
+    expect(row.lines, `${row.reference} wraps`).toBe(1)
+    for (const height of row.controls)
+      expect(Math.abs(height - rowHeight), `${row.reference} control`).toBeLessThanOrEqual(0.5)
+  }
   // A closed row without a lead keeps its number in a column of its own, one lead to the left.
   const open = rows.filter((row) => !row.leadless)
   const leads = oneColumn(open, (row) => row.lead)
@@ -100,22 +110,19 @@ function holdsTheGrid(rows: Measured[], rowHeight: number, step: number) {
     rows.filter((row) => row.leadless),
     (row) => row.number,
   )
-  // A level stands one step in from the level above it.
-  expect(Math.abs((leads.get('2') ?? 0) - (leads.get('1') ?? 0) - step)).toBeLessThanOrEqual(1)
-  for (const row of rows) {
-    expect(Math.abs(row.height - rowHeight), row.reference).toBeLessThanOrEqual(0.5)
-    expect(row.lines, `${row.reference} wraps`).toBe(1)
-    for (const height of row.controls)
-      expect(Math.abs(height - rowHeight), `${row.reference} control`).toBeLessThanOrEqual(0.5)
-  }
+  // Every row and the quiet rows' fold stand at one level, one step in from the space.
+  expect([[...leads.keys()], rows.some((row) => row.reference === 'quiet')]).toEqual([['1'], true])
 }
 
-/** A space's head stands as tall as a row, and so does its fold: no button's own floor. */
+/**
+ * A space's head stands as tall as a row, and so do its fold and the quiet rows' fold: no
+ * button's own floor.
+ */
 async function headsHold(page: Page, within: string, rowHeight: number) {
   const heads = await page
     .locator(within)
     .evaluate((root) =>
-      [...root.querySelectorAll('.nav-tree-head, .nav-tree-fold')].map(
+      [...root.querySelectorAll('.nav-tree-head, .nav-tree-fold, .nav-quiet-fold')].map(
         (node) => node.getBoundingClientRect().height,
       ),
     )
@@ -151,8 +158,9 @@ function nothingRinged(page: Page, within: string) {
 test('the rail’s list stands on one grid at 1280', async ({ page }) => {
   await open(page, { width: 1280, height: 800 })
   await expect(liveRow(page, 'ZED-1')).toBeAttached()
+  await openQuiet(page, '.nav-work-list')
   const rows = await measure(page, '.nav-work-list')
-  holdsTheGrid(rows, 28, 12)
+  holdsTheGrid(rows, 28)
   await headsHold(page, '.nav-work-list', 28)
   // The space's fold stands at the level above the first, on the same grid.
   const spaceFold = await page.locator('.nav-tree-fold').first().boundingBox()
@@ -238,10 +246,11 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await expect(panel).toBeVisible()
   // Measured where it comes to rest: it slides in from the rail's edge.
   await settled(panel)
+  await openQuiet(page, '.side-panel-body')
   const box = await panel.boundingBox()
   expect(box).toMatchObject({ x: 0, width: 340 })
   expect(await panel.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)
-  holdsTheGrid(await measure(page, '.side-panel-body'), 44, 12)
+  holdsTheGrid(await measure(page, '.side-panel-body'), 44)
   await headsHold(page, '.side-panel-body', 44)
   const pinned = liveRow(page, 'MAIN-20', '.side-panel-body').locator('.nav-row-pin')
   expect(await pinned.boundingBox()).toMatchObject({ width: 44, height: 44 })

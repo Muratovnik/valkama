@@ -1,10 +1,11 @@
 /**
  * The edges of the list of work going on now, measured on every row rather than looked
- * at: a level's titles start at one x whatever its numbers' length, a keyboard ring is
- * whole with nothing drawn over it, the pin under the pointer covers neither the title's
- * ellipsis nor the count and stands where a pinned row's pin does, an epic at work says
- * so in the sign column, the empty list and the panel's heading start at an edge their
- * surroundings have, and the panel's folds are a finger's size.
+ * at, the quiet rows opened: a row's words start at one x whatever its number's length, a
+ * keyboard ring is whole with nothing drawn over it, the pin under the pointer covers
+ * neither the title's ellipsis nor the count and stands where a pinned row's pin does, an
+ * epic at work says so in the sign column every row does, the empty list and the panel's
+ * heading start at an edge their surroundings have, and the panel's folds are a finger's
+ * size.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -15,7 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, liveRow, servePins } from './liveWorkPage.ts'
+import { installLiveStreams, liveRow, openQuiet, servePins } from './liveWorkPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -42,9 +43,13 @@ async function open(page: Page, width: number, frame: LiveFrame = edgeFrame()) {
   await page.goto(SETTINGS)
   await expect.poll(() => streams.open()).toHaveLength(1)
   await streams.live(frame)
-  if (width > 760) return RAIL
+  if (width > 760) {
+    await openQuiet(page, RAIL)
+    return RAIL
+  }
   await page.locator('.nav-work-rail').click()
   await settled(page.getByRole('dialog', { name: 'Work' }))
+  await openQuiet(page, PANEL)
   return PANEL
 }
 
@@ -62,6 +67,8 @@ interface RowBoxes {
   reference: string
   sign: Box | null
   title: Box
+  /** Where the row's words start: its epic's title, or its own. */
+  words: Box
 }
 
 /** Every row's parts as they stand: depth, sign, title, count and a pin in sight. */
@@ -71,6 +78,7 @@ function rows(page: Page, within: string) {
       const parts = {
         sign: row.querySelector('.nav-row-sign, .nav-row-lead > :not(button), .nav-row-own > *'),
         title: row.querySelector('.nav-row-title'),
+        words: row.querySelector('.nav-row-epic, .nav-row-title'),
         meta: row.querySelector('.nav-row-meta'),
         pin: row.querySelector('.nav-row-pin'),
       }
@@ -118,26 +126,26 @@ function leadRoom(page: Page, within: string) {
 }
 
 /**
- * On a phone a closed row has no lead, so its title stands one lead and gap to the left of the
+ * On a phone a closed row has no lead, so its words stand one lead and gap to the left of the
  * open rows of its level: each closed row is measured against an open row of its level, and the
  * difference must be the lead and gap an open row's grid gives. Elsewhere a level shares one edge.
  */
 function titlesOneEdge(all: RowBoxes[], width: number, room: { gap: number; lead: number }) {
   if (width > 760) {
-    oneEdge(all, (row) => row.title.left, 'title')
+    oneEdge(all, (row) => row.words.left, 'words')
     return
   }
   const closed = all.filter((row) => CLOSED_ROWS.has(row.reference))
   const open = all.filter((row) => !CLOSED_ROWS.has(row.reference))
   expect(closed.length, 'closed rows in the frame').toBeGreaterThan(0)
-  oneEdge(open, (row) => row.title.left, 'title')
+  oneEdge(open, (row) => row.words.left, 'words')
   for (const row of closed) {
     const peer = open.find((other) => other.depth === row.depth)
     if (peer === undefined)
       throw new Error(`no open row at level ${row.depth} for ${row.reference}`)
     expect(
-      Math.abs(peer.title.left - row.title.left - (room.lead + room.gap)),
-      `${row.reference} title one lead and gap left of level ${row.depth}`,
+      Math.abs(peer.words.left - row.words.left - (room.lead + room.gap)),
+      `${row.reference} words one lead and gap left of level ${row.depth}`,
     ).toBeLessThanOrEqual(1)
   }
 }
@@ -153,7 +161,7 @@ function oneEdge(all: RowBoxes[], pick: (row: RowBoxes) => number | null, what: 
 }
 
 for (const width of [1280, 390])
-  test(`every title of a level starts at one edge whatever its number’s length, at ${width}`, async ({
+  test(`every row's words start at one edge whatever its number’s length, at ${width}`, async ({
     page,
   }) => {
     const within = await open(page, width)
@@ -163,8 +171,10 @@ for (const width of [1280, 390])
       .evaluate((root) =>
         [...root.querySelectorAll('.nav-row-number')].map((node) => node.textContent?.length),
       )
-    // The fixture puts numbers of one, two and three digits side by side.
+    // The fixture puts numbers of one, two and three digits side by side, and an epic's
+    // title before some rows' own.
     expect(new Set(numbers)).toEqual(new Set([1, 2, 3]))
+    expect(await page.locator(`${within} .nav-row-epic`).count()).toBeGreaterThan(0)
     titlesOneEdge(all, width, await leadRoom(page, within))
   })
 
@@ -305,7 +315,7 @@ for (const width of [1280, 390])
 const signCentre = (row: RowBoxes) => (row.sign ? (row.sign.left + row.sign.right) / 2 : null)
 
 for (const width of [1280, 390])
-  test(`an epic at work carries its sign in the sign column its tasks do, at ${width}`, async ({
+  test(`an epic at work carries its sign in the sign column every row does, at ${width}`, async ({
     page,
   }) => {
     const within = await open(page, width)
@@ -314,9 +324,8 @@ for (const width of [1280, 390])
     const epic = all.find((row) => row.reference === 'MAIN-4')
     expect(epic?.sign, 'the epic’s own sign').toBeTruthy()
     oneEdge(all, signCentre, 'sign')
-    // The fold still says the group is open.
-    const fold = liveRow(page, 'MAIN-4', within).locator('.nav-row-fold')
-    await expect(fold).toHaveAttribute('aria-expanded', 'true')
+    // It is a row like its tasks, with no fold of its own.
+    await expect(liveRow(page, 'MAIN-4', within).locator('button:not(.nav-row-pin)')).toHaveCount(0)
   })
 
 /** Where a box starts, or a failure naming what is missing. */
@@ -355,12 +364,15 @@ test('the panel’s heading starts where its spaces’ names do, and every fold 
     .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))
   expect(names.length).toBeGreaterThan(1)
   for (const name of names) expect(Math.abs(name - heading)).toBeLessThan(0.5)
-  const folds = await panel.locator('.nav-tree-fold, .nav-row-fold').evaluateAll((nodes) =>
+  const folds = await panel.locator('.nav-tree-fold').evaluateAll((nodes) =>
     nodes.map((node) => {
       const { height, width } = node.getBoundingClientRect()
       return { label: node.getAttribute('aria-label') ?? '', height, width }
     }),
   )
-  expect(folds.length).toBeGreaterThan(2)
+  expect(folds.length).toBeGreaterThan(1)
   for (const fold of folds) expect(fold, fold.label).toMatchObject({ width: 44, height: 44 })
+  // The quiet rows' fold is a row, a finger's height across the panel.
+  const quiet = await panel.locator('.nav-quiet-fold').boundingBox()
+  expect(quiet?.height).toBe(44)
 })

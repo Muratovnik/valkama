@@ -16,7 +16,8 @@
           "quiet_since": null,
           "pinned": false,
           "state_name": "Backlog",
-          "is_terminal": false
+          "is_terminal": false,
+          "updated_at": "2026-01-02T03:04:05Z"
         },
         {
           "reference": "MAIN-4",
@@ -28,7 +29,8 @@
           "quiet_since": "2026-01-02T03:04:05Z",
           "pinned": false,
           "state_name": "Backlog",
-          "is_terminal": false
+          "is_terminal": false,
+          "updated_at": "2026-01-02T03:04:05Z"
         },
         {
           "reference": "MAIN-1",
@@ -40,7 +42,8 @@
           "quiet_since": null,
           "pinned": true,
           "state_name": "Backlog",
-          "is_terminal": false
+          "is_terminal": false,
+          "updated_at": "2026-01-02T03:04:05Z"
         },
         {
           "reference": "MAIN-2",
@@ -52,7 +55,8 @@
           "quiet_since": null,
           "pinned": false,
           "state_name": "Backlog",
-          "is_terminal": false
+          "is_terminal": false,
+          "updated_at": "2026-01-02T03:04:05Z"
         }
       ]
     }

@@ -11,28 +11,37 @@ export const NAME_INDENT_TOUCH = 'calc(var(--size-control-target) + var(--space-
  * The side panel's list: each space the frame names, folded or open, with its work
  * under it, and what is at work in no row.
  *
- * Every row's number stands in a column as wide as the list's longest number, so the
- * titles of a level start at one x whatever their numbers' length.
+ * Under a space's head stand the items a session is working on or waiting at, freshest
+ * first, each led by the title of the item it belongs to (`liveList`). Under them the
+ * space says how many agents are at work in it on no row, «no task · N agents», as a
+ * caption and not a place to go. Then one row, «N more quiet», folds the items held by a
+ * session at work on others or silent for over a day; it starts folded, opens in place
+ * and keeps its place when it does, so nothing above it moves. Last, under a caption of
+ * their own, the pinned items not at work. The agents whose folder is under no space are
+ * said once, after every space.
  *
- * A space's head is its key and name, which lead to its board, and a fold before them as
- * a group's head has, in the same column. Under its rows the space says how many agents
- * are at work in it on no row, «no task · N agents», as a caption and not a place to go;
- * the agents whose folder is under no space are said once, after every space. With
- * nothing to show the list says that nobody is working, quietly, in the room a row takes,
- * as a caption of what holds it: under the rail entry's label, which the rail's group
- * hands down as `--nav-label-start` (`NavModuleList`), and in the phone's panel where the
- * spaces' names would start, which is where its heading starts (`NAME_INDENT_TOUCH`).
+ * Every row's number stands in a column as wide as the list's longest number, folded rows
+ * included, so the titles start at one x and opening the fold widens nothing.
  *
- * On the rail Escape folds the innermost open group or space around focus and gives focus
- * to its fold; folded, the next Escape goes on to the one around it, and past the spaces
- * to the list itself (`NavWorkGroup`). In the phone's panel Escape closes the panel.
+ * A space's head is its key and name, which lead to its board, and a fold before them in
+ * the lead's column. With nothing to show the list says that nobody is working, quietly,
+ * in the room a row takes, as a caption of what holds it: under the rail entry's label,
+ * which the rail's group hands down as `--nav-label-start` (`NavModuleList`), and in the
+ * phone's panel where the spaces' names would start, which is where its heading starts
+ * (`NAME_INDENT_TOUCH`).
+ *
+ * On the rail Escape folds the quiet rows or the space around focus and gives focus to
+ * its fold; folded, the next Escape goes on to the one around it, and past the spaces to
+ * the list itself (`NavWorkGroup`). In the phone's panel Escape closes the panel.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import NavWorkBranch from '@/widgets/app-nav/components/NavWorkBranch.vue'
+import NavWorkQuiet from '@/widgets/app-nav/components/NavWorkQuiet.vue'
+import NavWorkRows from '@/widgets/app-nav/components/NavWorkRows.vue'
 import type { NavNode, NavOpen } from '@/widgets/app-nav/composables/useNavOpen.ts'
-import { liveTree, rowNumber } from '@/widgets/app-nav/utils/liveTree.ts'
+import { liveList, rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
+import type { LiveList } from '@/widgets/app-nav/utils/liveList.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -73,16 +82,20 @@ interface SpaceTree {
   folded: boolean
   href: string | undefined
   label: string
+  list: LiveList
   node: NavNode
+  pinnedHeading: string
+  /** The folded row of the space's quiet items, and the list it shows. */
+  quiet: { fold: string; id: string; node: NavNode; open: boolean }
   route: PlatformRoute | null
   space: ShownSpace
-  tree: ReturnType<typeof liveTree>
   rowRoute: (reference: string) => PlatformRoute | null
 }
 
 const trees = computed<SpaceTree[]>(() =>
   props.spaces.map((space) => {
     const node: NavNode = `space:${space.key}`
+    const quiet: NavNode = `quiet:${space.key}`
     const route = props.target({ key: space.key, project_id: space.project_id, reference: null })
     return {
       branch: `${props.prefix}-space-${space.key}`,
@@ -90,21 +103,30 @@ const trees = computed<SpaceTree[]>(() =>
       folded: !props.open.isOpen(node),
       href: route === null ? undefined : serializePlatformRoute(route),
       label: t('liveWork.space', { key: space.key, name: space.name }),
+      list: liveList(space.rows),
       node,
+      pinnedHeading: `${props.prefix}-pinned-${space.key}`,
+      quiet: {
+        fold: `${props.prefix}-quiet-${space.key}-fold`,
+        id: `${props.prefix}-quiet-${space.key}`,
+        node: quiet,
+        open: props.open.isOpen(quiet),
+      },
       route,
       rowRoute: (reference: string) =>
         props.target({ key: space.key, project_id: space.project_id, reference }),
       space,
-      tree: liveTree(space.rows),
     }
   }),
 )
 const touch = computed(() => props.size === 'touch')
 const empty = computed(() => props.spaces.length === 0 && props.elsewhere === 0)
-/** A number as wide as the list's longest, which sizes every row's number column. */
+/** A number as wide as the list's longest drawn, folded or not, which sizes every number column. */
 const widest = computed(() => {
-  const lengths = props.spaces.flatMap((space) =>
-    space.rows.map((row) => rowNumber(row.reference).length),
+  const lengths = trees.value.flatMap(({ list }) =>
+    [...list.live, ...list.quiet, ...list.pinned].map(
+      (entry) => rowNumber(entry.row.reference).length,
+    ),
   )
   return '0'.repeat(Math.max(1, ...lengths))
 })
@@ -126,6 +148,10 @@ function toggle(entry: SpaceTree) {
   props.open.set(entry.node, entry.folded)
 }
 
+function toggleQuiet(entry: SpaceTree) {
+  props.open.set(entry.quiet.node, !entry.quiet.open)
+}
+
 function pressSpace(event: MouseEvent, entry: SpaceTree) {
   if (entry.route === null || event.button !== 0) return
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -133,7 +159,7 @@ function pressSpace(event: MouseEvent, entry: SpaceTree) {
   emit('go', entry.route)
 }
 
-/** Fold the innermost open group or space around focus, and give focus to its fold. */
+/** Fold the innermost open node around focus, and give focus to its fold. */
 function escape(event: KeyboardEvent) {
   if (props.size !== 'rail' || !(event.target instanceof Element)) return
   let group = event.target.closest<HTMLElement>('[data-nav-node]')
@@ -214,13 +240,10 @@ function escape(event: KeyboardEvent) {
           :id="entry.branch"
           class="nav-tree-body"
         >
-          <NavWorkBranch
-            v-if="entry.tree.length > 0"
+          <NavWorkRows
+            v-if="entry.list.live.length > 0"
+            :entries="entry.list.live"
             :current="currentIn(entry)"
-            :depth="1"
-            :nodes="entry.tree"
-            :open="open"
-            :prefix="prefix"
             :route="entry.rowRoute"
             :size="size"
             :widest="widest"
@@ -232,6 +255,41 @@ function escape(event: KeyboardEvent) {
           >
             <span class="nav-tree-note-words">{{ unplacedWords(entry) }}</span>
           </p>
+          <NavWorkQuiet
+            v-if="entry.list.quiet.length > 0"
+            :entries="entry.list.quiet"
+            :fold-id="entry.quiet.fold"
+            :list-id="entry.quiet.id"
+            :node="entry.quiet.node"
+            :open="entry.quiet.open"
+            :current="currentIn(entry)"
+            :route="entry.rowRoute"
+            :size="size"
+            :widest="widest"
+            @toggle="toggleQuiet(entry)"
+            @go="(next) => emit('go', next)"
+          />
+          <div
+            v-if="entry.list.pinned.length > 0"
+            class="nav-tree-pinned"
+            role="group"
+            :aria-labelledby="entry.pinnedHeading"
+          >
+            <p
+              :id="entry.pinnedHeading"
+              class="nav-tree-note nav-tree-note-nested"
+            >
+              <span class="nav-tree-note-words">{{ t('liveWork.pinnedGroup') }}</span>
+            </p>
+            <NavWorkRows
+              :entries="entry.list.pinned"
+              :current="currentIn(entry)"
+              :route="entry.rowRoute"
+              :size="size"
+              :widest="widest"
+              @go="(next) => emit('go', next)"
+            />
+          </div>
         </div>
       </li>
     </ul>
@@ -245,11 +303,11 @@ function escape(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-/* The column every level counts from: the start padding of a row at depth 0 and the
-   width of the lead its fold stands in. A row of the levels below indents by one step of
-   12px a level from the same start (`NavWorkRow`, with the same values), so the folds of
-   all levels stand on one grid and the numbers of one level in one column. On a phone the
-   lead is a finger wide and the arrow keeps to the room before a row's sign. */
+/* The column the list counts from: the start padding of a space's head and the width of
+   the lead its fold stands in. A row indents by one step of 12px from the same start
+   (`NavWorkRow`, with the same values), and so does the folded row of quiet items, so
+   their folds and signs stand in one column and their numbers and words in the next. On a
+   phone the lead is a finger wide and the arrow keeps to the room before a row's sign. */
 .nav-tree {
   --nav-tree-lead: 24px;
   --nav-tree-arrow-end: 0;
@@ -268,7 +326,8 @@ function escape(event: KeyboardEvent) {
 }
 
 .nav-tree-space,
-.nav-tree-body {
+.nav-tree-body,
+.nav-tree-pinned {
   display: grid;
   gap: var(--space-half);
 }

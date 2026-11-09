@@ -6,7 +6,8 @@
  * arrives as `event: live` in a stream the page already has, and as the answer to
  * a pin. The server sends it in the order it is drawn, so a client does not sort
  * it; `parent` always names a row of the same space. A `quiet` row, silent for
- * over a day, says since when; no other row carries a time.
+ * over a day, says since when, and every row says when its item last changed, which
+ * only a write to the item moves: the side panel orders the work going on now by it.
  */
 
 import {
@@ -37,6 +38,8 @@ const rowShape = {
   /** The item's workflow state, as a link names the state of its other end. */
   state_name: boundedText(TITLE, 200),
   is_terminal: z.boolean(),
+  /** When the item last changed; only a write to it moves this. */
+  updated_at: boundedText(ISO, 96),
 }
 
 const liveRowSchema = z.union([

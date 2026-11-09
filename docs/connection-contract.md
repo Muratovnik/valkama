@@ -865,20 +865,22 @@ are not read.
    "rows": [
      {"reference": "MAIN-4", "title": "Structured answers", "kind": "epic", "parent": null,
       "state": null, "agents": 0, "quiet_since": null, "pinned": false,
-      "state_name": "Dev", "is_terminal": false},
+      "state_name": "Dev", "is_terminal": false, "updated_at": "2026-10-28T08:00:00Z"},
      {"reference": "MAIN-12", "title": "Answer a review in one form", "kind": "task",
       "parent": "MAIN-4", "state": "working", "agents": 2, "quiet_since": null,
-      "pinned": false, "state_name": "Dev", "is_terminal": false},
+      "pinned": false, "state_name": "Dev", "is_terminal": false,
+      "updated_at": "2026-11-04T10:15:00Z"},
      {"reference": "MAIN-13", "title": "Tell other work", "kind": "task",
       "parent": "MAIN-4", "state": "quiet", "agents": 0,
       "quiet_since": "2026-11-03T18:02:11Z", "pinned": false,
-      "state_name": "Dev", "is_terminal": false},
+      "state_name": "Dev", "is_terminal": false, "updated_at": "2026-11-03T17:40:00Z"},
      {"reference": "MAIN-7", "title": "Old migration", "kind": "task", "parent": null,
       "state": null, "agents": 0, "quiet_since": null, "pinned": true,
-      "state_name": "Done", "is_terminal": true},
+      "state_name": "Done", "is_terminal": true, "updated_at": "2026-10-02T12:00:00Z"},
      {"reference": "MAIN-20", "title": "Notes for the owner", "kind": "task",
       "parent": null, "state": null, "agents": 0, "quiet_since": null, "pinned": true,
-      "state_name": "Backlog", "is_terminal": false}]}],
+      "state_name": "Backlog", "is_terminal": false,
+      "updated_at": "2026-10-30T09:30:00Z"}]}],
  "elsewhere": 0}
 ```
 
@@ -895,6 +897,7 @@ are not read.
 | `quiet_since` | for a `quiet` row, when its session last gave a sign of life; `null` otherwise. It does not move while the row stays quiet |
 | `pinned` | whether a person pinned the item |
 | `state_name`, `is_terminal` | the item's workflow state, as a link names the state of its other end |
+| `updated_at` | when the item last changed, as its card says it. Only a write to the item moves it, so a frame read again over an unchanged store keeps it |
 
 **Which rows.** An open item whose state is `working`, `held`, `waiting` or
 `quiet`; a pinned item, open or closed, whatever its state; and every parent of
@@ -909,7 +912,9 @@ group: the groups come first, in the [order of work](#the-order-of-work), each
 followed by its own rows, and then the rows with neither a parent nor rows of
 their own. Rows that are not groups stand by number, so a change of state does
 not move a row, and a pinned row stands at its number among the others. The frame
-is already in order; a client does not sort it.
+is already in order, and a client that lists it as it came does not sort it. The
+interface's side panel draws its own order from it: the rows at work, freshest
+`updated_at` first; the rest folded or apart (see `DESIGN.md`).
 
 **`unplaced` and `elsewhere`.** A session's space is the space bound to the
 project whose root is the longest one that contains the session's

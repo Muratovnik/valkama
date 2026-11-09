@@ -19,6 +19,7 @@ export function liveRow(reference: string, overrides: Partial<Row> = {}): Row {
     pinned: false,
     state_name: 'Dev',
     is_terminal: false,
+    updated_at: '2026-11-01T09:00:00Z',
     ...overrides,
   } as Row
 }
@@ -90,10 +91,9 @@ export function busyFrame(): LiveFrame {
 }
 
 /**
- * The busy frame with closed rows of the kinds the phone's list keeps a lead for: a closed group
- * head with an open child, a pinned closed epic with a child, and a closed item a session is
- * still on. Under them a closed item nests at the second and the third level, for the nested
- * cases a spec states once their lead is decided.
+ * The busy frame with closed rows: a closed parent of an open item, a pinned closed epic with an
+ * item at work under it, a closed item a session is still on, and closed items the frame holds
+ * only as parents, at the second and the third level.
  */
 export function closedFrame(): LiveFrame {
   const frame = busyFrame()

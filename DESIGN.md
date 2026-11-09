@@ -679,10 +679,25 @@ the foot of every page; connecting is the moment a page opens, and showing it wo
 flash. Lost, the foot holds the state, the reason in its hint and the refresh above Settings,
 with a rule over them; connected, it holds Settings alone and draws no rule.
 
-In the Work list's phone panel (the navigation at most 760px wide), only a closed
-top-level item with no sign and no fold loses its lead column, so its title takes that
-room; a group's head with items shown under it, an item with a sign and a closed item
-nested under another keep their lead column.
+The Work list under «Work» is there to follow running work across spaces at a glance.
+Each space shows, first, only the items a session is working on or waiting at, the one
+whose item changed last on top (the live frame's `updated_at`; two changed in one second
+stand by number). Under them «без задачи · N агент» counts the agents at work in the
+space on no item. Then one row, «ещё N тихих», folds the quiet work — items a session
+holds while it works on others, and items silent for over a day — in the same order; it
+starts folded, opens in place under itself, and its opening is kept on the device.
+Opening it moves nothing above it and widens nothing: the numbers' column is sized with
+the folded rows already. Last, under the caption «Закреплённые», the pinned items not at
+work, by number; a pinned item at work stands with the work instead, once. An epic, or
+any item the list holds only as the parent of others, is no row of its own: its title
+leads each of its items' rows, muted, and gives way first, never taking more than two
+fifths of the row, so the item's own title keeps the rest; both stay on one line. An
+epic at work is a row like any other. This replaced a tree of epics with their items
+under them, quiet and pinned items mixed in by number, which read as a heap.
+
+In the Work list's phone panel (the navigation at most 760px wide), a closed item with
+no sign loses its lead column, so its title takes that room; an item with a sign keeps
+it.
 
 The shell owns one page scroll surface. Horizontal scrolling belongs only to a
 data region that genuinely needs it, such as Kanban lanes or a wide table.

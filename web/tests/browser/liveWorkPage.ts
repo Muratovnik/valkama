@@ -91,6 +91,12 @@ export async function servePins(page: Page, answer: (body: unknown) => LiveFrame
   return sent
 }
 
+/** Open every space's quiet rows in a list, so that every row of the frame stands in it. */
+export async function openQuiet(page: Page, within: string) {
+  for (const fold of await page.locator(`${within} .nav-quiet-fold`).all()) await fold.click()
+  await page.mouse.move(0, 0)
+}
+
 /** The rail's row of an item, by its reference, in the list or in the phone's panel. */
 export const liveRow = (page: Page, reference: string, within = '.nav-work-list') =>
   page.locator(`${within} .nav-row`, {
