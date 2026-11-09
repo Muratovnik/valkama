@@ -20,7 +20,8 @@
  * nothing either.
  * The route also holds how the space is looked at: the view, the chain every
  * view is narrowed to, whether the board is grouped by epic, and the filter,
- * which the workspace owns and writes back within the manifest's bound.
+ * which the workspace owns and writes back within the manifest's bound. A saved
+ * view is that state under a name, kept for the space it was saved in.
  *
  * So the bar over the views stands while a space is read, first or after a switch,
  * and only the stage under it waits. It used to give way to a page that said
@@ -126,6 +127,10 @@ const view = computed<PlanningViewMode>(() => viewOf(props.route.state))
 // An address that opens on the graph downloads it beside the space read, not after it.
 watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
 const grouping = computed(() => groupingOf(props.route.state))
+/** The space a saved view belongs to: the store and the key, which the project does not change. */
+const viewPlace = computed(() =>
+  boundSpace.value ? `${boundSpace.value.data_scope_id}:${boundSpace.value.space_key}` : '',
+)
 
 /**
  * The project the address names, when this workstation has no such project.
@@ -435,6 +440,7 @@ defineExpose({ refresh, selectedId })
       :reading="!model"
       :route-state="route.state"
       :state-bytes="stateBytes"
+      :view-place="viewPlace"
       :chain="chainScope"
       :chain-branch="chainBranch"
       :chain-pending="chainPending"

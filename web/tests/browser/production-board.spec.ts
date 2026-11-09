@@ -10,7 +10,7 @@
  * own output folder.
  */
 import { expect } from '@playwright/test'
-import type { Locator } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
@@ -113,6 +113,13 @@ for (const [width, oneRow] of [
   })
 }
 
+/** The board's grouping, chosen in the view's menu beside the view switch. */
+async function chooseGrouping(page: Page, choice: 'By epic' | 'No grouping') {
+  await page.getByRole('button', { name: 'View', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: choice }).click()
+  await expect(page.getByRole('menu')).toHaveCount(0)
+}
+
 test('a lane stays folded or unfolded the way it was left, across a reload', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
@@ -132,7 +139,7 @@ test('a lane stays folded or unfolded the way it was left, across a reload', asy
   await expect(closed).toHaveAttribute('aria-expanded', 'true')
   await expect(page.locator('[data-reference="MAIN-402"]')).toHaveCount(0)
   // Without grouping, every tile is on the board whatever its lane was left as.
-  await page.getByRole('button', { name: 'Group the board by epic' }).click()
+  await chooseGrouping(page, 'No grouping')
   await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
   await expect(page.locator('[data-reference="MAIN-402"]')).toBeVisible()
 })
@@ -157,7 +164,7 @@ test('a lane shows its epic’s chain on the board, in every view, and the chip 
   await page.screenshot(shot(info, 'w-board-chain-1440.png'))
 
   // Ungrouped, the root is a tile like its members; the chain stays.
-  await page.getByRole('button', { name: 'Group the board by epic' }).click()
+  await chooseGrouping(page, 'No grouping')
   await expect
     .poll(() => routeState(page))
     .toEqual({ view: 'kanban', chain: 'MAIN-401', chain_scope: 'chain' })

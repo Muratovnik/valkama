@@ -12,7 +12,7 @@ import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
 import {
   filterTokens,
   hasToken,
-  WORK_FILTER_PRESETS,
+  WORK_FILTER_CONDITIONS,
 } from '@/entities/work-item/utils/workFilter.ts'
 import type {
   LabelsMatch,
@@ -29,10 +29,10 @@ type Translate = (key: string, params?: Record<string, unknown>) => string
 type StateCategory = WorkItemBrief['state']['category']
 type ValueFacet = Exclude<WorkFilterToken['facet'], 'ready' | 'held'>
 
-type FilterGroupId = 'presets' | 'facets' | 'everywhere' | ValueFacet
+type FilterGroupId = 'conditions' | 'facets' | 'everywhere' | ValueFacet
 
 /**
- * Where the menu stands: the list of facets, with the presets over it, or one
+ * Where the menu stands: the list of facets, with the conditions over it, or one
  * facet's values. A reader picks the facet first, as Linear and GitLab ask,
  * because every value of every facet at once was a list a space's labels made
  * thousands long.
@@ -54,7 +54,7 @@ export interface FilterOption {
   action: FilterAction
   /** Unique across the menu, and stable while the value is offered. */
   key: string
-  /** The value's own word: «Высокий», `coordinator`, «Назначено». */
+  /** The value's own word: «Высокий», `coordinator`, «Есть ответственный». */
   text: string
   /** A count beside the word, where one says something: how many are held. */
   detail?: string
@@ -124,7 +124,7 @@ function tokenValue(token: WorkFilterToken, t: Translate): string {
   }
 }
 
-/** What a chip says: «Метка: coordinator», «Метка: не coordinator»; a preset by its own name. */
+/** What a chip says: «Метка: coordinator», «Метка: не coordinator»; a condition by its own name. */
 export function tokenName(token: WorkFilterToken, t: Translate): string {
   if (token.facet === 'ready' || token.facet === 'held') return tokenValue(token, t)
   return t(token.not ? 'workItem.filter.chipNot' : 'workItem.filter.chip', {
@@ -200,31 +200,28 @@ function markOf(token: WorkFilterToken, text: string): FacetMark | undefined {
 }
 
 /**
- * Every group the menu offers, with the presets first. A value already in the
+ * Every group the menu offers, with the conditions first. A value already in the
  * filter stays offered, so picking it again is how it comes out.
  */
 export function filterGroups(input: {
   categories: readonly StateCategory[]
   /** Values in the filter that the work no longer carries stay removable here. */
   filter: WorkFilter
-  /** How many open items are held: the «Назначено» preset's count; none while it is unknown. */
+  /** How many open items are held: the held condition's count; none while it is unknown. */
   held: number | null
   items: readonly WorkItemBrief[]
   t: Translate
 }): ValueGroup[] {
   const { t } = input
-  const presets: ValueGroup = {
-    id: 'presets',
-    name: t('workItem.filter.presets'),
-    options: WORK_FILTER_PRESETS.map((preset) => {
-      const token = preset.tokens[0] as WorkFilterToken
-      return {
-        key: tokenKey(token),
-        action: pick(token),
-        text: t(preset.label),
-        ...(token.facet === 'held' && input.held !== null ? { detail: String(input.held) } : {}),
-      }
-    }),
+  const conditions: ValueGroup = {
+    id: 'conditions',
+    name: t('workItem.filter.conditions'),
+    options: WORK_FILTER_CONDITIONS.map((token) => ({
+      key: tokenKey(token),
+      action: pick(token),
+      text: tokenValue(token, t),
+      ...(token.facet === 'held' && input.held !== null ? { detail: String(input.held) } : {}),
+    })),
   }
   const picked = filterTokens(input.filter)
   const groups = GROUP_ORDER.map((facet) => {
@@ -243,7 +240,7 @@ export function filterGroups(input: {
       ...choicesOf(facet, values, t),
     }
   })
-  return [presets, ...groups].filter((group) => group.options.length)
+  return [conditions, ...groups].filter((group) => group.options.length)
 }
 
 /**
@@ -274,7 +271,7 @@ function narrowValues<Group extends FilterGroup>(group: Group, needle: string): 
 }
 
 /**
- * The menu at its step. With no text, the facets: the presets, then one row per
+ * The menu at its step. With no text, the facets: the conditions, then one row per
  * facet that steps into its values. Typed text in the facets' step still finds a
  * value of any facet, the fast path for someone who knows the word; in a facet's
  * step it narrows that facet's values. Text always ends the menu with the way to
@@ -310,19 +307,19 @@ export function stepGroups(
     return [{ ...values, back }, ...everywhere]
   }
   if (needle) return [...narrowGroups(groups, needle), ...everywhere]
-  const presets = groups.filter((group) => group.id === 'presets')
+  const conditions = groups.filter((group) => group.id === 'conditions')
   const steps: FilterGroup = {
     id: 'facets',
     name: t('workItem.filter.facets'),
     options: groups
-      .filter((group) => group.id !== 'presets')
+      .filter((group) => group.id !== 'conditions')
       .map((group) => ({
         key: `open:${group.id}`,
         text: group.name,
         action: { do: 'open', facet: group.id as ValueFacet },
       })),
   }
-  return [...presets, steps]
+  return [...conditions, steps]
 }
 
 /** Whether a value row's token is in the filter; a row that is no value is not chosen at all. */

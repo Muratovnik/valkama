@@ -183,10 +183,6 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
-    `pages/planning/PlanningGrouping.vue <ToggleChip> v-tooltip.detail="t('workItem.lanes.groupingLabel')"`,
-    'what the chip does to the board; its word only names the grouping',
-  ],
-  [
     `pages/settings/components/SettingsKindColors.vue <input> v-tooltip.detail="t('settings.kindColors.kept')"`,
     'where a chosen colour is kept, which the swatch does not say; it stood as a paragraph over the group',
   ],

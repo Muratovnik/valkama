@@ -141,13 +141,16 @@ test('in the forced palette the board keeps the bounds its grounds drew', async 
   await installBackend(page)
   await serve(page)
 
-  // The flat board: its columns, its tiles, the stage they lie on and the chips in its bar.
+  // The flat board: its columns, its tiles and the stage they lie on. Its bar holds no
+  // chip at rest since the presets became conditions of the filter's menu; the one
+  // toggle chip left, a filter chip's operator, is read in the forced palette by
+  // production-toggle-chip.spec.ts.
   await openBoard(page, {})
   const flat = await sweep(page)
-  for (const kind of ['work-item-column', 'work-item-tile', 'toggle-chip', 'module-stage'])
+  for (const kind of ['work-item-column', 'work-item-tile', 'module-stage'])
     expect(flat.kinds.join(' '), `${kind} is told apart by its ground`).toContain(kind)
   expect.soft(flat.lost, 'the flat board').toEqual([])
-  const surfaces = ['module-stage', 'work-item-column', 'work-item-tile', 'toggle-chip']
+  const surfaces = ['module-stage', 'work-item-column', 'work-item-tile']
   expect.soft(await drawnEdges(page, surfaces), 'edges drawn on the flat board').toEqual([])
 
   // By epic: the cells that hold tiles.

@@ -1,7 +1,8 @@
 /**
  * The owner's local preferences: opening sessions and files, whether a card offers
- * its Execution tab, the colours of the work item kinds, and whether the standard workflow
- * states read in the interface's language.
+ * its Execution tab, the colours of the work item kinds, whether the standard workflow
+ * states read in the interface's language, and the views saved in each planning space
+ * (`savedViews.ts`).
  *
  * A session opens where it was last open; the server decides that. What the owner
  * sets here is only what the rule falls back to, per client family, and an
@@ -16,6 +17,8 @@ import { EDITORS } from '@/shared/api/openPlanModel.ts'
 import type { Editor, OpenPlace } from '@/shared/api/openPlanModel.ts'
 import { readKindColors } from '@/shared/lib/kindColors.ts'
 import type { KindColors } from '@/shared/lib/kindColors.ts'
+import { readSavedViews } from '@/shared/lib/savedViews.ts'
+import type { SavedViews } from '@/shared/lib/savedViews.ts'
 import { STATE_NAMINGS } from '@/shared/lib/stateNames.ts'
 import type { StateNaming } from '@/shared/lib/stateNames.ts'
 
@@ -42,6 +45,8 @@ export interface PlatformSettings {
   sessions: Record<SessionFamily, SessionOpening>
   /** How a workflow state is named on screen: the standard ones translated, or every one as written. */
   stateNames: StateNaming
+  /** Named address states, by the planning space they were saved in. */
+  views: SavedViews
 }
 
 export const MAX_CUSTOM_COMMAND_LENGTH = 400
@@ -67,6 +72,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     other: { ...DEFAULT_OPENING },
   },
   stateNames: 'translated',
+  views: {},
 }
 
 export function placesFor(family: SessionFamily): readonly OpenPlace[] {
@@ -143,6 +149,7 @@ export function mergeSettings(raw: unknown): PlatformSettings {
     stateNames: STATE_NAMINGS.includes(source.stateNames as StateNaming)
       ? (source.stateNames as StateNaming)
       : 'translated',
+    views: readSavedViews(source.views),
   }
 }
 

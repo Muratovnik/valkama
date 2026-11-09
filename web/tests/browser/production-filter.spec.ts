@@ -32,6 +32,12 @@ async function open(page: Page, width = 1440, height = 900) {
 }
 
 const field = (page: Page) => page.getByRole('combobox', { name: 'Filter work' })
+/** The board's grouping, chosen in the view's menu beside the view switch. */
+async function group(page: Page, choice: 'By epic' | 'No grouping') {
+  await page.getByRole('button', { name: 'View', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: choice }).click()
+  await expect(page.getByRole('menu')).toHaveCount(0)
+}
 const chips = (page: Page) => page.locator('.workspace-chips .filter-chip')
 
 for (const width of [1440, 1024]) {
@@ -72,17 +78,16 @@ test('the grouped board says its epics as rows on the counts line, where a phone
   await installBackend(page)
   await serve(page)
   await openBoard(page, {})
-  const grouping = page.getByRole('button', { name: 'Group the board by epic' })
   const rows = page.locator('.workspace-rows')
   await expect(rows).toBeHidden()
-  await grouping.click()
+  await group(page, 'By epic')
   await expect(rows).toBeVisible()
   await expect(rows).toContainText(/epics? as (rows|a row)/)
-  await grouping.click()
+  await group(page, 'No grouping')
   await expect(rows).toBeHidden()
   // A phone keeps the line at its height: the rows are not drawn there at all.
   await page.setViewportSize({ width: 390, height: 844 })
-  await grouping.click()
+  await group(page, 'By epic')
   await expect(page.locator('.workspace-figures')).toBeVisible()
   await expect(rows).toBeHidden()
 })
@@ -112,21 +117,19 @@ test('a filter survives a reload and Back, because the address holds it', async 
   await expect(page.locator('.work-item-tile')).toHaveCount(1)
 })
 
-test('a preset and the menu make the same filter', async ({ page }) => {
+test('a former preset is a condition of the menu, and makes the filter it made', async ({
+  page,
+}) => {
   await open(page)
-  await page.getByRole('button', { name: 'Assigned' }).click()
-  const fromPreset = await addressState(page)
-  expect(fromPreset).toEqual({ held: true })
-  await page.getByRole('button', { name: 'Assigned' }).click()
-  await expect.poll(() => addressState(page)).toEqual({})
-
+  // Nothing beside the field stands for it any more.
+  await expect(page.getByRole('button', { name: /^(Assigned|Has a holder)/u })).toHaveCount(0)
   await field(page).click()
-  await page.getByRole('option', { name: /^Assigned/u }).click()
-  await expect.poll(() => addressState(page)).toEqual(fromPreset)
-  await expect(page.getByRole('button', { name: /^Assigned/u })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await page.getByRole('option', { name: /^Has a holder/u }).click()
+  await expect.poll(() => addressState(page)).toEqual({ held: true })
+  await expect(chips(page)).toHaveText(['Has a holder'])
+  await page.getByRole('option', { name: /^Has a holder/u }).click()
+  await expect.poll(() => addressState(page)).toEqual({})
+  await expect(chips(page)).toHaveCount(0)
 })
 
 test('the bar’s keyboard: `/`, ↓ and Enter, Escape one step at a time, ← and Backspace', async ({
@@ -223,17 +226,19 @@ for (const width of [1440, 1024, 390]) {
   })
 }
 
-test('on a phone the view, the filter and the action share the first line', async ({ page }) => {
+test('on a phone the view, its menu, the filter and the action share the first line', async ({
+  page,
+}) => {
   await open(page, 390, 844)
   const first = await page
-    .locator('.workspace-view-menu, .workspace-filter, .workspace-action')
+    .locator('.workspace-view-menu, .view-menu, .workspace-filter, .workspace-action')
     .evaluateAll((elements) =>
       elements.map((element) => {
         const box = element.getBoundingClientRect()
         return { top: box.top, bottom: box.bottom }
       }),
     )
-  expect(first).toHaveLength(3)
+  expect(first).toHaveLength(4)
   // One line: each starts above where every other ends.
   expect(Math.max(...first.map((box) => box.top))).toBeLessThan(
     Math.min(...first.map((box) => box.bottom)),
@@ -246,7 +251,7 @@ test('on a phone the view, the filter and the action share the first line', asyn
   await expectNoSilentClipping(page, 'Work bar at 390px')
 })
 
-test('on a phone the field’s hint fits it, and the grouping says its word until a filter needs the room', async ({
+test('on a phone the field’s hint fits it, and a filter turned on does not make the bar taller', async ({
   page,
 }) => {
   await open(page, 390, 844)
@@ -268,33 +273,26 @@ test('on a phone the field’s hint fits it, and the grouping says its word unti
     }
   })
   expect(hint.text, JSON.stringify(hint)).toBeLessThanOrEqual(hint.room)
-  // The grouping says what it does beside the counts, on the bar's second line.
-  const grouping = page.getByRole('button', { name: 'Group the board by epic' })
-  await expect(grouping.locator('.grouping-word')).toHaveText('By epic')
-  await expect(grouping.locator('.grouping-word')).toBeVisible()
+  // The counts are the bar's second line, under the row of controls.
   const line = async () =>
     page.locator('.workspace-head').evaluate((head) => {
       const box = (selector: string) =>
         head.querySelector(selector)?.getBoundingClientRect() ?? new DOMRect()
       return {
         height: head.getBoundingClientRect().height,
-        switchBottom: box('.workspace-grouping').bottom,
+        rowBottom: box('.workspace-filter').bottom,
         figuresTop: box('.workspace-figures').top,
       }
     })
   const resting = await line()
   expect(resting.height).toBeLessThanOrEqual(100)
-  expect(resting.figuresTop).toBeLessThan(resting.switchBottom)
-  // A filter's reset takes the word's room rather than a third line, so the
-  // work does not move as a filter turns on; the control keeps its name and shows
-  // its glyph.
+  expect(resting.figuresTop).toBeGreaterThanOrEqual(resting.rowBottom)
+  // A filter's reset rides the counts' line rather than a third one, so the work
+  // does not move as a filter turns on.
   await field(page).fill('MAIN')
   await expect(page.locator('.workspace-figures')).toContainText('Reset')
-  await expect(grouping.locator('.grouping-word')).toBeHidden()
-  await expect(grouping.locator('.grouping-glyph')).toBeVisible()
-  await expect(grouping).toHaveAccessibleName('Group the board by epic')
   const filtered = await line()
   expect(filtered.height).toBe(resting.height)
-  expect(filtered.figuresTop).toBeLessThan(filtered.switchBottom)
+  expect(filtered.figuresTop).toBe(resting.figuresTop)
   await expectNoSilentClipping(page, 'Work bar at 390px with a filter')
 })

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
  * The one filter over the Work views: free text and facet chips in one field,
- * the two presets beside it, and the menu of facet values it opens.
+ * and the menu of conditions and facet values it opens.
  *
- * Three ways in, one model out. A chip clicked on a tile, a value picked from
- * the menu and a preset pressed all produce the same `WorkFilterToken`, so a
- * filter reads the same whichever way it was built, and the chips that show
- * it are how it is taken apart again.
+ * Two ways in, one model out. A chip clicked on a tile and a value picked from
+ * the menu produce the same `WorkFilterToken`, so a filter reads the same
+ * whichever way it was built, and the chips that show it are how it is taken
+ * apart again.
  *
  * The chips are the host's to place (`WorkFilterChips`); the field asks for
  * them with its `chips` event.
@@ -15,7 +15,7 @@
  * typed, and never because focus arrived. Tab passes through on its way to what
  * lies behind the menu, and focus also comes back here on its own, when a card
  * closes or the window returns; so nothing here listens for focus at all. It
- * opens on the facets, the presets over them, and a facet's row steps into its
+ * opens on the facets, the conditions over them, and a facet's row steps into its
  * values (`stepGroups`). Typing there still finds a value of any facet; inside a
  * facet it narrows that facet's values. Text ends the menu with a row that hands
  * it to the search over every project, the one thing this filter cannot do. It
@@ -39,7 +39,6 @@ import { useEventListener } from '@vueuse/core'
 import { drawnGroups, filterGroups, stepGroups } from '@/features/work-filter/filterOptions.ts'
 import type { FilterStep } from '@/features/work-filter/filterOptions.ts'
 import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
-import WorkFilterPresets from '@/features/work-filter/WorkFilterPresets.vue'
 
 import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
 import {
@@ -62,7 +61,7 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 const props = defineProps<{
   /** The states the workflow has, by category: what the state facet offers. */
   categories: readonly WorkItemBrief['state']['category'][]
-  /** Open items somebody holds: the «Назначено» preset's count; none while it is unknown. */
+  /** Open items somebody holds: the held condition's count; none while it is unknown. */
   held: number | null
   /** The work the bar counts, whose labels and holders the menu offers. */
   items: readonly WorkItemBrief[]
@@ -429,12 +428,6 @@ defineExpose({ focus: focusText })
           :size="16"
       /></VButton>
     </div>
-
-    <WorkFilterPresets
-      v-model:filter="filter"
-      :held="held"
-      @focusin="closeMenu"
-    />
 
     <OptionGroups
       v-show="shown"

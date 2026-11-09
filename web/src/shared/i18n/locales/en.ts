@@ -21,6 +21,7 @@ import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
+import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
@@ -822,10 +823,6 @@ export const en = {
     },
     columnEmpty: 'Nothing here',
     lanes: {
-      groupingLabel: 'Group the board by epic',
-      grouping: {
-        epic: 'By epic',
-      },
       noEpic: 'No epic',
       counts: '{open} open · {closed} closed',
       fold: 'Fold {lane}',
@@ -860,6 +857,7 @@ export const en = {
     ...workItemHeadMessages.en,
     ...workItemNextStepMessages.en,
     filter: workFilterMessages.en.filter,
+    ...viewMenuMessages.en,
     kindLabel: 'Kind',
     state: 'State',
     priority: 'Priority',

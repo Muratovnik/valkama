@@ -7,7 +7,12 @@ import { installBackend } from './backend.ts'
 import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+/** The board with a label picked, whose chip's operator is the pressed chip read here. */
+const BOARD = serializePlatformRoute({
+  module_id: 'planning',
+  scope: projectScope,
+  state: { labels: 'phase-1' },
+})
 
 /** How far around the chip is read: its focus ring stands outside it. */
 const AROUND = 4
@@ -78,7 +83,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme, forcedColors: 'active' })
     await installBackend(page)
     await page.goto(BOARD)
-    const chip = page.locator('.workspace-grouping')
+    const chip = page.locator('.workspace-chips .filter-chip-operator').first()
     await chip.click()
     await expect(chip).toHaveAttribute('aria-pressed', 'true')
     await page.mouse.move(0, 0)

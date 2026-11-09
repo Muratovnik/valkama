@@ -2,11 +2,15 @@
  * The bar above the work: one row of controls named from the keyboard, and one
  * line of state that answers the filter. The layout itself — one row at 1440
  * and 1024, what folds on a phone — is the browser suite's, which has widths.
+ * The view's menu is read through the entries it is handed; the menu itself, its
+ * keys and its focus, is `VMenu`'s (`ui-menu.spec.ts`).
  */
+import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
 
@@ -14,11 +18,19 @@ import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
-
-import { hintOf } from '../support/hint.ts'
+import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
 
 const COUNTS = { held: 1, matchedClosed: 0, matchedOpen: 2, open: 2, total: 3 }
-const GROUPING = 'button[aria-label="Group the board by epic"]'
+
+/** The view's menu as the bar hands it over: its name and its entries, each to be chosen. */
+const MenuStub = defineComponent({
+  name: 'VMenu',
+  props: {
+    entries: { type: Array as () => MenuEntry[], required: true },
+    label: { type: String, required: true },
+  },
+  template: '<div class="menu-stub" :aria-label="label" />',
+})
 
 function bar(
   props: Partial<InstanceType<typeof PlanningWorkspaceBar>['$props']> = {},
@@ -37,33 +49,53 @@ function bar(
       'grouping': 'none' as const,
       'items': [],
       'stored': true,
+      'routeState': undefined,
+      'viewPlace': 'scope:MAIN',
       'view': 'kanban' as const,
       'writable': true,
       'onUpdate:filter': (next: WorkFilter) => wrapper.setProps({ filter: next }),
       ...props,
     },
-    global: { plugins: [createI18n({ legacy: false, locale, messages, pluralRules })] },
+    global: {
+      plugins: [createI18n({ legacy: false, locale, messages, pluralRules })],
+      stubs: { VMenu: MenuStub },
+    },
   })
   return wrapper
 }
 
+/** The view's menu entries, and the grouping choice among them if there is one. */
+function viewMenu(wrapper: ReturnType<typeof bar>) {
+  const entries = wrapper.getComponent(MenuStub).props('entries') as MenuEntry[]
+  const grouping = entries.find((entry) => entry.key === 'grouping')
+  return { entries, grouping: grouping?.kind === 'choice' ? grouping : undefined }
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  setActivePinia(createPinia())
+})
 afterEach(() => {
   document.body.innerHTML = ''
 })
 
 describe('the work bar', () => {
-  it('holds the view, the grouping, one filter field and the action in one row', () => {
+  it('holds the view, its menu, one filter field and the action in one row', () => {
     const wrapper = bar()
     const row = wrapper.get('.workspace-tools')
     expect(row.find('[role="radiogroup"][aria-label="View"]').exists()).toBe(true)
     expect(row.get('input[role="combobox"]').attributes('aria-label')).toBe('Filter work')
-    // The grouping arranges the view, so it stands by the view and ahead of the
+    // The view's menu arranges the view, so it stands by the view and ahead of the
     // field, whose neighbours narrow the work instead.
-    const grouping = row.get(GROUPING).element
+    const menu = row.get('.menu-stub[aria-label="View"]').element
     const field = row.get('input[role="combobox"]').element
     const view = row.get('[role="radiogroup"][aria-label="View"]').element
-    expect(view.compareDocumentPosition(grouping)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(grouping.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(view.compareDocumentPosition(menu)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(menu.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    // No preset and no grouping stands in the row as a button of its own.
+    const buttons = row.findAll('button').map((button) => button.text())
+    for (const word of ['Workable', 'Has a holder', 'Assigned', 'By epic'])
+      expect(buttons).not.toContain(word)
     // The one primary action ends the row, not the line of state under it.
     expect(row.get('.workspace-action').text()).toBe('+New work item')
     expect(wrapper.get('.workspace-status').find('.workspace-action').exists()).toBe(false)
@@ -71,23 +103,21 @@ describe('the work bar', () => {
     expect(wrapper.find('[aria-label="Work queue"]').exists()).toBe(false)
   })
 
-  it('offers the grouping only while the board is on the stage, as a pressed control', async () => {
+  it('offers the grouping in the view’s menu only while the board is on the stage', async () => {
     const wrapper = bar({ grouping: 'epic' })
-    const grouping = wrapper.get(GROUPING)
-    // The same control as the presets beside the field, and no switch among them.
-    expect(grouping.classes()).toContain('toggle-chip')
-    expect(wrapper.find('[role="switch"]').exists()).toBe(false)
-    expect(grouping.attributes('aria-pressed')).toBe('true')
-    expect(hintOf(grouping)).toBe('Group the board by epic')
-    expect(grouping.text()).toBe('By epic')
-    await grouping.trigger('click')
+    const { grouping } = viewMenu(wrapper)
+    expect(grouping).toMatchObject({ label: 'Grouping', value: 'epic' })
+    expect(grouping?.options.map((option) => option.label)).toEqual(['No grouping', 'By epic'])
+    grouping?.select('none')
     expect(wrapper.emitted('group')).toEqual([['none']])
     await wrapper.setProps({ grouping: 'none' })
-    expect(wrapper.get(GROUPING).attributes('aria-pressed')).toBe('false')
-    await wrapper.get(GROUPING).trigger('click')
+    expect(viewMenu(wrapper).grouping?.value).toBe('none')
+    viewMenu(wrapper).grouping?.select('epic')
     expect(wrapper.emitted('group')).toEqual([['none'], ['epic']])
+    // The list and the graph are not grouped: the menu says nothing of it there.
     await wrapper.setProps({ grouping: null })
-    expect(wrapper.find(GROUPING).exists()).toBe(false)
+    expect(viewMenu(wrapper).grouping).toBeUndefined()
+    expect(viewMenu(wrapper).entries.map((entry) => entry.key)).toEqual(['save'])
   })
 
   it.each([
@@ -184,7 +214,7 @@ describe('the work bar', () => {
 
   it('switches a chip’s value to «is not» and back, the chip keeping its place and focus', async () => {
     const wrapper = bar({ filter: { text: '', labels: ['ui'], ready: true }, filtered: true })
-    // A preset is no value of a facet, and has no operator.
+    // A condition is no value of a facet, and has no operator.
     expect(wrapper.findAll('.workspace-chips .filter-chip-operator')).toHaveLength(1)
     const operator = wrapper.get('.workspace-chips .filter-chip-operator')
     expect(operator.text()).toBe('=')

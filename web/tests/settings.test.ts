@@ -101,6 +101,7 @@ test('settings stored with the notify fields of older builds read cleanly and lo
     'kindColors',
     'sessions',
     'stateNames',
+    'views',
   ])
   assert.equal(merged.sessions.claude.fallback, 'terminal')
 })

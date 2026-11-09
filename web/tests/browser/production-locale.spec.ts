@@ -91,36 +91,30 @@ function oneLine(boxes: { bottom: number; top: number }[]) {
 async function barAt(page: Page) {
   return page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect()
-    const word = document.querySelector('.grouping-word')
+    // Its word where the row has room, its sign alone on a phone: the one drawn.
+    const menu = [...document.querySelectorAll<HTMLElement>('.view-menu .menu-trigger')].find(
+      (trigger) => trigger.checkVisibility(),
+    )
     return {
       field: box('.filter-box')?.width ?? 0,
       fieldTop: box('.filter-box')?.top ?? 0,
-      groupingTop: box('.workspace-grouping')?.top ?? 0,
+      menuTop: menu?.getBoundingClientRect().top ?? 0,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      word: word !== null && getComputedStyle(word).display !== 'none',
+      name: menu?.getAttribute('aria-label') || menu?.textContent?.trim() || '',
+      // The width the bar's rules read: the module stage's, its container.
+      stage: box('.module-stage')?.width ?? 0,
+      word: menu?.textContent?.trim() ?? '',
+      // A sign's reach stands past its box and is no cut word, so only a word is read.
+      cut: menu?.textContent?.trim() ? menu.scrollWidth - menu.clientWidth : 0,
     }
   })
 }
 
 // The field never holds less than a phone gives it, which is what its short hint
-// is sized for, and the grouping keeps its word on the row or on the line under it.
-for (const [width, onRow] of [
-  [1440, true],
-  [1260, true],
-  [1024, true],
-  [996, true],
-  [990, false],
-  [900, false],
-  [888, false],
-  [880, false],
-  [820, false],
-  [760, false],
-  [700, false],
-  [690, false],
-  [680, false],
-  [390, false],
-] as const) {
-  test(`the Russian grouping keeps its word beside a field that works at ${width}px`, async ({
+// is sized for, and the view's menu keeps its whole word on the row beside it: the
+// grouping it holds once rode the counts' line where the row had no room for it.
+for (const width of [1440, 1260, 1024, 996, 990, 900, 888, 880, 820, 760, 700, 690, 680, 390]) {
+  test(`the Russian view menu keeps its word on the row beside a field that works at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 800 })
@@ -128,10 +122,14 @@ for (const [width, onRow] of [
     await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
     await expect(page.locator('.work-item-tile').first()).toBeVisible()
     const bar = await barAt(page)
-    expect(bar.word, 'the word is drawn').toBe(true)
+    expect(bar.name, 'the menu is named').toBe('Вид')
+    // Its word on the row where the row has room; on a phone its sign alone, so the
+    // field keeps the room it needs.
+    expect(bar.word, 'the word is drawn where there is room').toBe(bar.stage > 624 ? 'Вид' : '')
+    expect(bar.cut, 'the word is whole').toBeLessThanOrEqual(0)
     expect(bar.field, 'the field is usable').toBeGreaterThanOrEqual(100)
     expect(bar.overflow, 'the page does not scroll sideways').toBe(0)
-    expect(bar.groupingTop === bar.fieldTop, 'the word rides the row where it fits').toBe(onRow)
+    expect(bar.menuTop, 'the menu stands on the row').toBe(bar.fieldTop)
   })
 }
 
@@ -165,13 +163,13 @@ test('every order of the Russian phone list has its whole name', async ({ page }
   expect(box?.y ?? Infinity).toBeLessThan((sort?.y ?? 0) + (sort?.height ?? 0))
 })
 
-test('Russian Work bar keeps its controls on one row and folds the presets at narrow widths', async ({
+test('Russian Work bar keeps its controls on one row, and the former presets are conditions of its menu', async ({
   page,
 }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
-  const presets = page.getByRole('group', { name: 'Быстрые фильтры' })
+  const conditions = page.getByRole('group', { name: 'Условия' })
   const field = page.getByRole('combobox', { name: 'Фильтр работы' })
 
   for (const [width, height] of [
@@ -179,7 +177,9 @@ test('Russian Work bar keeps its controls on one row and folds the presets at na
     [1024, 768],
   ]) {
     await page.setViewportSize({ width, height })
-    await expect(page.getByRole('button', { name: 'Группировать доску по эпикам' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Вид', exact: true })).toBeVisible()
+    for (const gone of ['Можно брать', 'Назначено', 'По эпикам', 'Группировать доску по эпикам'])
+      await expect(page.getByRole('button', { name: gone, exact: true })).toHaveCount(0)
     expect(oneLine(await toolBoxes(page)), `one row at ${width}px`).toBe(true)
     // One row of controls, one line of state.
     const head = await page.locator('.workspace-head').boundingBox()
@@ -187,13 +187,13 @@ test('Russian Work bar keeps its controls on one row and folds the presets at na
     await expect(page.locator('.workspace-figures')).toContainText('открыт')
     await expectNoSilentClipping(page, `Russian Work bar at ${width}px`)
   }
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await expect(presets).toBeVisible()
-  await page.setViewportSize({ width: 1024, height: 768 })
-  // Where the row cannot hold them, the presets are the menu's first group.
-  await expect(presets).toBeHidden()
+  // The conditions are the menu's first group, at every width.
+  await expect(conditions).toHaveCount(0)
   await field.click()
-  await expect(page.getByRole('group', { name: 'Быстрые фильтры' })).toBeVisible()
+  await expect(conditions).toBeVisible()
+  await expect(conditions.getByRole('option')).toHaveText(['Можно брать', /^Есть ответственный/u])
+  await page.keyboard.press('Escape')
+  await field.click()
   // The menu opens on the facets; a state is a step further in.
   await page.getByRole('option', { name: 'Состояние', exact: true }).click()
   await page.getByRole('option', { name: 'В работе' }).click()

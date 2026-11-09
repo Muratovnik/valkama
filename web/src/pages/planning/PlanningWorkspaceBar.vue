@@ -2,26 +2,27 @@
 /**
  * The bar above the work: one row of controls, one line of state.
  *
- * The row is the view and, on the board, how it is grouped, then the filter, with
- * the one primary action at its end, where every module puts it. Grouping stands
- * by the view because it arranges what is drawn; everything to the right of the
- * field narrows it, so the two are not read as one set of filters. It is the same
- * pressed control as its neighbours, and where the row cannot hold its word beside
- * a field the phone's 108px wide, the word rides the line under it. The filter is one
- * field — text and facet chips — with its two presets and the menu it opens, because
- * the five queue segments that stood beside a search were two controls for one
- * population, and two of them repeated columns the board already draws.
+ * The row is the view and its menu, then the filter, with the one primary action
+ * at its end, where every module puts it. The menu stands by the view because what
+ * it holds arranges what is drawn — the board's grouping — or brings a whole view
+ * back, a saved one (`PlanningViewMenu`); everything to the right of it narrows
+ * what is drawn, so the two are not read as one set of filters. The filter is one
+ * field — text and facet chips — and the menu it opens, because the five queue
+ * segments that stood beside a search were two controls for one population, and two
+ * of them repeated columns the board already draws. The two presets that stood
+ * beside it, and the grouping that stood among them, read as three filters; the
+ * presets are conditions in the filter's menu now.
  *
  * The line under it answers the filter: how much of the open work it lets
- * through, with the way back out of it. The held count rides its preset. On the
- * grouped board the line also says how many epics are drawn as rows, the one
- * thing its columns do not count.
+ * through, with the way back out of it. The held count rides its condition in the
+ * filter's menu. On the grouped board the line also says how many epics are drawn
+ * as rows, the one thing its columns do not count.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { CensusExclusion } from '@/pages/planning/composables/usePlanningCensus.ts'
-import PlanningGrouping from '@/pages/planning/PlanningGrouping.vue'
+import PlanningViewMenu from '@/pages/planning/PlanningViewMenu.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
@@ -62,9 +63,13 @@ const props = defineProps<{
   grouping: BoardGrouping | null
   /** The work the counts count, whose labels and holders the filter offers. */
   items: readonly WorkItemBrief[]
+  /** The module's address state, which a saved view keeps. */
+  routeState: Record<string, string | number | boolean> | undefined
   /** The address holds the whole filter. */
   stored: boolean
   view: PlanningViewMode
+  /** The planning space the views are saved in. */
+  viewPlace: string
   writable: boolean
   /** The space is being read, so the bar has nothing to count yet and says no number. */
   reading?: boolean
@@ -76,6 +81,8 @@ const emit = defineEmits<{
   /** Search every project for the filter's text, from the last row of its menu. */
   'find': [text: string]
   'group': [grouping: BoardGrouping]
+  /** A saved view chosen: the address state it keeps. */
+  'state': [state: Record<string, string | number | boolean>]
   'view': [mode: PlanningViewMode]
 }>()
 
@@ -98,13 +105,8 @@ function pickView(mode: string) {
  * `aria-busy="false"` is a claim about a state the row is not in.
  */
 const countsBusy = computed(() => (props.busy || props.reading ? true : undefined))
-/** The held preset's count, which a space still being read does not have. */
+/** The held condition's count, which a space still being read does not have. */
 const heldCount = computed(() => (props.reading ? null : props.counts.held))
-
-const grouped = computed(() => props.grouping === 'epic')
-function toggleGrouping() {
-  emit('group', grouped.value ? 'none' : 'epic')
-}
 
 /** «319 открытых из 1267», or what the filter let through of the open work. */
 const countsText = computed(() => {
@@ -180,12 +182,12 @@ function removeChip(token: WorkFilterToken) {
         @focusin="graphView.prefetch"
         @update:model-value="pickView"
       />
-      <PlanningGrouping
-        v-if="grouping !== null"
-        class="workspace-grouping"
-        :filtered="filtered"
-        :pressed="grouped"
-        @toggle="toggleGrouping"
+      <PlanningViewMenu
+        :grouping="grouping"
+        :place="viewPlace"
+        :state="routeState"
+        @group="(value) => emit('group', value)"
+        @state="(state) => emit('state', state)"
       />
       <WorkFilterField
         ref="field"
@@ -376,44 +378,10 @@ function removeChip(token: WorkFilterToken) {
   }
 }
 
-/* The board, where the row keeps the grouping's word off it: the word rides the
-   counts' line, and the field takes what it left. */
-@container workspace (width > 624px) and (width < 736px) {
-  .workspace-head:has(.workspace-grouping) {
-    flex-flow: row wrap;
-    align-items: center;
-
-    &::before {
-      content: '';
-      flex-basis: 100%;
-      order: 1;
-      margin-top: calc(-1 * var(--space-2));
-    }
-
-    .workspace-tools,
-    .workspace-status {
-      display: contents;
-    }
-
-    .workspace-grouping,
-    .workspace-chip,
-    .workspace-chips,
-    .workspace-figures {
-      order: 2;
-    }
-
-    .workspace-left-out,
-    .workspace-note {
-      flex: 1 1 100%;
-      order: 3;
-    }
-  }
-}
-
-/* A phone: the view becomes a menu and the action its sign, so the view, the
-   filter and the action hold the first line. The two rows give up their own
-   boxes and wrap as one: the picked facets, the counts and the grouping
-   switch share the second line instead of each taking one. */
+/* A phone: the view becomes a menu and the action its sign, so the view, its
+   menu, the filter and the action hold the first line. The two rows give up their
+   own boxes and wrap as one: the picked facets and the counts share the second
+   line instead of each taking one. */
 @container workspace (width <= 624px) {
   .workspace-head {
     flex-flow: row wrap;
@@ -456,19 +424,17 @@ function removeChip(token: WorkFilterToken) {
     clip-path: inset(50%);
   }
 
-  /* The second line: the grouping, then what the filter lets through. The
-     closed items it lets through are a fact the wide bar has room for. */
-  .workspace-grouping,
-  .workspace-figures {
-    order: 2;
-  }
-
+  /* The second line: what the filter lets through. As tall as the reset that joins
+     it, as the wide bar's line is, so the work does not move when a filter turns on. */
   .workspace-figures {
     flex: 1 1 auto;
+    align-content: center;
+    order: 2;
+    min-block-size: var(--size-control-inline);
   }
 
   /* The closed items and the epics drawn as rows are facts the wide bar has room
-     for: on a phone the line keeps the counts and the grouping's word, and a third
+     for: on a phone the line keeps the counts and the reset, and a third
      fact would make the bar taller while a filter turns on. */
   .workspace-closed,
   .workspace-rows {

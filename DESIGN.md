@@ -1077,25 +1077,29 @@ the one-off cheaper than the shared thing.
 
 Work presents board, list, and graph views from the same Planning read model.
 It pairs a collapsible epic index with a horizontally scrollable board.
-The bar above the views is two rows and no more: the view and, on the board,
-its grouping, then the filter, then the one primary action, every control of
-the row at one compact height, and under them what is drawn and how much of it.
-The grouping is a pressed control as the filter's presets are, with no switch
-among them, and it stands by the view because it arranges what is drawn;
-everything to the right of the field narrows it. A press on it or on a preset
-changes no box: pressed is the ground, the full ink and a bar under what it says,
-with no check to make room for. The presets fold into the menu where the row cannot
-hold them beside a usable filter. A usable filter is as wide as a phone's, 108px
-with the longest words: where the row cannot hold the grouping's word beside that,
-the word rides the counts' line instead of becoming a glyph, and where the view's
-segments and the action cannot either, the bar takes its phone form. The filter's
+The bar above the views is two rows and no more: the view and its menu, then the
+filter, then the one primary action, every control of the row at one compact
+height, and under them what is drawn and how much of it. The view's menu, «View»
+by the view because it arranges what is drawn, holds how the view is arranged and
+the views kept: the grouping is a choice in it, offered only where the view has one
+(the board's «No grouping» or «By epic»); «Save view…» keeps the address's state —
+the view, its grouping and the filter — under a name, per space, in the interface's
+own settings, and a kept view is a choice the menu marks while the address holds it
+exactly; choosing it puts its state back, and the marked one can be deleted. A
+space never lists another space's views. Nothing in the row is a pressed filter of
+its own any more: everything to the right of the field narrows it, and the two
+conditions that once stood beside it as presets, «Workable» and «Has a
+holder», are the first group of the filter's menu. A usable filter is as wide as a
+phone's, 108px with the longest words; where the view's segments and the action
+cannot stand beside that, the bar takes its phone form, where the menu is its sign
+alone. The filter's
 hint starts with «Filter:» and names what it narrows by, so it does not read as the
 search over every project, «Go to a task» in the navigation; it is whole where it fits
 and short where it would be cut. The field is the way into the filter's menu, with no button of its own: a
 press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
 itself does not, since Tab passes through to what the menu would cover. The menu takes
 two steps, as Linear's does: it opens on the facets — state, kind, priority, holder,
-label — under the two presets, and a facet's row, marked with a chevron, steps into
+label — under the two conditions, and a facet's row, marked with a chevron, steps into
 that facet's values. Every value of every facet at once was a list a real space's
 labels made thousands of rows long. The values' step heads its list with the facet's
 name as the way back; ← or Backspace from the start of the text goes back too, and
@@ -1119,8 +1123,8 @@ to «Label: not ui», so the work must not carry that value; work nobody holds i
 by the holder named. Linear asks for the operator the same way, on the chip, rather than
 on every pick as GitLab's three steps do. The menu marks a value negated with the chip's
 cross in its check's place, and a press there takes it out whichever way it was in. In the
-address a negated value rides its facet's own key behind `%-`, which no older link holds. On a phone the grouping gives its word up to the reset while a filter is on, so
-the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
+address a negated value rides its facet's own key behind `%-`, which no older link holds. On a phone the counts' line is as tall as the reset that joins it while a filter
+is on, so the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and
 a filter names the closed items it let through only when no open one matched.
