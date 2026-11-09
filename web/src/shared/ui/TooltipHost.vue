@@ -26,7 +26,6 @@ import { computed, defineComponent, onBeforeUnmount, ref, shallowRef, watch } fr
 
 import { useEventListener } from '@vueuse/core'
 import {
-  injectTooltipProviderContext,
   injectTooltipRootContext,
   TooltipContent,
   TooltipPortal,
@@ -46,15 +45,13 @@ import {
 } from '@/shared/ui/tooltipAnchors.ts'
 
 let root: ReturnType<typeof injectTooltipRootContext> | null = null
-let provider: ReturnType<typeof injectTooltipProviderContext> | null = null
 
 const drawsNothing = () => null
 
-/** The root's and the provider's contexts, which only a child of the root can reach. */
+/** The root's context, which only a child of the root can reach. */
 const Contexts = defineComponent({
   setup() {
     root = injectTooltipRootContext()
-    provider = injectTooltipProviderContext()
     return drawsNothing
   },
 })
@@ -132,8 +129,7 @@ useEventListener(
     const element = tooltipAnchorOf(event.target)
     if (element === hovered) return
     if (hovered) leave()
-    // The library swaps this ref as the hint mounts, so it is read through its context.
-    if (!element || provider?.isPointerInTransitRef.value) return
+    if (!element) return
     hovered = element
     if (previewAnchorOf(element)) return
     pointAt(element)
@@ -231,9 +227,13 @@ onBeforeUnmount(stopHearing)
 </script>
 
 <template>
+  <!-- A hint is never entered (it lets the pointer through), so the library keeps no way open
+       to it: that way, the room between an element and its hint, held off the next element's
+       hint while the pointer stood in it, and a word beside a cut word showed none. -->
   <TooltipProvider
     :delay-duration="500"
     :skip-delay-duration="300"
+    disable-hoverable-content
   >
     <TooltipRoot
       :open="open"

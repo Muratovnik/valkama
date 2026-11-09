@@ -53,6 +53,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **The next hint shows when the pointer moves straight onto it.** Moving from a word with a
+  hint onto the one beside it, such as from a suggestion's name to its title, closed the first
+  hint and showed none for the second while the pointer stood between the first word and its
+  hint. A hint is never entered, so that stretch no longer holds the next one back.
 - **A focus ring brought into view keeps all of its room.** When focus moves to why a send or
   a read failed, to a reply or to a reference in text and scrolls it into view, the scroll now
   stops a pixel further in, so the ring is never short of the edge by a fraction of a pixel
