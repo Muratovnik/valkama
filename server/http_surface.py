@@ -932,6 +932,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._answer(boundary.errors(error))
         finally:
             if conn is not None:
+                # Whatever a write that never reached `settle` noted goes with it.
+                planning_images.forget(conn)
                 conn.close()
 
     def _read_json(self, max_bytes: int | None = None) -> dict:

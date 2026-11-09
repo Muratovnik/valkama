@@ -267,6 +267,17 @@ def release(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
     return freed
 
 
+def forget(conn: sqlite3.Connection) -> None:
+    """Drop what a write that did not commit noted; its rows came back with the rollback.
+
+    Every path that ends a write without reaching `settle` calls this, so a
+    long-running process does not keep a note for each failed delete, and a later
+    connection that happens to get the same `id` does not inherit one.
+    """
+
+    _FREED.pop(id(conn), None)
+
+
 def settle(conn: sqlite3.Connection) -> int:
     """After a commit, remove the files the committed write freed; how many went.
 

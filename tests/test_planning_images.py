@@ -25,7 +25,7 @@ from unittest import mock
 
 from server import http_surface, mcp_surface, store, store_backups
 from server.ops import tray
-from server.planning import api, images, service
+from server.planning import api, images, model, service
 from tests import schema9, schema13
 from tests.test_mcp_surface import Stdin, Stdout, params
 
@@ -207,6 +207,22 @@ class DeletionTests(StoreCase):
         reopened = store.connect()
         self.addCleanup(reopened.close)
         self.assertEqual([], os.listdir(self.folder))
+
+    def test_a_delete_that_fails_before_its_commit_leaves_nothing_noted(self) -> None:
+        images.store(self.conn, self.first, png(19))
+        release = images.release
+
+        def release_then_fail(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+            release(conn, hashes)
+            raise RuntimeError("failed on the way to the commit")
+
+        with (
+            mock.patch.object(images, "release", release_then_fail),
+            self.assertRaises(RuntimeError),
+        ):
+            self.delete(self.first)
+        self.assertNotIn(id(self.conn), images._FREED)
+        self.assertTrue((self.folder / sha(png(19))).exists())
 
     def test_an_upload_that_failed_and_could_not_take_its_file_back_leaves_it_to_the_sweep(
         self,
@@ -580,6 +596,31 @@ class HttpTests(HttpCase):
         self.assertEqual(200, status, answer)
         self.assertFalse((self.folder / sha(data)).exists())
         self.assertEqual(404, self.fetch(kept["path"])[0])
+
+    def test_a_delete_the_page_sends_that_fails_before_its_commit_leaves_nothing_noted(
+        self,
+    ) -> None:
+        self.upload(self.first, png(34))
+        before = set(images._FREED)
+        release = images.release
+
+        def release_then_fail(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+            release(conn, hashes)
+            raise model.PlanningError("refused on the way to the commit")
+
+        body = json.dumps({"id": self.first}).encode("utf-8")
+        headers = {
+            "Origin": f"http://{self.authority}",
+            "Sec-Fetch-Site": "same-origin",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+            "X-Valkama-Session": self.token(),
+        }
+        with mock.patch.object(images, "release", release_then_fail):
+            status, _, _ = self.request("POST", "/api/planning/work-item/delete", headers, body)
+        self.assertEqual(400, status)
+        self.assertEqual(before, set(images._FREED))
+        self.assertTrue((self.folder / sha(png(34))).exists())
 
     def test_an_upload_without_the_browser_credential_is_refused(self) -> None:
         status, body = self.upload(self.first, png(32), token="x" * 64)
