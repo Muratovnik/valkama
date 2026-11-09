@@ -1385,8 +1385,10 @@ tabs, the content. The facts are rows 4px apart, each led by its name in the qui
 one column, «Состояние», «Приоритет», «Эпик», «Исполняет» or «Ранее отвечал», «Подписаны»
 and «Метки», with the value on the name's baseline; a run of chips with no names read as
 one heap of state, priority, holder and tags. The state is its own transition menu, said
-once, so a move the server refuses leaves the chip naming where the item is, then a
-question waiting for its answer. The priority is a menu as well, urgent to low, each
+once, so a move the server refuses leaves the chip naming where the item is, then, while a
+question waits, «Ответить» with the question's sign: a verb that goes to the question on
+Overview. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
+that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
 The epic is the epic's sign, as a tile draws it, and its reference as an item link, the
 same link a number in text is: a press opens the epic through the card's departure, its
@@ -1470,8 +1472,7 @@ words in `title` and `aria-label`. An icon is a 28px target with a fine pointer 
 a finger or on a screen a phone's width, drawn bare either way, so the difference is room
 around the glyph. The words of the line wrap in a column of their own, so no name reaches the
 icons. A comment that asks and still waits for its reply says «· пока без ответа» after the
-time, as plain words of that line and the last of them, not «Ждёт ответа», the head's chip for a
-question to the person. They stay beside the time only where the author keeps the lines it has
+time, as plain words of that line and the last of them, not a status chip. They stay beside the time only where the author keeps the lines it has
 without them, and otherwise start the next line without the dot; the time never moves for them.
 They go once another session or a person replies in the thread, or the thread is resolved. Only what shows more of what an entry says keeps its words, because those say how much
 is left. Every entry has the one Reply, because threads are one level deep and an answer to a

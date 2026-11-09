@@ -25,6 +25,8 @@ export const inputRequestMessages = {
       unreadable: 'Questions could not be read',
       dismiss: 'Remove from list',
       answer: 'Send',
+      /** A card's way to the question that waits on it. */
+      answerQuestion: 'Answer',
       decline: "Don't answer",
       recommended: 'recommended',
       ownVariant: 'Your own option',
@@ -122,6 +124,7 @@ export const inputRequestMessages = {
       unreadable: 'Не удалось прочитать вопросы',
       dismiss: 'Убрать из списка',
       answer: 'Отправить',
+      answerQuestion: 'Ответить',
       decline: 'Не отвечать',
       recommended: 'рекомендую',
       ownVariant: 'Свой вариант',

@@ -54,6 +54,7 @@ import RichText from '@/shared/ui/RichText.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -61,7 +62,7 @@ const props = withDefaults(
     item: WorkItem
     workflow: PlanningWorkflow | null
     writable: boolean
-    /** Whether a question on it waits for an answer. */
+    /** Whether a question on it waits for an answer: the facts offer to go and answer it. */
     asking?: boolean
     /** The epic's reference; the record carries only its id. */
     parentReference?: string | null
@@ -254,6 +255,8 @@ defineExpose({ actionCell })
             :label="item.state.name"
           />
         </span>
+        <!-- A verb, not a state: the state's dot already says an agent waits, and this goes
+             to the question on Overview. -->
         <VButton
           v-if="asking"
           class="card-question"
@@ -261,11 +264,11 @@ defineExpose({ actionCell })
           size="compact"
           @click="emit('question')"
         >
-          <SemanticState
-            dimension="work-item-readiness"
-            state="asking"
-            :label="t('requests.pending')"
+          <VIcon
+            name="message-square"
+            :size="16"
           />
+          {{ t('requests.answerQuestion') }}
         </VButton>
       </div>
     </div>

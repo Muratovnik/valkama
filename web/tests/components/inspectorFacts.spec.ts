@@ -198,6 +198,26 @@ describe('the state as the menu that moves it', () => {
     expect(busy.emitted('fact')).toBeUndefined()
   })
 
+  // A question waiting is a way to answer it, said as the verb: the state already says the
+  // agent waits, and a button drawn as a status read as one more fact.
+  it('offers to answer a question that waits, with its sign, and goes to it', async () => {
+    const asked = mount(InspectorFacts, {
+      props: { item: item(), workflow, busy: false, writable: true, asking: true },
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+        stubs: { ChoiceSelect: choiceStub },
+      },
+    })
+    const button = asked.get('.card-question')
+    expect(button.element.tagName).toBe('BUTTON')
+    expect(button.text()).toBe('Answer')
+    expect(button.find('svg').classes()).toContain('lucide-message-square')
+    expect(button.find('[data-dimension]').exists()).toBe(false)
+    await button.trigger('click')
+    expect(asked.emitted('question')).toHaveLength(1)
+    expect(facts(item()).find('.card-question').exists()).toBe(false)
+  })
+
   it('is a plain state where nothing can move it', () => {
     const wrapper = facts(item(), { writable: false })
     expect(wrapper.findComponent(choiceStub).exists()).toBe(false)

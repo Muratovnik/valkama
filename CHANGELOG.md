@@ -38,6 +38,10 @@ checkouts are therefore distinguishable even at the same version.
   answered fold where they stand and later gather under «Answered (N)» at the end of the list,
   never moving while your pointer or keyboard is on them or below them.
 
+- **«Answer» in a card's facts.** Where a question waits, the facts offer «Answer» with the
+  question's sign, which goes to the question on Overview; it was a «Waiting for an answer»
+  status that acted when pressed.
+
 - **The epic in a card's facts is a link.** It draws the epic's sign, as a tile does, and its
   number opens the epic, through the card's Back, with the epic's hover card on pointing; the
   blocker an item waits on is a link the same way.
