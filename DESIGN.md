@@ -736,7 +736,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   choices and a status there is refused, and the rail's «nobody is working»,
   one of the rail's captions in the rail's ink and row height.
 - **Icons and badges:** application glyphs come from the central icon owner;
-  local SVGs and per-screen badge shapes are prohibited.
+  local SVGs and per-screen badge shapes are prohibited. A glyph is the size it is drawn
+  at: `VIcon` (and `ControlIcon` through it) takes the size as `size` and keeps it in a
+  row short of room — no flex shrink, no `max-width` from the page — so no consumer
+  writes `flex: none` for it or a width over it. Measured on every surface at a desktop
+  width, a phone's and the navigation's narrowest (`production-icon-size.spec.ts`).
+- **One-line labels:** a label that keeps to one line carries the shared `one-line`
+  class (no wrap, an ellipsis where it ends) and a `clipped` hint with its whole words,
+  on itself or on the control around it, so a cut label is whole on hover. No component
+  writes the three lines again.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
   arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the
   shell it is a single ink taking its color from the carrier. Where it stands

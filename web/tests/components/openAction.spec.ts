@@ -59,6 +59,13 @@ function read(wrapper: ReturnType<typeof mountAction>) {
   }
 }
 
+/** The hints among words that stand for no button, other than a cut word's own whole words. */
+const stillHints = (wrapper: ReturnType<typeof mountAction>) =>
+  wrapper
+    .findAll('.open-action-still [data-tooltip]')
+    .filter((hinted) => hinted.attributes('data-tooltip-kind') !== 'clipped')
+    .map((hinted) => hinted.attributes('data-tooltip'))
+
 function always(choice: string) {
   localStorage.setItem(
     'valkama-settings',
@@ -216,8 +223,9 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(wrapper.find('button.open-action').exists()).toBe(false)
     expect(wrapper.text()).toContain('No window · running')
-    // The words stand with no hint of their own: the why is the control beside them.
-    expect(wrapper.find('.open-action-still [data-tooltip]').exists()).toBe(false)
+    // The words say nothing more on hover than their own whole words, and that only while a
+    // narrow line cuts them: the why is the control beside them.
+    expect(stillHints(wrapper)).toEqual([])
     expect(wrapper.get('.open-action-why').attributes('aria-label')).toContain(
       'it is stopped from its attempt',
     )
@@ -230,7 +238,7 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(wrapper.find('button.open-action').exists()).toBe(false)
     expect(wrapper.get('.open-action-still .open-action-place').text()).toBe('session gone')
-    expect(wrapper.find('.open-action-still [data-tooltip]').exists()).toBe(false)
+    expect(stillHints(wrapper)).toEqual([])
     const why = wrapper.get('.open-action-why').attributes('aria-label')
     expect(why).toContain('The client no longer has this session.')
     expect(why).toContain('A copy is kept in Valkama.')

@@ -311,7 +311,7 @@ defineExpose({ actionCell })
         <span
           v-else-if="holder"
           v-tooltip.detail="holderTitle"
-          class="card-holder-name"
+          class="card-holder-name one-line"
           >{{ holderName(holder) }}</span
         >
         <FacetMarks

@@ -53,6 +53,18 @@
   text-overflow: ellipsis;
 }
 
+/* A label that keeps to one line: what does not fit ends in an ellipsis instead of wrapping
+   under itself. Twenty-nine rules wrote these lines each, and a label without one was the one
+   that wrapped: «Go to a task» and «Needs my answer» took two lines in the narrowest
+   navigation. Its element, or the control around it, carries a `clipped` hint with the whole
+   words, which shows only while they are cut. */
+.one-line {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Five components render this — the platform state panel while it loads, and on
    the graph a card's live mark, a zoomed-out card, a frame's header and the
    key — so it is a recipe that belongs to no one of them and stays here, as the

@@ -201,7 +201,7 @@ function sendMark() {
       </template>
     </EntryHead>
     <template v-if="folded">
-      <p class="thread-first">
+      <p class="thread-first one-line">
         <span
           :id="metaId"
           class="thread-first-meta"
@@ -354,9 +354,6 @@ function sendMark() {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .thread-first-meta {

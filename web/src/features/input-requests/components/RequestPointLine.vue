@@ -22,6 +22,7 @@ import type { PointWay, Verdict } from '@/features/input-requests/utils/reviewFo
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import RichText from '@/shared/ui/RichText.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -96,13 +97,14 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
     >
     <RichText
       v-if="excerpt && view === 'line'"
-      class="request-point-cut"
+      class="request-point-cut one-line"
       :source="excerpt"
       inline
     />
     <span
       v-else-if="excerpt"
-      class="request-point-cut"
+      v-tooltip.clipped="plainText(excerpt)"
+      class="request-point-cut one-line"
       >{{ plainText(excerpt) }}</span
     >
   </span>
@@ -110,7 +112,7 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
     v-if="said"
     class="request-point-line"
   >
-    <span class="request-point-cut"
+    <span class="request-point-cut one-line"
       ><span class="request-point-key">{{ t('requests.comment') }}: </span
       ><span class="request-point-chosen">{{ said }}</span></span
     >
@@ -156,9 +158,5 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
 /* What is cut short at the row's end. */
 .request-point-cut {
   flex: 1 1 0;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

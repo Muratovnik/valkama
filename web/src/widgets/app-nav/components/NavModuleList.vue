@@ -116,7 +116,7 @@ function currentState(module: ModuleManifest) {
           :name="module.icon_key"
           :size="20"
         />
-        <span class="nav-item-label">{{ moduleTitle(module) }}</span>
+        <span class="nav-item-label one-line">{{ moduleTitle(module) }}</span>
         <CountBadge
           v-if="moduleBadge(module)"
           class="nav-item-count"
@@ -295,11 +295,7 @@ function currentState(module: ModuleManifest) {
 }
 
 .nav-item-label {
-  min-width: 0;
   font: var(--font-name);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The rail declares the `nav` container and every part of it answers for itself,

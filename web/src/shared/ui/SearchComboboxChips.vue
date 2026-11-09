@@ -8,6 +8,7 @@
  * for a forced palette to draw where it clears every fill. Its name stays on one line and
  * ends in an ellipsis; the whole of it is in the list and in its button's name.
  */
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{
@@ -26,7 +27,11 @@ const emit = defineEmits<{ remove: [index: number] }>()
       :key="chip.value"
       class="combo-chip"
     >
-      <span class="combo-chip-name">{{ chip.label }}</span>
+      <span
+        v-tooltip.clipped="chip.label"
+        class="combo-chip-name one-line"
+        >{{ chip.label }}</span
+      >
       <button
         class="combo-chip-remove"
         type="button"
@@ -60,13 +65,6 @@ const emit = defineEmits<{ remove: [index: number] }>()
   font: var(--font-detail);
   background: var(--color-surface-active);
   border-radius: var(--radius-control);
-}
-
-.combo-chip-name {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .combo-chip-remove {

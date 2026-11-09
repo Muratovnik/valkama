@@ -20,6 +20,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Icons keep their size, and one-line labels end in an ellipsis.** An icon no longer
+  shrinks in a row short of room: the search and questions glyphs of the narrowest
+  navigation were drawn 13 to 18 pixels wide of their 20. The navigation's «Go to a task» and
+  «Needs my answer» no longer wrap onto a second line; like every one-line label they end in
+  an ellipsis, and say their whole words on hover while they are cut.
 - **A hover hint never says what is already on screen.** Every hint now states its kind: a
   name for a control that shows only a glyph, the whole of a cut text that shows only while
   the text is cut, or a detail the place does not show, which the UI check accepts only from

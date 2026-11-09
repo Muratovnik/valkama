@@ -27,6 +27,7 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { parseRichInline, plainText, unlinked } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 import RichText from '@/shared/ui/RichText.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   chosen: boolean
@@ -90,7 +91,8 @@ const label = computed(() => {
     />
     <span
       v-else-if="description && showsExcerpt"
-      class="request-option-excerpt"
+      v-tooltip.clipped="plainText(description)"
+      class="request-option-excerpt one-line"
       >{{ plainText(description) }}</span
     >
   </span>
@@ -132,12 +134,5 @@ const label = computed(() => {
 /* The word is what tells a chosen row from the others wherever colour does not. */
 .request-option-mark {
   font: var(--font-strong);
-}
-
-/* One quiet line of what the press beside it would open. */
-.request-option-excerpt {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
 
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   active: number
@@ -99,7 +100,11 @@ defineExpose({
       @click="emit('choose', index)"
     >
       <span class="markdown-suggestion-reference">{{ row.reference }}</span>
-      <span class="markdown-suggestion-title">{{ row.title }}</span>
+      <span
+        v-tooltip.clipped="row.title"
+        class="markdown-suggestion-title one-line"
+        >{{ row.title }}</span
+      >
       <span class="markdown-suggestion-detail">{{ row.detail }}</span>
     </li>
     <li
@@ -168,9 +173,6 @@ defineExpose({
 .markdown-suggestion-title {
   color: var(--color-text);
   font: var(--font-note);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .markdown-suggestion-detail {

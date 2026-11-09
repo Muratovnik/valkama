@@ -100,7 +100,7 @@ useResizeObserver(
         v-if="epic"
         ref="name"
         v-tooltip.clipped="epic.reference"
-        class="graph-frame-reference"
+        class="graph-frame-reference one-line"
         >{{ epic.reference }}</span
       >
       <span
@@ -165,11 +165,7 @@ useResizeObserver(
 
 .graph-frame-reference {
   flex: 0 1 auto;
-  min-width: 0;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .graph-frame-title {

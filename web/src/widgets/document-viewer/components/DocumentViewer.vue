@@ -276,7 +276,7 @@ async function copyPath() {
           <span class="document-project">{{ project }} ·</span>
           <button
             v-tooltip.detail="copyTitle"
-            class="document-path"
+            class="document-path one-line"
             type="button"
             :aria-label="copyTitle"
             @click="copyPath"
@@ -382,18 +382,14 @@ async function copyPath() {
 }
 
 .document-path {
-  min-width: 0;
   min-height: 24px;
   padding: 0;
   border: 0;
   color: var(--color-text-muted);
   font: var(--font-note);
   text-align: start;
-  white-space: nowrap;
   direction: rtl;
   background: transparent;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: copy;
 
   &:hover {
@@ -421,7 +417,6 @@ async function copyPath() {
 }
 
 .document-status-mark {
-  flex: 0 0 auto;
   color: var(--color-warning);
 }
 

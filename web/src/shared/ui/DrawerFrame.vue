@@ -188,7 +188,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
       <!-- The heading is the one in the scroller; this is the same words kept in sight. -->
       <p
         v-tooltip.clipped="title"
-        class="drawer-frame-pinned-title"
+        class="drawer-frame-pinned-title one-line"
         aria-hidden="true"
       >
         {{ title }}
@@ -281,12 +281,8 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
 
 .drawer-frame-pinned-title {
   grid-area: lead;
-  min-width: 0;
   margin: 0;
   font: var(--font-name);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .drawer-frame-action {

@@ -25,7 +25,7 @@ const { t } = useI18n()
         name="search"
         :size="20"
       />
-      <span class="action-label">{{ t('finder.trigger') }}</span>
+      <span class="action-label one-line">{{ t('finder.trigger') }}</span>
       <kbd
         class="action-shortcut"
         aria-hidden="true"
@@ -43,7 +43,7 @@ const { t } = useI18n()
         name="message-square"
         :size="20"
       />
-      <span class="action-label">{{ t('requests.title') }}</span>
+      <span class="action-label one-line">{{ t('requests.title') }}</span>
       <!-- Questions waiting are work for the reader: in the hint's grey, beside
            the Ctrl K shortcut, the number read as part of the furniture. -->
       <!-- A count cut short by an unreadable source reads "2+": the number is
@@ -98,8 +98,9 @@ const { t } = useI18n()
   }
 }
 
+/* One line: a label short of room ends in an ellipsis, and the action's `clipped` hint says
+   it whole, instead of the word wrapping under itself in a row one control high. */
 .action-label {
-  min-width: 0;
   font: var(--font-name);
 }
 

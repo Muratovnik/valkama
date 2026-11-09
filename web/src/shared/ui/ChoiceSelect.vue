@@ -52,6 +52,8 @@ const props = withDefaults(
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.invalid ? 'true' : undefined))
+/** A heading's trigger keeps to its neighbours' size, chevron included. */
+const chevronSize = computed(() => (props.size === 'heading' ? 14 : 18))
 const open = ref(false)
 const query = ref('')
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -118,6 +120,7 @@ function updateOpen(value: boolean) {
           v-if="selected?.icon"
           class="choice-icon"
           :name="selected.icon"
+          :size="24"
         />
         <span class="choice-value">
           <SelectValue
@@ -132,13 +135,14 @@ function updateOpen(value: boolean) {
             >
               <strong
                 v-tooltip.detail="selected?.title"
-                class="choice-title"
+                class="choice-title one-line"
                 :class="{ placeholder: !selected }"
                 >{{ selected?.label || placeholder }}</strong
               >
               <small
                 v-if="selected?.description"
-                class="choice-note"
+                v-tooltip.clipped="selected.description"
+                class="choice-note one-line"
                 >{{ selected.description }}</small
               >
             </slot>
@@ -147,6 +151,7 @@ function updateOpen(value: boolean) {
         <ControlIcon
           class="choice-chevron"
           name="chevron"
+          :size="chevronSize"
         />
       </SelectTrigger>
 
@@ -196,13 +201,19 @@ function updateOpen(value: boolean) {
                 v-if="option.icon"
                 class="choice-icon"
                 :name="option.icon"
+                :size="24"
               />
               <SelectItemText as-child>
                 <span class="choice-value">
-                  <strong class="choice-title">{{ option.label }}</strong>
+                  <strong
+                    v-tooltip.clipped="option.label"
+                    class="choice-title one-line"
+                    >{{ option.label }}</strong
+                  >
                   <small
                     v-if="option.description"
-                    class="choice-note"
+                    v-tooltip.clipped="option.description"
+                    class="choice-note one-line"
                     >{{ option.description }}</small
                   >
                 </span>
@@ -279,11 +290,6 @@ function updateOpen(value: boolean) {
   .choice-title {
     font: var(--font-column-head);
   }
-
-  .choice-chevron {
-    width: 14px;
-    height: 14px;
-  }
 }
 
 /* A host on another ramp, the chrome, names its two fills through `--color-choice-trigger-fill`
@@ -299,21 +305,9 @@ function updateOpen(value: boolean) {
   cursor: not-allowed;
 }
 
-.choice-icon {
-  width: 24px;
-  height: 24px;
-}
-
-.choice-chevron,
-.choice-check,
-.choice-search-icon {
-  width: 20px;
-  height: 20px;
-}
-
+/* Each glyph's size is the one it is drawn at (`size` on the icon): 24 for an option's
+   identity, 18 for the chevron, 14 in a heading's, 20 for the check and the search. */
 .choice-chevron {
-  width: 18px;
-  height: 18px;
   color: var(--color-text-muted);
   transition: transform var(--duration-quick) var(--ease-out);
 
@@ -338,9 +332,6 @@ function updateOpen(value: boolean) {
 .choice-title {
   display: block;
   font: var(--font-row-title);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 
   &.placeholder {
     color: var(--color-text-muted);
@@ -351,9 +342,6 @@ function updateOpen(value: boolean) {
   display: block;
   color: var(--color-text-muted);
   font: var(--font-detail);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .choice-popup {

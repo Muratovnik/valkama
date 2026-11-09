@@ -278,7 +278,6 @@ defineExpose({ focusLast })
 }
 
 .filter-chip-remove {
-  flex: 0 0 auto;
   color: var(--color-text-muted);
 }
 

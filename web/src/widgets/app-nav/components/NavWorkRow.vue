@@ -222,7 +222,7 @@ function press(event: MouseEvent) {
           >{{ widest }}</span
         >
       </span>
-      <span class="nav-row-title">{{ row.title }}</span>
+      <span class="nav-row-title one-line">{{ row.title }}</span>
       <span
         v-if="meta"
         class="nav-row-meta"
@@ -439,10 +439,6 @@ function press(event: MouseEvent) {
 
 .nav-row-title {
   flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .nav-row-meta {

@@ -50,7 +50,8 @@ const indent = computed(() =>
       <header class="side-panel-head">
         <h2
           :id="titleId"
-          class="side-panel-title"
+          v-tooltip.clipped="title"
+          class="side-panel-title one-line"
         >
           {{ title }}
         </h2>
@@ -97,14 +98,10 @@ const indent = computed(() =>
 }
 
 .side-panel-title {
-  min-width: 0;
   margin: 0;
   font-size: var(--font-size-module);
   font-weight: 700;
   letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* A finger's target: there is no label to widen it. */

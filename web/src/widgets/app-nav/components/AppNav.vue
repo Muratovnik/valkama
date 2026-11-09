@@ -206,7 +206,11 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
           tone="chrome"
           :size="30"
         />
-        <span class="brand-name">{{ t('app.title') }}</span>
+        <span
+          v-tooltip.clipped="t('app.title')"
+          class="brand-name one-line"
+          >{{ t('app.title') }}</span
+        >
       </button>
     </div>
 
@@ -347,9 +351,6 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   font-size: var(--font-size-module);
   font-weight: 700;
   letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The rail's middle: the actions and the groups, in a column whose one flexible part

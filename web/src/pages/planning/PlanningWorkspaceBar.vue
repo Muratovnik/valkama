@@ -372,7 +372,6 @@ function removeChip(token: WorkFilterToken) {
   font: var(--font-detail);
 
   .workspace-note-icon {
-    flex: 0 0 auto;
     margin-top: var(--space-hair);
   }
 }

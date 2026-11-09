@@ -19,6 +19,7 @@ import { onScopeDispose, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -66,7 +67,11 @@ onScopeDispose(() => clearTimeout(timer))
     class="graph-layout-status"
     role="alert"
   >
-    <span class="graph-layout-status-text">{{ t('graph.layoutFailed') }}</span>
+    <span
+      v-tooltip.clipped="t('graph.layoutFailed')"
+      class="graph-layout-status-text one-line"
+      >{{ t('graph.layoutFailed') }}</span
+    >
     <VButton
       size="inline"
       @click="emit('retry')"
@@ -78,7 +83,11 @@ onScopeDispose(() => clearTimeout(timer))
     class="graph-layout-status"
     role="status"
   >
-    <span class="graph-layout-status-text">{{ t('graph.layoutLoading') }}</span>
+    <span
+      v-tooltip.clipped="t('graph.layoutLoading')"
+      class="graph-layout-status-text one-line"
+      >{{ t('graph.layoutLoading') }}</span
+    >
   </p>
 </template>
 
@@ -95,12 +104,5 @@ onScopeDispose(() => clearTimeout(timer))
   margin: 0 auto 0 0;
   color: var(--color-text-muted);
   font: var(--font-note);
-}
-
-.graph-layout-status-text {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

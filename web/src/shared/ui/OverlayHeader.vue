@@ -7,6 +7,7 @@
  */
 import { computed, ref } from 'vue'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -73,7 +74,8 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
       </p>
       <span
         v-if="context"
-        class="overlay-header-context"
+        v-tooltip.clipped="context"
+        class="overlay-header-context one-line"
         >{{ context }}</span
       >
       <slot name="meta" />
@@ -173,9 +175,6 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   margin-top: var(--space-2);
   color: var(--color-text-muted);
   font: var(--font-note);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* As tall as the way out, so that the icons of the row stand on one line. They are one

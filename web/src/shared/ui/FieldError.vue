@@ -44,7 +44,6 @@ defineProps<{
 
 /* As tall as the first line, with the drawing centred in it as an icon's frame keeps it. */
 .field-error-glyph {
-  flex: none;
   block-size: 1lh;
 }
 

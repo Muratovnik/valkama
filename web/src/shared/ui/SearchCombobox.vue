@@ -379,7 +379,6 @@ defineExpose({ show })
 }
 
 .combo-chevron {
-  flex: 0 0 auto;
   margin-inline-start: auto;
   color: var(--color-text-muted);
   pointer-events: none;

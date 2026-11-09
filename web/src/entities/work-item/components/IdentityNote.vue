@@ -67,8 +67,4 @@ const glyph = computed(() => (props.failed ? 'alert' : 'check'))
   align-items: center;
   color: var(--color-text-muted);
 }
-
-.identity-note-glyph {
-  flex: none;
-}
 </style>

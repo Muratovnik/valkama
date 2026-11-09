@@ -199,7 +199,7 @@ test('one place draws who holds an item, and the shell owns scope presentation',
   assert.match(card, /const FACTS: readonly FacetId\[\] = \['holder', 'steps'\]/)
   assert.match(card, /surfaceMarks\('tile', props\.item, context\.value, FACTS\)/)
   assert.doesNotMatch(lane, /bundle-active|t\('work\.active'\)/)
-  assert.match(graphNode, /class="flow-node-owner-state"/)
+  assert.match(graphNode, /class="flow-node-owner-state[ "]/)
   assert.match(
     readFileSync(new URL('../src/app/components/AppModuleStage.vue', import.meta.url), 'utf8'),
     /<PlanningModuleSurface/,

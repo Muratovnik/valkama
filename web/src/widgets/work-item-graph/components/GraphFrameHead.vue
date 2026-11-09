@@ -199,7 +199,8 @@ function onOpenBlur() {
       />
       <span
         v-if="overview && inside"
-        class="graph-frame-inside"
+        v-tooltip.clipped="insideShown"
+        class="graph-frame-inside one-line"
         >{{ insideShown }}</span
       >
       <GraphFrameCounts
@@ -215,7 +216,8 @@ function onOpenBlur() {
     />
     <span
       v-if="!overview && inside"
-      class="graph-frame-inside"
+      v-tooltip.clipped="insideShown"
+      class="graph-frame-inside one-line"
       >{{ insideShown }}</span
     >
   </header>
@@ -369,9 +371,6 @@ function onOpenBlur() {
 .graph-frame-inside {
   color: var(--color-text);
   font: var(--font-strong);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Zoomed out, the header is a band that still reads and is easy to hit: its words

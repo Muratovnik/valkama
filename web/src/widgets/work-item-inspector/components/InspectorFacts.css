@@ -83,12 +83,8 @@
 
 .card-holder-name {
   flex: 0 1 auto;
-  min-width: 0;
   color: var(--color-text);
   font: var(--font-detail);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .card-holder-stale {

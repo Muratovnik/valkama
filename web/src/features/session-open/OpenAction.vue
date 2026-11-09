@@ -233,7 +233,7 @@ function finished(outcome: Outcome) {
     >
       <span class="open-action-words">
         <span
-          class="open-action-name"
+          class="open-action-name one-line"
           :class="{ whole: nameWhole }"
           >{{ name ?? action }}</span
         >
@@ -255,6 +255,7 @@ function finished(outcome: Outcome) {
               v-if="mark.client"
               class="open-action-glyph"
               :name="mark.client"
+              :size="14"
             />
             <VIcon
               v-else-if="mark.glyph && mark.key === 'live'"
@@ -283,7 +284,8 @@ function finished(outcome: Outcome) {
       <span class="open-action-words">
         <span
           v-if="stillName"
-          class="open-action-name"
+          v-tooltip.clipped="stillName"
+          class="open-action-name one-line"
           :class="{ who: !nameWhole }"
           >{{ stillName }}</span
         >
@@ -360,11 +362,7 @@ function finished(outcome: Outcome) {
 /* A host whose label stands beside the name can lift it off the button's quiet ink. */
 .open-action-name {
   flex: 0 1 auto;
-  min-width: 0;
   color: var(--color-open-action-name, inherit);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 
   &.whole {
     white-space: normal;
@@ -401,9 +399,6 @@ function finished(outcome: Outcome) {
 }
 
 .open-action-glyph {
-  width: 14px;
-  height: 14px;
-
   &[data-tone='success'] {
     color: var(--color-success);
   }

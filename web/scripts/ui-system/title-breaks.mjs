@@ -72,7 +72,7 @@ export const UNBROKEN_TITLES = new Map([
   ],
   ['shared/ui/DataEmptyState.vue {{ title }} in strong.empty-title', "an empty state's heading"],
   [
-    'shared/ui/DrawerFrame.vue {{ title }} in p.drawer-frame-pinned-title',
+    'shared/ui/DrawerFrame.vue {{ title }} in p.drawer-frame-pinned-title.one-line',
     `the pinned title is ${ONE_LINE}`,
   ],
   [
@@ -80,7 +80,7 @@ export const UNBROKEN_TITLES = new Map([
     "the heading's words where its slot is left empty, which no drawer does: the card, the one drawer, draws its title in the slot through the directive",
   ],
   [
-    'shared/ui/MarkdownSuggestions.vue {{ row.title }} in span.markdown-suggestion-title',
+    'shared/ui/MarkdownSuggestions.vue {{ row.title }} in span.markdown-suggestion-title.one-line',
     `a suggestion is ${ONE_LINE}`,
   ],
   [
@@ -96,15 +96,15 @@ export const UNBROKEN_TITLES = new Map([
     "a section's heading",
   ],
   [
-    'shared/ui/SidePanel.vue {{ title }} in h2.side-panel-title',
+    'shared/ui/SidePanel.vue {{ title }} in h2.side-panel-title.one-line',
     `a side panel's heading: the interface's words, ${ONE_LINE}`,
   ],
   [
-    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }} in span.nav-row-title',
+    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }} in span.nav-row-title.one-line',
     `a row of the Work list is ${ONE_LINE}`,
   ],
   [
-    'widgets/work-item-inspector/components/ChainMembers.vue {{ member.title }} in span.chain-row-title',
+    'widgets/work-item-inspector/components/ChainMembers.vue {{ member.title }} in span.chain-row-title.one-line',
     `a chain's row is ${ONE_LINE}`,
   ],
   [
@@ -120,7 +120,7 @@ export const UNBROKEN_TITLES = new Map([
     "a refusal's heading",
   ],
   [
-    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }} in span.lane-title',
+    'widgets/work-item-views/components/WorkItemLaneHead.vue {{ title }} in span.lane-title.one-line',
     `the epic's title over its lane is ${ONE_LINE}`,
   ],
 ])
