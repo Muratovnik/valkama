@@ -7,6 +7,8 @@
  * a value that matches nothing it could show. Kind and priority are closed
  * vocabularies and are offered whole.
  */
+import { choiceMark } from '@/entities/work-item/utils/facets.ts'
+import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
 import {
   filterTokens,
   hasToken,
@@ -56,8 +58,11 @@ export interface FilterOption {
   text: string
   /** A count beside the word, where one says something: how many are held. */
   detail?: string
-  /** The kind this value is, whose colour its word takes. */
-  kind?: string
+  /**
+   * How a kind, a priority or a state is drawn, glyph and word, as the card draws it; the
+   * other facets' values are their words alone.
+   */
+  mark?: FacetMark
 }
 
 /** A value row, the one kind of row a facet's group holds. */
@@ -182,6 +187,18 @@ function valuesOf(
 
 const pick = (token: WorkFilterToken) => ({ do: 'pick', token }) as const
 
+/** A value of a closed vocabulary as the registry draws it; a label or a holder has no mark. */
+function markOf(token: WorkFilterToken, text: string): FacetMark | undefined {
+  if (token.facet === 'kind' || token.facet === 'priority') return choiceMark(token)
+  if (token.facet === 'category')
+    return choiceMark({
+      facet: 'state',
+      value: token.value,
+      state: { name: text, category: token.value },
+    })
+  return undefined
+}
+
 /**
  * Every group the menu offers, with the presets first. A value already in the
  * filter stays offered, so picking it again is how it comes out.
@@ -219,8 +236,9 @@ export function filterGroups(input: {
       name: t(`workItem.filter.facet.${facet}`),
       options: values.map((value) => {
         const token = { facet, value } as WorkFilterToken
-        const kind = facet === 'kind' ? { kind: value } : {}
-        return { key: tokenKey(token), action: pick(token), text: tokenValue(token, t), ...kind }
+        const text = tokenValue(token, t)
+        const mark = markOf(token, text)
+        return { key: tokenKey(token), action: pick(token), text, ...(mark ? { mark } : {}) }
       }),
       ...choicesOf(facet, values, t),
     }
@@ -308,11 +326,11 @@ export function stepGroups(
 }
 
 /** Whether a value row's token is in the filter; a row that is no value is not chosen at all. */
-export const picked = (filter: WorkFilter, option: FilterOption) =>
+const picked = (filter: WorkFilter, option: FilterOption) =>
   option.action.do === 'pick' ? hasToken(filter, option.action.token) : undefined
 
 /** Whether a value row's value is in the filter negated, «не равно». */
-export function excluded(filter: WorkFilter, option: FilterOption): boolean {
+function excluded(filter: WorkFilter, option: FilterOption): boolean {
   const { action } = option
   return action.do === 'pick' && 'value' in action.token
     ? hasToken(filter, { ...action.token, not: true })
@@ -320,7 +338,47 @@ export function excluded(filter: WorkFilter, option: FilterOption): boolean {
 }
 
 /** The glyph in a row's check place: the search's own, or the chip's cross for a value negated. */
-export function rowIcon(option: FilterOption, negated: boolean): string | undefined {
+function rowIcon(option: FilterOption, negated: boolean): string | undefined {
   if (option.action.do === 'find') return 'search'
   return negated ? 'close' : undefined
+}
+
+/**
+ * The groups as the list draws them: each value's word, its mark where the registry draws
+ * one, and whether it is in. The field hands in none while the menu is closed. A space's
+ * labels made it a list of some two thousand nodes that the board built, out of sight,
+ * before its first tile could show; it is built when it opens instead, and then only for
+ * the step on show.
+ */
+export function drawnGroups(groups: readonly FilterGroup[], filter: WorkFilter, t: Translate) {
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    bare: group.bare,
+    back: group.back && {
+      key: group.back.key,
+      name: t('workItem.filter.back', { facet: group.name }),
+    },
+    options: group.options.map((option) => {
+      // A value the work must not carry is in the filter too, marked as the chip's cross is.
+      const negated = excluded(filter, option)
+      return {
+        key: option.key,
+        text: option.text,
+        name: negated ? t('workItem.filter.excluded', { value: option.text }) : undefined,
+        detail: option.detail,
+        mark: option.mark,
+        icon: rowIcon(option, negated),
+        next: option.action.do === 'open',
+        selected: negated || picked(filter, option),
+      }
+    }),
+    choices: group.choices?.map((choice) => ({
+      key: choice.key,
+      name: choice.name,
+      text: choice.text,
+      title: choice.title,
+      selected: (filter.labelsMatch ?? 'all') === choice.match,
+    })),
+  }))
 }

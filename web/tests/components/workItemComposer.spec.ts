@@ -157,18 +157,25 @@ describe('WorkItemComposer priority', () => {
     for (const { locale, label, options } of cases) {
       const wrapper = mountComposer(locale)
       const trigger = wrapper.get(`.choice-trigger[aria-label="${label}"]`)
-      // The chosen value starts at medium, the default the model gives.
-      expect(hintOf(trigger.get('.choice-title')), locale).toBe(options[1]?.[1])
+      // The chosen value starts at medium, the default the model gives, and says on hover
+      // what it means, as the card's priority does.
+      expect(hintOf(trigger.get('.facet-mark')), locale).toBe(options[1]?.[1])
       await trigger.trigger('keydown', { key: 'Enter' })
       await flushPromises()
+      const rows = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+      // Most pressing first, as the card and the filter offer them.
+      expect(
+        rows.map((row) => row.querySelector('.facet-word')?.textContent),
+        locale,
+      ).toEqual(options.map(([name]) => name).toReversed())
       for (const [name, hover] of options) {
         const option = present(
-          [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
-            item.textContent?.includes(name),
-          ),
+          rows.find((item) => item.textContent?.includes(name)),
           `${locale} option ${name}`,
         )
-        expect(hintOf(option), `${locale} ${name}`).toBe(hover)
+        // In the list the meaning is the option's note under its word, not a hover.
+        const meaning = hover.slice(hover.indexOf(' — ') + ' — '.length)
+        expect(option.querySelector('.choice-note')?.textContent, `${locale} ${name}`).toBe(meaning)
       }
       wrapper.unmount()
     }

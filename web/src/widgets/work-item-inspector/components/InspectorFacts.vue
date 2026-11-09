@@ -37,15 +37,15 @@ import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 import MissingPlaces from '@/features/session-open/MissingPlaces.vue'
 import WorkItemLabels from '@/features/work-item-labels/WorkItemLabels.vue'
 
+import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
-import { holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
+import { holderRef, printsFacet, PRIORITY_CHOICES } from '@/entities/work-item/utils/facets.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
-import { PRIORITIES } from '@/shared/api/planningModel.ts'
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
-import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -80,8 +80,12 @@ const { t, d } = useI18n()
 /** The action's place on the card, which the bar takes over from once it has scrolled away. */
 const actionCell = ref<HTMLElement | null>(null)
 
+const facetChoices = useFacetChoices()
+const stateChoice = (state: Pick<WorkItem['state'], 'key' | 'name' | 'category'>) =>
+  ({ facet: 'state', value: state.key, state }) as const
+
 /** The states this item may move to, which is the workflow's answer, not a list. */
-const moves = computed<ChoiceOption[]>(() => {
+const moves = computed(() => {
   const workflow = props.workflow
   if (!workflow) return []
   const allowed = new Set(
@@ -89,14 +93,19 @@ const moves = computed<ChoiceOption[]>(() => {
       .filter((transition) => transition.from === props.item.state.state_id)
       .map((transition) => transition.to),
   )
-  return workflow.states
-    .filter((state) => allowed.has(state.state_id))
-    .map((state) => ({ value: state.key, label: state.name }))
+  return facetChoices(
+    workflow.states
+      .filter((state) => allowed.has(state.state_id))
+      .map((state) => stateChoice(state)),
+  )
 })
 
-/** The menu names where the item is, checked and not choosable, above where it can go. */
-const stateOptions = computed<ChoiceOption[]>(() => [
-  { value: props.item.state.key, label: props.item.state.name, disabled: true },
+/**
+ * The menu names where the item is, checked and not choosable, above where it can go; each
+ * with its dot, as the chip draws the state it is in.
+ */
+const stateOptions = computed(() => [
+  ...facetChoices([stateChoice(props.item.state)]).map((here) => ({ ...here, disabled: true })),
   ...moves.value,
 ])
 const movable = computed(() => props.writable && moves.value.length > 0)
@@ -111,16 +120,11 @@ function move(stateKey: string) {
 }
 
 /**
- * The four priorities, most pressing first, each with what it means: the same definitions an
- * agent reads in the tool's schema, so a person choosing one reads what it commits to.
+ * The four priorities, most pressing first, each with its glyph and what it means: the same
+ * definitions an agent reads in the tool's schema, so a person choosing one reads what it
+ * commits to.
  */
-const priorityOptions = computed<ChoiceOption[]>(() =>
-  [...PRIORITIES].reverse().map((value) => ({
-    value,
-    label: t(`priority.${value}`),
-    description: t(`priorityMeaning.meaning.${value}`),
-  })),
-)
+const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 const priorityName = computed(() => t(`priority.${props.item.priority}`))
 
 /** As a move: a choice made during another write is not sent, and the chip keeps its focus. */
@@ -213,6 +217,9 @@ defineExpose({ actionCell })
           :label="t('workItem.head.state', { state: item.state.name })"
           @update:model-value="move"
         >
+          <template #option="{ option }">
+            <FacetChoiceMark :mark="option.mark" />
+          </template>
           <template #value>
             <SemanticState
               dimension="work-item-state"
@@ -259,6 +266,9 @@ defineExpose({ actionCell })
           :label="t('workItem.head.priority', { priority: priorityName })"
           @update:model-value="choosePriority"
         >
+          <template #option="{ option }">
+            <FacetChoiceMark :mark="option.mark" />
+          </template>
           <template #value>
             <span class="card-priority-value">
               <FacetMarks

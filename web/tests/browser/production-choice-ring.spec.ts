@@ -112,14 +112,15 @@ for (const width of [1280, 390]) {
     // pointer goes off the dialog first, or the list opens under it and it chooses there.
     await page.mouse.move(0, 0)
     await page.keyboard.press('Enter')
-    await expect(page.getByRole('option', { name: 'High', exact: true })).toBeFocused()
+    await expect(page.getByRole('option', { name: /^High/u })).toBeFocused()
     await expectRinged(page, 'option')
     await page.keyboard.press('ArrowDown')
     // The list moves focus in a timer after the key, so a read at once may find the option left.
-    await expect(page.getByRole('option', { name: 'High', exact: true })).not.toBeFocused()
+    await expect(page.getByRole('option', { name: /^High/u })).not.toBeFocused()
     await expectRinged(page, 'option')
-    const walked = await focusShown(page)
-    const reached = walked?.text ?? ''
+    // The value's word: the row says what the priority means under it, the trigger does not.
+    const reached = (await page.locator('[role="option"]:focus .facet-word').textContent()) ?? ''
+    expect(reached).not.toBe('')
     await page.keyboard.press('Enter')
     await expect(page.getByRole('listbox')).toHaveCount(0)
     await expect(priority).toBeFocused()

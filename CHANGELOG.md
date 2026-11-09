@@ -20,6 +20,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **A menu shows each value the way its button shows the chosen one.** The priority, kind
+  and state menus of the card, the new-task dialog and the Work filter draw each option with
+  its glyph or dot and its word, and a priority with what it means; the new task's priorities
+  are listed most pressing first, as everywhere else.
+
 - **Controls of one row stand at one height.** A section heading's actions take one compact
   size, so the chain's scope switch and «На графе» are equal; a label chip in the card is as
   tall as the «+» beside it; the new task's labels field stays 40px with a label chosen

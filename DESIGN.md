@@ -402,6 +402,16 @@ and only fades the end of a strip that scrolls on past it.
   advice for an empty field is its placeholder, never a hint under one field of a
   pair, which stands that field taller than its neighbour.
   `production-row-controls.spec.ts` measures each such row's heights and top edges.
+- **A menu draws a value as its button does.** A list of priorities, kinds or states
+  — the card's state and priority, the new task's kind and priority, the filter's
+  kinds, priorities and states — draws each value with the registry's mark
+  (`choiceMark` in `facets.ts`, `useFacetChoices`, `FacetChoiceMark`): a priority's
+  glyph in its tone, its word and what it means as the row's note; a kind's glyph and
+  word in its colour; a state's dot and name. Its button draws the chosen value the
+  same way, so a value reads one way above the list and in it. Priorities stand most
+  pressing first everywhere they are offered. `ChoiceSelect` takes the drawing through
+  its `option` slot and `OptionGroups` through its `text` slot; neither knows a facet.
+  `production-choice-marks.spec.ts` compares each row with its button.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.

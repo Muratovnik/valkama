@@ -22,8 +22,11 @@ import { useI18n } from 'vue-i18n'
 
 import { epicChoices, labelChoices } from '@/features/work-item-compose/composerChoices.ts'
 
+import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
+import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
+import { KIND_CHOICES, PRIORITY_CHOICES } from '@/entities/work-item/utils/facets.ts'
+
 import { createWorkItem } from '@/shared/api/planningApi.ts'
-import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
@@ -77,22 +80,10 @@ watch(
   },
 )
 
-const kindOptions = computed(() =>
-  WORK_ITEM_KINDS.map((value) => ({ value, label: t(`workItem.kind.${value}`) })),
-)
-const priorityOptions = computed(() =>
-  PRIORITIES.map((value) => {
-    const label = t(`priority.${value}`)
-    return {
-      value,
-      label,
-      title: t('priorityMeaning.hint', {
-        priority: label,
-        meaning: t(`priorityMeaning.meaning.${value}`),
-      }),
-    }
-  }),
-)
+/** The kinds and the priorities as the card draws them: a glyph, a word and what it means. */
+const facetChoices = useFacetChoices()
+const kindOptions = computed(() => facetChoices(KIND_CHOICES))
+const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
 const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic')))
 const labelOptions = computed(() => labelChoices(props.items))
@@ -145,12 +136,34 @@ async function submit() {
           v-model="kind"
           :label="t('workItem.kindLabel')"
           :options="kindOptions"
-        />
+        >
+          <template #value="{ selected }">
+            <FacetChoiceMark
+              v-if="selected"
+              :mark="selected.mark"
+              explained
+            />
+          </template>
+          <template #option="{ option }">
+            <FacetChoiceMark :mark="option.mark" />
+          </template>
+        </ChoiceSelect>
         <ChoiceSelect
           v-model="priority"
           :label="t('workItem.priority')"
           :options="priorityOptions"
-        />
+        >
+          <template #value="{ selected }">
+            <FacetChoiceMark
+              v-if="selected"
+              :mark="selected.mark"
+              explained
+            />
+          </template>
+          <template #option="{ option }">
+            <FacetChoiceMark :mark="option.mark" />
+          </template>
+        </ChoiceSelect>
       </div>
       <MarkdownEditor
         v-model="description"

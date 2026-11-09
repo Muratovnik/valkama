@@ -55,5 +55,38 @@ export function decodeChoiceValue(codec: ChoiceValueCodec, token: string): strin
   return codec.tokenToValue.get(token) ?? null
 }
 
+/** One row of a grouped list (`OptionGroups`). */
+export interface OptionRow {
+  key: string
+  text: string
+  detail?: string
+  /** The glyph in the check's place, for a row that does something rather than choose. */
+  icon?: string
+  /** What a screen reader says of the row where its word alone says too little; it starts with the word. */
+  name?: string
+  /** The row leads to a list of its own, and says so with a chevron at its end. */
+  next?: boolean
+  /** Absent for a row that is no value, which a press does not choose but follows. */
+  selected?: boolean
+}
+
+/** A named group of rows in a grouped list (`OptionGroups`). */
+export interface OptionGroup<Row> {
+  id: string
+  name: string
+  options: readonly Row[]
+  /** The group's name is a row too, the way back to the list this one was opened from. */
+  back?: { key: string; name: string }
+  /** No head: the group's rows say what they are, and its name labels it for a screen reader. */
+  bare?: boolean
+  choices?: readonly {
+    key: string
+    name: string
+    selected: boolean
+    text: string
+    title: string
+  }[]
+}
+
 /** The id of an option in a grouped list (`OptionGroups`), by its place in reading order. */
 export const optionGroupItemId = (listId: string, place: number) => `${listId}-${place}`

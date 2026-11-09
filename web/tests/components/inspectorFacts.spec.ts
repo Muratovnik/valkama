@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest'
 
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
 
+import type { FacetChoiceOption } from '@/entities/work-item/composables/useFacetChoices.ts'
+
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
@@ -144,9 +146,15 @@ describe('the state as the menu that moves it', () => {
     const chip = facts(item()).getComponent(choiceStub)
     expect(chip.props('modelValue')).toBe('todo')
     expect(chip.props('label')).toBe('State: To do. Move to another state')
-    expect(chip.props('options')).toEqual([
+    const options = chip.props('options') as FacetChoiceOption[]
+    expect(options.map((option) => ({ ...option, mark: undefined }))).toEqual([
       { value: 'todo', label: 'To do', disabled: true },
       { value: 'dev', label: 'Development' },
+    ])
+    // Each is drawn as the chip draws the state: its dot in its category's tone.
+    expect(options.map(({ mark }) => mark.tone.dimension)).toEqual([
+      'work-item-state',
+      'work-item-state',
     ])
     expect(chip.text()).toBe('To do')
   })
@@ -181,7 +189,15 @@ describe('the priority as the menu that changes it', () => {
     const menu = priorityMenu(facts(item()))
     expect(menu.props('modelValue')).toBe('medium')
     expect(menu.props('label')).toBe('Priority: Medium. Change it')
-    expect(menu.props('options')).toEqual([
+    const options = menu.props('options') as FacetChoiceOption[]
+    // Each is drawn as the chosen priority is: its glyph, none for medium.
+    expect(options.map(({ mark }) => mark.glyph)).toEqual([
+      'priority-urgent',
+      'priority-high',
+      null,
+      'priority-low',
+    ])
+    expect(options.map((option) => ({ ...option, mark: undefined }))).toEqual([
       { value: 'urgent', label: 'Urgent', description: 'blocks work or loses data' },
       { value: 'high', label: 'High', description: 'serious; could block work' },
       {
