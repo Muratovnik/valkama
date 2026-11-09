@@ -20,6 +20,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Work's header keeps views, and its presets moved into the filter.** A «View» menu
+  beside «Board / List / Graph» holds the board's grouping, «No grouping» or «By epic»,
+  and «Save view…», which keeps the view, its grouping and the filter under a name for
+  the space; a kept view is chosen there to put its state back, the one the address
+  holds is marked, and it can be deleted. Kept views live in the browser's interface
+  settings, one list per space. The «Workable» and «Assigned» buttons and the «By epic»
+  toggle left the header: the two conditions are the first group of the filter's menu,
+  and «Assigned» now reads «Has a holder». On a phone the menu is its sign alone.
+
 - **The card's labels change in the new-task dialog's picker.** «+», or a press on the
   labels row beside the chips, opens the picker with the item's labels checked: choosing one
   attaches it, choosing a checked one takes it off, and typed words add a new one. A label
