@@ -123,7 +123,7 @@ for (const viewport of [
   { width: 390, height: 844 },
   { width: 1024, height: 420 },
 ]) {
-  test(`the # suggestions stay inside a ${viewport.width}×${viewport.height} window`, async ({
+  test(`the @ suggestions stay inside a ${viewport.width}×${viewport.height} window`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
@@ -146,8 +146,8 @@ for (const viewport of [
     // The field at the foot of the window, where a list under it has no room.
     await comment.evaluate((element) => element.scrollIntoView({ block: 'end' }))
     await comment.click()
-    await page.keyboard.type('See #Parser')
-    const list = page.getByRole('listbox', { name: 'Tasks' })
+    await page.keyboard.type('See @Parser')
+    const list = page.getByRole('listbox', { name: 'Mentions' })
     await expect(list.getByRole('option')).toHaveCount(8)
 
     const inside = async () => {

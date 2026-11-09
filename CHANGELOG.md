@@ -17,6 +17,13 @@ checkouts are therefore distinguishable even at the same version.
   including what its subagents hold, most recently changed first. Each item carries its
   state, how it is held, its steps done and in all, its questions waiting for a person and
   its address. Read-only; no MCP tool.
+- **Project files in the `@` list.** Typing after `@` in a text also offers the Markdown
+  files of the project the work item's space is bound to, by name or by a line they hold,
+  grouped apart from the tasks. A chosen file is written as a Markdown link from the
+  project's root, `[plan.md](docs/plan.md)`, which opens in the document viewer. The list
+  comes from the new `GET /api/documents/search?space=<id>&q=<text>`, the existing
+  document search over that one project. Neither it nor `GET /api/search` offers or
+  reads a file the project's Git ignores.
 
 ### Changed
 
@@ -58,6 +65,13 @@ checkouts are therefore distinguishable even at the same version.
   row heading its items: its title leads each of their rows, muted. The live-work frame
   gives each row `updated_at`, when its item last changed.
 
+
+- **Mentions are written with `@`; `#` no longer opens a list.** The list of tasks to
+  mention opens on an `@` that starts a word, and the editor's mention button writes `@`.
+  A `#` opens nothing, since at a line's start it is a Markdown heading. A chosen task is
+  still written as its bare number, and a comment sent from a card's comment field now
+  tells that task in `mentions` while the number stands in the text, so the work on it
+  hears of it; a number typed by hand remains a link that tells nobody.
 
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on

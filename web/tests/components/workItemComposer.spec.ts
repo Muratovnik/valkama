@@ -1,6 +1,6 @@
 /**
  * The new-task dialog writes its description in the same markdown editor the
- * card does: `#` offers the tasks of the space the task is created in, the
+ * card does: `@` offers the tasks of the space the task is created in, the
  * preview is the text as the card will draw it, and Ctrl+Enter is the dialog's
  * own Create — held back, as the button is, until there is a title.
  */
@@ -13,6 +13,7 @@ import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
 
+import { searchSpaceDocuments } from '@/shared/api/documentApi.ts'
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import { PRIORITIES, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -25,6 +26,7 @@ import { present } from '../support/present.ts'
 
 vi.mock('@/shared/api/planningApi.ts', () => ({ createWorkItem: vi.fn() }))
 vi.mock('@/shared/api/planningSearchApi.ts', () => ({ searchPlanningWorkItems: vi.fn() }))
+vi.mock('@/shared/api/documentApi.ts', () => ({ searchSpaceDocuments: vi.fn() }))
 
 const SPACE = '7a1c2f3e-4b5d-4e6f-8a9b-0c1d2e3f4a5b'
 
@@ -80,7 +82,7 @@ describe('WorkItemComposer description', () => {
     expect(wrapper.emitted('created')).toEqual([['MAIN-264']])
   })
 
-  it('offers the tasks of the space it creates in for # and writes the chosen one', async () => {
+  it('offers the tasks and files of the space it creates in for @ and writes the chosen one', async () => {
     vi.mocked(searchPlanningWorkItems).mockResolvedValue([
       {
         work_item_id: '11111111-2222-4333-8444-555555555555',
@@ -91,10 +93,12 @@ describe('WorkItemComposer description', () => {
         claim_ref: '',
       },
     ])
+    vi.mocked(searchSpaceDocuments).mockResolvedValue([])
     const wrapper = mountComposer()
-    await typeDescription(wrapper, 'After #pars')
+    await typeDescription(wrapper, 'After @pars')
     await vi.advanceTimersByTimeAsync(250)
     expect(searchPlanningWorkItems).toHaveBeenCalledWith('pars', SPACE, expect.any(AbortSignal))
+    expect(searchSpaceDocuments).toHaveBeenCalledWith(SPACE, 'pars', expect.any(AbortSignal))
     expect(wrapper.get('[role="listbox"]').text()).toContain('Parser')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     await flushPromises()

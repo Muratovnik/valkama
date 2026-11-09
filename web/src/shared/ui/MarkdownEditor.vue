@@ -12,15 +12,16 @@
  * switching moves nothing, and the caret and the undo history are still there
  * when the reader comes back.
  *
- * The toolbar's mention button writes a `#`, and a `#` is what opens the list of
- * work items, whichever way it got there; choosing a row writes its reference in
- * place of the `#` query. The keys belong to the field while the list is open:
- * the arrows walk it, Enter or Tab takes the active row and Escape closes it
- * without closing the card around it.
+ * The toolbar's mention button writes an `@`, and an `@` that starts a word is what
+ * opens the list of what can be mentioned, whichever way it got there; choosing a
+ * row writes its reference in place of the `@` and the query, and tells the host
+ * which row it was. A `#` opens nothing: at a line's start it is a heading. The keys
+ * belong to the field while the list is open: the arrows walk it, Enter or Tab takes
+ * the active row and Escape closes it without closing the card around it.
  *
- * What a work item is and how to find one is the host's to say: the editor is a
- * text control and knows nothing about planning. So is what sending means: a
- * host with an action of its own for this text puts it in the `actions` slot, the
+ * What can be mentioned, how to find it and what choosing it means is the host's to
+ * say: the editor is a text control and knows nothing about planning. So is what
+ * sending means: a host with an action of its own for this text puts it in the `actions` slot, the
  * foot's end (`MarkdownFoot`), and a host whose action stands elsewhere leaves the
  * foot out.
  */
@@ -40,9 +41,15 @@ import TabPanel from '@/shared/ui/TabPanel.vue'
 import { useEditorSuggestions } from '@/shared/ui/useEditorSuggestions.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
+/** What a row stands for; the list is grouped by it, under the group's name. */
+export type SuggestionKind = 'file' | 'task'
+
 export interface EditorSuggestion {
   detail: string
   key: string
+  kind: SuggestionKind
+  /** The row's short name, read first: a task's number, a file's name. */
+  name: string
   /** What is written into the text when the row is chosen. */
   reference: string
   title: string
@@ -86,7 +93,11 @@ const props = withDefaults(
     suggest: undefined,
   },
 )
-const emit = defineEmits<{ 'submit': []; 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{
+  'chose': [row: EditorSuggestion]
+  'submit': []
+  'update:modelValue': [value: string]
+}>()
 /**
  * The host binds this where one choice governs several fields — a question's
  * text answers are one answer being written, and two switches apart would let
@@ -95,7 +106,7 @@ const emit = defineEmits<{ 'submit': []; 'update:modelValue': [value: string] }>
 const preview = defineModel<boolean>('preview', { default: false })
 const { t } = useI18n()
 
-/** What may stand right before a `#` for it to start a word. */
+/** What may stand right before an `@` for it to start a word. */
 const WORD_START = /(?:^|[\s([{])$/u
 const inputId = useId()
 const errorId = useId()
@@ -212,15 +223,18 @@ function format(tool: MarkdownTool) {
   const { start, end } = field.selection()
   apply(markdownEdit(tool, field.text(), start, end))
 }
-/** Write a `#` after what is selected, as a word of its own; `edited` takes it from there. */
+/** Write an `@` after what is selected, as a word of its own; `edited` takes it from there. */
 function mention() {
   const at = field.selection().end
-  const text = WORD_START.test(field.text().slice(0, at)) ? '#' : ' #'
+  const text = WORD_START.test(field.text().slice(0, at)) ? '@' : ' @'
   const caret = at + text.length
   apply({ start: at, end: at, text, selection: [caret, caret] })
 }
 
-/** Write the chosen reference in place of the `#` query and put the caret after it. */
+/**
+ * Write the chosen reference in place of the `@` query, put the caret after it, and
+ * tell the host which row it was.
+ */
 function choose(index: number) {
   const row = choices.value[index]
   const at = trigger.value
@@ -229,6 +243,7 @@ function choose(index: number) {
   const caret = at.start + text.length
   close()
   apply({ start: at.start, end: at.start + 1 + at.query.length, text, selection: [caret, caret] })
+  emit('chose', row)
 }
 
 /** The toolbar's keys, by the key's place: `event.key` is «и» on a Russian layout. */

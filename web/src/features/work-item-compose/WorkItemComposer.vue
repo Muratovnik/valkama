@@ -36,8 +36,8 @@ import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { mentionSuggest } from '@/shared/lib/mentionSuggest.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
-import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -68,7 +68,7 @@ const parent = ref('')
 const busy = ref(false)
 const error = ref('')
 const previewing = ref(false)
-const suggest = workItemSuggest(() => props.space)
+const suggest = mentionSuggest(() => props.space)
 // The preview's references are text: opening one from this modal dialog put the
 // card it named behind the dialog, where it could be seen and not reached.
 provideReferenceLinks(() => null)

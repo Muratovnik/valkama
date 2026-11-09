@@ -15,7 +15,7 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
-from server import documents, http_surface
+from server import documents, http_surface, processes
 from server.projects import project_registry
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
@@ -434,8 +434,96 @@ class ReadTests(DocumentRoutesHarness):
                 self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
 
 
+class SearchTests(DocumentRoutesHarness):
+    """`search` offers a space's Markdown files by name or by a line, as paths `resolve` takes."""
+
+    def search(self, query: str, space: str | None = SPACE) -> tuple[int, dict]:
+        asked = [("q", query)] if space is None else [("space", space), ("q", query)]
+        status, body, _ = self.request(f"/api/documents/search?{urlencode(asked)}")
+        return status, body
+
+    def test_a_name_is_found_ahead_of_a_line_and_answered_from_the_space_root(self) -> None:
+        write(self.workspace / "docs" / "notes.md", b"# notes\n\nSee the plan here.\n")
+        status, body = self.search("plan")
+        self.assertEqual(200, status, body)
+        self.assertEqual(
+            [
+                {"path": "docs/plan.md", "line": 0, "text": ""},
+                {"path": "docs/notes.md", "line": 3, "text": "See the plan here."},
+            ],
+            body["documents"],
+        )
+        # What it answers is what `resolve` takes from the same space.
+        self.assertEqual("file", self.resolve("docs/plan.md")[0]["status"])
+
+    def test_only_markdown_inside_the_space_s_own_root_is_offered(self) -> None:
+        status, body = self.search("a")
+        self.assertEqual(200, status, body)
+        paths = [entry["path"] for entry in body["documents"]]
+        self.assertNotIn("src/a.ts", paths)
+        self.assertNotIn("b.md", paths)
+        self.assertEqual([], self.search("secret")[1]["documents"])
+        self.assertEqual(
+            ["b.md"], [entry["path"] for entry in self.search("b.md", SPACE_B)[1]["documents"]]
+        )
+
+    def test_what_the_project_s_git_ignores_is_neither_offered_nor_read(self) -> None:
+        made = processes.run_text(["git", "-C", str(self.workspace), "init", "-q"])
+        self.assertEqual(0, made.returncode, made.stderr)
+        write(self.workspace / ".gitignore", b"tmp/\n.private/\n")
+        write(self.workspace / "tmp" / "scratch.md", b"the plan as drafted\n")
+        write(self.workspace / ".private" / "plan-evidence.md", b"# evidence\n")
+        _, body = self.search("plan")
+        # Untracked but not ignored is still the project's; ignored is not.
+        self.assertEqual(["docs/plan.md"], [entry["path"] for entry in body["documents"]])
+
+    def test_nothing_typed_and_an_unbound_space_offer_nothing(self) -> None:
+        self.assertEqual((200, {"documents": []}), self.search(""))
+        self.assertEqual((200, {"documents": []}), self.search("plan", space_identity("NONE")))
+
+    def test_a_request_without_a_space_or_with_a_crafted_one_is_refused(self) -> None:
+        for space in (None, "..\\x"):
+            with self.subTest(space):
+                status, body = self.search("plan", space)
+                self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+        status, body = self.search("x" * (documents.MAX_QUERY_CHARS + 1))
+        self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+
+    def test_the_answer_is_bounded(self) -> None:
+        for number in range(documents.MAX_PROJECT_HITS + 5):
+            write(self.workspace / "many" / f"page-{number:02}.md", b"# page\n")
+        _, body = self.search("page-")
+        self.assertEqual(documents.MAX_PROJECT_HITS, len(body["documents"]))
+
+    def test_a_name_is_not_lost_to_the_lines_found_before_it(self) -> None:
+        for number in range(documents.MAX_DOC_HITS + 5):
+            write(self.workspace / "aa" / f"page-{number:02}.md", b"# page\n\nzeta\n")
+        write(self.workspace / "zz" / "zeta.md", b"# notes\n")
+        _, body = self.search("zeta")
+        self.assertEqual({"path": "zz/zeta.md", "line": 0, "text": ""}, body["documents"][0])
+        self.assertEqual(documents.MAX_PROJECT_HITS, len(body["documents"]))
+
+    @unittest.skipUnless(os.name == "nt", "a junction is a Windows reparse point")
+    def test_a_file_behind_a_junction_out_of_the_root_is_not_offered(self) -> None:
+        link = self.workspace / "escape"
+        made = processes.run_text(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(self.outside)],
+            # The console's code page: read only to name a failure to a person.
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertEqual(0, made.returncode, made.stdout + made.stderr)
+        # Removing a junction must leave what it points at alone.
+        self.addCleanup(os.rmdir, link)
+        self.assertEqual([], self.search("secret")[1]["documents"])
+
+
 class RequestSourceTests(DocumentRoutesHarness):
-    ROUTES = ("/api/documents/resolve?path=docs/plan.md", "/api/documents/read?project=x&path=y")
+    ROUTES = (
+        "/api/documents/resolve?path=docs/plan.md",
+        "/api/documents/read?project=x&path=y",
+        "/api/documents/search?space=x&q=plan",
+    )
 
     def test_only_the_page_itself_may_ask(self) -> None:
         for route in self.ROUTES:

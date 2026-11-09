@@ -280,17 +280,17 @@ test('a new task is described in the markdown editor, inside the dialog that own
   await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
   const description = dialog.getByRole('textbox', { name: 'Description' })
   await description.click()
-  await page.keyboard.type('After #blo')
-  const list = dialog.getByRole('listbox', { name: 'Tasks' })
+  await page.keyboard.type('After @blo')
+  const list = dialog.getByRole('listbox', { name: 'Mentions' })
   await expect(list).toContainText(blockedWorkItem.title)
   expect(searched.at(-1)?.get('space')).toBe(planningSpace.planning_space_id)
-  await expectNoSilentClipping(page, 'New task with # suggestions at 390px')
+  await expectNoSilentClipping(page, 'New task with @ suggestions at 390px')
 
   // Escape closes the list and leaves the dialog and the text as they were.
   await page.keyboard.press('Escape')
   await expect(list).toHaveCount(0)
   await expect(dialog).toBeVisible()
-  await expect(description).toHaveValue('After #blo')
+  await expect(description).toHaveValue('After @blo')
   await expect(description).toBeFocused()
 
   // The list again, and Enter writes the chosen reference in place of the query.

@@ -13,12 +13,14 @@ import hashlib
 import ntpath
 import os
 import stat
+import subprocess
 import sys
 import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Literal, NamedTuple
 
+from . import git_worktrees
 from .ops import configuration
 from .projects import project_registry
 
@@ -443,47 +445,158 @@ def doc_roots() -> list[str]:
     return [part for part in (item.strip() for item in raw.split(os.pathsep)) if part]
 
 
-def search_documents(query: str, roots: list[str] | None = None) -> list[dict]:
+def search_documents(
+    query: str, roots: list[str] | None = None, *, by_path: bool = False
+) -> list[dict]:
     """Grep the configured document roots for one query, with a bounded result.
 
     Deliberately plain substring search over Markdown: the canonical artifacts
     are documents, and an index would be one more thing to keep true. Memory
     and transcripts stay out of scope by owner decision.
+
+    `by_path` also takes a document whose path from its root holds the query, at
+    `line` 0 with no `text`, ahead of those found by a line: a person looking for
+    a file types its name, which its text need not hold.
     """
     needle = query.strip().lower()
     if not needle:
         return []
-    hits: list[dict] = []
+    named: list[dict] = []
+    lined: list[dict] = []
     for root in roots if roots is not None else doc_roots():
         if not os.path.isdir(root):
             continue
+        for relative in _documents_in(root):
+            path = os.path.join(root, relative)
+            if by_path and needle in relative.lower():
+                if os.path.isfile(path):
+                    named.append({"path": relative, "root": root, "line": 0, "text": ""})
+                if len(named) >= MAX_DOC_HITS:
+                    return named
+                continue
+            # Once the lines fill the answer, only a name can still take a place in it,
+            # and a name costs no read.
+            if len(lined) >= MAX_DOC_HITS:
+                if not by_path:
+                    return lined
+                continue
+            try:
+                if os.path.getsize(path) > MAX_DOC_BYTES:
+                    continue
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    lines = handle.read().splitlines()
+            except OSError:
+                continue
+            for number, line in enumerate(lines, start=1):
+                if needle in line.lower():
+                    lined.append(
+                        {"path": relative, "root": root, "line": number, "text": line.strip()[:240]}
+                    )
+                    break  # one hit per document keeps the list readable
+    return (named + lined)[:MAX_DOC_HITS]
+
+
+def _documents_in(root: str) -> list[str]:
+    """The Markdown files under a root, as `/`-separated paths from it in path order.
+
+    Where the root lies in a Git work tree that does not ignore it, Git names them:
+    the files it tracks and those it would add, so nothing its ignore rules cover,
+    such as scratch, private evidence or build output, is read or offered, and its
+    index answers instead of a walk of the whole tree on every search. A root Git
+    cannot answer for is walked, past `SKIP_DIRECTORIES`.
+    """
+
+    listed = _listed_by_git(root)
+    if listed is None:
+        listed = []
         for directory, subdirectories, files in os.walk(root):
             subdirectories[:] = [name for name in subdirectories if name not in SKIP_DIRECTORIES]
-            for name in sorted(files):
-                if not name.lower().endswith(DOC_SUFFIXES):
-                    continue
-                path = os.path.join(directory, name)
-                try:
-                    if os.path.getsize(path) > MAX_DOC_BYTES:
-                        continue
-                    with open(path, encoding="utf-8", errors="replace") as handle:
-                        lines = handle.read().splitlines()
-                except OSError:
-                    continue
-                for number, line in enumerate(lines, start=1):
-                    if needle in line.lower():
-                        hits.append(
-                            {
-                                "path": os.path.relpath(path, root).replace("\\", "/"),
-                                "root": root,
-                                "line": number,
-                                "text": line.strip()[:240],
-                            }
-                        )
-                        break  # one hit per document keeps the list readable
-                if len(hits) >= MAX_DOC_HITS:
-                    return hits
-    return hits
+            for name in files:
+                listed.append(
+                    os.path.relpath(os.path.join(directory, name), root).replace("\\", "/")
+                )
+    return sorted(
+        {
+            path
+            for path in listed
+            if path.lower().endswith(DOC_SUFFIXES)
+            and SKIP_DIRECTORIES.isdisjoint(path.split("/")[:-1])
+        }
+    )
+
+
+def _listed_by_git(root: str) -> list[str] | None:
+    """The files under a root that its Git does not ignore, or None where Git has no say.
+
+    No say is no Git, a root outside any work tree, or a root its enclosing work tree
+    ignores, which is not that repository's to describe. Git that takes too long or
+    names a file in other than UTF-8 offers nothing rather than a walk that would
+    offer what it ignores.
+    """
+
+    try:
+        ignored = git_worktrees.git_text(
+            root, "check-ignore", "-q", "--", ".", timeout=REF_RESOLVE_TIMEOUT
+        )
+        # 0: the root is ignored; 1: it is not; anything else: not a work tree.
+        if ignored.returncode != 1:
+            return None
+        found = git_worktrees.git_text(
+            root,
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            timeout=REF_RESOLVE_TIMEOUT,
+        )
+    except OSError:
+        return None
+    except (subprocess.TimeoutExpired, UnicodeDecodeError):
+        return []
+    if found.returncode != 0:
+        return None
+    return [path for path in found.stdout.split("\0") if path]
+
+
+#: How many documents one search of a space's project answers with.
+MAX_PROJECT_HITS = 20
+#: The longest query that search takes; a file's name is shorter.
+MAX_QUERY_CHARS = 200
+
+
+def search_space_documents(
+    space: str, query: str, *, reader: project_registry.RegistryReader | None = None
+) -> list[dict[str, object]]:
+    """The Markdown files of the project a planning space is bound to that a query names.
+
+    The search is `search_documents` over that one root, by path as well as by a
+    line. Each answer is a path from the root, which is what `resolve` takes from
+    the same space, with the line it was found at (0 for its path) and that line.
+    The root is never told. A file reached through a link or a junction that leads
+    out of the root is left out, as `resolve` would refuse it. A space the registry
+    does not bind to one existing root has no files to offer, and an identity that
+    does not parse is refused, as `resolve` refuses it.
+    """
+
+    if len(query) > MAX_QUERY_CHARS:
+        raise DocumentError("invalid_request")
+    mapping = project_registry.resolve_space_root(
+        {"kind": "planning-space", "resource_id": space}, reader=reader
+    )
+    if mapping["status"] == "malformed" and mapping["resource_ref"] is None:
+        raise DocumentError("invalid_request")
+    if mapping["status"] != "mapped":
+        return []
+    root = os.path.realpath(str(mapping["canonical_root"]))
+    found: list[dict[str, object]] = []
+    for hit in search_documents(query, [root], by_path=True):
+        if _relative_in(root, os.path.realpath(os.path.join(root, hit["path"]))) is None:
+            continue
+        found.append({"path": hit["path"], "line": hit["line"], "text": hit["text"]})
+        if len(found) >= MAX_PROJECT_HITS:
+            break
+    return found
 
 
 __all__ = [
@@ -491,6 +604,8 @@ __all__ = [
     "MAX_DOC_BYTES",
     "MAX_DOC_HITS",
     "MAX_PATH_CHARS",
+    "MAX_PROJECT_HITS",
+    "MAX_QUERY_CHARS",
     "MAX_RESOLVE_PATHS",
     "REF_RESOLVE_TIMEOUT",
     "DocumentError",
@@ -504,4 +619,5 @@ __all__ = [
     "registered_roots",
     "resolve_paths",
     "search_documents",
+    "search_space_documents",
 ]

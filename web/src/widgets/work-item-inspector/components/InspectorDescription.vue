@@ -7,7 +7,7 @@ import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useIns
 
 import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
+import { mentionSuggest } from '@/shared/lib/mentionSuggest.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -24,7 +24,7 @@ const previewing = ref(false)
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const opener = ref<InstanceType<typeof VButton> | null>(null)
 const draft = ref('')
-const suggest = workItemSuggest(
+const suggest = mentionSuggest(
   () => props.item.planning_space_id,
   () => props.item.work_item_id,
 )

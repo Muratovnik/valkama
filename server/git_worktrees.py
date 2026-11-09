@@ -45,9 +45,9 @@ def canonical(path: str | os.PathLike[str]) -> str:
     return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
 
 
-def git_text(repo: str, *args: str) -> processes.TextResult:
+def git_text(repo: str, *args: str, timeout: float | None = None) -> processes.TextResult:
     """Run git in `repo` and decode its output as the UTF-8 it declares."""
-    return processes.run_text(["git", "-C", repo, *args])
+    return processes.run_text(["git", "-C", repo, *args], timeout=timeout)
 
 
 def is_reparse_point(path: str) -> bool:

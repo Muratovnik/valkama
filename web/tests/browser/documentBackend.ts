@@ -103,7 +103,8 @@ const KNOWN: Record<string, object> = {
   'src/a.ts': { status: 'file', project: 'demo', relative: 'src/a.ts', markdown: false },
 }
 
-async function installDocuments(page: Page) {
+/** The project's files as the document routes answer for them. */
+export async function installDocuments(page: Page) {
   await page.route('**/api/documents/resolve*', async (route) => {
     const paths = new URL(route.request().url()).searchParams.getAll('path')
     await route.fulfill({

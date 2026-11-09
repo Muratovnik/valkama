@@ -403,6 +403,8 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
 
         '/api/documents/resolve': () =>
           fulfill({ paths: resolvedPaths(url.searchParams.getAll('path')) }),
+        // A project with no file the query names, unless a test says otherwise.
+        '/api/documents/search': () => fulfill({ documents: [] }),
         '/api/documents/read': () => {
           const found = projectDocument(url.searchParams.get('path') ?? '')
           return found ? fulfill(found) : fulfill({ error: { code: 'not_found' } }, 404)

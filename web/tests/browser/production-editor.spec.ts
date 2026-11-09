@@ -300,11 +300,11 @@ test('Ctrl+Z takes back a toolbar action, and a chosen task, one step at a time'
 
   await comment.fill('See ')
   await select(comment, 4, 4)
-  await page.keyboard.type('#Par')
-  await page.getByRole('listbox', { name: 'Tasks' }).getByRole('option').first().click()
+  await page.keyboard.type('@Par')
+  await page.getByRole('listbox', { name: 'Mentions' }).getByRole('option').first().click()
   await expect(comment).toHaveValue('See MAIN-100 ')
   await page.keyboard.press('Control+z')
-  await expect(comment).toHaveValue('See #Par')
+  await expect(comment).toHaveValue('See @Par')
 })
 
 test('Ctrl+B and Ctrl+I work on a Russian layout, where the key says «и» and «ш»', async ({
@@ -335,7 +335,7 @@ const row = (number: number, title: string) => ({
   claim_ref: '',
 })
 
-test('the mention button writes a # and opens the list a typed one opens, and a row is chosen from it', async ({
+test('the mention button writes an @ and opens the list a typed one opens, and a row is chosen from it', async ({
   page,
 }) => {
   const { drawer, comment } = await openCard(page)
@@ -358,14 +358,14 @@ test('the mention button writes a # and opens the list a typed one opens, and a 
   })
   const mention = drawer
     .locator('.discussion-form')
-    .getByRole('button', { name: 'Link a task', exact: true })
-  const list = page.getByRole('listbox', { name: 'Tasks' })
+    .getByRole('button', { name: 'Mention a task or a file', exact: true })
+  const list = page.getByRole('listbox', { name: 'Mentions' })
 
   // After a word, with what is selected left alone.
   await comment.fill('See word')
   await select(comment, 4, 8)
   await mention.click()
-  await expect(comment).toHaveValue('See word #')
+  await expect(comment).toHaveValue('See word @')
   await expect(comment).toBeFocused()
   await expect(list.getByRole('option')).toHaveCount(2)
   expect(active).toHaveLength(1)
@@ -384,7 +384,7 @@ test('the mention button writes a # and opens the list a typed one opens, and a 
   // With nothing typed, the keys take a row just as well.
   await comment.fill('')
   await mention.click()
-  await expect(comment).toHaveValue('#')
+  await expect(comment).toHaveValue('@')
   await expect(list.getByRole('option')).toHaveCount(2)
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Enter')

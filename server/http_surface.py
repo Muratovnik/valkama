@@ -376,6 +376,7 @@ def _boundary(table: tuple[_Boundary, ...], path: str) -> _Boundary | None:
 
 _DOCUMENT_RESOLVE = "/api/documents/resolve"
 _DOCUMENT_READ = "/api/documents/read"
+_DOCUMENT_SEARCH = "/api/documents/search"
 #: The first routes that give out the text of a file on the disk: nothing keeps a
 #: copy of the answer, and nothing guesses another type for it.
 _DOCUMENT_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
@@ -406,6 +407,12 @@ def _document_answer(path: str, parameters: Mapping[str, list[str]]) -> tuple[in
                 exact=_first_value(parameters, "exact") == "1",
             )
             return 200, {"paths": answers}
+        if path == _DOCUMENT_SEARCH:
+            space = _first_value(parameters, "space")
+            if not space:
+                raise documents.DocumentError("invalid_request")
+            query = _first_value(parameters, "q") or ""
+            return 200, {"documents": documents.search_space_documents(space, query)}
         project = _first_value(parameters, "project")
         relative = _first_value(parameters, "path")
         if not project or relative is None:
@@ -1108,7 +1115,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         parameters = parse_qs(url.query, keep_blank_values=True)
-        if url.path in (_DOCUMENT_RESOLVE, _DOCUMENT_READ):
+        if url.path in (_DOCUMENT_RESOLVE, _DOCUMENT_READ, _DOCUMENT_SEARCH):
             self._answer_document(url.path, parameters)
             return
         if url.path == "/api/open-places":
