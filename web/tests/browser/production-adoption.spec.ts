@@ -150,7 +150,8 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
   const choice = dialog.getByRole('radiogroup', { name: /Should deployment proceed\?/u })
   const no = choice.getByRole('radio', { name: 'No', exact: true })
-  await expect(choice.getByRole('radio')).toHaveCount(3)
+  // Yes and No only: a comment, not a row of its own, stands for the person's own option.
+  await expect(choice.getByRole('radio')).toHaveCount(2)
   await expect(choice.getByRole('radio', { checked: true })).toHaveCount(0)
   await dialog.getByRole('button', { name: 'Send', exact: true }).click()
   // The refusal stands at the field, which takes focus, and brings no second Refresh.
@@ -165,8 +166,8 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await expect(choice).not.toHaveAttribute('aria-invalid')
   await expectNoSilentClipping(page, 'Question at 390px')
   await page.screenshot({ path: testInfo.outputPath('question-narrow.png') })
-  // Past the way not to answer at all: the comment on the block stands in its head, and the
-  // way to the task is the number there.
+  // Past the way not to answer at all: the field's comment stands on the line naming it, and
+  // the way to the task is the number in the head.
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await expect(dialog.getByRole('button', { name: 'Send', exact: true })).toBeFocused()
