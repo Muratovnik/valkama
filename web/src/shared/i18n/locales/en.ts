@@ -561,7 +561,6 @@ export const en = {
     providers: memoryProviderMessages.en,
     search: {
       heading: 'Search',
-      intro: 'What matched, never a copy of it. Valkama keeps the pointer.',
       label: 'Search this project',
       placeholder: 'A word in the text or the file name',
       action: 'Search',
@@ -572,7 +571,6 @@ export const en = {
     },
     links: {
       heading: 'Attached',
-      intro: 'What this project already points at. Read without asking a provider.',
       none: 'Nothing is attached yet',
       noneDetail: 'A pointer attached to a work item shows up here.',
       truncated: 'More are attached than this page shows.',
@@ -603,7 +601,6 @@ export const en = {
   },
   usage: {
     heading: 'Usage',
-    intro: 'The latest attempt, as {adapter} observed it.',
     noAdapter: 'no local source',
     loading: 'Reading the local journals',
     none: 'Nothing has been run for this item yet.',
@@ -629,7 +626,6 @@ export const en = {
     },
     silentSession: 'A {client} session reported nothing: {reason}',
     tools: 'Tools',
-    toolsCaption: 'Tool calls this attempt reported, with how many ended in an error.',
     noTools: 'No tool call was reported for this attempt.',
     tool: 'Tool',
     calls: 'Calls',
