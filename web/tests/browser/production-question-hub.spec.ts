@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 
-import { asked, openQuestion, question, routeField, send } from './questionBackend.ts'
+import { asked, openQuestion, question, routeField, send, wordsField } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const TOUCHED = '77777777-7777-4777-8777-777777777771'
@@ -29,8 +29,8 @@ const answeredThere: Partial<InputRequestEntry['request']> = {
 const WRITTEN = 'Keep them, but say why in the commit.'
 const POLL = 30_000
 
-const listed = (id: string, prompt: string, created: string) =>
-  asked({ request_id: id, prompt, created_at: created })
+const listed = (id: string, prompt: string, created: string, fields = [routeField]) =>
+  asked({ request_id: id, prompt, created_at: created, fields })
 
 /** The list open over the board, with the clock under the test's hand from the first load. */
 async function openList(page: Page, entries: InputRequestEntry[]) {
@@ -56,11 +56,8 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
   ])
   const touched = card('The touched question')
   await touched.getByRole('radio', { name: 'Keep the comments', exact: true }).check()
-  await touched.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
-  const note = touched.getByRole('textbox', {
-    name: 'Comment on the block of questions',
-    exact: true,
-  })
+  await touched.getByRole('button', { name: /^Comment: /u }).click()
+  const note = touched.getByRole('textbox', { name: /^Comment: /u })
   await note.fill(WRITTEN)
   await expect(note).toBeFocused()
 
@@ -127,10 +124,8 @@ test('a send refused because the question closed keeps the promise that the draf
   ])
   const touched = card('The touched question')
   await touched.getByRole('radio', { name: 'Keep the comments', exact: true }).check()
-  await touched.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
-  await touched
-    .getByRole('textbox', { name: 'Comment on the block of questions', exact: true })
-    .fill(WRITTEN)
+  await touched.getByRole('button', { name: /^Comment: /u }).click()
+  await touched.getByRole('textbox', { name: /^Comment: /u }).fill(WRITTEN)
   requests.settle(TOUCHED, answeredThere)
   await send(touched).click()
   await expect(touched.getByRole('alert')).toHaveText(
@@ -150,7 +145,7 @@ test('a question the keyboard is in stays when answered elsewhere, even with not
     listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
   ])
   const touched = card('The touched question')
-  await touched.getByRole('button', { name: /^Comment on the block of questions: /u }).focus()
+  await touched.getByRole('button', { name: /^Comment: /u }).focus()
   requests.settle(TOUCHED, answeredThere)
   await page.clock.runFor(POLL)
   await expect(touched).toBeFocused()
@@ -235,13 +230,16 @@ for (const locale of ['en', 'ru'] as const) {
     await page.setViewportSize({ width: 1500, height: 900 })
     await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
     const { card } = await openList(page, [
-      listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
+      listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z', [routeField, wordsField]),
     ])
     const touched = card('The touched question')
-    // Every part open: the own option's text and the block's comment.
-    await touched.getByRole('radio').last().check()
-    await touched.locator('.request-note-toggle').click()
-    const field = await touched.locator('.request-field').boundingBox()
+    // Every part open: the field's comment and the block's.
+    await touched.locator('.request-field .request-note-toggle').click()
+    await touched.locator('.request-header .request-note-toggle').click()
+    const field = await touched
+      .locator('.request-fields > .request-note')
+      .locator('xpath=preceding-sibling::*[1]')
+      .boundingBox()
     const note = touched.locator('.request-fields > .request-note')
     const zone = await note.boundingBox()
     const row = await touched.locator('.request-actions').boundingBox()

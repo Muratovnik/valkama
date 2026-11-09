@@ -136,8 +136,6 @@ for (const locale of ['en', 'ru'])
       const first = card.locator('.request-point').first()
       await first.locator('.request-point-toggle').click()
       await expectIconsOnFirstLine(rows, ...point, `${at} opened`)
-      await first.locator('.request-point-own').click()
-      await expectIconsOnFirstLine(rows, ...point, `${at} own variant`)
       await first.locator('.request-note-toggle').click()
       await expectIconsOnFirstLine(rows, ...point, `${at} with a comment`)
       // The heading of each group, whose chevron already stood on its first line.

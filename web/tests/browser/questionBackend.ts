@@ -63,6 +63,15 @@ export const routeField: InputRequestField = {
   ],
 }
 
+/** A second field, optional words, so that a block holds more than one question. */
+export const wordsField: InputRequestField = {
+  id: 'words',
+  label: 'Anything else',
+  type: 'text',
+  required: false,
+  options: [],
+}
+
 /** The prompt of the question `routeField` answers, which also names its group. */
 const ROUTE_PROMPT = 'Where should the **comments** go?'
 export const ROUTE_ASKED = 'Where should the comments go?'

@@ -174,13 +174,20 @@ describe('choosing a parent', () => {
     expect(chooseVerdict(contractFields, later, p4, 'accept').answers['p4-steps']).toEqual([])
   })
 
-  test('a verdict takes the place of an own variant', () => {
-    const own = draft({ ownChosen: ['p4'], own: { p4: 'Mine' } })
-    expect(chooseVerdict(contractFields, own, p4, 'reject')).toMatchObject({
-      answers: { p4: 'reject' },
-      ownChosen: [],
-      own: { p4: 'Mine' },
-    })
+  // The owner's rule: a point's comment is its own option while it has no verdict, so it
+  // counts as decided, and the note on the verdict once one is chosen.
+  test('a comment with no verdict decides the point as its own option, and a verdict keeps it', () => {
+    const own = draft({ comments: { p4: 'Mine' } })
+    expect(undecidedVerdicts([p4, p13], own)).toEqual([p13])
+    expect(checkAnswers([p4], own)).toMatchObject({ own: { p4: 'Mine' }, values: {} })
+    const rejected = chooseVerdict(contractFields, own, p4, 'reject')
+    expect(rejected).toMatchObject({ answers: { p4: 'reject' }, comments: { p4: 'Mine' } })
+    expect(checkAnswers([p4], rejected)).toMatchObject({ own: {}, fieldNotes: { p4: 'Mine' } })
+  })
+
+  test('accepting leaves a way unfilled whose comment stands in for its choice', () => {
+    const own = draft({ comments: { 'p13-way': 'Neither' } })
+    expect(chooseVerdict(contractFields, own, p13, 'accept').answers).toEqual({ p13: 'accept' })
   })
 })
 
@@ -214,9 +221,7 @@ describe('sending', () => {
   test('a hidden field gives nothing and is never refused, even required', () => {
     const later = draft({
       answers: { 'p4': 'later', 'p4-steps': ['p4a'] },
-      fieldNotes: { 'p4-steps': 'Kept' },
-      own: { 'p4-steps': 'Mine' },
-      ownChosen: ['p4-steps'],
+      comments: { 'p4-steps': 'Kept' },
     })
     expect(checkAnswers(contractFields, later)).toEqual({
       fieldNotes: {},

@@ -1,6 +1,6 @@
 /**
- * An answer in the widget: an own option in every field with options, a comment on a field
- * and on the question, and what an answered question shows. Changing it is
+ * An answer in the widget: the one comment of every field with options, the comment
+ * on the question, and what an answered question shows. Changing it is
  * `inputRequestChange.spec.ts`; the real keyboard is `production-question-answer.spec.ts`.
  */
 import { nextTick } from 'vue'
@@ -20,7 +20,7 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 
 import { firstAnswer, requestEntry } from '../support/inputRequests.ts'
 import { present } from '../support/present.ts'
-import { answer, checkedLabels, radios } from '../support/radioAnswers.ts'
+import { answer } from '../support/radioAnswers.ts'
 
 vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/inputRequestApi.ts')>()),
@@ -124,8 +124,6 @@ const textareaNamed = (wrapper: Wrapper, name: string) =>
     wrapper.findAll('textarea').find((area) => area.attributes('aria-label') === name),
     name,
   )
-const describedText = (wrapper: Wrapper, control: { attributes: (name: string) => unknown }) =>
-  wrapper.get(`#${String(present(control.attributes('aria-describedby'), 'description'))}`).text()
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -135,118 +133,43 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-describe('your own option', () => {
+// The owner's rule: one «Comment» per field with options, in place of a row for your own option
+// and a comment beside it. With nothing chosen it is sent as the own option, with a choice as the
+// field's note; the server contract does not change.
+describe('the comment of a field', () => {
   it.each([
-    ['a choice', route, 'radio'],
-    ['a yes or no', go, 'radio'],
-    ['ticks', areas, 'checkbox'],
-  ])('is the last row of %s, of the same kind as the rest', (_, field, kind) => {
+    ['a choice', route, 'radio', ['Keep', 'Merge']],
+    ['a yes or no', go, 'radio', ['Yes', 'No']],
+    ['ticks', areas, 'checkbox', ['Keep', 'Merge']],
+  ])('takes no row among the options of %s', (_, field, kind, labels) => {
     const wrapper = card(asked([field]))
     const rows = wrapper.findAll('.request-option')
-    expect(present(rows.at(-1), 'last row').text()).toBe(OWN)
-    expect(present(rows.at(-1), 'last row').find(`input[type="${kind}"]`).exists()).toBe(true)
+    expect(rows.map((row) => row.text())).toEqual(labels)
+    expect(wrapper.findAll(`input[type="${kind}"]`)).toHaveLength(labels.length)
+    expect(wrapper.text()).not.toContain('Your own option')
     expect(wrapper.find('textarea').exists()).toBe(false)
   })
 
   it('is not offered on a text field, which is its author’s own words already', () => {
     const wrapper = card(asked([why]))
-    expect(wrapper.text()).not.toContain(OWN)
-    expect(wrapper.findAll('button[aria-label^="Comment on the question:"]')).toHaveLength(0)
+    expect(wrapper.findAll('button[aria-label^="Comment:"]')).toHaveLength(0)
   })
 
-  // A yes or no used to share one row; a row that opens a field cannot stand beside another.
-  it('stacks yes and no with it, with no row layout left over', () => {
+  // A yes or no used to share one row; it stays in a column with the rows of every field.
+  it('stacks yes and no, with no row layout left over', () => {
     const wrapper = card(asked([go]))
     expect(wrapper.get('fieldset').classes()).not.toContain('is-row')
   })
 
-  it('opens its field in place, leaves focus in the group and is described as opening one', async () => {
+  it('opens and closes on one press while it is empty, on the only field too', async () => {
     const wrapper = card(asked([route]))
-    const own = present(radios(wrapper).at(-1), 'own radio')
-    expect(describedText(wrapper, own)).toBe('A field for your text opens below.')
-    ;(own.element as HTMLInputElement).focus()
-    await answer(wrapper, OWN)
-    expect(textareaNamed(wrapper, 'Your own option: Route').exists()).toBe(true)
-    expect(document.activeElement).toBe(own.element)
-  })
-
-  it('sends its words in place of an option, and takes the option away', async () => {
-    const entry = asked([route])
-    vi.mocked(answerInputRequest).mockResolvedValue(
-      given([route], { own: { route: 'In a week' }, revision: 2 }),
-    )
-    const wrapper = card(entry)
-    await answer(wrapper, 'Keep')
-    await answer(wrapper, OWN)
-    expect(checkedLabels(wrapper)).toEqual([OWN])
-    await textareaNamed(wrapper, 'Your own option: Route').setValue('  In a week ')
-    await send(wrapper)
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, {}, '', {
-      own: { route: 'In a week' },
-      field_notes: {},
-    })
-  })
-
-  it('sends its words beside ticks', async () => {
-    const entry = asked([areas])
-    vi.mocked(answerInputRequest).mockResolvedValue(given([areas], {}))
-    const wrapper = card(entry)
-    await wrapper.get('input[type="checkbox"][value="merge"]').setValue(true)
-    await wrapper.get('input[type="checkbox"][value="_own"]').setValue(true)
-    await flushPromises()
-    await textareaNamed(wrapper, 'Your own option: Areas').setValue('And this')
-    await send(wrapper)
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { areas: ['merge'] }, '', {
-      own: { areas: 'And this' },
-      field_notes: {},
-    })
-  })
-
-  it('refuses it empty at its own field, and takes focus there', async () => {
-    const wrapper = card(asked([route]))
-    await answer(wrapper, OWN)
-    await send(wrapper)
-    expect(answerInputRequest).not.toHaveBeenCalled()
-    const text = textareaNamed(wrapper, 'Your own option: Route')
-    expect(text.attributes('aria-invalid')).toBe('true')
-    expect(describedText(wrapper, text)).toBe('Write your own option, or choose another.')
-    expect(document.activeElement).toBe(text.element)
-    // The message is on the field, not said twice on the group.
-    expect(wrapper.get('[role="radiogroup"]').attributes('aria-invalid')).toBeUndefined()
-    await text.setValue('Now it says something')
-    expect(text.attributes('aria-invalid')).toBeUndefined()
-  })
-
-  it('hides its field when another option is chosen and keeps the words, unsent', async () => {
-    const entry = asked([route])
-    vi.mocked(answerInputRequest).mockResolvedValue(given([route], { answers: { route: 'keep' } }))
-    const wrapper = card(entry)
-    await answer(wrapper, OWN)
-    await textareaNamed(wrapper, 'Your own option: Route').setValue('Mine')
-    await answer(wrapper, 'Keep')
-    expect(wrapper.find('textarea').exists()).toBe(false)
-    await answer(wrapper, OWN)
-    expect(
-      (textareaNamed(wrapper, 'Your own option: Route').element as HTMLTextAreaElement).value,
-    ).toBe('Mine')
-    await answer(wrapper, 'Keep')
-    await send(wrapper)
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { route: 'keep' }, '', {
-      own: {},
-      field_notes: {},
-    })
-  })
-})
-
-describe('comments', () => {
-  it('a comment on the field opens and closes on one press while it is empty', async () => {
-    const wrapper = card(asked([route, areas]))
-    const name = 'Comment on the question: Route'
+    const name = 'Comment: Route'
     expect(buttonNamed(wrapper, name).attributes('aria-expanded')).toBe('false')
     await press(wrapper, name)
     expect(buttonNamed(wrapper, name).attributes('aria-expanded')).toBe('true')
     const text = textareaNamed(wrapper, name)
     expect(document.activeElement).toBe(text.element)
+    expect(text.attributes('placeholder')).toBe('With nothing chosen, these words are your answer')
     await press(wrapper, name)
     expect(wrapper.find('textarea').exists()).toBe(false)
     await press(wrapper, name)
@@ -256,27 +179,65 @@ describe('comments', () => {
     expect(buttonNamed(wrapper, `${name}: written`).attributes('aria-expanded')).toBe('true')
   })
 
-  it('goes with the choice and does not answer the field', async () => {
-    const entry = asked([route, why])
-    vi.mocked(answerInputRequest).mockResolvedValue(given([route, why], {}))
+  it('with nothing chosen is sent as the own option, and answers a required field', async () => {
+    const entry = asked([route])
+    vi.mocked(answerInputRequest).mockResolvedValue(
+      given([route], { own: { route: 'In a week' }, revision: 2 }),
+    )
     const wrapper = card(entry)
-    await press(wrapper, 'Comment on the question: Route')
-    await textareaNamed(wrapper, 'Comment on the question: Route').setValue('Because of the digest')
+    await press(wrapper, 'Comment: Route')
+    await textareaNamed(wrapper, 'Comment: Route').setValue('  In a week ')
     await send(wrapper)
-    expect(answerInputRequest).not.toHaveBeenCalled()
-    expect(wrapper.get('[role="radiogroup"]').attributes('aria-invalid')).toBe('true')
-    await answer(wrapper, 'Merge')
-    await send(wrapper)
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { route: 'merge' }, '', {
-      own: {},
-      field_notes: { route: 'Because of the digest' },
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, {}, '', {
+      own: { route: 'In a week' },
+      field_notes: {},
     })
   })
 
+  it('with an option chosen is sent as the note on it', async () => {
+    const entry = asked([route, areas])
+    vi.mocked(answerInputRequest).mockResolvedValue(given([route, areas], {}))
+    const wrapper = card(entry)
+    await press(wrapper, 'Comment: Route')
+    await textareaNamed(wrapper, 'Comment: Route').setValue('Because of the digest')
+    await answer(wrapper, 'Merge')
+    await wrapper.get('input[type="checkbox"][value="keep"]').setValue(true)
+    await press(wrapper, 'Comment: Areas')
+    await textareaNamed(wrapper, 'Comment: Areas').setValue('And this')
+    await send(wrapper)
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(
+      entry,
+      { route: 'merge', areas: ['keep'] },
+      '',
+      { own: {}, field_notes: { route: 'Because of the digest', areas: 'And this' } },
+    )
+  })
+
+  it('puts a refusal right as a choice does', async () => {
+    const wrapper = card(asked([route]))
+    await send(wrapper)
+    expect(answerInputRequest).not.toHaveBeenCalled()
+    const group = wrapper.get('[role="radiogroup"]')
+    expect(group.attributes('aria-invalid')).toBe('true')
+    await press(wrapper, 'Comment: Route')
+    await textareaNamed(wrapper, 'Comment: Route').setValue('Neither')
+    expect(wrapper.get('[role="radiogroup"]').attributes('aria-invalid')).toBeUndefined()
+  })
+
+  it('stands for the block’s comment in a block of one question with options', () => {
+    const block = /^Comment on the block of questions: /u
+    expect(() => buttonNamed(card(asked([route])), block)).toThrow()
+    expect(buttonNamed(card(asked([route, why])), block).exists()).toBe(true)
+    // A text answer has no comment of its own, so its block keeps one.
+    expect(buttonNamed(card(asked([why])), block).exists()).toBe(true)
+  })
+})
+
+describe('comments', () => {
   // The button this replaces, "Your own answer", took away every required field.
   it('a comment on the question leaves required fields required and refused', async () => {
-    const entry = asked([route])
-    vi.mocked(answerInputRequest).mockResolvedValue(given([route], {}))
+    const entry = asked([route, why])
+    vi.mocked(answerInputRequest).mockResolvedValue(given([route, why], {}))
     const wrapper = card(entry)
     expect(wrapper.text()).toContain('Route · Required')
     await press(wrapper, /^Comment on the block of questions: /u)

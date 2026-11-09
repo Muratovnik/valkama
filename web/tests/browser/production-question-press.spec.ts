@@ -62,7 +62,7 @@ for (const [upper, lower] of [
       await press(page, at, 2)
       await pause(150)
       expect(writesTo(requests)).toEqual([UPPER])
-      await expect(next.getByRole('radio')).toHaveCount(lower + 1)
+      await expect(next.getByRole('radio')).toHaveCount(lower)
       // Nor did it take the keyboard away from how the upper question ended.
       await expect(top).toBeFocused()
     })
@@ -168,10 +168,10 @@ test('a press repeated on the same control works as it always did', async ({ pag
   await expect(chevron).toHaveAttribute('aria-expanded', 'true')
   await press(page, atChevron, 2)
   await expect(chevron).toHaveAttribute('aria-expanded', 'false')
-  const own = card.getByRole('button', { name: /^Comment on the block of questions: /u })
+  const own = card.getByRole('button', { name: /^Comment: /u })
   await press(page, await centre(own))
   await expect(card.getByRole('textbox')).toBeFocused()
-  // Its field opens at the block's end, and the press in the block's head stays where it was.
+  // Its field opens under the options, and the press on the field's label stays where it was.
   await press(page, await centre(own), 2)
   await expect(card.getByRole('textbox')).toHaveCount(0)
 })
@@ -189,9 +189,7 @@ test('in the list of everything waiting a second press selects nothing of the ne
   await press(page, at)
   await expect(top.locator('.request-state')).toBeVisible()
   // An option row of the next question stands where the press was, whichever of them it is.
-  await expect
-    .poll(() => under(page, at))
-    .toMatch(/^The lower question: (?:Choice|Your own option)/u)
+  await expect.poll(() => under(page, at)).toMatch(/^The lower question: Choice/u)
   await press(page, at, 2)
   await pause(150)
   expect(writesTo(opened.requests)).toEqual([UPPER])

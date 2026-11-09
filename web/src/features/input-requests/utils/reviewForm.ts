@@ -1,4 +1,4 @@
-import { editField, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
+import { commentOn, editField, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputAnswers, InputRequestField, VERDICTS } from '@/shared/api/inputRequestModel.ts'
@@ -57,9 +57,9 @@ export function sections(fields: Fields): FieldSection[] {
   return runs
 }
 
-/** A verdict is decided by a word or by an own variant chosen in its place. */
+/** A verdict is decided by a word, or by a comment with none, which is sent as its own option. */
 function isDecided(field: InputRequestField, draft: RequestDraft): boolean {
-  return draft.answers[field.id] !== undefined || draft.ownChosen.includes(field.id)
+  return draft.answers[field.id] !== undefined || Boolean(commentOn(draft, field))
 }
 
 /** The verdicts on screen: a hidden one is neither decided nor undecided. */
@@ -74,27 +74,28 @@ export function undecidedVerdicts(fields: Fields, draft: RequestDraft): InputReq
 /**
  * What a field under an accepted point is filled with the first time it shows: ticks with the
  * recommended options, or every option where none is; a choice with its recommended option, or
- * nothing. A field that was ever given anything, even all its ticks taken back, keeps that.
+ * nothing. A field that was ever given anything, even all its ticks taken back, keeps that, and
+ * so does one whose comment stands in for a choice.
  */
 function firstFill(
   child: InputRequestField,
   draft: RequestDraft,
 ): InputAnswers[string] | undefined {
-  if (Object.hasOwn(draft.answers, child.id) || draft.ownChosen.includes(child.id)) return undefined
+  if (Object.hasOwn(draft.answers, child.id) || commentOn(draft, child)) return undefined
   const recommended = child.options.filter((option) => option.recommended).map(({ id }) => id)
   if (child.type === 'multi_choice')
     return recommended.length ? recommended : child.options.map(({ id }) => id)
   return child.type === 'choice' ? recommended[0] : undefined
 }
 
-/** A draft with one verdict given, in place of an own variant, and accepting fills what it opens. */
+/** A draft with one verdict given, and accepting fills what it opens. */
 export function chooseVerdict(
   fields: Fields,
   draft: RequestDraft,
   field: InputRequestField,
   verdict: Verdict,
 ): RequestDraft {
-  let next = editField(draft, field.id, { value: verdict, ownChosen: false })
+  let next = editField(draft, field.id, { value: verdict })
   if (verdict !== 'accept') return next
   for (const child of childrenOf(fields, field.id)) {
     const value = child.under?.option === 'accept' ? firstFill(child, next) : undefined

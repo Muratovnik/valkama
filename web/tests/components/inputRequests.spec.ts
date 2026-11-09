@@ -105,11 +105,7 @@ describe('human input requests', () => {
       request: { ...entry.request, status: 'answered', answers: { proceed: false }, revision: 2 },
     })
     const wrapper = card(entry)
-    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual([
-      'Yes',
-      'No',
-      'Your own option',
-    ])
+    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(['Yes', 'No'])
     expect(checkedLabels(wrapper)).toEqual([])
     await button(wrapper, 'Send').trigger('click')
     expect(answerInputRequest).not.toHaveBeenCalled()
@@ -173,7 +169,7 @@ describe('human input requests', () => {
       },
     ]
     const wrapper = card(entry)
-    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual([...ids, 'Your own option'])
+    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(ids)
     expect(checkedLabels(wrapper)).toEqual([])
     await button(wrapper, 'Send').trigger('click')
     await flushPromises()

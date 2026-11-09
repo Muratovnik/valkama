@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * The fields of a question being answered, and the field of the comment on the whole
- * question, whose press the card places among the buttons. A comment explains an answer and
- * does not stand in for one: it takes nothing away from what is required.
+ * question, whose press the card places in the block's head. That comment explains an answer
+ * and does not stand in for one: it takes nothing away from what is required.
  *
  * Text is markdown, and the fields share one Write | Preview choice: several text
  * answers are one answer being written, and a choice per field would let them disagree
@@ -24,7 +24,7 @@ import RequestNote from '@/features/input-requests/components/RequestNote.vue'
 import RequestReview from '@/features/input-requests/components/RequestReview.vue'
 import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
 import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
-import { chosenOwn, editField } from '@/features/input-requests/utils/validateAnswers.ts'
+import { editField } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
@@ -64,7 +64,6 @@ const {
   () => questionNote.value,
 )
 
-const several = computed(() => props.fields.length > 1)
 const structured = computed(() => isStructured(props.fields))
 /** The fields drawn one under another, as a question without rows has them. */
 const plainFields = computed(() => (structured.value ? [] : props.fields))
@@ -72,18 +71,8 @@ const review = ref<InstanceType<typeof RequestReview> | null>(null)
 const undecided = computed(() => review.value?.undecided ?? 0)
 const edit = (field: InputRequestField, change: FieldEdit) =>
   emit('edit', editField(props.draft, field.id, change))
-const isOwnChosen = (field: InputRequestField) => props.draft.ownChosen.includes(field.id)
-/** An own variant chosen and left empty, which is said on its own editor. */
-function ownRefused(field: InputRequestField) {
-  return props.refused.includes(field.id) && isOwnChosen(field) && !chosenOwn(props.draft, field.id)
-}
-function ownError(field: InputRequestField) {
-  return ownRefused(field) ? t('requests.missing.own') : ''
-}
 function fieldError(field: InputRequestField) {
-  return props.refused.includes(field.id) && !ownRefused(field)
-    ? t(`requests.missing.${field.type}`)
-    : ''
+  return props.refused.includes(field.id) ? t(`requests.missing.${field.type}`) : ''
 }
 /** Take focus to one field; a text answer can only be fixed where it is written. */
 async function focusField(id: string) {
@@ -121,14 +110,10 @@ defineExpose({ focusField, noteOpen, noteWritten, pressNote, structured, undecid
       :data-rail-question="field.label"
       :field="field"
       :model-value="draft.answers[field.id]"
-      :note="draft.fieldNotes[field.id]"
-      :own="draft.own[field.id]"
-      :own-chosen="isOwnChosen(field)"
-      :own-error="ownError(field)"
+      :comment="draft.comments[field.id]"
       :disabled="disabled"
       :error="fieldError(field)"
       :prompt-id="promptId"
-      :several="several"
       :suggest="suggest"
       @edit="edit(field, $event)"
       @submit="emit('submit')"

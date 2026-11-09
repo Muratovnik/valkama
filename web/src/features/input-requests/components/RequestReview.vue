@@ -29,7 +29,7 @@ import {
   undecidedVerdicts,
 } from '@/features/input-requests/utils/reviewForm.ts'
 import type { Verdict } from '@/features/input-requests/utils/reviewForm.ts'
-import { chosenOwn, editField, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
+import { editField, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
@@ -124,13 +124,8 @@ function countOn(field: InputRequestField) {
   return { chosen: Array.isArray(value) ? value.length : 0, total: steps.options.length }
 }
 
-const isOwnChosen = (field: InputRequestField) => props.draft.ownChosen.includes(field.id)
-const isRefused = (field: InputRequestField) => props.refused.includes(field.id)
-const ownRefused = (field: InputRequestField) =>
-  isRefused(field) && isOwnChosen(field) && !chosenOwn(props.draft, field.id)
-const ownError = (field: InputRequestField) => (ownRefused(field) ? t('requests.missing.own') : '')
 function fieldError(field: InputRequestField) {
-  if (!isRefused(field) || ownRefused(field)) return ''
+  if (!props.refused.includes(field.id)) return ''
   if (field.type === 'verdict') return t('requests.review.missingVerdict')
   return field.under
     ? t('requests.review.missingUnder', { field: plainText(field.label) })
@@ -197,13 +192,10 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
           :count="countOn(field)"
           :count-id="countIdOf(field.id)"
           :disabled="disabled"
+          :comment="draft.comments[field.id]"
           :error="fieldError(field)"
           :field="field"
-          :note="draft.fieldNotes[field.id]"
           :opens="opensOn(field)"
-          :own="draft.own[field.id]"
-          :own-chosen="isOwnChosen(field)"
-          :own-error="ownError(field)"
           :suggest="suggest"
           :value="draft.answers[field.id]"
           @edit="edit(field, $event)"
@@ -219,15 +211,11 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
           :described-by="describedBy(shown)"
           :field="shown"
           :model-value="draft.answers[shown.id]"
-          :note="draft.fieldNotes[shown.id]"
-          :own="draft.own[shown.id]"
-          :own-chosen="isOwnChosen(shown)"
-          :own-error="ownError(shown)"
+          :comment="draft.comments[shown.id]"
           :disabled="disabled"
           :error="fieldError(shown)"
           :prompt-id="promptId"
           :suggest="suggest"
-          several
           @edit="edit(shown, $event)"
           @submit="emit('submit')"
         />

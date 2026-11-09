@@ -356,17 +356,3 @@ for (const width of WIDTHS) {
     expect(await scrollTop(scroller)).toBe(0)
   })
 }
-
-test('your own option needs no caption over its field: the row above it says it', async ({
-  page,
-}) => {
-  const { card } = await openQuestion(page, [asked()])
-  await card.getByRole('radio', { name: 'Your own option', exact: true }).check()
-  // Named for the field it answers, so that two own options in one question stay apart.
-  const text = card.getByRole('textbox', { name: 'Your own option: Route', exact: true })
-  await expect(text).toBeVisible()
-  // Nothing stands in the step between the row and the field: its name is for a reader alone.
-  const row = await box(card.locator('.request-option').last())
-  const field = await box(text)
-  expect(field.y - (row.y + row.height)).toBeLessThanOrEqual(8)
-})

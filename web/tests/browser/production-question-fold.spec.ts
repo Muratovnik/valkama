@@ -213,7 +213,7 @@ test('a question waiting stands under the form past the first hundred, and the c
   ])
   const first = drawer.locator('.thread > li').first()
   await expect(first).toContainText(ROUTE_ASKED)
-  await expect(first.getByRole('radio')).toHaveCount(4)
+  await expect(first.getByRole('radio')).toHaveCount(3)
   await expect(drawer.getByText(CUT, { exact: true })).toBeVisible()
   expect(requests.reads.filter((read) => read.includes('reference=')).join(' ')).toContain(
     'status=pending',
@@ -224,7 +224,7 @@ test('with all of a card’s questions in one read nothing more is read or said'
   page,
 }) => {
   const { drawer, requests, card } = await openQuestion(page, [asked()])
-  await expect(card.getByRole('radio')).toHaveCount(4)
+  await expect(card.getByRole('radio')).toHaveCount(3)
   await expect(drawer.getByText(CUT, { exact: true })).toHaveCount(0)
   expect(requests.reads.filter((read) => read.includes('reference=')).join(' ')).not.toContain(
     'status=pending',

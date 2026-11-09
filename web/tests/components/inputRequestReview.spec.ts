@@ -1,8 +1,8 @@
 /**
  * A review answered in the thread, by the plan's rules and its check table: verdicts with no
  * value until chosen, Accept filling the steps once, Accept recommended filling only what is
- * undecided, the undecided count said over Send, a required row stopping the send, an own
- * variant in place of a verdict, groups that fold, and a head and foot that stay in sight.
+ * undecided, the undecided count said over Send, a required row stopping the send, a comment
+ * standing for a verdict, groups that fold, and a head and foot that stay in sight.
  * The real 25-field form in a browser is `production-question-review.spec.ts`.
  */
 import { nextTick } from 'vue'
@@ -257,21 +257,17 @@ describe('sending', () => {
     expect(point(wrapper, 'P4 ').text()).toContain('0 of 3')
   })
 
-  it('sends an own variant in place of a verdict, and keeps its words when taken back', async () => {
+  // The owner's rule: a point's comment with no verdict is its own option, and counts as decided.
+  it('sends the comment of a point with no verdict as its own option', async () => {
     const entry = asked()
     vi.mocked(answerInputRequest).mockReturnValue(new Promise(() => {}))
     const wrapper = card(entry)
+    await press(wrapper, 'Comment: P9 Labels in a list row and a filter by label')
+    await point(wrapper, 'P9 ').get('textarea').setValue('Labels only, no filtering')
+    expect(head(wrapper).text()).toContain('Decided 1 of 18')
     await press(wrapper, 'Accept recommended')
-    await press(wrapper, 'Your own option: P9 Labels in a list row and a filter by label')
     expect(point(wrapper, 'P9 ').findAll('[aria-checked="true"]')).toHaveLength(0)
     expect(head(wrapper).text()).toContain('Decided 18 of 18')
-    await point(wrapper, 'P9 ').get('textarea').setValue('Labels only, no filtering')
-    const own = 'Your own option: P9 Labels in a list row and a filter by label'
-    await press(wrapper, own)
-    expect(point(wrapper, 'P9 ').find('textarea').exists()).toBe(false)
-    await press(wrapper, own)
-    const text = point(wrapper, 'P9 ').get<HTMLTextAreaElement>('textarea')
-    expect(text.element.value).toBe('Labels only, no filtering')
     await press(wrapper, 'Send')
     const rest = Object.fromEntries(Object.entries(recommendedAnswer).filter(([id]) => id !== 'p9'))
     expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, rest, '', {

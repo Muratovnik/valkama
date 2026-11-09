@@ -9,9 +9,8 @@
  * said (`RequestAdvice`). The segment itself never shows it,
  * by colour or by mark, so a recommendation is not mistaken for a choice.
  *
- * An own variant is an icon beside the comment's, not a fourth segment, which a phone's width
- * has no room for: it opens a field in place of the verdict and takes the verdict away, as your
- * own option takes a radio's. Taking it back hides the field and keeps the words, unsent.
+ * Its comment is the one a field with options has: with no verdict chosen it is sent as the
+ * point's own option, and with one as a note on it (`checkAnswers`).
  *
  * Where choosing Accept opens a field below (the steps of the point, or its way), the segment
  * says so to a reader before it is pressed, and focus stays in the segments when it opens
@@ -21,10 +20,9 @@
  * stop only while focus is in the row: twenty-five toggles stood between the segments and Send.
  *
  * Side by side where the row is wide, the segments go under the label on a row of their own,
- * across its whole width, where it is not; a phone gets the target a finger needs, and so do the
- * own variant's and the comment's presses, each growing its own box as an entry's icons do
- * (`reach-grow`): the own variant stood 28×28 beside a comment press of 44. Its presses and the
- * segments stand on the label's first line, however it wraps (`LineEnd`).
+ * across its whole width, where it is not; a phone gets the target a finger needs, and so does
+ * the comment's press, growing its own box as an entry's icons do (`reach-grow`). Its presses and
+ * the segments stand on the label's first line, however it wraps (`LineEnd`).
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -56,30 +54,25 @@ const props = withDefaults(
   defineProps<{
     disabled: boolean
     field: InputRequestField
+    /** The point's comment. */
+    comment?: string
     /** How many of the steps under it are ticked, of how many. */
     count?: { chosen: number; total: number } | null
     /** The id that count stands under, which the steps name as what describes them. */
     countId?: string
     /** Why the row was refused; empty while it stands. */
     error?: string
-    note?: string
     /** What choosing Accept opens below, by its label; empty where it opens nothing. */
     opens?: string
-    own?: string
-    ownChosen?: boolean
-    ownError?: string
     suggest?: EditorSuggest
     value?: InputAnswers[string]
   }>(),
   {
     count: null,
+    comment: '',
     countId: undefined,
     error: '',
-    note: '',
     opens: '',
-    own: '',
-    ownChosen: false,
-    ownError: '',
     suggest: undefined,
     value: undefined,
   },
@@ -136,7 +129,6 @@ function leave(event: FocusEvent) {
     standing.value = false
 }
 
-const ownEditor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const root = ref<HTMLElement | null>(null)
 const noteEditor = ref<InstanceType<typeof RequestNote> | null>(null)
 const {
@@ -144,20 +136,12 @@ const {
   press: pressNote,
   written: noteWritten,
 } = useRequestNote(
-  () => props.note,
+  () => props.comment,
   preview,
   () => noteEditor.value,
 )
-/** In place of the verdict, or back out of it with the words kept. */
-function pressOwn() {
-  emit('edit', props.ownChosen ? { ownChosen: false } : { ownChosen: true, value: null })
-}
-/** Moves focus to what is to be fixed: the own variant's text, or the segments. */
+/** Moves focus to what is to be fixed, the segments. */
 function focus() {
-  if (props.ownError && ownEditor.value) {
-    ownEditor.value.focus()
-    return
-  }
   moveFocus(root.value?.querySelector<HTMLElement>('[role="radiogroup"] [tabindex="0"]'))
 }
 defineExpose({ focus })
@@ -242,28 +226,11 @@ defineExpose({ focus })
         @update:model-value="emit('verdict', $event)"
       />
       <LineEnd class="request-point-end request-point-tools reach-grow">
-        <VButton
-          v-tooltip="t('requests.ownVariant')"
-          class="request-point-own"
-          variant="text"
-          size="inline"
-          :class="{ 'is-chosen': ownChosen }"
-          :disabled="disabled"
-          :aria-expanded="ownChosen"
-          :aria-label="t('requests.review.ownOption', { field: name })"
-          icon
-          @click="pressOwn"
-        >
-          <VIcon
-            name="edit"
-            :size="16"
-          />
-        </VButton>
         <RequestNoteToggle
           :disabled="disabled"
-          :name="t('requests.fieldNoteName', { field: name })"
+          :name="t('requests.commentName', { field: name })"
           :open="noteOpen"
-          :title="t('requests.fieldNote')"
+          :title="t('requests.comment')"
           :written="noteWritten"
           @press="pressNote"
         />
@@ -281,23 +248,6 @@ defineExpose({ focus })
       class="visually-hidden"
       >{{ t('requests.review.opensBelow', { field: opens }) }}</span
     >
-    <MarkdownEditor
-      v-if="ownChosen"
-      ref="ownEditor"
-      v-model:preview="preview"
-      :label="t('requests.ownVariantName', { field: name })"
-      :rows="2"
-      :maxlength="8000"
-      :model-value="own"
-      :disabled="disabled"
-      :error="ownError"
-      :suggest="suggest"
-      hide-label
-      hide-tools
-      quiet-error
-      @update:model-value="emit('edit', { own: $event })"
-      @submit="emit('submit')"
-    />
     <FieldError
       v-if="error"
       :id="errorId"
@@ -308,12 +258,13 @@ defineExpose({ focus })
       ref="noteEditor"
       v-model:preview="preview"
       :disabled="disabled"
-      :label="t('requests.fieldNoteName', { field: name })"
+      :label="t('requests.commentName', { field: name })"
       :maxlength="2000"
-      :model-value="note"
+      :model-value="comment"
+      :placeholder="t('requests.commentHint')"
       :rows="2"
       :suggest="suggest"
-      @update:model-value="emit('edit', { note: $event })"
+      @update:model-value="emit('edit', { comment: $event })"
       @submit="emit('submit')"
     />
   </div>
@@ -407,11 +358,6 @@ defineExpose({ focus })
   display: flex;
   grid-area: segments;
   min-width: 0;
-}
-
-.request-point-own.is-chosen {
-  color: var(--color-text);
-  background: var(--color-surface-active);
 }
 
 /* Wide enough, the words take the line's start and the verdict its end, as on a page. */

@@ -22,7 +22,6 @@ import { talkedOn } from './threadFixtures.ts'
 const PLACES = [
   ['an entry’s action', '.entry-actions button', '--size-control-inline'],
   ['an editor’s tool', '.discussion-form .markdown-tools button', '--size-control-inline'],
-  ['a review point’s own variant', '.request-point-own', '--size-control-inline'],
   ['a review point’s comment', '.request-point .request-note-toggle', '--size-control-inline'],
   ['a review point’s fold', '.request-point-toggle', '--size-control-height-compact'],
 ] as const

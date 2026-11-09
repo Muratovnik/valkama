@@ -1,4 +1,4 @@
-import { chosenOwn, hasDraft, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
+import { hasDraft, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputAnswers, InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -11,7 +11,7 @@ export const ANSWER_VERSION_LIMIT = 50
 
 /**
  * The words in a draft that are nowhere else once its question has closed some other way:
- * a text field's answer as well as the own variants and the comments.
+ * a text field's answer as well as the comments.
  */
 export function unsentWords(request: Request, draft: RequestDraft): string {
   const answers = request.fields
@@ -20,12 +20,27 @@ export function unsentWords(request: Request, draft: RequestDraft): string {
   return [
     ...answers.filter((value): value is string => typeof value === 'string'),
     draft.note,
-    ...Object.values(draft.own),
-    ...Object.values(draft.fieldNotes),
+    ...Object.values(draft.comments),
   ]
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n\n')
+}
+
+/**
+ * Each field's comment as the answer in force says it: its own option or its note. An answer
+ * of the time when a field took both, an own option beside ticks and a note, says both in one
+ * comment, its own option first, so opening the form costs neither of them.
+ */
+function commentsOf(request: Request): Record<string, string> {
+  const own = request.own ?? {}
+  const notes = request.field_notes ?? {}
+  return Object.fromEntries(
+    [...new Set([...Object.keys(own), ...Object.keys(notes)])].map((id) => [
+      id,
+      [own[id], notes[id]].filter(Boolean).join('\n\n'),
+    ]),
+  )
 }
 
 /**
@@ -34,14 +49,11 @@ export function unsentWords(request: Request, draft: RequestDraft): string {
  * opening the form does not cost the only copy of them.
  */
 export function draftFromAnswer(request: Request, unsent = ''): RequestDraft {
-  const own = request.own ?? {}
   return {
     answers: request.answers ?? {},
     changing: request.revision,
-    fieldNotes: request.field_notes ?? {},
+    comments: commentsOf(request),
     note: [request.note ?? '', unsent].filter(Boolean).join('\n\n'),
-    own,
-    ownChosen: Object.keys(own),
   }
 }
 
@@ -53,11 +65,12 @@ function sameValue(left: Value, right: Value) {
 }
 
 /**
- * Whether a change's form says anything other than the answer in force. A chosen own
- * variant says its words, and what differs only in the spaces around it says the same. A field
- * its parent hides says nothing, whatever its draft still keeps for when it shows again.
+ * Whether a change's form says anything other than the answer in force, as the form opened on
+ * it says it: what differs only in the spaces around it says the same. A field its parent hides
+ * says nothing, whatever its draft still keeps for when it shows again.
  */
 export function differsFromAnswer(request: Request, draft: RequestDraft): boolean {
+  const comments = commentsOf(request)
   return (
     (request.note ?? '').trim() !== draft.note.trim() ||
     request.fields.some((field) => {
@@ -65,9 +78,7 @@ export function differsFromAnswer(request: Request, draft: RequestDraft): boolea
       const shown = isShown(field, draft.answers)
       return (
         !sameValue(request.answers?.[id], shown ? draft.answers[id] : undefined) ||
-        (request.own?.[id] ?? '').trim() !== (shown ? chosenOwn(draft, id) : '') ||
-        (request.field_notes?.[id] ?? '').trim() !==
-          (shown ? (draft.fieldNotes[id] ?? '') : '').trim()
+        (comments[id] ?? '').trim() !== (shown ? (draft.comments[id] ?? '') : '').trim()
       )
     })
   )
