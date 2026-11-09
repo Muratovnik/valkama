@@ -412,6 +412,11 @@ and only fades the end of a strip that scrolls on past it.
   pressing first everywhere they are offered. `ChoiceSelect` takes the drawing through
   its `option` slot and `OptionGroups` through its `text` slot; neither knows a facet.
   `production-choice-marks.spec.ts` compares each row with its button.
+- **A form asks in the order the card reads.** The new-task dialog asks for the title,
+  then the kind and the priority, then the labels and the epic, and the description
+  last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
+  reads an item's facets in, and the description follows the facts as it does on the
+  card. It used to ask for the description between the two pairs.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.

@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
+import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
+
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import { PRIORITIES, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -279,5 +281,36 @@ describe('WorkItemComposer epic and labels', () => {
     const sent = vi.mocked(createWorkItem).mock.calls[0]?.[0]
     expect(sent?.labels).toEqual([])
     expect(sent).not.toHaveProperty('parent')
+  })
+})
+
+/**
+ * The fields a person fills in, top to bottom, each by the name it is read by: its own label,
+ * or the label that names it.
+ */
+const fieldNames = () =>
+  [...document.querySelectorAll<HTMLElement>('input, textarea, button[role="combobox"]')].map(
+    (control) =>
+      control.getAttribute('aria-label') ??
+      document.querySelector(`label[for="${control.id}"]`)?.textContent?.trim(),
+  )
+
+describe('WorkItemComposer field order', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('asks for the facts in the card’s order and for the description last', () => {
+    const wrapper = mountComposer()
+    // The decision: the title, the kind and the priority, the labels and the epic, then the
+    // description; the dialog asked for the description between the two pairs.
+    expect(fieldNames()).toEqual(['Title', 'Kind', 'Priority', 'Labels', 'Epic', 'Description'])
+    // And that order is the registry's, in which every surface reads an item's facets.
+    const facetField = { kind: 'Kind', priority: 'Priority', labels: 'Labels', parent: 'Epic' }
+    const asked = FACET_ORDER.filter((facet) => facet in facetField).map(
+      (facet) => facetField[facet as keyof typeof facetField],
+    )
+    expect(fieldNames().slice(1, -1)).toEqual(asked)
+    wrapper.unmount()
   })
 })

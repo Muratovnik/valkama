@@ -2,9 +2,27 @@
  * What the new-task dialog offers for its epic and its labels, from the space the board
  * already holds: no read of its own, so the lists say what the board says.
  */
+import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
+import type { FacetId } from '@/entities/work-item/utils/facets.ts'
+
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { byUse } from '@/shared/lib/byUse.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+
+/** The facets a new item is given in the dialog; the state is the workflow's to choose. */
+const ASKED: ReadonlySet<FacetId> = new Set(['kind', 'priority', 'labels', 'parent'])
+
+/**
+ * The dialog's fields after the title, two to a row, in the order every surface reads an
+ * item's facets (`FACET_ORDER`): the kind and the priority, then the labels and the epic.
+ * The description follows them, last, as it follows the facts on the card. The dialog
+ * asked for the description between the two rows, so the form read in another order than
+ * the card it makes.
+ */
+export const COMPOSER_ROWS: readonly (readonly FacetId[])[] = (() => {
+  const asked = FACET_ORDER.filter((facet) => ASKED.has(facet))
+  return [asked.slice(0, 2), asked.slice(2)]
+})()
 
 /**
  * The items a new one may stand under: an epic, or an item already holding others, that

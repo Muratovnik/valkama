@@ -12,6 +12,9 @@
  * space the item is created in, and Ctrl+Enter as this dialog's Create. Escape
  * closes an open `#` list first and the dialog only after.
  *
+ * The fields follow the card's order (`COMPOSER_ROWS`): the kind and the priority, the labels
+ * and the epic, and the description last.
+ *
  * The epic and the labels are chosen from what the space already has, searched as they
  * are typed (`SearchCombobox`): a reference typed by hand named an epic only when it was
  * spelled right, and a label typed by hand forked the one the filter menu knew. A new
@@ -20,11 +23,16 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { epicChoices, labelChoices } from '@/features/work-item-compose/composerChoices.ts'
+import {
+  COMPOSER_ROWS,
+  epicChoices,
+  labelChoices,
+} from '@/features/work-item-compose/composerChoices.ts'
 
 import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
 import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
 import { KIND_CHOICES, PRIORITY_CHOICES } from '@/entities/work-item/utils/facets.ts'
+import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -87,6 +95,8 @@ const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
 const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic')))
 const labelOptions = computed(() => labelChoices(props.items))
+/** The row an epic's title stands in, which needs more than a phone's half. */
+const holdsTitles = (row: readonly FacetId[]) => row.includes('parent')
 const addLabel = (label: string) => t('compose.addLabel', { label })
 const removeLabel = (label: string) => t('compose.removeLabel', { label })
 
@@ -131,39 +141,72 @@ async function submit() {
         :label="t('workItem.title')"
         :maxlength="200"
       />
-      <div class="composer-pair">
-        <ChoiceSelect
-          v-model="kind"
-          :label="t('workItem.kindLabel')"
-          :options="kindOptions"
+      <div
+        v-for="(row, place) in COMPOSER_ROWS"
+        :key="place"
+        class="composer-pair"
+        :class="{ 'has-titles': holdsTitles(row) }"
+      >
+        <template
+          v-for="facet in row"
+          :key="facet"
         >
-          <template #value="{ selected }">
-            <FacetChoiceMark
-              v-if="selected"
-              :mark="selected.mark"
-              explained
-            />
-          </template>
-          <template #option="{ option }">
-            <FacetChoiceMark :mark="option.mark" />
-          </template>
-        </ChoiceSelect>
-        <ChoiceSelect
-          v-model="priority"
-          :label="t('workItem.priority')"
-          :options="priorityOptions"
-        >
-          <template #value="{ selected }">
-            <FacetChoiceMark
-              v-if="selected"
-              :mark="selected.mark"
-              explained
-            />
-          </template>
-          <template #option="{ option }">
-            <FacetChoiceMark :mark="option.mark" />
-          </template>
-        </ChoiceSelect>
+          <ChoiceSelect
+            v-if="facet === 'kind'"
+            v-model="kind"
+            :label="t('workItem.kindLabel')"
+            :options="kindOptions"
+          >
+            <template #value="{ selected }">
+              <FacetChoiceMark
+                v-if="selected"
+                :mark="selected.mark"
+                explained
+              />
+            </template>
+            <template #option="{ option }">
+              <FacetChoiceMark :mark="option.mark" />
+            </template>
+          </ChoiceSelect>
+          <ChoiceSelect
+            v-else-if="facet === 'priority'"
+            v-model="priority"
+            :label="t('workItem.priority')"
+            :options="priorityOptions"
+          >
+            <template #value="{ selected }">
+              <FacetChoiceMark
+                v-if="selected"
+                :mark="selected.mark"
+                explained
+              />
+            </template>
+            <template #option="{ option }">
+              <FacetChoiceMark :mark="option.mark" />
+            </template>
+          </ChoiceSelect>
+          <SearchCombobox
+            v-else-if="facet === 'labels'"
+            v-model="labels"
+            :label="t('workItem.labels')"
+            :placeholder="t('compose.labelsHint')"
+            :options="labelOptions"
+            :empty-label="t('compose.labelsEmpty')"
+            :create-label="addLabel"
+            :remove-label="removeLabel"
+            :max="32"
+            :maxlength="64"
+            :disabled="busy"
+          />
+          <SearchCombobox
+            v-else
+            v-model="parent"
+            :label="t('workItem.parent')"
+            :options="epicOptions"
+            :empty-label="t('compose.epicsEmpty')"
+            :disabled="busy"
+          />
+        </template>
       </div>
       <MarkdownEditor
         v-model="description"
@@ -175,27 +218,6 @@ async function submit() {
         :disabled="busy"
         @submit="submit"
       />
-      <div class="composer-pair has-titles">
-        <SearchCombobox
-          v-model="labels"
-          :label="t('workItem.labels')"
-          :placeholder="t('compose.labelsHint')"
-          :options="labelOptions"
-          :empty-label="t('compose.labelsEmpty')"
-          :create-label="addLabel"
-          :remove-label="removeLabel"
-          :max="32"
-          :maxlength="64"
-          :disabled="busy"
-        />
-        <SearchCombobox
-          v-model="parent"
-          :label="t('workItem.parent')"
-          :options="epicOptions"
-          :empty-label="t('compose.epicsEmpty')"
-          :disabled="busy"
-        />
-      </div>
     </div>
 
     <template #footer>

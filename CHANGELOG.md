@@ -20,6 +20,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The new-task dialog asks in the card's order.** Title, kind and priority, labels and
+  epic, and the description last, rather than the description between the two pairs.
+
 - **A menu shows each value the way its button shows the chosen one.** The priority, kind
   and state menus of the card, the new-task dialog and the Work filter draw each option with
   its glyph or dot and its word, and a priority with what it means; the new task's priorities
