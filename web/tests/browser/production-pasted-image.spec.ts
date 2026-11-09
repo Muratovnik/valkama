@@ -108,21 +108,46 @@ test('a pasted picture is sent, named in the comment and drawn in it at a bounde
   await expect
     .poll(() => thumb.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth))
     .toBe(1600)
-  const geometry = await thumb.evaluate((image: HTMLImageElement) => {
-    const own = image.getBoundingClientRect()
-    const text = image.closest('.rich-text') ?? image.parentElement?.parentElement
-    const room = (text ?? image).getBoundingClientRect()
-    const line = Number.parseFloat(getComputedStyle(image).lineHeight)
-    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
-    return { width: own.width, height: own.height, room: room.width, line, rem }
-  })
-  // No wider than the text or 32rem, no taller than six lines, and not stretched.
-  expect(geometry.width).toBeGreaterThan(100)
-  expect(geometry.width).toBeLessThanOrEqual(Math.min(geometry.room, 32 * geometry.rem) + 0.5)
-  expect(geometry.height).toBeLessThanOrEqual(6 * geometry.line + 0.5)
-  // Whole inside the comment's held lines: nothing of the comment is held back.
-  await expect(drawer.getByRole('button', { name: 'Show all', exact: true })).toHaveCount(0)
-  expect(Math.abs(geometry.width / geometry.height - 1600 / 1200)).toBeLessThan(0.02)
+  // At the default window and at a phone's, where the card stands across all of it.
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 })
+    const geometry = await thumb.evaluate((image: HTMLImageElement) => {
+      const own = image.getBoundingClientRect()
+      const press = image.parentElement?.getBoundingClientRect() ?? own
+      const paragraph = image.closest('p') ?? image.parentElement?.parentElement ?? image
+      const room = paragraph.getBoundingClientRect()
+      const words = document.createRange()
+      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+      while (walker.nextNode() && !walker.currentNode.textContent?.trim());
+      words.selectNodeContents(walker.currentNode)
+      const line = Number.parseFloat(getComputedStyle(image).lineHeight)
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+      return {
+        width: own.width,
+        height: own.height,
+        pressStart: press.left,
+        pressEnd: press.right,
+        wordsStart: words.getBoundingClientRect().left,
+        roomEnd: room.right,
+        room: room.width,
+        line,
+        rem,
+      }
+    })
+    // No wider than the text or 32rem, no taller than six lines, and not stretched; the
+    // press starts where the words above it start and ends inside the text's column.
+    expect(geometry.width, `at ${width}px`).toBeGreaterThan(100)
+    expect(geometry.width).toBeLessThanOrEqual(Math.min(geometry.room, 32 * geometry.rem) + 0.5)
+    expect(geometry.height).toBeLessThanOrEqual(6 * geometry.line + 0.5)
+    expect(Math.abs(geometry.width / geometry.height - 1600 / 1200)).toBeLessThan(0.02)
+    expect(
+      Math.abs(geometry.pressStart - geometry.wordsStart),
+      `at ${width}px`,
+    ).toBeLessThanOrEqual(1)
+    expect(geometry.pressEnd).toBeLessThanOrEqual(geometry.roomEnd + 0.5)
+    // Whole inside the comment's held lines: nothing of the comment is held back.
+    await expect(drawer.getByRole('button', { name: 'Show all', exact: true })).toHaveCount(0)
+  }
 
   // Pressed, it opens at its own size, and Escape closes the picture, not the card.
   await open.click()
