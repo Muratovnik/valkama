@@ -23,9 +23,10 @@ const LINE_LENGTH = 120
 /** Six rows with a line under the label are what a laptop's drawer holds beside a prompt. */
 const DESCRIBED_ON_SCREEN = 6
 
-/** A link, or a path that is a control whatever the server answers. */
+/** A link or a picture, or a path that is a control whatever the server answers. */
 const isControl = (node: RichInline): boolean =>
   node.kind === 'link' ||
+  node.kind === 'image' ||
   (node.kind === 'reference' &&
     node.reference.kind === 'document' &&
     node.reference.strength !== 'weak')

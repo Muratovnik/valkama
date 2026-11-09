@@ -16,11 +16,20 @@ Where the copies go and what they are named is passed in. The store's path
 default and the product's file prefix belong to the module that owns the store,
 and a second answer to "where is the store" here is exactly the failure the one
 configuration resolution exists to end.
+
+The pictures pasted into items are files beside the store rather than rows in it,
+so a copy of the database alone would come back with every picture missing. A
+snapshot therefore takes the pictures' directory along, as a directory named like
+the snapshot with `.images` for `.sqlite3`. Each file there is named by the
+SHA-256 of its bytes, which is what makes a copy checkable without knowing which
+rows hold it: a file is intact when its bytes hash to its name.
 """
 
 from __future__ import annotations
 
 import os
+import re
+import shutil
 import sqlite3
 from collections.abc import Callable
 from hashlib import sha256
@@ -28,10 +37,67 @@ from typing import NamedTuple
 
 
 class BackupLocation(NamedTuple):
-    """The backups directory, and the prefix every generated name carries."""
+    """The backups directory, the prefix every generated name carries, and the pictures.
+
+    `images` is the directory of the store's pictures, copied beside each
+    snapshot; empty for a caller whose store keeps none.
+    """
 
     directory: str
     prefix: str
+    images: str = ""
+
+
+_PICTURE = re.compile(r"[0-9a-f]{64}")
+_SNAPSHOT_SUFFIX = ".sqlite3"
+IMAGES_SUFFIX = ".images"
+
+
+def images_beside(snapshot_path: str) -> str:
+    """The directory that holds a snapshot's pictures."""
+
+    stem = snapshot_path.removesuffix(_SNAPSHOT_SUFFIX)
+    return stem + IMAGES_SUFFIX
+
+
+def _pictures(directory: str) -> list[str]:
+    """The picture files in a directory, by name; none when it does not exist."""
+
+    try:
+        names = os.listdir(directory)
+    except FileNotFoundError:
+        return []
+    return sorted(name for name in names if _PICTURE.fullmatch(name))
+
+
+def _copy_pictures(source: str, destination: str) -> None:
+    pictures = _pictures(source)
+    if not pictures:
+        return
+    os.makedirs(destination, exist_ok=True)
+    for name in pictures:
+        shutil.copyfile(os.path.join(source, name), os.path.join(destination, name))
+
+
+def verify_pictures(snapshot_path: str, source: str) -> None:
+    """Refuse a snapshot whose pictures are not all there, each holding what its name says.
+
+    Every picture in `source` must have its copy, because the rows the snapshot
+    holds name them; a copy whose bytes do not hash to its name is no copy.
+    """
+
+    copies = images_beside(snapshot_path)
+    held = set(_pictures(copies))
+    missing = [name for name in _pictures(source) if name not in held]
+    if missing:
+        raise RuntimeError(f"snapshot lacks {len(missing)} picture(s) of the source store")
+    for name in held:
+        digest = sha256()
+        with open(os.path.join(copies, name), "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != name:
+            raise RuntimeError("a picture in the snapshot does not hold what its name says")
 
 
 def snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> str:
@@ -42,7 +108,6 @@ def snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> s
     a torn backup.
     """
     import datetime
-    import re
     import uuid
 
     os.makedirs(backups.directory, exist_ok=True)
@@ -52,6 +117,10 @@ def snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> s
         backups.directory, f"{backups.prefix}-{label}-{stamp}-{unique}.sqlite3"
     )
     conn.execute("VACUUM INTO ?", (destination,))
+    # After the rows: a picture is on disk before the row that names it commits,
+    # so every picture the copied rows name is there to be copied now.
+    if backups.images:
+        _copy_pictures(backups.images, images_beside(destination))
     # Retention keeps the last 5 of THIS label, ordered by mtime. All three
     # properties are load-bearing, and a second label broke each of them:
     #
@@ -83,6 +152,7 @@ def snapshot(conn: sqlite3.Connection, backups: BackupLocation, label: str) -> s
     for stale in sorted(peers, key=os.path.getmtime)[:-5]:
         if stale != destination:
             os.remove(stale)
+            shutil.rmtree(images_beside(stale), ignore_errors=True)
     return destination
 
 
@@ -149,7 +219,13 @@ def set_aside(path: str) -> None:
     except OSError:
         # Left in place it is still older than the fresh copy taken next, so
         # the next open reuses that one instead.
-        pass
+        return
+    pictures = images_beside(path)
+    if os.path.isdir(pictures):
+        try:
+            os.rename(pictures, pictures + UNVERIFIED_SUFFIX)
+        except OSError:
+            pass
 
 
 def verified_snapshot(
@@ -185,10 +261,13 @@ def verified_snapshot(
     if reusable is not None:
         try:
             if snapshot_identity(reusable) == source_identity:
+                verify_pictures(reusable, locate().images)
                 return reusable, source_identity
-        except (sqlite3.Error, RuntimeError):
+        except (OSError, sqlite3.Error, RuntimeError):
             set_aside(reusable)
-    destination = snapshot(conn, locate(), label)
+    backups = locate()
+    destination = snapshot(conn, backups, label)
     if snapshot_identity(destination) != source_identity:
         raise RuntimeError("snapshot does not match the exact logical source store")
+    verify_pictures(destination, backups.images)
     return destination, source_identity

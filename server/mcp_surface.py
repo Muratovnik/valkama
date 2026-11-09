@@ -7,6 +7,7 @@ operation, or the reverse, is only visible when the two are read side by side.
 
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 import sys
@@ -20,6 +21,7 @@ from .ops import configuration, tray
 from .planning import acknowledgements
 from .planning import api as planning_api
 from .planning import calls as planning_calls
+from .planning import images as planning_images
 from .planning import model as planning_model
 from .planning import tools as planning_tools
 from .platform import tools as platform_tools
@@ -372,6 +374,29 @@ def _compact(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
+def tool_result(data: object) -> dict[str, object]:
+    """A tool's answer as its result: one line of JSON, or a picture and a line about it.
+
+    A picture is an image block a client shows its model, followed by the facts
+    about it as the usual line, so a client that shows no images still reads them.
+    """
+
+    if isinstance(data, planning_images.Picture):
+        facts = {"sha256": data.sha256, "media_type": data.media_type, "size": len(data.data)}
+        return {
+            "content": [
+                {
+                    "type": "image",
+                    "data": base64.b64encode(data.data).decode("ascii"),
+                    "mimeType": data.media_type,
+                },
+                {"type": "text", "text": _compact(facts)},
+            ],
+            "isError": False,
+        }
+    return {"content": [{"type": "text", "text": _compact(data)}], "isError": False}
+
+
 def _write_message(payload: dict) -> None:
     # bytes, not text: Windows text stdout would turn \n into \r\n
     sys.stdout.buffer.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
@@ -651,8 +676,7 @@ def _mcp_loop(
                     meta=params.get("_meta"),
                     client=client,
                 )
-                content = _compact(data)
-                result = {"content": [{"type": "text", "text": content}], "isError": False}
+                result = tool_result(data)
             except (planning_model.PlanningError, planning_api.PlanningHttpError) as error:
                 # A guard refusal, a stale write and a refused argument are
                 # answers, not crashes, so they carry the same structured body

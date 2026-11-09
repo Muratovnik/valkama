@@ -235,7 +235,9 @@ resolved mark, oldest first, 20 at a time: while `truncated` is true, read on wi
 `comments_after` set to the last root's id. `full: true` returns all of its history. Every
 comment carries `by_person`, true when it came through Valkama's interface. A
 reply to a question belongs to the question's thread, which
-`get_work_item_request` reads.
+`get_work_item_request` reads. A screenshot the owner pasted is named in the text
+by its address, `/api/images/<sha256>`, and listed in the item's `images`;
+`read_work_item_image` with the item's `id` and that `sha256` shows it to you.
 `get_work_item_chain` shows what an item's work grew into and whether it
 converges. Read the history before assuming who did what.
 

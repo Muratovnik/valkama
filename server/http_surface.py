@@ -49,6 +49,7 @@ from .planning import api as planning_api
 from .planning import calls as planning_calls
 from .planning import display_links, live_frame
 from .planning import exact_api as planning_exact_api
+from .planning import images as planning_images
 from .planning import interactions as planning_interactions
 from .planning import model as planning_model
 from .planning import service as planning_service
@@ -380,6 +381,18 @@ _DOCUMENT_SEARCH = "/api/documents/search"
 #: The first routes that give out the text of a file on the disk: nothing keeps a
 #: copy of the answer, and nothing guesses another type for it.
 _DOCUMENT_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+#: Where the editor sends one pasted picture, naming its item as `?item=`.
+_IMAGE_UPLOAD = "/api/images"
+#: One picture, as the page's own `<img>` asks for it: the type the bytes were
+#: checked to be and no other guess, nothing kept once the item is gone, nothing
+#: run if a browser were ever talked into opening it as a page, and nothing another
+#: site may embed.
+_IMAGE_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
+    "Cross-Origin-Resource-Policy": "same-origin",
+}
 _DOCUMENT_REFUSALS = {
     "invalid_request": 400,
     "invalid_path": 400,
@@ -1114,6 +1127,9 @@ class Handler(BaseHTTPRequestHandler):
                 headers={"Cache-Control": "no-store"},
             )
             return
+        if url.path.startswith(planning_images.PATH_PREFIX):
+            self._send_image(url.path.removeprefix(planning_images.PATH_PREFIX))
+            return
         parameters = parse_qs(url.query, keep_blank_values=True)
         if url.path in (_DOCUMENT_RESOLVE, _DOCUMENT_READ, _DOCUMENT_SEARCH):
             self._answer_document(url.path, parameters)
@@ -1249,6 +1265,66 @@ class Handler(BaseHTTPRequestHandler):
         else:
             status, answer = _document_answer(path, parameters)
         self._send_json(status, answer, headers=_DOCUMENT_HEADERS)
+
+    def _send_image(self, sha: str) -> None:
+        """One picture an item holds, to the page's own fetch or `<img>` and nothing else.
+
+        Checked like a document read rather than like the reads beside it: an
+        `<img>` on another site carries that site in `Sec-Fetch-Site`, so it can
+        neither show a picture nor learn that one exists.
+        """
+
+        try:
+            http_security.require_same_origin_fetch(self.headers, self.server.security_context)
+        except http_security.RequestRefusedError as error:
+            self._send_json(error.status, {"error": {"code": error.code}}, headers=_IMAGE_HEADERS)
+            return
+        conn = self._open_store()
+        if conn is None:
+            return
+        try:
+            picture = planning_images.read(conn, sha)
+        except planning_images.ImageRefusedError as error:
+            status, body = planning_api.error_response(error)
+            self._send_json(status, body, headers=_IMAGE_HEADERS)
+            return
+        finally:
+            conn.close()
+        self._send(200, picture.data, picture.media_type, headers=_IMAGE_HEADERS)
+
+    def _receive_image(self, query: str) -> None:
+        """Keep one pasted picture for the item `?item=` names, behind the browser's credential.
+
+        Not a table row: the body is the picture's bytes, not a JSON object, and the
+        limit is the picture's. The answer names the address to write into the text.
+        """
+
+        try:
+            http_security.require_write_authorization(
+                self.headers, self.server.security_context, adapter_endpoint=False
+            )
+            data = http_security.read_bytes(
+                self.headers, self.rfile, max_bytes=planning_images.MAX_BYTES
+            )
+        except http_security.RequestRefusedError as error:
+            self._refuse(error)
+            return
+        item = _first_value(parse_qs(query, keep_blank_values=True), "item") or ""
+        conn = self._open_store()
+        if conn is None:
+            return
+        try:
+            with planning_calls.bind(planning_calls.browser(), _IMAGE_UPLOAD):
+                answer = planning_images.store(conn, item, data)
+        except planning_model.PlanningError as error:
+            self._answer(planning_api.error_response(error))
+            return
+        except Exception:  # a failure past the checks names nothing it read
+            self._send_generic_failure(500)
+            return
+        finally:
+            conn.close()
+        self._send_json(200, answer)
 
     def _send_open_places(self) -> None:
         """Say which places this machine can open, for the settings to offer."""
@@ -1420,11 +1496,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b"", "application/json")
 
     def do_POST(self) -> None:
-        path = urlparse(self.path).path
+        url = urlparse(self.path)
+        path = url.path
         if not self._require_validated_host():
             return
         if path == display_links.HOOK_PATH:
             self._answer_message_display()
+            return
+        if path == _IMAGE_UPLOAD:
+            self._receive_image(url.query)
             return
         try:
             http_security.require_write_authorization(

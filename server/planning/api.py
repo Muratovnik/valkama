@@ -24,6 +24,7 @@ from . import (
     calls,
     chain,
     held,
+    images,
     live_frame,
     mention_records,
     migration,
@@ -132,6 +133,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
                 "actual": error.actual,
             }
         }
+    if isinstance(error, images.ImageRefusedError):
+        return error.status, {"error": {"code": error.code, "message": str(error)}}
     if isinstance(error, model.WorkItemNotFoundError):
         return 404, {"error": {"code": "not_found", "message": str(error)}}
     if isinstance(error, model.WorkflowGuardError):

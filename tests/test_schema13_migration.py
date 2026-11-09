@@ -74,7 +74,10 @@ class SchemaThirteenTests(unittest.TestCase):
         return {label: len(self.snapshots(label)) for label in LABELS if self.snapshots(label)}
 
     def assert_reached_13(self, conn: sqlite3.Connection) -> None:
-        self.assertEqual(13, conn.execute("PRAGMA user_version").fetchone()[0])
+        # The chain runs on to this build's own schema in the same open.
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(
             COLUMNS, [row[1] for row in conn.execute(f"PRAGMA table_info({ADDED_TABLE})")]
         )
@@ -208,7 +211,10 @@ class SchemaThirteenTests(unittest.TestCase):
         with mock.patch.object(store, "STORE_SCHEMA_VERSION", 12):
             with self.assertRaises(store.StoreTooNewError) as refusal:
                 store.connect()
-        self.assertEqual((13, 12), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 12),
+            (refusal.exception.stored, refusal.exception.supported),
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
 

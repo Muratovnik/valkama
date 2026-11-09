@@ -2049,7 +2049,11 @@ class CompactWorkItemReadTests(WireCallTestCase):
         # A whole read carries every comment that told the item, so it counts none.
         self.assertEqual(
             {k: v for k, v in self.complete.items() if k != "mentions_total"},
-            {k: v for k, v in answer.items() if k not in ("sessions", "url", "questions")},
+            {
+                k: v
+                for k, v in answer.items()
+                if k not in ("sessions", "url", "questions", "images")
+            },
         )
         self.assertNotIn("history_truncated", answer)
         self.assertNotIn("mentions_total", answer)

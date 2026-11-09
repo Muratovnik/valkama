@@ -6,7 +6,10 @@
  * lexer; its HTML renderer is never used. Its tokens are copied into the small
  * tree below, and the copy is where the trust boundary sits: raw HTML becomes
  * the text it was written as, an image becomes a link to it, and a link keeps
- * its address only when that address is `http:`, `https:` or `mailto:`. What
+ * its address only when that address is `http:`, `https:` or `mailto:`. The one
+ * image drawn as a picture is one this server keeps for an item — a card's text
+ * naming `/api/images/<sha256>`, which is what a paste writes — and the tree holds
+ * its hash, never the address as written. What
  * reaches a component is therefore text and structure, never markup, and the
  * renderer has no `v-html` to get wrong.
  *
@@ -31,6 +34,7 @@ import GithubSlugger from 'github-slugger'
 import { Lexer } from 'marked'
 import type { Token, Tokens } from 'marked'
 
+import { servedImage } from '@/shared/lib/pastedImages.ts'
 import {
   crossesEscape,
   documentLink,
@@ -48,6 +52,8 @@ export type RichInline =
   | { children: RichInline[]; kind: 'em' }
   | { children: RichInline[]; kind: 'strong' }
   | { children: RichInline[]; href: string; kind: 'link' }
+  /** A picture this server keeps, by its hash; its children are the words written for it. */
+  | { children: RichInline[]; kind: 'image'; sha256: string }
   /**
    * A candidate reference; `code` when it was written as a code span of its own.
    * `caption` is a link's own words, drawn instead of the path.
@@ -290,6 +296,11 @@ function link(
     token.type === 'image'
       ? [{ kind: 'text', text: token.text || token.href } satisfies RichInline]
       : inlines(token.tokens, reading, true)
+  // A pasted picture, in a card's own text and outside a link: a document's
+  // Markdown names files of its project, and a picture inside a link would be
+  // a press inside a press.
+  const sha256 = token.type === 'image' && !reading && !inLink && servedImage(token.href)
+  if (sha256) return [{ kind: 'image', sha256, children: token.text ? children : [] }]
   const href = safeHref(token.href)
   if (href !== null && !inLink) return [{ kind: 'link', href, children }]
   const reference = inLink ? null : documentLink(writtenAddress(token), reading?.from)
@@ -541,8 +552,9 @@ export function inlineWords(nodes: readonly RichInline[]): string {
  * own, where a link would be a press inside a press.
  */
 export function unlinked(nodes: readonly RichInline[]): RichInline[] {
-  return nodes.flatMap((node) => {
-    if (node.kind === 'link') return unlinked(node.children)
+  return nodes.flatMap((node): RichInline[] => {
+    // A picture opens when pressed, so inside a press it is the words written for it.
+    if (node.kind === 'link' || node.kind === 'image') return unlinked(node.children)
     return 'children' in node ? [{ ...node, children: unlinked(node.children) }] : [node]
   })
 }
@@ -552,7 +564,5 @@ function nodeWords(node: RichInline): string {
   if (node.kind === 'code' || node.kind === 'text') return node.text
   if (node.kind === 'reference')
     return node.caption ? inlineWords(node.caption) : node.reference.value
-  if (node.kind === 'link' || node.kind === 'em' || node.kind === 'strong' || node.kind === 'del')
-    return inlineWords(node.children)
-  return ''
+  return inlineWords(node.children)
 }

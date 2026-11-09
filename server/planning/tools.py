@@ -21,6 +21,7 @@ from . import (
     acknowledgements,
     api,
     calls,
+    images,
     mention_records,
     model,
     person_events,
@@ -345,7 +346,9 @@ TOOLS = [
         " with mentions_total."
         " questions gives its questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
-        " and truncated when there are more.",
+        " and truncated when there are more. images lists the pictures pasted into its"
+        " text, each with sha256, media_type, size, created_at and the path its Markdown"
+        " names; read_work_item_image shows one.",
         READ_ONLY,
         {
             "id": _REFERENCE,
@@ -375,6 +378,23 @@ TOOLS = [
             },
         },
         ["id"],
+    ),
+    _tool(
+        "read_work_item_image",
+        "Read a picture on a work item",
+        "One picture pasted into the item's description or discussion, as an image the"
+        " client shows you, with its sha256, media_type and size. Name it by the sha256"
+        " from get_work_item's images, or the last part of its /api/images/ path.",
+        READ_ONLY,
+        {
+            "id": _REFERENCE,
+            "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "The picture's SHA-256, as get_work_item lists it.",
+            },
+        },
+        ["id", "sha256"],
     ),
     _tool(
         "list_work_items",
@@ -1355,7 +1375,19 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     item = {**item, "mentions": named, "mentions_total": total}
     if full:
         del item["mentions_total"]
-    return _with_url({**item, "questions": requests.item_questions(conn, item["work_item_id"])})
+    return _with_url(
+        {
+            **item,
+            "questions": requests.item_questions(conn, item["work_item_id"]),
+            "images": images.of_item(conn, item["work_item_id"]),
+        }
+    )
+
+
+def _image(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """One picture the item holds, for the surface to hand over as an image."""
+
+    return images.read(conn, arguments.get("sha256"), item=arguments.get("id") or "")
 
 
 def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -1516,6 +1548,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "create_planning_space": _post("/api/planning/spaces"),
     "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
     "get_work_item": _work_item,
+    "read_work_item_image": _image,
     "list_work_items": _listing(
         _get(
             "/api/planning/work-items",

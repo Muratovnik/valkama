@@ -14,6 +14,7 @@ import { liveWorkMessages } from '@/shared/i18n/liveWorkMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { mentionMessages } from '@/shared/i18n/mentionMessages.ts'
 import { openMessages } from '@/shared/i18n/openMessages.ts'
+import { pastedImageMessages } from '@/shared/i18n/pastedImageMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
@@ -47,6 +48,7 @@ export const ru = {
   textLinks: richTextMessages.ru.textLinks,
   textFrames: richTextMessages.ru.textFrames,
   documentLinks: richTextMessages.ru.documentLinks,
+  pastedImages: pastedImageMessages.ru.pastedImages,
   ...connectionMessages.ru,
   liveWork: liveWorkMessages.ru.liveWork,
   app: {

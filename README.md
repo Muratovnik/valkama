@@ -584,7 +584,21 @@ question's answer and keeps the answers it replaced, records where a session
 was last opened, and adds the owner's Windows notification settings
 (`owner_alert_settings`, empty until they are saved); its snapshot is labelled
 `preschema10`. A store older than 9 takes both steps in one open, under the
-`preschema9` (or `preproductmodel`) snapshot.
+`preschema9` (or `preproductmodel`) snapshot. Schema 14 records the pictures
+pasted into an item's text (`work_item_images`); the files themselves stand in
+an `images` folder beside the database, one per content hash. Its snapshot is
+labelled `preschema14`.
+
+Every snapshot taken from schema 14 on carries the pictures as well: a folder
+with the snapshot's name and `.images` after it stands beside the snapshot file,
+and a snapshot counts as verified only when that folder holds every picture the
+store held, each file's SHA-256 equal to its name. To restore one, stop every
+process that holds the store, delete the `-wal` and `-shm` files beside it, copy
+the snapshot file in place of the database and copy the files of its `.images`
+folder into the `images` folder beside it. Going back to a build at schema 13
+is the same with the `preschema14` snapshot, before pinning the earlier release
+as described below for schema 9: everything written since is lost, and the
+pictures, which that build does not know, may stay in the folder or be deleted.
 
 The order of work took no migration of its own. A placement is written to the
 item's `position`, a column every schema-9 store already has, so no snapshot was
@@ -1095,6 +1109,15 @@ not interchangeable, never belong in URLs, cookies, browser storage, argv, or
 environment variables, and every write must be an explicitly framed UTF-8 JSON
 object. Vite development is the only extra browser origin and must be enabled by
 the exact `--development-origin http://127.0.0.1:5173` flag shown above.
+
+A picture is sent with `POST /api/images?item=<reference>` as the bytes of the
+file, under the same browser credential as any write, and read back with
+`GET /api/images/<sha256>`, which, like the bootstrap, answers only a request with
+`Sec-Fetch-Site: same-origin`. The server decides by the first bytes whether it is
+a PNG, JPEG, WebP or GIF, refuses anything else (415) and anything over 10 MB
+(413), and answers a read with that type, `X-Content-Type-Options: nosniff` and
+`Content-Security-Policy: default-src 'none'; sandbox`. Neither the bytes nor
+their contents are logged or sent anywhere.
 
 Every page the listener answers, the app's own and the document page alike, carries
 `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`: no

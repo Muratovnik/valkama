@@ -325,8 +325,8 @@ def _require_json_content_type(headers: Headers) -> None:
             )
 
 
-def read_json_object(headers: Headers, stream: ByteStream, *, max_bytes: int) -> dict:
-    """Parse one bounded JSON object from an unambiguous HTTP/1 body frame."""
+def _framed_length(headers: Headers, limit: int) -> int:
+    """The length of one unambiguous HTTP/1 body frame, refused past `limit`."""
 
     if _header_values(headers, "Transfer-Encoding"):
         raise RequestRefusedError(
@@ -346,13 +346,34 @@ def read_json_object(headers: Headers, stream: ByteStream, *, max_bytes: int) ->
     if len(lengths[0]) > 20:
         raise RequestRefusedError(413, "request_too_large", "request body is too large", close=True)
     length = int(lengths[0], 10)
-    limit = min(GLOBAL_JSON_LIMIT, max_bytes)
     if length > limit:
         raise RequestRefusedError(413, "request_too_large", "request body is too large", close=True)
-    _require_json_content_type(headers)
+    return length
+
+
+def _read_exactly(stream: ByteStream, length: int) -> bytes:
     body = stream.read(length)
     if len(body) != length:
         raise RequestRefusedError(400, "truncated_body", "request body is truncated", close=True)
+    return body
+
+
+def read_bytes(headers: Headers, stream: ByteStream, *, max_bytes: int) -> bytes:
+    """One bounded body as it was sent, framed as strictly as a JSON one.
+
+    What the bytes are is the caller's to decide from the bytes: the declared
+    type says nothing a sender could not have chosen.
+    """
+
+    return _read_exactly(stream, _framed_length(headers, max_bytes))
+
+
+def read_json_object(headers: Headers, stream: ByteStream, *, max_bytes: int) -> dict:
+    """Parse one bounded JSON object from an unambiguous HTTP/1 body frame."""
+
+    length = _framed_length(headers, min(GLOBAL_JSON_LIMIT, max_bytes))
+    _require_json_content_type(headers)
+    body = _read_exactly(stream, length)
     try:
         payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
