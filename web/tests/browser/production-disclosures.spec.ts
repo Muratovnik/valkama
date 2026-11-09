@@ -6,7 +6,7 @@ import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 import { openCard } from './editorPage.ts'
-import { asked, openQuestion, routeField } from './questionBackend.ts'
+import { asked, openQuestion, routeField, wordsField } from './questionBackend.ts'
 import { test } from './test.ts'
 import { talkedOn } from './threadFixtures.ts'
 
@@ -25,7 +25,8 @@ const startOf = (target: Locator) => target.evaluate((node) => node.getBoundingC
 for (const width of [1500, 390])
   test(`a block's comment press is bare in its head at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    const { card, drawer } = await openQuestion(page, [asked()])
+    // A block of several questions: one question with options offers only the field's comment.
+    const { card, drawer } = await openQuestion(page, [asked({ fields: [routeField, wordsField] })])
     await expect(drawer).toHaveCSS('transform', 'none')
     const name = /^Comment on the block of questions: /u
     const toggle = await look(card.getByRole('button', { name }))
