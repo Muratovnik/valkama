@@ -179,6 +179,9 @@ class _Scenario:
             "documents-resolve": self.http(f"/api/documents/resolve?{asked}"),
             "documents-resolve-unbound": self.http("/api/documents/resolve?path=docs%2Fplan.md"),
             "documents-read": self.http(f"/api/documents/read?{document}"),
+            "documents-search": self.http(
+                f"/api/documents/search?{urlencode({'space': space, 'q': 'plan'})}"
+            ),
             "documents-refused": self.refusal(
                 f"/api/documents/read?{urlencode({'project': 'no-such-project', 'path': 'a.md'})}"
             ),

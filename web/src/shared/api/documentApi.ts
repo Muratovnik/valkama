@@ -58,7 +58,21 @@ const documentSchema = strictObject({
   revision: z.string().regex(/^[0-9a-f]{16}$/u),
 })
 
+/** At most this many files; the server keeps to it. */
+const SEARCH_LIMIT = 20
+
+const foundDocumentSchema = strictObject({
+  path: relative,
+  /** 0 when the path holds the query, otherwise the line that does. */
+  line: z.number().int().nonnegative(),
+  text: z.string().max(240),
+})
+const searchSchema = strictObject({
+  documents: z.array(foundDocumentSchema).max(SEARCH_LIMIT),
+})
+
 export type ResolvedPath = z.infer<typeof resolvedPathSchema>
+export type FoundDocument = z.infer<typeof foundDocumentSchema>
 export type ProjectDocument = z.infer<typeof documentSchema>
 
 const refusalSchema = strictObject({
@@ -115,8 +129,8 @@ function invalid(path: string, detail: string): never {
   throw new DocumentContractError(`${path}: ${detail}`)
 }
 
-async function read(input: string): Promise<unknown> {
-  const { response, payload } = await readJsonResponse(input)
+async function read(input: string, signal?: AbortSignal): Promise<unknown> {
+  const { response, payload } = await readJsonResponse(input, signal ? { signal } : undefined)
   if (response.ok) return payload
   const refusal = refusalSchema.safeParse(payload)
   throw new DocumentRefusal(response.status, refusal.success ? refusal.data.error : null)
@@ -149,7 +163,12 @@ export function validateDocument(value: unknown): ProjectDocument {
   return parseContract(documentSchema, value, 'documents.read', invalid)
 }
 
-/** A refusal from either route, by the closed list the server promises. */
+/** A `search` answer, by the rules the web holds the server to. */
+export function validateFound(value: unknown) {
+  return parseContract(searchSchema, value, 'documents.search', invalid)
+}
+
+/** A refusal from any of the routes, by the closed list the server promises. */
 export function validateRefusal(value: unknown): RefusalBody {
   return parseContract(refusalSchema, value, 'documents.refusal', invalid).error
 }
@@ -165,6 +184,20 @@ export async function resolveDocuments(
   if (said.size !== asked.size || [...asked].some((path) => !said.has(path)))
     invalid('documents.resolve.paths', 'does not answer the paths asked')
   return answer.paths
+}
+
+/**
+ * The Markdown files of the project a planning space is bound to that a query names,
+ * by their path first and then by a line; each path is what `resolve` takes from that space.
+ */
+export async function searchSpaceDocuments(
+  space: string,
+  query: string,
+  signal: AbortSignal,
+): Promise<FoundDocument[]> {
+  const parameters = new URLSearchParams({ space, q: query })
+  const answer = await read(`/api/documents/search?${parameters.toString()}`, signal)
+  return validateFound(answer).documents
 }
 
 /** One Markdown file's words, as `resolve` named it. */

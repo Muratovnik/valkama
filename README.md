@@ -728,7 +728,7 @@ and the path that comes out is compared with the root as the disk spells both: i
 a folder Windows keeps case-sensitive, `proj` beside `Proj` is a sibling and
 outside. Anything else the page only copies, and a network path never reaches the server.
 
-Both routes are `GET`, read files and write nothing. Unlike the other reads they
+The three routes below are `GET`, read files and write nothing. Unlike the other reads they
 require the request to come from the page itself: an `Origin`, when there is one,
 must be allowed (`origin_refused`) and `Sec-Fetch-Site` must be `same-origin`
 (`fetch_metadata_refused`), both 403. Every answer carries
@@ -802,9 +802,27 @@ read: a folder on the way swapped for a junction out in between is `outside_root
 The text is strict UTF-8 with a leading byte order mark removed and its line
 endings untouched.
 
+`GET /api/documents/search?space=<id>&q=<text>` offers the Markdown files of the
+project a planning space is bound to, for the `@` list of a text being written. It
+is the document search of `GET /api/search` over that project's root alone, which
+also takes a file whose path from the root holds the text, case aside, at `line` 0
+and ahead of the files found by a line. Each `path` is what `resolve` takes from the
+same space; the root is never told. At most 20 files, one hit each; nothing typed,
+or a space the registry does not bind to one existing root, offers none. A file
+reached through a link or a junction out of the root is left out. No `space`, one
+that is not a planning space's identity, or a text over 200 characters is
+`invalid_request`.
+
+```json
+{"documents": [
+  {"path": "docs/plan.md", "line": 0, "text": ""},
+  {"path": "docs/notes.md", "line": 3, "text": "See the plan here."}
+]}
+```
+
 | Code | HTTP | When |
 | --- | --- | --- |
-| `invalid_request` | 400 | Either route: no `path`, more than 64 paths, no `project` for `read`, both `space` and `project` for `resolve`, or a `space` that is not a planning space's identity |
+| `invalid_request` | 400 | Any route: no `path`, more than 64 paths, no `project` for `read`, both `space` and `project` for `resolve`, no `space` or a text over 200 characters for `search`, or a `space` that is not a planning space's identity |
 | `invalid_path` | 400 | The path's form, as in `resolve` |
 | `project_unknown` | 404 | `project` is not in the registry, for either route |
 | `outside_root` | 403 | Outside every registered root |

@@ -11,7 +11,12 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { validateDocument, validateRefusal, validateResolved } from '@/shared/api/documentApi.ts'
+import {
+  validateDocument,
+  validateFound,
+  validateRefusal,
+  validateResolved,
+} from '@/shared/api/documentApi.ts'
 import {
   validateInputRequestDetail,
   validateInputRequestList,
@@ -55,6 +60,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'documents-refused.json': validateRefusal,
   'documents-resolve-unbound.json': validateResolved,
   'documents-resolve.json': validateResolved,
+  'documents-search.json': validateFound,
   'live-frame.json': validateLiveFrame,
   'open-places.json': validateOpenPlaces,
   'open-plan-copy.json': validateOpenPlan,
@@ -126,6 +132,9 @@ describe('the server fixtures', () => {
       'space_unbound',
     )
     expect(validateRefusal(read('documents-refused.json')).code).toBe('project_unknown')
+    expect(validateFound(read('documents-search.json')).documents).toEqual([
+      { path: 'docs/plan.md', line: 0, text: '' },
+    ])
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

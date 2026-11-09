@@ -443,12 +443,18 @@ def doc_roots() -> list[str]:
     return [part for part in (item.strip() for item in raw.split(os.pathsep)) if part]
 
 
-def search_documents(query: str, roots: list[str] | None = None) -> list[dict]:
+def search_documents(
+    query: str, roots: list[str] | None = None, *, by_path: bool = False
+) -> list[dict]:
     """Grep the configured document roots for one query, with a bounded result.
 
     Deliberately plain substring search over Markdown: the canonical artifacts
     are documents, and an index would be one more thing to keep true. Memory
     and transcripts stay out of scope by owner decision.
+
+    `by_path` also takes a document whose path from its root holds the query, at
+    `line` 0 with no `text`, ahead of those found by a line: a person looking for
+    a file types its name, which its text need not hold.
     """
     needle = query.strip().lower()
     if not needle:
@@ -463,6 +469,12 @@ def search_documents(query: str, roots: list[str] | None = None) -> list[dict]:
                 if not name.lower().endswith(DOC_SUFFIXES):
                     continue
                 path = os.path.join(directory, name)
+                relative = os.path.relpath(path, root).replace("\\", "/")
+                if by_path and needle in relative.lower():
+                    hits.append({"path": relative, "root": root, "line": 0, "text": ""})
+                    if len(hits) >= MAX_DOC_HITS:
+                        return _named_first(hits)
+                    continue
                 try:
                     if os.path.getsize(path) > MAX_DOC_BYTES:
                         continue
@@ -474,7 +486,7 @@ def search_documents(query: str, roots: list[str] | None = None) -> list[dict]:
                     if needle in line.lower():
                         hits.append(
                             {
-                                "path": os.path.relpath(path, root).replace("\\", "/"),
+                                "path": relative,
                                 "root": root,
                                 "line": number,
                                 "text": line.strip()[:240],
@@ -482,8 +494,54 @@ def search_documents(query: str, roots: list[str] | None = None) -> list[dict]:
                         )
                         break  # one hit per document keeps the list readable
                 if len(hits) >= MAX_DOC_HITS:
-                    return hits
-    return hits
+                    return _named_first(hits)
+    return _named_first(hits)
+
+
+def _named_first(hits: list[dict]) -> list[dict]:
+    """Documents named by their path ahead of those found by a line, each in the order found."""
+
+    return sorted(hits, key=lambda hit: hit["line"] != 0)
+
+
+#: How many documents one search of a space's project answers with.
+MAX_PROJECT_HITS = 20
+#: The longest query that search takes; a file's name is shorter.
+MAX_QUERY_CHARS = 200
+
+
+def search_space_documents(
+    space: str, query: str, *, reader: project_registry.RegistryReader | None = None
+) -> list[dict[str, object]]:
+    """The Markdown files of the project a planning space is bound to that a query names.
+
+    The search is `search_documents` over that one root, by path as well as by a
+    line. Each answer is a path from the root, which is what `resolve` takes from
+    the same space, with the line it was found at (0 for its path) and that line.
+    The root is never told. A file reached through a link or a junction that leads
+    out of the root is left out, as `resolve` would refuse it. A space the registry
+    does not bind to one existing root has no files to offer, and an identity that
+    does not parse is refused, as `resolve` refuses it.
+    """
+
+    if len(query) > MAX_QUERY_CHARS:
+        raise DocumentError("invalid_request")
+    mapping = project_registry.resolve_space_root(
+        {"kind": "planning-space", "resource_id": space}, reader=reader
+    )
+    if mapping["status"] == "malformed" and mapping["resource_ref"] is None:
+        raise DocumentError("invalid_request")
+    if mapping["status"] != "mapped":
+        return []
+    root = os.path.realpath(str(mapping["canonical_root"]))
+    found: list[dict[str, object]] = []
+    for hit in search_documents(query, [root], by_path=True):
+        if _relative_in(root, os.path.realpath(os.path.join(root, hit["path"]))) is None:
+            continue
+        found.append({"path": hit["path"], "line": hit["line"], "text": hit["text"]})
+        if len(found) >= MAX_PROJECT_HITS:
+            break
+    return found
 
 
 __all__ = [
@@ -491,6 +549,8 @@ __all__ = [
     "MAX_DOC_BYTES",
     "MAX_DOC_HITS",
     "MAX_PATH_CHARS",
+    "MAX_PROJECT_HITS",
+    "MAX_QUERY_CHARS",
     "MAX_RESOLVE_PATHS",
     "REF_RESOLVE_TIMEOUT",
     "DocumentError",
@@ -504,4 +564,5 @@ __all__ = [
     "registered_roots",
     "resolve_paths",
     "search_documents",
+    "search_space_documents",
 ]
