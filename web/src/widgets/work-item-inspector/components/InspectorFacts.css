@@ -78,11 +78,11 @@
 }
 
 /* The trim clips sideways at the box, and a link's underline ends a fraction past its last
-   letter: the pixel of room each side keeps that fringe, and takes none from the row. */
+   letter: the room each side keeps that fringe, and takes none from the row. */
 .card-epic-link {
   min-width: 0;
-  margin-inline: -1px;
-  padding-inline: 1px;
+  padding-inline: var(--space-half);
+  margin-inline: calc(-1 * var(--space-half));
   color: var(--color-text);
   font: var(--font-detail);
   white-space: nowrap;
