@@ -10,6 +10,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **What a session is working on, in one read.** `GET /api/planning/held?session=<id>` lists
+  the open work items an agent session holds, by its claim or by a step not yet done,
+  including what its subagents hold, most recently changed first. Each item carries its
+  state, how it is held, its steps done and in all, its questions waiting for a person and
+  its address. Read-only; no MCP tool.
+
 ## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) - 2026-11-08
 
 ### Added

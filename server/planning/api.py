@@ -23,6 +23,7 @@ from .. import query_params
 from . import (
     calls,
     chain,
+    held,
     live_frame,
     mention_records,
     migration,
@@ -342,6 +343,12 @@ def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
     }
 
 
+def _held(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The open items one agent session holds, for a reader showing them beside it."""
+
+    return held.held_by_session(conn, _required(parameters, "session"))
+
+
 def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": "valkama-planning-requests",
@@ -365,6 +372,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/search": _search,
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,
+    "/api/planning/held": _held,
 }
 
 

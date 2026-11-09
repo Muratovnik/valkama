@@ -172,6 +172,40 @@ before (200 for a list, 50 for a search), and with the same `truncated` and
 `GET /api/planning/search` take the same `offset` parameter and carry the same
 two fields.
 
+### The items one session holds
+
+`GET /api/planning/held?session=<session id>` answers which open work items one
+agent session holds, so that a client can show a person, beside that session, the
+work it is on. It writes nothing and has no MCP tool. The answer names the session
+as given and lists its items, most recently changed first:
+
+```json
+{"session": "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e",
+ "items": [{"reference": "MAIN-12", "title": "Fix the parser",
+            "state": {"key": "dev", "name": "Dev", "category": "active"},
+            "held_as": "claim", "steps": {"done": 1, "total": 3},
+            "pending_questions": 0, "url": "http://127.0.0.1:8642/open/MAIN-12"}]}
+```
+
+An item is held when its claim, or a checklist step that is not done, carries a
+holder label of the session (see [Who holds a claim or a step](#who-holds-a-claim-or-a-step)):
+the label ends in `(session <id>)`, so what a subagent of the session holds counts
+as well. `held_as` is `claim` when the item's claim is the session's, else `step`.
+Only an item in a state that is not terminal is listed, and only a hold that has not
+lapsed: a claim whose lease reads `stale` (see [Claims are leases](#claims-are-leases))
+holds nothing here, and neither does a step of a session whose claims would read
+`stale`, although nothing has released either yet.
+
+`steps` counts the item's checklist steps and those done. `pending_questions`
+counts the questions and decisions on the item that still wait for a person: one
+past its deadline or on a finished execution has lapsed, and a
+[list on a comment](#a-list-on-a-comment) waits for nobody, so neither is counted.
+`url` is the item's
+[address](#the-address-of-a-work-item).
+
+A session nothing names answers with no items. A missing or blank `session` is
+refused with `invalid_request` and status 400.
+
 ### Naming a state
 
 A workflow's states are rows, so their keys belong to the space: the default

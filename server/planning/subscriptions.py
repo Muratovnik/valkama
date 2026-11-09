@@ -91,15 +91,31 @@ def holds(row: sqlite3.Row, session_id: str, agent_id: str | None) -> bool:
     own suffix finds what its agents hold as well, an agent's only its own.
     """
 
+    suffix = holder_suffix(session_id, agent_id)
+    return holds_claim(row, suffix) or holds_step(row, suffix)
+
+
+def holder_suffix(session_id: str, agent_id: str | None = None) -> str:
+    """How every holder label of this session, or of this agent of it, ends."""
+
     suffix = f"(session {calls.label_id(session_id)})"
-    if agent_id:
-        suffix = f" agent {calls.label_id(agent_id)} {suffix}"
-    labels = [str(row["claim_ref"] or "")] + [
-        str(step["claimed_by"] or "")
+    return f" agent {calls.label_id(agent_id)} {suffix}" if agent_id else suffix
+
+
+def holds_claim(row: sqlite3.Row, suffix: str) -> bool:
+    """Whether the item's claim is held under a label ending in `suffix`."""
+
+    return str(row["claim_ref"] or "").endswith(suffix)
+
+
+def holds_step(row: sqlite3.Row, suffix: str) -> bool:
+    """Whether a step not yet done is held under a label ending in `suffix`."""
+
+    return any(
+        str(step["claimed_by"] or "").endswith(suffix)
         for step in model.checklist(row["checklist"])
         if not step["done"]
-    ]
-    return any(label.endswith(suffix) for label in labels)
+    )
 
 
 #: Each row with its call's columns named as in `leases.CALL`, so `leases.of_call` reads it.
