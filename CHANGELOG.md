@@ -18,6 +18,19 @@ checkouts are therefore distinguishable even at the same version.
   state, how it is held, its steps done and in all, its questions waiting for a person and
   its address. Read-only; no MCP tool.
 
+### Changed
+
+- **A review reads as a list of decisions, and a comment replaces your own option.** Each
+  point of a review is one row: its label, Accept / Later / Reject and the comment's press on
+  one line in a card's drawer, and one quiet line under the label saying the way chosen, what
+  the agent recommends, or the start of the description. A press on the label opens the point
+  in place, nothing already read moves, and what Accept opens hangs from it behind a rule,
+  read only until Accept. Every field with options has one «Comment» instead of a row «Your
+  own option» and a separate comment: with nothing chosen its words go as your own option,
+  with a choice as a note. The answer sent to the server is unchanged. Accept recommended now
+  also fills a point listed under another before it, and two groups apart with one title
+  fold apart.
+
 ## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) - 2026-11-08
 
 ### Added
