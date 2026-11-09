@@ -57,6 +57,11 @@ const props = withDefaults(
     max?: number
     /** How long one typed value may be. */
     maxlength?: number
+    /**
+     * What the empty field says to do, in the field rather than a hint under it: a hint
+     * under one field of a pair stood that field taller than the other.
+     */
+    placeholder?: string
     /** The row that adds the typed words as a new value; several values only. */
     createLabel?: (text: string) => string
     /** The name of a chip's remove button. */
@@ -70,6 +75,7 @@ const props = withDefaults(
     hint: '',
     max: Number.POSITIVE_INFINITY,
     maxlength: 200,
+    placeholder: '',
     removeLabel: (label: string) => label,
   },
 )
@@ -126,8 +132,15 @@ const chips = computed(() =>
 )
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.error ? 'true' : undefined))
-/** The chosen words, standing in an emptied field while the list is open. */
-const standIn = computed(() => (open.value && !several.value ? shownLabel.value : undefined))
+/**
+ * The chosen words, standing in an emptied field while the list is open; else what the field
+ * says to do while it holds nothing.
+ */
+const standIn = computed(() => {
+  if (open.value && !several.value) return shownLabel.value
+  const empty = several.value ? !chosen.value.length : !internal.value
+  return empty && props.placeholder ? props.placeholder : undefined
+})
 const unavailable = (option: ChoiceOption) =>
   Boolean(option.disabled) || (full.value && !chosen.value.includes(option.value))
 

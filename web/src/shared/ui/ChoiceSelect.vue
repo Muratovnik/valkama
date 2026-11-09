@@ -1,4 +1,10 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="Option extends ChoiceOption">
+/**
+ * A host may draw the chosen value its own way through the `value` slot — a state with its
+ * dot — and each option through the `option` slot: a host that draws its values with more
+ * than words, a priority's glyph or a state's dot, draws both, so a list and its button say
+ * a value one way. What a value means stays the option's note under it in the list.
+ */
 import { computed, nextTick, ref } from 'vue'
 
 import {
@@ -22,7 +28,7 @@ const props = withDefaults(
   defineProps<{
     label: string
     modelValue: string
-    options: readonly ChoiceOption[]
+    options: readonly Option[]
     /** The id of the message that says why the choice was refused. */
     describedby?: string
     disabled?: boolean
@@ -124,8 +130,6 @@ function updateOpen(value: boolean) {
             class="choice-value-content"
             :placeholder="placeholder"
           >
-            <!-- A host may draw the chosen value its own way — a state with
-                 its dot — and the list below still names every option. -->
             <slot
               name="value"
               :selected="selected"
@@ -199,7 +203,11 @@ function updateOpen(value: boolean) {
               />
               <SelectItemText as-child>
                 <span class="choice-value">
-                  <strong class="choice-title">{{ option.label }}</strong>
+                  <slot
+                    name="option"
+                    :option="option"
+                    ><strong class="choice-title">{{ option.label }}</strong></slot
+                  >
                   <small
                     v-if="option.description"
                     class="choice-note"
@@ -304,8 +312,6 @@ function updateOpen(value: boolean) {
   height: 24px;
 }
 
-.choice-chevron,
-.choice-check,
 .choice-search-icon {
   width: 20px;
   height: 20px;

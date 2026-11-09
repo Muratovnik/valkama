@@ -12,6 +12,9 @@
  * space the item is created in, and Ctrl+Enter as this dialog's Create. Escape
  * closes an open `#` list first and the dialog only after.
  *
+ * The fields follow the card's order (`COMPOSER_ROWS`): the kind and the priority, the labels
+ * and the epic, and the description last.
+ *
  * The epic and the labels are chosen from what the space already has, searched as they
  * are typed (`SearchCombobox`): a reference typed by hand named an epic only when it was
  * spelled right, and a label typed by hand forked the one the filter menu knew. A new
@@ -20,10 +23,18 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { epicChoices, labelChoices } from '@/features/work-item-compose/composerChoices.ts'
+import {
+  COMPOSER_ROWS,
+  epicChoices,
+  labelChoices,
+} from '@/features/work-item-compose/composerChoices.ts'
+
+import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
+import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
+import { KIND_CHOICES, PRIORITY_CHOICES } from '@/entities/work-item/utils/facets.ts'
+import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'
-import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
@@ -77,25 +88,15 @@ watch(
   },
 )
 
-const kindOptions = computed(() =>
-  WORK_ITEM_KINDS.map((value) => ({ value, label: t(`workItem.kind.${value}`) })),
-)
-const priorityOptions = computed(() =>
-  PRIORITIES.map((value) => {
-    const label = t(`priority.${value}`)
-    return {
-      value,
-      label,
-      title: t('priorityMeaning.hint', {
-        priority: label,
-        meaning: t(`priorityMeaning.meaning.${value}`),
-      }),
-    }
-  }),
-)
+/** The kinds and the priorities as the card draws them: a glyph, a word and what it means. */
+const facetChoices = useFacetChoices()
+const kindOptions = computed(() => facetChoices(KIND_CHOICES))
+const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
 const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic')))
 const labelOptions = computed(() => labelChoices(props.items))
+/** The row an epic's title stands in, which needs more than a phone's half. */
+const holdsTitles = (row: readonly FacetId[]) => row.includes('parent')
 const addLabel = (label: string) => t('compose.addLabel', { label })
 const removeLabel = (label: string) => t('compose.removeLabel', { label })
 
@@ -140,17 +141,72 @@ async function submit() {
         :label="t('workItem.title')"
         :maxlength="200"
       />
-      <div class="composer-pair">
-        <ChoiceSelect
-          v-model="kind"
-          :label="t('workItem.kindLabel')"
-          :options="kindOptions"
-        />
-        <ChoiceSelect
-          v-model="priority"
-          :label="t('workItem.priority')"
-          :options="priorityOptions"
-        />
+      <div
+        v-for="(row, place) in COMPOSER_ROWS"
+        :key="place"
+        class="composer-pair"
+        :class="{ 'has-titles': holdsTitles(row) }"
+      >
+        <template
+          v-for="facet in row"
+          :key="facet"
+        >
+          <ChoiceSelect
+            v-if="facet === 'kind'"
+            v-model="kind"
+            :label="t('workItem.kindLabel')"
+            :options="kindOptions"
+          >
+            <template #value="{ selected }">
+              <FacetChoiceMark
+                v-if="selected"
+                :mark="selected.mark"
+                explained
+              />
+            </template>
+            <template #option="{ option }">
+              <FacetChoiceMark :mark="option.mark" />
+            </template>
+          </ChoiceSelect>
+          <ChoiceSelect
+            v-else-if="facet === 'priority'"
+            v-model="priority"
+            :label="t('workItem.priority')"
+            :options="priorityOptions"
+          >
+            <template #value="{ selected }">
+              <FacetChoiceMark
+                v-if="selected"
+                :mark="selected.mark"
+                explained
+              />
+            </template>
+            <template #option="{ option }">
+              <FacetChoiceMark :mark="option.mark" />
+            </template>
+          </ChoiceSelect>
+          <SearchCombobox
+            v-else-if="facet === 'labels'"
+            v-model="labels"
+            :label="t('workItem.labels')"
+            :placeholder="t('compose.labelsHint')"
+            :options="labelOptions"
+            :empty-label="t('compose.labelsEmpty')"
+            :create-label="addLabel"
+            :remove-label="removeLabel"
+            :max="32"
+            :maxlength="64"
+            :disabled="busy"
+          />
+          <SearchCombobox
+            v-else
+            v-model="parent"
+            :label="t('workItem.parent')"
+            :options="epicOptions"
+            :empty-label="t('compose.epicsEmpty')"
+            :disabled="busy"
+          />
+        </template>
       </div>
       <MarkdownEditor
         v-model="description"
@@ -162,27 +218,6 @@ async function submit() {
         :disabled="busy"
         @submit="submit"
       />
-      <div class="composer-pair has-titles">
-        <SearchCombobox
-          v-model="labels"
-          :label="t('workItem.labels')"
-          :hint="t('compose.labelsHint')"
-          :options="labelOptions"
-          :empty-label="t('compose.labelsEmpty')"
-          :create-label="addLabel"
-          :remove-label="removeLabel"
-          :max="32"
-          :maxlength="64"
-          :disabled="busy"
-        />
-        <SearchCombobox
-          v-model="parent"
-          :label="t('workItem.parent')"
-          :options="epicOptions"
-          :empty-label="t('compose.epicsEmpty')"
-          :disabled="busy"
-        />
-      </div>
     </div>
 
     <template #footer>

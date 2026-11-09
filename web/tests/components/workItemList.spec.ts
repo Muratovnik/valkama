@@ -13,10 +13,17 @@ import { LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { i18n as appI18n } from '@/shared/i18n/index.ts'
+import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardItem } from '../fixtures/board.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
+
+/** `ChoiceSelect` is generic over its options, which test-utils cannot read its props through. */
+interface ChoiceProps {
+  modelValue: string
+  options: readonly ChoiceOption[]
+}
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -301,11 +308,11 @@ describe('the list head on a narrow list', () => {
     const wrapper = head('title')
     expect(wrapper.findAll('.list-sort').map((sort) => sort.text())).toEqual(['Ref', 'Title'])
     const choice = wrapper.getComponent(ChoiceSelect)
-    expect(choice.props('options').map((option) => option.value)).toEqual(
+    expect((choice.props() as ChoiceProps).options.map((option) => option.value)).toEqual(
       folded.map((column) => column.key),
     )
     // Nothing to turn over until a folded order is the list's.
-    expect(choice.props('modelValue')).toBe('')
+    expect((choice.props() as ChoiceProps).modelValue).toBe('')
     choice.vm.$emit('update:modelValue', 'priority')
     expect(wrapper.emitted('sort')).toEqual([['priority']])
   })
@@ -313,8 +320,8 @@ describe('the list head on a narrow list', () => {
   it('turns a chosen folded order over from the same choice', () => {
     const wrapper = head('updated')
     const choice = wrapper.getComponent(ChoiceSelect)
-    expect(choice.props('modelValue')).toBe('updated')
-    const turn = choice.props('options').at(-1)
+    expect((choice.props() as ChoiceProps).modelValue).toBe('updated')
+    const turn = (choice.props() as ChoiceProps).options.at(-1)
     expect(turn?.label).toBe('Sort ascending')
     choice.vm.$emit('update:modelValue', turn?.value)
     expect(wrapper.emitted('sort')).toEqual([['updated']])

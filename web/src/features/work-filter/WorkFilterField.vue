@@ -36,17 +36,12 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener } from '@vueuse/core'
 
-import {
-  excluded,
-  filterGroups,
-  picked,
-  rowIcon,
-  stepGroups,
-} from '@/features/work-filter/filterOptions.ts'
+import { drawnGroups, filterGroups, stepGroups } from '@/features/work-filter/filterOptions.ts'
 import type { FilterStep } from '@/features/work-filter/filterOptions.ts'
 import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
 import WorkFilterPresets from '@/features/work-filter/WorkFilterPresets.vue'
 
+import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
 import {
   filterTokens,
   removeToken,
@@ -158,45 +153,8 @@ const entries = computed(() =>
 )
 /** With nothing to offer, the menu is no empty frame over the work. */
 const shown = computed(() => open.value && entries.value.length > 0)
-/**
- * The groups as the list draws them: each value's word and whether it is in.
- * A closed menu draws none of them. A space's labels made it a list of some
- * two thousand nodes that the board built, out of sight, before its first tile
- * could show; it is built when it opens instead, and then only for the step
- * on show.
- */
-const menuGroups = computed(() =>
-  (open.value ? groups.value : []).map((group) => ({
-    id: group.id,
-    name: group.name,
-    bare: group.bare,
-    back: group.back && {
-      key: group.back.key,
-      name: t('workItem.filter.back', { facet: group.name }),
-    },
-    options: group.options.map((option) => {
-      // A value the work must not carry is in the filter too, marked as the chip's cross is.
-      const negated = excluded(filter.value, option)
-      return {
-        key: option.key,
-        text: option.text,
-        name: negated ? t('workItem.filter.excluded', { value: option.text }) : undefined,
-        detail: option.detail,
-        kind: option.kind,
-        icon: rowIcon(option, negated),
-        next: option.action.do === 'open',
-        selected: negated || picked(filter.value, option),
-      }
-    }),
-    choices: group.choices?.map((choice) => ({
-      key: choice.key,
-      name: choice.name,
-      text: choice.text,
-      title: choice.title,
-      selected: (filter.value.labelsMatch ?? 'all') === choice.match,
-    })),
-  })),
-)
+/** The groups as the list draws them (`drawnGroups`); a closed menu draws none. */
+const menuGroups = computed(() => drawnGroups(open.value ? groups.value : [], filter.value, t))
 const menuRoom = useMenuRoom(
   () => root.value?.querySelector<HTMLElement>(`[id="${menuId}"]`),
   () => shown.value,
@@ -487,7 +445,15 @@ defineExpose({ focus: focusText })
       :groups="menuGroups"
       :label="t('workItem.filter.menuLabel')"
       @choose="choose"
-    />
+    >
+      <template #text="{ option }">
+        <FacetChoiceMark
+          v-if="option.mark"
+          :mark="option.mark"
+        />
+        <template v-else>{{ option.text }}</template>
+      </template>
+    </OptionGroups>
   </div>
 </template>
 

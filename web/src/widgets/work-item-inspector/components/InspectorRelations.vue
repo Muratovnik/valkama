@@ -114,11 +114,12 @@ function when(value: string): string {
       >
         <template
           v-if="writable"
-          #actions
+          #actions="{ size }"
         >
           <VButton
             v-tooltip="t('workItem.related.add')"
             variant="ghost"
+            :size="size"
             :aria-label="t('workItem.related.add')"
             :disabled="busy"
             icon

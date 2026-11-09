@@ -391,6 +391,32 @@ and only fades the end of a strip that scrolls on past it.
   hole around it, and a list row's reference moved the row's shared baseline down
   13px, for as long as nothing compared the two boxes. A compact field gives it
   back too, or it stands 4px over the compact controls beside it.
+- **Controls of one row are one size.** A row's owner names the size, not each
+  control in it: `SectionHeader` hands its actions slot one size, compact, so a
+  section's switch and its button cannot drift apart again — the chain's heading
+  held a 36px scope switch beside a 28px «На графе». A label chip standing alone
+  is drawn across the whole 28px it is pressed across, the height of the «+»
+  beside it, rather than as tall as its words. A field holding chips keeps the
+  field's height: a chip's remove button gives the base rule's 40px back, which
+  had stood the new-task labels field 52px tall beside a 40px epic. A field's
+  advice for an empty field is its placeholder, never a hint under one field of a
+  pair, which stands that field taller than its neighbour.
+  `production-row-controls.spec.ts` measures each such row's heights and top edges.
+- **A menu draws a value as its button does.** A list of priorities, kinds or states
+  — the card's state and priority, the new task's kind and priority, the filter's
+  kinds, priorities and states — draws each value with the registry's mark
+  (`choiceMark` in `facets.ts`, `useFacetChoices`, `FacetChoiceMark`): a priority's
+  glyph in its tone, its word and what it means as the row's note; a kind's glyph and
+  word in its colour; a state's dot and name. Its button draws the chosen value the
+  same way, so a value reads one way above the list and in it. Priorities stand most
+  pressing first everywhere they are offered. `ChoiceSelect` takes the drawing through
+  its `option` slot and `OptionGroups` through its `text` slot; neither knows a facet.
+  `production-choice-marks.spec.ts` compares each row with its button.
+- **A form asks in the order the card reads.** The new-task dialog asks for the title,
+  then the kind and the priority, then the labels and the epic, and the description
+  last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
+  reads an item's facets in, and the description follows the facts as it does on the
+  card. It used to ask for the description between the two pairs.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.
@@ -1386,14 +1412,18 @@ nobody is behind it; a plate there read as one more chip. «Подписаны»
 sessions that follow the item, each as its claim's holder would print, a name moving to
 the next line whole and one wider than the line wrapping between its own words, read whole
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
-following there is no such row. The labels row ends in «+», which opens a field over the
-space's labels, the most used first, that also takes a new one; Escape gives the «+» back
-with nothing attached. Each label shows its × at its end under the pointer or keyboard
-focus, always on a touch screen, with the room for it kept at rest so no chip grows when
-it appears. A read-only item with no labels has no such row. The labels stay under the
-title, not above it: the title is what the card is found by, and editing controls over
-it would push it down by however many labels wrap. Every value stands at one height, the
-state chip's, so a wrap adds a row of that height and never a half step.
+following there is no such row. A label chip only filters, its words in its middle with
+the same room at either end, at rest and under the pointer alike. The labels are changed
+in one place, the picker the new-task dialog asks with: the «+» that ends the row, or a
+press on the row beside the chips, opens it in the row's place over the space's labels,
+the most used first, with a check on each the item carries. Choosing an unchecked one
+attaches it, choosing a checked one takes it off, and typed words add a new one; Escape,
+or focus leaving it, gives the chips back, Escape with focus on the «+». A × kept at each
+chip's end was a second way to take a label off, and the room held for it left every
+chip's words off its middle. A read-only item with no labels has no such row. The labels
+stay under the title, not above it: the title is what the card is found by, and editing
+controls over it would push it down by however many labels wrap. Every value stands at
+one height, the state chip's, so a wrap adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
 labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="Row extends OptionRow">
 /**
  * A list of options in named groups, any number of them chosen: the popup a
  * one-line field drives (`VTextInput` with `completion`).
@@ -18,6 +18,9 @@
  * the group is still below the fold the head waits at the list's lower edge, so what it
  * offers is in sight as the list opens, however many values stand above it.
  *
+ * A row says its value in words unless the host draws it through the `text` slot: a kind's or a
+ * priority's glyph beside its word, a state's dot.
+ *
  * A list can be one step of several. A row that leads to another list says so with a chevron
  * and is no value, so it carries no `aria-selected`; the list it led to has its group's name as
  * the row back, the first the arrows reach.
@@ -25,42 +28,12 @@
 import { computed } from 'vue'
 
 import { optionGroupItemId } from '@/shared/ui/choiceControls.ts'
+import type { OptionGroup, OptionRow } from '@/shared/ui/choiceControls.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-interface OptionGroup {
-  id: string
-  name: string
-  options: readonly {
-    key: string
-    text: string
-    detail?: string
-    /** The glyph in the check's place, for a row that does something rather than choose. */
-    icon?: string
-    /** The option names a work item kind, and its word takes that kind's colour. */
-    kind?: string
-    /** What a screen reader says of the row where its word alone says too little; it starts with the word. */
-    name?: string
-    /** The row leads to a list of its own, and says so with a chevron at its end. */
-    next?: boolean
-    /** Absent for a row that is no value, which a press does not choose but follows. */
-    selected?: boolean
-  }[]
-  /** The group's name is a row too, the way back to the list this one was opened from. */
-  back?: { key: string; name: string }
-  /** No head: the group's rows say what they are, and its name labels it for a screen reader. */
-  bare?: boolean
-  choices?: readonly {
-    key: string
-    name: string
-    selected: boolean
-    text: string
-    title: string
-  }[]
-}
-
 const props = defineProps<{
-  groups: readonly OptionGroup[]
+  groups: readonly OptionGroup<Row>[]
   /** The highlighted option by its place in reading order; -1 for none. */
   highlight: number
   id: string
@@ -70,6 +43,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   'choose': [key: string]
   'update:highlight': [place: number]
+}>()
+defineSlots<{
+  /** A row's value, drawn the host's way; its words by default. */
+  text?: (scope: { option: Row }) => unknown
 }>()
 
 /** The DOM id of an option by its place in reading order, which the arrows walk. */
@@ -194,10 +171,12 @@ const NO_VALUE = undefined
           :data-glyph="entry.option.icon && 'own'"
           :size="14"
         />
-        <span
-          class="option-text"
-          :data-kind="entry.option.kind"
-          >{{ entry.option.text }}</span
+        <span class="option-text"
+          ><slot
+            name="text"
+            :option="entry.option"
+            >{{ entry.option.text }}</slot
+          ></span
         >
         <span
           v-if="entry.option.detail"
@@ -400,10 +379,6 @@ const NO_VALUE = undefined
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-
-  &[data-kind] {
-    color: var(--color-kind-ink);
-  }
 }
 
 .option-detail {
