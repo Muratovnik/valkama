@@ -123,10 +123,10 @@ describe('the why of a recommended verdict', () => {
     })
 
   it('shows the why of the advice on focus, and nothing to press without one', async () => {
-    expect(point({}).find('.request-point-facts button').exists()).toBe(false)
+    expect(point({}).find('.request-point-line button').exists()).toBe(false)
     const wrapper = point({ why: WHY })
-    const words = wrapper.get('.request-point-facts button')
-    expect(words.text()).toBe('recommended: accept')
+    const words = wrapper.get('.request-point-line button')
+    expect(words.text()).toBe('Agent: accept')
     await words.trigger('focus')
     expect(tooltip()?.textContent).toContain(WHY)
   })

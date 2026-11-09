@@ -16,6 +16,7 @@ import {
   sections,
   shortName,
   undecidedVerdicts,
+  wayOf,
 } from '@/features/input-requests/utils/reviewForm.ts'
 import { checkAnswers, EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -191,6 +192,47 @@ describe('choosing a parent', () => {
   })
 })
 
+// What a closed point says of what its verdict opened (the packet's decision 1, row 2).
+describe('the way a closed point names', () => {
+  test('is nothing until the verdict holds the option it hangs from', () => {
+    expect(wayOf(contractFields, p13, EMPTY_DRAFT)).toBeNull()
+    expect(wayOf(contractFields, p13, draft({ answers: { p13: 'later' } }))).toBeNull()
+  })
+
+  test('names the option chosen, and whether it is the recommended one', () => {
+    const accepted = chooseVerdict(contractFields, EMPTY_DRAFT, p13, 'accept')
+    expect(wayOf(contractFields, p13, accepted)).toEqual({
+      chosen: 'vue/max-lines-per-block',
+      count: null,
+      label: 'How',
+      missing: false,
+      option: 'accept',
+      own: false,
+      recommended: true,
+    })
+    const other = draft({ answers: { 'p13': 'accept', 'p13-way': 'css_file' } })
+    expect(wayOf(contractFields, p13, other)).toMatchObject({
+      chosen: 'Styles in CSS files',
+      recommended: false,
+    })
+  })
+
+  test('says a required way with nothing chosen is missing, unless a comment answers it', () => {
+    const bare = draft({ answers: { p13: 'accept' } })
+    expect(wayOf(contractFields, p13, bare)).toMatchObject({ chosen: '', missing: true })
+    const own = draft({ answers: { p13: 'accept' }, comments: { 'p13-way': 'Neither' } })
+    expect(wayOf(contractFields, p13, own)).toMatchObject({ missing: false, own: true })
+  })
+
+  test('counts the ticked steps of a list', () => {
+    const accepted = chooseVerdict(contractFields, EMPTY_DRAFT, p4, 'accept')
+    expect(wayOf(contractFields, p4, accepted)).toMatchObject({
+      count: { chosen: 2, total: 3 },
+      label: 'Steps',
+    })
+  })
+})
+
 describe('accepting what is recommended', () => {
   test('fills only what is undecided, and leaves what the person chose', () => {
     const chosen = draft({ answers: { p4: 'reject' } })
@@ -198,6 +240,23 @@ describe('accepting what is recommended', () => {
     expect(filled).toBe(1)
     expect(next.answers).toEqual({ 'p4': 'reject', 'p13': 'accept', 'p13-way': 'per_block' })
     expect(fillRecommended(contractFields, next).filled).toBe(0)
+  })
+
+  test('fills a verdict under another one, wherever the question lists it', () => {
+    const sub: InputRequestField = {
+      ...p13,
+      id: 'p13-sub',
+      label: 'P13a The styles too',
+      under: { field: 'p13', option: 'accept' },
+    }
+    for (const fields of [
+      [p13, way, sub],
+      [sub, p13, way],
+    ]) {
+      const { draft: next, filled } = fillRecommended(fields, EMPTY_DRAFT)
+      expect(next.answers).toEqual({ 'p13': 'accept', 'p13-way': 'per_block', 'p13-sub': 'accept' })
+      expect(filled).toBe(2)
+    }
   })
 
   test('on the real review it is the whole answer, every point accepted as proposed', () => {

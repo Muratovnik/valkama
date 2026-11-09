@@ -1,8 +1,8 @@
 /**
  * One column, one set of edges, in the real 25-field review at a laptop's width and a phone's.
  * A group's heading starts on the edge its rows start on and draws nothing left of it; what a
- * point's answer opens stands in by the step the row's own words stand in, so its rows start
- * under the point's words; and the answered summary sets that part in by the step its reply
+ * point's answer opens hangs from the open point behind the thread's rule, which stands under the
+ * point's words; and the answered summary sets that part in by the step its reply
  * is set in from the prompt. The heading's chevron once hung four pixels into the column with
  * its title twenty-four pixels further, and the opened part stood at a third edge between them.
  */
@@ -44,16 +44,19 @@ for (const width of [1280, 390]) {
     }
   })
 
-  test(`what a point's answer opens starts under the point's words, at ${width}`, async ({
+  test(`what a point's answer opens hangs behind a rule under the point's words, at ${width}`, async ({
     page,
   }) => {
     const card = await openReview(page, width)
     const row = point(card, 'P13 The 400-line limit')
     await row.getByRole('radio', { name: 'Accept', exact: true }).click()
+    await row.locator('.request-point-toggle').click()
     const opened = card.getByRole('radiogroup', { name: /Way/u })
     await expect(opened).toBeVisible()
     const words = await drawnBox(row.locator('.request-point-label'))
-    expect(Math.abs((await startOf(opened)) - words.left)).toBeLessThanOrEqual(1)
+    const rule = await startOf(row.locator('.request-point-hang'))
+    expect(Math.abs(rule - words.left)).toBeLessThanOrEqual(1)
+    expect(await startOf(opened)).toBeGreaterThan(rule)
   })
 
   test(`the answered summary sets an opened part in by its reply's step, at ${width}`, async ({

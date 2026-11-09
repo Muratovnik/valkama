@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 
 import RequestOption from '@/features/input-requests/components/RequestOption.vue'
 import RequestUnsent from '@/features/input-requests/components/RequestUnsent.vue'
-import { useOpenedOptions } from '@/features/input-requests/composables/useOpenedOptions.ts'
+import { useFolds } from '@/features/input-requests/composables/useFolds.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -66,7 +66,7 @@ const outcome = computed(() => {
   return [said, at ? unbroken(d(new Date(at), 'activity')) : ''].filter(Boolean).join(' · ')
 })
 
-const { isOpen, toggle } = useOpenedOptions()
+const { isOpen, toggle } = useFolds()
 </script>
 
 <template>

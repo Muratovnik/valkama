@@ -130,6 +130,9 @@ for (const width of WIDTHS) {
     const { card, scroller } = await openReview(page, width)
     await card.getByRole('button', { name: 'Accept recommended', exact: true }).click()
     await expect(card.locator('.request-review-head')).toContainText('Decided 18 of 18')
+    // Every point open, so that what hangs from them is drawn too.
+    for (const toggle of await card.locator('.request-point-toggle').all()) await toggle.click()
+    await expect(card.locator('.request-point-detail')).not.toHaveCount(0)
     expect(
       await scroller.evaluate((node) => node.scrollWidth - node.clientWidth),
     ).toBeLessThanOrEqual(0)

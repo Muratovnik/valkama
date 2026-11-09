@@ -24,8 +24,7 @@ import type { DescriptionView } from '@/features/input-requests/utils/optionDesc
 
 import type { InputRequestOption } from '@/shared/api/inputRequestModel.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
-import { parseRichInline, plainText } from '@/shared/lib/richText.ts'
-import type { RichInline } from '@/shared/lib/richText.ts'
+import { parseRichInline, plainText, unlinked } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 import RichText from '@/shared/ui/RichText.vue'
 
@@ -50,13 +49,6 @@ const showsLine = computed(() => props.view === 'line')
 const showsExcerpt = computed(() => props.view === 'excerpt' && !props.open)
 const chosenMark = computed(() => props.live && props.chosen)
 
-/** A link's words in place of the link, at any depth. */
-function unlinked(nodes: readonly RichInline[]): RichInline[] {
-  return nodes.flatMap((node) => {
-    if (node.kind === 'link') return unlinked(node.children)
-    return 'children' in node ? [{ ...node, children: unlinked(node.children) }] : [node]
-  })
-}
 const label = computed(() => {
   const nodes = parseRichInline(props.option.label)
   return props.live ? nodes : unlinked(nodes)

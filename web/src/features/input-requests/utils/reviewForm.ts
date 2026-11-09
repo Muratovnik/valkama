@@ -1,7 +1,13 @@
-import { commentOn, editField, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
+import {
+  choosesIn,
+  commentOn,
+  editField,
+  isShown,
+} from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputAnswers, InputRequestField, VERDICTS } from '@/shared/api/inputRequestModel.ts'
+import { plainText } from '@/shared/lib/richText.ts'
 
 /**
  * A question answered row by row, as a review is: one line per point, each accepted, put off or
@@ -105,13 +111,72 @@ export function chooseVerdict(
 }
 
 /**
+ * What a point's verdict opened, as its closed row names it: the first field with options shown
+ * under it, with what is chosen there. A comment standing in for a choice is its own option;
+ * nothing chosen where something is required is said as missing.
+ */
+export interface PointWay {
+  /** The option chosen, by its label; empty while none is. */
+  chosen: string
+  /** The ticks, how many of how many; null for a single answer. */
+  count: { chosen: number; total: number } | null
+  label: string
+  missing: boolean
+  /** The verdict that opened it. */
+  option: string
+  own: boolean
+  /** The option chosen is the one the agent recommends. */
+  recommended: boolean
+}
+
+export function wayOf(fields: Fields, field: InputRequestField, draft: RequestDraft) {
+  const way = childrenOf(fields, field.id).find(
+    (child) =>
+      (child.type === 'choice' || child.type === 'multi_choice') && isShown(child, draft.answers),
+  )
+  if (!way?.under) return null
+  const value = draft.answers[way.id]
+  const own = !choosesIn(draft, way.id) && Boolean(commentOn(draft, way))
+  const missing = way.required && !own && !choosesIn(draft, way.id)
+  const base = { label: plainText(way.label), missing, option: way.under.option, own }
+  if (way.type === 'multi_choice') {
+    const chosen = Array.isArray(value) ? value.length : 0
+    return {
+      ...base,
+      chosen: '',
+      count: { chosen, total: way.options.length },
+      recommended: false,
+    } satisfies PointWay
+  }
+  const option = way.options.find(({ id }) => id === value)
+  return {
+    ...base,
+    chosen: option ? plainText(option.label) : '',
+    count: null,
+    recommended: Boolean(option?.recommended),
+  } satisfies PointWay
+}
+
+/**
  * Every verdict still undecided given what the agent recommends, as if each were chosen by hand;
  * what the person already chose stays. Nothing is sent, and a hand undoes any of it.
+ *
+ * A verdict under another shows only once that one holds, and a question may list it first, so
+ * the fields are gone through again while a pass fills anything: one pass left such a verdict
+ * undecided. Each pass decides a verdict for good or ends it, so the passes end.
  */
 export function fillRecommended(
   fields: Fields,
   draft: RequestDraft,
 ): { draft: RequestDraft; filled: number } {
+  let done = { draft, filled: 0 }
+  for (let pass = fillOnce(fields, draft); pass.filled > 0; pass = fillOnce(fields, pass.draft))
+    done = { draft: pass.draft, filled: done.filled + pass.filled }
+  return done
+}
+
+/** One pass of that over the fields, in their order. */
+function fillOnce(fields: Fields, draft: RequestDraft) {
   let next = draft
   let filled = 0
   for (const field of fields) {

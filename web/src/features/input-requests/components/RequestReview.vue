@@ -2,7 +2,9 @@
 /**
  * A question answered row by row, the whole of it in the thread where it was asked: its points
  * in their groups (`RequestGroup`), each answered with a verdict (`RequestVerdictRow`), and what
- * a point's answer opens right under it, shown only while that answer holds.
+ * a point's answer opens hanging from it while the point is open, read only until the answer
+ * holds. Which points stand open is held here, as a field holds which of its options do
+ * (`useFolds`), so that a refusal can open the point it is in.
  *
  * Its head counts what is decided and fills every point still undecided with what the agent
  * recommends, at one press. That press chooses for the person only where they had not, sends
@@ -13,12 +15,13 @@
  *
  * Every other field is the one a plain question has (`RequestField`).
  */
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
 import RequestGroup from '@/features/input-requests/components/RequestGroup.vue'
 import RequestVerdictRow from '@/features/input-requests/components/RequestVerdictRow.vue'
+import { useFolds } from '@/features/input-requests/composables/useFolds.ts'
 import {
   childrenOf,
   chooseVerdict,
@@ -27,6 +30,7 @@ import {
   shortName,
   shownVerdicts,
   undecidedVerdicts,
+  wayOf,
 } from '@/features/input-requests/utils/reviewForm.ts'
 import type { Verdict } from '@/features/input-requests/utils/reviewForm.ts'
 import { editField, isShown } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -77,13 +81,17 @@ function fill() {
   if (filled) emit('edit', draft)
 }
 
+/**
+ * A run of fields is known by its first field, since two runs apart may share a heading: by the
+ * heading, they shared a key and folded together.
+ */
+const runOf = (section: { fields: readonly InputRequestField[] }) => section.fields[0]?.id ?? ''
 const closed = ref<ReadonlySet<string>>(new Set())
-const isOpen = (group: string | null) => group === null || !closed.value.has(group)
-function setOpen(group: string | null, open: boolean) {
-  if (group === null) return
+const isOpen = (run: string) => !closed.value.has(run)
+function setOpen(run: string, open: boolean) {
   const next = new Set(closed.value)
-  if (open) next.delete(group)
-  else next.add(group)
+  if (open) next.delete(run)
+  else next.add(run)
   closed.value = next
 }
 /** A group's points and what stands under them, for its count. */
@@ -97,11 +105,19 @@ function groupCount(fields: readonly InputRequestField[]) {
 }
 /** A field drawn as a plain one, and what its answer opens under it while that holds. */
 function plainFields(field: InputRequestField) {
+  if (field.type === 'verdict') return []
   const under = childrenOf(props.fields, field.id).filter((child) =>
     isShown(child, props.draft.answers),
   )
-  return field.type === 'verdict' ? under : [field, ...under]
+  return [field, ...under]
 }
+/** What hangs from a point: every field under it, shown or held. */
+const hanging = (point: InputRequestField) => childrenOf(props.fields, point.id)
+/** The verdict that lets a field hanging from a point be answered. */
+const afterOf = (field: InputRequestField) =>
+  field.under ? t(`requests.review.verdict.${field.under.option}`) : ''
+const isHeld = (field: InputRequestField) => !isShown(field, props.draft.answers)
+const wayOn = (point: InputRequestField) => wayOf(props.fields, point, props.draft)
 /** What Accept opens on a point, by its label. */
 function opensOn(field: InputRequestField) {
   const opened = childrenOf(props.fields, field.id).find(
@@ -109,20 +125,7 @@ function opensOn(field: InputRequestField) {
   )
   return opened ? plainText(opened.label) : ''
 }
-const uid = useId()
-const countIdOf = (parent: string) => `${uid}-${parent}-count`
-/** The steps of a point are described by how many of them are ticked, which stands on the point. */
-const describedBy = (field: InputRequestField) =>
-  field.under && field.type === 'multi_choice' ? countIdOf(field.under.field) : undefined
-/** How many steps are ticked under a point, while they show. */
-function countOn(field: InputRequestField) {
-  const steps = childrenOf(props.fields, field.id).find(
-    (child) => child.type === 'multi_choice' && isShown(child, props.draft.answers),
-  )
-  if (!steps) return null
-  const value = props.draft.answers[steps.id]
-  return { chosen: Array.isArray(value) ? value.length : 0, total: steps.options.length }
-}
+const { isOpen: isPointOpen, show: showPoint, toggle: togglePoint } = useFolds()
 
 function fieldError(field: InputRequestField) {
   if (!props.refused.includes(field.id)) return ''
@@ -138,11 +141,14 @@ const choose = (field: InputRequestField, verdict: Verdict) =>
   emit('edit', chooseVerdict(props.fields, props.draft, field, verdict))
 
 const controls: Record<string, { focus: () => void } | null> = {}
-/** Takes focus to one field, opening its group first. */
+/** Takes focus to one field, opening its group first, and its point where it hangs from one. */
 async function focusField(id: string) {
   const field = props.fields.find((candidate) => candidate.id === id)
   const parent = props.fields.find((candidate) => candidate.id === field?.under?.field)
-  setOpen((parent ?? field)?.group ?? null, true)
+  const top = parent ?? field
+  const section = groups.value.find((run) => run.fields.some(({ id: shown }) => shown === top?.id))
+  if (section) setOpen(runOf(section), true)
+  if (parent?.type === 'verdict') showPoint(parent.id)
   preview.value = false
   await nextTick()
   controls[id]?.focus()
@@ -175,11 +181,11 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
     </div>
     <RequestGroup
       v-for="section in groups"
-      :key="section.group ?? section.fields[0]?.id"
+      :key="runOf(section)"
       v-bind="groupCount(section.fields)"
-      :open="isOpen(section.group)"
+      :open="isOpen(runOf(section))"
       :title="section.group"
-      @update:open="setOpen(section.group, $event)"
+      @update:open="setOpen(runOf(section), $event)"
     >
       <template
         v-for="field in section.fields"
@@ -189,26 +195,49 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
           v-if="field.type === 'verdict'"
           :ref="(row) => (controls[field.id] = row as { focus: () => void } | null)"
           v-model:preview="preview"
-          :count="countOn(field)"
-          :count-id="countIdOf(field.id)"
-          :disabled="disabled"
           :comment="draft.comments[field.id]"
+          :disabled="disabled"
           :error="fieldError(field)"
           :field="field"
+          :open="isPointOpen(field.id)"
           :opens="opensOn(field)"
           :suggest="suggest"
           :value="draft.answers[field.id]"
+          :way="wayOn(field)"
           @edit="edit(field, $event)"
           @submit="emit('submit')"
+          @update:open="togglePoint(field.id)"
           @verdict="choose(field, $event)"
-        />
+        >
+          <template
+            v-if="hanging(field).length"
+            #under
+          >
+            <RequestField
+              v-for="child in hanging(field)"
+              :key="child.id"
+              :ref="(control) => (controls[child.id] = control as { focus: () => void } | null)"
+              v-model:preview="preview"
+              :after="afterOf(child)"
+              :held="isHeld(child)"
+              :comment="draft.comments[child.id]"
+              :disabled="disabled"
+              :error="fieldError(child)"
+              :field="child"
+              :model-value="draft.answers[child.id]"
+              :prompt-id="promptId"
+              :suggest="suggest"
+              @edit="edit(child, $event)"
+              @submit="emit('submit')"
+            />
+          </template>
+        </RequestVerdictRow>
         <RequestField
           v-for="shown in plainFields(field)"
           :key="shown.id"
           :ref="(control) => (controls[shown.id] = control as { focus: () => void } | null)"
           v-model:preview="preview"
           :class="{ 'request-review-under': shown.under }"
-          :described-by="describedBy(shown)"
           :field="shown"
           :model-value="draft.answers[shown.id]"
           :comment="draft.comments[shown.id]"

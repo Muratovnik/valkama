@@ -536,6 +536,17 @@ export function inlineWords(nodes: readonly RichInline[]): string {
   return nodes.map((node) => nodeWords(node)).join('')
 }
 
+/**
+ * A link's words in place of the link, at any depth: for words that stand inside a press of their
+ * own, where a link would be a press inside a press.
+ */
+export function unlinked(nodes: readonly RichInline[]): RichInline[] {
+  return nodes.flatMap((node) => {
+    if (node.kind === 'link') return unlinked(node.children)
+    return 'children' in node ? [{ ...node, children: unlinked(node.children) }] : [node]
+  })
+}
+
 function nodeWords(node: RichInline): string {
   if (node.kind === 'break') return ' '
   if (node.kind === 'code' || node.kind === 'text') return node.text

@@ -19,7 +19,7 @@ import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestOption from '@/features/input-requests/components/RequestOption.vue'
-import { useOpenedOptions } from '@/features/input-requests/composables/useOpenedOptions.ts'
+import { useFolds } from '@/features/input-requests/composables/useFolds.ts'
 import { fieldOptions } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 
@@ -54,7 +54,7 @@ function isChosen(option: string) {
   if (Array.isArray(value)) return value.includes(option)
   return typeof value === 'boolean' ? String(value) === option : value === option
 }
-const { isOpen, toggle } = useOpenedOptions()
+const { isOpen, toggle } = useFolds()
 </script>
 
 <template>

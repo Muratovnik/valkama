@@ -29,7 +29,7 @@ import RequestFoot from '@/features/input-requests/components/RequestFoot.vue'
 import RequestNote from '@/features/input-requests/components/RequestNote.vue'
 import RequestOption from '@/features/input-requests/components/RequestOption.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
-import { useOpenedOptions } from '@/features/input-requests/composables/useOpenedOptions.ts'
+import { useFolds } from '@/features/input-requests/composables/useFolds.ts'
 import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
@@ -196,7 +196,7 @@ function pick(option: string, event: Event) {
 const onward = () => void resolve(changing.value ? 'change' : 'answer')
 const writeNote = (note: string) => emit('update:draft', { ...props.draft, note })
 
-const { isOpen, toggle: toggleDescription } = useOpenedOptions()
+const { isOpen, toggle: toggleDescription } = useFolds()
 /** What is ticked and still folded stands whole under the rows, as a question's choice does. */
 const chosenFolded = computed(() =>
   options.value.flatMap(({ id: option, label, description }) =>

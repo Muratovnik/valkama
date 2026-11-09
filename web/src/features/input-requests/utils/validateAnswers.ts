@@ -80,7 +80,8 @@ export function commentOn(draft: RequestDraft, field: InputRequestField): string
 }
 
 /** Whether a field's draft chooses anything: an option, Yes or No, a tick or a verdict. */
-const choosesIn = (draft: RequestDraft, field: string): boolean => !blank(draft.answers[field])
+export const choosesIn = (draft: RequestDraft, field: string): boolean =>
+  !blank(draft.answers[field])
 
 /** One edit of one field: what it names changes, and what it leaves out stays. */
 export interface FieldEdit {
