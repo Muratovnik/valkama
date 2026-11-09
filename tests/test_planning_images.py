@@ -61,6 +61,12 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def pictures(folder: Path | str) -> list[str]:
+    """The picture files in a directory, by name, leaving out the marker naming its store."""
+
+    return sorted(name for name in os.listdir(folder) if name != images.MARKER)
+
+
 class StoreCase(unittest.TestCase):
     """A temporary store holding one space and two items."""
 
@@ -147,7 +153,7 @@ class KeepingTests(StoreCase):
             [(1, sha(data), "image/png", len(data)), (2, sha(data), "image/png", len(data))],
             self.rows(),
         )
-        self.assertEqual([sha(data)], os.listdir(self.folder))
+        self.assertEqual([sha(data)], pictures(self.folder))
 
     def test_a_picture_for_no_item_is_refused_and_leaves_no_file(self) -> None:
         with self.assertRaises(Exception):  # noqa: B017 - the refusal's class is the item lookup's
@@ -206,7 +212,7 @@ class DeletionTests(StoreCase):
         # The next open of the store takes the file nobody holds.
         reopened = store.connect()
         self.addCleanup(reopened.close)
-        self.assertEqual([], os.listdir(self.folder))
+        self.assertEqual([], pictures(self.folder))
 
     def test_a_delete_that_fails_before_its_commit_leaves_nothing_noted(self) -> None:
         images.store(self.conn, self.first, png(19))
@@ -245,7 +251,7 @@ class DeletionTests(StoreCase):
         self.assertTrue((self.folder / sha(data)).exists())
         reopened = store.connect()
         self.addCleanup(reopened.close)
-        self.assertEqual([], os.listdir(self.folder))
+        self.assertEqual([], pictures(self.folder))
 
     def test_deleting_the_item_deletes_its_pictures(self) -> None:
         data = png(10)
@@ -263,10 +269,10 @@ class DeletionTests(StoreCase):
         images.store(self.conn, self.second, shared)
         self.delete(self.first)
         self.assertEqual(
-            [shared], [(self.folder / name).read_bytes() for name in os.listdir(self.folder)]
+            [shared], [(self.folder / name).read_bytes() for name in pictures(self.folder)]
         )
         self.delete(self.second)
-        self.assertEqual([], os.listdir(self.folder))
+        self.assertEqual([], pictures(self.folder))
 
     def test_a_merge_gives_the_survivor_the_pictures_its_threads_show(self) -> None:
         data = png(13)
@@ -296,6 +302,13 @@ class BackupTests(StoreCase):
         self.assertEqual(
             data, (Path(store_backups.images_beside(snapshot)) / sha(data)).read_bytes()
         )
+        self.assertEqual(images.MARKER, store_backups.MARKER)
+        self.assertEqual(
+            (self.folder / images.MARKER).read_text(encoding="utf-8"),
+            (Path(store_backups.images_beside(snapshot)) / images.MARKER).read_text(
+                encoding="utf-8"
+            ),
+        )
         # The documented restore: the snapshot in place of the store, its pictures into
         # `images` beside it. A fresh directory stands for a machine that lost the store.
         fresh = self.root / "fresh"
@@ -306,6 +319,13 @@ class BackupTests(StoreCase):
             restored = store.connect()
         self.addCleanup(restored.close)
         self.assertEqual(data, images.read(restored, sha(data), item=self.first).data)
+        # The copy names its store, so the restored store still owns it and clears it.
+        orphan = fresh / "images" / sha(png(29))
+        orphan.write_bytes(png(29))
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(fresh / "valkama.sqlite3")}):
+            store.connect().close()
+        self.assertFalse(orphan.exists())
+        self.assertTrue((fresh / "images" / sha(data)).exists())
 
     def test_a_restore_over_a_newer_store_keeps_no_picture_the_snapshot_does_not_hold(
         self,
@@ -322,7 +342,7 @@ class BackupTests(StoreCase):
         shutil.copytree(store_backups.images_beside(snapshot), self.folder, dirs_exist_ok=True)
         restored = store.connect()
         self.addCleanup(restored.close)
-        self.assertEqual([sha(older)], os.listdir(self.folder))
+        self.assertEqual([sha(older)], pictures(self.folder))
         self.assertEqual(older, images.read(restored, sha(older), item=self.first).data)
         with self.assertRaises(images.ImageRefusedError):
             images.read(restored, sha(newer))
@@ -349,8 +369,8 @@ class BackupTests(StoreCase):
                 self.conn, "manual", locate=store._backups
             )
         self.assertEqual(["waited"], attempts)
-        self.assertEqual([sha(png(27))], sorted(os.listdir(store_backups.images_beside(snapshot))))
-        self.assertEqual([sha(png(27))], os.listdir(self.folder))
+        self.assertEqual([sha(png(27))], pictures(store_backups.images_beside(snapshot)))
+        self.assertEqual([sha(png(27))], pictures(self.folder))
 
     def test_a_snapshot_missing_a_picture_or_holding_a_wrong_one_is_refused(self) -> None:
         data = png(21)
@@ -379,6 +399,35 @@ class BackupTests(StoreCase):
         taken = [store_backups.snapshot(self.conn, store._backups(), "manual") for _ in range(6)]
         self.assertFalse(os.path.exists(store_backups.images_beside(taken[0])))
         self.assertTrue(os.path.isdir(store_backups.images_beside(taken[-1])))
+
+
+class SharedDirectoryTests(StoreCase):
+    """A second store opened beside the first, in the same directory."""
+
+    def open_other(self) -> sqlite3.Connection:
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.root / "other.sqlite3")}):
+            other = store.connect()
+        self.addCleanup(other.close)
+        return other
+
+    def test_opening_another_store_beside_this_one_removes_none_of_its_pictures(self) -> None:
+        pictures = [png(60), png(61)]
+        for data in pictures:
+            images.store(self.conn, self.first, data)
+        self.open_other()
+        for data in pictures:
+            self.assertEqual(data, images.read(self.conn, sha(data), item=self.first).data)
+
+    def test_the_other_store_keeps_no_picture_in_a_folder_it_does_not_own(self) -> None:
+        images.store(self.conn, self.first, png(62))
+        other = self.open_other()
+        service.create_planning_space(other, project_id="else", name="Else", key="ELS")
+        item = str(service.create_work_item(other, space="ELS", title="Elsewhere")["reference"])
+        other.commit()
+        with self.assertRaises(images.ImageRefusedError) as refused:
+            images.store(other, item, png(63))
+        self.assertEqual(409, refused.exception.status)
+        self.assertFalse((self.folder / sha(png(63))).exists())
 
 
 class SchemaFourteenTests(unittest.TestCase):

@@ -36,6 +36,12 @@ MAX_BYTES = 10 * 1024 * 1024
 DIRECTORY = "images"
 #: Where one picture is served, and so what the Markdown written for it names.
 PATH_PREFIX = "/api/images/"
+#: The file in the pictures' directory naming the store that owns it, by the store's
+#: identity (`platform_store_metadata.data_scope_id`). The directory is found beside the
+#: database file, so a second store opened in the same directory finds the same one; the
+#: marker is what tells it the pictures there are not its own to keep or to remove.
+#: `store_backups` copies it with the pictures under the same name.
+MARKER = ".store"
 _HASH = re.compile(r"[0-9a-f]{64}")
 #: What `_write` leaves behind when the process dies before its `os.replace`.
 _TORN = re.compile(r"\.[0-9a-f]{64}\..+\.tmp")
@@ -89,6 +95,53 @@ def directory(conn: sqlite3.Connection) -> str:
         if row[1] == "main" and row[2]:
             return directory_beside(str(row[2]))
     raise ImageRefusedError(503, "unavailable", "this store has no file to keep pictures beside")
+
+
+def _identity(conn: sqlite3.Connection) -> str | None:
+    row = conn.execute(
+        "SELECT data_scope_id FROM platform_store_metadata WHERE singleton = 1"
+    ).fetchone()
+    return str(row[0]) if row else None
+
+
+def _owner(folder: str) -> str | None:
+    """The identity the directory's marker names, or None when it has none."""
+
+    try:
+        with open(os.path.join(folder, MARKER), encoding="utf-8") as handle:
+            return handle.read(200).strip()
+    except FileNotFoundError:
+        return None
+
+
+def _owns(conn: sqlite3.Connection, folder: str) -> bool:
+    identity = _identity(conn)
+    return identity is not None and _owner(folder) == identity
+
+
+def _claim(conn: sqlite3.Connection, folder: str) -> None:
+    """Make the directory this store's, or refuse to keep a picture in another's.
+
+    The first store to keep a picture creates the directory and names itself in
+    the marker; created exclusively, so of two stores racing for one directory
+    one wins and the other is refused rather than both writing into it.
+    """
+
+    identity = _identity(conn)
+    if identity is None:
+        raise ImageRefusedError(503, "unavailable", "this store has no identity yet")
+    os.makedirs(folder, exist_ok=True)
+    with (
+        contextlib.suppress(FileExistsError),
+        open(os.path.join(folder, MARKER), "x", encoding="utf-8") as handle,
+    ):
+        handle.write(identity)
+    if _owner(folder) != identity:
+        raise ImageRefusedError(
+            409,
+            "store_conflict",
+            "the pictures' folder beside this store belongs to another store",
+        )
 
 
 def path_of(sha: str) -> str:
@@ -151,6 +204,7 @@ def store(conn: sqlite3.Connection, reference: object, data: bytes) -> dict:
     try:
         item = str(read_model.item_row(conn, reference)["work_item_id"])
         folder = directory(conn)
+        _claim(conn, folder)
         wrote = _write(folder, digest, data)
         conn.execute(
             "INSERT OR IGNORE INTO work_item_images(work_item_id,sha256,media_type,size,call_id)"
@@ -296,7 +350,7 @@ def settle(conn: sqlite3.Connection) -> int:
     try:
         conn.execute("BEGIN IMMEDIATE")
         try:
-            if directory(conn) == folder:
+            if directory(conn) == folder and _owns(conn, folder):
                 for sha in _unheld(conn, hashes):
                     with contextlib.suppress(OSError):
                         os.remove(os.path.join(folder, sha))
@@ -322,6 +376,10 @@ def sweep(conn: sqlite3.Connection) -> int:
     if not conn.in_transaction:
         raise RuntimeError("the pictures are swept only under the store's write lock")
     folder = directory(conn)
+    # Only a directory that names this store: another store's pictures beside it, or
+    # a directory with no marker, have no rows here and are not this store's to judge.
+    if not _owns(conn, folder):
+        return 0
     try:
         names = os.listdir(folder)
     except FileNotFoundError:

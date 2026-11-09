@@ -50,6 +50,10 @@ class BackupLocation(NamedTuple):
 
 
 _PICTURE = re.compile(r"[0-9a-f]{64}")
+#: The pictures' directory names the store it belongs to in this file (the planning
+#: images module owns it); a snapshot's copy carries it, so a restored directory is
+#: still its store's.
+MARKER = ".store"
 _SNAPSHOT_SUFFIX = ".sqlite3"
 IMAGES_SUFFIX = ".images"
 
@@ -78,6 +82,8 @@ def _copy_pictures(source: str, destination: str) -> None:
     os.makedirs(destination, exist_ok=True)
     for name in pictures:
         shutil.copyfile(os.path.join(source, name), os.path.join(destination, name))
+    if os.path.isfile(os.path.join(source, MARKER)):
+        shutil.copyfile(os.path.join(source, MARKER), os.path.join(destination, MARKER))
 
 
 def verify_pictures(snapshot_path: str, source: str) -> None:

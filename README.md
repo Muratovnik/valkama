@@ -597,9 +597,13 @@ process that holds the store, delete the `-wal` and `-shm` files beside it, copy
 the snapshot file in place of the database, delete the `images` folder beside it
 and put a copy of the snapshot's `.images` folder there under the name `images`;
 a snapshot with no `.images` folder held no pictures, and the store then has
-none. Every open of the store also removes a picture file that no item holds,
-so a picture written after the snapshot does not outlive the restore even when
-the folder was not replaced. Going back to a build at schema 13 is the same with
+none. The folder's `.store` file names the store it belongs to, and a snapshot's
+`.images` carries it, so the restored folder is still its store's. Every open of
+the store also removes a picture file that no item holds, so a picture written
+after the snapshot does not outlive the restore even when the folder was not
+replaced; a store neither clears nor writes into a folder whose `.store` names
+another store, as one opened from a second database file in the same directory
+would find it. Going back to a build at schema 13 is the same with
 the `preschema14` snapshot, which has no `.images` folder, before pinning the
 earlier release as described below for schema 9: everything written since is
 lost, pictures included.
