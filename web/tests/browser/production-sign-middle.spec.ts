@@ -392,6 +392,11 @@ for (const locale of ['ru', 'en'] as const) {
       await installBackend(page)
       await serveChain(page, largeChainHere())
       await page.goto(CARD)
+      // The chain stands under Relations.
+      await page
+        .locator('.drawer')
+        .getByRole('tab', { name: /Relations|Связи/u })
+        .click()
       const section = page.locator('.drawer section.chain')
       await expect(section).toBeVisible()
       const rows = section.locator('.chain-row').filter({ has: page.locator('.chain-row-glyph') })

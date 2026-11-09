@@ -87,6 +87,8 @@ for (const width of [1280, 390])
       await serve(page, largeChainHere())
       await page.goto(CARD)
       const drawer = page.locator('.drawer')
+      // The chain stands under Relations.
+      await drawer.getByRole('tab', { name: /Relations|Связи/u }).click()
       await expect(drawer.locator('section.chain .section-header-actions')).toBeVisible()
       await expect(drawer).toHaveCSS('transform', 'none')
 
