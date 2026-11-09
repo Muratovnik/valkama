@@ -194,6 +194,8 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   ])
   await dialog.getByRole('button', { name: 'Close questions', exact: true }).click()
   await page.getByRole('button', { name: /^Needs my answer/ }).click()
+  // Read again with nothing of the reader on it, it stands under «Answered», folded.
+  await dialog.getByRole('button', { name: 'Answered (1)', exact: true }).click()
   await expect(dialog.locator('.request-state')).toContainText('You answered')
   await expect(dialog.locator('.request-option.is-chosen')).toContainText('No')
   // The number in the head of the block is the way to its task.

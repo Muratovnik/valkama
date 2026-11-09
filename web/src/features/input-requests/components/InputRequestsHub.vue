@@ -8,6 +8,7 @@ import { useInputRequests } from '@/features/input-requests/composables/useInput
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
+import { hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -31,8 +32,35 @@ const list = ref<InstanceType<typeof RequestList> | null>(null)
 const holding = (entry: InputRequestEntry) =>
   holdsDraft(entry.request, drafts.value[requestIdentity(entry)]) ||
   (list.value?.holdsFocus(entry) ?? false)
-const { result, loading, failed, partial, entries, count, waits, refresh, changed, dismiss } =
-  useInputRequests(() => 'all', holding)
+/**
+ * A question that stopped waiting is put aside under «Answered» at the first read after which
+ * it holds nothing typed or chosen, no form of a change stands open in it, and neither the
+ * pointer nor the keyboard is in it or after it in the list, which it would move from under them.
+ */
+function settles(entry: InputRequestEntry) {
+  const draft = drafts.value[requestIdentity(entry)]
+  const kept = Boolean(draft && (draft.changing !== null || hasDraft(draft)))
+  return !kept && !(list.value?.holdsReader(entry) ?? false)
+}
+const {
+  result,
+  loading,
+  failed,
+  partial,
+  entries,
+  count,
+  settled,
+  waits,
+  refresh,
+  changed,
+  dismiss,
+} = useInputRequests(() => 'all', holding, settles)
+const inPlace = computed(() =>
+  entries.value.filter((entry) => !(requestIdentity(entry) in settled.value)),
+)
+const answered = computed(() =>
+  entries.value.filter((entry) => requestIdentity(entry) in settled.value),
+)
 const waiting = computed(
   () =>
     new Set(entries.value.filter((entry) => waits(entry)).map((entry) => requestIdentity(entry))),
@@ -66,7 +94,8 @@ watch(
   >
     <RequestList
       ref="list"
-      :entries="entries"
+      :entries="inPlace"
+      :answered="answered"
       :waiting="waiting"
       :result="result"
       :loading="loading"

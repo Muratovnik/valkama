@@ -1,7 +1,8 @@
 /**
  * The way through «Needs my answer» in the dialog's head: «Question N of M», M counting the
  * blocks still waiting and N the one being read, and the steps to the one before and after,
- * which bring that block's head up to the top of the list.
+ * which bring that block's head up to the top of the list. A block answered here folds where it
+ * stands and goes under «Answered (N)» only at a read that moves nothing from under the reader.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -9,7 +10,7 @@ import type { Locator, Page } from '@playwright/test'
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { box } from './editorPage.ts'
-import { asked, openQuestion, routeField } from './questionBackend.ts'
+import { asked, openQuestion, routeField, send } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const POLL = 30_000
@@ -82,6 +83,16 @@ const lines = (locator: Locator) =>
     range.selectNodeContents(element)
     return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
   })
+
+/**
+ * Where a block stands in the list, whatever the list has scrolled by: focus moving on to the next
+ * question after an answer scrolls it, and that is not the block moving.
+ */
+async function inList(dialog: Locator, card: Locator) {
+  const at = await box(card)
+  const list = await box(dialog.locator('.request-list'))
+  return { x: at.x - list.x, y: at.y - list.y, width: at.width, height: at.height }
+}
 
 /** Whether the head of this block stands at the very top of the list. */
 async function onTop(dialog: Locator, scroller: Locator, title: string) {
@@ -230,6 +241,87 @@ test('the count follows the block whose head stands at the top as the list scrol
   })
   await settle(page)
   await expect(place).toHaveText('Question 4 of 4')
+})
+
+test('an answered block folds where it stands and goes under «Answered» at a read that moves nothing', async ({
+  page,
+}) => {
+  const { dialog, place } = await openList(page, blocks(3, 1))
+  const first = block(dialog, 'Block 1')
+  const second = block(dialog, 'Block 2')
+  const status = dialog.locator('.request-status')
+  await expect(place).toHaveText('Question 1 of 3')
+  // Answered here, by the pointer.
+  await second.getByRole('radio').first().check()
+  const above = await inList(dialog, first)
+  const { y: top } = await inList(dialog, second)
+  await send(second).click()
+  await expect(second.locator('.request-state')).toContainText('You answered')
+  expect(await inList(dialog, first)).toEqual(above)
+  expect(await inList(dialog, second)).toMatchObject({ y: top })
+  // Focus went on to the next block waiting, the second of two, whose head now stands at the top.
+  await expect(block(dialog, 'Block 3')).toBeFocused()
+  await expect(place).toHaveText('Question 2 of 2')
+  await expect(status).toHaveText('Waiting for an answer: 2')
+  // The next read, with the pointer still resting on it: it stays.
+  await page.clock.runFor(POLL)
+  expect(await inList(dialog, second)).toMatchObject({ y: top })
+  const fold = dialog.getByRole('button', { name: 'Answered (1)', exact: true })
+  await expect(fold).toHaveCount(0)
+
+  // A read the person asks for from above the blocks: it goes, and nothing above it moves.
+  await dialog.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect(fold).toBeVisible()
+  await expect(second).toBeHidden()
+  expect(await inList(dialog, first)).toEqual(above)
+  await expect(place).toHaveText(/ of 2$/u)
+  // It opens in place: the press stays where it was and the block stands under it.
+  // Where the press stands once it is in view to be pressed, in the window and in the list.
+  await fold.scrollIntoViewIfNeeded()
+  const press = await box(fold)
+  const pressInList = await inList(dialog, fold)
+  await fold.click()
+  await expect(second).toBeVisible()
+  expect(await box(fold)).toEqual(press)
+  expect(await inList(dialog, fold)).toEqual(pressInList)
+  const opened = await box(second)
+  expect(opened.y).toBeGreaterThan(press.y + press.height)
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+})
+
+test('a block answered elsewhere while it holds a choice here no longer counts, and stays', async ({
+  page,
+}) => {
+  const { dialog, place, requests } = await openList(page, blocks(3, 1))
+  const first = block(dialog, 'Block 1')
+  await first.getByRole('radio').first().check()
+  requests.settle(id(0), { status: 'answered', answers: { f0: 'move' }, answered_by: 'user' })
+  await page.clock.runFor(POLL)
+  await expect(first.locator('.request-state')).toContainText('Answered')
+  await expect(place).toHaveText('Question 1 of 2')
+  await expect(dialog.locator('.request-status')).toHaveText('Waiting for an answer: 2')
+  // A read from above it does not put it aside: it holds what was chosen and never sent.
+  await dialog.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await page.clock.runFor(POLL)
+  await expect(first).toBeVisible()
+  await expect(dialog.getByRole('button', { name: /^Answered/u })).toHaveCount(0)
+})
+
+test('a read while the keyboard stands after an answered block leaves it where it is', async ({
+  page,
+}) => {
+  const { dialog } = await openList(page, blocks(3, 1))
+  const second = block(dialog, 'Block 2')
+  await second.getByRole('radio').first().check()
+  await send(second).press('Enter')
+  await expect(second.locator('.request-state')).toContainText('You answered')
+  // Focus went on to the next block waiting, after it.
+  await expect(block(dialog, 'Block 3')).toBeFocused()
+  await page.mouse.move(0, 0)
+  await page.clock.runFor(POLL)
+  await page.clock.runFor(POLL)
+  await expect(second).toBeVisible()
+  await expect(dialog.getByRole('button', { name: /^Answered/u })).toHaveCount(0)
 })
 
 test('no rail of bars is left at the start edge', async ({ page }) => {
