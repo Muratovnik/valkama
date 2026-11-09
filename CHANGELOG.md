@@ -38,6 +38,11 @@ checkouts are therefore distinguishable even at the same version.
   answered fold where they stand and later gather under «Answered (N)» at the end of the list,
   never moving while your pointer or keyboard is on them or below them.
 
+- **A card's chain is under «Relations».** The chain section moved from Overview to the
+  Relations tab, after the links and references. Its «Epic | Chain» switch shows only where
+  the two differ. The chain read (`GET /api/planning/work-item/chain`, `get_work_item_chain`)
+  adds `root.totals`, how many members each scope holds; nothing it answered before changed.
+
 - **The pin is in a card's «…».** A «…» menu beside Close holds «Pin to Work», checked while
   the item is pinned; the pin no longer stands in the line with the reference and the date.
   The menu works from the keyboard as a menu does: arrows, Home and End, Escape back to «…».

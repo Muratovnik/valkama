@@ -73,6 +73,16 @@ const scopes = computed(() => [
   { value: 'chain' as const, label: t('workItem.chain.scopeChain') },
 ])
 
+/**
+ * Epic or Chain is a choice only where the two answer differently. Where the work grew
+ * nothing past the root's children they are the same list, and where the root has no
+ * children Epic is an empty one, so either way the switch would offer nothing to compare.
+ */
+const twoScopes = computed(() => {
+  const totals = props.chain?.root.totals
+  return totals !== undefined && totals.epic > 0 && totals.epic !== totals.chain
+})
+
 const groups = computed(() => (props.chain ? groupMembers(props.chain.members) : null))
 
 /** The open blocker each member waits on, where the blocker is another member of this chain. */
@@ -215,7 +225,7 @@ defineExpose({ restore, reveal, view })
         #actions
       >
         <SegmentedControl
-          v-if="chain.root.has_children"
+          v-if="twoScopes"
           class="chain-scope"
           size="compact"
           :label="t('workItem.chain.scopeLabel')"

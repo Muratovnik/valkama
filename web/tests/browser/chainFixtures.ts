@@ -3,6 +3,7 @@
  * one that draws legibly, the card's large one renamed into the space, and the
  * unit fixture's long one filed in it; and `serve`, which answers for them.
  */
+import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -73,6 +74,7 @@ export function smallChain() {
       title: workItem.title,
       kind: 'epic' as const,
       has_children: true,
+      totals: { chain: items.length, epic: 6 },
     },
     scope: 'chain' as const,
     total: items.length,
@@ -220,6 +222,16 @@ export async function serve(
       body: JSON.stringify(response.body),
     })
   })
+}
+
+/**
+ * Open the card's Relations, where its chain stands, from the keys: a press would leave
+ * the pointer's modality behind for a check of what keyboard focus draws.
+ */
+export async function showRelations(page: Page) {
+  await page.locator('.drawer').getByRole('tab', { name: 'Relations', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.drawer .relations')).toBeVisible()
 }
 
 /** What the address's module state says, decoded. */

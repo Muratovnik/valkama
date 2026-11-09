@@ -1128,7 +1128,13 @@ never in heavier ink, and reads high or urgent after its reference; its glyphs a
 not pressed, since the card is one button. A search result leads with the
 same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
-A card's chain section leads with a branch map: one lane per origin of work,
+A card's chain section stands in «Связи», after the item's links and references: what
+the work grew into is a relation of the item, and the map and its hundreds of rows held
+Overview's first screen between the next step and the description. Its «Эпик | Цепочка»
+switch stands only where the two answer differently, by the counts the chain read gives
+for both scopes: where the work grew nothing past the root's children the two are one
+list, and a root with no children has no epic scope to read.
+The section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the
 board's hues — finished green, in progress blue, review amber, ahead grey,

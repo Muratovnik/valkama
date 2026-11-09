@@ -16,7 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainOf, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
-import { serve } from './chainFixtures.ts'
+import { serve, showRelations } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { frames } from './frames.ts'
 import { openPlanFor } from './openSessionFixtures.ts'
@@ -104,6 +104,7 @@ const members = [
 /** The card's chain as a card opens it: Done folded. */
 async function openChain(page: Page, width: number) {
   await openCard(page, width, {}, () => serve(page, chainOf(ROOT, members)))
+  await showRelations(page)
   const list = page.locator('.drawer section.chain .chain-members')
   await expect(list.locator('.chain-row')).toHaveCount(8 + 2)
   return list

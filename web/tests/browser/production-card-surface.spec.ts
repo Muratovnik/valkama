@@ -5,7 +5,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { largeChainHere, serve } from './chainFixtures.ts'
+import { largeChainHere, serve, showRelations } from './chainFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -430,6 +430,7 @@ test('Back to a card read far down shows it at that place and at no other first'
   await installBackend(page)
   await serve(page, largeChainHere())
   await page.goto(CARD)
+  await showRelations(page)
   const drawer = page.locator('.drawer')
   const group = drawer.locator('section.chain-group[aria-label="Backlog"]')
   await expect(drawer).toHaveCSS('transform', 'none')

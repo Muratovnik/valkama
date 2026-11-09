@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
 import { chainResponse, emptyChain, largeEpicChain } from '../fixtures/chain.ts'
-import { deferred, getButton, workItemFixture } from '../fixtures/workItem.ts'
+import { deferred, getButton, showRelations, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -48,6 +48,7 @@ function serveChain(...answers: Response[]) {
 async function open(item = ROOT, overrides: { writable?: boolean } = {}) {
   const wrapper = mountInspector(item, overrides)
   await flushPromises()
+  await showRelations(wrapper)
   return wrapper
 }
 
@@ -342,7 +343,7 @@ describe('the chain section of a card', () => {
     await flushPromises()
     expect(wrapper.emitted('open')).toEqual([
       [reference, expect.objectContaining({ opened: reference, reference: ROOT.reference })],
-      ['MAIN-779', expect.objectContaining({ opened: 'MAIN-779', section: 'overview' })],
+      ['MAIN-779', expect.objectContaining({ opened: 'MAIN-779', section: 'relations' })],
     ])
   })
 

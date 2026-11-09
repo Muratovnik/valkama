@@ -257,6 +257,10 @@ function when(value: string): string {
         inline
       />
     </section>
+
+    <!-- What the item's work grew into, which the card reads and owns. It comes after
+         the item's own links and references, because it can run to hundreds of rows. -->
+    <slot name="chain" />
   </div>
 </template>
 <style scoped>

@@ -16,7 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainOf, mapId, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
-import { serve } from './chainFixtures.ts'
+import { serve, showRelations } from './chainFixtures.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -82,6 +82,7 @@ async function openCard(page: Page) {
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
+  await showRelations(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   return section

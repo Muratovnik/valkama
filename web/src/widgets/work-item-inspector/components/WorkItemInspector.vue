@@ -428,8 +428,15 @@ defineExpose({ close, openFrom })
               @refresh="load"
               @resume="(state) => changeFacts({ state })"
               @tick="tick"
+            />
+            <InspectorRelations
+              v-if="section === 'relations'"
+              :item="payload"
+              :writable="writable && !busy"
+              @changed="reloaded"
+              @open="openFrom"
             >
-              <template #composition>
+              <template #chain>
                 <InspectorChain
                   ref="chainSection"
                   :chain="chain.chain.value"
@@ -444,14 +451,7 @@ defineExpose({ close, openFrom })
                   @open="openFrom"
                 />
               </template>
-            </InspectorOverview>
-            <InspectorRelations
-              v-if="section === 'relations'"
-              :item="payload"
-              :writable="writable && !busy"
-              @changed="reloaded"
-              @open="openFrom"
-            />
+            </InspectorRelations>
             <InspectorAgents
               v-else-if="section === 'agents'"
               :agents="payload.agents ?? []"

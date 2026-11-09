@@ -26,6 +26,7 @@ import {
   rootFramed,
   routeState,
   serve,
+  showRelations,
   smallChain,
 } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
@@ -42,6 +43,7 @@ async function openCard(page: Page, view?: 'graph') {
       ...(view ? { state: { view } } : {}),
     }),
   )
+  await showRelations(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   return section
@@ -270,6 +272,7 @@ test('an attached store item says where a chain is read, and asks for none', asy
       entity: planningWorkItemEntity(attachedWorkItemRef),
     }),
   )
+  await showRelations(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   await expect(section.locator('.data-empty')).toHaveText(
@@ -413,6 +416,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await expect(chip).toBeVisible()
 
   await page.goBack()
+  await showRelations(page)
   await expect(page.locator('.drawer section.chain')).toBeVisible()
   await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await page.goForward()
@@ -424,6 +428,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await chip.click()
   await expect(chip).toHaveCount(0)
   await page.goBack()
+  await showRelations(page)
   await expect(page.locator('.drawer section.chain')).toBeVisible()
   await expect(chip).toHaveText('Chain MAIN-264 · 17')
 })

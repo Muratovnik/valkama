@@ -5,7 +5,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { largeChainHere, serve } from './chainFixtures.ts'
+import { largeChainHere, serve, showRelations } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
@@ -324,6 +324,7 @@ async function openChain(page: Page, width: number) {
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
+  await showRelations(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   return section

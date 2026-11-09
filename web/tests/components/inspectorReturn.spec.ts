@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
-import { getButton, workItemFixture } from '../fixtures/workItem.ts'
+import { getButton, showRelations, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -67,6 +67,7 @@ describe('a card reopened by Back', () => {
     const scopes = serveChain()
     // Read the 21st backlog row off the card as the reader would have reached it.
     const first = await open()
+    await showRelations(first)
     await getButton(first, 'Show all · 107').trigger('click')
     const reference = rows(first, 'Backlog')[20].get('.chain-row-reference').text()
     first.unmount()
@@ -76,7 +77,7 @@ describe('a card reopened by Back', () => {
       opened: reference,
       reference: ROOT.reference,
       scroll: 900,
-      section: 'overview',
+      section: 'relations',
     })
     // The scope it was read in is the one asked for, and the groups open as they were.
     expect(scopes.at(-1)).toBe('epic')
@@ -96,7 +97,7 @@ describe('a card reopened by Back', () => {
       opened: done?.reference ?? '',
       reference: ROOT.reference,
       scroll: 0,
-      section: 'overview',
+      section: 'relations',
     })
     expect(focusedReference()).toBe(done?.reference)
   })
@@ -128,7 +129,7 @@ describe('a card reopened by Back', () => {
       opened: 'MAIN-1',
       reference: 'MAIN-2',
       scroll: 0,
-      section: 'overview',
+      section: 'relations',
     })
     expect(scopes).toEqual(['chain'])
     expect(focusedReference()).toBeUndefined()

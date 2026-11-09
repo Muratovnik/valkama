@@ -208,9 +208,26 @@ class ChainBoundaryTests(ChainFixture):
                 "title": "R",
                 "kind": "epic",
                 "has_children": True,
+                "totals": {"chain": 10, "epic": 3},
             },
             by_reference["root"],
         )
+
+    def test_the_root_says_what_each_scope_holds_whichever_is_asked(self) -> None:
+        # R grew past its three children; O's children grew nothing; D1 has no children
+        # and one item discovered from it; E's chain adds D2, found from its child E1.
+        expected = {
+            "R": {"chain": 10, "epic": 3},
+            "O": {"chain": 2, "epic": 2},
+            "D1": {"chain": 1, "epic": 0},
+            "E": {"chain": 3, "epic": 2},
+        }
+        for name, totals in expected.items():
+            for scope in ("chain", "epic"):
+                with self.subTest(root=name, scope=scope):
+                    found = self.read(id=self.refs[name], scope=scope)
+                    self.assertEqual(totals, found["root"]["totals"])
+                    self.assertEqual(totals[scope], found["total"])
 
     def test_a_root_without_children_still_has_what_was_discovered_from_it(self) -> None:
         found = self.read(id=self.refs["D1"])

@@ -108,6 +108,7 @@ export function chainOf(space: Brief[]) {
       title: LONG_EPIC,
       kind: 'epic' as const,
       has_children: true,
+      totals: { chain: members.length, epic: members.length },
     },
     scope: 'chain' as const,
     total: members.length,
