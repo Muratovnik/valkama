@@ -1,8 +1,8 @@
 /**
  * The list of everything waiting, read as blocks of questions: each block's head stays at the
  * top of the list while its questions scroll, with the comment on the whole block in it and the
- * task's number as the way to the task, and a rail of short bars at the dialog's start edge goes
- * to any question, by the pointer and by the keys.
+ * task's number as the way to the task. The way from block to block is in the dialog's head
+ * (`production-question-counter.spec.ts`).
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -11,7 +11,7 @@ import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputReq
 
 import { REVIEW_PROMPT, reviewFields } from '../support/reviewQuestion.ts'
 import { box } from './editorPage.ts'
-import { asked, mixedField, openQuestion, routeField } from './questionBackend.ts'
+import { asked, openQuestion, routeField } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const LIST = /^(?:Needs my answer|Ждут моего ответа)/u
@@ -35,11 +35,10 @@ const blocks = (): InputRequestEntry[] =>
       fields: block.labels.map((label) => field(label.toLowerCase(), label)),
     }),
   )
-const QUESTIONS = BLOCKS.flatMap((block) => block.labels)
 
 async function openList(page: Page, entries: InputRequestEntry[], width: number) {
   await page.setViewportSize({ width, height: 844 })
-  // A press on a bar scrolls at once, so where it lands is read when it has landed.
+  // A step scrolls at once, so where it lands is read when it has landed.
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const opened = await openQuestion(page, entries)
   await page.keyboard.press('Escape')
@@ -56,7 +55,8 @@ const block = (dialog: Locator, title: string) =>
   dialog
     .locator('.request-card')
     .filter({ has: dialog.page().getByRole('heading', { name: title }) })
-const question = (scope: Locator, label: string) => scope.locator(`[data-rail-question="${label}"]`)
+const question = (scope: Locator, label: string) =>
+  scope.locator('.request-field').filter({ hasText: label })
 
 for (const width of [1280, 390] as const) {
   test(`a block's head stays at the top while its questions scroll, with its comment, at ${width}`, async ({
@@ -117,83 +117,6 @@ test('the next block’s head takes the place of the one before as its block com
   expect(gone.y + gone.height).toBeLessThanOrEqual(panel.y + 1)
 })
 
-test('a bar for each question at the start edge goes to it, under the head that sticks', async ({
-  page,
-}) => {
-  const { dialog, scroller } = await openList(page, blocks(), 1280)
-  const rail = dialog.getByRole('navigation', { name: 'Question navigation' })
-  const bars = rail.getByRole('button')
-  await expect(bars).toHaveCount(QUESTIONS.length)
-  for (const [index, label] of QUESTIONS.entries()) {
-    await expect(bars.nth(index)).toHaveAccessibleName(label)
-    await expect(bars.nth(index)).toHaveAttribute('data-tooltip', label)
-  }
-  await expect(rail.getByRole('group', { name: 'Third block' }).getByRole('button')).toHaveCount(3)
-  // In the start inset, left of the words, which stand where the dialog's head's words do.
-  const edge = await box(rail)
-  const words = await box(dialog.locator('.request-card').first())
-  expect(edge.x + edge.width).toBeLessThanOrEqual(words.x + 0.5)
-  for (const bar of await bars.all()) {
-    const target = await box(bar)
-    expect(target.width).toBeGreaterThanOrEqual(24)
-    expect(target.height).toBeGreaterThanOrEqual(24)
-  }
-  await expect(bars.first()).toHaveAttribute('aria-current', 'location')
-
-  const delta = bars.nth(QUESTIONS.indexOf('Delta'))
-  await delta.click()
-  await expect(delta).toHaveAttribute('aria-current', 'location')
-  await expect(bars.first()).not.toHaveAttribute('aria-current')
-  const third = block(dialog, 'Third block')
-  const head = await box(third.locator('.request-header'))
-  const landed = await box(question(third, 'Delta'))
-  const panel = await box(scroller)
-  expect(Math.abs(head.y - panel.y)).toBeLessThan(1)
-  expect(landed.y, 'clear of the head').toBeGreaterThanOrEqual(head.y + head.height)
-  expect(landed.y, 'right under it').toBeLessThanOrEqual(head.y + head.height + 16)
-  // A press of the pointer leaves focus where it was.
-  await expect(delta).toBeFocused()
-})
-
-test('the rail is one stop on Tab, the arrows walk it and Enter takes focus to the question', async ({
-  page,
-}) => {
-  const { dialog } = await openList(page, blocks(), 1280)
-  const bars = dialog.getByRole('navigation', { name: 'Question navigation' }).getByRole('button')
-  await dialog.getByRole('button', { name: 'Close questions', exact: true }).focus()
-  await page.keyboard.press('Tab')
-  await expect(bars.first()).toBeFocused()
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowDown')
-  await expect(bars.nth(2)).toBeFocused()
-  await page.keyboard.press('End')
-  await expect(bars.last()).toBeFocused()
-  await page.keyboard.press('Home')
-  await expect(bars.first()).toBeFocused()
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('Enter')
-  const gamma = question(block(dialog, 'Second block'), 'Gamma')
-  await expect(gamma.getByRole('radio').first()).toBeFocused()
-  await expect(bars.nth(2)).toHaveAttribute('aria-current', 'location')
-  // Back in the rail, the one stop is the question being read.
-  await dialog.getByRole('button', { name: 'Close questions', exact: true }).focus()
-  await page.keyboard.press('Tab')
-  await expect(bars.nth(2)).toBeFocused()
-})
-
-test('a phone-wide window draws no rail, and the inset it would stand in is the inset', async ({
-  page,
-}) => {
-  const { dialog } = await openList(page, blocks(), 390)
-  await expect(dialog.getByRole('navigation', { name: 'Question navigation' })).toBeHidden()
-  const frame = await box(dialog.locator('.dialog-frame'))
-  const card = await box(dialog.locator('.request-card').first())
-  const title = await box(dialog.locator('.overlay-header-name'))
-  expect(Math.abs(card.x - title.x)).toBeLessThanOrEqual(1)
-  expect(card.x - frame.x).toBeGreaterThanOrEqual(15)
-})
-
 test('a review in the list keeps its count under the block’s head and its foot at the bottom', async ({
   page,
 }) => {
@@ -204,9 +127,6 @@ test('a review in the list keeps its count under the block’s head and its foot
   )
   const card = dialog.locator('.request-card')
   await expect(card.locator('.request-point')).toHaveCount(18)
-  // A review marks no field of its own: its titled groups are its questions.
-  const bars = dialog.getByRole('navigation', { name: 'Question navigation' }).getByRole('button')
-  expect(await bars.count()).toBeGreaterThan(1)
   const panel = await box(scroller)
   await scroller.evaluate((node) => {
     node.scrollTop = node.scrollHeight * 0.5
@@ -242,21 +162,4 @@ test('a review in the list keeps its count under the block’s head and its foot
     covered.push(...under.map((edge) => `${key} under ${edge}`))
   }
   expect(covered).toEqual([])
-})
-
-const twin = (id: string, title: string) =>
-  asked({ request_id: id, title, fields: [routeField, mixedField] })
-
-test('two questions of one label in two blocks are two bars', async ({ page }) => {
-  const { dialog } = await openList(
-    page,
-    [
-      twin('99999999-9999-4999-8999-999999999991', 'One'),
-      twin('99999999-9999-4999-8999-999999999992', 'Two'),
-    ],
-    1280,
-  )
-  const rail = dialog.getByRole('navigation', { name: 'Question navigation' })
-  await expect(rail.getByRole('group')).toHaveCount(2)
-  await expect(rail.getByRole('button', { name: 'Route', exact: true })).toHaveCount(2)
 })

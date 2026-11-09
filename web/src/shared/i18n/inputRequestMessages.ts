@@ -1,5 +1,6 @@
 import { commentListMessages } from '@/shared/i18n/commentListMessages.ts'
 import { inputRequestReviewMessages } from '@/shared/i18n/inputRequestReviewMessages.ts'
+import { requestHubMessages } from '@/shared/i18n/requestHubMessages.ts'
 
 export const inputRequestMessages = {
   en: {
@@ -37,7 +38,7 @@ export const inputRequestMessages = {
       questionNote: 'Comment on the block of questions',
       questionNoteName: 'Comment on the block of questions: {title}',
       questionNoteSaid: 'Comment on the block of questions: {text}',
-      rail: 'Question navigation',
+      hub: requestHubMessages.en.hub,
       chosen: 'selected',
       you: 'You',
       changeAnswer: 'Change answer',
@@ -134,7 +135,7 @@ export const inputRequestMessages = {
       questionNote: 'Комментарий к блоку вопросов',
       questionNoteName: 'Комментарий к блоку вопросов: {title}',
       questionNoteSaid: 'Комментарий к блоку вопросов: {text}',
-      rail: 'Навигация по вопросам',
+      hub: requestHubMessages.ru.hub,
       chosen: 'выбрано',
       you: 'Вы',
       changeAnswer: 'Изменить ответ',

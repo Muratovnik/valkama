@@ -287,8 +287,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     :aria-labelledby="labelledBy"
     :aria-describedby="describedBy"
     :style="headHeight"
-    :data-rail-label="request.title"
-    data-rail-block
   >
     <RequestHeader
       v-if="standalone"

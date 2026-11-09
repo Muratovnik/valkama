@@ -12,9 +12,6 @@
  *
  * A question with a verdict, a group or a field under another is answered row by row
  * (`RequestReview`); its foot then stays in sight under it, and says what is undecided.
- *
- * Each field is one question of its block to the rail of the list (`data-rail-question`,
- * `RequestRail`), named by its label.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -118,7 +115,6 @@ defineExpose({ focusField, noteOpen, noteWritten, pressNote, structured, undecid
       :key="field.id"
       :ref="(control) => (controls[field.id] = control as { focus: () => void } | null)"
       v-model:preview="previewing"
-      :data-rail-question="field.label"
       :field="field"
       :model-value="draft.answers[field.id]"
       :note="draft.fieldNotes[field.id]"

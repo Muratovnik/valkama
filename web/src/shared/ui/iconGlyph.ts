@@ -18,6 +18,7 @@ import type { Component, VNode } from 'vue'
 import {
   Activity,
   ArrowDown,
+  ArrowUp,
   Asterisk,
   Ban,
   BarChart3,
@@ -127,8 +128,9 @@ const ICONS: Record<string, Component> = {
   // What a press could not do, beside what it said; `check` is what it did.
   'alert': CircleAlert,
   'analytics': BarChart3,
-  // A way further down the same page, which a chevron would read as opening something.
+  // A way further down or up the same page, which a chevron would read as opening something.
   'arrow-down': ArrowDown,
+  'arrow-up': ArrowUp,
   'bell': Bell,
   'board': SquareKanban,
   // An epic's card, opened beside the board, and its chain drawn on the board: a lane

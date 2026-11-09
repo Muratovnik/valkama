@@ -73,10 +73,18 @@ export function useInputRequests(
     if (failed.value) return 'unknown'
     if (!result.value) return null
     return {
-      value: entries.value.filter((entry) => entry.request.status === 'pending').length,
+      value: entries.value.filter((entry) => waits(entry)).length,
       incomplete: partial.value || result.value.has_more,
     }
   })
+
+  /**
+   * Whether a question still waits, as the last read said. One held here after a read no
+   * longer brought it does not, whatever the copy kept of it says while it is asked again.
+   */
+  function waits(entry: InputRequestEntry) {
+    return entry.request.status === 'pending' && !(requestIdentity(entry) in resolved.value)
+  }
 
   async function refresh() {
     if (loading.value || document.visibilityState === 'hidden') return
@@ -202,5 +210,5 @@ export function useInputRequests(
     window.removeEventListener('focus', refresh)
     document.removeEventListener('visibilitychange', refresh)
   })
-  return { result, loading, failed, partial, entries, count, refresh, changed, dismiss }
+  return { result, loading, failed, partial, entries, count, waits, refresh, changed, dismiss }
 }

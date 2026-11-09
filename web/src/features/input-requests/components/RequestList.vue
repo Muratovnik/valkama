@@ -22,6 +22,9 @@
  *
  * A question that stopped waiting can be removed from here. Focus goes to the question
  * after it, or the one before, and with none left to the way to read the list again.
+ *
+ * What waits carries its identity as `data-request-waiting`, which is what the way through the
+ * list in the dialog's head counts and goes to.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -51,6 +54,8 @@ const props = defineProps<{
   loading: boolean
   partial: boolean
   result: InputRequestList | null
+  /** The identities of the questions still waiting. */
+  waiting: ReadonlySet<string>
 }>()
 const emit = defineEmits<{
   dismiss: [entry: InputRequestEntry]
@@ -69,12 +74,10 @@ const emptyLabel = computed(() => {
   return t(props.partial ? 'requests.partialEmpty' : 'requests.empty')
 })
 /**
- * The questions still waiting, which is what the rail counts. Answered ones stay
- * on screen with their outcome, so counting the cards said 2 beside a rail's 1.
+ * The questions still waiting, which the rail's badge and the head's count say too. Answered
+ * ones stay on screen with their outcome, so counting the cards said 2 beside a rail's 1.
  */
-const waiting = computed(
-  () => props.entries.filter((entry) => entry.request.status === 'pending').length,
-)
+const waiting = computed(() => props.waiting.size)
 /** The same condition the rail's count carries as its plus: a source or a page was not read. */
 const incomplete = computed(() => props.partial || Boolean(props.result?.has_more))
 /** Whether a question here holds anything typed or chosen that a failed read must not cost. */
@@ -152,6 +155,11 @@ function holdsFocus(entry: InputRequestEntry) {
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
 }
+/** What waits names itself to the way through the list in the head; nothing else does. */
+function waitingMark(entry: InputRequestEntry) {
+  const key = requestIdentity(entry)
+  return props.waiting.has(key) ? key : undefined
+}
 /**
  * Moves focus on from the question once its answer has landed, under the answer's own right: a
  * person who has moved focus since the answer began keeps it where they put it.
@@ -169,7 +177,7 @@ async function updated(entry: InputRequestEntry, right: FocusRight) {
   }
   const at = props.entries.findIndex((candidate) => requestIdentity(candidate) === key)
   const next = [...props.entries.slice(at + 1), ...props.entries.slice(0, Math.max(at, 0))].find(
-    (candidate) => candidate.request.status === 'pending',
+    (candidate) => props.waiting.has(requestIdentity(candidate)),
   )
   right.take(() => {
     if (next) cards[requestIdentity(next)]?.focus()
@@ -256,6 +264,7 @@ defineExpose({ holdsFocus })
       :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
       :entry="entry"
       :draft="draftFor(entry)"
+      :data-request-waiting="waitingMark(entry)"
       standalone
       @update:draft="emit('draft', requestIdentity(entry), $event)"
       @updated="updated"
