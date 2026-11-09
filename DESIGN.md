@@ -784,6 +784,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   something, confirms a destruction, is the one primary action of a form or a surface,
   is the way out of a failure or an empty state, or has an icon that would need a
   legend. A panel opened by a finger keeps its words too: a finger gets no hint.
+- **Actions that come up:** a row of a long list may keep its actions out of sight until
+  they are wanted, and then all of them by one rule, `reveal.css`: the row is `reveal-row`,
+  the action or its group `reveal`. Where a pointer can hover, the action is see-through at
+  rest and keeps its place, so nothing in the row moves when it comes up; it comes up under
+  the pointer anywhere on the row, with the keyboard anywhere in it, and while a popup it
+  opened is open, and Tab reaches it from either side. A press with the pointer does not
+  leave it up. Where nothing can hover it stands. It serves a checklist step's discussion,
+  the pin of an unpinned row of the Work list and a lane heading's card and chain;
+  `check:ui-system` refuses a copy of it elsewhere.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
   alternatives" — view switches, chart encodings, ledger filters, a card's
   sections. Picking a value — the board's view, the graph's filter, a chain's
@@ -1096,11 +1105,10 @@ fewer. That happens up to 890px in Russian under a finger (849px with a mouse;
 in English 802px under a finger, 782px with a mouse), in lanes with an epic and
 without: three lines for two, or four for three where a long title also names
 work out of sight.
-They come up under the pointer and when the keyboard reaches them, in a place
-kept for them, so nothing shifts or is covered; where nothing can hover they
-stay, a finger's reach apart. A pointer's press on the row does not leave them
-up, and the keyboard moving along a row held at the top leaves the board where
-it is: the room the board keeps there for that row does not push its own
+They come up as a row's actions do (**Actions that come up**), in a place kept
+for them, so nothing shifts or is covered; where nothing can hover they stay, a
+finger's reach apart. The keyboard moving along a row held at the top leaves the
+board where it is: the room the board keeps there for that row does not push its own
 buttons out of view. Their rings stand whole wherever the row does: it keeps the
 ring's reach above its arrow, and the board keeps it at its edges. A tile the board brings into
 view under the row's heading, by the keyboard, by opening it or by moving the
@@ -1458,6 +1466,8 @@ A section of a card that holds nothing and offers nothing is absent, rather than
 heading and a sentence saying so on the first screen: the «Agents» tab and «Checklist»
 stand only while they have something in them, and a step arriving with the live stream's next
 frame brings its section back with no reload.
+A step's discussion stands at the end of its first line and comes up as a row's actions do
+(**Actions that come up**): standing on every step at rest, it repeated one icon down the list.
 A question has no section of its own: it stands in the discussion and reads as a
 comment does, its author, its time and its prompt as markdown, with its fields under
 them. One still waiting stands right under the comment form, however old it is, and a

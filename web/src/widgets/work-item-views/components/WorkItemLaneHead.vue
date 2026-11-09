@@ -85,7 +85,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 <template>
   <header
     ref="head"
-    class="lane-head reach-room"
+    class="lane-head reach-room reveal-row"
     :class="{ acting: props.lane.epic, away, crowded, tied }"
   >
     <button
@@ -151,7 +151,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       <span
         v-if="props.lane.epic"
         ref="actions"
-        class="lane-actions"
+        class="lane-actions reveal"
       >
         <VButton
           v-tooltip="openLabel"
@@ -395,8 +395,8 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
 /* At the end of the heading's last line, in a place of their own, so nothing moves or is
    covered when they come up; where that line is full, at the end of the first. Icons, as an
-   entry's actions are, with their words in the tooltip and for a screen reader. Arriving there
-   by Tab shows them; a press with the pointer leaves focus behind without leaving them up. */
+   entry's actions are, with their words in the tooltip and for a screen reader. They come up
+   under the pointer and the keyboard as every row's actions do (`reveal.css`). */
 .lane-actions {
   display: flex;
   flex: 0 0 auto;
@@ -407,17 +407,6 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   align-items: center;
   padding-inline-end: calc(var(--lane-reach-past) / 2);
   margin-inline-start: auto;
-  opacity: 0;
-  transition: opacity var(--duration-quick) var(--ease-out);
-
-  .lane-head:is(:hover, :has(:focus-visible)) & {
-    opacity: 1;
-  }
-
-  /* Nothing can hover here, so they stand. */
-  @media (hover: none) {
-    opacity: 1;
-  }
 
   .crowded & {
     position: absolute;
@@ -461,3 +450,5 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 </style>
 
 <style scoped src="@/shared/ui/reach.css"></style>
+
+<style scoped src="@/shared/ui/reveal.css"></style>

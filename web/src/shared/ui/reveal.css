@@ -1,0 +1,30 @@
+/*
+ * An action a row keeps out of sight until it is wanted, so a list of many rows does not stand a
+ * button on each. This is the one place that asks whether a pointer can hover (`check:ui-system`
+ * holds every other file to these classes), read by each host as its own scoped style, as
+ * `reach.css` is:
+ *
+ * - `.reveal-row` — the row whose pointer and keyboard bring its actions up.
+ * - `.reveal` — an action in that row, or the group of them, out of sight at rest.
+ *
+ * Out of sight it is see-through, not hidden: it keeps its place, so nothing in the row moves
+ * when it comes up, and the keyboard reaches it from either side. A hidden action is no stop for
+ * Tab, so Shift+Tab from the next row passed the rail's pin by. It comes up under the pointer
+ * anywhere on the row, with the keyboard anywhere in it, and while a popup it opened is open. Only
+ * the keyboard's focus counts: a press with the pointer leaves focus behind, and the actions
+ * stayed up after the pointer had gone. Where nothing can hover they stand.
+ *
+ * Its hosts: a checklist step's discussion (`InspectorOverview`), the pin of an unpinned rail row
+ * (`NavWorkPin` in `NavWorkRow`) and a lane heading's card and chain (`WorkItemLaneHead`).
+ */
+@media (hover: hover) {
+  .reveal {
+    opacity: 0;
+    transition: opacity var(--duration-quick) var(--ease-out);
+  }
+
+  .reveal-row:is(:hover, :has(:focus-visible)) .reveal,
+  .reveal:is([aria-expanded='true'], :has([aria-expanded='true'])) {
+    opacity: 1;
+  }
+}

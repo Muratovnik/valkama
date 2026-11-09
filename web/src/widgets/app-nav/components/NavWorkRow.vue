@@ -151,7 +151,7 @@ function press(event: MouseEvent) {
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
     v-tooltip:right="rowHint"
-    class="nav-row"
+    class="nav-row reveal-row"
     :class="{
       current,
       muted,
@@ -285,8 +285,6 @@ function press(event: MouseEvent) {
   /* The pin's column, kept on every row of the rail so nothing under it is ever covered
      and its pin comes up where a pinned row's stands (`NavWorkPin`). */
   &.nav-row-has-pin {
-    --nav-work-pin-sight: hidden;
-
     grid-template-columns: var(--nav-row-lead) minmax(0, 1fr) auto;
   }
 
@@ -298,12 +296,6 @@ function press(event: MouseEvent) {
     &.nav-row-has-pin {
       grid-template-columns: minmax(0, 1fr) auto;
     }
-  }
-
-  /* Focus anywhere in the row, not only the keyboard's: a pin that hid while focus was
-     on its way to it would drop that focus. */
-  &:is(:hover, :focus-within) {
-    --nav-work-pin-sight: visible;
   }
 }
 

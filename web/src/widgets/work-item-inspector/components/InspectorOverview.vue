@@ -228,11 +228,12 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
         <!-- The step, its one action at the row's end, and who holds or closed
              it directly under the step's own text. The action used to be a full
              button on a row of its own, so each holder line sat closer to the
-             next step than to the one it described. -->
+             next step than to the one it described. Where a pointer can hover,
+             the action comes up under it and the keyboard (`reveal.css`). -->
         <li
           v-for="step in item.checklist"
           :key="step.id"
-          class="step-row"
+          class="step-row reveal-row"
         >
           <!-- A checkbox, not a toggle button: a step is done or not done, and
                `aria-pressed` would announce it as a control that stays in.
@@ -273,7 +274,7 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
           <VButton
             v-if="writable"
             v-tooltip="t('checklistComment.discuss')"
-            class="step-discuss"
+            class="step-discuss reveal"
             variant="ghost"
             size="inline"
             :aria-label="t('checklistComment.discussStep', { step: plainText(step.text) })"
@@ -319,3 +320,5 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
 </template>
 
 <style scoped src="./InspectorOverview.css"></style>
+
+<style scoped src="@/shared/ui/reveal.css"></style>
