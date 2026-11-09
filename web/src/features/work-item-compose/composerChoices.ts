@@ -28,9 +28,13 @@ export const COMPOSER_ROWS: readonly (readonly FacetId[])[] = (() => {
  * The items a new one may stand under: an epic, or an item already holding others, that
  * is not inside one itself, since the hierarchy is one level deep. "No epic" leads, then
  * open work before closed and the newest first. An option is found by its number and its
- * title, and says its state.
+ * title, and says its state as `stateName` names it.
  */
-export function epicChoices(items: readonly WorkItemBrief[], noEpic: string): ChoiceOption[] {
+export function epicChoices(
+  items: readonly WorkItemBrief[],
+  noEpic: string,
+  stateName: (state: WorkItemBrief['state']) => string,
+): ChoiceOption[] {
   const epics = items
     .filter((item) => (item.kind === 'epic' || item.container) && item.parent_id === null)
     .sort(
@@ -43,7 +47,7 @@ export function epicChoices(items: readonly WorkItemBrief[], noEpic: string): Ch
     ...epics.map((item) => ({
       value: item.reference,
       label: `${item.reference} · ${item.title}`,
-      description: item.state.name,
+      description: stateName(item.state),
     })),
   ]
 }

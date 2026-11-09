@@ -20,6 +20,7 @@ import GraphFrameWorking from '@/widgets/work-item-graph/components/GraphFrameWo
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -52,6 +53,8 @@ const kindGlyph = computed(() => (epic?.kind === 'epic' ? 'kind-epic' : 'parent'
 const kindInk = computed(() => (epic?.kind === 'epic' ? 'epic' : undefined))
 /** The epic's state, said once it has moved, as a board's lane says it. */
 const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : false))
+const stateName = useStateName()
+const epicState = computed(() => (epic ? stateName(epic.state) : ''))
 
 const line = useTemplateRef<HTMLElement>('line')
 const name = useTemplateRef<HTMLElement>('name')
@@ -116,7 +119,7 @@ useResizeObserver(
       dimension="work-item-state"
       :class="{ closed: epic.state.is_terminal }"
       :state="epic.state.category"
-      :label="epic.state.name"
+      :label="epicState"
     />
     <GraphFrameWorking
       v-if="working"

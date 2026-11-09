@@ -22,6 +22,11 @@ vi.mock('@/shared/api/planningSearchApi.ts', () => ({
   searchPlanningWorkItems: vi.fn(),
 }))
 vi.mock('@/shared/api/documentApi.ts', () => ({ searchSpaceDocuments: vi.fn() }))
+// A task's state is named by the one function the interface names states with; its own
+// rules are `stateNames.test.ts`'s, so here it only marks what passed through it.
+vi.mock('@/shared/lib/useStateName.ts', () => ({
+  useStateName: () => (state: { name: string }) => `named ${state.name}`,
+}))
 
 const SPACE = '00000000-0000-4000-8000-000000000001'
 const OWN = '00000000-0000-4000-8000-000000000099'
@@ -55,6 +60,10 @@ describe('mentionSuggest', () => {
       ['task', 'MAIN-1', 'MAIN-1'],
       ['task', 'MAIN-2', 'MAIN-2'],
       ['file', 'plan.md', '[plan.md](docs/plan.md)'],
+    ])
+    expect(rows.filter((row) => row.kind === 'task').map((row) => row.detail)).toEqual([
+      'named Doing',
+      'named Doing',
     ])
     expect(searchPlanningWorkItems).toHaveBeenCalledWith('pl', SPACE, signal)
     expect(searchSpaceDocuments).toHaveBeenCalledWith(SPACE, 'pl', signal)

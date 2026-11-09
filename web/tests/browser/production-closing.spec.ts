@@ -20,7 +20,7 @@ async function refusedClose(page: Page, prepare?: Parameters<typeof seed>[0]) {
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
-  await drawer.getByRole('combobox', { name: /^State: Dev/u }).click()
+  await drawer.getByRole('combobox', { name: /^State: In progress/u }).click()
   await page.getByRole('option', { name: 'Done', exact: true }).click()
   await expect(drawer.locator('.refusal')).toContainText('There is no closing summary')
   return { backend, drawer }
@@ -141,7 +141,7 @@ test('the way out goes back to the comment with its draft, and the item stays wh
   await form.getByRole('button', { name: 'Back to comment', exact: true }).click()
   await expect(form).toHaveCount(0)
   await expect(drawer.getByRole('textbox', { name: 'Comment', exact: true })).toBeVisible()
-  await expectState(drawer, 'Dev')
+  await expectState(drawer, 'In progress')
   expect(transitions(backend.writes)).toHaveLength(1)
   expect(backend.item.summary).toBeNull()
 })
@@ -260,7 +260,7 @@ for (const [what, change, state] of [
     (item: WorkItem) => {
       item.summary = { done: 'Agent shipped it', next: 'Agent watches it' }
     },
-    'Dev',
+    'In progress',
   ],
   [
     'moved it past the need for this move',

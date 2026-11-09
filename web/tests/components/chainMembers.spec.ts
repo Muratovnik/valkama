@@ -48,7 +48,11 @@ function mountMembers(members: ChainMember[], waiting: Map<string, string>) {
   return mount(ChainMembers, {
     props: {
       groups,
-      labels: groupLabels(groups, (group) => group),
+      labels: groupLabels(
+        groups,
+        (group) => group,
+        (state) => state.name,
+      ),
       waiting,
     },
     global: {

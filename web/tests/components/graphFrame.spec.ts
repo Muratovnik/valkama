@@ -156,7 +156,7 @@ describe("a frame's header", () => {
 
   it('says the epic’s state only once it has moved from where work starts', () => {
     const moved = header({ frame: frame() })
-    expect(moved.get('.graph-frame-state').text()).toBe('Dev')
+    expect(moved.get('.graph-frame-state').text()).toBe('In progress')
     moved.unmount()
     const resting = header({ frame: frame({ epic: { ...EPIC, state: boardItem(1).state } }) })
     expect(resting.find('.graph-frame-state').exists()).toBe(false)

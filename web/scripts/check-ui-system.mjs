@@ -27,6 +27,7 @@ import {
 import { scanRevealCopies } from './ui-system/reveal.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
+import { scanStateNames, STATE_NAME_READS } from './ui-system/state-names.mjs'
 import {
   FILL_BUDGET,
   scanMeaningFills,
@@ -50,6 +51,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const titles = product ? UNBROKEN_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
   const details = product ? DETAIL_TOOLTIPS : new Map()
+  const stateReads = product ? STATE_NAME_READS : new Map()
   return [
     ...scanUiSources(sources),
     ...scanRevealCopies(sources),
@@ -63,6 +65,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanTitleBreaks(sources, titles),
     ...scanNativeTitles(sources, hints),
     ...scanTooltipKinds(sources, details),
+    ...scanStateNames(sources, stateReads),
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),

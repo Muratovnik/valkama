@@ -5,6 +5,7 @@ import type { BranchLane } from '@/widgets/work-item-inspector/utils/chainBranch
 import { CHAIN_PROGRESS_ORDER } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 
 /*
  * The legend and every count name groups in the order a lane runs through
@@ -33,6 +34,7 @@ function groupCounts(lanes: readonly BranchLane[]) {
  */
 export function useBranchText(groupName: (group: ChainGroup) => string) {
   const { t } = useI18n()
+  const stateName = useStateName()
 
   function laneName(lane: BranchLane): string {
     return lane.reference ?? t('workItem.chain.noEpic')
@@ -85,7 +87,7 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
     const line = t('workItem.chain.map.task', {
       reference: member.reference,
       title: member.title,
-      state: member.state.name,
+      state: stateName(member.state),
     })
     return !member.state.is_terminal && member.claim_ref
       ? `${line} · ${holderName(member.claim_ref)}`

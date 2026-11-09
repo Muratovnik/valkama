@@ -247,8 +247,8 @@ describe('WorkItemComposer epic and labels', () => {
     await flushPromises()
     expect(optionNames()).toEqual([
       'No epic',
-      'MAIN-12 · ParserDev',
-      'MAIN-7 · Holds twoDev',
+      'MAIN-12 · ParserIn progress',
+      'MAIN-7 · Holds twoIn progress',
       'MAIN-3 · Old releaseDone',
     ])
     await epic?.trigger('keydown', { key: 'Escape' })

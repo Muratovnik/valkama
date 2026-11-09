@@ -8,7 +8,12 @@ const resultSchema = z.object({
   planning_space_id: z.uuid(),
   reference: z.string().max(20).regex(WORK_ITEM_REFERENCE),
   title: z.string().min(1).max(200),
-  state: z.object({ name: z.string().min(1).max(200) }),
+  // The key and category name a standard state in the reader's language; the name is the space's.
+  state: z.object({
+    key: z.string().max(32).optional(),
+    name: z.string().min(1).max(200),
+    category: z.string().max(32).optional(),
+  }),
   claim_ref: z.string().max(200),
 })
 

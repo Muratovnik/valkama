@@ -50,6 +50,7 @@ import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -85,6 +86,9 @@ const emit = defineEmits<{
 }>()
 
 const { t, d } = useI18n()
+const stateName = useStateName()
+/** Where the item stands, as the owner has states named. */
+const here = computed(() => stateName(props.item.state))
 /** The action's place on the card, which the bar takes over from once it has scrolled away. */
 const actionCell = ref<HTMLElement | null>(null)
 
@@ -238,7 +242,7 @@ defineExpose({ actionCell })
           size="compact"
           :model-value="item.state.key"
           :options="stateOptions"
-          :label="t('workItem.head.state', { state: item.state.name })"
+          :label="t('workItem.head.state', { state: here })"
           @update:model-value="move"
         >
           <template #option="{ option }">
@@ -248,7 +252,7 @@ defineExpose({ actionCell })
             <SemanticState
               dimension="work-item-state"
               :state="item.state.category"
-              :label="item.state.name"
+              :label="here"
             />
           </template>
         </ChoiceSelect>
@@ -260,7 +264,7 @@ defineExpose({ actionCell })
             class="card-state"
             dimension="work-item-state"
             :state="item.state.category"
-            :label="item.state.name"
+            :label="here"
           />
         </span>
         <!-- A verb, not a state: the state's dot already says an agent waits, and this goes

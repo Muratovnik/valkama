@@ -138,7 +138,7 @@ for (const width of [1440, 390]) {
       outside: 0,
     })
     await expect(section.locator('figcaption')).toHaveText(
-      'Branch map: 6 lanes, 617 items; Done 485, Code review 2, Development 11, Blocked 1, Todo 20, Backlog 98.',
+      'Branch map: 6 lanes, 617 items; Done 485, Code review 2, Development 11, Blocked 1, Queued 20, Backlog 98.',
     )
     await expectNoSilentClipping(page, `chain map at ${width}px`)
     await section.locator('.branch-map').screenshot(shot(info, `chain-map-large-${width}.png`))
@@ -164,7 +164,7 @@ for (const width of [1440, 390]) {
     await expect(section.locator('.chain-group-title')).toHaveText([
       'Development · 8',
       'Code review · 1',
-      'Todo · 14',
+      'Queued · 14',
       'Backlog · 56',
       'Blocked · 1',
     ])

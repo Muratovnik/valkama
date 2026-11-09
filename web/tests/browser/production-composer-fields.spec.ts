@@ -69,7 +69,7 @@ test('an item is created with an epic found by search, a label the space has and
   await epic.click()
   await page.keyboard.type('rework')
   const list = page.getByRole('listbox', { name: 'Epic' })
-  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}Dev`])
+  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}In progress`])
   await page.keyboard.press('Enter')
   await expect(list).toHaveCount(0)
   await expect(epic).toHaveValue(`MAIN-12 · ${EPIC_TITLE}`)
@@ -158,7 +158,7 @@ test('a pointer opens the epic list over an empty search, the chosen epic standi
   await expect(epic).toHaveAttribute('placeholder', 'No epic')
   await page.keyboard.type('rew')
   await expect(epic).toHaveValue('rew')
-  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}Dev`])
+  await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}In progress`])
   // Left without a choice, the field says what is still chosen.
   await dialog.getByRole('heading', { name: 'New work' }).click()
   await expect(list).toHaveCount(0)

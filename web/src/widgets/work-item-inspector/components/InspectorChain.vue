@@ -27,6 +27,7 @@ import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainFo
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -53,6 +54,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const stateName = useStateName()
 
 const visible = computed(() => {
   if (!props.readable) return true
@@ -91,7 +93,9 @@ const waiting = computed(() =>
 
 /** One word per group for the whole section: the map's legend, the line under it and the list. */
 const labels = computed(() =>
-  groups.value ? groupLabels(groups.value, (group) => t(`workItem.chain.group.${group}`)) : null,
+  groups.value
+    ? groupLabels(groups.value, (group) => t(`workItem.chain.group.${group}`), stateName)
+    : null,
 )
 
 /**

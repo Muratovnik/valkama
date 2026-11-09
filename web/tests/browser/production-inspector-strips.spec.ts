@@ -19,8 +19,8 @@ import { asked, openQuestion } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const WORDS = {
-  en: { close: 'Close', state: 'State', takeOver: 'Take over' },
-  ru: { close: 'Закрыть', state: 'Состояние', takeOver: 'Забрать себе' },
+  en: { close: 'Close', done: 'Done', state: 'State', takeOver: 'Take over' },
+  ru: { close: 'Закрыть', done: 'Выполнено', state: 'Состояние', takeOver: 'Забрать себе' },
 } as const
 type Locale = keyof typeof WORDS
 
@@ -45,8 +45,8 @@ for (const locale of ['en', 'ru'] as const)
       const drawer = page.locator('.drawer')
       await expect(drawer).toHaveCSS('transform', 'none')
       await drawer.getByRole('combobox', { name: new RegExp(`^${words.state}`, 'u') }).click()
-      // The workflow's own state names, which the fixture gives in English.
-      await page.getByRole('option', { name: 'Done', exact: true }).click()
+      // The fixture's workflow is the standard one, whose names read in the page's language.
+      await page.getByRole('option', { name: words.done, exact: true }).click()
       const refusal = drawer.locator('.refusal')
       await refusal.locator('.refusal-force').click()
       await expectStripOnColumn(refusal.locator('.confirm-strip'), refusal, `${at} refusal`)

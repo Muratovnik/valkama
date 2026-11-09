@@ -8,10 +8,12 @@ import { sortedRows } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 
 export function useListSort(items: () => readonly WorkItemBrief[]) {
   const sortKey = ref<SortKey>('updated')
   const descending = ref(true)
+  const stateName = useStateName()
 
   function sortBy(key: SortKey) {
     if (sortKey.value === key) descending.value = !descending.value
@@ -31,7 +33,7 @@ export function useListSort(items: () => readonly WorkItemBrief[]) {
   return {
     ariaSort,
     descending,
-    rows: computed(() => sortedRows(items(), sortKey.value, descending.value)),
+    rows: computed(() => sortedRows(items(), sortKey.value, descending.value, stateName)),
     sortBy,
     sortKey,
   }

@@ -87,7 +87,7 @@ describe('related task picker', () => {
       expect.any(AbortSignal),
     )
     expect(wrapper.findAll('input[type="radio"]')).toHaveLength(1)
-    expect(wrapper.text()).toContain('Dev · Alex')
+    expect(wrapper.text()).toContain('In progress · Alex')
     await wrapper.get('input[type="radio"]').setValue()
     vi.mocked(linkWorkItems).mockRejectedValueOnce(new Error('Link refused'))
     await wrapper.get('form').trigger('submit')

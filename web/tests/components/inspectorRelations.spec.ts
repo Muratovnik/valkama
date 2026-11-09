@@ -71,7 +71,7 @@ describe('relation rows', () => {
     ])
     const state = row(wrapper, 'MAIN-13').find('.semantic-state')
     expect(state.attributes('data-state')).toBe('active')
-    expect(state.text()).toBe('Dev')
+    expect(state.text()).toBe('In progress')
   })
 
   it('prints no state for an end whose state the server could not say', () => {

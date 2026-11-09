@@ -392,7 +392,7 @@ test('a lane names the work it holds out of sight and keeps its heading while it
   await openBoard(page)
   const epic = lane(page, LONG_EPIC)
   const note = epic.locator('.lane-elsewhere')
-  await expect(note).toHaveText(['To the right: 1 in Dev →'])
+  await expect(note).toHaveText(['To the right: 1 in In progress →'])
   // Finished work is counted in the heading already, so it is not named while
   // anything of the lane is in view.
   await expect(note).not.toContainText('Done')

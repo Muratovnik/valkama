@@ -11,10 +11,12 @@ import { useI18n } from 'vue-i18n'
 
 import type { FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
 
+import { useStateName } from '@/shared/lib/useStateName.ts'
+
 export interface MarkWords {
   /** «Фильтр: тип Улучшение», or the way back out of it. */
   filterName: (facet: FacetId, active: boolean, value: string) => string
-  /** A mark's words: data as it is, or its key looked up. */
+  /** A mark's words: data as it is, its key looked up, or a state as the owner has states named. */
   say: (text: FacetMark['text']) => string
 }
 
@@ -23,6 +25,7 @@ const SEPARATOR = String.fromCodePoint(0)
 
 export function useMarkWords(): MarkWords {
   const { t, locale } = useI18n()
+  const stateName = useStateName()
   const words = kept.get(t) ?? new Map<string, string>()
   kept.set(t, words)
 
@@ -41,6 +44,9 @@ export function useMarkWords(): MarkWords {
         facet: look(`workItem.facet.name.${facet}`),
         value,
       }),
-    say: (text) => ('literal' in text ? text.literal : look(text.key, text.params)),
+    say: (text) => {
+      if ('literal' in text) return text.literal
+      return 'state' in text ? stateName(text.state) : look(text.key, text.params)
+    },
   }
 }

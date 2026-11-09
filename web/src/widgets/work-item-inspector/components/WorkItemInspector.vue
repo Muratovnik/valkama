@@ -183,7 +183,7 @@ const {
   failureText: (error) => failureText(typedFailure(error, 'mutation_failed')),
   load,
   reference: () => props.reference,
-  stateName: (key) => props.workflow?.states.find((entry) => entry.key === key)?.name ?? key,
+  workflow: () => props.workflow,
   writable: () => props.writable,
 })
 

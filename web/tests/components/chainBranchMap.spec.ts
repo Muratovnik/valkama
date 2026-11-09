@@ -34,8 +34,10 @@ const i18n = createI18n({ legacy: false, locale: 'en', messages })
 
 /** The words the card's section gives each group of this chain, as it hands them to the map. */
 function sectionLabels(chain: WorkItemChain) {
-  return groupLabels(groupMembers(chain.members), (group) =>
-    i18n.global.t(`workItem.chain.group.${group}`),
+  return groupLabels(
+    groupMembers(chain.members),
+    (group) => i18n.global.t(`workItem.chain.group.${group}`),
+    (state) => state.name,
   )
 }
 

@@ -25,6 +25,8 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
 }))
 
 const ROOT = { ...workItemFixture('Planning rethink', 1), container: true }
+/** The standard queued state, read in the interface's words, heads its fourteen items. */
+const QUEUED = 'Queued · 14'
 
 /** Answer every chain read with the next response, and record what was asked. */
 function serveChain(...answers: Response[]) {
@@ -153,7 +155,7 @@ describe('the chain section of a card', () => {
     ])
 
     const headings = chain.findAll('.chain-group-title').map((heading) => heading.text())
-    expect(headings).toEqual(['Development · 11', 'Code review · 1', 'Todo · 14', 'Backlog · 107'])
+    expect(headings).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Backlog · 107'])
     // Finished work is one folded group, closed until asked.
     expect(getButton(wrapper, 'Done · 483').attributes('aria-expanded')).toBe('false')
     expect(chain.findAll('.chain-row.is-done')).toHaveLength(0)
@@ -179,7 +181,7 @@ describe('the chain section of a card', () => {
       .findAll('.chain-group-title, .chain-done-toggle')
       .map((heading) => heading.text().replace(/ · \d+$/u, ''))
     const line = chain.get('.chain-summary-line').text().replaceAll('\u{A0}', ' ')
-    expect(legend).toEqual(['Done', 'Code review', 'Development', 'Todo', 'Backlog'])
+    expect(legend).toEqual(['Done', 'Code review', 'Development', 'Queued', 'Backlog'])
     expect(new Set(headings)).toEqual(new Set(legend))
     // The line under the map is what the key does not say.
     for (const word of legend) expect(line).not.toContain(word)
@@ -203,7 +205,7 @@ describe('the chain section of a card', () => {
     serveChain(json(chainResponse(largeEpicChain())), json(chainResponse(mixed)))
     // One state per group: the heading names it, and the rows do not repeat it.
     const single = await open()
-    expect(details(single, 'Todo')).toEqual(eight(null))
+    expect(details(single, 'Queued')).toEqual(eight(null))
     await getButton(single, 'Done · 483').trigger('click')
     expect(details(single, 'Done')).toEqual(eight(null))
     single.unmount()
@@ -360,7 +362,7 @@ describe('the chain section of a card', () => {
     await getButton(wrapper, 'MAIN-779').trigger('click')
     expect(chip().text()).toBe('Lane MAIN-779')
     expect(chip().attributes('aria-label')).toBe('Lane MAIN-779: show every lane')
-    expect(headings()).toEqual(['Development · 11', 'Code review · 1', 'Todo · 14', 'Backlog · 74'])
+    expect(headings()).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Backlog · 74'])
     expect(getButton(wrapper, 'Done · 142').exists()).toBe(true)
     // The narrowed list follows the map and its line directly; the whole
     // chain's history moves below it, so the rows the choice narrowed are not
@@ -394,12 +396,7 @@ describe('the chain section of a card', () => {
     // The chip widens the list back, and so does the same label again.
     await chip().trigger('click')
     expect(chip().exists()).toBe(false)
-    expect(headings()).toEqual([
-      'Development · 11',
-      'Code review · 1',
-      'Todo · 14',
-      'Backlog · 107',
-    ])
+    expect(headings()).toEqual(['Development · 11', 'Code review · 1', QUEUED, 'Backlog · 107'])
     await getButton(wrapper, 'MAIN-900').trigger('click')
     await getButton(wrapper, 'MAIN-900').trigger('click')
     expect(chip().exists()).toBe(false)

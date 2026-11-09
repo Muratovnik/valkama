@@ -37,6 +37,7 @@ import { rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { ShownRow } from '@/shared/lib/liveWorkRows.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -57,6 +58,9 @@ const props = defineProps<{
 const emit = defineEmits<{ go: [route: PlatformRoute] }>()
 
 const { d, t } = useI18n()
+const stateName = useStateName()
+/** The item's state as the owner has states named; a row carries its name alone. */
+const rowState = computed(() => stateName({ name: props.row.state_name }))
 const store = useLiveWorkStore()
 
 const QUIET_DAY = { month: 'short', day: '2-digit' } as const
@@ -71,13 +75,10 @@ onBeforeUnmount(() => {
   for (; holds > 0; holds -= 1) store.hold(props.row.reference, false)
 })
 
-const muted = computed(
-  () =>
-    props.row.fading ||
-    props.row.state === 'quiet' ||
-    props.row.is_terminal ||
-    (props.row.state === null && props.row.pinned),
-)
+const muted = computed(() => {
+  const { fading, pinned, state } = props.row
+  return fading || state === 'quiet' || props.row.is_terminal || (state === null && pinned)
+})
 /** The dots, the ring or nothing: what the session is doing, while it does something. */
 const sign = computed(() => {
   const state = props.row.state
@@ -89,10 +90,10 @@ const still = computed(() => sign.value === 'held')
 const stateWords = computed(() => {
   const { row } = props
   if (row.fading) return t('liveWork.ended')
-  if (row.is_terminal) return t('liveWork.closed', { state: row.state_name })
+  if (row.is_terminal) return t('liveWork.closed', { state: rowState.value })
   if (row.state === 'quiet' && row.quiet_since)
     return t('liveWork.quiet', { since: d(new Date(row.quiet_since), QUIET_DAY) })
-  if (row.state === null) return row.pinned ? t('liveWork.idle', { state: row.state_name }) : ''
+  if (row.state === null) return row.pinned ? t('liveWork.idle', { state: rowState.value }) : ''
   const doing = t(`liveWork.${row.state}`)
   return row.agents > 0
     ? `${doing}, ${t('liveWork.agents', { count: row.agents }, row.agents)}`
@@ -124,7 +125,7 @@ const currentMark = computed(() => (props.current ? ('page' as const) : undefine
 const pinShown = computed(() => props.size === 'rail' || props.row.pinned)
 /** What stands at the end of the link: a closed item's state, else how many agents are on it. */
 const meta = computed(() => {
-  if (props.row.is_terminal) return { agents: false, word: props.row.state_name }
+  if (props.row.is_terminal) return { agents: false, word: rowState.value }
   if (props.row.agents > 0 && !props.row.fading)
     return { agents: true, word: String(props.row.agents) }
   return null

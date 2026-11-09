@@ -12,6 +12,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import { sourceDocument } from '@/shared/lib/textReferences.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -32,6 +33,12 @@ const emit = defineEmits<{
 }>()
 const { t, d } = useI18n()
 type Link = WorkItem['links'][number]
+
+const stateName = useStateName()
+/** The other end's state as the owner has states named; drawn only where the server named it. */
+function linkState(link: Link): string {
+  return stateName({ name: link.state_name ?? '', category: link.state_category ?? undefined })
+}
 
 /**
  * Kinds whose two directions mean the same thing. A link is stored once, from
@@ -168,7 +175,7 @@ function when(value: string): string {
                   variant="inline"
                   dimension="work-item-state"
                   :state="link.state_category"
-                  :label="link.state_name"
+                  :label="linkState(link)"
                 />
               </span>
             </button>

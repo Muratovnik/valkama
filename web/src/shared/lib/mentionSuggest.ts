@@ -6,6 +6,7 @@ import type { FoundDocument } from '@/shared/api/documentApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { activePlanningWorkItems, searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import { splitIdentifiers } from '@/shared/lib/textReferences.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 import { SUGGEST_LIMIT } from '@/shared/ui/useEditorSuggestions.ts'
 
@@ -19,9 +20,13 @@ const MOST_TOLD = 20
  * The tasks of one planning space, found by the same search the related-work picker
  * uses, so a reference written here means the same item a link added there would.
  * With nothing typed yet it offers what is being worked on, so an `@` alone already
- * has rows to take.
+ * has rows to take. A row names its state as the owner has states named.
  */
-function workItems(space: () => string, omit: () => string | undefined): MentionSource {
+function workItems(
+  space: () => string,
+  omit: () => string | undefined,
+  stateName: ReturnType<typeof useStateName>,
+): MentionSource {
   return async (query, signal) => {
     const found = query
       ? await searchPlanningWorkItems(query, space(), signal)
@@ -35,7 +40,7 @@ function workItems(space: () => string, omit: () => string | undefined): Mention
         name: entry.reference,
         reference: entry.reference,
         title: entry.title,
-        detail: entry.state.name,
+        detail: stateName(entry.state),
       }))
   }
 }
@@ -111,10 +116,14 @@ function shared(lists: readonly EditorSuggestion[][]): EditorSuggestion[] {
  *
  * `space` is the space's `planning_space_id`. `omit` leaves one item out — the card
  * being written on, since a text that links to its own item says nothing; a task that
- * does not exist yet has nothing to leave out.
+ * does not exist yet has nothing to leave out. Called where a component sets up, since
+ * the state names follow the interface's language and the owner's choice.
  */
 export function mentionSuggest(space: () => string, omit: () => string | undefined = () => '') {
-  const sources: readonly MentionSource[] = [workItems(space, omit), projectFiles(space)]
+  const sources: readonly MentionSource[] = [
+    workItems(space, omit, useStateName()),
+    projectFiles(space),
+  ]
   return async (query: string, signal: AbortSignal): Promise<EditorSuggestion[]> => {
     const settled = await Promise.allSettled(sources.map((source) => source(query, signal)))
     const found = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))

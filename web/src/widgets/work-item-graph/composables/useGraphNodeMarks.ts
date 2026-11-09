@@ -26,6 +26,7 @@ import {
 } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 
 interface MarkInput {
   focusSet: Ref<ReturnType<typeof neighborhood> | null>
@@ -49,6 +50,7 @@ const FRAME_PARTS = [
 
 export function useGraphNodeMarks(input: MarkInput) {
   const { t } = useI18n()
+  const stateName = useStateName()
   const inChain = computed(() => input.scopeKind() === 'chain')
   // Containers are named by reference on their children.
   const referenceById = computed(
@@ -106,7 +108,7 @@ export function useGraphNodeMarks(input: MarkInput) {
       for (const item of input.items())
         if (members.has(item.work_item_id)) groups[chainGroup(item)].push(item)
     }
-    return groupStateNames(groups)
+    return groupStateNames(groups, stateName)
   })
 
   /**

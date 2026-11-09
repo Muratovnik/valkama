@@ -10,6 +10,8 @@
  * the chain is merely planned. It rides on a row as a mark instead.
  */
 
+import type { NamedState } from '@/shared/lib/stateNames.ts'
+
 export const CHAIN_GROUPS = ['active', 'review', 'queued', 'backlog', 'blocked', 'done'] as const
 export type ChainGroup = (typeof CHAIN_GROUPS)[number]
 
@@ -45,22 +47,24 @@ export function chainGroup(item: Classifiable): ChainGroup {
 }
 
 interface Named {
-  state: { name: string }
+  state: NamedState
 }
 
 /**
  * The space's own name for each group, when every member in it is in one state:
  * a workflow that calls its active state "Development" should read that wherever
- * a chain is drawn, as the board's column reads it. Null for a group that spans
- * several states, or holds none, which keeps the group's own word.
+ * a chain is drawn, as the board's column reads it, in the words `stateName` gives it. Null
+ * for a group that spans several states, or holds none, which keeps the group's own word.
  */
 export function groupStateNames(
   groups: Readonly<Record<ChainGroup, readonly Named[]>>,
+  stateName: (state: NamedState) => string,
 ): Record<ChainGroup, string | null> {
   return Object.fromEntries(
     CHAIN_GROUPS.map((group) => {
-      const names = new Set(groups[group].map((member) => member.state.name))
-      return [group, names.size === 1 ? [...names][0] : null]
+      const [first, ...rest] = groups[group]
+      const one = first && rest.every((member) => member.state.name === first.state.name)
+      return [group, one ? stateName(first.state) : null]
     }),
   ) as Record<ChainGroup, string | null>
 }

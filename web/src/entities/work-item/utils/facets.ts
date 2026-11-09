@@ -26,6 +26,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import type { NamedState } from '@/shared/lib/stateNames.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
 /**
@@ -49,7 +50,7 @@ export type FacetId =
  * default it would be mistaken for.
  */
 export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> & {
-  state: Pick<WorkItemBrief['state'], 'name' | 'category'> & { is_terminal?: boolean }
+  state: Pick<WorkItemBrief['state'], 'name' | 'category'> & { is_terminal?: boolean; key?: string }
 } & Partial<
     Pick<
       WorkItemBrief,
@@ -258,8 +259,12 @@ export const FACET_ORDER: readonly FacetId[] = [
   'steps',
 ]
 
-/** The words a mark can say: an i18n key and its parameters, or data as it is. */
-type FacetText = { key: string; params?: Record<string, string | number> } | { literal: string }
+/**
+ * The words a mark can say: an i18n key and its parameters, data as it is, or a workflow
+ * state, which the reader's language and the owner's choice name.
+ */
+type FacetMessage = { key: string; params?: Record<string, string | number> }
+type FacetText = FacetMessage | { literal: string } | { state: NamedState }
 
 export interface FacetMark {
   facet: FacetId
@@ -454,7 +459,7 @@ export function stateMark(state: FacetSubject['state'], form: FacetForm): FacetM
     value: state.category,
     form,
     glyph: state.category === 'cancelled' ? 'state-cancelled' : null,
-    text: { literal: state.name },
+    text: { state },
     tone: { dimension: 'work-item-state', state: state.category },
     // The card's state is its transition menu, so a click there moves the
     // item; state filters come from the bar's menu instead.

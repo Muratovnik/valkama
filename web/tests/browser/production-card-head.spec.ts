@@ -78,8 +78,8 @@ for (const width of [1440, 1024, 390]) {
     expect((await topOf(lead.locator('.card-facts-block'))) - top).toBeLessThanOrEqual(180)
     await expect(drawer.getByText('Перевести в', { exact: true })).toHaveCount(0)
     await expect(
-      lead.getByRole('combobox', { name: 'Состояние: Dev. Перевести в другое' }),
-    ).toHaveText('Dev')
+      lead.getByRole('combobox', { name: 'Состояние: В работе. Перевести в другое' }),
+    ).toHaveText('В работе')
     await expect(drawer.locator('.facts, .fact-term')).toHaveCount(0)
 
     // One action, and where it stands is the drawer's width to decide.
@@ -122,7 +122,7 @@ test('the state chip moves the item from the keyboard and says why the server re
   page,
 }) => {
   const { drawer, moves } = await openCard(page, 1440)
-  const chip = drawer.getByRole('combobox', { name: /^Состояние: Dev/u })
+  const chip = drawer.getByRole('combobox', { name: /^Состояние: В работе/u })
   await drawer.locator('.drawer-frame-close').focus()
   // Close, the reference, its link, the source, then the state.
   for (let step = 0; step < 4; step += 1) await page.keyboard.press('Tab')
@@ -130,7 +130,7 @@ test('the state chip moves the item from the keyboard and says why the server re
 
   await page.keyboard.press('Enter')
   const options = page.getByRole('option')
-  await expect(options).toHaveText(['Dev', 'Done'])
+  await expect(options).toHaveText(['В работе', 'Выполнено'])
   // Where the item is, checked and not a move.
   await expect(options.first()).toHaveAttribute('aria-disabled', 'true')
   // Escape closes the menu and leaves the card open.
@@ -146,15 +146,15 @@ test('the state chip moves the item from the keyboard and says why the server re
     .poll(() => moves)
     .toEqual([{ author: 'user', id: workItemRef.reference, state: 'done' }])
   const refusal = drawer.locator('.drawer-frame-notices .refusal')
-  await expect(refusal).toContainText('Перевод в «Done» не выполнен')
+  await expect(refusal).toContainText('Перевод в «Выполнено» не выполнен')
   await expect(refusal).toContainText('has no closing summary')
   // The chip still names where the item is, and keeps the focus it had.
-  await expect(chip).toHaveText('Dev')
+  await expect(chip).toHaveText('В работе')
   await expect(chip).toBeFocused()
 
   // The same move again by pointer is a second request, not a no-op.
   await chip.click()
-  await page.getByRole('option', { name: 'Done' }).click()
+  await page.getByRole('option', { name: 'Выполнено' }).click()
   await expect.poll(() => moves.length).toBe(2)
 })
 

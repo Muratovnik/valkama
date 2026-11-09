@@ -21,6 +21,8 @@ function inState(member: Member, key: string, name: string): Member {
 }
 
 const word = (group: string) => `<${group}>`
+/** A stand-in for the screen's naming that shows it is the one asked. */
+const named = (state: { name: string }) => `«${state.name}»`
 
 describe('the word a chain section gives a group, and the state a row names', () => {
   const [first, second, third] = largeEpicChain().members.filter(
@@ -29,19 +31,23 @@ describe('the word a chain section gives a group, and the state a row names', ()
 
   it('is the one state a group is in, and then its rows say nothing', () => {
     const group = [first, second, third]
-    const labels = groupLabels(groupMembers(group), word)
-    expect(labels.backlog).toEqual({ text: 'Backlog', state: true })
-    expect(group.map((member) => rowStateName(labels.backlog, member))).toEqual([null, null, null])
+    const labels = groupLabels(groupMembers(group), word, named)
+    expect(labels.backlog).toEqual({ text: '«Backlog»', state: true })
+    expect(group.map((member) => rowStateName(labels.backlog, member, named))).toEqual([
+      null,
+      null,
+      null,
+    ])
   })
 
   it('is the group’s own word where it mixes states, and then each row names its own', () => {
     const group = [first, inState(second, 'icebox', 'Icebox'), third]
-    const labels = groupLabels(groupMembers(group), word)
+    const labels = groupLabels(groupMembers(group), word, named)
     expect(labels.backlog).toEqual({ text: '<backlog>', state: false })
-    expect(group.map((member) => rowStateName(labels.backlog, member))).toEqual([
-      'Backlog',
-      'Icebox',
-      'Backlog',
+    expect(group.map((member) => rowStateName(labels.backlog, member, named))).toEqual([
+      '«Backlog»',
+      '«Icebox»',
+      '«Backlog»',
     ])
   })
 })

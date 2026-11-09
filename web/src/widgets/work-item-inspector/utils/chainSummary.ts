@@ -9,6 +9,10 @@
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS, chainGroup, groupStateNames } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
+import type { NamedState } from '@/shared/lib/stateNames.ts'
+
+/** How a state is named on screen: `useStateName`, or a plain stand-in where no screen is. */
+type StateName = (state: NamedState) => string
 
 export type ChainGroups = Record<ChainGroup, ChainMember[]>
 
@@ -64,8 +68,12 @@ export type GroupLabels = Record<ChainGroup, GroupLabel>
  * It is read off the whole chain rather than a narrowed list, so choosing a
  * lane does not rename a group either.
  */
-export function groupLabels(groups: ChainGroups, word: (group: ChainGroup) => string): GroupLabels {
-  const names = groupStateNames(groups)
+export function groupLabels(
+  groups: ChainGroups,
+  word: (group: ChainGroup) => string,
+  stateName: StateName,
+): GroupLabels {
+  const names = groupStateNames(groups, stateName)
   return Object.fromEntries(
     CHAIN_GROUPS.map((group) => {
       const name = names[group]
@@ -79,8 +87,12 @@ export function groupLabels(groups: ChainGroups, word: (group: ChainGroup) => st
  * group is in already says it, so the row says nothing; a heading that names
  * the group's own word leaves every row to name its own.
  */
-export function rowStateName(label: GroupLabel, member: ChainMember): string | null {
-  return label.state ? null : member.state.name
+export function rowStateName(
+  label: GroupLabel,
+  member: ChainMember,
+  stateName: StateName,
+): string | null {
+  return label.state ? null : stateName(member.state)
 }
 
 /** The day a series point names, read as a calendar date wherever the reader is. */

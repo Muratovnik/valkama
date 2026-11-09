@@ -45,7 +45,7 @@ describe('Planning related-task search', () => {
         planning_space_id: space,
         reference: 'QA-42',
         title: item.title,
-        state: { name: 'Dev' },
+        state: { key: 'dev', name: 'Dev' },
         claim_ref: 'Alex',
       },
     ])
