@@ -20,6 +20,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Settings stands at the foot of the rail.** It moved from under the last group into the
+  rail's foot, under the connection's state when that is lost, so it stays in one place
+  however long the list of work going on now grows. It is still part of the navigation.
+
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on
   one line in a card's drawer, and one quiet line under the label saying the way chosen, what

@@ -648,9 +648,12 @@ a right-hand column of six numbers that means nothing read on its own. Only the
 compact state moves a count to the top-right of the icon box, which is the one
 place left once the label is gone; it never reserves unexplained space below it.
 
-Work and Settings own distinct icons. Settings is a destination like any other and
-stands under the last navigation group; the rail's footer holds the connection
-state and refresh and nothing you navigate to. A lost connection is said there
+Work and Settings own distinct icons. Settings is a destination like any other, in
+the navigation landmark, and stands in the rail's footer at its floor, under the
+connection state and refresh. It stood under the last navigation group, so a long
+list of work going on now carried it into the middle of the rail and a short one
+left it half way up; in the footer it is in one place whatever the list holds, and
+a lost connection said above it does not move it. A lost connection is said there
 and only there: the dot and the word change, the tooltip says that the app
 reconnects by itself and what the button does, and assistive technology hears
 it once. On a narrow rail the word is gone, so a press on the dot while the
@@ -670,10 +673,11 @@ its narrowest and widest. It starts at 260px, goes no narrower than 200px and no
 name the rail still cuts short says itself in a hint beside the rail; a name it does not
 cut shows none. At 760px and narrower the rail is its icons alone and has no edge to drag.
 
-The connection's foot shows only while the connection is lost. Connected, the streams bring
-every change as it happens, so a green dot and a refresh nobody needed stood at the foot of
-every page; connecting is the moment a page opens, and showing it would only flash. Lost,
-the foot holds the state, the reason in its hint and the refresh, as below.
+The connection's state shows in the foot only while the connection is lost. Connected, the
+streams bring every change as it happens, so a green dot and a refresh nobody needed stood at
+the foot of every page; connecting is the moment a page opens, and showing it would only
+flash. Lost, the foot holds the state, the reason in its hint and the refresh above Settings,
+with a rule over them; connected, it holds Settings alone and draws no rule.
 
 In the Work list's phone panel (the navigation at most 760px wide), only a closed
 top-level item with no sign and no fold loses its lead column, so its title takes that
