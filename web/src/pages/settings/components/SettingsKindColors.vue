@@ -22,6 +22,7 @@ import { WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { DEFAULT_KIND_COLORS, kindColor, readsPoorly } from '@/shared/lib/kindColors.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -76,10 +77,7 @@ function resetAll() {
 </script>
 
 <template>
-  <SettingsGroup
-    :title="t('settings.kindColors.title')"
-    :intro="t('settings.kindColors.intro')"
-  >
+  <SettingsGroup :title="t('settings.kindColors.title')">
     <SettingsRow
       v-for="row in rows"
       :key="row.kind"
@@ -102,6 +100,7 @@ function resetAll() {
       <div class="kind-color-field">
         <input
           :id="pickerId(row.kind)"
+          v-tooltip.detail="t('settings.kindColors.kept')"
           class="kind-color-input"
           type="color"
           :value="row.color"

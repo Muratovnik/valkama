@@ -26,6 +26,7 @@ import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { placeIcon } from '@/shared/ui/placeIcon.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const { t } = useI18n()
@@ -148,10 +149,7 @@ function selectEditor(value: string) {
 </script>
 
 <template>
-  <SettingsGroup
-    :title="t('open.settings.title')"
-    :intro="t('open.settings.intro')"
-  >
+  <SettingsGroup :title="t('open.settings.title')">
     <template
       v-if="placesUnknown"
       #note
@@ -175,7 +173,11 @@ function selectEditor(value: string) {
           v-if="placesFor(family).length"
           class="settings-opening-lane"
         >
-          <small class="settings-opening-lane-label">{{ t('open.settings.fallback') }}</small>
+          <small
+            v-tooltip.detail="t('open.settings.lastPlaceHint')"
+            class="settings-opening-lane-label"
+            >{{ t('open.settings.fallback') }}</small
+          >
           <SelectionControl
             class="settings-opening-control"
             mode="combobox"

@@ -145,6 +145,12 @@ checkouts are therefore distinguishable even at the same version.
   what the search searches and what an attempt is are gone; a permanent explanation is no
   longer placed over a section.
 
+- **Settings opens with its settings.** The sentences under each group's heading and under
+  «Installation health», saying what the group is for, are gone. The two facts no control
+  said move onto the control as a hover hint: a type's colour picker says the colour is kept
+  on this device, and «If the place is unknown or cannot be opened» says that the place is
+  the one a session was last open in.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session

@@ -35,14 +35,10 @@
 
 .health-detail {
   max-width: 80ch;
-  overflow-wrap: anywhere;
-}
-
-.health-intro,
-.health-detail {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-note);
+  overflow-wrap: anywhere;
 }
 
 .health-summary {

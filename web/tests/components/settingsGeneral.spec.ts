@@ -58,8 +58,14 @@ describe('SettingsGeneral opening sessions and files', () => {
 
   it('offers each family only the places that can hold its sessions', () => {
     const wrapper = mountGeneral()
-    expect(wrapper.find('.settings-group-intro').exists()).toBe(true)
-    expect(wrapper.text()).toContain('A session opens where it was last open.')
+    // No paragraph stands over the group: which place «the place» is, is the label's hint.
+    expect(wrapper.find('.settings-group-head p').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('A session opens where it was last open')
+    expect(
+      wrapper
+        .findAll('.settings-opening-lane-label')
+        .map((label) => label.attributes('data-tooltip')),
+    ).toContain('A session opens where it was last open; this place takes it otherwise.')
     expect(values(wrapper, `Claude Code: ${FALLBACK}`)).toEqual([
       'vscode',
       'vscode-insiders',

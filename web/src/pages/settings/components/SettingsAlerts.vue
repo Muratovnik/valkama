@@ -86,10 +86,7 @@ function readinessDetail(answer: AlertReadiness): string {
 </script>
 
 <template>
-  <SettingsGroup
-    :title="t('alerts.title')"
-    :intro="t('alerts.intro')"
-  >
+  <SettingsGroup :title="t('alerts.title')">
     <template
       v-if="failureOf('locale')"
       #note

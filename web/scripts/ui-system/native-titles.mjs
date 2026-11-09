@@ -187,6 +187,14 @@ export const DETAIL_TOOLTIPS = new Map([
     'what the chip does to the board; its word only names the grouping',
   ],
   [
+    `pages/settings/components/SettingsKindColors.vue <input> v-tooltip.detail="t('settings.kindColors.kept')"`,
+    'where a chosen colour is kept, which the swatch does not say; it stood as a paragraph over the group',
+  ],
+  [
+    `pages/settings/components/SettingsOpening.vue <small> v-tooltip.detail="t('open.settings.lastPlaceHint')"`,
+    'which place «the place» is, the last one a session was open in; it stood as a paragraph over the group',
+  ],
+  [
     'shared/ui/ChoiceSelect.vue <strong> v-tooltip.detail="{ text: selected?.title, words: selected?.label }"',
     'the chosen option’s hint, which no row of the field draws; while its own words are cut, they come first, whole',
   ],

@@ -38,7 +38,6 @@ function emitLocale(value: string) {
       <SettingsGroup
         class="settings-general-group"
         :title="t('settings.interface')"
-        :intro="t('settings.interfaceIntro')"
       >
         <SettingsRow
           :label="t('language.label')"

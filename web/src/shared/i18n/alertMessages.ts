@@ -4,8 +4,6 @@ export const alertMessages = {
   en: {
     alerts: {
       title: 'Windows notifications',
-      intro:
-        'Valkama shows a Windows notification when an agent is waiting for you, even with its window closed. A click opens the work item.',
       loadFailed: 'Could not read the notification settings.',
       saveFailed: 'Not saved: {reason}',
       enabled: 'Notify me when an agent is waiting for me',
@@ -81,8 +79,6 @@ export const alertMessages = {
   ru: {
     alerts: {
       title: 'Оповещения Windows',
-      intro:
-        'Valkama покажет оповещение Windows, когда агент ждёт вас, даже при закрытом окне. Клик открывает карточку задачи.',
       loadFailed: 'Не удалось прочитать настройки оповещений.',
       saveFailed: 'Не сохранено: {reason}',
       enabled: 'Оповещать, когда агент ждёт меня',

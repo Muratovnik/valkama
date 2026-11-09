@@ -13,7 +13,6 @@ export const settingsMessages = {
       },
       interface: 'Interface',
       system: 'System',
-      interfaceIntro: 'Language and other local display preferences.',
       languageHint: 'Applies to the entire Valkama interface on this device.',
       executionTab: {
         label: 'Execution tab on a card: start an agent right from the task',
@@ -40,7 +39,6 @@ export const settingsMessages = {
       },
       interface: 'Интерфейс',
       system: 'Система',
-      interfaceIntro: 'Язык и другие локальные параметры отображения.',
       languageHint: 'Применяется ко всему интерфейсу Valkama на этом устройстве.',
       executionTab: {
         label: 'Вкладка «Исполнение» в карточке: запуск агента прямо из задачи',

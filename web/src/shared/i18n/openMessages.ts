@@ -164,7 +164,7 @@ export const openMessages = {
       },
       settings: {
         title: 'Opening sessions and files',
-        intro: 'A session opens where it was last open.',
+        lastPlaceHint: 'A session opens where it was last open; this place takes it otherwise.',
         family: {
           claude: 'Claude Code',
           codex: 'Codex',
@@ -362,7 +362,7 @@ export const openMessages = {
       },
       settings: {
         title: 'Открытие сессий и файлов',
-        intro: 'Сессия открывается там, где была открыта последней.',
+        lastPlaceHint: 'Сессия открывается там, где была открыта последней; иначе — в этом месте.',
         family: {
           claude: 'Claude Code',
           codex: 'Codex',
