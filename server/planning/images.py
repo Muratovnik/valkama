@@ -37,6 +37,10 @@ DIRECTORY = "images"
 #: Where one picture is served, and so what the Markdown written for it names.
 PATH_PREFIX = "/api/images/"
 _HASH = re.compile(r"[0-9a-f]{64}")
+#: The pictures a write freed, by the connection that made it, until it commits: the
+#: directory they stand in and their hashes. Kept by `id` because a connection takes no
+#: attribute and no weak reference; `settle` checks the directory before it trusts one.
+_FREED: dict[int, tuple[str, set[str]]] = {}
 
 
 class ImageRefusedError(model.PlanningError):
@@ -230,26 +234,64 @@ def held(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
     ]
 
 
-def release(conn: sqlite3.Connection, hashes: list[str]) -> int:
-    """Remove each file no item holds any more; how many went.
-
-    Called by the write that took the rows away, inside its transaction and so
-    under the store's write lock: an upload of the same picture waits for it,
-    and writes the file again if it was taken.
-    """
-
-    if not hashes:
-        return 0
-    folder = directory(conn)
-    removed = 0
-    for sha in sorted(set(hashes)):
+def _unheld(conn: sqlite3.Connection, hashes: set[str]) -> list[str]:
+    return [
+        sha
+        for sha in sorted(hashes)
         if conn.execute(
             "SELECT 1 FROM work_item_images WHERE sha256 = ? LIMIT 1", (sha,)
-        ).fetchone():
-            continue
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(os.path.join(folder, sha))
-            removed += 1
+        ).fetchone()
+        is None
+    ]
+
+
+def release(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+    """The pictures no item holds any more, once the write that took their rows commits.
+
+    Nothing is removed here. The write may still be rolled back -- a refusal, a
+    failure on its way to the commit -- and a file removed inside it would leave
+    the rows it brings back naming nothing. The hashes are noted for `settle`,
+    which the surface that commits calls after the commit.
+    """
+
+    freed = _unheld(conn, set(hashes))
+    if freed:
+        folder = directory(conn)
+        noted = _FREED.setdefault(id(conn), (folder, set()))
+        if noted[0] == folder:
+            noted[1].update(freed)
+        else:
+            _FREED[id(conn)] = (folder, set(freed))
+    return freed
+
+
+def settle(conn: sqlite3.Connection) -> int:
+    """After a commit, remove the files the committed write freed; how many went.
+
+    Under the write lock again, in a transaction of its own, so an upload of the same
+    picture cannot slip between the check and the removal: a hash some item holds
+    again is left alone. A file that cannot be removed now -- open in another
+    process, as Windows refuses then -- stays for the sweep at the next open of the
+    store (`sweep`), and so does everything when the lock cannot be had.
+    """
+
+    noted = _FREED.pop(id(conn), None)
+    if noted is None or conn.in_transaction:
+        return 0
+    folder, hashes = noted
+    removed = 0
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if directory(conn) == folder:
+                for sha in _unheld(conn, hashes):
+                    with contextlib.suppress(OSError):
+                        os.remove(os.path.join(folder, sha))
+                        removed += 1
+        finally:
+            conn.rollback()
+    except sqlite3.Error:
+        return removed
     return removed
 
 

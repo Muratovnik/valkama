@@ -915,6 +915,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if boundary.commit is _Commit.SURFACE and conn is not None:
                     conn.commit()
+                    # A deleted item's pictures go only now that its delete has committed.
+                    planning_images.settle(conn)
                 if boundary.after_commit is not None:
                     boundary.after_commit(call)
                 publishes = _publishes(boundary.notify, path)

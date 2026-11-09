@@ -360,6 +360,7 @@ def run_tool_call(
     # without this every tool write an agent made was rolled back when the
     # process ended.
     conn.commit()
+    planning_images.settle(conn)
     alert_emit.send(due)
     return data
 

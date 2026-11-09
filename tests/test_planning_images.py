@@ -164,11 +164,45 @@ class KeepingTests(StoreCase):
         self.assertEqual(404, caught.exception.status)
 
 
+#: An agent session, for a tool call made the way the stdio loop makes it.
+AGENT = {"sessionId": "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"}
+
+
 class DeletionTests(StoreCase):
     def delete(self, reference: str) -> None:
-        handled = api.handle_post(self.conn, "/api/planning/work-item/delete", {"id": reference})
+        """Delete as an agent does: the call, its commit and what follows the commit."""
+
+        mcp_surface.run_tool_call(self.conn, "delete_work_item", {"id": reference}, meta=AGENT)
+
+    def test_a_delete_rolled_back_after_it_freed_the_pictures_keeps_every_one(self) -> None:
+        pictures = [png(14), png(15)]
+        for data in pictures:
+            images.store(self.conn, self.first, data)
+        handled = api.handle_post(self.conn, "/api/planning/work-item/delete", {"id": self.first})
         assert handled is not None
-        self.conn.commit()
+        # Whatever fails between the delete and its commit takes the delete back whole.
+        self.conn.rollback()
+        self.assertEqual(2, len(self.rows()))
+        for data in pictures:
+            self.assertEqual(data, images.read(self.conn, sha(data), item=self.first).data)
+
+    def test_a_file_that_cannot_be_removed_does_not_stop_the_delete(self) -> None:
+        kept, held = png(16), png(17)
+        images.store(self.conn, self.first, kept)
+        images.store(self.conn, self.first, held)
+        remove = os.remove
+
+        def refuse(path: str) -> None:
+            # Another process has the second picture open, as Windows refuses then.
+            if os.path.basename(path) == sha(held):
+                raise PermissionError(13, "in use", path)
+            remove(path)
+
+        with mock.patch.object(os, "remove", refuse):
+            self.delete(self.first)
+        self.assertEqual([], self.rows())
+        self.assertFalse((self.folder / sha(kept)).exists())
+        self.assertTrue((self.folder / sha(held)).exists())
 
     def test_deleting_the_item_deletes_its_pictures(self) -> None:
         data = png(10)
@@ -458,6 +492,22 @@ class HttpTests(HttpCase):
             answer = raw.recv(4096).decode("latin-1")
         self.assertTrue(answer.startswith("HTTP/1.0 413"), answer)
         self.assertEqual([], self.rows())
+
+    def test_a_delete_the_page_sends_takes_the_picture_once_it_has_committed(self) -> None:
+        data = png(33)
+        _, kept = self.upload(self.first, data)
+        body = json.dumps({"id": self.first}).encode("utf-8")
+        headers = {
+            "Origin": f"http://{self.authority}",
+            "Sec-Fetch-Site": "same-origin",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+            "X-Valkama-Session": self.token(),
+        }
+        status, _, answer = self.request("POST", "/api/planning/work-item/delete", headers, body)
+        self.assertEqual(200, status, answer)
+        self.assertFalse((self.folder / sha(data)).exists())
+        self.assertEqual(404, self.fetch(kept["path"])[0])
 
     def test_an_upload_without_the_browser_credential_is_refused(self) -> None:
         status, body = self.upload(self.first, png(32), token="x" * 64)
