@@ -251,8 +251,7 @@ defineExpose({ restoreView, reveal, view })
                   class="chain-row-glyph"
                   :name="mark.glyph"
                   :size="14"
-                />
-                {{ markWord(mark) }}
+                />{{ markWord(mark) }}
               </span>
               <span
                 v-if="holder(group, member)"

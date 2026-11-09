@@ -1,8 +1,9 @@
 /**
  * The identity line over a card's title and the rows of facts under it, measured in the built
  * app. The texts of one line share a baseline, a row's name with its value's words, each icon or
- * dot stands on the middle of the lowercase letters beside it, within a pixel, and a word trimmed
- * to its letters keeps them all.
+ * dot stands on the middle of the capitals beside it, within half a pixel, and a word trimmed to
+ * its capitals keeps all its letters. Every other surface that stands a sign beside words is
+ * measured the same way in `production-sign-middle.spec.ts`.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -22,17 +23,19 @@ const CARD = serializePlatformRoute({
   entity: planningWorkItemEntity(workItemRef),
 })
 
-/** The room a mark may stand off the middle of the letters beside it. */
+/** The room two texts of one line may stand apart from one baseline. */
 const TOLERANCE = 1
+/** The room a sign may stand off the middle of the capitals of its line, on every surface. */
+const MIDDLE_ROOM = 0.5
 /** Under half a pixel, so that two words of one line never round to two rows of pixels. */
 const BASELINE_ROOM = 0.25
 
 interface TextMeasure {
   /** The text's baseline, from the top of its own run plus the font's ascent. */
   baseline: number
+  /** The middle of its capitals: the baseline less half the height of an `H`. */
+  capCentre: number
   text: string
-  /** The middle of its lowercase letters: the baseline less half the height of an `x`. */
-  xCentre: number
 }
 
 interface Measured {
@@ -69,8 +72,8 @@ function measure(page: Page, spec: Spec): Promise<Measured> {
       const style = getComputedStyle(element)
       canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
       const baseline = box.top + canvas.measureText('H').fontBoundingBoxAscent
-      const xCentre = baseline - canvas.measureText('x').actualBoundingBoxAscent / 2
-      texts[name] = { baseline, xCentre, text: node.textContent?.trim() ?? '' }
+      const capCentre = baseline - canvas.measureText('H').actualBoundingBoxAscent / 2
+      texts[name] = { baseline, capCentre, text: node.textContent?.trim() ?? '' }
     }
     const marks: Record<string, number> = {}
     for (const [name, selector] of Object.entries(input.marks)) {
@@ -170,20 +173,22 @@ function trimmedWords(page: Page) {
 }
 
 /**
- * Every text of the line shares the first one's baseline, and each mark stands on the lowercase
- * middle of the text it is paired with.
+ * Every text of the line shares the first one's baseline, and each mark stands on the middle of
+ * the capitals of the text it is paired with.
  */
 function alignmentGaps(measured: Measured, pairs: [string, string][]) {
   const [first, ...rest] = Object.values(measured.texts)
   const baselines = rest.map((other) => ({
     gap: Math.abs(other.baseline - first.baseline),
     label: `baseline of “${other.text}” against “${first.text}”`,
+    room: TOLERANCE,
   }))
   const marks = pairs.map(([mark, text]) => {
     const target = measured.texts[text]
     return {
-      gap: Math.abs(measured.marks[mark] - target.xCentre),
+      gap: Math.abs(measured.marks[mark] - target.capCentre),
       label: `${mark} against the middle of “${target.text}”`,
+      room: MIDDLE_ROOM,
     }
   })
   return [...baselines, ...marks]
@@ -210,7 +215,7 @@ const STATE: Spec = {
 
 for (const locale of ['ru', 'en'] as const) {
   for (const width of [1280, 390]) {
-    test(`the identity line shares one baseline, and its marks centre on the letters, ${locale} at ${width}px`, async ({
+    test(`the identity line shares one baseline, and its marks centre on the capitals, ${locale} at ${width}px`, async ({
       page,
     }) => {
       await openCard(page, locale, width)
@@ -221,7 +226,7 @@ for (const locale of ['ru', 'en'] as const) {
         ['link', 'reference'],
         ['source', line.texts.updated ? 'updated' : 'reference'],
       ])
-      for (const { gap, label } of gaps) expect(gap, label).toBeLessThanOrEqual(TOLERANCE)
+      for (const { gap, label, room } of gaps) expect(gap, label).toBeLessThanOrEqual(room)
     })
 
     test(`the state button's dot and chevron centre on its label, ${locale} at ${width}px`, async ({
@@ -234,7 +239,7 @@ for (const locale of ['ru', 'en'] as const) {
         ['dot', 'label'],
         ['chevron', 'label'],
       ])
-      for (const { gap, label } of gaps) expect(gap, label).toBeLessThanOrEqual(TOLERANCE)
+      for (const { gap, label, room } of gaps) expect(gap, label).toBeLessThanOrEqual(room)
     })
   }
 }

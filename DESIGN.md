@@ -577,8 +577,9 @@ and only fades the end of a strip that scrolls on past it.
   two widths; it is the only check here that can see a defect no element's
   declared style is wrong for.
 - A word whose neighbours centre on its letters is trimmed to them, by one class:
-  `.trimmed-word` in `shell.css`. The trimmed box is one x-height tall, so capitals, marks
-  above the letters and descenders stand outside it and anything that clips at it cuts them;
+  `.trimmed-word` in `shell.css`. The trimmed box is the capitals' height, from the baseline
+  up, so marks above the letters and descenders stand outside it and anything that clips at
+  it cuts them;
   a card's words were written with the trim and an inherited `overflow: hidden`, and every
   «Высокий» read «Высокии». The class says the trim and the sideways-only clip together, and
   `check:ui-system` refuses `text-box` anywhere else. `production-card-alignment.spec.ts`
@@ -607,11 +608,20 @@ and only fades the end of a strip that scrolls on past it.
   tile, a list row, a graph node and the hover card read the kind, the number, the
   priority, and the card's head the kind and the number. A search result still lays
   out its own lead, the priority first, and is the one surface that does. A mark's glyph stands in a box that is a line of the mark's
-  text, centred on the middle of its lowercase letters as an inline image centres, and
-  the mark lines that box up with its word by their baseline; so the glyph stands on
-  the letters' middle on every surface, and on the first line of a word that wraps.
-  Centred on the line box instead, a glyph stood 1px high on a tile, 2–3.5px off in
-  the hover card and up to 3px off on the graph, a different amount on each.
+  text, and the mark lines that box up with its word by their baseline; so the glyph
+  stands on the same middle as its words on every surface, and on the first line of a
+  word that wraps. Centred on the line box instead, a glyph stood 1px high on a tile,
+  2–3.5px off in the hover card and up to 3px off on the graph, a different amount on each.
+- Every sign beside words — a mark's glyph, a state's dot, a chevron, the session's dots in
+  the side panel and on a tile — stands its middle on the middle of the capitals of its
+  line, `--size-text-middle` (`0.5cap`) above the baseline, and a box that centres a word
+  trims it to its capitals (`.trimmed-word`). The capitals are the reference because the
+  lines a sign stands beside are a reference, a number or a word that starts with one, and
+  the middle of the lowercase letters, where `vertical-align: middle` and the x-height trim
+  put signs, stood them 1–2.5px low beside a reference on every surface but the side
+  panel. `production-card-alignment.spec.ts` measures the card and
+  `production-sign-middle.spec.ts` every other surface, at 1280 and 390px in both languages,
+  within half a pixel.
 - What a block in a column draws first stands on the column's edge. A row or a bare
   inline control whose fill keeps an inset under the pointer, `--space-fill-inset`, stands
   that inset outside the column as a negative margin, so its words start where the heading

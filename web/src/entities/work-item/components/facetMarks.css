@@ -157,13 +157,11 @@
 }
 
 /* The glyph's line: a box that is a line of the mark's text, holding a zero-width
-   letter for its baseline and the glyph centred on the middle of that line's
-   lowercase letters, as an inline image centres (`vertical-align: middle`: the
-   baseline plus half an x-height). It lines up with the word beside it by that
-   baseline, and with the text beside the mark as any line of text does, so the
-   glyph stands on the letters' middle on every surface and every line, the first
-   of a word that wraps included. It takes no room beyond the glyph, and the letter
-   says nothing to a screen reader. */
+   letter for its baseline and the glyph in that line (`.facet-glyph` below). It
+   lines up with the word beside it by that baseline, and with the text beside the
+   mark as any line of text does, so the glyph stands on the capitals' middle on
+   every surface and every line, the first of a word that wraps included. It takes
+   no room beyond the glyph, and the letter says nothing to a screen reader. */
 .facet-glyph-box {
   display: inline-block;
   flex: none;
@@ -171,11 +169,6 @@
 
   &::before {
     content: '\200b' / '';
-  }
-
-  .facet-glyph {
-    display: inline;
-    vertical-align: middle;
   }
 }
 
@@ -197,7 +190,7 @@
 }
 
 /* A mark that is its glyph alone, its word out of sight, is that line itself: the
-   same letter and the same centring as a glyph box, and no box inside the mark. */
+   same letter and the same glyph as a glyph box, and no box inside the mark. */
 .facet-mark.glyph-alone {
   display: inline-block;
   white-space: nowrap;
@@ -205,11 +198,15 @@
   &::before {
     content: '\200b' / '';
   }
+}
 
-  .facet-glyph {
-    display: inline;
-    vertical-align: middle;
-  }
+/* The one place a mark's glyph is set in its line: its middle on the middle of the
+   line's capitals (`--size-text-middle`), which puts its foot half its 14px
+   (`drawMarks`) below there. `vertical-align: middle` centred it on the lowercase
+   letters instead, and beside a reference or a capital it stood a pixel and a half low. */
+:is(.facet-glyph-box, .facet-mark.glyph-alone) > .facet-glyph {
+  display: inline;
+  vertical-align: calc(var(--size-text-middle) - 7px);
 }
 
 /* A head lines its marks and the number up by their baseline: the number is often set in

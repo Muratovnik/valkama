@@ -40,15 +40,16 @@
   container: main / inline-size;
 }
 
-/* A word whose box is trimmed to its letters, so that what stands beside it centres on their
-   middle rather than on the em box. The box is then one x-height tall, and capitals, marks
-   above the letters and descenders all stand outside it, so whatever clips at the box takes
-   them: `overflow: hidden` made «Высокий» read «Высокии» on every card. The trim and the overflow
-   it needs are therefore one rule, written here and nowhere else, and `check:ui-system` refuses
-   `text-box` in any other. Short of room the word is cut sideways only. Three components
-   write the class, so it belongs to no one of them, as the owner order in DESIGN.md has it. */
+/* A word whose box is trimmed to its capitals, so that what stands beside it centres on their
+   middle (`--size-text-middle`) rather than on the em box. The box is then one cap height
+   tall, and accents above the capitals and descenders stand outside it, so whatever clips at
+   the box takes them: `overflow: hidden` made «Высокий» read «Высокии» on every card. The trim
+   and the overflow it needs are therefore one rule, written here and nowhere else, and
+   `check:ui-system` refuses `text-box` in any other. Short of room the word is cut sideways
+   only. Several components write the class, so it belongs to no one of them, as the owner
+   order in DESIGN.md has it. */
 .trimmed-word {
-  text-box: trim-both ex alphabetic;
+  text-box: trim-both cap alphabetic;
   overflow: clip visible;
   text-overflow: ellipsis;
 }

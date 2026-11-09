@@ -98,12 +98,12 @@
    the registry gives the mark. The words give the mark its baseline: a glyph has
    none, and first in a centred row its foot stood in for one, which lifted the
    words above the row's line and made the row taller. It reads at the row's own line
-   height, since a taller one would stand a marked row's line lower than the others'. */
+   height, since a taller one would stand a marked row's line lower than the others'.
+   The mark is one line of text with its glyph in it, set where every sign beside words
+   stands (`--size-text-middle`): centred in a box of the line, it stood on the line's
+   middle, most of a pixel under the capitals' one. */
 .chain-row-waiting {
-  display: inline-flex;
   grid-column: 3;
-  gap: var(--space-1);
-  align-items: baseline;
   color: var(--color-text-muted);
   white-space: nowrap;
 
@@ -112,8 +112,11 @@
   }
 }
 
+/* Its foot half its 14px under the capitals' middle. */
 .chain-row-glyph {
-  align-self: center;
+  display: inline;
+  vertical-align: calc(var(--size-text-middle) - 7px);
+  margin-inline-end: var(--space-1);
 }
 
 .chain-row-usage {

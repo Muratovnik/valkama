@@ -40,6 +40,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
+  sign in the side panel and the marks of a chain now centre on the middle of the capitals of
+  the line they stand on — a reference, a number or a capitalized word — on a tile, a list row,
+  a graph node, the hover card, a Ctrl K result, the side panel and the card. They had centred
+  on the lowercase letters and stood 1–2.5px low beside a reference.
 - **A focus ring brought into view keeps all of its room.** When focus moves to why a send or
   a read failed, to a reply or to a reference in text and scrolls it into view, the scroll now
   stops a pixel further in, so the ring is never short of the edge by a fraction of a pixel
