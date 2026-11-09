@@ -20,6 +20,7 @@ import type { NavNode } from '@/widgets/app-nav/composables/useNavOpen.ts'
 import type { LiveEntry } from '@/widgets/app-nav/utils/liveList.ts'
 
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -54,6 +55,7 @@ const words = computed(() =>
   >
     <button
       :id="foldId"
+      v-tooltip:right.clipped="words"
       class="nav-quiet-fold"
       type="button"
       :aria-expanded="open"
@@ -67,7 +69,7 @@ const words = computed(() =>
           :size="14"
         />
       </span>
-      <span class="nav-quiet-words">{{ words }}</span>
+      <span class="nav-quiet-words one-line">{{ words }}</span>
     </button>
     <NavWorkRows
       v-show="open"
@@ -134,13 +136,6 @@ const words = computed(() =>
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
-}
-
-.nav-quiet-words {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* A phone: a finger's row and the reading size, as its rows have. */

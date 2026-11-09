@@ -81,12 +81,10 @@
 /* The trim clips sideways at the box, and a link's underline ends a fraction past its last
    letter: the room each side keeps that fringe, and takes none from the row. */
 .card-epic-link {
-  min-width: 0;
   padding-inline: var(--space-half);
   margin-inline: calc(-1 * var(--space-half));
   color: var(--color-text);
   font: var(--font-detail);
-  white-space: nowrap;
 }
 
 /* The holder's words take one line beside the action; only where they cannot does the name

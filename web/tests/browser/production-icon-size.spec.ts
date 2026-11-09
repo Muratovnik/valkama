@@ -1,6 +1,7 @@
 /**
  * Every icon is the size it is drawn at, and a one-line label stays on one line, in the built
- * application: on the board with the navigation's live work, on the portfolio, on a card and on
+ * application: on the board with the navigation's live work and its quiet work unfolded, on
+ * the portfolio, on a card, its «…» menu, its Relations with the chain and its `@` list, and on
  * a question's review, at a desktop width, at a phone's and with the navigation at its
  * narrowest, in both languages.
  *
@@ -18,6 +19,8 @@ import { busyFrame } from '../support/liveFrame.ts'
 import { wayReviewFields, WAYS_PROMPT } from '../support/reviewWays.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
+import { serve as serveChain, smallChain } from './chainFixtures.ts'
+import { openMentionList } from './editorPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
 import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
 import { asked, openQuestion } from './questionBackend.ts'
@@ -74,12 +77,20 @@ async function withLiveWork(page: Page, open: () => Promise<void>) {
     await expect(page.locator('.nav-work-list')).toBeVisible()
 }
 
-/** The board narrowed by two labels, so its filter draws its chips and their removes. */
+/**
+ * The board narrowed by two labels, so its filter draws its chips and their removes, and the
+ * navigation's quiet work unfolded where the navigation stands.
+ */
 async function board(page: Page) {
   await installBackend(page)
   await serve(page)
   await withLiveWork(page, () => openBoard(page, { group: 'epic', labels: 'coordinator,ui' }))
   await expect(page.locator('.workspace-chips .filter-chip').first()).toBeVisible()
+  const fold = page.locator('.nav-quiet-fold').first()
+  if (await fold.isVisible()) {
+    await fold.click()
+    await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  }
 }
 
 /** The board showing one epic's chain, which its scope chip says and leaves. */
@@ -98,19 +109,40 @@ async function portfolio(page: Page) {
   await expect(page.locator('.portfolio-project').first()).toBeVisible()
 }
 
-async function card(page: Page) {
+async function card(page: Page, before?: () => Promise<unknown>) {
   await installBackend(page)
+  await before?.()
   await page.goto(CARD)
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts .card-row-value')).toBeVisible()
   await expect(drawer).toHaveCSS('transform', 'none')
 }
 
-/** The card's links, each with the press that removes it. */
+/** The card's links, each with the press that removes it, and the chain under them. */
 async function links(page: Page) {
-  await card(page)
+  const small = smallChain()
+  await card(page, () => serveChain(page, small.chain, small.items))
   await page.getByRole('tab', { name: /Relations|Связи/u }).click()
   await expect(page.locator('.drawer .relations svg.lucide').first()).toBeVisible()
+  await expect(page.locator('.drawer section.chain .chain-row').first()).toBeVisible()
+}
+
+/** The card's «…» open, its entries with their signs and the pin's check. */
+async function menu(page: Page) {
+  // The menu holds the pin, which a live frame says.
+  const live: { streams?: Awaited<ReturnType<typeof installLiveStreams>> } = {}
+  await card(page, async () => {
+    live.streams = await installLiveStreams(page)
+  })
+  await expect.poll(() => live.streams?.open()).toHaveLength(1)
+  await live.streams?.live(busyFrame())
+  await page.locator('.drawer .menu-trigger').click()
+  await expect(page.locator('.menu-popup .menu-item').first()).toBeVisible()
+}
+
+/** A comment's `@` list, a task's row and a file's whose path is longer than the list. */
+async function mentions(page: Page) {
+  await openMentionList(page)
 }
 
 async function review(page: Page) {
@@ -121,7 +153,7 @@ async function review(page: Page) {
   await expect(opened.drawer).toHaveCSS('transform', 'none')
 }
 
-const SCENES = { board, chain, portfolio, card, links, review } as const
+const SCENES = { board, chain, portfolio, card, links, menu, mentions, review } as const
 
 /** Every icon on the page whose box differs from the size it is drawn at, and how many stand. */
 function measureIcons() {

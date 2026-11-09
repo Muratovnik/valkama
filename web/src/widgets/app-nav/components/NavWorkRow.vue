@@ -203,7 +203,7 @@ function press(event: MouseEvent) {
       </span>
       <template v-if="epic">
         <span
-          class="nav-row-epic trimmed-word"
+          class="nav-row-epic trimmed-word one-line"
           :style="epicStyle"
           >{{ epic }}</span
         >
@@ -370,7 +370,6 @@ function press(event: MouseEvent) {
   min-width: min(3ch, var(--nav-row-epic-letters));
   max-width: 40%;
   color: var(--color-navigation-text-muted);
-  white-space: nowrap;
 }
 
 .nav-row-epic-mark {

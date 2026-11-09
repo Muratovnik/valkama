@@ -267,6 +267,7 @@ defineExpose({ actionCell })
              to the question on Overview. -->
         <VButton
           v-if="asking"
+          v-tooltip.clipped="t('requests.answerQuestion')"
           class="card-question"
           variant="ghost"
           size="compact"
@@ -276,7 +277,9 @@ defineExpose({ actionCell })
             name="message-square"
             :size="16"
           />
-          <span class="card-question-word trimmed-word">{{ t('requests.answerQuestion') }}</span>
+          <span class="card-question-word trimmed-word one-line">{{
+            t('requests.answerQuestion')
+          }}</span>
         </VButton>
       </div>
     </div>
@@ -331,7 +334,7 @@ defineExpose({ actionCell })
             :context="context"
           />
           <RichText
-            class="card-epic-link trimmed-word"
+            class="card-epic-link trimmed-word one-line"
             :source="parentReference ?? ''"
             inline
           />

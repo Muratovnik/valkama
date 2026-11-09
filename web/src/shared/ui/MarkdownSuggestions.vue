@@ -129,7 +129,7 @@ defineExpose({
       >
         <span
           v-tooltip.clipped="row.name"
-          class="markdown-suggestion-name"
+          class="markdown-suggestion-name one-line"
           >{{ row.name }}</span
         >
         <span
@@ -140,7 +140,7 @@ defineExpose({
         <span
           v-if="row.detail"
           v-tooltip.clipped="row.detail"
-          class="markdown-suggestion-detail"
+          class="markdown-suggestion-detail one-line"
           >{{ row.detail }}</span
         >
       </li>
@@ -226,9 +226,6 @@ defineExpose({
   color: var(--color-text-muted);
   font: var(--font-line);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .markdown-suggestion-title {
@@ -241,9 +238,6 @@ defineExpose({
   grid-column: 2;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .markdown-suggestion-empty {

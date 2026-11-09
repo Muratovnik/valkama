@@ -808,7 +808,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **One-line labels:** a label that keeps to one line carries the shared `one-line`
   class (no wrap, an ellipsis where it ends) and a `clipped` hint with its whole words,
   on itself or on the control around it, so a cut label is whole on hover. No component
-  writes the three lines again.
+  writes the three lines again. A word trimmed to its capitals (`trimmed-word`) takes both
+  classes and keeps the trim's cut, sideways only, so its accents stay whole. A menu's
+  entry is not such a label: it wraps, and every word of it stays on screen.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
   arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the
   shell it is a single ink taking its color from the carrier. Where it stands

@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 
 import { servedImagePath } from '@/shared/lib/pastedImages.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{ alt: string; sha256: string }>()
 const { t } = useI18n()
@@ -34,6 +35,7 @@ const failed = ref(false)
     >{{ name }}</span
   ><button
     v-else
+    v-tooltip.name="t('pastedImages.open', { name })"
     type="button"
     class="rich-image"
     :aria-label="t('pastedImages.open', { name })"

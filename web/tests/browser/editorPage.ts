@@ -4,7 +4,8 @@ import type { Locator, Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { installDocuments, LONG_PATH } from './documentBackend.ts'
+import { planningSpace, projectScope } from './planningFixtures.ts'
 
 /**
  * A card open with its comment field in reach, and how to read what a field is doing.
@@ -20,6 +21,41 @@ export async function openCard(page: Page, prepare?: () => Promise<unknown>) {
   const comment = drawer.locator('.discussion-form').getByRole('textbox')
   await expect(comment).toBeVisible()
   return { backend, drawer, comment }
+}
+
+/**
+ * A card's comment field with its `@` list open on a task and a file whose path is longer
+ * than the list is wide, the two kinds of row the list draws.
+ */
+export async function openMentionList(page: Page) {
+  const opened = await openCard(page, async () => {
+    await installDocuments(page)
+    await page.route('**/api/planning/search?*', (route) =>
+      route.fulfill({
+        json: {
+          interface_version: 'valkama-planning-api',
+          work_items: [
+            {
+              work_item_id: '00000000-0000-4000-8000-000000000103',
+              planning_space_id: planningSpace.planning_space_id,
+              reference: 'MAIN-3',
+              title: 'The plan parser',
+              state: { name: 'Doing' },
+              claim_ref: '',
+            },
+          ],
+        },
+      }),
+    )
+    await page.route('**/api/documents/search?*', (route) =>
+      route.fulfill({ json: { documents: [{ path: LONG_PATH, line: 0, text: '' }] } }),
+    )
+  })
+  await opened.comment.click()
+  await page.keyboard.type('@pl')
+  const list = page.locator('.markdown-suggestions')
+  await expect(list.locator('.markdown-suggestion')).toHaveCount(2)
+  return { ...opened, list }
 }
 
 export const select = (field: Locator, start: number, end: number) =>

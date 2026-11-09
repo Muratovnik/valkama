@@ -2,7 +2,8 @@
  * What a hover hint says in the built application: never the words its anchor already shows.
  * Every hint states its kind; a `clipped` one shows only while its words are cut, so it is the
  * one hint allowed to say them, and the sweep leaves it out. The rest are swept by pointing at
- * every anchor on the board, the navigation and an opened card, in both languages.
+ * every anchor on the board, the navigation with its quiet work unfolded, an opened card, its
+ * «…» menu, its Relations with the chain and its `@` list, in both languages.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -11,9 +12,13 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { richUsage, usageAnswer } from '../fixtures/usage.ts'
+import { busyFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
+import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
+import { openMentionList } from './editorPage.ts'
+import { installLiveStreams } from './liveWorkPage.ts'
 import { heldCard, openPlanFor } from './openSessionFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -38,16 +43,26 @@ async function prepare(page: Page, locale: Locale, width: number) {
   await page.clock.install()
 }
 
+/** The board, with the navigation's live work and its quiet work unfolded where it stands. */
 async function board(page: Page, locale: Locale, width = 1280) {
   await prepare(page, locale, width)
   await installBackend(page)
   await serve(page)
+  const streams = await installLiveStreams(page)
   await openBoard(page)
+  await expect.poll(() => streams.open()).toHaveLength(1)
+  await streams.live(busyFrame())
+  const fold = page.locator('.nav-quiet-fold').first()
+  if (width > 390) {
+    await fold.click()
+    await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  }
 }
 
-async function card(page: Page, locale: Locale, width = 1280) {
+async function card(page: Page, locale: Locale, width = 1280, before?: () => Promise<unknown>) {
   await prepare(page, locale, width)
   await installBackend(page, { card: heldCard, openPlan: openPlanFor })
+  await before?.()
   await page.route('**/api/planning/work-item/usage?*', (route) =>
     route.fulfill({
       contentType: 'application/json',
@@ -158,6 +173,41 @@ for (const locale of ['en', 'ru'] as const) {
     const drawer = await card(page, locale)
     const { pointed, said } = await sweep(page, drawer)
     expect(pointed).toBeGreaterThan(2)
+    expect(said).toEqual([])
+  })
+
+  test(`no hint in a card's «…» menu or its Relations with the chain says what its anchor shows, ${locale}`, async ({
+    page,
+  }) => {
+    const small = smallChain()
+    const live: { streams?: Awaited<ReturnType<typeof installLiveStreams>> } = {}
+    const drawer = await card(page, locale, 1280, async () => {
+      await serveChain(page, small.chain, small.items)
+      live.streams = await installLiveStreams(page)
+    })
+    // The menu holds the pin, which a live frame says.
+    await expect.poll(() => live.streams?.open()).toHaveLength(1)
+    await live.streams?.live(busyFrame())
+    await drawer.locator('.menu-trigger').click()
+    const menu = page.locator('.menu-popup')
+    await expect(menu.locator('.menu-item').first()).toBeVisible()
+    const inMenu = await sweep(page, menu)
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await drawer.getByRole('tab', { name: /Relations|Связи/u }).click()
+    await expect(drawer.locator('section.chain .chain-row').first()).toBeVisible()
+    const inRelations = await sweep(page, drawer)
+    expect(inRelations.pointed).toBeGreaterThan(2)
+    expect([...inMenu.said, ...inRelations.said]).toEqual([])
+  })
+
+  test(`no hint in the \`@\` list says what its anchor shows, and a cut path says itself whole, ${locale}`, async ({
+    page,
+  }) => {
+    await prepare(page, locale, 1280)
+    const { list } = await openMentionList(page)
+    const { pointed, said } = await sweep(page, list)
+    expect(pointed).toBeGreaterThan(0)
     expect(said).toEqual([])
   })
 }
