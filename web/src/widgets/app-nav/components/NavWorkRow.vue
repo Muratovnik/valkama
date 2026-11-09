@@ -102,12 +102,11 @@ const said = computed(() => [`${props.row.reference} ${props.row.title}`, stateW
 const name = computed(() => said.value.filter(Boolean).join(' — '))
 const hint = computed(() => said.value.filter(Boolean).join('\n'))
 /**
- * The row's hint stands beside the whole row, clear of its ring: while its title is cut, or
- * always on a muted row, whose reason no mark on it shows. The phone's panel is as wide as the
- * window and has no room beside a row, and a finger shows no hint.
- */
+ * The row's hint, beside the row: its whole words while its title is cut, and on a muted row
+ * only the reason no mark shows (a closed row's state is its last word). A phone has none. */
+const reason = computed(() => (muted.value && !props.row.is_terminal ? stateWords.value : ''))
 const rowHint = computed(() =>
-  props.size === 'touch' ? null : { text: hint.value, clipped: !muted.value },
+  props.size === 'touch' ? null : { text: reason.value || hint.value, clipped: !reason.value },
 )
 const href = computed(() =>
   props.route === null ? undefined : serializePlatformRoute(props.route),
@@ -150,7 +149,7 @@ function press(event: MouseEvent) {
   <!-- The pointer and focus on a row hold it while it fades; they are no input of its own. -->
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
-    v-tooltip:right="rowHint"
+    v-tooltip:right.detail="rowHint"
     class="nav-row"
     :class="{
       current,
@@ -175,7 +174,7 @@ function press(event: MouseEvent) {
       <button
         v-if="fold"
         :id="fold.id"
-        v-tooltip="fold.label"
+        v-tooltip.name="fold.label"
         class="nav-row-fold"
         type="button"
         :aria-expanded="fold.open"

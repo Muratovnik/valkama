@@ -189,7 +189,9 @@ test('the holder and the action about it stand on one row, the action at its end
   // A link and no plate: nothing under its words until the pointer is.
   const link = holder.value.locator('button.open-action')
   await expect(link).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-  await expect(link).toHaveAttribute('data-tooltip', /claude \(session /u)
+  // The whole holder is what a screen reader hears; the hover says only what a press does.
+  await expect(link).toHaveAttribute('aria-description', /claude \(session /u)
+  await expect(link).not.toHaveAttribute('data-tooltip', /claude/u)
   // The label is on the screen, so nothing hidden says it again.
   const head = drawer.locator('.card-facts-block')
   await expect(head.locator('.visually-hidden').getByText('Ответственный')).toHaveCount(0)
@@ -336,7 +338,7 @@ test('on a phone a long holder gives way with an ellipsis and stays whole in its
   const cut = await name.evaluate((node) => node.scrollWidth > node.clientWidth)
   expect(cut, 'a name wider than the line is cut').toBe(true)
   await expect(holder.locator('button.open-action')).toHaveAttribute(
-    'data-tooltip',
+    'aria-description',
     /a-coordinator-with-a-name-long-enough-to-run-out/u,
   )
   const block = await box(drawer.locator('.card-facts-block'))

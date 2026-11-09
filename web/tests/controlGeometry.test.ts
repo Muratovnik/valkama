@@ -101,7 +101,7 @@ test('a control states its own subject, so nothing captions it twice', () => {
   // the button's own name printed inside it, and it cost the dot its alignment.
   assert.doesNotMatch(navConnection, /refresh\.label/)
   // Its hint names the refresh, after the lost connection it is there for.
-  assert.match(navConnection, /v-tooltip:right="hint"/)
+  assert.match(navConnection, /v-tooltip:right.detail="hint"/)
   assert.match(navConnection, /t\('refresh\.title'\)/)
   assert.match(
     navConnection,

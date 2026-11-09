@@ -138,7 +138,7 @@ onMounted(load)
         <p class="health-intro">{{ t('health.intro') }}</p>
       </div>
       <VButton
-        v-tooltip="recheckLabel"
+        v-tooltip.name="recheckLabel"
         variant="ghost"
         :aria-label="recheckLabel"
         :disabled="loading"

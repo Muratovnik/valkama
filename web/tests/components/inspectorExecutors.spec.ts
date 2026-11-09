@@ -167,7 +167,11 @@ describe('an agent on the card', () => {
     await flushPromises()
     const button = wrapper.get('button.open-action')
     expect(button.attributes('aria-label')).toBe('Open the parent session in VS Code')
-    expect(hintOf(button)).toContain('The agent’s progress shows in its parent session')
+    // A screen reader hears where the progress shows; the hover says only what a press does.
+    expect(button.attributes('aria-description')).toContain(
+      'The agent’s progress shows in its parent session',
+    )
+    expect(hintOf(button)).toBe('Open in VS Code')
     expect(wrapper.getComponent(OpenAction).props('session')).toBe(SESSION)
   })
 

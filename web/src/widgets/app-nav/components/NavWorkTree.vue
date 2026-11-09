@@ -179,7 +179,7 @@ function escape(event: KeyboardEvent) {
         <div class="nav-tree-head">
           <button
             :id="entry.fold"
-            v-tooltip="foldLabel(entry)"
+            v-tooltip.name="foldLabel(entry)"
             class="nav-tree-fold"
             type="button"
             :aria-expanded="!entry.folded"
@@ -204,7 +204,7 @@ function escape(event: KeyboardEvent) {
           >
           <span
             v-else
-            v-tooltip:right="t('liveWork.noProject')"
+            v-tooltip:right.detail="t('liveWork.noProject')"
             class="nav-tree-space-name"
             >{{ entry.label }}</span
           >

@@ -152,7 +152,7 @@ const updated = computed(() => {
     >
     <button
       v-if="sourceLink && anchorShown"
-      v-tooltip="sourceLink.title"
+      v-tooltip.name="sourceLink.title"
       class="identity-source"
       type="button"
       :aria-label="sourceLink.title"

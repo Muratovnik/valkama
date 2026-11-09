@@ -36,7 +36,7 @@ const glyph = computed(() => (paused.value ? 'play' : 'pause'))
   <span class="graph-motion-place">
     <VButton
       v-if="offered"
-      v-tooltip="label"
+      v-tooltip.name="label"
       class="graph-motion-toggle"
       variant="ghost"
       size="compact"

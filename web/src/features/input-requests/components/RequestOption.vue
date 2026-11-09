@@ -102,7 +102,7 @@ const describedBy = computed(() => {
       class="request-option-end"
     >
       <VButton
-        v-tooltip="toggleLabel"
+        v-tooltip.name="toggleLabel"
         class="request-option-toggle"
         variant="text"
         size="compact"

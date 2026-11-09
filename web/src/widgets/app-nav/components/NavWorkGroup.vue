@@ -84,7 +84,7 @@ const elsewhere = computed(() => store.frame?.elsewhere ?? 0)
       />
     </div>
     <button
-      v-tooltip:right="countWords"
+      v-tooltip:right.name="countWords"
       class="nav-work-rail"
       type="button"
       :aria-label="countWords"

@@ -154,7 +154,7 @@ const models = computed(() =>
         <li
           v-for="row in kinds"
           :key="row.key"
-          v-tooltip="row.title"
+          v-tooltip.detail="row.title"
           class="work-usage-row"
           :class="{ 'is-part': row.part, 'is-total': row.total }"
         >

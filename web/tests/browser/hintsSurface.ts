@@ -12,13 +12,13 @@ export const hintsSurface = () =>
   h('main', { class: 'hints-harness' }, [
     h('button', { class: 'hints-under', type: 'button' }, 'Under'),
     withDirectives(h('button', { class: 'hints-own', type: 'button' }, 'Own'), [
-      [vTooltip, 'A hint of its own'],
+      [vTooltip, 'A hint of its own', undefined, { detail: true }],
     ]),
     withDirectives(
       h('div', { class: 'hints-holder' }, [
         h('button', { class: 'hints-inner', type: 'button' }, 'Inside'),
       ]),
-      [[vTooltip, 'The holder’s hint']],
+      [[vTooltip, 'The holder’s hint', undefined, { detail: true }]],
     ),
     h(TooltipHost),
   ])

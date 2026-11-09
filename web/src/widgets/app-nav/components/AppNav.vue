@@ -197,7 +197,7 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   >
     <div class="nav-head">
       <button
-        v-tooltip:right="t('navigation.home')"
+        v-tooltip:right.detail="t('navigation.home')"
         class="app-brand"
         type="button"
         @click="emit('home')"

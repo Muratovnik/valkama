@@ -127,7 +127,7 @@ function currentState(module: ModuleManifest) {
       <button
         v-if="disclosure && folds(module)"
         :id="disclosure.id"
-        v-tooltip:right="disclosure.label"
+        v-tooltip:right.name="disclosure.label"
         class="nav-entry-fold"
         type="button"
         :aria-expanded="disclosure.expanded"

@@ -460,7 +460,7 @@ defineExpose({ focus: focusText })
       />
       <VButton
         v-if="filter.text"
-        v-tooltip="t('workItem.filter.clearText')"
+        v-tooltip.name="t('workItem.filter.clearText')"
         size="inline"
         variant="ghost"
         :aria-label="t('workItem.filter.clearText')"

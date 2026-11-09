@@ -3,9 +3,11 @@
  * How much work the item took, in one quiet line under its facts: the time, the estimated cost
  * and the tokens processed anew. An item with nothing to say has no line and none of its room.
  *
- * The line says the numbers and its tooltip what they are; a press goes to the Agents tab,
- * where the same explanations stand in words a finger can reach as well. The first number is
- * the clock's: what agents spent side by side adds up in that tab and in the tooltip.
+ * The line says the numbers and a press goes to the Agents tab, where what they are stands in
+ * words. It has no hover hint: three to five sentences about the method stood over the card at
+ * every pass of the pointer, and the tab says them. A screen reader hears them as the line's
+ * description. The first number is the clock's: what agents spent side by side adds up in
+ * that tab.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -15,7 +17,6 @@ import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useIns
 import { isEstimated, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const emit = defineEmits<{ details: [] }>()
 
@@ -61,7 +62,6 @@ const explanation = computed(() => {
 <template>
   <button
     v-if="facts.length"
-    v-tooltip="explanation"
     class="usage-line"
     type="button"
     :aria-description="explanation"

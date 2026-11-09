@@ -154,7 +154,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         class="lane-actions"
       >
         <VButton
-          v-tooltip="openLabel"
+          v-tooltip.name="openLabel"
           class="lane-action"
           variant="ghost"
           size="inline"
@@ -169,7 +169,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           />
         </VButton>
         <VButton
-          v-tooltip="chainLabel"
+          v-tooltip.name="chainLabel"
           class="lane-action"
           variant="ghost"
           size="inline"

@@ -318,7 +318,7 @@ useListKeys(root, {
           >
             <component
               :is="word(item, HOLDER)"
-              v-tooltip="holderOf(item)"
+              v-tooltip.clipped="holderOf(item)"
               class="list-claim"
             />
           </td>

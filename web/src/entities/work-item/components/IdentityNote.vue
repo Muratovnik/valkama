@@ -35,7 +35,7 @@ const glyph = computed(() => (props.failed ? 'alert' : 'check'))
 <template>
   <span
     v-if="text"
-    v-tooltip="text"
+    v-tooltip.name="text"
     class="identity-note"
     aria-hidden="true"
   >

@@ -53,16 +53,17 @@ describe('FacetMarks', () => {
     expect(wrapper.get('[data-facet="kind"] .facet-word').text()).toBe('Bug')
   })
 
-  it('says what each priority means after its name on hover, in both languages', () => {
+  it('says what each priority means beside its word on hover, in both languages', () => {
+    // The word is on screen, so the hover says only what it means: it never repeats the word.
     const hovers = [
-      ['en', 'urgent', 'Urgent — blocks work or loses data'],
-      ['en', 'high', 'High — serious; could block work'],
-      ['en', 'medium', 'Medium — noticeably affects work, with a workaround'],
-      ['en', 'low', 'Low — minor'],
-      ['ru', 'urgent', 'Срочный — блокирует работу или теряет данные'],
-      ['ru', 'high', 'Высокий — серьёзно, может заблокировать'],
-      ['ru', 'medium', 'Средний — заметно влияет, есть обход'],
-      ['ru', 'low', 'Низкий — мелочь'],
+      ['en', 'urgent', 'blocks work or loses data'],
+      ['en', 'high', 'serious; could block work'],
+      ['en', 'medium', 'noticeably affects work, with a workaround'],
+      ['en', 'low', 'minor'],
+      ['ru', 'urgent', 'блокирует работу или теряет данные'],
+      ['ru', 'high', 'серьёзно, может заблокировать'],
+      ['ru', 'medium', 'заметно влияет, есть обход'],
+      ['ru', 'low', 'мелочь'],
     ] as const
     for (const [locale, priority, hover] of hovers) {
       // The card prints every level as a word, so each level has a mark to hover.

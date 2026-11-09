@@ -55,7 +55,7 @@ const indent = computed(() =>
           {{ title }}
         </h2>
         <VButton
-          v-tooltip="closeLabel"
+          v-tooltip.name="closeLabel"
           class="side-panel-close"
           variant="ghost"
           :aria-label="closeLabel"

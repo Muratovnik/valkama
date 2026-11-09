@@ -20,6 +20,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **A hover hint never says what is already on screen.** Every hint now states its kind: a
+  name for a control that shows only a glyph, the whole of a cut text that shows only while
+  the text is cut, or a detail the place does not show, which the UI check accepts only from
+  its register with a reason. A board tile, a label chip and the usage line no longer repeat
+  their own words on hover; a priority's hover says what the level means instead of its name
+  again; a session button hints what a press does, with the session's state on a quieter
+  second line, instead of the holder's name it already shows. The holder's whole name and
+  the session's details stay in what a screen reader hears.
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on
   one line in a card's drawer, and one quiet line under the label saying the way chosen, what

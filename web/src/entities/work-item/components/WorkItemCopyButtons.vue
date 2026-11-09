@@ -20,7 +20,7 @@ const { t } = useI18n()
 
 <template>
   <button
-    v-tooltip="t('workItem.head.copyReference', { reference })"
+    v-tooltip.detail="t('workItem.head.copyReferenceHint')"
     class="head-reference"
     type="button"
     :aria-label="t('workItem.head.copyReference', { reference })"
@@ -29,7 +29,7 @@ const { t } = useI18n()
     {{ reference }}
   </button>
   <button
-    v-tooltip="t('workItem.head.copyLink', { reference })"
+    v-tooltip.name="t('workItem.head.copyLink', { reference })"
     class="identity-link"
     type="button"
     :aria-label="t('workItem.head.copyLink', { reference })"

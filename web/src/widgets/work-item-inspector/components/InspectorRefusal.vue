@@ -56,7 +56,7 @@ function force() {
     <div class="refusal-head">
       <strong class="refusal-title">{{ notice.title }}</strong>
       <VButton
-        v-tooltip="t('workItem.refusal.dismiss')"
+        v-tooltip.name="t('workItem.refusal.dismiss')"
         variant="ghost"
         size="inline"
         :aria-label="t('workItem.refusal.dismiss')"

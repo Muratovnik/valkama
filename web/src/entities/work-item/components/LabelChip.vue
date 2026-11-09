@@ -49,7 +49,7 @@ const chip = () =>
   >
     <component :is="chip()" />
     <button
-      v-tooltip="removeLabel"
+      v-tooltip.name="removeLabel"
       class="label-chip-remove"
       type="button"
       :aria-label="removeLabel"

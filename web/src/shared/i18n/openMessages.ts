@@ -52,6 +52,11 @@ export const openMessages = {
         running: 'Session {name} is running {where}: what can be done',
         runningAction: '{action} — it is running {where}: what can be done',
       },
+      tip: {
+        at: 'Open {where}',
+        plain: 'Open the session',
+        running: 'Show what can be done',
+      },
       panel: {
         running: 'The session is running',
         look: 'See it {where}:',
@@ -242,6 +247,11 @@ export const openMessages = {
         plain: 'Открыть сессию {name}',
         running: 'Сессия {name} идёт {where}: что можно сделать',
         runningAction: '{action} — она идёт {where}: что можно сделать',
+      },
+      tip: {
+        at: 'Открыть {where}',
+        plain: 'Открыть сессию',
+        running: 'Показать, что можно сделать',
       },
       panel: {
         running: 'Сессия идёт',

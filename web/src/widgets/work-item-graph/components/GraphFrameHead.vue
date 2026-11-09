@@ -156,7 +156,7 @@ function onOpenBlur() {
   >
     <GraphFrameFold
       v-if="foldShown"
-      v-tooltip="foldHint"
+      v-tooltip.name="foldHint"
       :folded="frame.folded"
       :overview="overview"
       :aria-label="foldLabel"
@@ -169,7 +169,7 @@ function onOpenBlur() {
     />
     <component
       :is="openTag"
-      v-tooltip="openHint"
+      v-tooltip.name="openHint"
       class="graph-frame-open"
       :class="{ folds: foldShown }"
       :type="openType"

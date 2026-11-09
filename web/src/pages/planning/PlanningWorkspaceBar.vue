@@ -199,7 +199,7 @@ function removeChip(token: WorkFilterToken) {
       />
       <VButton
         v-if="writable"
-        v-tooltip="t('workItem.create')"
+        v-tooltip.clipped="t('workItem.create')"
         class="workspace-action"
         variant="primary"
         reach

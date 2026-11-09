@@ -18,8 +18,9 @@
  * keeps its glyph and its word drops out of sight, still read out and still the
  * hover text. A tile's first line folds, so its marks never push it to two.
  *
- * A mark with short words draws them and keeps its whole words as the name and
- * the hover text: a tile shows «⛔ MAIN-12» and says «Ждёт MAIN-12».
+ * A mark with short words draws them and keeps its whole words as the name, and
+ * as the hover text once the line has folded them: a tile shows «⛔ MAIN-12» and
+ * says «Ждёт MAIN-12». A hover never repeats the words a mark shows.
  *
  * A pressed mark is out of the Tab order inside a container that is one Tab
  * stop; every other mark, and a pressed one anywhere else, has the default
@@ -51,6 +52,7 @@ import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import { iconGlyph } from '@/shared/ui/iconGlyph.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import type { TooltipKind } from '@/shared/ui/tooltipAnchors.ts'
 
 /** How a surface places one run. */
 export interface MarkRun {
@@ -80,9 +82,21 @@ export interface MarkRun {
   onFilter?: (token: WorkFilterToken) => void
 }
 
+/** What a mark says on hover, and which kind of hint that is (`tooltipAnchors.ts`). */
+interface MarkHint {
+  kind: TooltipKind
+  text: string
+}
+
 /** The element with its hover text in the window's one tooltip, when it has one. */
-const hinted = (node: VNode, hint: string | undefined) =>
-  hint ? withDirectives(node, [[vTooltip, hint]]) : node
+function hinted(node: VNode, hint: MarkHint | undefined): VNode {
+  if (!hint) return node
+  if (hint.kind === 'detail')
+    return withDirectives(node, [[vTooltip, hint.text, undefined, { detail: true }]])
+  if (hint.kind === 'clipped')
+    return withDirectives(node, [[vTooltip, hint.text, undefined, { clipped: true }]])
+  return withDirectives(node, [[vTooltip, hint.text, undefined, { name: true }]])
+}
 
 /** One label as a chip, as `LabelChip` and a run of marks both draw it. */
 export interface ChipDrawing {
@@ -129,7 +143,8 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
     },
     [face],
   )
-  return hinted(button, name)
+  // Its word is on screen and its name is the button's: a hover hint would say both again.
+  return button
 }
 
 /**
@@ -148,7 +163,8 @@ function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolea
   if (mark.short !== undefined)
     return [
       h('span', { 'class': word, 'aria-hidden': 'true' }, run.words.say(mark.short)),
-      h('span', { class: 'facet-word-hidden' }, whole),
+      // The shared copy for assistive technology, which a hint does not count as cut text.
+      h('span', { class: 'facet-word-hidden visually-hidden' }, whole),
     ]
   // A word alone is a word of its own, which takes the mark's tone.
   if (mark.form === 'word') return [h('span', { class: `${word} facet-word-alone` }, whole)]
@@ -161,21 +177,34 @@ function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolea
 const isActive = (mark: FacetMark, run: MarkRun) =>
   mark.filter !== null && hasToken(run.filter ?? EMPTY_WORK_FILTER, mark.filter)
 
-/** What a mark says on hover: its name or its word, and what a value means after it. */
-function markHint(mark: FacetMark, run: MarkRun, whole: string, filters: boolean) {
-  const name = filters ? run.words.filterName(mark.facet, isActive(mark, run), whole) : undefined
+/**
+ * What a mark says on hover, never the words it shows: a glyph alone is named by its word
+ * (or by what its press does), a word that folds out of sight or stands shortened says its
+ * whole words while it is cut, and what a value means — a priority's — is said beside the
+ * word on screen. A mark whose word is all there is to say has no hint. A preview is the
+ * tooltip's own content and brings no hover text of its own.
+ */
+function markHint(
+  mark: FacetMark,
+  run: MarkRun,
+  whole: string,
+  filters: boolean,
+): MarkHint | undefined {
   const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
-  // A glyph whose word may fold out of sight tells the pointer its word.
+  const name = filters ? run.words.filterName(mark.facet, isActive(mark, run), whole) : whole
+  if (mark.hint !== undefined && run.surface !== 'preview') {
+    const meaning = run.words.say(mark.hint)
+    return glyphOnly
+      ? {
+          kind: 'detail',
+          text: run.words.say({ key: 'priorityMeaning.hint', params: { priority: name, meaning } }),
+        }
+      : { kind: 'detail', text: meaning }
+  }
+  if (glyphOnly) return { kind: 'name', text: name }
+  // A glyph whose word may fold out of sight tells the pointer its word once it has.
   const foldable = run.fold === true && mark.glyph !== null
-  const hover = name ?? (glyphOnly || foldable || mark.short ? whole : undefined)
-  // What a value means follows the name the hover already gives it. A preview
-  // is the tooltip's own content and brings no hover text of its own.
-  return mark.hint === undefined || run.surface === 'preview'
-    ? hover
-    : run.words.say({
-        key: 'priorityMeaning.hint',
-        params: { priority: hover ?? whole, meaning: run.words.say(mark.hint) },
-      })
+  return foldable || mark.short !== undefined ? { kind: 'clipped', text: whole } : undefined
 }
 
 /** What a mark is and does, whatever it draws inside: its tone, its name and its press. */

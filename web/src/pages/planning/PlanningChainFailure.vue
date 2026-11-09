@@ -30,7 +30,7 @@ const { t } = useI18n()
       >{{ t('graph.retry') }}</VButton
     >
     <VButton
-      v-tooltip="t('graph.chainDismiss')"
+      v-tooltip.name="t('graph.chainDismiss')"
       variant="ghost"
       :aria-label="t('graph.chainDismiss')"
       icon

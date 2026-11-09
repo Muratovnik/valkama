@@ -145,7 +145,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
     :connectable="false"
   />
   <button
-    v-tooltip="blockTitle"
+    v-tooltip.name="blockTitle"
     class="flow-node-card nopan"
     type="button"
     :data-tone="statePresentation('work-item-node-marker', markerState).tone"
@@ -203,7 +203,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         </span>
         <span
           v-if="parentReference"
-          v-tooltip="`${t('workItem.parent')} ${parentReference}`"
+          v-tooltip.detail="t('workItem.parent')"
           class="flow-node-epic"
           >{{ parentReference }}</span
         >

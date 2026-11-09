@@ -38,7 +38,7 @@ provideReferenceLinks((reference, parent) => {
 
 <template>
   <span
-    v-tooltip="session"
+    v-tooltip.detail="session"
     class="session-start"
     ><RichInlines :nodes="drawn"
   /></span>

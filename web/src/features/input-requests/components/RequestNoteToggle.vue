@@ -45,7 +45,7 @@ const heardName = computed(() => said(props.name ?? props.title))
 
 <template>
   <VButton
-    v-tooltip="shownTitle"
+    v-tooltip.name="shownTitle"
     class="request-note-toggle"
     variant="text"
     size="inline"

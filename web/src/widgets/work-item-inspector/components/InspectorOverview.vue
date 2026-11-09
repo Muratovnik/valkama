@@ -272,7 +272,7 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
           /></label>
           <VButton
             v-if="writable"
-            v-tooltip="t('checklistComment.discuss')"
+            v-tooltip.name="t('checklistComment.discuss')"
             class="step-discuss"
             variant="ghost"
             size="inline"

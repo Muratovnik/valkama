@@ -131,7 +131,7 @@ function updateOpen(value: boolean) {
               :selected="selected"
             >
               <strong
-                v-tooltip="selected?.title"
+                v-tooltip.detail="selected?.title"
                 class="choice-title"
                 :class="{ placeholder: !selected }"
                 >{{ selected?.label || placeholder }}</strong
@@ -185,7 +185,7 @@ function updateOpen(value: boolean) {
             <SelectItem
               v-for="option in filtered"
               :key="option.value"
-              v-tooltip="option.title"
+              v-tooltip.detail="option.title"
               class="choice-option"
               :class="{ 'has-icon': option.icon }"
               :value="optionToken(option.value)"

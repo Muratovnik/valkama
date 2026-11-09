@@ -30,7 +30,6 @@ import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -224,7 +223,6 @@ defineExpose({ restore, reveal, view })
           @update:model-value="(next) => emit('scope', next)"
         />
         <VButton
-          v-tooltip="t('workItem.chain.showOnGraph')"
           variant="ghost"
           size="inline"
           :aria-label="t('workItem.chain.showOnGraph')"

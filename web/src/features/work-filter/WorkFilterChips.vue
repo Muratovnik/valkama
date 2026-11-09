@@ -156,7 +156,7 @@ defineExpose({ focusLast })
       <span class="filter-chip-pill reach-grow">
         <ToggleChip
           v-if="chip.operator"
-          v-tooltip="chip.operator.name"
+          v-tooltip.name="chip.operator.name"
           class="filter-chip-operator"
           :pressed="chip.operator.pressed"
           :aria-label="chip.operator.name"
@@ -165,7 +165,6 @@ defineExpose({ focusLast })
           {{ chip.operator.sign }}
         </ToggleChip>
         <button
-          v-tooltip="chip.removeName"
           class="filter-chip"
           type="button"
           :aria-describedby="chip.describedBy"

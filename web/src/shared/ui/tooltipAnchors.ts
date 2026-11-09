@@ -8,14 +8,25 @@
  * `TooltipHost` finds the marked element under the pointer or the focus from listeners of
  * its own, as `ReferencePreview` does.
  *
- *     <button v-tooltip="t('refresh.title')">              always, above
- *     <a v-tooltip:right.clipped="name">{{ name }}</a>     only while its text is cut, at the right
- *     <a v-tooltip="{ text: hint, clipped: !muted }">      the mode decided as the page runs
+ *     <button v-tooltip.name="t('refresh.title')">            an icon's name, always, above
+ *     <a v-tooltip:right.clipped="name">{{ name }}</a>      only while its text is cut, at the right
+ *     <time v-tooltip.detail="full">{{ short }}</time>      what the screen does not say, always
+ *
+ * Every hint states its kind, because the kind is what decides whether it may show at all:
+ * - `name` names a control that shows no words, an icon or a glyph, and always shows;
+ * - `clipped` is the whole text of an element whose text is cut, and shows only while it is;
+ * - `detail` says what is nowhere on the screen. A hint that repeats the words its element
+ *   shows is noise over the thing it covers, so `check:ui-system` allows a detail only from
+ *   its register, each with its reason, and refuses a hint that states no kind.
  *
  * The argument is the side it stands on (`top` unless said: `right`, `bottom`, `left`), and
  * the hint moves to the other side where the window has no room. `clipped` shows it only
  * while the element or something in it has more text than its box shows: an ellipsis, a
  * clamp, or a label hidden for want of room. An empty or absent text shows nothing.
+ *
+ * The value is the text, or `{ text, note }`: the note is a second line in the quiet ink,
+ * a state under an action. `{ text, clipped: true }` holds a detail back until its element
+ * is cut, where whether it says anything the screen does not is decided as the page runs.
  *
  * For assistive technology it does what `title` did. With nothing else naming the element
  * the hint is its name, as `aria-label`; otherwise it is its description, through
@@ -27,20 +38,30 @@ import type { Directive, DirectiveBinding } from 'vue'
 
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left'
 
+/** What a hint is to its element, which decides when it shows (see above). */
+export type TooltipKind = 'name' | 'clipped' | 'detail'
+
 export type TooltipValue =
-  string | { text: string | null | undefined; clipped?: boolean } | null | undefined
+  | string
+  | { text: string | null | undefined; clipped?: boolean; note?: string | null }
+  | null
+  | undefined
 
 interface Tooltip {
   clipped: boolean
   /** The id of the hidden copy that describes the element, while it does. */
   describes: string | null
+  kind: TooltipKind
   /** The hint is the element's name, written by this directive. */
   names: boolean
+  /** A second line in the quiet ink, or empty. */
+  note: string
   side: TooltipSide
   text: string
 }
 
 const SIDES = new Set<string>(['top', 'right', 'bottom', 'left'])
+const KINDS: readonly TooltipKind[] = ['name', 'clipped', 'detail']
 /** What the elements show, read by the host as it shows and reshown when it changes. */
 const tooltips = shallowReactive(new WeakMap<Element, Tooltip>())
 /** The hidden copies the host keeps, by id: an element is described by one of them. */
@@ -105,6 +126,7 @@ function forget(element: HTMLElement) {
     )
   }
   delete element.dataset.tooltip
+  delete element.dataset.tooltipKind
   // A reference's preview marks the same attribute for the popup library; it keeps it.
   if (!Object.hasOwn(element.dataset, 'referencePreview')) delete element.dataset.graceAreaTrigger
   gone?.(element)
@@ -112,27 +134,31 @@ function forget(element: HTMLElement) {
 
 function file(
   element: HTMLElement,
-  binding: DirectiveBinding<TooltipValue, 'clipped', TooltipSide>,
+  binding: DirectiveBinding<TooltipValue, TooltipKind, TooltipSide>,
 ) {
   const { value } = binding
-  const text = (typeof value === 'object' && value !== null ? value.text : value) ?? ''
-  if (!text.trim()) {
+  const parts: Exclude<TooltipValue, string | null | undefined> =
+    typeof value === 'object' && value !== null ? value : { text: value }
+  const main = parts.text?.trim() ?? ''
+  const note = parts.note?.trim() ?? ''
+  // A hint that states no kind shows nothing: the gate refuses one before it gets here.
+  const kind = KINDS.find((each) => binding.modifiers[each])
+  if (!main || !kind) {
     forget(element)
     return
   }
+  // What assistive technology is given and the page marks: both lines, as one text.
+  const said = note ? `${main}\n${note}` : main
   const before = tooltips.get(element)
-  const clipped =
-    typeof value === 'object' && value !== null && value.clipped !== undefined
-      ? value.clipped
-      : Boolean(binding.modifiers.clipped)
+  const clipped = kind === 'clipped' || parts.clipped === true
   const side: TooltipSide = binding.arg && SIDES.has(binding.arg) ? binding.arg : 'top'
   const names = before?.names === true || !nameOf(element, before)
   let describes: string | null = null
-  if (names) element.setAttribute('aria-label', text)
-  else if (!repeats(text, element, nameOf(element, before))) {
+  if (names) element.setAttribute('aria-label', said)
+  else if (!repeats(said, element, nameOf(element, before))) {
     if (!before?.describes) serial += 1
     describes = before?.describes ?? `tooltip-${serial}`
-    tooltipDescriptions.set(describes, text)
+    tooltipDescriptions.set(describes, said)
     // A template that writes the element's own description writes over this id on its next
     // update; the directive's `updated` hook comes after and adds it back.
     const ids = describedBy(element)
@@ -145,13 +171,14 @@ function file(
       describedBy(element).filter((id) => id !== before.describes),
     )
   }
-  element.dataset.tooltip = text
+  element.dataset.tooltip = said
+  element.dataset.tooltipKind = kind
   // The popup library closes a hint whose pointer, on the hint, stands over another one.
   element.dataset.graceAreaTrigger = ''
-  tooltips.set(element, { clipped, describes, names, side, text })
+  tooltips.set(element, { clipped, describes, kind, names, note, side, text: main })
 }
 
-export const vTooltip: Directive<HTMLElement, TooltipValue, 'clipped', TooltipSide> = {
+export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, TooltipSide> = {
   mounted: file,
   updated: file,
   beforeUnmount: forget,
@@ -181,11 +208,16 @@ const LOOK_AT = 40
 /**
  * Whether the element or something in it shows less text than it holds, across or down.
  * Read at the moment the hint would show, so it answers for the width the box has then.
+ *
+ * The shared copy for assistive technology (`.visually-hidden`) is never shown, so it is
+ * never cut: counted, it held up the hint of every element that keeps one, as a mark whose
+ * short words stand on screen keeps its whole words. A label a narrow place hides for want
+ * of room is hidden by a rule of its own, and counts.
  */
 export function textIsClipped(element: HTMLElement): boolean {
   const boxes = [element, ...[...element.querySelectorAll<HTMLElement>('*')].slice(0, LOOK_AT)]
   return boxes.some((box) => {
-    if (!box.textContent?.trim()) return false
+    if (!box.textContent?.trim() || box.classList.contains('visually-hidden')) return false
     const style = getComputedStyle(box)
     const across = CUTS.has(style.overflowX) && box.scrollWidth > box.clientWidth
     // A line's box can be a pixel shorter than its letters; only a cut line counts.

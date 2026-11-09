@@ -262,7 +262,7 @@ async function copyPath() {
         #start
       >
         <VButton
-          v-tooltip="backTitle"
+          v-tooltip.name="backTitle"
           variant="ghost"
           :aria-label="backTitle"
           icon
@@ -275,7 +275,7 @@ async function copyPath() {
         <p class="document-where">
           <span class="document-project">{{ project }} ·</span>
           <button
-            v-tooltip="copyTitle"
+            v-tooltip.detail="copyTitle"
             class="document-path"
             type="button"
             :aria-label="copyTitle"
@@ -288,7 +288,7 @@ async function copyPath() {
       <template #actions>
         <VButton
           v-if="canRefresh"
-          v-tooltip="refreshTitle"
+          v-tooltip.name="refreshTitle"
           variant="ghost"
           :aria-label="refreshLabel"
           icon

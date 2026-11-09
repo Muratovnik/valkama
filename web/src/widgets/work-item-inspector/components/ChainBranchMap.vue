@@ -224,7 +224,7 @@ function countId(lane: LaneDrawing): string {
           >
           <button
             v-else
-            v-tooltip="lane.lane.title"
+            v-tooltip.detail="lane.lane.title"
             class="branch-map-label chooses"
             type="button"
             :class="{ selected: isFiltered(lane) }"

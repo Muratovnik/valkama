@@ -48,7 +48,7 @@ async function toggle() {
 <template>
   <button
     v-if="pinned !== null"
-    v-tooltip="words"
+    v-tooltip.name="words"
     class="identity-pin"
     type="button"
     :class="{ pinned }"

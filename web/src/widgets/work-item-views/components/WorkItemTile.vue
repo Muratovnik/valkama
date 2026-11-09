@@ -7,8 +7,9 @@
  * not a plain task, the reference, a priority glyph when the priority is not the
  * ordinary medium — the order every surface reads an item in (`drawHead`) — and
  * on the right only an open blocker, «⛔ MAIN-12». It never wraps; a mark short of
- * room keeps its glyph. Below it the title, at most three lines with the whole of
- * it on hover; the labels on one line, up to three whole chips and «+N» for the
+ * room keeps its glyph. Below it the title, at most three lines, with no hover of its
+ * own: it hung over the whole sheet and stood over the tile's top edge, saying again
+ * the words the sheet shows; the card says it whole. The labels on one line, up to three whole chips and «+N» for the
  * rest, which opens the card like the rest of the sheet; and, only when there is
  * something to say, a holder glyph and how far its steps are. The holder is a
  * glyph whose hover names who holds it, and says when the claim is stale, in the
@@ -52,7 +53,6 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -176,7 +176,6 @@ const describedBy = computed(() => {
       />
     </span>
     <button
-      v-tooltip="props.item.title"
       class="tile-open"
       type="button"
       :tabindex="props.tabStop"

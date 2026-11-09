@@ -81,7 +81,7 @@ async function press() {
 <template>
   <VButton
     v-if="offered"
-    v-tooltip="title"
+    v-tooltip.name="title"
     variant="ghost"
     :aria-label="label"
     :aria-busy="busyMark"

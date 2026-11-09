@@ -15,7 +15,8 @@
  * - Focus shows a hint when a key moved it there, as it shows a ring; a press does not. It is
  *   the focused element's own hint or none: a control inside a hinted element is not that
  *   element, and one with a hint of another kind, a why tip's, would raise two at once.
- * - A hint in `clipped` mode shows only while its text is cut, measured as it would show.
+ * - A hint of the `clipped` kind shows only while its text is cut, measured as it would show;
+ *   a name and a detail always show.
  * - A reference's preview wins: no hint shows on a reference, or while its card is up, and
  *   either one opening closes the other.
  * - Escape closes the hint and still does what it does where it was pressed; a press anywhere,
@@ -256,6 +257,11 @@ onBeforeUnmount(stopHearing)
           hide-when-detached
         >
           {{ hint.text }}
+          <span
+            v-if="hint.note"
+            class="tooltip-note"
+            >{{ hint.note }}</span
+          >
         </TooltipContent>
       </TooltipPortal>
     </TooltipRoot>
@@ -294,5 +300,11 @@ onBeforeUnmount(stopHearing)
   background: var(--color-tooltip-surface);
   border-radius: var(--radius-status);
   box-shadow: 0 8px 24px var(--color-shadow);
+}
+
+/* A state under the action it qualifies: its own line, in the quiet ink. */
+.tooltip-note {
+  display: block;
+  color: var(--color-text-muted);
 }
 </style>

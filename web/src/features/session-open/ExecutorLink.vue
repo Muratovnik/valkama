@@ -25,6 +25,8 @@ const props = withDefaults(
 )
 
 const name = computed(() => holderName(props.holder))
+/** The holder as it was written, where the line shortens it; nothing where it says it all. */
+const whole = computed(() => (props.holder === name.value ? undefined : props.holder))
 /** The holder as it was written, which the line shortens, and what they are to the item. */
 const lines = computed(() => [props.holder, props.detail].filter(Boolean).join('\n'))
 </script>
@@ -41,7 +43,7 @@ const lines = computed(() => [props.holder, props.detail].filter(Boolean).join('
   />
   <span
     v-else
-    v-tooltip="holder"
+    v-tooltip.detail="whole"
     class="executor-link-name"
     >{{ name }}</span
   >

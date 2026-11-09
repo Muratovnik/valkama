@@ -242,7 +242,9 @@ describe('rows with no work moving', () => {
     const quiet = row(wrapper, 'MAIN-14')
     expect(quiet.classList).toContain('muted')
     expect(quiet.querySelector('.work-dots')).toBeNull()
-    expect(hintOf(quiet)).toMatch(/^MAIN-14 Quiet claim\nмолчит с 03 нояб\.?$/u)
+    // The number and the title are on the row: its hint is the reason alone, and always shows.
+    expect(hintOf(quiet)).toMatch(/^молчит с 03 нояб\.?$/u)
+    expect(tooltipOf(quiet)?.clipped).toBe(false)
   })
 
   it('keeps the sign’s room on a pinned row with no work, and says why it is there', () => {
@@ -252,7 +254,7 @@ describe('rows with no work moving', () => {
     expect(idle.classList).toContain('muted')
     expect(idle.querySelector('.nav-row-lead')?.children).toHaveLength(0)
     expect(working.querySelector('.nav-row-lead')?.children).toHaveLength(1)
-    expect(hintOf(idle)).toBe('MAIN-20 Notes for the owner\nPinned · no work now · Backlog')
+    expect(hintOf(idle)).toBe('Pinned · no work now · Backlog')
     expect(idle.querySelector('.nav-row-meta')).toBeNull()
     expect(idle.querySelector('.nav-row-pin')?.getAttribute('aria-label')).toBe(
       'Pinned to Work: press to remove the pin',

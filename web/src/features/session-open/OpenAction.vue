@@ -25,7 +25,8 @@ import OpenPanel from '@/features/session-open/OpenPanel.vue'
 import { currentSettings, prepareOpen } from '@/features/session-open/openPlan.ts'
 import type { OpenAction, OpenTarget, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 import { heardOfSession, previewOpen, sessionNews } from '@/features/session-open/openPreview.ts'
-import { openMarks, openName, openView } from '@/features/session-open/openView.ts'
+import { openMarks, openName, openTip, openView } from '@/features/session-open/openView.ts'
+import type { OpenMark } from '@/features/session-open/openView.ts'
 import { outcomeKind, outcomeWords } from '@/features/session-open/placeWords.ts'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
@@ -45,7 +46,7 @@ const props = withDefaults(
     session: string
     /** What the button says of itself where it names no holder: «Открыть сессию». */
     action?: string
-    /** Another line for the tooltip: what this holder is to the item. */
+    /** Another line for a screen reader's description: what this holder is to the item. */
     detail?: string
     /** What the card's read says of it; a surface whose read does not waits for the plan. */
     executor?: Executor | null
@@ -120,8 +121,8 @@ const spoken = computed(() => openName(t, view.value, { action: props.action, na
 /** Nothing to press, so nothing to name it by: why, and who it is. */
 const standing = computed(() => [view.value.hint, props.detail].filter(Boolean).join('\n'))
 const description = computed(() => [view.value.state, standing.value].filter(Boolean).join('\n'))
-/** The name says where it opens and whether a setting chose that; that it runs it does not. */
-const tooltip = computed(() => [spoken.value, description.value].filter(Boolean).join('\n'))
+/** What a press does, and the state under it: the name and the glyphs say the rest. */
+const tooltip = computed(() => openTip(t, view.value, { action: props.action }))
 /**
  * A program this computer lacks, which the surface says once: the row then says only who
  * it is, or what a press would have done, and its mark says why.
@@ -130,7 +131,7 @@ const told = reportMissingPlace(() => view.value.missing)
 const marked = computed(() => told && Boolean(view.value.missing))
 /** What a session that opens nothing is called on its row: the holder, or the action it would be. */
 const stillName = computed(() => props.name ?? (marked.value ? props.action : undefined))
-/** An action's words are never cut; a holder's name is, with the whole of it in the tooltip. */
+/** An action's words are never cut; a holder's name is, the whole of it in the button's name. */
 const nameWhole = computed(() => props.name === undefined)
 /** A bare button stands its words at its fill's inset, which words standing beside it match. */
 const textInset = computed(() => props.variant === 'text')
@@ -138,6 +139,8 @@ const textInset = computed(() => props.variant === 'text')
 const marks = computed(() => openMarks(t, view.value))
 /** The same, as the words a session that cannot be opened says them. */
 const markWords = computed(() => marks.value.map(({ label }) => label).join(' · '))
+/** A glyph's hint is its name; a place that says its word has said it. */
+const markHint = (mark: OpenMark) => (mark.word ? undefined : mark.label)
 /** A running session's glyph, in the hue a live session has wherever one is listed. */
 const liveTone = semanticStatePresentation({ dimension: 'session', state: 'active' }).tone
 
@@ -218,7 +221,7 @@ function finished(outcome: Outcome) {
   >
     <VButton
       v-if="view.pressable"
-      v-tooltip="tooltip"
+      v-tooltip.detail="tooltip"
       class="open-action"
       :class="{ named: !nameWhole }"
       :variant="variant"
@@ -241,7 +244,7 @@ function finished(outcome: Outcome) {
           <span
             v-for="mark in marks"
             :key="mark.key"
-            v-tooltip="mark.label"
+            v-tooltip.name="markHint(mark)"
             class="open-action-mark"
             role="img"
             :class="{ word: mark.word }"
@@ -271,7 +274,7 @@ function finished(outcome: Outcome) {
         </span>
       </span>
     </VButton>
-    <!-- The words carry the hint, not the line: the why is a control of its own. -->
+    <!-- The words stand with no hint: the why is a control of its own beside them. -->
     <span
       v-else
       class="open-action-still"
@@ -280,7 +283,6 @@ function finished(outcome: Outcome) {
       <span class="open-action-words">
         <span
           v-if="stillName"
-          v-tooltip="standing"
           class="open-action-name"
           :class="{ who: !nameWhole }"
           >{{ stillName }}</span
@@ -289,10 +291,7 @@ function finished(outcome: Outcome) {
         <span
           class="open-action-place standing"
           :class="{ bare: marked }"
-          ><span
-            v-if="!marked"
-            v-tooltip="standing"
-            >{{ markWords }}</span
+          ><span v-if="!marked">{{ markWords }}</span
           ><InfoTip
             class="open-action-tip"
             :label="view.hint"

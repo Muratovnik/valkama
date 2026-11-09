@@ -27,7 +27,7 @@ function open() {
 
 <template>
   <VButton
-    v-tooltip="label"
+    v-tooltip.name="label"
     variant="ghost"
     :aria-label="label"
     icon

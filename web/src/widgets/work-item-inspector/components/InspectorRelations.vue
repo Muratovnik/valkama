@@ -117,7 +117,7 @@ function when(value: string): string {
           #actions
         >
           <VButton
-            v-tooltip="t('workItem.related.add')"
+            v-tooltip.name="t('workItem.related.add')"
             variant="ghost"
             :aria-label="t('workItem.related.add')"
             :disabled="busy"
@@ -173,7 +173,7 @@ function when(value: string): string {
             </button>
             <VButton
               v-if="writable"
-              v-tooltip="t('workItem.unlink')"
+              v-tooltip.name="t('workItem.unlink')"
               class="link-remove"
               variant="ghost"
               size="inline"

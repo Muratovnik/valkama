@@ -106,7 +106,7 @@ function cancel() {
       >
         <VButton
           ref="opener"
-          v-tooltip="editLabel"
+          v-tooltip.name="editLabel"
           variant="ghost"
           :aria-label="editLabel"
           icon
