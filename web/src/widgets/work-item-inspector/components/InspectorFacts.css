@@ -71,9 +71,21 @@
   gap: var(--space-1);
 }
 
+/* «Answer» speaks in the state chip's word beside it, trimmed to its letters as that word is,
+   so the two stand on one baseline with the row's name. */
+.card-question-word {
+  font: var(--font-field-label);
+}
+
+/* The trim clips sideways at the box, and a link's underline ends a fraction past its last
+   letter: the pixel of room each side keeps that fringe, and takes none from the row. */
 .card-epic-link {
+  min-width: 0;
+  margin-inline: -1px;
+  padding-inline: 1px;
   color: var(--color-text);
   font: var(--font-detail);
+  white-space: nowrap;
 }
 
 /* The holder's words take one line beside the action; only where they cannot does the name

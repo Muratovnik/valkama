@@ -1407,13 +1407,14 @@ and «Метки», with the value on the name's baseline; a run of chips with n
 one heap of state, priority, holder and tags. The state is its own transition menu, said
 once, so a move the server refuses leaves the chip naming where the item is, then, while a
 question waits, «Ответить» with the question's sign: a verb that goes to the question on
-Overview. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
+Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
 that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
 The epic is the epic's sign, as a tile draws it, and its reference as an item link, the
 same link a number in text is: a press opens the epic through the card's departure, its
-draft guard and Back, and resting on it shows the epic's hover card; a ↳ and a bare number
-there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
+draft guard and Back, and resting on it shows the epic's hover card; its number is trimmed to
+its letters as every value of the facts is, so it stands on its name's baseline. A ↳ and a
+bare number there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
 of its session with the whole value and its lease in a tooltip and a warning dot once
 nobody is behind it; a plate there read as one more chip. «Подписаны» names the other
 sessions that follow the item, each as its claim's holder would print, a name moving to

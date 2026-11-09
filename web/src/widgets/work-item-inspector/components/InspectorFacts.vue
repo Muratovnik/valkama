@@ -268,7 +268,7 @@ defineExpose({ actionCell })
             name="message-square"
             :size="16"
           />
-          {{ t('requests.answerQuestion') }}
+          <span class="card-question-word trimmed-word">{{ t('requests.answerQuestion') }}</span>
         </VButton>
       </div>
     </div>
@@ -320,7 +320,7 @@ defineExpose({ actionCell })
             :context="context"
           />
           <RichText
-            class="card-epic-link"
+            class="card-epic-link trimmed-word"
             :source="parentReference ?? ''"
             inline
           />
