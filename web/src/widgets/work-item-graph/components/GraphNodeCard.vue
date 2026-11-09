@@ -203,7 +203,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         </span>
         <span
           v-if="parentReference"
-          v-tooltip.detail="t('workItem.parent')"
+          v-tooltip.detail="{ text: t('workItem.parent'), words: parentReference }"
           class="flow-node-epic one-line"
           >{{ parentReference }}</span
         >

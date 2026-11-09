@@ -16,7 +16,8 @@
  *   the focused element's own hint or none: a control inside a hinted element is not that
  *   element, and one with a hint of another kind, a why tip's, would raise two at once.
  * - A hint of the `clipped` kind shows only while its text is cut, measured as it would show;
- *   a name and a detail always show.
+ *   a name and a detail always show. A detail on an element whose own words are cut says
+ *   them whole first, on a line of their own, measured the same way; uncut, it is the detail.
  * - A reference's preview wins: no hint shows on a reference, or while its card is up, and
  *   either one opening closes the other.
  * - Escape closes the hint and still does what it does where it was pressed; a press anywhere,
@@ -60,6 +61,8 @@ const open = ref(false)
 /** The element whose hint shows. */
 const shown = shallowRef<HTMLElement | null>(null)
 const hint = computed(() => (shown.value ? tooltipOf(shown.value) : undefined))
+/** The shown element's own words are cut, so its hint says them first. */
+const whole = ref(false)
 /** What the hint is placed against; the stub trigger stands nowhere. */
 const reference = computed(() => shown.value ?? undefined)
 
@@ -105,6 +108,7 @@ function request(next: boolean) {
   const reached = heldByFocus ? element === document.activeElement : element.matches(':hover')
   if (!reached) return
   shown.value = element
+  whole.value = Boolean(tooltipOf(element)?.words) && textIsClipped(element)
   open.value = true
 }
 
@@ -256,7 +260,11 @@ onBeforeUnmount(stopHearing)
           :collision-padding="8"
           hide-when-detached
         >
-          {{ hint.text }}
+          <span
+            v-if="whole && hint.words"
+            class="tooltip-words"
+            >{{ hint.words }}</span
+          >{{ hint.text }}
           <span
             v-if="hint.note"
             class="tooltip-note"
@@ -300,6 +308,11 @@ onBeforeUnmount(stopHearing)
   background: var(--color-tooltip-surface);
   border-radius: var(--radius-status);
   box-shadow: 0 8px 24px var(--color-shadow);
+}
+
+/* The element's own words, whole while it shows them cut: their own line, over the detail. */
+.tooltip-words {
+  display: block;
 }
 
 /* A state under the action it qualifies: its own line, in the quiet ink. */

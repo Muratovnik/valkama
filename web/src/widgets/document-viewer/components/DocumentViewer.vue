@@ -94,6 +94,8 @@ const headingLevel = computed(() => (props.page ? 'h1' : 'h2'))
 const refreshLabel = computed(() => t('documentLinks.viewer.refresh'))
 const refreshTitle = computed(() => t('documentLinks.viewer.refreshTitle'))
 const copyTitle = computed(() => t('documentLinks.viewer.copyPath', { path: path.value }))
+/** What a press does: the path is on the line, and said whole over it while it is cut. */
+const copyHint = computed(() => t('documentLinks.viewer.copyPathHint'))
 const backTitle = computed(() =>
   t('documentLinks.viewer.backTo', { path: previous.value?.path ?? '' }),
 )
@@ -275,7 +277,7 @@ async function copyPath() {
         <p class="document-where">
           <span class="document-project">{{ project }} ·</span>
           <button
-            v-tooltip.detail="copyTitle"
+            v-tooltip.detail="{ text: copyHint, words: path }"
             class="document-path one-line"
             type="button"
             :aria-label="copyTitle"

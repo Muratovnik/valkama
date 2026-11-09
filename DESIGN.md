@@ -783,7 +783,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   shows: a board tile, a label chip and the usage line have none, since everything they
   would say is on screen. A hint may carry a note, a second line in the quiet ink, for a
   state that qualifies the action: a session button hints what a press does — «Open in
-  VS Code» — over the session's state, and never the holder's name it shows. For
+  VS Code» — over the session's state, and never the holder's name it shows. A detail on
+  an element whose own words can be cut (a one-line name, a path, a value) is given those
+  words too: while they are cut the hint says them whole on a first line, over the
+  detail, since a cut word is not on screen; while they are whole it is the detail alone,
+  and with no detail to add it is the `clipped` hint of its words. For
   assistive technology a hint is what `title` was: the name of an element nothing else
   names, else its description when it says more than the name. A reference's preview
   card wins over it. A hint is words; anything with a control in it is `InfoTip`.

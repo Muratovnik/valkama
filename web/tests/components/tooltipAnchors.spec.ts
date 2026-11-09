@@ -121,6 +121,31 @@ describe('v-tooltip for assistive technology', () => {
     expect(link.dataset.tooltipKind).toBeUndefined()
   })
 
+  it('keeps a detail’s own words apart, and with no detail makes them a clipped hint', async () => {
+    const { values, wrapper } = host(
+      '<span v-tooltip.detail="{ text: detail, words: name }" aria-label="Copy">{{ name }}</span>',
+      { detail: 'Copy the path', name: 'docs/a/long/path.md' },
+    )
+    const span = wrapper.get('span').element
+    // The words are the element's own: they show only while cut, and are never its description.
+    expect(tooltipOf(span)).toMatchObject({
+      kind: 'detail',
+      clipped: false,
+      text: 'Copy the path',
+      words: 'docs/a/long/path.md',
+    })
+    expect(span.dataset.tooltip).toBe('Copy the path')
+    expect(described(span)).toEqual(['Copy the path'])
+    values.detail.value = ''
+    await nextTick()
+    expect(tooltipOf(span)).toMatchObject({
+      kind: 'detail',
+      clipped: true,
+      text: 'docs/a/long/path.md',
+      words: '',
+    })
+  })
+
   it('shows nothing for a hint that states no kind', () => {
     const { wrapper } = host(
       '<button v-tooltip="\'Refresh now\'"><svg aria-hidden="true" /></button>',

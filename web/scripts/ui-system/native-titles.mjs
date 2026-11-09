@@ -179,16 +179,16 @@ export const DETAIL_TOOLTIPS = new Map([
     'the holder as it was written, where the line shortens its session to the start',
   ],
   [
-    'features/session-open/OpenAction.vue <VButton> v-tooltip.detail="tooltip"',
-    'what a press does and, under it, the state the session is in; the button shows the holder',
+    'features/session-open/OpenAction.vue <VButton> v-tooltip.detail="{ ...tooltip, words: name }"',
+    'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
     `pages/planning/PlanningGrouping.vue <ToggleChip> v-tooltip.detail="t('workItem.lanes.groupingLabel')"`,
     'what the chip does to the board; its word only names the grouping',
   ],
   [
-    'shared/ui/ChoiceSelect.vue <strong> v-tooltip.detail="selected?.title"',
-    'the chosen option’s hint, which no row of the field draws',
+    'shared/ui/ChoiceSelect.vue <strong> v-tooltip.detail="{ text: selected?.title, words: selected?.label }"',
+    'the chosen option’s hint, which no row of the field draws; while its own words are cut, they come first, whole',
   ],
   [
     'shared/ui/ChoiceSelect.vue <SelectItem> v-tooltip.detail="option.title"',
@@ -220,19 +220,19 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',
-    'why a muted row is muted, which no mark on it shows; else the whole row while its title is cut',
+    'why a muted row is muted, which no mark on it shows, under the row’s whole words while they are cut; else the whole row while its title is cut',
   ],
   [
-    `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="t('liveWork.noProject')"`,
-    'why the space’s name is no link: no project holds it',
+    `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,
+    'why the space’s name is no link: no project holds it; while its own words are cut, they come first, whole',
   ],
   [
-    'widgets/document-viewer/components/DocumentViewer.vue <button> v-tooltip.detail="copyTitle"',
-    'that a press copies the path, with the whole of a long path the line gives the start of',
+    'widgets/document-viewer/components/DocumentViewer.vue <button> v-tooltip.detail="{ text: copyHint, words: path }"',
+    'that a press copies the path; while its own words are cut, they come first, whole',
   ],
   [
-    `widgets/work-item-graph/components/GraphNodeCard.vue <span> v-tooltip.detail="t('workItem.parent')"`,
-    'what the reference beside the number is: the item’s epic',
+    `widgets/work-item-graph/components/GraphNodeCard.vue <span> v-tooltip.detail="{ text: t('workItem.parent'), words: parentReference }"`,
+    'what the reference beside the number is: the item’s epic; while its own words are cut, they come first, whole',
   ],
   [
     'widgets/work-item-inspector/components/AgentsUsageSummary.vue <li> v-tooltip.detail="row.title"',

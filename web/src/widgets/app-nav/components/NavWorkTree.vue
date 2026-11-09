@@ -234,7 +234,7 @@ function escape(event: KeyboardEvent) {
           >
           <span
             v-else
-            v-tooltip:right.detail="t('liveWork.noProject')"
+            v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"
             class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >

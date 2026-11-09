@@ -221,7 +221,7 @@ function finished(outcome: Outcome) {
   >
     <VButton
       v-if="view.pressable"
-      v-tooltip.detail="tooltip"
+      v-tooltip.detail="{ ...tooltip, words: name }"
       class="open-action"
       :class="{ named: !nameWhole }"
       :variant="variant"

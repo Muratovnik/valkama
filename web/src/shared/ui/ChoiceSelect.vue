@@ -138,7 +138,7 @@ function updateOpen(value: boolean) {
               :selected="selected"
             >
               <strong
-                v-tooltip.detail="selected?.title"
+                v-tooltip.detail="{ text: selected?.title, words: selected?.label }"
                 class="choice-title one-line"
                 :class="{ placeholder: !selected }"
                 >{{ selected?.label || placeholder }}</strong

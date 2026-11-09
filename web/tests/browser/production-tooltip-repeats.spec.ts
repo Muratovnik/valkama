@@ -78,14 +78,20 @@ async function card(page: Page, locale: Locale, width = 1280, before?: () => Pro
 }
 
 interface Shown {
+  /** The anchor shows less of its words than it holds. */
+  cut: boolean
   hint: string
   kind: string
   visible: string
+  /** The anchor's own words, which a detail says first while they are cut. */
+  words: string | null
 }
 
 /**
  * The hint showing under the pointer at `x, y`, its anchor's kind and the words the anchor
- * shows. A word inside a box cut to nothing, a hidden or a transparent one is not shown.
+ * shows. A word inside a box cut to nothing, a hidden or a transparent one is not shown. The
+ * anchor's own words, said whole over a detail while they are cut, are read apart: a cut
+ * word is not on screen.
  */
 function readShown([x, y]: [number, number]): Shown | null {
   const hint = document.querySelector('.tooltip-hint')
@@ -93,7 +99,8 @@ function readShown([x, y]: [number, number]): Shown | null {
   if (!hint || !anchor) return null
   // The hint's own words, without the state under them or the copy read to assistive technology.
   const main = hint.cloneNode(true) as HTMLElement
-  for (const extra of main.querySelectorAll('.tooltip-note, [role="tooltip"]')) extra.remove()
+  for (const extra of main.querySelectorAll('.tooltip-note, .tooltip-words, [role="tooltip"]'))
+    extra.remove()
   const seen = (node: Text) => {
     for (let at = node.parentElement; at; at = at.parentElement) {
       const style = getComputedStyle(at)
@@ -111,8 +118,13 @@ function readShown([x, y]: [number, number]): Shown | null {
     if (seen(node as Text)) words.push(node.textContent ?? '')
   return {
     hint: main.textContent ?? '',
+    cut: [anchor, ...anchor.querySelectorAll<HTMLElement>('*')].some((box) => {
+      const style = getComputedStyle(box)
+      return style.overflowX !== 'visible' && box.scrollWidth > box.clientWidth
+    }),
     kind: anchor.dataset.tooltipKind ?? '',
     visible: words.join(' '),
+    words: hint.querySelector('.tooltip-words')?.textContent ?? null,
   }
 }
 
@@ -153,6 +165,8 @@ async function sweep(page: Page, where: Locator) {
     const shown = await page.evaluate(readShown, point)
     if (!shown) continue
     pointed += 1
+    if (shown.words !== null && !shown.cut)
+      said.push(`${shown.kind}: «${shown.visible.trim()}» whole, and said again → «${shown.words}»`)
     if (shown.kind !== 'clipped' && repeats(shown))
       said.push(`${shown.kind || 'no kind'}: «${shown.visible.trim()}» → «${shown.hint}»`)
   }
@@ -266,9 +280,15 @@ for (const width of [1280, 390] as const)
       expect(lines.actionLines).toBe(1)
       expect(lines.noteLines).toBe(1)
       expect(lines.noteTop).toBeGreaterThanOrEqual(lines.actionBottom - 1)
-      // The holder's name is on the button, so the hint never says it.
-      await expect(hint(page)).not.toContainText(name)
-      await expect(hint(page)).not.toContainText('coordinator')
+      // The holder's name is on the button, so the hint never says it again: only while the
+      // name is cut does the hint say it, whole, on a line over the action.
+      const cut = await button
+        .locator('.open-action-name')
+        .evaluate((node) => node.scrollWidth > node.clientWidth)
+      await expect(hint(page).locator('.tooltip-words')).toHaveText(cut ? [name] : [])
+      expect(lines.action).not.toContain(name)
+      expect(lines.action).not.toContain('coordinator')
+      await expect(note).not.toContainText('coordinator')
       // The state is in the quiet ink, still legible on the hint's ground.
       const [quiet, main] = await Promise.all([
         note.evaluate((node) => getComputedStyle(node).color),

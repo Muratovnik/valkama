@@ -7,7 +7,7 @@
  * control it stood over.
  */
 import { expect } from '@playwright/test'
-import type { Locator } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { test } from './test.ts'
 
@@ -81,4 +81,58 @@ test('a hint the keyboard holds up lets a press through to what it covers', asyn
     }
   })
   expect(landed).toEqual({ over: true, on: 'hints-under' })
+})
+
+/** The hint's lines: its element's whole words when it says them, and the detail under them. */
+const hintLines = (page: Page) =>
+  page.locator('.tooltip-hint').evaluate((node) => {
+    const words = node.querySelector('.tooltip-words')
+    const text = [...node.childNodes].find(
+      (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+    )
+    const range = document.createRange()
+    range.selectNodeContents(text ?? node)
+    const [line] = range.getClientRects()
+    return {
+      words: words?.textContent ?? null,
+      text: text?.textContent?.trim() ?? '',
+      under: words ? (line?.top ?? 0) >= words.getBoundingClientRect().bottom - 1 : null,
+    }
+  })
+
+test('a detail on a cut name says the name whole over it, and on a whole name the detail alone', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await page.goto('/tests/browser/harness.html?lang=en&surface=hints')
+  const [held, short, bare] = [
+    page.locator('.hints-held'),
+    page.locator('.hints-short'),
+    page.locator('.hints-bare'),
+  ]
+  await expect(held).toBeVisible()
+  // The setting this asks about: the first name is cut, the second is not.
+  expect(await held.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
+  expect(await short.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(false)
+
+  await held.hover()
+  await page.clock.runFor(1000)
+  expect(await hintLines(page)).toEqual({
+    words: 'A holder whose name is long',
+    text: 'Held since Monday',
+    under: true,
+  })
+
+  await short.hover()
+  await page.clock.runFor(1000)
+  expect(await hintLines(page)).toEqual({ words: null, text: 'Held since Monday', under: null })
+
+  // With nothing to add, a cut name's hint is its words, as a `clipped` one is.
+  await bare.hover()
+  await page.clock.runFor(1000)
+  expect(await hintLines(page)).toEqual({
+    words: null,
+    text: 'A name with nothing to add',
+    under: null,
+  })
 })

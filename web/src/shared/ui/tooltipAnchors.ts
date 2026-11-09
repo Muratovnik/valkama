@@ -28,6 +28,11 @@
  * a state under an action. `{ text, clipped: true }` holds a detail back until its element
  * is cut, where whether it says anything the screen does not is decided as the page runs.
  *
+ * `{ text, words }` is a detail on an element whose own words can be cut: a one-line name
+ * that already has something to add. While its words are cut the hint says them whole
+ * before the detail, since a cut word is not on the screen; while they are not, the hint is
+ * the detail alone. With no detail to add it is the `clipped` hint of its words.
+ *
  * For assistive technology it does what `title` did. With nothing else naming the element
  * the hint is its name, as `aria-label`; otherwise it is its description, through
  * `aria-describedby` and a hidden copy of the words the host keeps, unless it says nothing
@@ -43,7 +48,12 @@ export type TooltipKind = 'name' | 'clipped' | 'detail'
 
 export type TooltipValue =
   | string
-  | { text: string | null | undefined; clipped?: boolean; note?: string | null }
+  | {
+      text: string | null | undefined
+      clipped?: boolean
+      note?: string | null
+      words?: string | null
+    }
   | null
   | undefined
 
@@ -58,6 +68,8 @@ interface Tooltip {
   note: string
   side: TooltipSide
   text: string
+  /** The element's own words, said whole before the text while they are cut, or empty. */
+  words: string
 }
 
 const SIDES = new Set<string>(['top', 'right', 'bottom', 'left'])
@@ -139,7 +151,11 @@ function file(
   const { value } = binding
   const parts: Exclude<TooltipValue, string | null | undefined> =
     typeof value === 'object' && value !== null ? value : { text: value }
-  const main = parts.text?.trim() ?? ''
+  const detail = parts.text?.trim() ?? ''
+  const own = parts.words?.trim() ?? ''
+  // With nothing to add, the element's own words are its hint while they are cut.
+  const main = detail || own
+  const words = detail ? own : ''
   const note = parts.note?.trim() ?? ''
   // A hint that states no kind shows nothing: the gate refuses one before it gets here.
   const kind = KINDS.find((each) => binding.modifiers[each])
@@ -150,7 +166,7 @@ function file(
   // What assistive technology is given and the page marks: both lines, as one text.
   const said = note ? `${main}\n${note}` : main
   const before = tooltips.get(element)
-  const clipped = kind === 'clipped' || parts.clipped === true
+  const clipped = kind === 'clipped' || parts.clipped === true || !detail
   const side: TooltipSide = binding.arg && SIDES.has(binding.arg) ? binding.arg : 'top'
   const names = before?.names === true || !nameOf(element, before)
   let describes: string | null = null
@@ -175,7 +191,7 @@ function file(
   element.dataset.tooltipKind = kind
   // The popup library closes a hint whose pointer, on the hint, stands over another one.
   element.dataset.graceAreaTrigger = ''
-  tooltips.set(element, { clipped, describes, kind, names, note, side, text: main })
+  tooltips.set(element, { clipped, describes, kind, names, note, side, text: main, words })
 }
 
 export const vTooltip: Directive<HTMLElement, TooltipValue, TooltipKind, TooltipSide> = {

@@ -97,6 +97,7 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
     >
     <RichText
       v-if="excerpt && view === 'line'"
+      v-tooltip.clipped="plainText(excerpt)"
       class="request-point-cut one-line"
       :source="excerpt"
       inline
@@ -112,7 +113,9 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
     v-if="said"
     class="request-point-line"
   >
-    <span class="request-point-cut one-line"
+    <span
+      v-tooltip.clipped="`${t('requests.comment')}: ${said}`"
+      class="request-point-cut one-line"
       ><span class="request-point-key">{{ t('requests.comment') }}: </span
       ><span class="request-point-chosen">{{ said }}</span></span
     >

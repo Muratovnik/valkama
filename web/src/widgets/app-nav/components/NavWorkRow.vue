@@ -108,11 +108,14 @@ const name = computed(() => said.value.filter(Boolean).join(' — '))
 const hint = computed(() => said.value.filter(Boolean).join('\n'))
 /**
  * The row's hint, beside the row: its whole words while its title is cut, and on a muted row
- * only the reason no mark shows (a closed row's state is its last word). A phone has none. */
+ * the reason no mark shows (a closed row's state is its last word), under its whole words
+ * while they are cut. A phone has none. */
 const reason = computed(() => (muted.value && !props.row.is_terminal ? stateWords.value : ''))
-const rowHint = computed(() =>
-  props.size === 'touch' ? null : { text: reason.value || hint.value, clipped: !reason.value },
-)
+const rowHint = computed(() => {
+  if (props.size === 'touch') return null
+  if (!reason.value) return { text: hint.value, clipped: true }
+  return { text: reason.value, words: said.value.slice(0, 2).filter(Boolean).join('\n') }
+})
 const href = computed(() =>
   props.route === null ? undefined : serializePlatformRoute(props.route),
 )

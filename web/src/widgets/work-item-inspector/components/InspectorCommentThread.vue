@@ -46,6 +46,7 @@ import EntryAction from '@/shared/ui/EntryAction.vue'
 import EntryHead from '@/shared/ui/EntryHead.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import MetaLine from '@/shared/ui/MetaLine.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -201,7 +202,10 @@ function sendMark() {
       </template>
     </EntryHead>
     <template v-if="folded">
-      <p class="thread-first one-line">
+      <p
+        v-tooltip.clipped="`${authorName} · ${when(root.at)} · ${firstLine}`"
+        class="thread-first one-line"
+      >
         <span
           :id="metaId"
           class="thread-first-meta"

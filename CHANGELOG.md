@@ -91,6 +91,13 @@ checkouts are therefore distinguishable even at the same version.
   navigation were drawn 13 to 18 pixels wide of their 20. The navigation's «Go to a task» and
   «Needs my answer» no longer wrap onto a second line; like every one-line label they end in
   an ellipsis, and say their whole words on hover while they are cut.
+- **A cut name is whole on hover even where the hover has more to say.** A one-line name
+  whose hover already says something else — a space with no project in the navigation, a
+  muted row there, a menu's chosen value, a document's path, an epic on the graph, a
+  session's holder — showed that and never the name cut short. Now, while the name is cut,
+  its hover says it whole on a first line and the rest under it; while it is whole, the rest
+  alone. A review's comment line and a folded thread's first line, cut with no hover at all,
+  say their whole words while they are cut.
 - **A hover hint never says what is already on screen.** Every hint now states its kind: a
   name for a control that shows only a glyph, the whole of a cut text that shows only while
   the text is cut, or a detail the place does not show, which the UI check accepts only from
