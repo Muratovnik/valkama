@@ -71,9 +71,13 @@ test('a long path gives up its start, at the narrowest the pane stands', async (
   await settled(drawer)
   const path = pane.getByRole('button', { name: `Copy the path ${LONG_PATH}` })
   await expect(path).toBeVisible()
-  await expect(path).toHaveAttribute('data-tooltip', `Copy the path ${LONG_PATH}`)
+  await expect(path).toHaveAttribute('data-tooltip', 'Copy the path')
   await inWindow(page, path)
   expect(await path.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
+  // The path is cut, so its hint says it whole over what a press does.
+  await path.hover()
+  await expect(page.locator('.tooltip-hint .tooltip-words')).toHaveText(LONG_PATH)
+  await page.mouse.move(0, 0)
   // Two rows however long the path: the way out beside the title, the actions under it.
   const close = await pane.getByRole('button', { name: 'Close the document' }).boundingBox()
   const pathBox = await path.boundingBox()
