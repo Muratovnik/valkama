@@ -1512,14 +1512,38 @@ it takes, not to the middle of the view as a browser's own do. The radio is name
 label alone and described only by a line, or a screen reader would read paragraphs on every
 arrow press; a description standing under the options is named as its details and read by
 going on to it. The chevron is a tab stop only on the row the keyboard stands on, so that
-Tab reaches Send.
-Your own option is the last row of every field with options, Yes and No included, which is
-why they stand in a column: a row that opens a field cannot stand in a row with others. It is a
-radio of the same group, or a tick beside the others. Choosing it opens its field in place and
-leaves focus in the group, because an arrow both moves and chooses and focus taken away would
-end the walk; the field is the next stop on Tab, with no toolbar in the way, and Shift+Tab comes
-straight back. Taking the row back hides the field and keeps the words until the answer is sent,
-and chosen with no words it is refused at the field itself.
+Tab reaches Send. A review's point is the one exception: closed, it names the way chosen under it
+by its label in its quiet line, and the way's description shows when the point is opened, where
+the rule above holds again, so that a review of a dozen accepted points reads as a list of
+decisions rather than a dozen forms.
+No row offers an option of the person's own: a field's comment stands for it. With nothing
+chosen, its words are sent as the person's own option; with something chosen, as a note on what
+was chosen. A row «Your own option» that opened a field, and a comment beside it, were two places
+to write one thing, and the person had to decide which their words belonged in while what was
+chosen decided it anyway. A change of answer opens the comment on whichever of the two the answer
+in force holds; an older answer holding both opens it on the own option, then the note after a
+blank line, and saved beside a choice that goes as one note. Its field takes 2000 characters, a
+note's limit, since its words may become either.
+A review's point is one row: a chevron and the point's label, which are one press that opens the
+point, the three words of the verdict at the row's end and the comment's glyph after them; under
+the label, from its edge to the row's end, one quiet line of what the point comes to. Accepted
+with a way, the line names the way and what is chosen there, with «recommended» where that is the
+agent's choice, or how many steps of how many are ticked; a way still to choose is said there in
+the warning's ink. Undecided, or decided otherwise than the agent recommends, it says what the
+agent recommends, with its why on a press, and while undecided the start of the description after
+it; otherwise it is the start of the description. A written comment adds a line of its first
+words. The verdict shares the label's line where the point's own width is 30rem or more, as in a
+card's drawer, and otherwise takes a line of its own across the row between the label and the
+quiet line, so that opening the point moves it no more than the label. Opening moves nothing
+already read: the description starts where the quiet line stood, and what the agent recommends
+and why follow it in words. Under them hang the fields the verdict opens and the comment's field,
+set in behind the thread's rule (`--color-rule-strong`) that runs from under the point to the end
+of the last of them; the points of a list stand apart by a divider. A field hangs there before
+the verdict holds its option, read only: a dot stands where each radio or tick will, in its box,
+and its label says it is chosen after «Accept», in a box as tall as the plain label, so that
+Accept turns the dots into controls and moves nothing. Accept fills the way with the agent's
+choice as it always did, which a closed point shows in its line. A send refused at a field that
+hangs from a point opens the point and takes focus to the field.
 No press on a question nobody has put anything into writes, whatever came to stand under
 the pointer. Controls can rise under a pointer at rest, as when an agent answers the question
 above or asks a new one, and no watch on the pointer catches every way that happens, so the
@@ -1571,15 +1595,17 @@ does not stay empty to prevent it. The scrim follows the same rule, so a second 
 leaves its card open, and a press on the scrim that does not close takes no focus out of the
 surface. It is not a rule of the whole interface: those are the places where the press would
 choose or send without being meant, or take away what was just opened.
-A comment is one quiet press away and explains a choice without standing in for one. The press
-is a glyph with no line of its own: for one question, at the end of the line naming it, its field
-opening under the options, «Comment on this question»; for the whole block of questions, at the
-end of the first line of the block's head, its field opening at the block's end above the
-buttons, «Comment on the block of questions», heard with the block's title. Among the buttons it
-read as one more of them and said nothing of which block it was on, and «the question» named a
-block of several. A block of one question offers only the second, since for the person
-both would say the same; one an older answer has on its field stays to be read and changed. Once
-written the glyph is filled and says so in its words, and the comment closes only empty. Opening
+A comment is one quiet press away. The press is a glyph with no line of its own: for a field
+with options, at the end of the line naming it, its field opening under the options, «Comment»,
+heard as «Comment: » and the field's name, its empty field saying that with nothing chosen these
+words are the answer; for the whole block of questions, at the end of the first line of the
+block's head, its field opening at the block's end above the buttons, «Comment on the block of
+questions», heard with the block's title, which explains the answer and stands in for none. Among
+the buttons it read as one more of them and said nothing of which block it was on. A block of one
+question with options offers only the field's comment, since for the person both would say the
+same; a block of several, or of one question answered in words, keeps the block's, and one an
+older answer wrote stays to be read and changed. Once written the glyph is filled and says so in
+its words, and the comment closes only empty. Opening
 anything moves nothing already read: an option's description goes on from where its excerpt
 stood, and «Needs my answer» stands from the top of its room, with its scrollbar's room kept, so
 that what opens in it only grows downward. Declining is as quiet. A

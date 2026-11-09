@@ -36,9 +36,10 @@ function blank(value: InputAnswers[string] | undefined): boolean {
 /**
  * What is held in a question's form.
  *
- * An own variant is two facts, because taking its row back hides the editor and keeps the
- * words: `own` is what was written by field, `ownChosen` the fields whose row is chosen.
- * Only a chosen one is sent, and a chosen one with no words is refused at its own field.
+ * A field with options has one comment, whatever is chosen in it: the server still takes two
+ * things, an own option in place of a choice and a note beside one, and which of them the words
+ * are is decided when they are sent (`checkAnswers`), from what is chosen then. Two places to
+ * write in one field asked the person to know that difference before writing.
  * `changing` is the revision of the answer being changed, null while no answer is: it
  * guards the write, so an answer that moved on under the form is a conflict and not
  * something overwritten. It lives here because the form has to survive what the draft
@@ -47,21 +48,17 @@ function blank(value: InputAnswers[string] | undefined): boolean {
 export interface RequestDraft {
   answers: InputAnswers
   changing: number | null
-  /** Comments on fields with options, by field id; each answers nothing. */
-  fieldNotes: Readonly<Record<string, string>>
+  /** The comment of each field with options, by field id. */
+  comments: Readonly<Record<string, string>>
   /** A comment on the whole question; it answers nothing. */
   note: string
-  own: Readonly<Record<string, string>>
-  ownChosen: readonly string[]
 }
 
 export const EMPTY_DRAFT: RequestDraft = {
   answers: {},
   changing: null,
-  fieldNotes: {},
+  comments: {},
   note: '',
-  own: {},
-  ownChosen: [],
 }
 
 const written = (map: Readonly<Record<string, string>>) =>
@@ -72,23 +69,23 @@ export function hasDraft(draft: RequestDraft | undefined): boolean {
   return (
     draft !== undefined &&
     (Boolean(draft.note.trim()) ||
-      draft.ownChosen.length > 0 ||
-      written(draft.own) ||
-      written(draft.fieldNotes) ||
+      written(draft.comments) ||
       Object.values(draft.answers).some((value) => !blank(value)))
   )
 }
 
-/** A chosen own variant's words, trimmed; empty when its row is not chosen or holds none. */
-export function chosenOwn(draft: RequestDraft, field: string): string {
-  return draft.ownChosen.includes(field) ? (draft.own[field] ?? '').trim() : ''
+/** A field's comment, trimmed; a text answer has none, being its author's words already. */
+export function commentOn(draft: RequestDraft, field: InputRequestField): string {
+  return field.type === 'text' ? '' : (draft.comments[field.id] ?? '').trim()
 }
+
+/** Whether a field's draft chooses anything: an option, Yes or No, a tick or a verdict. */
+export const choosesIn = (draft: RequestDraft, field: string): boolean =>
+  !blank(draft.answers[field])
 
 /** One edit of one field: what it names changes, and what it leaves out stays. */
 export interface FieldEdit {
-  note?: string
-  own?: string
-  ownChosen?: boolean
+  comment?: string
   value?: InputAnswers[string] | null
 }
 
@@ -98,27 +95,20 @@ function editedAnswers(draft: RequestDraft, field: string, value: FieldEdit['val
   return Object.fromEntries(value === null ? others : [...others, [field, value]])
 }
 
-function editedChosen(draft: RequestDraft, field: string, chosen: boolean | undefined) {
-  if (chosen === undefined) return draft.ownChosen
-  return [...draft.ownChosen.filter((id) => id !== field), ...(chosen ? [field] : [])]
-}
-
 /** A draft with one field edited. A null value takes the field's answer away. */
 export function editField(draft: RequestDraft, field: string, edit: FieldEdit): RequestDraft {
   return {
     ...draft,
     answers: editedAnswers(draft, field, edit.value),
-    ownChosen: editedChosen(draft, field, edit.ownChosen),
-    own: edit.own === undefined ? draft.own : { ...draft.own, [field]: edit.own },
-    fieldNotes:
-      edit.note === undefined ? draft.fieldNotes : { ...draft.fieldNotes, [field]: edit.note },
+    comments:
+      edit.comment === undefined ? draft.comments : { ...draft.comments, [field]: edit.comment },
   }
 }
 
 /**
- * What the last send refused that an edit has not touched. A field whose value or own variant
- * changed is being put right, and its message goes; a comment answers nothing, so it leaves a
- * refusal standing.
+ * What the last send refused that an edit has not touched. A field whose value or comment
+ * changed is being put right, and its message goes: with nothing chosen, the comment is the
+ * answer.
  */
 export function stillRefused(
   refused: readonly string[],
@@ -126,10 +116,7 @@ export function stillRefused(
   after: RequestDraft,
 ): string[] {
   return refused.filter(
-    (id) =>
-      before.answers[id] === after.answers[id] &&
-      before.own[id] === after.own[id] &&
-      before.ownChosen.includes(id) === after.ownChosen.includes(id),
+    (id) => before.answers[id] === after.answers[id] && before.comments[id] === after.comments[id],
   )
 }
 
@@ -140,6 +127,10 @@ interface CheckedAnswers {
   values: InputAnswers
 }
 
+/**
+ * One field's part of the answer. Its comment goes as its own option while nothing is chosen
+ * in it, which answers a required field, and as the note on what is chosen otherwise.
+ */
 function checkField(
   field: InputRequestField,
   draft: RequestDraft,
@@ -147,20 +138,13 @@ function checkField(
   list: boolean,
 ) {
   const { id } = field
-  const own = chosenOwn(draft, id)
-  const fieldNote = (draft.fieldNotes[id] ?? '').trim()
-  if (fieldNote && field.type !== 'text') checked.fieldNotes[id] = fieldNote
-  if (draft.ownChosen.includes(id) && !own) {
-    checked.refused.push(id)
-    return
-  }
-  if (own) checked.own[id] = own
-  // An own variant takes the place of a single answer, and stands beside ticks.
-  if (own && field.type !== 'multi_choice') return
+  const comment = commentOn(draft, field)
   const value = draft.answers[id]
-  if (value === undefined || blank(value)) {
+  const chosen = choosesIn(draft, id)
+  if (comment) (chosen ? checked.fieldNotes : checked.own)[id] = comment
+  if (value === undefined || !chosen) {
     if (list && field.type === 'multi_choice') checked.values[id] = []
-    else if (field.required && !own) checked.refused.push(id)
+    else if (field.required && !comment) checked.refused.push(id)
   } else if (validField(field, value)) checked.values[id] = value
   else checked.refused.push(id)
 }
@@ -170,10 +154,9 @@ function checkField(
  *
  * Each refused field is named so its own message can stand beside it; a single
  * "fill in the required fields" at the foot of the form left the reader to find
- * which one it meant. A required field is answered by a value or by a chosen own variant;
- * a comment, on the field or on the question, answers nothing. An own variant chosen and
- * left empty is refused even where the field is optional or has ticks beside it, because
- * it was chosen and would otherwise vanish unsaid. An empty optional field is left out.
+ * which one it meant. A required field is answered by a value or, with nothing chosen, by its
+ * comment, which then goes as its own option; the comment on the question answers nothing.
+ * An empty optional field is left out.
  * With nothing chosen or written at all the first field is refused, required or not: an
  * answer with nothing in it tells the agent nothing. A question always has a field.
  *

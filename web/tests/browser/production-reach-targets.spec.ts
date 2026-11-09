@@ -1,11 +1,12 @@
 /**
  * Where a finger presses — a phone-sized touch screen, or touch at a laptop's width — every icon
  * that draws its sign alone answers a press across 44px, whichever way its host takes the target
- * from `reach.css`: a reach past the drawing (a review point's fold, the board's «+»), or an
- * inline icon that grows its own box (an entry's actions, the editor's tools, a review point's
- * own variant and comment). Under a mouse at 1280 each keeps the box it draws and answers no
- * further. A review point's own variant stayed 28×28 under a finger, beside a comment press of
- * 44, because an inline icon does not reach and nothing grew it.
+ * from `reach.css`: a reach past the drawing (the board's «+»), or an inline icon that grows its
+ * own box (an entry's actions, the editor's tools, a review point's comment). Under a mouse at
+ * 1280 each keeps the box it draws and answers no further. A review point's own variant stayed
+ * 28×28 under a finger, beside a comment press of 44, because an inline icon does not reach and
+ * nothing grew it. A point's chevron is no icon of its own any more: it opens the point with the
+ * label, one press as wide as the label.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -22,9 +23,7 @@ import { talkedOn } from './threadFixtures.ts'
 const PLACES = [
   ['an entry’s action', '.entry-actions button', '--size-control-inline'],
   ['an editor’s tool', '.discussion-form .markdown-tools button', '--size-control-inline'],
-  ['a review point’s own variant', '.request-point-own', '--size-control-inline'],
   ['a review point’s comment', '.request-point .request-note-toggle', '--size-control-inline'],
-  ['a review point’s fold', '.request-point-toggle', '--size-control-height-compact'],
 ] as const
 
 /** A card whose thread holds the 18-point review and a discussion, with the composer under it. */

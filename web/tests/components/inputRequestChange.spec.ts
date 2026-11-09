@@ -146,10 +146,9 @@ describe('changing an answer', () => {
     const wrapper = card(entry())
     await press(wrapper, 'Change answer')
     expect(checkedLabels(wrapper)).toEqual(['Keep'])
-    expect(
-      (textareaNamed(wrapper, 'Comment on the question: Route').element as HTMLTextAreaElement)
-        .value,
-    ).toBe('Why')
+    expect((textareaNamed(wrapper, 'Comment: Route').element as HTMLTextAreaElement).value).toBe(
+      'Why',
+    )
     expect(
       (textareaNamed(wrapper, 'Comment on the block of questions').element as HTMLTextAreaElement)
         .value,

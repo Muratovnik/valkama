@@ -13,6 +13,7 @@ import {
   editField,
   EMPTY_DRAFT,
   hasDraft,
+  stillRefused,
 } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -104,95 +105,95 @@ test('sends false, leaves out an empty optional field and refuses nothing', () =
   })
 })
 
-// A comment explains a choice and never stands in for it, and the server refuses the same
-// with "a note no longer stands in for a field".
-test('a comment, on the question or on a field, answers nothing', () => {
+// The comment on the question explains the answer and never stands in for it, and the server
+// refuses the same with "a note no longer stands in for a field".
+test('the comment on the question answers nothing', () => {
   expect(checkAnswers(fields, draft({ note: 'My own words' })).refused).toEqual([
     'proceed',
     'branch',
     'note',
   ])
-  expect(
-    checkAnswers(fields, draft({ answers: { proceed: true }, fieldNotes: { branch: 'Why' } }))
-      .refused,
-  ).toEqual(['branch', 'note'])
 })
 
-test('an own variant answers a required field in place of a value', () => {
+// The owner's rule for the one «Comment» of a field: with nothing chosen it goes as the own
+// option, with something chosen as the field's note. The server contract does not change.
+test('a comment with nothing chosen is the own option, and answers a required field', () => {
   const checked = checkAnswers(
     fields,
-    draft({
-      answers: { proceed: true, note: 'why' },
-      own: { branch: ' In a week ' },
-      ownChosen: ['branch'],
-    }),
+    draft({ answers: { proceed: true, note: 'why' }, comments: { branch: ' In a week ' } }),
   )
   expect(checked).toMatchObject({
     refused: [],
     values: { proceed: true, note: 'why' },
     own: { branch: 'In a week' },
+    fieldNotes: {},
   })
 })
 
-test('an own variant chosen with no words is refused, wherever it stands', () => {
-  const given = { proceed: true, branch: 'keep', note: 'why' }
-  const blank = (id: string, text = '') =>
-    checkAnswers(fields, draft({ answers: given, own: { [id]: text }, ownChosen: [id] })).refused
-  expect(blank('branch')).toEqual(['branch'])
-  expect(blank('branch', '   ')).toEqual(['branch'])
-  // Optional, and with a tick beside it: it was chosen, and must not vanish unsaid.
-  expect(
-    checkAnswers(fields, draft({ answers: { ...given, extra: ['keep'] }, ownChosen: ['extra'] }))
-      .refused,
-  ).toEqual(['extra'])
-})
-
-test('words of an own variant taken back are kept and not sent', () => {
-  const chosen = draft({
-    answers: { proceed: true, note: 'why' },
-    own: { branch: 'In a week' },
-    ownChosen: ['branch'],
-  })
-  const taken = editField(chosen, 'branch', { ownChosen: false, value: 'keep' })
-  expect(taken.own).toEqual({ branch: 'In a week' })
-  expect(checkAnswers(fields, taken)).toMatchObject({
-    refused: [],
-    values: { proceed: true, branch: 'keep', note: 'why' },
-    own: {},
-  })
-})
-
-test('ticks and an own variant stand side by side', () => {
+test('a comment beside a choice, Yes or No or a tick is the note on it', () => {
   const checked = checkAnswers(
     fields,
     draft({
-      answers: { proceed: true, branch: 'keep', note: 'why', extra: ['merge'] },
-      own: { extra: 'And also this' },
-      ownChosen: ['extra'],
+      answers: { proceed: false, branch: 'keep', extra: ['merge'], note: 'why' },
+      comments: { proceed: 'Because', branch: 'For now', extra: 'And also this' },
     }),
   )
-  expect(checked.values.extra).toEqual(['merge'])
-  expect(checked.own).toEqual({ extra: 'And also this' })
-})
-
-test('choosing an own variant of a single answer takes the option away', () => {
-  const edited = editField(answers({ branch: 'keep', proceed: true }), 'branch', {
-    ownChosen: true,
-    value: null,
+  expect(checked).toMatchObject({
+    refused: [],
+    values: { proceed: false, branch: 'keep', extra: ['merge'], note: 'why' },
+    own: {},
+    fieldNotes: { proceed: 'Because', branch: 'For now', extra: 'And also this' },
   })
-  expect(edited.answers).toEqual({ proceed: true })
-  expect(edited.ownChosen).toEqual(['branch'])
 })
 
-test('a draft holds a choice, an own variant or a comment, and neither spaces nor no ticks count', () => {
+test('ticks all taken back leave the comment as the own option', () => {
+  const checked = checkAnswers(
+    fields,
+    draft({
+      answers: { proceed: true, branch: 'keep', note: 'why', extra: [] },
+      comments: { extra: 'None of these' },
+    }),
+  )
+  expect(checked.own).toEqual({ extra: 'None of these' })
+  expect(checked.fieldNotes).toEqual({})
+  expect(checked.values).not.toHaveProperty('extra')
+})
+
+test('a comment of spaces is no comment, and a text answer has none', () => {
+  const checked = checkAnswers(
+    fields,
+    draft({ answers: { proceed: true }, comments: { branch: '   ', note: 'Words' } }),
+  )
+  expect(checked.refused).toEqual(['branch', 'note'])
+  expect(checked.own).toEqual({})
+})
+
+test('choosing after writing turns the same words from the own option into a note', () => {
+  const written = draft({ answers: { proceed: true, note: 'why' }, comments: { branch: 'Later' } })
+  const chosen = editField(written, 'branch', { value: 'merge' })
+  expect(chosen.comments).toEqual({ branch: 'Later' })
+  expect(checkAnswers(fields, chosen)).toMatchObject({ own: {}, fieldNotes: { branch: 'Later' } })
+  const unchosen = editField(chosen, 'branch', { value: null })
+  expect(checkAnswers(fields, unchosen)).toMatchObject({ own: { branch: 'Later' } })
+})
+
+test('a draft holds a choice or a comment, and neither spaces nor no ticks count', () => {
   expect(hasDraft(undefined)).toBe(false)
   expect(hasDraft(draft({ answers: { extra: [] }, note: '  ' }))).toBe(false)
   expect(hasDraft(answers({ proceed: false }))).toBe(true)
   expect(hasDraft(draft({ note: 'Words' }))).toBe(true)
-  expect(hasDraft(draft({ ownChosen: ['branch'] }))).toBe(true)
-  expect(hasDraft(draft({ own: { branch: 'Words' } }))).toBe(true)
-  expect(hasDraft(draft({ fieldNotes: { branch: 'Words' } }))).toBe(true)
-  expect(hasDraft(draft({ fieldNotes: { branch: '  ' } }))).toBe(false)
+  expect(hasDraft(draft({ comments: { branch: 'Words' } }))).toBe(true)
+  expect(hasDraft(draft({ comments: { branch: '  ' } }))).toBe(false)
+})
+
+test('an edit of the comment puts a refusal right, as an edit of the value does', () => {
+  const before = draft({ answers: { proceed: true } })
+  expect(
+    stillRefused(['branch', 'note'], before, editField(before, 'branch', { comment: 'W' })),
+  ).toEqual(['note'])
+  expect(stillRefused(['branch'], before, editField(before, 'note', { comment: 'W' }))).toEqual([
+    'branch',
+  ])
 })
 
 function answeredRequest() {
@@ -215,13 +216,27 @@ test('the form of a change opens on the answer in force and says nothing new', (
   expect(seeded).toEqual({
     answers: request.answers,
     changing: 4,
-    fieldNotes: { proceed: 'Because' },
+    comments: { proceed: 'Because', branch: 'In a week' },
     note: 'On the whole',
-    own: { branch: 'In a week' },
-    ownChosen: ['branch'],
   })
   expect(differsFromAnswer(request, seeded)).toBe(false)
   expect(holdsDraft(request, seeded)).toBe(false)
+})
+
+// An answer of the time when a field took both: the decision is to keep both words in the one
+// comment, the own option first, and to call that form unchanged until the person changes it.
+test('an older answer with an own option and a note on one field opens with both in its comment', () => {
+  const request = {
+    ...answeredRequest(),
+    answers: { proceed: true, extra: ['keep'], note: 'why' },
+    own: { extra: 'And this' },
+    field_notes: { extra: 'Because' },
+  }
+  const seeded = draftFromAnswer(request)
+  expect(seeded.comments.extra).toBe('And this\n\nBecause')
+  expect(differsFromAnswer(request, seeded)).toBe(false)
+  // Saved as it stands beside a tick, both go as the note: the server keeps one of the two.
+  expect(checkAnswers(fields, seeded).fieldNotes.extra).toBe('And this\n\nBecause')
 })
 
 test('a change differs by any part of the answer, and ticks in another order are the same', () => {
@@ -231,6 +246,7 @@ test('a change differs by any part of the answer, and ticks in another order are
     differsFromAnswer(request, { ...seeded, ...edit })
   expect(differs({ answers: { ...seeded.answers, extra: ['merge', 'keep'] } })).toBe(false)
   expect(differs({ note: '  On the whole  ' })).toBe(false)
+  expect(differs({ comments: { proceed: ' Because ', branch: 'In a week' } })).toBe(false)
   // A text written and erased again is back to nothing, and no ticks are no ticks.
   const blank = { ...request, answers: {} }
   const seededBlank = draftFromAnswer(blank)
@@ -239,15 +255,13 @@ test('a change differs by any part of the answer, and ticks in another order are
   expect(differs({ answers: { ...seeded.answers, extra: ['keep'] } })).toBe(true)
   expect(differs({ answers: { ...seeded.answers, proceed: false } })).toBe(true)
   expect(differs({ note: 'Otherwise' })).toBe(true)
-  expect(differs({ own: { branch: 'In a month' } })).toBe(true)
-  // Taken back, the words stay in the draft and the answer no longer says them.
-  expect(differs({ ownChosen: [] })).toBe(true)
-  expect(differs({ fieldNotes: {} })).toBe(true)
+  expect(differs({ comments: { proceed: 'Because', branch: 'In a month' } })).toBe(true)
+  expect(differs({ comments: {} })).toBe(true)
 })
 
 test('opening a change keeps words a closing left behind', () => {
   const request = answeredRequest()
-  const left = draft({ note: 'Still mine', own: { extra: 'And this' } })
+  const left = draft({ note: 'Still mine', comments: { extra: 'And this' } })
   expect(unsentWords(request, left)).toBe('Still mine\n\nAnd this')
   const seeded = draftFromAnswer(request, unsentWords(request, left))
   expect(seeded.note).toBe('On the whole\n\nStill mine\n\nAnd this')
@@ -261,7 +275,7 @@ test('what a leaving asks about follows how the question stands', () => {
   expect(holdsDraft(waiting, answers({ proceed: true }))).toBe(true)
   // A choice left in a form of a question that closed is nobody's words.
   expect(holdsDraft(closed, answers({ proceed: true }))).toBe(false)
-  expect(holdsDraft(closed, draft({ own: { branch: 'Words' } }))).toBe(true)
+  expect(holdsDraft(closed, draft({ comments: { branch: 'Words' } }))).toBe(true)
   expect(holdsDraft(closed, { ...draftFromAnswer(closed), note: 'New' })).toBe(true)
   // A text field's answer is words like any other: a closing used to leave it unsaid.
   expect(holdsDraft(closed, answers({ note: 'Typed out' }))).toBe(true)
@@ -274,23 +288,22 @@ test('a closing leaves the words of a text answer among the words not sent', () 
   expect(unsentWords(closed, left)).toBe('Typed out\n\nAnd a comment')
 })
 
-/** A key's last word, and «own» for the own variant: enough to read the lines by. */
-const lastWord = (key: string) =>
-  key === 'requests.ownVariant' ? 'own' : (key.split('.').at(-1) ?? '')
+/** A key's last word: enough to read the lines by. */
+const lastWord = (key: string) => key.split('.').at(-1) ?? ''
 
 test('what a closing left chosen reads as a line per field, by the labels shown', () => {
   const t = lastWord
   const left = draft({
     answers: { proceed: false, branch: 'merge', extra: ['keep', 'merge'], note: 'Words' },
-    ownChosen: ['extra'],
+    comments: { extra: 'Mine' },
   })
   expect(unsentChoices(fields, left, t)).toEqual([
     'Proceed: no',
     'Branch: Merge',
-    'Extra: Keep, Merge, own',
+    'Extra: Keep, Merge',
   ])
-  // An own variant chosen alone is a choice too, and a field with nothing chosen says nothing.
-  expect(unsentChoices(fields, draft({ ownChosen: ['branch'] }), t)).toEqual(['Branch: own'])
+  // A comment is words, said among them; a field with nothing chosen says nothing here.
+  expect(unsentChoices(fields, draft({ comments: { branch: 'Mine' } }), t)).toEqual([])
   expect(unsentChoices(fields, EMPTY_DRAFT, t)).toEqual([])
 })
 

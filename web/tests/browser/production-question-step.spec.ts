@@ -304,11 +304,11 @@ test('focus leaving its question ends the step, and focus moving inside it does 
   await expect(asking(top)).toBeVisible()
   await page.keyboard.press('Tab')
   await expect(asking(top)).toHaveCount(0)
-  // The way out of a question is the next one, whose head comes first: the comment on that
-  // block, then the entry's own icon.
-  await expect(page.locator(':focus')).toHaveAccessibleName(/^Comment on the block of questions: /u)
-  await page.keyboard.press('Tab')
+  // The way out of a question is the next one, whose head comes first: the entry's own icon,
+  // then the comment of its one field, at the end of the field's label.
   await expect(page.locator(':focus')).toHaveAccessibleName('Reply')
+  await page.keyboard.press('Tab')
+  await expect(page.locator(':focus')).toHaveAccessibleName(/^Comment: /u)
   await page.keyboard.press('Tab')
   await expect(next.getByRole('radio').first()).toBeFocused()
   expect(writesTo(requests)).toEqual([])

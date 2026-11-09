@@ -164,6 +164,9 @@ describe('changing it', () => {
         .map((node) => node.text())
     expect(checked('P12 ')).toEqual(['Later'])
     expect(checked('P9 ')).toEqual([])
+    // Closed, the point says the first line of its comment; open, its field holds all of it.
+    expect(row('P9 ').text()).toContain('Comment: Labels only, no filtering')
+    await row('P9 ').get('.request-point-toggle').trigger('click')
     expect(row('P9 ').get<HTMLTextAreaElement>('textarea').element.value).toBe(
       'Labels only, no filtering',
     )

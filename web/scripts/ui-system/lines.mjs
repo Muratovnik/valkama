@@ -81,6 +81,8 @@ export const LINE_BUDGET = new Map([
   ['features/input-requests/components/RequestFold.vue', 1], // A reply's rule, as a quote's.
   ['features/input-requests/components/RequestFieldAnswer.vue', 1], // A comment's rule, as a quote's.
   ['features/input-requests/components/RequestHistory.vue', 1], // A replaced answer's, the same.
+  // The divider between a review's points, and the thread's rule their fields hang behind.
+  ['features/input-requests/components/RequestVerdictRow.vue', 2],
   // Settings General uses one earned divider between its preference groups
   // and one row family, and its sheet's edge in a forced palette (below).
   // Diagnostics uses section and row dividers, plus status edges for

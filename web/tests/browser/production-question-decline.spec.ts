@@ -52,7 +52,7 @@ test('a question rising under a pointer at rest takes nothing from the press tha
   // Whatever came there, a second press only goes back.
   await press(page, at, 2)
   await expect(decline(next)).toBeFocused()
-  await expect(next.getByRole('radio')).toHaveCount(3)
+  await expect(next.getByRole('radio')).toHaveCount(2)
   expect(writesTo(requests)).toEqual([])
 })
 
@@ -97,7 +97,7 @@ for (const [hand, shift, wheel] of [
     await pause(150)
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeVisible()
-    await expect(next.getByRole('radio')).toHaveCount(3)
+    await expect(next.getByRole('radio')).toHaveCount(2)
   })
 }
 
@@ -166,14 +166,12 @@ test('spaces in the comment are nothing written, and words are', async ({ page }
       fields: [{ ...choices(2), required: false }],
     }),
   ])
-  await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+  await card.getByRole('button', { name: /^Comment: /u }).click()
   await page.keyboard.insertText('   ')
   await send(card).click()
   await pause(150)
   expect(writesTo(requests)).toEqual([])
-  await card
-    .getByRole('textbox', { name: 'Comment on the block of questions', exact: true })
-    .fill('A word')
+  await card.getByRole('textbox', { name: /^Comment: /u }).fill('A word')
   await send(card).click()
   await expect(card.locator('.request-reply')).toContainText('A word')
   expect(writesTo(requests)).toEqual([UPPER])
@@ -193,7 +191,7 @@ for (const gap of [180, 350]) {
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeFocused()
     await expect(top.getByText(ASKED, { exact: true })).toHaveCount(0)
-    await expect(top.getByRole('radio')).toHaveCount(6)
+    await expect(top.getByRole('radio')).toHaveCount(5)
   })
 }
 
@@ -209,7 +207,7 @@ test('going ahead by hand writes once, and a second press there reaches nothing'
   await pause(150)
   expect(writesTo(requests)).toEqual([UPPER])
   expect(requests.writes[0]?.action).toBe('decline')
-  await expect(next.getByRole('radio')).toHaveCount(3)
+  await expect(next.getByRole('radio')).toHaveCount(2)
 })
 
 test('the keys take the same two steps, and Escape goes back without closing the card', async ({
@@ -256,11 +254,11 @@ test('choosing or writing takes the step back, so that the place of Send sends a
   // Opening the comment moves the buttons, which ends the step by itself.
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
-  await top.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+  await top.getByRole('button', { name: /^Comment: /u }).click()
   await expect(back(top)).toHaveCount(0)
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
-  await top.getByRole('textbox', { name: 'Comment on the block of questions', exact: true }).focus()
+  await top.getByRole('textbox', { name: /^Comment: /u }).focus()
   await expect(back(top)).toBeVisible()
   await page.keyboard.insertText('A word')
   await expect(back(top)).toHaveCount(0)

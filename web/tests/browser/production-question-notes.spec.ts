@@ -11,10 +11,10 @@ import { workItem } from './planningFixtures.ts'
 import { asked, mixedField, openQuestion, routeField, send } from './questionBackend.ts'
 import { test } from './test.ts'
 
-const ON_FIELD = 'Comment on the question: Route'
+const ON_FIELD = 'Comment: Route'
 /** The comment on the whole block: its press is named by the block's title as well. */
 const ON_QUESTION = 'Comment on the block of questions'
-const ON_SECOND = 'Comment on the question: Option'
+const ON_SECOND = 'Comment: Option'
 const SEVERAL = { fields: [routeField, mixedField] }
 const ONE = { fields: [routeField] }
 const middle = (bounds: { height: number; y: number }) => bounds.y + bounds.height / 2
@@ -43,7 +43,7 @@ for (const [width, target, finger] of [
     // Named by the block it is on, which a list of several blocks needs to tell them apart.
     await expect(onQuestion).toHaveAccessibleName(`${ON_QUESTION}: ${workItem.title}`)
     for (const [press, title] of [
-      [onField, 'Comment on this question'],
+      [onField, 'Comment'],
       [onQuestion, ON_QUESTION],
     ] as const) {
       await expect(press).toHaveText('')
@@ -108,7 +108,7 @@ test('a comment written says so in its words and its shape, and stays open', asy
       named(card, 'button', ON_FIELD),
       named(card, 'button', `${ON_FIELD}: written`),
       ON_FIELD,
-      'Comment on this question: written',
+      'Comment: written',
     ],
     [blockPress(card), blockPress(card, true), ON_QUESTION, `${ON_QUESTION}: written`],
   ] as const) {
@@ -127,12 +127,15 @@ test('a comment written says so in its words and its shape, and stays open', asy
   }
 })
 
-test('one field has one comment: the question’s, and its press says nothing else', async ({
+// The owner's rule: a block of one question with options offers only the field's comment.
+test('one field has one comment: the field’s, and the block offers none beside it', async ({
   page,
 }) => {
   const { card } = await openQuestion(page, [asked(ONE)])
-  await expect(card.getByRole('button', { name: /^Comment on the question:/u })).toHaveCount(0)
-  await expect(blockPress(card)).toBeVisible()
+  await expect(named(card, 'button', ON_FIELD)).toBeVisible()
+  await expect(
+    card.getByRole('button', { name: /^Comment on the block of questions/u }),
+  ).toHaveCount(0)
 })
 
 test('a comment an older answer has on its one field stays to read and to change', async ({

@@ -1,8 +1,8 @@
 /**
  * A review answered in the thread, by the plan's rules and its check table: verdicts with no
  * value until chosen, Accept filling the steps once, Accept recommended filling only what is
- * undecided, the undecided count said over Send, a required row stopping the send, an own
- * variant in place of a verdict, groups that fold, and a head and foot that stay in sight.
+ * undecided, the undecided count said over Send, a required row stopping the send, a comment
+ * standing for a verdict, groups that fold, and a head and foot that stay in sight.
  * The real 25-field form in a browser is `production-question-review.spec.ts`.
  */
 import { nextTick } from 'vue'
@@ -74,6 +74,11 @@ const segment = (row: DOMWrapper<Element>, word: string) =>
     row.findAll('[role="radio"]').find((node) => node.text() === word),
     `segment ${word}`,
   )
+/** Opens or closes a point by the press on its label. */
+async function fold(wrapper: Wrapper, label: string) {
+  await point(wrapper, label).get('.request-point-toggle').trigger('click')
+  await flushPromises()
+}
 async function decide(wrapper: Wrapper, label: string, word: string) {
   await segment(point(wrapper, label), word).trigger('click')
   await flushPromises()
@@ -121,11 +126,17 @@ describe('a point', () => {
 
   it('says the recommendation in words while undecided or decided otherwise', async () => {
     const wrapper = card()
-    expect(point(wrapper, 'P2 ').text()).toContain('recommended: accept')
+    expect(point(wrapper, 'P2 ').text()).toContain('Agent: accept')
     await decide(wrapper, 'P2 ', 'Accept')
-    expect(point(wrapper, 'P2 ').text()).not.toContain('recommended')
+    expect(point(wrapper, 'P2 ').text()).not.toContain('Agent:')
     await decide(wrapper, 'P2 ', 'Reject')
-    expect(point(wrapper, 'P2 ').text()).toContain('recommended: accept')
+    expect(point(wrapper, 'P2 ').text()).toContain('Agent: accept')
+    // Open, it says so in words under the description, whatever was chosen.
+    await decide(wrapper, 'P2 ', 'Accept')
+    await fold(wrapper, 'P2 ')
+    expect(point(wrapper, 'P2 ').get('.request-point-advice').text()).toMatch(
+      /^The agent would accept/u,
+    )
   })
 
   it('tells a reader that Accept opens the steps below, and only where it does', () => {
@@ -136,7 +147,7 @@ describe('a point', () => {
     expect(segment(point(wrapper, 'P1 '), 'Accept').attributes('aria-describedby')).toBeUndefined()
   })
 
-  it('makes its description’s toggle a tab stop only while focus is in the row', async () => {
+  it('makes the press on its label a tab stop only while focus is in the row', async () => {
     const row = point(card(), 'P1 ')
     const toggle = row.get('.request-point-toggle')
     expect(toggle.attributes('tabindex')).toBe('-1')
@@ -146,23 +157,36 @@ describe('a point', () => {
 })
 
 describe('accepting a point with steps', () => {
-  it('opens the recommended steps under it and leaves focus in the segments', async () => {
+  it('fills the recommended steps, leaving focus in the segments, and counts them', async () => {
     const wrapper = card()
     expect(wrapper.text()).not.toContain('Mark the 14 refusals')
     const accept = segment(point(wrapper, 'P4 '), 'Accept')
     ;(accept.element as HTMLElement).focus()
     await accept.trigger('click')
     await flushPromises()
-    expect(ticked(wrapper)).toEqual(['p4a', 'p4b', 'p4c'])
-    expect(point(wrapper, 'P4 ').text()).toContain('3 of 3')
     expect(document.activeElement).toBe(accept.element)
+    expect(point(wrapper, 'P4 ').text()).toContain('Steps: 3 of 3')
+    await fold(wrapper, 'P4 ')
+    expect(ticked(wrapper)).toEqual(['p4a', 'p4b', 'p4c'])
+  })
+
+  it('hangs its steps from it when open, read only until Accept holds them', async () => {
+    const wrapper = card()
+    await fold(wrapper, 'P4 ')
+    const row = point(wrapper, 'P4 ')
+    expect(row.text()).toContain('Steps · to choose after “Accept”')
+    expect(row.findAll('input[type="checkbox"]')).toHaveLength(0)
+    expect(row.findAll('.request-option-held')).toHaveLength(3)
+    await decide(wrapper, 'P4 ', 'Accept')
+    expect(row.findAll('.request-option-held')).toHaveLength(0)
+    expect(ticked(wrapper)).toEqual(['p4a', 'p4b', 'p4c'])
   })
 
   it('fills them once: steps taken back stay taken back across another verdict', async () => {
     const wrapper = card()
+    await fold(wrapper, 'P10 ')
     await decide(wrapper, 'P10 ', 'Accept')
     expect(ticked(wrapper)).toEqual(['lock', 'dirty', 'managed', 'click', 'mutant'])
-    expect(point(wrapper, 'P10 ').text()).toContain('5 of 13')
     await wrapper.get('input[value="lock"]').setValue(false)
     await decide(wrapper, 'P10 ', 'Later')
     expect(ticked(wrapper)).toEqual([])
@@ -170,21 +194,22 @@ describe('accepting a point with steps', () => {
     expect(ticked(wrapper)).toEqual(['dirty', 'managed', 'click', 'mutant'])
   })
 
-  it('names the count beside the point as what describes its steps', async () => {
+  it('counts the steps left ticked in its line once closed again', async () => {
     const wrapper = card()
     await decide(wrapper, 'P5 ', 'Accept')
+    await fold(wrapper, 'P5 ')
     await wrapper.get('input[value="p5a"]').setValue(false)
-    const steps = present(
-      wrapper.findAll('fieldset').find((group) => group.text().includes('Do not name')),
-      'steps',
-    )
-    const said = steps.attributes('aria-describedby') ?? ''
-    expect(wrapper.get(`[id="${said}"]`).text()).toBe('4 of 5')
+    await fold(wrapper, 'P5 ')
+    expect(point(wrapper, 'P5 ').text()).toContain('4 of 5')
   })
 
-  it('a way under Accept is chosen with its recommended option', async () => {
+  it('a way under Accept is chosen with its recommended option, and named in the line', async () => {
     const wrapper = card()
     await decide(wrapper, 'P13 ', 'Accept')
+    expect(point(wrapper, 'P13 ').get('.request-point-way').text()).toBe(
+      'Way: The standard vue/max-lines-per-block · recommended',
+    )
+    await fold(wrapper, 'P13 ')
     const radio = wrapper.get<HTMLInputElement>('input[type="radio"][value="per_block"]')
     expect(radio.element.checked).toBe(true)
   })
@@ -249,29 +274,31 @@ describe('sending', () => {
   it('stops at steps all taken back under Accept, and says how to put it right', async () => {
     const wrapper = card()
     await press(wrapper, 'Accept recommended')
+    await fold(wrapper, 'P4 ')
     for (const id of ['p4a', 'p4b', 'p4c'])
       await wrapper.get(`input[value="${id}"]`).setValue(false)
+    await fold(wrapper, 'P4 ')
+    expect(point(wrapper, 'P4 ').text()).toContain('0 of 3')
     await press(wrapper, 'Send')
     expect(answerInputRequest).not.toHaveBeenCalled()
+    // The refusal opens the point it is in and takes focus to the steps.
     expect(wrapper.text()).toContain('Choose “Steps” or change the decision.')
-    expect(point(wrapper, 'P4 ').text()).toContain('0 of 3')
+    const row = point(wrapper, 'P4 ')
+    expect(row.get('.request-point-toggle').attributes('aria-expanded')).toBe('true')
+    expect(row.get('.request-point-hang').element.contains(document.activeElement)).toBe(true)
   })
 
-  it('sends an own variant in place of a verdict, and keeps its words when taken back', async () => {
+  // The owner's rule: a point's comment with no verdict is its own option, and counts as decided.
+  it('sends the comment of a point with no verdict as its own option', async () => {
     const entry = asked()
     vi.mocked(answerInputRequest).mockReturnValue(new Promise(() => {}))
     const wrapper = card(entry)
+    await press(wrapper, 'Comment: P9 Labels in a list row and a filter by label')
+    await point(wrapper, 'P9 ').get('textarea').setValue('Labels only, no filtering')
+    expect(head(wrapper).text()).toContain('Decided 1 of 18')
     await press(wrapper, 'Accept recommended')
-    await press(wrapper, 'Your own option: P9 Labels in a list row and a filter by label')
     expect(point(wrapper, 'P9 ').findAll('[aria-checked="true"]')).toHaveLength(0)
     expect(head(wrapper).text()).toContain('Decided 18 of 18')
-    await point(wrapper, 'P9 ').get('textarea').setValue('Labels only, no filtering')
-    const own = 'Your own option: P9 Labels in a list row and a filter by label'
-    await press(wrapper, own)
-    expect(point(wrapper, 'P9 ').find('textarea').exists()).toBe(false)
-    await press(wrapper, own)
-    const text = point(wrapper, 'P9 ').get<HTMLTextAreaElement>('textarea')
-    expect(text.element.value).toBe('Labels only, no filtering')
     await press(wrapper, 'Send')
     const rest = Object.fromEntries(Object.entries(recommendedAnswer).filter(([id]) => id !== 'p9'))
     expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, rest, '', {

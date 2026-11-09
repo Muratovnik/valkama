@@ -1,6 +1,6 @@
 /**
  * The whole of an answer by the real keyboard, at the widths and in the palette a person may
- * have: your own option in the radio group, comments, what an answered question shows, and
+ * have: the one comment of a field, what an answered question shows, and
  * changing an answer with every way back out of it.
  */
 import { expect } from '@playwright/test'
@@ -20,7 +20,7 @@ import {
 import { test } from './test.ts'
 
 const OWN = 'Your own option'
-const OWN_TEXT = /^Your own option: /u
+const COMMENT = 'Comment: Route'
 const yesNo: InputRequestField = {
   id: 'go',
   label: 'Go ahead',
@@ -68,90 +68,63 @@ const whole: Parameters<typeof asked>[0] = {
   ],
 }
 
-test('the arrows walk your own option with the rest, and focus stays in the group', async ({
-  page,
-}) => {
-  const { card } = await openQuestion(page, [asked()])
+// The owner's rule: one «Comment» per field with options, and no row for your own option.
+test('the arrows walk the options alone: no row stands for your own option', async ({ page }) => {
+  const { card } = await openQuestion(page, [asked({ fields: [routeField, ticks, yesNo] })])
+  await expect(card.getByText(OWN, { exact: true })).toHaveCount(0)
   const radio = (name: string) => card.getByRole('radio', { name, exact: true })
   await radio('Keep the comments').focus()
   await page.keyboard.press('ArrowUp')
-  await expect(radio(OWN)).toBeChecked()
-  await expect(radio(OWN)).toBeFocused()
-  const text = card.getByRole('textbox', { name: OWN_TEXT })
-  await expect(text).toBeVisible()
-  await page.keyboard.press('ArrowUp')
   await expect(radio('Drop them')).toBeChecked()
   await expect(radio('Drop them')).toBeFocused()
-  await expect(text).toHaveCount(0)
-  await page.keyboard.press('ArrowDown')
   await page.keyboard.press('ArrowDown')
   await expect(radio('Keep the comments')).toBeChecked()
-  await expect(text).toHaveCount(0)
+  await expect(card.getByRole('textbox')).toHaveCount(0)
 })
 
-test('Tab goes from your own option straight into its text, and Shift+Tab straight back', async ({
+test('the comment with nothing chosen goes as your own option, by the keyboard alone', async ({
   page,
 }) => {
   const { card, requests } = await openQuestion(page, [asked()])
-  const own = card.getByRole('radio', { name: OWN, exact: true })
-  await own.focus()
-  await page.keyboard.press('Space')
-  await expect(own).toBeChecked()
-  await expect(own).toBeFocused()
-  await page.keyboard.press('Tab')
-  const text = card.getByRole('textbox', { name: OWN_TEXT })
+  const toggle = card.getByRole('button', { name: COMMENT, exact: true })
+  await toggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  const text = card.getByRole('textbox', { name: COMMENT, exact: true })
   await expect(text).toBeFocused()
+  await expect(text).toHaveAttribute(
+    'placeholder',
+    'With nothing chosen, these words are your answer',
+  )
   await page.keyboard.type('In a week')
-  await page.keyboard.press('Shift+Tab')
-  await expect(own).toBeFocused()
-  await page.keyboard.press('Tab')
   await page.keyboard.press('Control+Enter')
   await expect(card).toBeFocused()
   expect(requests.writes[0]?.body).toMatchObject({ answers: {}, own: { route: 'In a week' } })
+  expect(requests.writes[0]?.body).not.toHaveProperty('field_notes.route')
 })
 
-test('a tick of your own opens its text too, and stands beside the others', async ({ page }) => {
+test('a comment beside ticks goes as the note on them', async ({ page }) => {
   const { card, requests } = await openQuestion(page, [asked({ fields: [ticks] })])
-  await card.getByRole('checkbox', { name: 'With a line', exact: true }).focus()
-  await page.keyboard.press('Space')
-  const own = card.getByRole('checkbox', { name: OWN, exact: true })
-  await own.focus()
-  await page.keyboard.press('Space')
-  await expect(own).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(card.getByRole('textbox', { name: OWN_TEXT })).toBeFocused()
-  await page.keyboard.type('And this')
+  await card.getByRole('checkbox', { name: 'With a line', exact: true }).check()
+  await card.getByRole('button', { name: 'Comment: Areas', exact: true }).click()
+  await card.getByRole('textbox', { name: 'Comment: Areas', exact: true }).fill('And this')
   await send(card).click()
   expect(requests.writes[0]?.body).toMatchObject({
     answers: { ticks: ['short'] },
-    own: { ticks: 'And this' },
+    field_notes: { ticks: 'And this' },
   })
+  expect(requests.writes[0]?.body).not.toHaveProperty('own.ticks')
 })
 
-test('yes and no stand in a column with your own option, whatever the width', async ({ page }) => {
+test('yes and no stand in a column, whatever the width', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   const { card } = await openQuestion(page, [asked({ fields: [yesNo] })])
   const rows = card.locator('.request-option')
-  await expect(rows).toHaveCount(3)
+  await expect(rows).toHaveCount(2)
   const lefts = await rows.evaluateAll((all) => all.map((row) => row.getBoundingClientRect().left))
   const tops = await rows.evaluateAll((all) => all.map((row) => row.getBoundingClientRect().top))
   expect(new Set(lefts).size).toBe(1)
-  expect(new Set(tops).size).toBe(3)
-})
-
-test('your own option with no words is refused at its text, and says so to the keyboard', async ({
-  page,
-}) => {
-  const { card, requests } = await openQuestion(page, [asked()])
-  await card.getByRole('radio', { name: OWN, exact: true }).check()
-  await send(card).click()
-  const text = card.getByRole('textbox', { name: OWN_TEXT })
-  await expect(text).toBeFocused()
-  await expect(text).toHaveAttribute('aria-invalid', 'true')
-  await expect(text).toHaveAccessibleDescription('Write your own option, or choose another.')
-  expect(requests.writes).toEqual([])
-  await page.keyboard.type('Now it says')
-  await expect(text).not.toHaveAttribute('aria-invalid', 'true')
+  expect(new Set(tops).size).toBe(2)
 })
 
 test('a press on a reference in a row selects, and nothing pressable stands in a label', async ({
@@ -181,13 +154,11 @@ test('a comment on a field goes under it with its own name, and is sent beside t
 }) => {
   const { card, requests } = await openQuestion(page, [asked({ fields: [routeField, ticks] })])
   await card.getByRole('radio', { name: 'Move them', exact: true }).check()
-  const toggle = card.getByRole('button', { name: /^Comment on the question: Route/u })
+  const toggle = card.getByRole('button', { name: /^Comment: Route/u })
   await toggle.focus()
   await page.keyboard.press('Enter')
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(
-    card.getByRole('textbox', { name: /^Comment on the question: Route/u }),
-  ).toBeFocused()
+  await expect(card.getByRole('textbox', { name: /^Comment: Route/u })).toBeFocused()
   await page.keyboard.type('Why this one')
   await send(card).click()
   expect(requests.writes[0]?.body).toMatchObject({
@@ -301,8 +272,16 @@ test('the way into a change, by the keyboard: the same form, and Save off until 
   const move = card.getByRole('radio', { name: 'Move them', exact: true })
   await expect(move).toBeChecked()
   await expect(move).toBeFocused()
-  await expect(card.getByRole('radio', { name: OWN, exact: true }).nth(1)).toBeChecked()
-  await expect(card.getByRole('textbox', { name: OWN_TEXT })).toHaveValue('Only after acceptance')
+  // An own option opens as the comment of its field with nothing chosen, a note as the comment
+  // beside the choice.
+  await expect(card.getByRole('radio', { name: 'Yes', exact: true })).not.toBeChecked()
+  await expect(card.getByRole('radio', { name: 'No', exact: true })).not.toBeChecked()
+  await expect(card.getByRole('textbox', { name: 'Comment: Go ahead', exact: true })).toHaveValue(
+    'Only after acceptance',
+  )
+  await expect(card.getByRole('textbox', { name: COMMENT, exact: true })).toHaveValue(
+    'Threads serve the digest too.',
+  )
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0)
   const save = card.getByRole('button', { name: 'Save change', exact: true })
   await expect(save).toBeDisabled()

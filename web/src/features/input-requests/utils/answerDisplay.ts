@@ -66,21 +66,18 @@ export function versionLines(
 
 /**
  * What a form had chosen when its question closed some other way, one line per field:
- * the options by their labels, Yes or No, and «Your own option» where its row was chosen.
- * A text field's answer is words, so it is not here but among them (`unsentWords`).
+ * the options by their labels, and Yes or No. A comment is words, and so is a text field's
+ * answer, so neither is here but among them (`unsentWords`).
  */
 export function unsentChoices(
   fields: readonly InputRequestField[],
-  draft: { answers: InputAnswers; ownChosen: readonly string[] },
+  draft: { answers: InputAnswers },
   t: Translate,
 ): string[] {
   return fields.flatMap((field) => {
     if (field.type === 'text' || !isShown(field, draft.answers)) return []
-    const parts = [
-      displayAnswer(field, draft.answers[field.id], t),
-      draft.ownChosen.includes(field.id) ? t('requests.ownVariant') : '',
-    ].filter(Boolean)
-    return parts.length ? [`${field.label}: ${parts.join(', ')}`] : []
+    const chosen = displayAnswer(field, draft.answers[field.id], t)
+    return chosen ? [`${field.label}: ${chosen}`] : []
   })
 }
 

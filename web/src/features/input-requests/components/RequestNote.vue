@@ -15,9 +15,11 @@ withDefaults(
     maxlength: number
     modelValue: string
     rows: number
+    /** What the empty field says it is for, where that depends on the rest of the form. */
+    placeholder?: string
     suggest?: InstanceType<typeof MarkdownEditor>['$props']['suggest']
   }>(),
-  { suggest: undefined },
+  { placeholder: '', suggest: undefined },
 )
 const emit = defineEmits<{ 'submit': []; 'update:modelValue': [value: string] }>()
 const preview = defineModel<boolean>('preview', { default: false })
@@ -34,6 +36,7 @@ defineExpose({ focus: () => editor.value?.focus() })
     :rows="rows"
     :maxlength="maxlength"
     :model-value="modelValue"
+    :placeholder="placeholder"
     :disabled="disabled"
     :suggest="suggest"
     @update:model-value="emit('update:modelValue', $event)"

@@ -16,6 +16,7 @@ import {
   ROUTE_ASKED,
   routeField,
   send,
+  wordsField,
 } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -28,7 +29,7 @@ test('a choice is only a choice until Send, then folds under the question and le
   const { drawer, card, requests } = await openQuestion(page, [asked()])
   await expect(navCount(page)).toHaveText('1')
   const group = card.getByRole('radiogroup', { name: new RegExp(ROUTE_ASKED, 'u') })
-  await expect(group.getByRole('radio')).toHaveCount(4)
+  await expect(group.getByRole('radio')).toHaveCount(3)
   // Recommended or not, nothing is chosen for the person.
   await expect(group.getByRole('radio', { checked: true })).toHaveCount(0)
   await expect(card.locator('.request-option').first()).toContainText('recommended')
@@ -166,7 +167,7 @@ test('several fields go through one form, and a refused one takes focus', async 
 })
 
 test('a comment on the question opens under the options and answers nothing', async ({ page }) => {
-  const { card, requests } = await openQuestion(page, [asked()])
+  const { card, requests } = await openQuestion(page, [asked({ fields: [routeField, wordsField] })])
   const own = card.getByRole('button', { name: /^Comment on the block of questions: /u })
   await expect(own).toHaveAttribute('aria-expanded', 'false')
   await own.click()
@@ -190,7 +191,7 @@ test('a comment on the question opens under the options and answers nothing', as
 })
 
 test('an empty comment closes again, and one with text in it never hides it', async ({ page }) => {
-  const { card } = await openQuestion(page, [asked()])
+  const { card } = await openQuestion(page, [asked({ fields: [routeField, wordsField] })])
   const own = card.getByRole('button', { name: /^Comment on the block of questions/u })
   const field = card.getByRole('textbox', {
     name: 'Comment on the block of questions',
@@ -226,7 +227,7 @@ test('declining is the quiet way out, and an expired question folds the same way
   const pending = card.filter({ hasText: ROUTE_ASKED })
   // The first press only asks, and the same words stand on the way on.
   await pending.getByRole('button', { name: "Don't answer", exact: true }).click()
-  await expect(pending.getByRole('radio')).toHaveCount(4)
+  await expect(pending.getByRole('radio')).toHaveCount(3)
   expect(requests.writes).toEqual([])
   await pending.getByRole('button', { name: "Don't answer", exact: true }).click()
   await expect(pending.locator('.request-state')).toContainText('You declined')
@@ -245,7 +246,7 @@ for (const failure of [503, 'abort'] as const) {
   }) => {
     const { drawer, card, requests } = await openQuestion(page, [asked()])
     await card.getByRole('radio', { name: 'Move them', exact: true }).check()
-    await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+    await card.getByRole('button', { name: /^Comment: /u }).click()
     await page.keyboard.insertText('And quickly')
     requests.failNext(failure)
     await send(card).click()
@@ -253,9 +254,7 @@ for (const failure of [503, 'abort'] as const) {
     await expect(reason).toContainText('could not be confirmed')
     await expect(reason).toBeFocused()
     await expect(card.getByRole('radio', { name: 'Move them', exact: true })).toBeChecked()
-    await expect(
-      card.getByRole('textbox', { name: 'Comment on the block of questions', exact: true }),
-    ).toHaveValue('And quickly')
+    await expect(card.getByRole('textbox', { name: /^Comment: /u })).toHaveValue('And quickly')
     await expect(card.locator('.request-state')).toHaveCount(0)
     await expect(navCount(page)).toHaveText('1')
     await expect(drawer.getByRole('button', { name: 'Waiting for an answer' })).toBeVisible()
@@ -280,7 +279,7 @@ test('an answer from another window folds it and keeps the note without pretendi
   page,
 }) => {
   const { drawer, card, requests, stream } = await openQuestion(page, [asked()])
-  await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+  await card.getByRole('button', { name: /^Comment: /u }).click()
   await page.keyboard.insertText('What I was writing')
   requests.settle(QUESTION_ID, {
     status: 'answered',
@@ -404,7 +403,7 @@ test('a question long unanswered at phone width is not clipped, open or folded',
       ],
     }),
   ])
-  await card.getByRole('button', { name: /^Comment on the block of questions: /u }).click()
+  await card.getByRole('button', { name: /^Comment: /u }).click()
   await expectNoSilentClipping(page, 'Question open at 390px')
   await card.getByRole('radio').first().check()
   await send(card).click()

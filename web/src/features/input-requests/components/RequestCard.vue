@@ -185,9 +185,17 @@ const hasFoot = computed(() =>
   [inForm.value, canRefresh.value, props.standalone, error.value].some(Boolean),
 )
 const busyMark = computed(() => busy.value || undefined)
+/**
+ * A block of one question with options offers no comment of its own: the field's comment would
+ * say the same. One an older answer wrote there stays open, to be read and changed.
+ */
+const offersNote = computed(() => {
+  const [only, ...rest] = request.value.fields
+  return rest.length > 0 || only?.type === 'text' || (answerFields.value?.noteOpen ?? false)
+})
 /** The press of the comment on the block, which stands in its head while there is a form. */
 const noteToggle = computed(() =>
-  inForm.value && supported.value
+  inForm.value && supported.value && offersNote.value
     ? {
         disabled: fieldsDisabled.value,
         name: t('requests.questionNoteName', { title: request.value.title }),

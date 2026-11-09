@@ -116,7 +116,7 @@ for (const locale of ['en', 'ru'])
       await expectIconsOnFirstLine(head, ...HEAD, `${at} changing`)
     })
 
-    test(`${at}: the points of a review, as given, opened, with an own variant and a comment`, async ({
+    test(`${at}: the points of a review, as given, opened, and with a comment`, async ({
       page,
     }) => {
       await inLocale(page, locale, width)
@@ -125,19 +125,24 @@ for (const locale of ['en', 'ru'])
         asked({ prompt: REVIEW_PROMPT, fields, title: 'Review of the checks' }),
       ])
       await expect(card.locator('.request-point')).toHaveCount(18)
-      const rows = card.locator('.request-point-line')
+      const rows = card.locator('.request-point-row')
+      // The chevron opens the point with the label, so its target is the label's; the comment's
+      // press is an icon of its own.
       const point = [
         '.request-point-label',
-        '.request-point-toggle svg, .request-point-tools svg',
+        '.request-point-glyph, .request-point-tools svg',
       ] as const
       const given = await expectIconsOnFirstLine(rows, ...point, `${at} as given`)
       expectWrapped(given, `${at} as given`)
-      expectTargets(given, [28, 36, inline(width)], at)
+      const tools = ['.request-point-label', '.request-point-tools svg'] as const
+      expectTargets(
+        await expectIconsOnFirstLine(rows, ...tools, `${at} its comment`),
+        [36, inline(width)],
+        at,
+      )
       const first = card.locator('.request-point').first()
       await first.locator('.request-point-toggle').click()
       await expectIconsOnFirstLine(rows, ...point, `${at} opened`)
-      await first.locator('.request-point-own').click()
-      await expectIconsOnFirstLine(rows, ...point, `${at} own variant`)
       await first.locator('.request-note-toggle').click()
       await expectIconsOnFirstLine(rows, ...point, `${at} with a comment`)
       // The heading of each group, whose chevron already stood on its first line.
