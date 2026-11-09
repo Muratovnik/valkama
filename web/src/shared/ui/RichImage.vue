@@ -8,9 +8,10 @@
  * server hands a picture only to this page (`Sec-Fetch-Site: same-origin`), and the
  * desktop app opens every new window in the system browser, where it would be refused.
  *
- * A picture that no longer loads — its item was deleted, or the address was copied into
- * another item's text by hand — is the words written for it, as a reader without pictures
- * hears it.
+ * The address is the picture's hash, not the item's: it serves the picture while any item
+ * still holds it, whichever item's text names it. A picture that no longer loads — every
+ * item that held it was deleted — is the words written for it, as a reader without
+ * pictures hears it.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

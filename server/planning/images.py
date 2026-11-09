@@ -36,7 +36,19 @@ MAX_BYTES = 10 * 1024 * 1024
 DIRECTORY = "images"
 #: Where one picture is served, and so what the Markdown written for it names.
 PATH_PREFIX = "/api/images/"
+#: The file in the pictures' directory naming the store that owns it, by the store's
+#: identity (`platform_store_metadata.data_scope_id`). The directory is found beside the
+#: database file, so a second store opened in the same directory finds the same one; the
+#: marker is what tells it the pictures there are not its own to keep or to remove.
+#: `store_backups` copies it with the pictures under the same name.
+MARKER = ".store"
 _HASH = re.compile(r"[0-9a-f]{64}")
+#: What `_write` leaves behind when the process dies before its `os.replace`.
+_TORN = re.compile(r"\.[0-9a-f]{64}\..+\.tmp")
+#: The pictures a write freed, by the connection that made it, until it commits: the
+#: directory they stand in and their hashes. Kept by `id` because a connection takes no
+#: attribute and no weak reference; `settle` checks the directory before it trusts one.
+_FREED: dict[int, tuple[str, set[str]]] = {}
 
 
 class ImageRefusedError(model.PlanningError):
@@ -83,6 +95,53 @@ def directory(conn: sqlite3.Connection) -> str:
         if row[1] == "main" and row[2]:
             return directory_beside(str(row[2]))
     raise ImageRefusedError(503, "unavailable", "this store has no file to keep pictures beside")
+
+
+def _identity(conn: sqlite3.Connection) -> str | None:
+    row = conn.execute(
+        "SELECT data_scope_id FROM platform_store_metadata WHERE singleton = 1"
+    ).fetchone()
+    return str(row[0]) if row else None
+
+
+def _owner(folder: str) -> str | None:
+    """The identity the directory's marker names, or None when it has none."""
+
+    try:
+        with open(os.path.join(folder, MARKER), encoding="utf-8") as handle:
+            return handle.read(200).strip()
+    except FileNotFoundError:
+        return None
+
+
+def _owns(conn: sqlite3.Connection, folder: str) -> bool:
+    identity = _identity(conn)
+    return identity is not None and _owner(folder) == identity
+
+
+def _claim(conn: sqlite3.Connection, folder: str) -> None:
+    """Make the directory this store's, or refuse to keep a picture in another's.
+
+    The first store to keep a picture creates the directory and names itself in
+    the marker; created exclusively, so of two stores racing for one directory
+    one wins and the other is refused rather than both writing into it.
+    """
+
+    identity = _identity(conn)
+    if identity is None:
+        raise ImageRefusedError(503, "unavailable", "this store has no identity yet")
+    os.makedirs(folder, exist_ok=True)
+    with (
+        contextlib.suppress(FileExistsError),
+        open(os.path.join(folder, MARKER), "x", encoding="utf-8") as handle,
+    ):
+        handle.write(identity)
+    if _owner(folder) != identity:
+        raise ImageRefusedError(
+            409,
+            "store_conflict",
+            "the pictures' folder beside this store belongs to another store",
+        )
 
 
 def path_of(sha: str) -> str:
@@ -145,6 +204,7 @@ def store(conn: sqlite3.Connection, reference: object, data: bytes) -> dict:
     try:
         item = str(read_model.item_row(conn, reference)["work_item_id"])
         folder = directory(conn)
+        _claim(conn, folder)
         wrote = _write(folder, digest, data)
         conn.execute(
             "INSERT OR IGNORE INTO work_item_images(work_item_id,sha256,media_type,size,call_id)"
@@ -230,26 +290,108 @@ def held(conn: sqlite3.Connection, work_item_id: str) -> list[str]:
     ]
 
 
-def release(conn: sqlite3.Connection, hashes: list[str]) -> int:
-    """Remove each file no item holds any more; how many went.
-
-    Called by the write that took the rows away, inside its transaction and so
-    under the store's write lock: an upload of the same picture waits for it,
-    and writes the file again if it was taken.
-    """
-
-    if not hashes:
-        return 0
-    folder = directory(conn)
-    removed = 0
-    for sha in sorted(set(hashes)):
+def _unheld(conn: sqlite3.Connection, hashes: set[str]) -> list[str]:
+    return [
+        sha
+        for sha in sorted(hashes)
         if conn.execute(
             "SELECT 1 FROM work_item_images WHERE sha256 = ? LIMIT 1", (sha,)
-        ).fetchone():
-            continue
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(os.path.join(folder, sha))
-            removed += 1
+        ).fetchone()
+        is None
+    ]
+
+
+def release(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+    """The pictures no item holds any more, once the write that took their rows commits.
+
+    Nothing is removed here. The write may still be rolled back -- a refusal, a
+    failure on its way to the commit -- and a file removed inside it would leave
+    the rows it brings back naming nothing. The hashes are noted for `settle`,
+    which the surface that commits calls after the commit.
+    """
+
+    freed = _unheld(conn, set(hashes))
+    if freed:
+        folder = directory(conn)
+        noted = _FREED.setdefault(id(conn), (folder, set()))
+        if noted[0] == folder:
+            noted[1].update(freed)
+        else:
+            _FREED[id(conn)] = (folder, set(freed))
+    return freed
+
+
+def forget(conn: sqlite3.Connection) -> None:
+    """Drop what a write that did not commit noted; its rows came back with the rollback.
+
+    Every path that ends a write without reaching `settle` calls this, so a
+    long-running process does not keep a note for each failed delete, and a later
+    connection that happens to get the same `id` does not inherit one.
+    """
+
+    _FREED.pop(id(conn), None)
+
+
+def settle(conn: sqlite3.Connection) -> int:
+    """After a commit, remove the files the committed write freed; how many went.
+
+    Under the write lock again, in a transaction of its own, so an upload of the same
+    picture cannot slip between the check and the removal: a hash some item holds
+    again is left alone. A file that cannot be removed now -- open in another
+    process, as Windows refuses then -- stays for the sweep at the next open of the
+    store (`sweep`), and so does everything when the lock cannot be had.
+    """
+
+    noted = _FREED.pop(id(conn), None)
+    if noted is None or conn.in_transaction:
+        return 0
+    folder, hashes = noted
+    removed = 0
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if directory(conn) == folder and _owns(conn, folder):
+                for sha in _unheld(conn, hashes):
+                    with contextlib.suppress(OSError):
+                        os.remove(os.path.join(folder, sha))
+                        removed += 1
+        finally:
+            conn.rollback()
+    except sqlite3.Error:
+        return removed
+    return removed
+
+
+def sweep(conn: sqlite3.Connection) -> int:
+    """Remove every picture file no item holds, and every torn write; how many went.
+
+    Run where the store is opened, inside its write transaction: no upload is
+    between its file and its row then, so a file without a row is nobody's. Such a
+    file is what a removal that failed leaves -- a deleted item's picture held open
+    by another process, an upload taken back -- and what a restore leaves when the
+    folder kept pictures written after the snapshot. Each would otherwise live on,
+    and be copied into every later snapshot, after the item that showed it is gone.
+    """
+
+    if not conn.in_transaction:
+        raise RuntimeError("the pictures are swept only under the store's write lock")
+    folder = directory(conn)
+    # Only a directory that names this store: another store's pictures beside it, or
+    # a directory with no marker, have no rows here and are not this store's to judge.
+    if not _owns(conn, folder):
+        return 0
+    try:
+        names = os.listdir(folder)
+    except FileNotFoundError:
+        return 0
+    held = {str(row[0]) for row in conn.execute("SELECT DISTINCT sha256 FROM work_item_images")}
+    removed = 0
+    for name in names:
+        unheld = _HASH.fullmatch(name) is not None and name not in held
+        if unheld or _TORN.fullmatch(name):
+            with contextlib.suppress(OSError):
+                os.remove(os.path.join(folder, name))
+                removed += 1
     return removed
 
 

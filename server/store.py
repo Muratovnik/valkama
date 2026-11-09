@@ -899,6 +899,9 @@ def connect() -> sqlite3.Connection:
                 or pretable_backup is not None
             ):
                 store_backups.integrity_check(conn, source="post-migration store")
+            # Under this open's write lock, so no upload stands between its file and
+            # its row: a picture file no row names is nobody's and goes.
+            planning_images.sweep(conn)
             # The schema ratchet is the final statement in the same transaction.
             if stored_version != STORE_SCHEMA_VERSION:
                 conn.execute(f"PRAGMA user_version={STORE_SCHEMA_VERSION}")

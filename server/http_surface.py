@@ -922,6 +922,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if boundary.commit is _Commit.SURFACE and conn is not None:
                     conn.commit()
+                    # A deleted item's pictures go only now that its delete has committed.
+                    planning_images.settle(conn)
                 if boundary.after_commit is not None:
                     boundary.after_commit(call)
                 publishes = _publishes(boundary.notify, path)
@@ -937,6 +939,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._answer(boundary.errors(error))
         finally:
             if conn is not None:
+                # Whatever a write that never reached `settle` noted goes with it.
+                planning_images.forget(conn)
                 conn.close()
 
     def _read_json(self, max_bytes: int | None = None) -> dict:

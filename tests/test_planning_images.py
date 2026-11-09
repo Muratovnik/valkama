@@ -25,7 +25,7 @@ from unittest import mock
 
 from server import http_surface, mcp_surface, store, store_backups
 from server.ops import tray
-from server.planning import api, images, service
+from server.planning import api, images, model, service
 from tests import schema9, schema13
 from tests.test_mcp_surface import Stdin, Stdout, params
 
@@ -59,6 +59,12 @@ SIGNATURES = {
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def pictures(folder: Path | str) -> list[str]:
+    """The picture files in a directory, by name, leaving out the marker naming its store."""
+
+    return sorted(name for name in os.listdir(folder) if name != images.MARKER)
 
 
 class StoreCase(unittest.TestCase):
@@ -147,7 +153,7 @@ class KeepingTests(StoreCase):
             [(1, sha(data), "image/png", len(data)), (2, sha(data), "image/png", len(data))],
             self.rows(),
         )
-        self.assertEqual([sha(data)], os.listdir(self.folder))
+        self.assertEqual([sha(data)], pictures(self.folder))
 
     def test_a_picture_for_no_item_is_refused_and_leaves_no_file(self) -> None:
         with self.assertRaises(Exception):  # noqa: B017 - the refusal's class is the item lookup's
@@ -164,11 +170,88 @@ class KeepingTests(StoreCase):
         self.assertEqual(404, caught.exception.status)
 
 
+#: An agent session, for a tool call made the way the stdio loop makes it.
+AGENT = {"sessionId": "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"}
+
+
 class DeletionTests(StoreCase):
     def delete(self, reference: str) -> None:
-        handled = api.handle_post(self.conn, "/api/planning/work-item/delete", {"id": reference})
+        """Delete as an agent does: the call, its commit and what follows the commit."""
+
+        mcp_surface.run_tool_call(self.conn, "delete_work_item", {"id": reference}, meta=AGENT)
+
+    def test_a_delete_rolled_back_after_it_freed_the_pictures_keeps_every_one(self) -> None:
+        pictures = [png(14), png(15)]
+        for data in pictures:
+            images.store(self.conn, self.first, data)
+        handled = api.handle_post(self.conn, "/api/planning/work-item/delete", {"id": self.first})
         assert handled is not None
-        self.conn.commit()
+        # Whatever fails between the delete and its commit takes the delete back whole.
+        self.conn.rollback()
+        self.assertEqual(2, len(self.rows()))
+        for data in pictures:
+            self.assertEqual(data, images.read(self.conn, sha(data), item=self.first).data)
+
+    def test_a_file_that_cannot_be_removed_does_not_stop_the_delete(self) -> None:
+        kept, held = png(16), png(17)
+        images.store(self.conn, self.first, kept)
+        images.store(self.conn, self.first, held)
+        remove = os.remove
+
+        def refuse(path: str) -> None:
+            # Another process has the second picture open, as Windows refuses then.
+            if os.path.basename(path) == sha(held):
+                raise PermissionError(13, "in use", path)
+            remove(path)
+
+        with mock.patch.object(os, "remove", refuse):
+            self.delete(self.first)
+        self.assertEqual([], self.rows())
+        self.assertFalse((self.folder / sha(kept)).exists())
+        self.assertTrue((self.folder / sha(held)).exists())
+        # The next open of the store takes the file nobody holds.
+        reopened = store.connect()
+        self.addCleanup(reopened.close)
+        self.assertEqual([], pictures(self.folder))
+
+    def test_a_delete_that_fails_before_its_commit_leaves_nothing_noted(self) -> None:
+        images.store(self.conn, self.first, png(19))
+        release = images.release
+
+        def release_then_fail(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+            release(conn, hashes)
+            raise RuntimeError("failed on the way to the commit")
+
+        with (
+            mock.patch.object(images, "release", release_then_fail),
+            self.assertRaises(RuntimeError),
+        ):
+            self.delete(self.first)
+        self.assertNotIn(id(self.conn), images._FREED)
+        self.assertTrue((self.folder / sha(png(19))).exists())
+
+    def test_an_upload_that_failed_and_could_not_take_its_file_back_leaves_it_to_the_sweep(
+        self,
+    ) -> None:
+        data = png(18)
+        remove = os.remove
+
+        def refuse(path: str) -> None:
+            if os.path.basename(path) == sha(data):
+                raise PermissionError(13, "in use", path)
+            remove(path)
+
+        with (
+            mock.patch.object(images.calls, "call_id", side_effect=RuntimeError("refused")),
+            mock.patch.object(os, "remove", refuse),
+            self.assertRaises(RuntimeError),
+        ):
+            images.store(self.conn, self.first, data)
+        self.assertEqual([], self.rows())
+        self.assertTrue((self.folder / sha(data)).exists())
+        reopened = store.connect()
+        self.addCleanup(reopened.close)
+        self.assertEqual([], pictures(self.folder))
 
     def test_deleting_the_item_deletes_its_pictures(self) -> None:
         data = png(10)
@@ -186,10 +269,10 @@ class DeletionTests(StoreCase):
         images.store(self.conn, self.second, shared)
         self.delete(self.first)
         self.assertEqual(
-            [shared], [(self.folder / name).read_bytes() for name in os.listdir(self.folder)]
+            [shared], [(self.folder / name).read_bytes() for name in pictures(self.folder)]
         )
         self.delete(self.second)
-        self.assertEqual([], os.listdir(self.folder))
+        self.assertEqual([], pictures(self.folder))
 
     def test_a_merge_gives_the_survivor_the_pictures_its_threads_show(self) -> None:
         data = png(13)
@@ -219,6 +302,13 @@ class BackupTests(StoreCase):
         self.assertEqual(
             data, (Path(store_backups.images_beside(snapshot)) / sha(data)).read_bytes()
         )
+        self.assertEqual(images.MARKER, store_backups.MARKER)
+        self.assertEqual(
+            (self.folder / images.MARKER).read_text(encoding="utf-8"),
+            (Path(store_backups.images_beside(snapshot)) / images.MARKER).read_text(
+                encoding="utf-8"
+            ),
+        )
         # The documented restore: the snapshot in place of the store, its pictures into
         # `images` beside it. A fresh directory stands for a machine that lost the store.
         fresh = self.root / "fresh"
@@ -229,6 +319,58 @@ class BackupTests(StoreCase):
             restored = store.connect()
         self.addCleanup(restored.close)
         self.assertEqual(data, images.read(restored, sha(data), item=self.first).data)
+        # The copy names its store, so the restored store still owns it and clears it.
+        orphan = fresh / "images" / sha(png(29))
+        orphan.write_bytes(png(29))
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(fresh / "valkama.sqlite3")}):
+            store.connect().close()
+        self.assertFalse(orphan.exists())
+        self.assertTrue((fresh / "images" / sha(data)).exists())
+
+    def test_a_restore_over_a_newer_store_keeps_no_picture_the_snapshot_does_not_hold(
+        self,
+    ) -> None:
+        older, newer = png(25), png(26)
+        images.store(self.conn, self.first, older)
+        snapshot, _ = store_backups.verified_snapshot(self.conn, "manual", locate=store._backups)
+        images.store(self.conn, self.second, newer)
+        self.conn.close()
+        # The snapshot in place of the store, its pictures copied in beside the newer one.
+        for sidecar in ("-wal", "-shm"):
+            Path(self.path + sidecar).unlink(missing_ok=True)
+        shutil.copyfile(snapshot, self.path)
+        shutil.copytree(store_backups.images_beside(snapshot), self.folder, dirs_exist_ok=True)
+        restored = store.connect()
+        self.addCleanup(restored.close)
+        self.assertEqual([sha(older)], pictures(self.folder))
+        self.assertEqual(older, images.read(restored, sha(older), item=self.first).data)
+        with self.assertRaises(images.ImageRefusedError):
+            images.read(restored, sha(newer))
+
+    def test_no_upload_commits_between_the_rows_copied_and_the_pictures_copied(self) -> None:
+        images.store(self.conn, self.first, png(27))
+        other = sqlite3.connect(self.path, timeout=0.2)
+        other.row_factory = sqlite3.Row
+        self.addCleanup(other.close)
+        copy = store_backups._copy_pictures
+        attempts: list[str] = []
+
+        def upload_meanwhile(source: str, destination: str) -> None:
+            # Another process pastes a picture after VACUUM INTO and before the copy.
+            try:
+                images.store(other, self.second, png(28))
+                attempts.append("committed")
+            except sqlite3.OperationalError:
+                attempts.append("waited")
+            copy(source, destination)
+
+        with mock.patch.object(store_backups, "_copy_pictures", upload_meanwhile):
+            snapshot, _ = store_backups.verified_snapshot(
+                self.conn, "manual", locate=store._backups
+            )
+        self.assertEqual(["waited"], attempts)
+        self.assertEqual([sha(png(27))], pictures(store_backups.images_beside(snapshot)))
+        self.assertEqual([sha(png(27))], pictures(self.folder))
 
     def test_a_snapshot_missing_a_picture_or_holding_a_wrong_one_is_refused(self) -> None:
         data = png(21)
@@ -257,6 +399,35 @@ class BackupTests(StoreCase):
         taken = [store_backups.snapshot(self.conn, store._backups(), "manual") for _ in range(6)]
         self.assertFalse(os.path.exists(store_backups.images_beside(taken[0])))
         self.assertTrue(os.path.isdir(store_backups.images_beside(taken[-1])))
+
+
+class SharedDirectoryTests(StoreCase):
+    """A second store opened beside the first, in the same directory."""
+
+    def open_other(self) -> sqlite3.Connection:
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.root / "other.sqlite3")}):
+            other = store.connect()
+        self.addCleanup(other.close)
+        return other
+
+    def test_opening_another_store_beside_this_one_removes_none_of_its_pictures(self) -> None:
+        pictures = [png(60), png(61)]
+        for data in pictures:
+            images.store(self.conn, self.first, data)
+        self.open_other()
+        for data in pictures:
+            self.assertEqual(data, images.read(self.conn, sha(data), item=self.first).data)
+
+    def test_the_other_store_keeps_no_picture_in_a_folder_it_does_not_own(self) -> None:
+        images.store(self.conn, self.first, png(62))
+        other = self.open_other()
+        service.create_planning_space(other, project_id="else", name="Else", key="ELS")
+        item = str(service.create_work_item(other, space="ELS", title="Elsewhere")["reference"])
+        other.commit()
+        with self.assertRaises(images.ImageRefusedError) as refused:
+            images.store(other, item, png(63))
+        self.assertEqual(409, refused.exception.status)
+        self.assertFalse((self.folder / sha(png(63))).exists())
 
 
 class SchemaFourteenTests(unittest.TestCase):
@@ -458,6 +629,47 @@ class HttpTests(HttpCase):
             answer = raw.recv(4096).decode("latin-1")
         self.assertTrue(answer.startswith("HTTP/1.0 413"), answer)
         self.assertEqual([], self.rows())
+
+    def test_a_delete_the_page_sends_takes_the_picture_once_it_has_committed(self) -> None:
+        data = png(33)
+        _, kept = self.upload(self.first, data)
+        body = json.dumps({"id": self.first}).encode("utf-8")
+        headers = {
+            "Origin": f"http://{self.authority}",
+            "Sec-Fetch-Site": "same-origin",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+            "X-Valkama-Session": self.token(),
+        }
+        status, _, answer = self.request("POST", "/api/planning/work-item/delete", headers, body)
+        self.assertEqual(200, status, answer)
+        self.assertFalse((self.folder / sha(data)).exists())
+        self.assertEqual(404, self.fetch(kept["path"])[0])
+
+    def test_a_delete_the_page_sends_that_fails_before_its_commit_leaves_nothing_noted(
+        self,
+    ) -> None:
+        self.upload(self.first, png(34))
+        before = set(images._FREED)
+        release = images.release
+
+        def release_then_fail(conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+            release(conn, hashes)
+            raise model.PlanningError("refused on the way to the commit")
+
+        body = json.dumps({"id": self.first}).encode("utf-8")
+        headers = {
+            "Origin": f"http://{self.authority}",
+            "Sec-Fetch-Site": "same-origin",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+            "X-Valkama-Session": self.token(),
+        }
+        with mock.patch.object(images, "release", release_then_fail):
+            status, _, _ = self.request("POST", "/api/planning/work-item/delete", headers, body)
+        self.assertEqual(400, status)
+        self.assertEqual(before, set(images._FREED))
+        self.assertTrue((self.folder / sha(png(34))).exists())
 
     def test_an_upload_without_the_browser_credential_is_refused(self) -> None:
         status, body = self.upload(self.first, png(32), token="x" * 64)

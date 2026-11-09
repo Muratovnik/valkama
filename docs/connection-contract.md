@@ -379,6 +379,12 @@ keep is `not_found`, even when another item keeps it. `media_type` is one of
 bytes, and a picture is at most 10 MB. The HTTP read of the item does not carry
 `images`.
 
+Reading a picture hands its bytes to the agent's client, which passes them to its
+model provider with the rest of the conversation: a screenshot leaves the machine
+the moment an agent reads it. `get_work_item` lists only what each picture is, so
+an agent calls `read_work_item_image` only when its task needs what the picture
+shows.
+
 Deleting an item deletes every picture no other item keeps; a merge carries the
 pictures of the merged item to the survivor.
 

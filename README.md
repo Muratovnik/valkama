@@ -594,11 +594,19 @@ with the snapshot's name and `.images` after it stands beside the snapshot file,
 and a snapshot counts as verified only when that folder holds every picture the
 store held, each file's SHA-256 equal to its name. To restore one, stop every
 process that holds the store, delete the `-wal` and `-shm` files beside it, copy
-the snapshot file in place of the database and copy the files of its `.images`
-folder into the `images` folder beside it. Going back to a build at schema 13
-is the same with the `preschema14` snapshot, before pinning the earlier release
-as described below for schema 9: everything written since is lost, and the
-pictures, which that build does not know, may stay in the folder or be deleted.
+the snapshot file in place of the database, delete the `images` folder beside it
+and put a copy of the snapshot's `.images` folder there under the name `images`;
+a snapshot with no `.images` folder held no pictures, and the store then has
+none. The folder's `.store` file names the store it belongs to, and a snapshot's
+`.images` carries it, so the restored folder is still its store's. Every open of
+the store also removes a picture file that no item holds, so a picture written
+after the snapshot does not outlive the restore even when the folder was not
+replaced; a store neither clears nor writes into a folder whose `.store` names
+another store, as one opened from a second database file in the same directory
+would find it. Going back to a build at schema 13 is the same with
+the `preschema14` snapshot, which has no `.images` folder, before pinning the
+earlier release as described below for schema 9: everything written since is
+lost, pictures included.
 
 The order of work took no migration of its own. A placement is written to the
 item's `position`, a column every schema-9 store already has, so no snapshot was
@@ -1116,8 +1124,10 @@ file, under the same browser credential as any write, and read back with
 `Sec-Fetch-Site: same-origin`. The server decides by the first bytes whether it is
 a PNG, JPEG, WebP or GIF, refuses anything else (415) and anything over 10 MB
 (413), and answers a read with that type, `X-Content-Type-Options: nosniff` and
-`Content-Security-Policy: default-src 'none'; sandbox`. Neither the bytes nor
-their contents are logged or sent anywhere.
+`Content-Security-Policy: default-src 'none'; sandbox`. The server neither logs
+the bytes nor sends them anywhere by itself; an agent that reads a picture with
+`read_work_item_image` hands it to its client and so to its model provider (see
+[the connection contract](docs/connection-contract.md#pictures-on-an-item)).
 
 Every page the listener answers, the app's own and the document page alike, carries
 `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`: no

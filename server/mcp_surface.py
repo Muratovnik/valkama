@@ -352,14 +352,20 @@ def run_tool_call(
     """
 
     identity, prepared = _prepared(name, arguments, meta, client)
-    with planning_calls.bind(identity, name):
-        data = _OPS[name](conn, prepared)
-        due = alert_emit.due_after_write(conn)
-    # The write has to be committed here. Board operations committed inside
-    # themselves; the Planning service leaves the transaction to its caller, so
-    # without this every tool write an agent made was rolled back when the
-    # process ended.
-    conn.commit()
+    try:
+        with planning_calls.bind(identity, name):
+            data = _OPS[name](conn, prepared)
+            due = alert_emit.due_after_write(conn)
+        # The write has to be committed here. Board operations committed inside
+        # themselves; the Planning service leaves the transaction to its caller, so
+        # without this every tool write an agent made was rolled back when the
+        # process ended.
+        conn.commit()
+    except BaseException:
+        # The caller rolls the write back; what it noted for after the commit goes too.
+        planning_images.forget(conn)
+        raise
+    planning_images.settle(conn)
     alert_emit.send(due)
     return data
 

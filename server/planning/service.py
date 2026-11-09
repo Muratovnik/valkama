@@ -578,7 +578,7 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     identity = str(row["work_item_id"])
     pictures = images.held(conn, identity)
     conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
-    # The rows went with the item; a file no other item holds goes with them.
+    # The rows went with the item; a file no other item holds goes once this commits.
     images.release(conn, pictures)
     return {
         "work_item_id": row["work_item_id"],
