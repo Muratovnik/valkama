@@ -22,11 +22,16 @@
  *
  * A question that stopped waiting can be removed from here. Focus goes to the question
  * after it, or the one before, and with none left to the way to read the list again.
+ *
+ * What stopped waiting and was put aside (`answered`) stands folded under «Answered (N)» after
+ * the rest, and opens in place. What waits carries its identity as `data-request-waiting`, which
+ * is what the way through the list in the dialog's head counts and goes to.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import { useUnderReader } from '@/features/input-requests/composables/useUnderReader.ts'
 import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -42,15 +47,21 @@ import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
+  /** What stopped waiting and was put aside, folded after the rest. */
+  answered: InputRequestEntry[]
   drafts: Record<string, RequestDraft>
+  /** What stands in its place: what waits, and what stopped waiting while it was read. */
   entries: InputRequestEntry[]
   failed: boolean
   loading: boolean
   partial: boolean
   result: InputRequestList | null
+  /** The identities of the questions still waiting. */
+  waiting: ReadonlySet<string>
 }>()
 const emit = defineEmits<{
   dismiss: [entry: InputRequestEntry]
@@ -64,17 +75,16 @@ const busyMark = computed(() => props.loading || undefined)
 // A poll runs every half minute. Once there is an answer it stays on screen
 // while the next one is read, so neither the empty message nor a "checking"
 // line blinks in and out of the layout on every poll; `aria-busy` says it.
-const empty = computed(() => Boolean(props.result) && !props.failed && !props.entries.length)
+const all = computed(() => [...props.entries, ...props.answered])
+const empty = computed(() => Boolean(props.result) && !props.failed && !all.value.length)
 const emptyLabel = computed(() => {
   return t(props.partial ? 'requests.partialEmpty' : 'requests.empty')
 })
 /**
- * The questions still waiting, which is what the rail counts. Answered ones stay
- * on screen with their outcome, so counting the cards said 2 beside a rail's 1.
+ * The questions still waiting, which the rail's badge and the head's count say too. Answered
+ * ones stay on screen with their outcome, so counting the cards said 2 beside a rail's 1.
  */
-const waiting = computed(
-  () => props.entries.filter((entry) => entry.request.status === 'pending').length,
-)
+const waiting = computed(() => props.waiting.size)
 /** The same condition the rail's count carries as its plus: a source or a page was not read. */
 const incomplete = computed(() => props.partial || Boolean(props.result?.has_more))
 /** Whether a question here holds anything typed or chosen that a failed read must not cost. */
@@ -91,7 +101,7 @@ const statusText = computed(() => {
     })
   // The questions below stay to say how they ended: none of them waits, and the line says that
   // of them rather than that there are none.
-  if (props.entries.length) return t('requests.noneWaiting')
+  if (all.value.length) return t('requests.noneWaiting')
   return ''
 })
 const projects = useProjectTitles()
@@ -113,7 +123,12 @@ const skipped = computed(() =>
       }
     }),
 )
-type CardHandle = { focus: () => void; focusOutcome: () => void; holdsFocus: () => boolean }
+type CardHandle = {
+  $el: Element | null
+  focus: () => void
+  focusOutcome: () => void
+  holdsFocus: () => boolean
+}
 const cards: Record<string, CardHandle | null> = {}
 const errorLine = ref<HTMLElement | null>(null)
 const emptyRefresh = ref<InstanceType<typeof VButton> | null>(null)
@@ -136,10 +151,10 @@ watch(
   },
 )
 async function dismiss(entry: InputRequestEntry) {
-  const at = props.entries.findIndex(
+  const at = all.value.findIndex(
     (candidate) => requestIdentity(candidate) === requestIdentity(entry),
   )
-  const neighbour = props.entries[at + 1] ?? props.entries[at - 1]
+  const neighbour = all.value[at + 1] ?? all.value[at - 1]
   emit('dismiss', entry)
   await nextTick()
   if (neighbour) cards[requestIdentity(neighbour)]?.focus()
@@ -149,8 +164,21 @@ async function dismiss(entry: InputRequestEntry) {
 function holdsFocus(entry: InputRequestEntry) {
   return cards[requestIdentity(entry)]?.holdsFocus() ?? false
 }
+const root = ref<HTMLElement | null>(null)
+const movesUnderReader = useUnderReader(root)
+/** Whether putting this question aside now would move something from under the reader. */
+function holdsReader(entry: InputRequestEntry) {
+  return movesUnderReader(cards[requestIdentity(entry)]?.$el)
+}
+/** Folded until opened, and then open as the person left it while more is put aside. */
+const answeredOpen = ref(false)
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
+}
+/** What waits names itself to the way through the list in the head; nothing else does. */
+function waitingMark(entry: InputRequestEntry) {
+  const key = requestIdentity(entry)
+  return props.waiting.has(key) ? key : undefined
 }
 /**
  * Moves focus on from the question once its answer has landed, under the answer's own right: a
@@ -169,18 +197,19 @@ async function updated(entry: InputRequestEntry, right: FocusRight) {
   }
   const at = props.entries.findIndex((candidate) => requestIdentity(candidate) === key)
   const next = [...props.entries.slice(at + 1), ...props.entries.slice(0, Math.max(at, 0))].find(
-    (candidate) => candidate.request.status === 'pending',
+    (candidate) => props.waiting.has(requestIdentity(candidate)),
   )
   right.take(() => {
     if (next) cards[requestIdentity(next)]?.focus()
     else cards[key]?.focusOutcome()
   })
 }
-defineExpose({ holdsFocus })
+defineExpose({ holdsFocus, holdsReader })
 </script>
 
 <template>
   <div
+    ref="root"
     class="request-list"
     :aria-busy="busyMark"
   >
@@ -256,12 +285,33 @@ defineExpose({ holdsFocus })
       :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
       :entry="entry"
       :draft="draftFor(entry)"
+      :data-request-waiting="waitingMark(entry)"
       standalone
       @update:draft="emit('draft', requestIdentity(entry), $event)"
       @updated="updated"
       @dismiss="dismiss"
       @select="emit('select', $event)"
     />
+    <VDisclosure
+      v-if="answered.length"
+      v-model:open="answeredOpen"
+    >
+      <template #summary>{{ t('requests.hub.answered', { count: answered.length }) }}</template>
+      <div class="request-answered">
+        <RequestCard
+          v-for="entry in answered"
+          :key="requestIdentity(entry)"
+          :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
+          :entry="entry"
+          :draft="draftFor(entry)"
+          standalone
+          @update:draft="emit('draft', requestIdentity(entry), $event)"
+          @updated="updated"
+          @dismiss="dismiss"
+          @select="emit('select', $event)"
+        />
+      </div>
+    </VDisclosure>
   </div>
 </template>
 
@@ -272,6 +322,13 @@ defineExpose({ holdsFocus })
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
+}
+
+/* What was put aside stands at the list's own step. */
+.request-answered {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
 }
 
 /* The sentence and the refresh it describes share one line; the button keeps

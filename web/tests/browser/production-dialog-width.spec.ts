@@ -59,8 +59,7 @@ test('on a phone the questions take the whole width, and an option its share of 
   expect(await across(dialog)).toEqual({ left: 0, width: 390 })
   const frame = dialog.locator('.dialog-frame')
   await expect(frame).toHaveCSS('border-radius', '0px')
-  // Head, body and foot keep one inset, so the title stands over the first line of the list. The
-  // list's start inset is the column its rail of questions takes in a wider window.
+  // Head, body and foot keep one inset, so the title stands over the first line of the list.
   const body = dialog.locator('.dialog-frame-body')
   expect(await contentLeft(body)).toBe((await innerLeft(frame)) + 16)
   const title = await across(dialog.getByRole('heading', { name: 'Needs my answer' }))

@@ -187,6 +187,12 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   gap: var(--space-1);
   align-items: center;
   min-height: var(--size-control-target);
+
+  /* What offers nothing at the moment, as the way through a list with nothing waiting, takes no
+     room: on a narrow head it would hold an empty row of its own. */
+  &:empty {
+    display: none;
+  }
 }
 
 /* A head that would leave the title less than a line's worth gives that row to the title

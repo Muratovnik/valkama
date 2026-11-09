@@ -36,8 +36,8 @@ const emit = defineEmits<{
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
 /**
- * The box that scrolls what the dialog holds, handed to what stands in the `rail`: a column of
- * the body's start inset, beside it and still while it scrolls, for a way through what it holds.
+ * The box that scrolls what the dialog holds, handed to what stands among the head's `actions`,
+ * still while it scrolls, for a way through what it holds.
  */
 const body = ref<HTMLElement | null>(null)
 </script>
@@ -58,7 +58,7 @@ const body = ref<HTMLElement | null>(null)
   >
     <form
       class="dialog-frame"
-      :class="{ 'is-paired': pane, 'has-rail': $slots.rail }"
+      :class="{ 'is-paired': pane }"
       :aria-busy="busyMark"
       @submit.prevent="emit('submit')"
     >
@@ -70,16 +70,17 @@ const body = ref<HTMLElement | null>(null)
         :close-label="closeLabel"
         :focusable-title="Boolean(pane)"
         @close="emit('close')"
-      />
-      <div
-        v-if="$slots.rail"
-        class="dialog-frame-rail"
       >
-        <slot
-          name="rail"
-          :scroller="body"
-        />
-      </div>
+        <template
+          v-if="$slots.actions"
+          #actions
+        >
+          <slot
+            name="actions"
+            :scroller="body"
+          />
+        </template>
+      </OverlayHeader>
       <div
         ref="body"
         class="dialog-frame-body"
@@ -131,38 +132,6 @@ const body = ref<HTMLElement | null>(null)
   &.is-paired {
     flex: 1 1 auto;
   }
-}
-
-/* A rail takes the body's start inset for its column, so the words start where they did and
-   the head, the body and the foot keep one edge. Where the dialog stands across a phone-wide
-   window that inset is 16px, narrower than a target, and its edge is the screen's, which a
-   finger swipes for the system: there the host draws no rail (`--display-dialog-rail`), and
-   the empty column is the inset it was. */
-.dialog-frame.has-rail {
-  grid-template-columns: var(--space-dialog-inset) minmax(0, 1fr);
-
-  > .dialog-frame-head,
-  > .dialog-frame-footer {
-    grid-column: 1 / -1;
-  }
-
-  /* Placed, not left to flow: with no rail drawn the body would take the rail's column. */
-  > .dialog-frame-body {
-    grid-row: 2;
-    grid-column: 2;
-    padding-inline-start: 0;
-  }
-}
-
-/* What the rail holds stands on the middle of the body's height, and no taller than it. */
-.dialog-frame-rail {
-  display: var(--display-dialog-rail, flex);
-  flex-direction: column;
-  grid-row: 2;
-  grid-column: 1;
-  justify-content: center;
-  min-height: 0;
-  overflow: hidden;
 }
 
 /* Its rows stand at the top: beside a pane the frame is as tall as the window, and rows

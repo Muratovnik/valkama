@@ -160,9 +160,5 @@
     --radius-dialog: 0;
     --space-dialog-gutter: 0px;
     --space-dialog-inset: var(--space-4);
-
-    /* Across the window the inset is narrower than a target and stands on the screen's edge,
-       which a finger swipes for the system, so a dialog's rail is not drawn (`DialogFrame`). */
-    --display-dialog-rail: none;
   }
 }

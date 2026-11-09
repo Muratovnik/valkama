@@ -29,15 +29,25 @@ const confirmedWrites = ref(0)
  * own to say how it ended, and leaves only through `dismiss`. A read of what waits
  * everywhere drops every question that stopped waiting, and it used to drop the one being
  * written in with the draft and the focus inside it.
+ *
+ * `settles` lets a host put the questions that stopped waiting here aside (`settled`), at
+ * the first read after which the host says one can leave its place: until then it stands
+ * where it was answered. The read a write here starts is never that read, whatever stands
+ * where: it comes a moment after the press, while focus is still on its way to the next
+ * question. A host that gives none keeps them where they stand.
  */
 export function useInputRequests(
   source: () => PlanningTarget | 'all' | null,
   keep: (entry: InputRequestEntry) => boolean = () => false,
+  settles: (entry: InputRequestEntry) => boolean = () => false,
 ) {
   const result = ref<InputRequestList | null>(null)
   const loading = ref(false)
   const failed = ref(false)
   const resolved = ref<Record<string, InputRequestEntry>>({})
+  const settled = ref<Record<string, true>>({})
+  /** Written here, with no read finished since: not to be put aside by the read the write began. */
+  const fresh = new Set<string>()
   let controller: AbortController | undefined
   let generation = 0
   let timer: ReturnType<typeof setInterval> | undefined
@@ -56,9 +66,14 @@ export function useInputRequests(
     // Open questions first, newest first, as the server lists them. A question
     // answered here keeps its place among them: the read after the answer no
     // longer returns it, and it used to come back from the confirmed copy at the
-    // end of the list, out from under the reader who had just answered it.
-    const open = (entry: InputRequestEntry) =>
-      entry.request.status === 'pending' || requestIdentity(entry) in resolved.value
+    // end of the list, out from under the reader who had just answered it. Once put aside it
+    // goes after them.
+    const open = (entry: InputRequestEntry) => {
+      const key = requestIdentity(entry)
+      return (
+        (entry.request.status === 'pending' || key in resolved.value) && !(key in settled.value)
+      )
+    }
     return [...combined.values()].sort(
       (a, b) =>
         Number(open(b)) - Number(open(a)) ||
@@ -73,10 +88,27 @@ export function useInputRequests(
     if (failed.value) return 'unknown'
     if (!result.value) return null
     return {
-      value: entries.value.filter((entry) => entry.request.status === 'pending').length,
+      value: entries.value.filter((entry) => waits(entry)).length,
       incomplete: partial.value || result.value.has_more,
     }
   })
+
+  /**
+   * Whether a question still waits, as the last read said. One held here after a read no
+   * longer brought it does not, whatever the copy kept of it says while it is asked again.
+   */
+  function waits(entry: InputRequestEntry) {
+    return entry.request.status === 'pending' && !(requestIdentity(entry) in resolved.value)
+  }
+
+  /** Puts aside what stopped waiting, where the host says nothing moves from under the reader. */
+  function settle() {
+    for (const entry of Object.values(resolved.value)) {
+      const key = requestIdentity(entry)
+      if (entry.request.status === 'pending' || key in settled.value || fresh.delete(key)) continue
+      if (settles(entry)) settled.value[key] = true
+    }
+  }
 
   async function refresh() {
     if (loading.value || document.visibilityState === 'hidden') return
@@ -113,6 +145,7 @@ export function useInputRequests(
           : items,
       }
       failed.value = false
+      settle()
     } catch {
       if (generation === current) failed.value = true
     } finally {
@@ -150,6 +183,8 @@ export function useInputRequests(
   /** The person is done with a question that no longer waits: it leaves the list. */
   function dismiss(entry: InputRequestEntry) {
     delete resolved.value[requestIdentity(entry)]
+    delete settled.value[requestIdentity(entry)]
+    fresh.delete(requestIdentity(entry))
   }
 
   /** A response started before a write must not replace what the write confirmed. */
@@ -162,6 +197,7 @@ export function useInputRequests(
 
   function changed(entry: InputRequestEntry) {
     resolved.value[requestIdentity(entry)] = entry
+    fresh.add(requestIdentity(entry))
     seenWrites = ++confirmedWrites.value
     readAgain()
   }
@@ -184,6 +220,8 @@ export function useInputRequests(
       loading.value = false
       result.value = null
       resolved.value = {}
+      settled.value = {}
+      fresh.clear()
       void refresh()
     },
     { immediate: true },
@@ -202,5 +240,17 @@ export function useInputRequests(
     window.removeEventListener('focus', refresh)
     document.removeEventListener('visibilitychange', refresh)
   })
-  return { result, loading, failed, partial, entries, count, refresh, changed, dismiss }
+  return {
+    result,
+    loading,
+    failed,
+    partial,
+    entries,
+    count,
+    settled,
+    waits,
+    refresh,
+    changed,
+    dismiss,
+  }
 }
