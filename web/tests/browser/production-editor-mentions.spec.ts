@@ -181,3 +181,36 @@ for (const width of [390, 1280]) {
     expect(rows[1]?.nameShare).toBeLessThan(0.5)
   })
 }
+
+test('what a row cuts short shows whole under the pointer, and what it shows whole adds nothing', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await page.setViewportSize({ width: 390, height: 900 })
+  const { comment, list } = await openWithSources(page, [
+    { path: LONG, line: 0, text: '' },
+    { path: 'docs/notes.md', line: 3, text: LINE },
+  ])
+  await comment.click()
+  await page.keyboard.type('@pl')
+  await page.clock.runFor(500)
+  const rows = list.getByRole('option')
+  await expect(rows).toHaveCount(3)
+  const words = page.getByRole('tooltip')
+  /** The pointer rests on a part of a row, from the field, as a hand comes back to the list. */
+  const rest = async (part: Locator) => {
+    await comment.hover()
+    await page.clock.runFor(1000)
+    await part.hover()
+    await page.clock.runFor(1000)
+  }
+
+  await rest(rows.first().locator('.markdown-suggestion-name'))
+  await expect(words).toHaveCount(0)
+
+  await rest(rows.nth(1).locator('.markdown-suggestion-name'))
+  await expect(words).toHaveText(LONG.slice(LONG.lastIndexOf('/') + 1))
+
+  await rest(rows.nth(2).locator('.markdown-suggestion-detail'))
+  await expect(words).toHaveText(LINE.trim())
+})

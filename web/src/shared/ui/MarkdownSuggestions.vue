@@ -13,7 +13,8 @@
  * dialog in the document, so the dialog still owns it.
  *
  * Focus stays in the field, which names the active row and keeps the keys; this
- * only draws and answers a pointer.
+ * only draws and answers a pointer. A name, title or line the row cuts short shows
+ * whole under the pointer, as other cut text does.
  */
 import { computed, ref, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,6 +22,7 @@ import { useI18n } from 'vue-i18n'
 import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
 
 import type { EditorSuggestion, SuggestionKind } from '@/shared/ui/MarkdownEditor.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   active: number
@@ -125,10 +127,19 @@ defineExpose({
         @mousemove="emit('point', index)"
         @click="emit('choose', index)"
       >
-        <span class="markdown-suggestion-name">{{ row.name }}</span>
-        <span class="markdown-suggestion-title">{{ row.title }}</span>
+        <span
+          v-tooltip.clipped="row.name"
+          class="markdown-suggestion-name"
+          >{{ row.name }}</span
+        >
+        <span
+          v-tooltip.clipped="row.title"
+          class="markdown-suggestion-title"
+          >{{ row.title }}</span
+        >
         <span
           v-if="row.detail"
+          v-tooltip.clipped="row.detail"
           class="markdown-suggestion-detail"
           >{{ row.detail }}</span
         >
