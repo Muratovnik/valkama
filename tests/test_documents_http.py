@@ -495,6 +495,14 @@ class SearchTests(DocumentRoutesHarness):
         _, body = self.search("page-")
         self.assertEqual(documents.MAX_PROJECT_HITS, len(body["documents"]))
 
+    def test_a_name_is_not_lost_to_the_lines_found_before_it(self) -> None:
+        for number in range(documents.MAX_DOC_HITS + 5):
+            write(self.workspace / "aa" / f"page-{number:02}.md", b"# page\n\nzeta\n")
+        write(self.workspace / "zz" / "zeta.md", b"# notes\n")
+        _, body = self.search("zeta")
+        self.assertEqual({"path": "zz/zeta.md", "line": 0, "text": ""}, body["documents"][0])
+        self.assertEqual(documents.MAX_PROJECT_HITS, len(body["documents"]))
+
     @unittest.skipUnless(os.name == "nt", "a junction is a Windows reparse point")
     def test_a_file_behind_a_junction_out_of_the_root_is_not_offered(self) -> None:
         link = self.workspace / "escape"

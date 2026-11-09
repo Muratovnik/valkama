@@ -461,7 +461,8 @@ def search_documents(
     needle = query.strip().lower()
     if not needle:
         return []
-    hits: list[dict] = []
+    named: list[dict] = []
+    lined: list[dict] = []
     for root in roots if roots is not None else doc_roots():
         if not os.path.isdir(root):
             continue
@@ -469,9 +470,15 @@ def search_documents(
             path = os.path.join(root, relative)
             if by_path and needle in relative.lower():
                 if os.path.isfile(path):
-                    hits.append({"path": relative, "root": root, "line": 0, "text": ""})
-                if len(hits) >= MAX_DOC_HITS:
-                    return _named_first(hits)
+                    named.append({"path": relative, "root": root, "line": 0, "text": ""})
+                if len(named) >= MAX_DOC_HITS:
+                    return named
+                continue
+            # Once the lines fill the answer, only a name can still take a place in it,
+            # and a name costs no read.
+            if len(lined) >= MAX_DOC_HITS:
+                if not by_path:
+                    return lined
                 continue
             try:
                 if os.path.getsize(path) > MAX_DOC_BYTES:
@@ -482,19 +489,11 @@ def search_documents(
                 continue
             for number, line in enumerate(lines, start=1):
                 if needle in line.lower():
-                    hits.append(
+                    lined.append(
                         {"path": relative, "root": root, "line": number, "text": line.strip()[:240]}
                     )
                     break  # one hit per document keeps the list readable
-            if len(hits) >= MAX_DOC_HITS:
-                return _named_first(hits)
-    return _named_first(hits)
-
-
-def _named_first(hits: list[dict]) -> list[dict]:
-    """Documents named by their path ahead of those found by a line, each in the order found."""
-
-    return sorted(hits, key=lambda hit: hit["line"] != 0)
+    return (named + lined)[:MAX_DOC_HITS]
 
 
 def _documents_in(root: str) -> list[str]:
