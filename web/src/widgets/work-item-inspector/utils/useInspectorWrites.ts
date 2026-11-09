@@ -20,9 +20,10 @@ import {
   transitionWorkItem,
   updateWorkItemFacts,
 } from '@/shared/api/planningApi.ts'
-import type { WorkItem } from '@/shared/api/planningModel.ts'
+import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 
 /** A move between states, by the key the server takes and the name a reader knows. */
 export interface StateMove {
@@ -62,10 +63,12 @@ export function useInspectorWrites(options: {
   failureText: (error: unknown) => string
   load: () => Promise<void>
   reference: () => string
-  stateName: (stateKey: string) => string
+  /** The space's workflow, which names a state a move goes to. */
+  workflow: () => PlanningWorkflow | null | undefined
   writable: () => boolean
 }) {
   const { t } = useI18n()
+  const nameOf = useStateName()
   const { busy } = options
   const error = ref('')
   const notice = ref<RefusalNotice | null>(null)
@@ -142,7 +145,8 @@ export function useInspectorWrites(options: {
   function moveTo(stateKey: string) {
     if (!stateKey) return
     const id = options.reference()
-    const state = options.stateName(stateKey)
+    const target = options.workflow()?.states.find((entry) => entry.key === stateKey)
+    const state = target ? nameOf(target) : stateKey
     void write(() => transitionWorkItem({ id, state: stateKey }), {
       title: t('workItem.refusal.transition', { state }),
       move: { key: stateKey, name: state },

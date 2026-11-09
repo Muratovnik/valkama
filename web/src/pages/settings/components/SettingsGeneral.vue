@@ -9,6 +9,8 @@ import SettingsKindColors from '@/pages/settings/components/SettingsKindColors.v
 import SettingsOpening from '@/pages/settings/components/SettingsOpening.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 
+import { STATE_NAMINGS } from '@/shared/lib/stateNames.ts'
+import type { StateNaming } from '@/shared/lib/stateNames.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
@@ -23,6 +25,14 @@ const languageOptions = computed<ChoiceOption[]>(() => [
   { value: 'ru', label: t('language.ru'), icon: 'language' },
   { value: 'en', label: t('language.en'), icon: 'language' },
 ])
+
+const stateNamingOptions = computed<ChoiceOption[]>(() =>
+  STATE_NAMINGS.map((value) => ({ value, label: t(`settings.stateNames.${value}`) })),
+)
+
+function chooseStateNaming(value: string) {
+  settings.value.stateNames = value as StateNaming
+}
 
 function emitLocale(value: string) {
   emit('locale', value === 'ru' ? 'ru' : 'en')
@@ -51,6 +61,19 @@ function emitLocale(value: string) {
             :options="languageOptions"
             :label="t('language.label')"
             @update:model-value="emitLocale"
+          />
+        </SettingsRow>
+        <SettingsRow
+          :label="t('settings.stateNames.label')"
+          :hint="t('settings.stateNames.hint')"
+        >
+          <SelectionControl
+            class="settings-general-control"
+            mode="combobox"
+            :model-value="settings.stateNames"
+            :options="stateNamingOptions"
+            :label="t('settings.stateNames.label')"
+            @update:model-value="chooseStateNaming"
           />
         </SettingsRow>
         <SettingsRow

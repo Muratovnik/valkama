@@ -100,7 +100,7 @@ const staged = useStagedRows<WorkItemBrief>({
   columns: [
     { font: '--font-line', word: (item) => item.reference },
     { font: '--font-line', word: (item) => item.title },
-    { font: '--font-field-label', word: (item) => item.state.name },
+    { font: '--font-field-label', word: (item) => facetWord(item, 'state') },
     { font: '--font-detail', word: (item) => facetWord(item, 'priority') },
     { font: '--font-detail', word: holderOf },
     { font: '--font-detail', word: (item) => facetWord(item, 'steps') },

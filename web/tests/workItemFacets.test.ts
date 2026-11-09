@@ -138,7 +138,8 @@ describe('state', () => {
     const dev = item({ ready: false }, 'dev')
     assert.deepEqual(printedOn('state', dev), ['list', 'graph', 'card', 'finder'])
     const mark = only(facetMarks('state', 'list', dev))
-    assert.deepEqual(mark.text, { literal: 'Dev' })
+    // The state itself, which the screen names in the reader's language or as written.
+    assert.deepEqual(mark.text, { state: dev.state })
     assert.equal(semanticStatePresentation(mark.tone).tone, 'info')
     // The card's state is its transition menu, so a click on it is not a filter.
     assert.equal(mark.filter, null)

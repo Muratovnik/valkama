@@ -8,6 +8,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -24,6 +25,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ changed: []; close: []; open: [reference: string] }>()
 const { t } = useI18n()
+const stateName = useStateName()
 const kind = ref(props.initialKind)
 const direction = ref(props.initialDirection)
 const mode = ref('existing')
@@ -256,7 +258,7 @@ function close() {
                 >{{ candidate.reference }} · <span v-slash-breaks="candidate.title"
               /></span>
               <span class="result-meta"
-                >{{ candidate.state.name
+                >{{ stateName(candidate.state)
                 }}<template v-if="candidate.claim_ref">
                   · {{ holderName(candidate.claim_ref) }}</template
                 ></span

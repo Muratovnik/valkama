@@ -49,7 +49,7 @@ describe('the board grouped by epic', () => {
     ])
     expect(lanes[0].get('.lane-reference').text()).toBe('MAIN-1')
     expect(lanes[0].get('.lane-counts').text()).toBe('3 open · 0 closed')
-    expect(lanes[0].get('.lane-state').text()).toBe('Dev')
+    expect(lanes[0].get('.lane-state').text()).toBe('In progress')
     expect(lanes[1].get('.lane-counts').text()).toBe('0 open · 1 closed')
     // The epic is the lane, never a tile in it.
     expect(wrapper.find('[data-reference="MAIN-1"]').exists()).toBe(false)

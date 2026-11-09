@@ -21,6 +21,7 @@ import {
 import { NATIVE_TITLES, scanNativeTitles } from './ui-system/native-titles.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
+import { scanStateNames, STATE_NAME_READS } from './ui-system/state-names.mjs'
 import {
   FILL_BUDGET,
   scanMeaningFills,
@@ -43,6 +44,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const fills = product ? FILL_BUDGET : new Map()
   const titles = product ? UNBROKEN_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
+  const stateReads = product ? STATE_NAME_READS : new Map()
   return [
     ...scanUiSources(sources),
     ...scanSemanticStateOwnership(sources),
@@ -54,6 +56,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanTrimmedWords(sources),
     ...scanTitleBreaks(sources, titles),
     ...scanNativeTitles(sources, hints),
+    ...scanStateNames(sources, stateReads),
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),

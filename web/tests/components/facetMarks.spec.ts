@@ -157,7 +157,7 @@ describe('FacetMarks', () => {
     })
     const state = wrapper.get('.semantic-state')
     expect(state.attributes('data-tone')).toBe('info')
-    expect(state.text()).toBe('Dev')
+    expect(state.text()).toBe('In progress')
   })
 
   it('is text, not buttons, unless the host lets it filter', () => {

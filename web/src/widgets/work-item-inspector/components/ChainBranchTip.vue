@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
@@ -23,6 +24,8 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const stateName = useStateName()
+const state = computed(() => stateName(props.member.state))
 
 /** Who holds the task, then where it stands in its lane. */
 const meta = computed(() => {
@@ -42,7 +45,7 @@ const meta = computed(() => {
       <SemanticState
         dimension="work-item-chain-group"
         :state="group"
-        :label="member.state.name"
+        :label="state"
       />
     </span>
     <span

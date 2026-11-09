@@ -49,11 +49,11 @@ describe('the preview card', () => {
     }
   })
 
-  test('always says the state, in the workflow’s word', () => {
+  test('always says the state, which the screen names', () => {
     for (const state of ['backlog', 'todo', 'dev', 'done'] as const) {
       const [mark] = facetMarks('state', 'preview', item({}, state))
       assert.equal(mark?.form, 'glyph-word', state)
-      assert.deepEqual(mark?.text, { literal: item({}, state).state.name })
+      assert.deepEqual(mark?.text, { state: item({}, state).state })
     }
   })
 

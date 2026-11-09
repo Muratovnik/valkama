@@ -347,15 +347,15 @@ describe('the graph scoped to one chain', () => {
     const places = () => graph.findAll(key).map((entry) => entry.text())
     // Every open member is in the one queued state, so the key says its name,
     // as the board's column and the card's chain section do.
-    expect(named()).toEqual(['Todo'])
+    expect(named()).toEqual(['Queued'])
     // «Done» is not drawn, so it is not named; its place is kept, unseen, so
     // throwing the switch moves no word of the key.
-    expect(places()).toEqual(['Done', 'Todo'])
+    expect(places()).toEqual(['Done', 'Queued'])
     expect(graph.get(`${key}.held`).text()).toBe('Done')
     await graph.get('[role="switch"]').trigger('click')
     await drawn(graph)
-    expect(named()).toEqual(['Done', 'Todo'])
-    expect(places()).toEqual(['Done', 'Todo'])
+    expect(named()).toEqual(['Done', 'Queued'])
+    expect(places()).toEqual(['Done', 'Queued'])
     // The key lies on the field. The bar's options hold the same key for a
     // narrow workspace only, where the field's corner gives way to the count;
     // which one shows is the container's call (the browser spec at 390).
@@ -404,7 +404,7 @@ describe('the graph scoped to one chain', () => {
     })
     await drawn(graph)
     const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
-    expect(named.map((entry) => entry.text())).toEqual(['Review', 'Dev', 'To do'])
+    expect(named.map((entry) => entry.text())).toEqual(['Review', 'In progress', 'To do'])
   })
 
   it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {
@@ -419,7 +419,7 @@ describe('the graph scoped to one chain', () => {
     expect(card?.get('.flow-node-overview').text()).toBe('MAIN-3')
     expect(card?.find('.flow-node-title').exists()).toBe(false)
     // Its accessible name still says everything the card does.
-    expect(card?.get('button').attributes('aria-label')).toBe('MAIN-3 item 3 · Todo')
+    expect(card?.get('button').attributes('aria-label')).toBe('MAIN-3 item 3 · Queued')
     viewport.value = { x: 0, y: 0, zoom: 1 }
     await flushPromises()
     expect(graph.find('.flow-node-overview').exists()).toBe(false)

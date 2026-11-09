@@ -88,7 +88,7 @@ describe('WorkItemPreview', () => {
     const wrapper = card({ item: CLAIMED })
     expect(wrapper.get('.preview-reference').text()).toBe('MAIN-1394')
     expect(wrapper.get('[data-facet="kind"]').text()).toBe('Bug')
-    expect(wrapper.get('.preview-head').text()).toContain('Dev')
+    expect(wrapper.get('.preview-head').text()).toContain('In progress')
     expect(wrapper.get('.preview-title').text()).toBe('Show a short card on hover')
     expect(wrapper.get('[data-facet="holder"]').text()).toBe('claude · f5f838f4-74fc')
     expect(wrapper.get('[data-facet="steps"]').text()).toBe('1/5')
@@ -184,7 +184,7 @@ describe('WorkItemPreview', () => {
 describe('what a screen reader hears', () => {
   it('reads the card as sentences, in the order it is drawn', () => {
     expect(spoken({ reference: 'MAIN-1394', item: CLAIMED })).toBe(
-      `Bug. Dev. Show a short card on hover. Held by claude · f5f838f4-74fc. Steps: 1 of 5. Updated ${day(UPDATED, 'en')}.`,
+      `Bug. In progress. Show a short card on hover. Held by claude · f5f838f4-74fc. Steps: 1 of 5. Updated ${day(UPDATED, 'en')}.`,
     )
   })
 

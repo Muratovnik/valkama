@@ -20,6 +20,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **State names read in the interface's language.** A state of the workflow a new space is
+  given that still has its own name — Backlog, Todo, Dev, Review, Done, Blocked, Cancelled —
+  is shown in the words of its category, «В работе» for Dev in Russian, on the board, the
+  tiles, the card, the chain, the graph, the finder and the navigation. A renamed state, or
+  any other, is shown as the workflow writes it. Settings › State names: «As in the
+  workflow» shows every state as written. Agents and the API still read the keys and names.
+
 - **The card's labels change in the new-task dialog's picker.** «+», or a press on the
   labels row beside the chips, opens the picker with the item's labels checked: choosing one
   attaches it, choosing a checked one takes it off, and typed words add a new one. A label

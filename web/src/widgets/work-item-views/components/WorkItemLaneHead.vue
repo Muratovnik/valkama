@@ -18,6 +18,7 @@ import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -54,19 +55,18 @@ const toggleLabel = computed(() =>
 )
 const away = computed(() => props.left !== '' || props.right !== '')
 const stateShown = computed(() => props.lane.epic && printsFacet('state', 'lane', props.lane.epic))
-const openLabel = computed(() =>
-  t('workItem.lanes.openEpic', { reference: props.lane.epic?.reference ?? '' }),
-)
-const chainLabel = computed(() =>
-  t('workItem.lanes.showChain', { reference: props.lane.epic?.reference ?? '' }),
-)
+const reference = computed(() => props.lane.epic?.reference ?? '')
+const openLabel = computed(() => t('workItem.lanes.openEpic', { reference: reference.value }))
+const chainLabel = computed(() => t('workItem.lanes.showChain', { reference: reference.value }))
 
 const head = ref<HTMLElement | null>(null)
 const toggle = ref<HTMLElement | null>(null)
 const tail = ref<HTMLElement | null>(null)
 const actions = ref<HTMLElement | null>(null)
 const parts = { actions, head, tail, toggle }
-const named = () => props.lane.epic?.state.name
+const stateName = useStateName()
+/** The epic's state as the owner has states named, which the line's room is measured with. */
+const named = () => (props.lane.epic ? stateName(props.lane.epic.state) : '')
 const words = () => [props.left, props.right, counts.value, stateShown.value, title.value, named()]
 const { layout } = useLaneActionsPlace(parts, () => props.boardWidth, words)
 const crowded = computed(() => layout.value.place === 'beside')
@@ -116,7 +116,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       class="lane-state"
       dimension="work-item-state"
       :state="props.lane.epic.state.category"
-      :label="props.lane.epic.state.name"
+      :label="named()"
     />
     <span
       ref="tail"
@@ -128,7 +128,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         dimension="work-item-state"
         :class="{ 'visually-hidden': !stateShown }"
         :state="props.lane.epic.state.category"
-        :label="props.lane.epic.state.name"
+        :label="named()"
       />
       <span class="lane-counts">{{ counts }}</span>
       <span

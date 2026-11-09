@@ -23,6 +23,7 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -64,6 +65,7 @@ const {
 }>()
 const emit = defineEmits<{ blur: [id: string]; focus: [id: string] }>()
 const { t } = useI18n()
+const stateName = useStateName()
 
 type WorkItemNodeMarkerState = Extract<
   SemanticStatePair,
@@ -117,7 +119,7 @@ const liveWord = useLiveWord()
 const accessibleName = computed(() =>
   [
     `${node.reference} ${node.title}`,
-    node.state.name,
+    stateName(node.state),
     ...(readinessLabel.value ? [readinessLabel.value] : []),
     ...(holder.value ? [`${ownerLabel.value} ${holderName(holder.value)}`] : []),
     ...(live ? [liveWord(live)] : []),

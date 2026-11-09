@@ -69,10 +69,13 @@ function stepsOf(item: WorkItemBrief): { done: number; total: number } {
   }
 }
 
-function sortValue(item: WorkItemBrief, key: SortKey): number | string {
+/** How a row's state reads, which is what the state column sorts by. */
+type StateName = (state: WorkItemBrief['state']) => string
+
+function sortValue(item: WorkItemBrief, key: SortKey, stateName: StateName): number | string {
   if (key === 'reference') return item.number
   if (key === 'title') return item.title.toLocaleLowerCase()
-  if (key === 'state') return item.state.name.toLocaleLowerCase()
+  if (key === 'state') return stateName(item.state).toLocaleLowerCase()
   if (key === 'priority') return urgency.get(item.priority) ?? 0
   if (key === 'claim') return holderRef(item).toLocaleLowerCase()
   if (key === 'checklist') {
@@ -87,11 +90,12 @@ export function sortedRows(
   items: readonly WorkItemBrief[],
   key: SortKey,
   descending: boolean,
+  stateName: StateName,
 ): WorkItemBrief[] {
   const direction = descending ? -1 : 1
   return [...items].sort((left, right) => {
-    const a = sortValue(left, key)
-    const b = sortValue(right, key)
+    const a = sortValue(left, key, stateName)
+    const b = sortValue(right, key, stateName)
     if (a === b) return left.number - right.number
     return (a > b ? 1 : -1) * direction
   })

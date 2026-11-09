@@ -37,6 +37,16 @@ export const workItemFacetMessages = {
       blocked: 'Blocked',
       cancelled: 'Cancelled',
     },
+    // The standard workflow's states by key, in the words of their categories.
+    stateName: {
+      backlog: 'Backlog',
+      todo: 'Queued',
+      dev: 'In progress',
+      review: 'Review',
+      done: 'Done',
+      blocked: 'Blocked',
+      cancelled: 'Cancelled',
+    },
   },
   ru: {
     facet: {
@@ -64,6 +74,15 @@ export const workItemFacetMessages = {
       active: 'В работе',
       review: 'Проверка',
       completed: 'Выполнено',
+      blocked: 'Заблокировано',
+      cancelled: 'Отменено',
+    },
+    stateName: {
+      backlog: 'Бэклог',
+      todo: 'К работе',
+      dev: 'В работе',
+      review: 'Проверка',
+      done: 'Выполнено',
       blocked: 'Заблокировано',
       cancelled: 'Отменено',
     },

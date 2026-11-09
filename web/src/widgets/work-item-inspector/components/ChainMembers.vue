@@ -24,6 +24,7 @@ import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.t
 import type { ChainGroups, GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { MembersView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
+import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { readinessMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
 
@@ -33,6 +34,7 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -47,6 +49,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ open: [reference: string] }>()
 const { t } = useI18n()
+const stateName = useStateName()
 
 const LIMIT = 8
 
@@ -162,7 +165,7 @@ function holderTitle(group: ChainGroup, member: ChainMember): string | undefined
  * the whole group is in. A closed one says how it ended on the same terms.
  */
 function stateWord(group: ChainGroup, member: ChainMember): string | null {
-  return holder(group, member) ? null : rowStateName(props.labels[group], member)
+  return holder(group, member) ? null : rowStateName(props.labels[group], member, stateName)
 }
 /** The readiness mark a member prints: the registry's rule, given what the member waits on. */
 function readinessFor(member: ChainMember): FacetMark[] {
@@ -171,9 +174,10 @@ function readinessFor(member: ChainMember): FacetMark[] {
   })
 }
 
-/** A mark's word, as the registry says it: a literal, or a message with its parameters. */
+const words = useMarkWords()
+/** A mark's word, as the registry says it. */
 function markWord(mark: FacetMark): string {
-  return 'literal' in mark.text ? mark.text.literal : t(mark.text.key, mark.text.params ?? {})
+  return words.say(mark.text)
 }
 defineExpose({ restoreView, reveal, view })
 </script>

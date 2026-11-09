@@ -39,6 +39,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import { byState } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -113,8 +114,10 @@ const root = ref<HTMLElement | null>(null)
 const flatRoot = computed(() => (grouped.value ? null : root.value))
 const { columnWidth } = useColumnFit(flatRoot, flatRoot, () => columns.value.length)
 
+const nameOf = useStateName()
 function stateName(key: string): string {
-  return props.workflow.states.find((state) => state.key === key)?.name ?? key
+  const state = props.workflow.states.find((entry) => entry.key === key)
+  return state ? nameOf(state) : key
 }
 
 function announce(text: string) {

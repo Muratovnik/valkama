@@ -47,7 +47,7 @@ describe('a card with live work', () => {
     expect(wrapper.get('.graph-live-word').text()).toBe('working')
     expect(wrapper.get('.graph-live .work-dots').classes()).not.toContain('still')
     expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
-      'MAIN-7 Item 7 · Dev · Assigned to agent-1 · working',
+      'MAIN-7 Item 7 · In progress · Assigned to agent-1 · working',
     )
   })
 
@@ -63,7 +63,7 @@ describe('a card with live work', () => {
     expect(wrapper.get('.graph-live-word').text()).toBe('у сессии')
     expect(wrapper.get('.graph-live .work-dots').classes()).toContain('still')
     expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
-      'MAIN-7 Item 7 · Dev · Закреплено за agent-1 · у сессии',
+      'MAIN-7 Item 7 · В работе · Закреплено за agent-1 · у сессии',
     )
   })
 
@@ -96,7 +96,7 @@ describe('a card with live work', () => {
     expect(wrapper.find('.graph-live').exists()).toBe(false)
     expect(wrapper.find('.work-dots').exists()).toBe(false)
     expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
-      'MAIN-7 Item 7 · Dev · Assigned to agent-1',
+      'MAIN-7 Item 7 · In progress · Assigned to agent-1',
     )
   })
 

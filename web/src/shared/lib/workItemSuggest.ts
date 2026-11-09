@@ -1,4 +1,5 @@
 import { activePlanningWorkItems, searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
 /**
@@ -9,9 +10,11 @@ import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
  * `space` is the space's `planning_space_id`. `omit` leaves one item out — the
  * card being written on, since a text that links to its own item says nothing;
  * a task that does not exist yet has nothing to leave out. With nothing typed
- * yet it offers what is being worked on, so a `#` alone already has rows to take.
+ * yet it offers what is being worked on, so a `#` alone already has rows to take. Called
+ * where a component sets up, since a row names its state as the owner has states named.
  */
 export function workItemSuggest(space: () => string, omit: () => string | undefined = () => '') {
+  const stateName = useStateName()
   return async (query: string, signal: AbortSignal): Promise<EditorSuggestion[]> => {
     const found = query
       ? await searchPlanningWorkItems(query, space(), signal)
@@ -23,7 +26,7 @@ export function workItemSuggest(space: () => string, omit: () => string | undefi
         key: entry.work_item_id,
         reference: entry.reference,
         title: entry.title,
-        detail: entry.state.name,
+        detail: stateName(entry.state),
       }))
   }
 }

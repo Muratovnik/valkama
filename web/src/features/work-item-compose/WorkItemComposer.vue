@@ -37,6 +37,7 @@ import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -93,7 +94,8 @@ const facetChoices = useFacetChoices()
 const kindOptions = computed(() => facetChoices(KIND_CHOICES))
 const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
-const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic')))
+const stateName = useStateName()
+const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic'), stateName))
 const labelOptions = computed(() => labelChoices(props.items))
 /** The row an epic's title stands in, which needs more than a phone's half. */
 const holdsTitles = (row: readonly FacetId[]) => row.includes('parent')

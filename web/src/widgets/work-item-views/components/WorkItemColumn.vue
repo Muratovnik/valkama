@@ -16,7 +16,7 @@
  * tile moved from the keyboard past that end is drawn where it lands. The count
  * in the header is always the whole state's.
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { useIntersectionObserver } from '@vueuse/core'
 
@@ -28,6 +28,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
@@ -50,6 +51,9 @@ const emit = defineEmits<{
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
+
+const stateName = useStateName()
+const name = computed(() => stateName(props.state))
 
 /** Tiles drawn at first, and added each time the end of them comes near. */
 const PAGE = 30
@@ -84,9 +88,9 @@ function placed(move: BoardMove, landing: StackLanding) {
           aria-hidden="true"
           dimension="work-item-state"
           :state="props.state.category"
-          :label="props.state.name"
+          :label="name"
         />
-        <span class="visually-hidden">{{ props.state.name }}</span>
+        <span class="visually-hidden">{{ name }}</span>
       </h2>
       <span class="column-count">{{ props.items.length }}</span>
     </header>

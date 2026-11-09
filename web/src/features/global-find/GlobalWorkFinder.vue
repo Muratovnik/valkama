@@ -21,6 +21,7 @@ import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import { projectTitle } from '@/shared/lib/projectTitles.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -38,6 +39,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ close: []; select: [target: PlanningTarget] }>()
 const { t } = useI18n()
+const stateName = useStateName()
 const query = ref('')
 const retry = ref(0)
 const loading = ref(false)
@@ -149,7 +151,7 @@ const choices = computed(() =>
       subject,
       // With its marks the state is drawn, so the words after it are the rest.
       place: [project, ...readonly].join(' · '),
-      detail: [project, entry.item.state.name, ...readonly].join(' · '),
+      detail: [project, stateName(entry.item.state), ...readonly].join(' · '),
     }
   }),
 )

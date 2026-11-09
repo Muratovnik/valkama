@@ -73,7 +73,7 @@ describe('a graph node', () => {
     expect(waiting.get('.flow-node-card').attributes('aria-label')).toContain('Waiting on OTH-7')
 
     const plain = card({ node: node('dev') })
-    expect(plain.get('.flow-node-state .semantic-state').text()).toBe('Dev')
+    expect(plain.get('.flow-node-state .semantic-state').text()).toBe('In progress')
   })
 
   it('reads its head as every surface does — kind, reference, high or urgent — as glyphs that do not filter', () => {

@@ -46,6 +46,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
@@ -76,6 +77,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const stateName = useStateName()
 const prefix = useId()
 const { folded, toggle } = useLaneCollapse(() => props.spaceId)
 
@@ -151,7 +153,7 @@ function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {
 /** «2 в «Review», 1 в «Blocked»». */
 function heldWords(held: HeldIn<WorkflowState>[]): string {
   return held
-    .map(({ count, state }) => t('workItem.lanes.inState', { count, state: state.name }))
+    .map(({ count, state }) => t('workItem.lanes.inState', { count, state: stateName(state) }))
     .join(', ')
 }
 
@@ -226,7 +228,7 @@ function laneGroup(lane: BoardLane): string {
           <SemanticState
             dimension="work-item-state"
             :state="state.category"
-            :label="state.name"
+            :label="stateName(state)"
           />
           <span class="lanes-state-count">{{ stateCount(state) }}</span>
         </span>

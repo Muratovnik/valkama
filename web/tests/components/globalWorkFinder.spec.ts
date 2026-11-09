@@ -352,7 +352,7 @@ describe('global task finder', () => {
     const wrapper = finder()
     await search(wrapper)
     expect(wrapper.find('[role="option"] [data-facet]').exists()).toBe(false)
-    expect(wrapper.get('.command-detail').text()).toBe('attached-project · Dev · Read only')
+    expect(wrapper.get('.command-detail').text()).toBe('attached-project · In progress · Read only')
   })
 
   it('names a result and a skipped source by the project title, and falls back to the id', async () => {

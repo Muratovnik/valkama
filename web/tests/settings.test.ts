@@ -100,6 +100,7 @@ test('settings stored with the notify fields of older builds read cleanly and lo
     'executionTab',
     'kindColors',
     'sessions',
+    'stateNames',
   ])
   assert.equal(merged.sessions.claude.fallback, 'terminal')
 })
@@ -112,6 +113,13 @@ test('anything else stored becomes the defaults rather than a broken structure',
     sessions: { claude: { fallback: 'codex-app', always: 'claude', command: 3 } },
   })
   assert.deepEqual(odd.sessions.claude, { fallback: 'vscode', ...rule })
+})
+
+test('state names read translated until the owner chooses the workflow’s own', () => {
+  assert.equal(DEFAULT_SETTINGS.stateNames, 'translated')
+  assert.equal(mergeSettings({}).stateNames, 'translated')
+  assert.equal(mergeSettings({ stateNames: 'workflow' }).stateNames, 'workflow')
+  assert.equal(mergeSettings({ stateNames: 'Workflow' }).stateNames, 'translated')
 })
 
 test('a family is offered only the places that can hold its sessions', () => {
