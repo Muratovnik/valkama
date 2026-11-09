@@ -43,6 +43,7 @@ import { afterRelease, endDropClickWait } from '@/widgets/work-item-views/utils/
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** Where a move left the tile, for the sentence that announces it. */
@@ -58,6 +59,8 @@ const props = defineProps<{
   /** Stacks a tile may move between share this name. */
   group: string
   items: WorkItemBrief[]
+  /** What an agent's session is doing on each item with live work, by item id. */
+  live: Readonly<Record<string, LiveWork>>
   state: WorkflowState
   /** Each item's open blocker, by item id. */
   waiting: Map<string, string>
@@ -345,6 +348,7 @@ defineExpose({ focusAt, walkFrom })
       <WorkItemTile
         :item="item"
         :waiting-on="waitingOn(item)"
+        :live="props.live[item.work_item_id] ?? null"
         :filter="props.filter"
         :tab-stop="tabStop(item)"
         :key-shortcuts="keyHint()"

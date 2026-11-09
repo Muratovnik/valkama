@@ -128,8 +128,47 @@ async function prepare(page: Page, locale: 'ru' | 'en', width: number) {
   await page.setViewportSize({ width, height: 900 })
 }
 
-async function openView(page: Page, view: 'kanban' | 'list' | 'graph') {
-  await installBackend(page, { space: withMarked })
+/**
+ * Tiles held by the client of a session at work on the item, at work on other items and
+ * waiting for a person, and two whose claim no session proved: one nobody's session is at
+ * and one whose session went quiet.
+ */
+const EXECUTORS = [
+  [490, 'claude (session 1a2b3c4d-5e6f-4a1b-9c2d-0123456789ab)', 'live', { state: 'working' }],
+  [491, 'claude (session 2b3c4d5e-6f70-4a1b-9c2d-0123456789ab)', 'live', { state: 'held' }],
+  [492, 'codex (session 019a2b3c-4d5e-7f00-8000-0123456789ab)', 'live', { state: 'waiting' }],
+  [493, 'claude', 'unconfirmed', null],
+  [494, 'claude', 'unconfirmed', { state: 'quiet', quiet_since: '2026-11-01T10:00:00Z' }],
+] as const
+
+const withExecutors = (model: Record<string, unknown>) => {
+  const items = EXECUTORS.map(([number, holder, claim]) => ({
+    ...MARKED,
+    work_item_id: `00000000-0000-4000-8000-000000000${number}`,
+    reference: `MAIN-${number}`,
+    number,
+    claim_ref: holder,
+    claim_state: claim,
+    checklist: [{ ...MARKED.checklist[0], id: `00000000-0000-4000-8000-000000001${number}` }],
+  }))
+  const live = Object.fromEntries(
+    EXECUTORS.flatMap((executor) =>
+      executor[3] ? [[`00000000-0000-4000-8000-000000000${executor[0]}`, executor[3]]] : [],
+    ),
+  )
+  return {
+    ...model,
+    work_items: [...(model.work_items as unknown[]), ...items],
+    live_work: { ...(model.live_work as object | undefined), ...live },
+  }
+}
+
+async function openView(
+  page: Page,
+  view: 'kanban' | 'list' | 'graph',
+  space: typeof withMarked = withMarked,
+) {
+  await installBackend(page, { space })
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
@@ -192,6 +231,45 @@ for (const locale of ['ru', 'en'] as const) {
       console.info(`tile ${at}`, JSON.stringify(offsets))
       // The kind, the priority and the blocker on the first lines; the holder and the steps.
       expectOnTheMiddle(offsets, 5)
+    })
+
+    test(`a tile draws its executor as the client and its session, on the middle of its words, ${at}`, async ({
+      page,
+    }) => {
+      await prepare(page, locale, width)
+      await openView(page, 'kanban', withExecutors)
+      const tile = (number: number) =>
+        page.locator('.work-item-tile').filter({
+          has: page.locator('.tile-reference').getByText(`MAIN-${number}`, { exact: true }),
+        })
+      const holder = (number: number) => tile(number).locator('[data-facet="holder"]')
+      for (const number of [490, 491, 492, 493, 494]) await expect(tile(number)).toBeVisible()
+      // No tile draws a person for a holder: a client's sign, or nothing.
+      await expect(page.locator('.work-item-tile svg.lucide-user')).toHaveCount(0)
+      await expect(holder(490)).toHaveAttribute('data-session', 'working')
+      await expect(holder(490).locator('svg.facet-glyph')).toHaveClass(/lucide-asterisk/u)
+      await expect(holder(490).locator('.facet-session.work-dots:not(.still)')).toHaveCount(1)
+      await expect(holder(491)).toHaveAttribute('data-session', 'held')
+      await expect(holder(491).locator('.facet-session.work-dots.still')).toHaveCount(1)
+      await expect(holder(492)).toHaveAttribute('data-session', 'waiting')
+      await expect(holder(492).locator('svg.facet-glyph')).toHaveClass(/lucide-codex/u)
+      await expect(holder(492).locator('svg.facet-session')).toHaveCount(1)
+      // The hover and a screen reader say who and what the session is doing.
+      await expect(holder(492).locator('.facet-word-hidden')).toHaveText(
+        locale === 'ru'
+          ? 'Держит codex · 019a2b3c-4d5e — ждёт человека'
+          : 'Held by codex · 019a2b3c-4d5e — waiting for a person',
+      )
+      // A claim no session proved, with no session at work on it, is no executor.
+      await expect(holder(493)).toHaveCount(0)
+      await expect(holder(494)).toHaveCount(0)
+      const words = '.tile-facts .facet-word:not(.facet-word-hidden)'
+      const offsets = await signOffsets(tile(490).or(tile(491)).or(tile(492)), [
+        ['.tile-facts [data-facet="holder"] .facet-glyph', words],
+        ['.tile-facts .facet-session', words],
+      ])
+      console.info(`executor ${at}`, JSON.stringify(offsets))
+      expectOnTheMiddle(offsets, 6)
     })
 
     test(`a list row's signs and state dot stand on the middle of its words, ${at}`, async ({

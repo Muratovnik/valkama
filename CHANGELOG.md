@@ -20,6 +20,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **A tile shows who is working the item, not just that someone holds it.** In place of the
+  person icon a tile draws the sign of the client whose session holds the item — Claude,
+  Codex, or a client for any other — and after it what that session is doing, as the side
+  panel does: running dots while it works on the item, still dots while it works on others, a
+  ring while it waits for a person. A stale claim keeps its sign in the warning colour. A claim
+  no session proved, with no session at work on the item, draws nothing on the tile; the list
+  and the card still name its holder.
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on
   one line in a card's drawer, and one quiet line under the label saying the way chosen, what

@@ -209,6 +209,25 @@
   vertical-align: calc(var(--size-text-middle) - 7px);
 }
 
+/* What an executor's session is doing, after its client's glyph in the same line and on
+   the same middle, in the hue of live work as the side panel draws it. The ring is 10px
+   and stands by its foot, as the glyph does; the dots' box is 10px and stands by the
+   middle of its dots. */
+:is(.facet-glyph-box, .facet-mark.glyph-alone) > .facet-session {
+  margin-inline-start: var(--space-half);
+  color: var(--color-info);
+
+  &:not(.work-dots) {
+    display: inline;
+    vertical-align: calc(var(--size-text-middle) - 5px);
+  }
+
+  &.work-dots {
+    gap: var(--space-half);
+    vertical-align: calc(var(--size-text-middle) - 2.5px);
+  }
+}
+
 /* A head lines its marks and the number up by their baseline: the number is often set in
    another face (a mono reference on the graph and in the cards), and two lines of one
    height in two faces centred on each other stood their words a pixel apart. */

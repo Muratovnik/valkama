@@ -1024,11 +1024,20 @@ its glyph and says its words on hover. The title follows, at most three lines,
 then the labels on one line — as many whole ones as it holds, up to three, then
 «+N», which opens the card like the rest of the sheet — then the holder and the
 steps when there are any, the steps only while the item is open. The holder is
-its glyph alone, in the warning tone when the claim is stale; its words, «Держит
-claude · 5937aa01-1234» and «… — захват устарел», are its hover text and what a
-screen reader hears, and the hover card and the card say the name and the stale
-claim in full. Printed as a name and a «Захват устарел» beside it, the holder was
-the loudest line of a tile after the title and stood it 28px taller. Only the title takes the full ink and the row-title weight; a finished
+its executor: the glyph of the client whose session holds the item — Claude's,
+Codex's, a client's for any other — and after it what that session is doing, as
+the side panel draws it: three running dots while it works on the item, still dots
+while it works on others, a ring while it waits for a person. A stale claim keeps
+its client in the warning tone and draws no session. A claim no session proved, with
+no session at work on the item, draws nothing: a person's glyph there said only
+that a claim existed, on items nobody was working. The client is the holder's name,
+the channel the server says the session proved itself on, and the session's doing
+is the read model's `live_work`, so the tile reads nothing the board does not
+already carry. Its words, «Держит claude · 5937aa01-1234 — работает над ней», «… —
+ждёт человека» and «… — захват устарел», are its hover text and what a screen reader
+hears, and the hover card and the card say the name and the stale claim in full.
+Printed as a name and a «Захват устарел» beside it, the holder was the loudest line
+of a tile after the title and stood it 28px taller. Only the title takes the full ink and the row-title weight; a finished
 item's takes the muted ink, so a column of a thousand closed items does not stand
 level with the work still open. On a tile and a list row a label is its word, in
 the tertiary ink: a press filters, and its 28px pointer box reaches past the line

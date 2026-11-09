@@ -26,6 +26,7 @@ import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -34,6 +35,8 @@ const props = defineProps<{
   emptyLabel: string
   filter: WorkFilter
   items: WorkItemBrief[]
+  /** What an agent's session is doing on each item with live work, by item id. */
+  live: Readonly<Record<string, LiveWork>>
   state: WorkflowState
   waiting: Map<string, string>
   writable: boolean
@@ -98,6 +101,7 @@ function placed(move: BoardMove, landing: StackLanding) {
         :items="props.items"
         :limit="drawn"
         :waiting="props.waiting"
+        :live="props.live"
         :filter="props.filter"
         :hint-id="props.hintId"
         :writable="props.writable"

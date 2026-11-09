@@ -44,6 +44,7 @@ import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -54,6 +55,8 @@ const props = defineProps<{
   /** A queue or search filter is narrowing what the lanes draw. */
   filtered: boolean
   lanes: BoardLane[]
+  /** What an agent's session is doing on each item with live work, by item id. */
+  live: Readonly<Record<string, LiveWork>>
   /** Whose folded lanes these are: the planning space. */
   spaceId: string
   states: WorkflowState[]
@@ -271,6 +274,7 @@ function laneGroup(lane: BoardLane): string {
               :state="state"
               :items="inState(lane, state)"
               :waiting="props.waiting"
+              :live="props.live"
               :filter="props.filter"
               :hint-id="props.hintId"
               :landable="isLanding(lane)"

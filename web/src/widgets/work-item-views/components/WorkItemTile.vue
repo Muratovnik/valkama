@@ -10,10 +10,14 @@
  * room keeps its glyph. Below it the title, at most three lines with the whole of
  * it on hover; the labels on one line, up to three whole chips and «+N» for the
  * rest, which opens the card like the rest of the sheet; and, only when there is
- * something to say, a holder glyph and how far its steps are. The holder is a
- * glyph whose hover names who holds it, and says when the claim is stale, in the
- * stale tone: the name and «Захват устарел» as words were the longest things on
- * the sheet after its title, and the card and the hover card say both in full.
+ * something to say, its executor and how far its steps are. The executor is the
+ * glyph of the client that holds it, then what that client's session is doing, as
+ * the side panel says it: dots that run while it works on the item, held still
+ * while it works on others, a ring while it waits for a person. A stale claim's
+ * glyph takes the stale tone, and a claim no session stands behind draws nothing.
+ * The hover names who holds it and says the rest: the name and «Захват устарел» as
+ * words were the longest things on the sheet after its title, and the card and the
+ * hover card say both in full.
  *
  * Three tones rank what is on it, and only one thing leads: the title in the
  * full ink at the row-title weight; the holder and what stops the work in the
@@ -50,6 +54,7 @@ import type { FacetContext, FacetId } from '@/entities/work-item/utils/facets.ts
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -63,6 +68,8 @@ const props = withDefaults(
     hintId?: string
     /** The keys the open target answers to, when the tile can be moved. */
     keyShortcuts?: string
+    /** What an agent's session is doing on the item now, or nothing. */
+    live?: LiveWork | null
     /** The open target is its stack's Tab stop (0), or reached by the arrows (-1). */
     tabStop?: 0 | -1
     /** The reference of an open item this one waits on, or nothing. */
@@ -72,6 +79,7 @@ const props = withDefaults(
     filter: () => EMPTY_WORK_FILTER,
     hintId: undefined,
     keyShortcuts: undefined,
+    live: null,
     tabStop: 0,
     waitingOn: null,
   },
@@ -97,7 +105,7 @@ const FACTS: readonly FacetId[] = ['holder', 'steps']
 
 /** The runs are drawn here as plain elements: a tile holds three or four, a board hundreds. */
 const words = useMarkWords()
-const context = computed<FacetContext>(() => ({ waitingOn: props.waitingOn }))
+const context = computed<FacetContext>(() => ({ live: props.live, waitingOn: props.waitingOn }))
 const leadRun = computed(() => surfaceMarks('tile', props.item, context.value, LEAD))
 const exceptionRun = computed(() => surfaceMarks('tile', props.item, context.value, EXCEPTIONS))
 const factRun = computed(() => surfaceMarks('tile', props.item, context.value, FACTS))

@@ -54,10 +54,10 @@
   text-overflow: ellipsis;
 }
 
-/* Five components render this — the platform state panel while it loads, and on
-   the graph a card's live mark, a zoomed-out card, a frame's header and the
-   key — so it is a recipe that belongs to no one of them and stays here, as the
-   owner order in DESIGN.md has it.
+/* Several surfaces render this — the platform state panel while it loads, the side
+   panel's work rows, a tile's executor (`drawMarks`), and on the graph a card's live
+   mark, a zoomed-out card, a frame's header and the key — so it is a recipe that
+   belongs to no one of them and stays here, as the owner order in DESIGN.md has it.
 
    Three dots at a fixed size: a squashed pulse reads as a rendering fault
    rather than as a narrower one, so this is the one part of a presence block
