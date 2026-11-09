@@ -260,7 +260,6 @@ async function run(index: number) {
 }
 
 .open-panel-warning-mark {
-  flex: none;
   margin-block-start: var(--space-half);
   color: var(--color-warning);
 }

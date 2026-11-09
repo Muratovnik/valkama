@@ -82,7 +82,6 @@ withDefaults(
 }
 
 .empty-mark {
-  flex: 0 0 auto;
   color: var(--color-text-tertiary);
 }
 

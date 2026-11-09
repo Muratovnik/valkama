@@ -175,4 +175,16 @@
     width: 240px;
     height: 48px;
   }
+
+  .hints-row {
+    display: flex;
+    margin: 0;
+  }
+
+  .hints-cut {
+    width: 80px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

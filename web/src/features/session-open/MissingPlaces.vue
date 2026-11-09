@@ -57,7 +57,6 @@ const places = useMissingPlaces()
 }
 
 .missing-place-glyph {
-  flex: none;
   block-size: 1lh;
 }
 </style>

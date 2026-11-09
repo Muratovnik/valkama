@@ -166,7 +166,7 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
     ><template v-else-if="linkFor(node.reference)"
       ><a
         v-reference-preview="previewFor(node.reference)"
-        v-tooltip="hoverTitle(node.reference)"
+        v-tooltip.detail="hoverTitle(node.reference)"
         class="rich-reference"
         :class="{ identifier: isId(node), copies: linkFor(node.reference)?.copies }"
         :href="hrefOf(node.reference)"

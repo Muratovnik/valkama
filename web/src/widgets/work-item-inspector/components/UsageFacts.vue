@@ -25,7 +25,7 @@ withDefaults(
     <span
       v-for="fact in facts"
       :key="fact.key"
-      v-tooltip="fact.title"
+      v-tooltip.detail="fact.title"
       class="usage-fact"
       ><span
         v-if="fact.label"

@@ -199,7 +199,7 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   >
     <div class="nav-head">
       <button
-        v-tooltip:right="t('navigation.home')"
+        v-tooltip:right.detail="t('navigation.home')"
         class="app-brand"
         type="button"
         @click="emit('home')"
@@ -208,7 +208,11 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
           tone="chrome"
           :size="30"
         />
-        <span class="brand-name">{{ t('app.title') }}</span>
+        <span
+          v-tooltip.clipped="t('app.title')"
+          class="brand-name one-line"
+          >{{ t('app.title') }}</span
+        >
       </button>
     </div>
 
@@ -351,9 +355,6 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   font-size: var(--font-size-module);
   font-weight: 700;
   letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Everything under the head: the middle, then the foot at the floor of the rail. */

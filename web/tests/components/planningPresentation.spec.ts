@@ -11,6 +11,7 @@ import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 
 import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { hintOf } from '../support/hint.ts'
 
@@ -170,14 +171,17 @@ describe('Planning semantic presentation', () => {
     expect(waiting.get('.facet-word').text()).toBe('QA-12')
     expect(waiting.get('.facet-word-hidden').text()).toBe('Waiting on QA-12')
     expect(waiting.attributes('data-tone')).toBe('danger')
-    // Folded short of room, the glyph still tells the pointer what it stands for.
+    // Folded short of room, the glyph still tells the pointer what it stands for; unfolded,
+    // the hint waits, since the reference it would repeat is on the line.
     expect(hintOf(waiting)).toBe('Waiting on QA-12')
-    // The open target names the item and is described by what stops it.
+    expect(tooltipOf(waiting.element)?.kind).toBe('clipped')
+    // The open target names the item and is described by what stops it. Its title is on the
+    // sheet, so it has no hover hint to say it again.
     const open = wrapper.get('.tile-open')
     const described = open.attributes('aria-describedby') ?? ''
     expect(described.split(' ')).toContain(wrapper.get('.tile-exceptions').attributes('id'))
     expect(open.text()).toContain('QA-340')
-    expect(hintOf(open)).toBe('Centralize semantic presentation')
+    expect(hintOf(open)).toBeUndefined()
   })
 
   it('gives ready and active ownership precedence over the workflow marker', async () => {

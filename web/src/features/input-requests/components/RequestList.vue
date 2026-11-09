@@ -236,7 +236,7 @@ defineExpose({ holdsFocus, holdsReader })
       <!-- Not disabled while a read runs: the focused button would drop focus to
            the page, and a second press while one is running starts nothing. -->
       <VButton
-        v-tooltip="t('requests.refresh')"
+        v-tooltip.name="t('requests.refresh')"
         variant="ghost"
         :aria-label="t('requests.refresh')"
         icon

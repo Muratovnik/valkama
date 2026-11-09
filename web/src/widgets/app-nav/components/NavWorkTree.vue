@@ -189,7 +189,11 @@ function escape(event: KeyboardEvent) {
       v-if="empty"
       class="nav-tree-note nav-tree-empty"
     >
-      <span class="nav-tree-note-words">{{ t('liveWork.empty') }}</span>
+      <span
+        v-tooltip.clipped="t('liveWork.empty')"
+        class="nav-tree-note-words one-line"
+        >{{ t('liveWork.empty') }}</span
+      >
     </p>
     <ul
       v-else
@@ -205,7 +209,7 @@ function escape(event: KeyboardEvent) {
         <div class="nav-tree-head">
           <button
             :id="entry.fold"
-            v-tooltip="foldLabel(entry)"
+            v-tooltip.name="foldLabel(entry)"
             class="nav-tree-fold"
             type="button"
             :aria-expanded="!entry.folded"
@@ -222,7 +226,7 @@ function escape(event: KeyboardEvent) {
           <a
             v-if="entry.href"
             v-tooltip:right.clipped="nameHint(entry)"
-            class="nav-tree-space-name nav-tree-space-link"
+            class="nav-tree-space-name nav-tree-space-link one-line"
             :href="entry.href"
             :aria-current="spaceCurrent(entry)"
             @click="pressSpace($event, entry)"
@@ -230,8 +234,8 @@ function escape(event: KeyboardEvent) {
           >
           <span
             v-else
-            v-tooltip:right="t('liveWork.noProject')"
-            class="nav-tree-space-name"
+            v-tooltip:right.detail="t('liveWork.noProject')"
+            class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >
         </div>
@@ -253,7 +257,11 @@ function escape(event: KeyboardEvent) {
             v-if="entry.space.unplaced > 0"
             class="nav-tree-note nav-tree-note-nested"
           >
-            <span class="nav-tree-note-words">{{ unplacedWords(entry) }}</span>
+            <span
+              v-tooltip.clipped="unplacedWords(entry)"
+              class="nav-tree-note-words one-line"
+              >{{ unplacedWords(entry) }}</span
+            >
           </p>
           <NavWorkQuiet
             v-if="entry.list.quiet.length > 0"
@@ -297,7 +305,11 @@ function escape(event: KeyboardEvent) {
       v-if="elsewhere > 0"
       class="nav-tree-note"
     >
-      <span class="nav-tree-note-words">{{ elsewhereWords }}</span>
+      <span
+        v-tooltip.clipped="elsewhereWords"
+        class="nav-tree-note-words one-line"
+        >{{ elsewhereWords }}</span
+      >
     </p>
   </div>
 </template>
@@ -382,9 +394,6 @@ function escape(event: KeyboardEvent) {
   color: var(--color-navigation-text-muted);
   font: var(--font-group-heading);
   text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   border-radius: var(--radius-status);
 }
 
@@ -408,13 +417,6 @@ function escape(event: KeyboardEvent) {
   margin: 0;
   color: var(--color-navigation-text-muted);
   font: var(--font-detail);
-}
-
-.nav-tree-note-words {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .nav-tree-note-nested {

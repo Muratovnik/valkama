@@ -197,7 +197,7 @@ function readinessDetail(answer: AlertReadiness): string {
           </div>
           <VButton
             v-if="readiness"
-            v-tooltip="recheckLabel"
+            v-tooltip.name="recheckLabel"
             class="settings-alerts-recheck"
             size="compact"
             variant="ghost"

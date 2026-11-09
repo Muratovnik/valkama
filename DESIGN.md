@@ -775,12 +775,20 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   focus a key brought, never for a finger, and goes with Escape, a press, the pointer
   leaving or a scroll. It stands above its element unless the place asks for a side —
   the rail's hints stand to its right, clear of the rows — and flips where the window
-  has no room. `clipped` shows it only while its element's text is cut, which is what a
-  truncated name needs. For assistive technology it is what `title` was: the name of an
-  element nothing else names, else its description when it says more than the name. A
-  reference's preview card wins over it. A hint is words; anything with a control in it
-  is `InfoTip`. `check:ui-system` refuses a `title` an element or a component's root
-  would get.
+  has no room. Every hint states its kind, and the kind says when it shows: `name` is
+  the words of an element that shows only a glyph, shown whenever it is pointed at;
+  `clipped` is the whole of words its element shows cut, shown only while they are cut;
+  `detail` says what the element does not show, and stands in `check:ui-system`'s
+  register with the reason the place needs it. No hint says again the words its element
+  shows: a board tile, a label chip and the usage line have none, since everything they
+  would say is on screen. A hint may carry a note, a second line in the quiet ink, for a
+  state that qualifies the action: a session button hints what a press does — «Open in
+  VS Code» — over the session's state, and never the holder's name it shows. For
+  assistive technology a hint is what `title` was: the name of an element nothing else
+  names, else its description when it says more than the name. A reference's preview
+  card wins over it. A hint is words; anything with a control in it is `InfoTip`.
+  `check:ui-system` refuses a `title` an element or a component's root would get, a hint
+  that states no kind and a `detail` its register does not hold.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
@@ -792,7 +800,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   choices and a status there is refused, and the rail's «nobody is working»,
   one of the rail's captions in the rail's ink and row height.
 - **Icons and badges:** application glyphs come from the central icon owner;
-  local SVGs and per-screen badge shapes are prohibited.
+  local SVGs and per-screen badge shapes are prohibited. A glyph is the size it is drawn
+  at: `VIcon` (and `ControlIcon` through it) takes the size as `size` and keeps it in a
+  row short of room — no flex shrink, no `max-width` from the page — so no consumer
+  writes `flex: none` for it or a width over it. Measured on every surface at a desktop
+  width, a phone's and the navigation's narrowest (`production-icon-size.spec.ts`).
+- **One-line labels:** a label that keeps to one line carries the shared `one-line`
+  class (no wrap, an ellipsis where it ends) and a `clipped` hint with its whole words,
+  on itself or on the control around it, so a cut label is whole on hover. No component
+  writes the three lines again.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
   arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the
   shell it is a single ink taking its color from the carrier. Where it stands
@@ -1516,8 +1532,9 @@ same link a number in text is: a press opens the epic through the card's departu
 draft guard and Back, and resting on it shows the epic's hover card; its number is trimmed to
 its letters as every value of the facts is, so it stands on its name's baseline. A ↳ and a
 bare number there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
-of its session with the whole value and its lease in a tooltip and a warning dot once
-nobody is behind it; a plate there read as one more chip. «Подписаны» names the other
+of its session with the whole value and its lease in a tooltip — on a holder that is a
+session's button, in what a screen reader hears after its name, since its hover says what a
+press does — and a warning dot once nobody is behind it; a plate there read as one more chip. «Подписаны» names the other
 sessions that follow the item, each as its claim's holder would print, a name moving to
 the next line whole and one wider than the line wrapping between its own words, read whole
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody

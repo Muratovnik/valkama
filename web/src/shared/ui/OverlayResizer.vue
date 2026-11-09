@@ -49,7 +49,7 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
   <!-- The rule does not count separator among the interactive roles. -->
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
-    v-tooltip="folded?.state"
+    v-tooltip.detail="folded?.state"
     class="overlay-resizer"
     role="separator"
     aria-orientation="vertical"

@@ -312,7 +312,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
         <div class="step-head">
           <strong class="step-label">{{ anchorLabel }}</strong>
           <VButton
-            v-tooltip="t('checklistComment.remove')"
+            v-tooltip.name="t('checklistComment.remove')"
             variant="ghost"
             size="inline"
             :aria-label="t('checklistComment.remove')"

@@ -5,7 +5,8 @@ import type { IconName } from '@/shared/lib/uiSystem.ts'
 import type { ControlIconName } from '@/shared/ui/choiceControls.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{ name: ControlIconName }>()
+/** `size` is the glyph's box, as `VIcon` takes it; a place's mark sits in a line of text at 14. */
+const props = withDefaults(defineProps<{ name: ControlIconName; size?: number }>(), { size: 20 })
 
 const iconMap: Record<ControlIconName, IconName> = {
   'language': 'language',
@@ -34,4 +35,9 @@ const iconMap: Record<ControlIconName, IconName> = {
 const icon = computed(() => iconMap[props.name])
 </script>
 
-<template><VIcon :name="icon" /></template>
+<template>
+  <VIcon
+    :name="icon"
+    :size="props.size"
+  />
+</template>

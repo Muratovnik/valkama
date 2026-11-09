@@ -84,7 +84,7 @@ const viewOptions = computed(() => [
       <VButton
         v-for="tool in tools"
         :key="tool.key"
-        v-tooltip="toolTitle(tool)"
+        v-tooltip.name="toolTitle(tool)"
         variant="ghost"
         size="inline"
         :disabled="toolsOff"

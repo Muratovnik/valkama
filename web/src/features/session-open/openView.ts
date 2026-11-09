@@ -221,7 +221,25 @@ export function openMarks(t: Translate, view: OpenView): OpenMark[] {
 }
 
 /**
- * What a button is called and what its tooltip leads with. A button names a holder or
+ * A button's hover hint: one line for what a press does and, in the quiet ink under it,
+ * the state the session is in. It never says the holder's name, which the button shows,
+ * or the whole id, the lease and the reason for the place, which made it five lines; the
+ * glyphs beside the name say the place and the setting under their own hints.
+ */
+export function openTip(
+  t: Translate,
+  view: OpenView,
+  who: { action?: string },
+): { note: string; text: string } {
+  const note = view.state
+  if (view.running) return { text: t('open.tip.running'), note }
+  if (view.where) return { text: t('open.tip.at', { where: view.where }), note }
+  // A button that says its action already says what the hint would.
+  return { text: who.action ? '' : t('open.tip.plain'), note }
+}
+
+/**
+ * What a button is called (its accessible name). A button names a holder or
  * says an action, and the two are different parts of the sentence: a holder is the
  * session the words are about, an action is the words themselves, so an action stands
  * first, as it does on the button, and is never put where a session's name goes.

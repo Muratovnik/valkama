@@ -13,6 +13,7 @@ import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 
 import { messages } from '@/shared/i18n/index.ts'
 import { DEFAULT_SETTINGS } from '@/shared/lib/settings.ts'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { hintOf } from '../support/hint.ts'
 import {
@@ -36,23 +37,34 @@ import {
 } from '../support/openActionHarness.ts'
 
 /**
- * What the button is called, what it shows, and its tooltip. What it shows is the name, then
- * each glyph by the words it is named and hinted by, which are the words it stands for.
+ * What the button is called, what it shows, its tooltip and the note under it, and what a
+ * screen reader hears after the name. What it shows is the name, then each glyph by the words
+ * it is named and hinted by, which are the words it stands for; a place said in words has no
+ * hint, since it would say them again.
  */
 function read(wrapper: ReturnType<typeof mountAction>) {
   const button = wrapper.get('button.open-action')
   const marks = button.findAll('.open-action-mark').map((mark) => {
     expect(mark.attributes('role')).toBe('img')
-    expect(hintOf(mark)).toBe(mark.attributes('aria-label'))
+    expect(hintOf(mark)).toBe(mark.classes('word') ? undefined : mark.attributes('aria-label'))
     return mark.attributes('aria-label')
   })
   return {
+    description: button.attributes('aria-description'),
     name: button.attributes('aria-label'),
+    note: tooltipOf(button.element)?.note,
     shown: [button.get('.open-action-name').text(), marks.join(' · ')].filter(Boolean).join(' '),
     glyphs: button.findAll('.open-action-mark').map((mark) => mark.attributes('data-mark')),
     title: hintOf(button),
   }
 }
+
+/** The hints among words that stand for no button, other than a cut word's own whole words. */
+const stillHints = (wrapper: ReturnType<typeof mountAction>) =>
+  wrapper
+    .findAll('.open-action-still [data-tooltip]')
+    .filter((hinted) => hinted.attributes('data-tooltip-kind') !== 'clipped')
+    .map((hinted) => hinted.attributes('data-tooltip'))
 
 function always(choice: string) {
   localStorage.setItem(
@@ -79,7 +91,8 @@ describe('what stands before any press', () => {
       name: `Open session ${NAME} in Claude Desktop`,
       shown: `${NAME} Claude Desktop`,
     })
-    expect(read(wrapper).title?.split('\n')[0]).toBe(`Open session ${NAME} in Claude Desktop`)
+    // The hint says what a press does, never the holder the button shows.
+    expect(read(wrapper)).toMatchObject({ title: 'Open in Claude Desktop', note: '' })
 
     await wrapper.get('button.open-action').trigger('click')
     await flushPromises()
@@ -104,7 +117,8 @@ describe('what stands before any press', () => {
     const wrapper = mountAction({ executor: executor(nowhere) })
     await flushPromises()
     expect(read(wrapper).shown).toBe(`${NAME} VS Code`)
-    expect(read(wrapper).title).toContain('Where it is open is unknown; it opens in VS Code')
+    expect(read(wrapper).title).toBe('Open in VS Code')
+    expect(read(wrapper).description).toContain('Where it is open is unknown; it opens in VS Code')
     wrapper.unmount()
   })
 
@@ -118,7 +132,7 @@ describe('what stands before any press', () => {
     const wrapper = mountAction({ executor: executor(nowhere) })
     await flushPromises()
     expect(read(wrapper).shown).toBe(`${NAME} Codex`)
-    expect(read(wrapper).title).toContain('by where it was first opened')
+    expect(read(wrapper).description).toContain('by where it was first opened')
     wrapper.unmount()
   })
 
@@ -139,7 +153,8 @@ describe('what stands before any press', () => {
     expect(read(wrapper).glyphs).toEqual(['place', 'live'])
     expect(wrapper.get('button.open-action .open-action-words').text()).toBe(NAME)
     expect(wrapper.find('.open-action [data-mark="place"] svg').exists()).toBe(true)
-    expect(read(wrapper).title).toContain('running')
+    // One line for what a press does, and the state under it in the quiet ink.
+    expect(read(wrapper)).toMatchObject({ title: 'Show what can be done', note: 'running' })
 
     const pressed = wrapper.get('button.open-action').element as HTMLElement
     pressed.focus()
@@ -168,9 +183,19 @@ describe('what stands before any press', () => {
       [{ kind: 'explain', reason: 'live-in-terminal' }, ...windowSteps],
       'live',
     )
-    for (const [locale, action, name] of [
-      ['en', 'Open session', 'Open session — it is running in a terminal: what can be done'],
-      ['ru', 'Открыть сессию', 'Открыть сессию — она идёт в терминале: что можно сделать'],
+    for (const [locale, action, name, title] of [
+      [
+        'en',
+        'Open session',
+        'Open session — it is running in a terminal: what can be done',
+        'Show what can be done',
+      ],
+      [
+        'ru',
+        'Открыть сессию',
+        'Открыть сессию — она идёт в терминале: что можно сделать',
+        'Показать, что можно сделать',
+      ],
     ] as const) {
       answerPlans(running)
       const wrapper = mountAction(
@@ -179,7 +204,7 @@ describe('what stands before any press', () => {
       )
       await flushPromises()
       expect(read(wrapper).name).toBe(name)
-      expect(read(wrapper).title?.split('\n')[0]).toBe(name)
+      expect(read(wrapper).title).toBe(title)
       wrapper.unmount()
     }
   })
@@ -198,7 +223,10 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(wrapper.find('button.open-action').exists()).toBe(false)
     expect(wrapper.text()).toContain('No window · running')
-    expect(hintOf(wrapper.get('.open-action-still [data-tooltip]'))).toContain(
+    // The words say nothing more on hover than their own whole words, and that only while a
+    // narrow line cuts them: the why is the control beside them.
+    expect(stillHints(wrapper)).toEqual([])
+    expect(wrapper.get('.open-action-why').attributes('aria-label')).toContain(
       'it is stopped from its attempt',
     )
     wrapper.unmount()
@@ -210,7 +238,8 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(wrapper.find('button.open-action').exists()).toBe(false)
     expect(wrapper.get('.open-action-still .open-action-place').text()).toBe('session gone')
-    const why = hintOf(wrapper.get('.open-action-still [data-tooltip]'))
+    expect(stillHints(wrapper)).toEqual([])
+    const why = wrapper.get('.open-action-why').attributes('aria-label')
     expect(why).toContain('The client no longer has this session.')
     expect(why).toContain('A copy is kept in Valkama.')
     wrapper.unmount()
@@ -271,7 +300,7 @@ describe('what stands before any press', () => {
     expect(reads).not.toHaveBeenCalled()
   })
 
-  it('a holder with a session names it, shortened, with the whole of it in the tooltip', async () => {
+  it('a holder with a session names it, shortened, with the whole of it in its description', async () => {
     answerPlans(plan(desktop, { ...desktop, source: 'recorded' }, [desktopStep]))
     const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
     const holder = `claude (session ${SESSION})`
@@ -282,8 +311,10 @@ describe('what stands before any press', () => {
     await flushPromises()
     const button = wrapper.get('button.open-action')
     expect(button.get('.open-action-name').text()).toBe('claude · 6f1c2a8e-0000')
-    expect(hintOf(button)).toContain(holder)
-    expect(hintOf(button)).toContain('Responsible')
+    expect(button.attributes('aria-description')).toContain(holder)
+    expect(button.attributes('aria-description')).toContain('Responsible')
+    // The hover says what a press does; the holder's name is on the button.
+    expect(hintOf(button)).toBe('Open in Claude Desktop')
   })
 })
 
@@ -295,7 +326,7 @@ describe('"always open in" is named while it is on', () => {
     await flushPromises()
     expect(read(wrapper).shown).toBe(`${NAME} VS Code · by your setting`)
     expect(read(wrapper).name).toBe(`Open session ${NAME} in VS Code — by your setting`)
-    expect(read(wrapper).title).toContain('opens in VS Code — by your setting')
+    expect(read(wrapper).description).toContain('opens in VS Code — by your setting')
     expect(String(reads.mock.calls[0])).toContain('always=vscode')
     wrapper.unmount()
   })
@@ -305,7 +336,7 @@ describe('"always open in" is named while it is on', () => {
     answerPlans(new Promise(() => {}))
     const wrapper = mountAction({ executor: executor(desktop) }, 'ru')
     expect(read(wrapper).shown).toBe(`${NAME} VS Code · по настройке`)
-    expect(read(wrapper).title).toContain('откроется в VS Code — по настройке')
+    expect(read(wrapper).description).toContain('откроется в VS Code — по настройке')
     wrapper.unmount()
   })
 

@@ -10,6 +10,7 @@ export const workItemHeadMessages = {
     head: {
       updated: 'updated {date}',
       copyReference: 'Copy {reference}',
+      copyReferenceHint: 'Copy the number',
       referenceCopied: '{reference} copied',
       referenceCopyFailed: '{reference} not copied',
       copyLink: 'Copy link to {reference}',
@@ -28,6 +29,7 @@ export const workItemHeadMessages = {
     head: {
       updated: 'обновлено {date}',
       copyReference: 'Скопировать {reference}',
+      copyReferenceHint: 'Скопировать номер',
       referenceCopied: '{reference} скопирован',
       referenceCopyFailed: '{reference} не скопирован',
       copyLink: 'Копировать ссылку на {reference}',

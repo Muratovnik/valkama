@@ -164,8 +164,11 @@ describe('WorkItemComposer priority', () => {
       const wrapper = mountComposer(locale)
       const trigger = wrapper.get(`.choice-trigger[aria-label="${label}"]`)
       // The chosen value starts at medium, the default the model gives, and says on hover
-      // what it means, as the card's priority does.
-      expect(hintOf(trigger.get('.facet-mark')), locale).toBe(options[1]?.[1])
+      // what it means, as the card's priority does: its word is on screen, so not the word.
+      const medium = options[1]?.[1] ?? ''
+      expect(hintOf(trigger.get('.facet-mark')), locale).toBe(
+        medium.slice(medium.indexOf(' — ') + ' — '.length),
+      )
       await trigger.trigger('keydown', { key: 'Enter' })
       await flushPromises()
       const rows = [...document.querySelectorAll<HTMLElement>('[role="option"]')]

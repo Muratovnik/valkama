@@ -174,7 +174,6 @@ const { isOpen, toggle } = useFolds()
   position: absolute;
   inset-block-start: 50%;
   inset-inline-start: 50%;
-  max-inline-size: none;
   translate: -50% -50%;
 }
 

@@ -86,6 +86,19 @@ checkouts are therefore distinguishable even at the same version.
   tells that task in `mentions` while the number stands in the text, so the work on it
   hears of it; a number typed by hand remains a link that tells nobody.
 
+- **Icons keep their size, and one-line labels end in an ellipsis.** An icon no longer
+  shrinks in a row short of room: the search and questions glyphs of the narrowest
+  navigation were drawn 13 to 18 pixels wide of their 20. The navigation's «Go to a task» and
+  «Needs my answer» no longer wrap onto a second line; like every one-line label they end in
+  an ellipsis, and say their whole words on hover while they are cut.
+- **A hover hint never says what is already on screen.** Every hint now states its kind: a
+  name for a control that shows only a glyph, the whole of a cut text that shows only while
+  the text is cut, or a detail the place does not show, which the UI check accepts only from
+  its register with a reason. A board tile, a label chip and the usage line no longer repeat
+  their own words on hover; a priority's hover says what the level means instead of its name
+  again; a session button hints what a press does, with the session's state on a quieter
+  second line, instead of the holder's name it already shows. The holder's whole name and
+  the session's details stay in what a screen reader hears.
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on
   one line in a card's drawer, and one quiet line under the label saying the way chosen, what
@@ -132,6 +145,10 @@ checkouts are therefore distinguishable even at the same version.
   the line they stand on — a reference, a number or a capitalized word — on a tile, a list row,
   a graph node, the hover card, a Ctrl K result, the side panel and the card. They had centred
   on the lowercase letters and stood 1–2.5px low beside a reference.
+- **The next hint shows when the pointer moves straight onto it.** Moving from a word with a
+  hint onto the one beside it, such as from a suggestion's name to its title, closed the first
+  hint and showed none for the second while the pointer stood between the first word and its
+  hint. A hint is never entered, so that stretch no longer holds the next one back.
 - **A focus ring brought into view keeps all of its room.** When focus moves to why a send or
   a read failed, to a reply or to a reference in text and scrolls it into view, the scroll now
   stops a pixel further in, so the ring is never short of the edge by a fraction of a pixel

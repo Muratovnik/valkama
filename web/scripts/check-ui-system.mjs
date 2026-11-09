@@ -18,7 +18,12 @@ import {
   scanControlSizes,
   scanHiddenRules,
 } from './ui-system/lines.mjs'
-import { NATIVE_TITLES, scanNativeTitles } from './ui-system/native-titles.mjs'
+import {
+  DETAIL_TOOLTIPS,
+  NATIVE_TITLES,
+  scanNativeTitles,
+  scanTooltipKinds,
+} from './ui-system/native-titles.mjs'
 import { scanRevealCopies } from './ui-system/reveal.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
@@ -44,6 +49,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const fills = product ? FILL_BUDGET : new Map()
   const titles = product ? UNBROKEN_TITLES : new Map()
   const hints = product ? NATIVE_TITLES : new Map()
+  const details = product ? DETAIL_TOOLTIPS : new Map()
   return [
     ...scanUiSources(sources),
     ...scanRevealCopies(sources),
@@ -56,6 +62,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanTrimmedWords(sources),
     ...scanTitleBreaks(sources, titles),
     ...scanNativeTitles(sources, hints),
+    ...scanTooltipKinds(sources, details),
     ...scanControlSizes(sources, sizes),
     ...scanFocusRingWidths(sources),
     ...scanScopeEscapes(sources),

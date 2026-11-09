@@ -224,7 +224,7 @@ function countId(lane: LaneDrawing): string {
           >
           <button
             v-else
-            v-tooltip="lane.lane.title"
+            v-tooltip.detail="lane.lane.title"
             class="branch-map-label chooses"
             type="button"
             :class="{ selected: isFiltered(lane) }"
@@ -237,7 +237,8 @@ function countId(lane: LaneDrawing): string {
           </button>
           <span
             :id="countId(lane)"
-            class="branch-map-count"
+            v-tooltip.clipped="laneCounts(lane.lane)"
+            class="branch-map-count one-line"
             >{{ laneCounts(lane.lane) }}</span
           >
         </div>
@@ -450,15 +451,11 @@ function countId(lane: LaneDrawing): string {
 /* The counts stand at the lane's end when the lane is long enough to hold
    them, and follow the label when it is not. */
 .branch-map-count {
-  min-width: 0;
   max-width: 100%;
   margin-inline-start: auto;
   color: var(--color-text-muted);
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .branch-map-lane {

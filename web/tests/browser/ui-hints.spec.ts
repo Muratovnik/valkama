@@ -7,8 +7,16 @@
  * control it stood over.
  */
 import { expect } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { test } from './test.ts'
+
+/** Where something stands, read in the page so that a missing one fails there. */
+const boxOf = (locator: Locator) =>
+  locator.evaluate((node) => {
+    const { x, y } = node.getBoundingClientRect()
+    return { x, y }
+  })
 
 test('focus shows the focused control’s own hint, and none of the element it is in', async ({
   page,
@@ -30,6 +38,26 @@ test('focus shows the focused control’s own hint, and none of the element it i
   await page.clock.runFor(1000)
   await expect(words).toHaveCount(0)
   await expect(page.locator('.tooltip-hint')).toHaveCount(0)
+})
+
+test('the pointer moved straight to the next cut word shows its hint at once', async ({ page }) => {
+  await page.clock.install()
+  await page.goto('/tests/browser/harness.html?lang=en&surface=hints')
+  const words = page.getByRole('tooltip')
+  const [name, title] = [page.locator('.hints-name'), page.locator('.hints-title')]
+  await expect(title).toBeVisible()
+  await name.hover()
+  await page.clock.runFor(1000)
+  await expect(words).toHaveText('A name cut short by its box')
+  // Straight across onto the start of the next word, which stands in the room between the
+  // first word and its wider hint: the library's way to a hint the pointer may enter, which a
+  // hint the pointer passes through has no use for.
+  const box = await boxOf(title)
+  await page.mouse.move(box.x + 4, box.y + 3, { steps: 8 })
+  await expect(words).toHaveText('A title cut short beside it')
+  // And still, once the moment for passing on is long gone.
+  await page.clock.runFor(1000)
+  await expect(words).toHaveText('A title cut short beside it')
 })
 
 test('a hint the keyboard holds up lets a press through to what it covers', async ({ page }) => {

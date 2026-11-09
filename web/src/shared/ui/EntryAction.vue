@@ -22,7 +22,7 @@ defineProps<{
 
 <template>
   <VButton
-    v-tooltip="label"
+    v-tooltip.name="label"
     class="entry-action"
     variant="ghost"
     size="inline"

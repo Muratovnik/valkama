@@ -145,7 +145,7 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
     :connectable="false"
   />
   <button
-    v-tooltip="blockTitle"
+    v-tooltip.name="blockTitle"
     class="flow-node-card nopan"
     type="button"
     :data-tone="statePresentation('work-item-node-marker', markerState).tone"
@@ -203,8 +203,8 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         </span>
         <span
           v-if="parentReference"
-          v-tooltip="`${t('workItem.parent')} ${parentReference}`"
-          class="flow-node-epic"
+          v-tooltip.detail="t('workItem.parent')"
+          class="flow-node-epic one-line"
           >{{ parentReference }}</span
         >
       </span>
@@ -220,10 +220,15 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
         <template v-if="holder">
           <span
             v-if="!live"
-            class="flow-node-owner-state"
+            v-tooltip.clipped="ownerLabel"
+            class="flow-node-owner-state one-line"
             >{{ ownerLabel }}</span
           >
-          <span class="flow-node-owner-name">{{ holderName(holder) }}</span>
+          <span
+            v-tooltip.clipped="holderName(holder)"
+            class="flow-node-owner-name one-line"
+            >{{ holderName(holder) }}</span
+          >
         </template>
         <GraphLiveMark
           v-if="live"
@@ -391,19 +396,12 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
 .flow-node-owner-state {
   flex: 0 0 auto;
   font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The holder's name gives way to the live word beside it; the card's
    accessible name keeps it whole. */
 .flow-node-owner-name {
   flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The root's mark: a word, so it reads without the colour, on the fill the
@@ -419,14 +417,10 @@ const blockTitle = computed(() => (overview ? accessibleName.value : undefined))
 }
 
 .flow-node-epic {
-  min-width: 0;
   max-width: 80px;
   padding: var(--space-hair) var(--space-1);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
   background: var(--color-control-surface);
-  overflow: hidden;
-  text-overflow: ellipsis;
   border-radius: var(--radius-status);
 }
 

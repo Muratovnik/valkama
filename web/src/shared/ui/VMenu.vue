@@ -100,7 +100,7 @@ watch(list, stopStrayPresses, { flush: 'post' })
     >
       <DropdownMenuTrigger as-child>
         <VButton
-          v-tooltip="hint"
+          v-tooltip.name="hint"
           class="menu-trigger"
           variant="ghost"
           :size="size"

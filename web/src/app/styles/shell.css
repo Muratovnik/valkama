@@ -40,6 +40,19 @@
   container: main / inline-size;
 }
 
+/* A label that keeps to one line: what does not fit ends in an ellipsis instead of wrapping
+   under itself. Twenty-nine rules wrote these lines each, and a label without one was the one
+   that wrapped: «Go to a task» and «Needs my answer» took two lines in the narrowest
+   navigation. Its element, or the control around it, carries a `clipped` hint with the whole
+   words, which shows only while they are cut. It stands before `.trimmed-word`, so a word
+   that is both keeps the trim's sideways-only cut and its accents. */
+.one-line {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* A word whose box is trimmed to its capitals, so that what stands beside it centres on their
    middle (`--size-text-middle`) rather than on the em box. The box is then one cap height
    tall, and accents above the capitals and descenders stand outside it, so whatever clips at

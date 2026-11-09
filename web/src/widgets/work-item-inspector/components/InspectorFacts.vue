@@ -351,8 +351,8 @@ defineExpose({ actionCell })
         />
         <span
           v-else-if="holder"
-          v-tooltip="holderTitle"
-          class="card-holder-name"
+          v-tooltip.detail="holderTitle"
+          class="card-holder-name one-line"
           >{{ holderName(holder) }}</span
         >
         <FacetMarks
@@ -398,7 +398,7 @@ defineExpose({ actionCell })
         <span
           v-for="follower in followers"
           :key="follower.label"
-          v-tooltip="follower.label"
+          v-tooltip.detail="follower.label"
           class="card-subscriber"
           ><template
             v-for="(word, at) in follower.words"

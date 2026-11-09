@@ -237,7 +237,7 @@ defineExpose({ restoreView, reveal, view })
               <span class="chain-row-reference">{{ member.reference }}</span>
               <span
                 v-tooltip.clipped="member.title"
-                class="chain-row-title"
+                class="chain-row-title one-line"
                 >{{ member.title }}</span
               >
               <span
@@ -256,12 +256,13 @@ defineExpose({ restoreView, reveal, view })
               <span
                 v-if="holder(group, member)"
                 v-tooltip.clipped="holderTitle(group, member)"
-                class="chain-row-detail chain-row-holder"
+                class="chain-row-detail chain-row-holder one-line"
                 >{{ holder(group, member) }}</span
               >
               <span
                 v-else-if="stateWord(group, member)"
-                class="chain-row-detail"
+                v-tooltip.clipped="stateWord(group, member)"
+                class="chain-row-detail one-line"
                 >{{ stateWord(group, member) }}</span
               >
               <ChainMemberUsage

@@ -192,7 +192,7 @@ function walk(event: KeyboardEvent) {
     :aria-label="t('requests.hub.nav')"
   >
     <VButton
-      v-tooltip="t('requests.hub.toAnswer')"
+      v-tooltip.detail="t('requests.hub.toAnswer')"
       class="request-navigator-place"
       variant="text"
       reach
@@ -209,7 +209,7 @@ function walk(event: KeyboardEvent) {
       </span>
     </VButton>
     <VButton
-      v-tooltip="t('requests.hub.previous')"
+      v-tooltip.name="t('requests.hub.previous')"
       variant="ghost"
       :aria-label="t('requests.hub.previous')"
       icon
@@ -219,7 +219,7 @@ function walk(event: KeyboardEvent) {
       <VIcon name="arrow-up" />
     </VButton>
     <VButton
-      v-tooltip="t('requests.hub.next')"
+      v-tooltip.name="t('requests.hub.next')"
       variant="ghost"
       :aria-label="t('requests.hub.next')"
       icon

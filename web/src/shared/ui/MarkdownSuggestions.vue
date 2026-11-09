@@ -134,7 +134,7 @@ defineExpose({
         >
         <span
           v-tooltip.clipped="row.title"
-          class="markdown-suggestion-title"
+          class="markdown-suggestion-title one-line"
           >{{ row.title }}</span
         >
         <span
@@ -234,9 +234,6 @@ defineExpose({
 .markdown-suggestion-title {
   color: var(--color-text);
   font: var(--font-note);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* A task's state, or the line a file was found at, which can be a long one. */

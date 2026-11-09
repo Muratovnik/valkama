@@ -108,7 +108,11 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           class="lane-reference"
           >{{ props.lane.epic.reference }}</span
         >
-        <span class="lane-title">{{ title }}</span>
+        <span
+          v-tooltip.clipped="title"
+          class="lane-title one-line"
+          >{{ title }}</span
+        >
       </span>
     </button>
     <SemanticState
@@ -154,7 +158,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
         class="lane-actions reveal"
       >
         <VButton
-          v-tooltip="openLabel"
+          v-tooltip.name="openLabel"
           class="lane-action"
           variant="ghost"
           size="inline"
@@ -169,7 +173,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
           />
         </VButton>
         <VButton
-          v-tooltip="chainLabel"
+          v-tooltip.name="chainLabel"
           class="lane-action"
           variant="ghost"
           size="inline"
@@ -324,11 +328,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
 /* The title gives way: the reference and the state beside it are shorter and say whose it is. */
 .lane-title {
-  min-width: 0;
   font: var(--font-row-title);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The state, the counts, the note of work out of sight and an epic's actions: beside the title

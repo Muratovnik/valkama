@@ -87,12 +87,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.chain-row-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* Workable is the norm of its group, so a row prints nothing for it; a member
    that waits on an open blocker says what it waits on, its glyph in the tone
    the registry gives the mark. The words give the mark its baseline: a glyph has
@@ -129,9 +123,6 @@
   grid-column: 4;
   max-width: 14ch;
   color: var(--color-text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* A row's mark stands under its title unless the list has room for both on one line,

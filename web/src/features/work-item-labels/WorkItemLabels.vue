@@ -137,7 +137,7 @@ function focusout(event: FocusEvent) {
     >
       <VButton
         ref="plus"
-        v-tooltip="t('workItem.head.addLabel')"
+        v-tooltip.name="t('workItem.head.addLabel')"
         variant="ghost"
         size="inline"
         :aria-label="t('workItem.head.addLabel')"

@@ -136,7 +136,7 @@ const NO_VALUE = undefined
             v-for="entry in row.choices"
             :id="optionId(entry.place)"
             :key="entry.option.key"
-            v-tooltip="entry.option.title"
+            v-tooltip.detail="entry.option.title"
             class="option-choice"
             role="option"
             tabindex="-1"
@@ -171,7 +171,9 @@ const NO_VALUE = undefined
           :data-glyph="entry.option.icon && 'own'"
           :size="14"
         />
-        <span class="option-text"
+        <span
+          v-tooltip.clipped="entry.option.text"
+          class="option-text one-line"
           ><slot
             name="text"
             :option="entry.option"
@@ -279,10 +281,6 @@ const NO_VALUE = undefined
   }
 }
 
-.option-back-icon {
-  flex: 0 0 auto;
-}
-
 /* A pressed segment's look, as a choice among two is: a track and its chosen word. */
 .option-choices {
   display: inline-flex;
@@ -351,7 +349,6 @@ const NO_VALUE = undefined
 
 /* The check holds its place on every row, so the words line up. */
 .option-check {
-  flex: 0 0 auto;
   visibility: hidden;
 
   .option-row[aria-selected='true'] &,
@@ -366,7 +363,6 @@ const NO_VALUE = undefined
 
 /* A row that leads to a list keeps its chevron at the row's end, where a count would stand. */
 .option-next {
-  flex: 0 0 auto;
   margin-inline-start: auto;
   color: var(--color-text-tertiary);
 }
@@ -375,10 +371,6 @@ const NO_VALUE = undefined
    the row's end, they sent the count to the menu's far edge, 230px from its label. */
 .option-text {
   flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .option-detail {
