@@ -31,7 +31,7 @@ import {
 
 import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
 import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
-import { KIND_CHOICES, PRIORITY_CHOICES } from '@/entities/work-item/utils/facets.ts'
+import { KIND_CHOICES, PRIORITY_CHOICES } from '@/entities/work-item/utils/facetChoices.ts'
 import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'

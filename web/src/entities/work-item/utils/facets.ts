@@ -19,16 +19,11 @@
  * and its colour is the custom property the owner can set.
  */
 
-import {
-  CLIENT_GLYPHS,
-  executorOf,
-  executorWords,
-} from '@/entities/work-item/utils/facetExecutor.ts'
+import { executorOf, executorWords, holderGlyph } from '@/entities/work-item/utils/facetExecutor.ts'
 import type { Executor, SessionDoing } from '@/entities/work-item/utils/facetExecutor.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
-import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
@@ -104,7 +99,7 @@ export interface FacetContext {
  */
 type FacetForm = 'glyph' | 'word' | 'glyph-word' | 'chips' | 'action'
 
-interface FacetRule {
+export interface FacetRule {
   form: FacetForm
   /** The surface prints this facet even when nothing holds it (a column). */
   always?: boolean
@@ -405,7 +400,7 @@ export function printsFacet(
   return true
 }
 
-function kindMark(kind: WorkItemBrief['kind'], { form, plain }: FacetRule): FacetMark {
+export function kindMark(kind: WorkItemBrief['kind'], { form, plain }: FacetRule): FacetMark {
   return {
     facet: 'kind',
     value: kind,
@@ -419,7 +414,10 @@ function kindMark(kind: WorkItemBrief['kind'], { form, plain }: FacetRule): Face
   }
 }
 
-function priorityMark(priority: WorkItemBrief['priority'], { form, plain }: FacetRule): FacetMark {
+export function priorityMark(
+  priority: WorkItemBrief['priority'],
+  { form, plain }: FacetRule,
+): FacetMark {
   return {
     facet: 'priority',
     value: priority,
@@ -433,7 +431,7 @@ function priorityMark(priority: WorkItemBrief['priority'], { form, plain }: Face
   }
 }
 
-function stateMark(state: FacetSubject['state'], form: FacetForm): FacetMark {
+export function stateMark(state: FacetSubject['state'], form: FacetForm): FacetMark {
   return {
     facet: 'state',
     value: state.category,
@@ -507,13 +505,11 @@ function holderMark(
   const stale = item.claim_state === 'stale' && !item.state.is_terminal
   const holder = holderRef(item)
   const executor = rule.executor ? executorOf(item, context.live) : null
-  let glyph: IconName | null = holder ? 'holder' : null
-  if (executor) glyph = CLIENT_GLYPHS[executor.client]
   return {
     facet: 'holder',
     value: holder,
     form: rule.form,
-    glyph,
+    glyph: holderGlyph(holder, executor),
     text: holderText(item, surface, executor),
     // Only a stale claim has something to say; a live or unconfirmed one is quiet.
     tone: stale ? { dimension: 'claim-lease', state: 'stale' } : PLAIN,
@@ -641,40 +637,4 @@ export function surfaceMarks(
   return FACET_ORDER.filter((facet) => facets.includes(facet)).flatMap((facet) =>
     facetMarks(facet, surface, item, context),
   )
-}
-
-/**
- * A value a person chooses from a menu: what an item is, how much it asks, or where it
- * stands — a state of the workflow, or a category the filter narrows by, named in words.
- */
-export type FacetChoice =
-  | { facet: 'kind'; value: WorkItemBrief['kind'] }
-  | { facet: 'priority'; value: WorkItemBrief['priority'] }
-  /** `value` is what the menu chooses: a workflow state's key, or a category. */
-  | { facet: 'state'; state: FacetSubject['state']; value: string }
-
-/** The kinds as a menu offers them, in the order of the model's vocabulary. */
-export const KIND_CHOICES: readonly FacetChoice[] = WORK_ITEM_KINDS.map((value) => ({
-  facet: 'kind',
-  value,
-}))
-
-/** The priorities as a menu offers them: the most pressing first. */
-export const PRIORITY_CHOICES: readonly FacetChoice[] = [...PRIORITIES]
-  .reverse()
-  .map((value) => ({ facet: 'priority', value }))
-
-/** What a menu draws a value with: the glyph and the word the card draws it with, read, not pressed. */
-const CHOICE_RULE: FacetRule = { form: 'glyph-word', plain: true }
-
-/**
- * One value as a menu offers it, from the rows the card draws the chosen value with: a
- * priority's glyph in its tone, its word and what it means; a kind's glyph and word in the
- * kind's colour; a state's dot and its name. A menu used to name a value in plain words
- * under a button that drew its glyph, so a list and its button said one value two ways.
- */
-export function choiceMark(choice: FacetChoice): FacetMark {
-  if (choice.facet === 'kind') return kindMark(choice.value, CHOICE_RULE)
-  if (choice.facet === 'priority') return priorityMark(choice.value, CHOICE_RULE)
-  return stateMark(choice.state, CHOICE_RULE.form)
 }

@@ -7,7 +7,7 @@
  * a value that matches nothing it could show. Kind and priority are closed
  * vocabularies and are offered whole.
  */
-import { choiceMark } from '@/entities/work-item/utils/facets.ts'
+import { choiceMark } from '@/entities/work-item/utils/facetChoices.ts'
 import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
 import {
   filterTokens,

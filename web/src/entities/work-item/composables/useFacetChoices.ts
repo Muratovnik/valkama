@@ -7,8 +7,9 @@
  * label, and what it means as its note where the registry says that.
  */
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
-import { choiceMark } from '@/entities/work-item/utils/facets.ts'
-import type { FacetChoice, FacetMark } from '@/entities/work-item/utils/facets.ts'
+import { choiceMark } from '@/entities/work-item/utils/facetChoices.ts'
+import type { FacetChoice } from '@/entities/work-item/utils/facetChoices.ts'
+import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 

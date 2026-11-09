@@ -46,10 +46,16 @@ export function executorOf(item: Claim, live: LiveWork | null | undefined): Exec
 }
 
 /** A client's own glyph, where the interface has one; any other client is a client. */
-export const CLIENT_GLYPHS: Readonly<Record<SessionFamily, IconName>> = {
+const CLIENT_GLYPHS: Readonly<Record<SessionFamily, IconName>> = {
   claude: 'claude',
   codex: 'codex',
   other: 'client',
+}
+
+/** The glyph a holder is drawn with: its client's where an executor stands behind the claim. */
+export function holderGlyph(holder: string, executor: Executor | null): IconName | null {
+  if (executor) return CLIENT_GLYPHS[executor.client]
+  return holder ? 'holder' : null
 }
 
 /** The words after the holder's name on a tile, by the executor's state. */
