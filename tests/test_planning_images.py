@@ -203,6 +203,33 @@ class DeletionTests(StoreCase):
         self.assertEqual([], self.rows())
         self.assertFalse((self.folder / sha(kept)).exists())
         self.assertTrue((self.folder / sha(held)).exists())
+        # The next open of the store takes the file nobody holds.
+        reopened = store.connect()
+        self.addCleanup(reopened.close)
+        self.assertEqual([], os.listdir(self.folder))
+
+    def test_an_upload_that_failed_and_could_not_take_its_file_back_leaves_it_to_the_sweep(
+        self,
+    ) -> None:
+        data = png(18)
+        remove = os.remove
+
+        def refuse(path: str) -> None:
+            if os.path.basename(path) == sha(data):
+                raise PermissionError(13, "in use", path)
+            remove(path)
+
+        with (
+            mock.patch.object(images.calls, "call_id", side_effect=RuntimeError("refused")),
+            mock.patch.object(os, "remove", refuse),
+            self.assertRaises(RuntimeError),
+        ):
+            images.store(self.conn, self.first, data)
+        self.assertEqual([], self.rows())
+        self.assertTrue((self.folder / sha(data)).exists())
+        reopened = store.connect()
+        self.addCleanup(reopened.close)
+        self.assertEqual([], os.listdir(self.folder))
 
     def test_deleting_the_item_deletes_its_pictures(self) -> None:
         data = png(10)
@@ -263,6 +290,26 @@ class BackupTests(StoreCase):
             restored = store.connect()
         self.addCleanup(restored.close)
         self.assertEqual(data, images.read(restored, sha(data), item=self.first).data)
+
+    def test_a_restore_over_a_newer_store_keeps_no_picture_the_snapshot_does_not_hold(
+        self,
+    ) -> None:
+        older, newer = png(25), png(26)
+        images.store(self.conn, self.first, older)
+        snapshot, _ = store_backups.verified_snapshot(self.conn, "manual", locate=store._backups)
+        images.store(self.conn, self.second, newer)
+        self.conn.close()
+        # The snapshot in place of the store, its pictures copied in beside the newer one.
+        for sidecar in ("-wal", "-shm"):
+            Path(self.path + sidecar).unlink(missing_ok=True)
+        shutil.copyfile(snapshot, self.path)
+        shutil.copytree(store_backups.images_beside(snapshot), self.folder, dirs_exist_ok=True)
+        restored = store.connect()
+        self.addCleanup(restored.close)
+        self.assertEqual([sha(older)], os.listdir(self.folder))
+        self.assertEqual(older, images.read(restored, sha(older), item=self.first).data)
+        with self.assertRaises(images.ImageRefusedError):
+            images.read(restored, sha(newer))
 
     def test_a_snapshot_missing_a_picture_or_holding_a_wrong_one_is_refused(self) -> None:
         data = png(21)

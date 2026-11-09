@@ -594,11 +594,15 @@ with the snapshot's name and `.images` after it stands beside the snapshot file,
 and a snapshot counts as verified only when that folder holds every picture the
 store held, each file's SHA-256 equal to its name. To restore one, stop every
 process that holds the store, delete the `-wal` and `-shm` files beside it, copy
-the snapshot file in place of the database and copy the files of its `.images`
-folder into the `images` folder beside it. Going back to a build at schema 13
-is the same with the `preschema14` snapshot, before pinning the earlier release
-as described below for schema 9: everything written since is lost, and the
-pictures, which that build does not know, may stay in the folder or be deleted.
+the snapshot file in place of the database, delete the `images` folder beside it
+and put a copy of the snapshot's `.images` folder there under the name `images`;
+a snapshot with no `.images` folder held no pictures, and the store then has
+none. Every open of the store also removes a picture file that no item holds,
+so a picture written after the snapshot does not outlive the restore even when
+the folder was not replaced. Going back to a build at schema 13 is the same with
+the `preschema14` snapshot, which has no `.images` folder, before pinning the
+earlier release as described below for schema 9: everything written since is
+lost, pictures included.
 
 The order of work took no migration of its own. A placement is written to the
 item's `position`, a column every schema-9 store already has, so no snapshot was

@@ -37,6 +37,8 @@ DIRECTORY = "images"
 #: Where one picture is served, and so what the Markdown written for it names.
 PATH_PREFIX = "/api/images/"
 _HASH = re.compile(r"[0-9a-f]{64}")
+#: What `_write` leaves behind when the process dies before its `os.replace`.
+_TORN = re.compile(r"\.[0-9a-f]{64}\..+\.tmp")
 #: The pictures a write freed, by the connection that made it, until it commits: the
 #: directory they stand in and their hashes. Kept by `id` because a connection takes no
 #: attribute and no weak reference; `settle` checks the directory before it trusts one.
@@ -292,6 +294,35 @@ def settle(conn: sqlite3.Connection) -> int:
             conn.rollback()
     except sqlite3.Error:
         return removed
+    return removed
+
+
+def sweep(conn: sqlite3.Connection) -> int:
+    """Remove every picture file no item holds, and every torn write; how many went.
+
+    Run where the store is opened, inside its write transaction: no upload is
+    between its file and its row then, so a file without a row is nobody's. Such a
+    file is what a removal that failed leaves -- a deleted item's picture held open
+    by another process, an upload taken back -- and what a restore leaves when the
+    folder kept pictures written after the snapshot. Each would otherwise live on,
+    and be copied into every later snapshot, after the item that showed it is gone.
+    """
+
+    if not conn.in_transaction:
+        raise RuntimeError("the pictures are swept only under the store's write lock")
+    folder = directory(conn)
+    try:
+        names = os.listdir(folder)
+    except FileNotFoundError:
+        return 0
+    held = {str(row[0]) for row in conn.execute("SELECT DISTINCT sha256 FROM work_item_images")}
+    removed = 0
+    for name in names:
+        unheld = _HASH.fullmatch(name) is not None and name not in held
+        if unheld or _TORN.fullmatch(name):
+            with contextlib.suppress(OSError):
+                os.remove(os.path.join(folder, name))
+                removed += 1
     return removed
 
 
