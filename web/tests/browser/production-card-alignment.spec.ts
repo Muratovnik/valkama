@@ -319,10 +319,10 @@ for (const locale of ['ru', 'en'] as const) {
       const lines = await factBaselines(page)
       console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
       // The state and the question, the priority, the epic, the holder and the labels, each
-      // with its name. A phone in English moves the question under the state, and the name
-      // stays on the state's line.
+      // with its name. A phone moves the question under the state, and the name stays on the
+      // state's line.
       expect(lines).toHaveLength(5)
-      expect(lines[0]).toHaveLength(width === 390 && locale === 'en' ? 2 : 3)
+      expect(lines[0]).toHaveLength(width === 390 ? 2 : 3)
       for (const [first, ...rest] of lines)
         for (const other of rest)
           expect(
