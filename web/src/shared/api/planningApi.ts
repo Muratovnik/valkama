@@ -392,7 +392,7 @@ type ReplyParent = { reply_to: number } | { reply_to_request: string }
  * answer names the root it landed under.
  */
 export async function replyInThread(
-  input: { body: string; id: string; author?: string } & ReplyParent,
+  input: { body: string; id: string; author?: string; mentions?: string[] } & ReplyParent,
 ): Promise<CommentWritten> {
   return validateCommentWritten(await write('/api/planning/work-item/comment', { ...input }))
 }

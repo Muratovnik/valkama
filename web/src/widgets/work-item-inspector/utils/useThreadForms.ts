@@ -10,7 +10,9 @@ import type { ThreadParent } from '@/features/discussion-thread/composables/useT
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { grantFocus } from '@/shared/lib/focusRight.ts'
 import type { FocusRight } from '@/shared/lib/focusRight.ts'
+import { chosenTasks } from '@/shared/lib/mentionSuggest.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
 export type ThreadForm = 'reply' | 'resolve' | 'steps'
 
@@ -43,6 +45,10 @@ export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${
  *
  * Making steps of a list is a form of the thread too, under the entry whose list it is,
  * root or reply; once the steps are written it gives way to a line saying how many.
+ *
+ * A reply tells the tasks chosen from its `@` list as a comment does. What was chosen is
+ * kept here with the draft, by thread, and not in the field: a thread folded or filtered
+ * away takes its field with it and keeps its draft, and the choice goes with the draft.
  */
 export function useThreadForms(identity: () => string, changed: () => void) {
   const { pending, error, submit } = useInspectorMutation(identity, changed)
@@ -51,6 +57,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   const replies = ref<Record<string, string>>({})
   const decisions = ref<Record<string, string>>({})
   const marks = ref<Record<string, boolean>>({})
+  const chosen = new Map<string, ReturnType<typeof chosenTasks>>()
   /** The entry whose list the open steps form is for, and the one the last steps went from. */
   const stepsOf = ref<number | null>(null)
   const added = ref<{ count: number; entry: number } | null>(null)
@@ -68,9 +75,19 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   useDraftSource('reply', () => Object.values(replies.value).some((text) => text.trim()))
   useDraftSource('resolution', () => Object.values(decisions.value).some((text) => text.trim()))
 
+  // A draft emptied forgets what was chosen in it, as a comment's does.
+  watch(
+    replies,
+    (drafts) => {
+      for (const key of chosen.keys()) if (!drafts[key]?.trim()) chosen.delete(key)
+    },
+    { deep: true },
+  )
+
   watch(identity, () => {
     open.value = null
     replies.value = {}
+    chosen.clear()
     decisions.value = {}
     marks.value = {}
     stepsOf.value = null
@@ -133,13 +150,22 @@ export function useThreadForms(identity: () => string, changed: () => void) {
     right.take(() => moveFocus(target))
   }
 
+  /** A task chosen from the `@` list of one thread's reply. */
+  function chose(key: string, row: EditorSuggestion) {
+    const tasks = chosen.get(key) ?? chosenTasks()
+    tasks.chose(row)
+    chosen.set(key, tasks)
+  }
+
   /** The root's id goes with the parent when the reply is to mark the thread as well. */
   function sendReply(key: string, parent: ThreadParent, root: number | null) {
     const marking = root !== null && marks.value[key] === true
     failedAt.value = { form: 'reply', key }
     if (marking) held.value.add(key)
     const right = grantFocus()
-    void writes.reply(parent, replies.value[key] ?? '', marking ? root : null, (written) => {
+    const body = replies.value[key] ?? ''
+    const words = { body, ...chosen.get(key)?.told(body) }
+    void writes.reply(parent, words, marking ? root : null, (written) => {
       replies.value[key] = ''
       marks.value[key] = false
       void hide('reply', right).then(() => {
@@ -201,6 +227,7 @@ export function useThreadForms(identity: () => string, changed: () => void) {
   return {
     added,
     cancel,
+    chose,
     decisions,
     errorAt,
     expanded,

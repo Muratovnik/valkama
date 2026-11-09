@@ -16,6 +16,7 @@ import { useAskedCancel } from '@/features/discussion-thread/composables/useAske
 
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -28,7 +29,7 @@ const props = withDefaults(
   }>(),
   { suggest: undefined },
 )
-const emit = defineEmits<{ cancel: []; refresh: []; submit: [] }>()
+const emit = defineEmits<{ cancel: []; chose: [row: EditorSuggestion]; refresh: []; submit: [] }>()
 const text = defineModel<string>('text', { required: true })
 const mark = defineModel<boolean>('mark', { required: true })
 const { t } = useI18n()
@@ -68,6 +69,7 @@ defineExpose({ focus: () => editor.value?.focusAtTop() })
       :disabled="pending"
       :error="error"
       hide-label
+      @chose="emit('chose', $event)"
       @submit="send"
     >
       <template #actions>

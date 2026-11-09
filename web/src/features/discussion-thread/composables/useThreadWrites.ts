@@ -32,17 +32,20 @@ export function useThreadWrites(identity: () => string, submit: Submit) {
     }
   }
 
-  /** `accepted` hears the id of the reply just written. */
+  /**
+   * `words` is the reply's text and the tasks it tells in `mentions`, when it tells any;
+   * `accepted` hears the id of the reply just written.
+   */
   function reply(
     parent: ThreadParent,
-    body: string,
+    words: { body: string; mentions?: string[] },
     markRoot: number | null,
     accepted: (commentId: number) => void,
   ) {
     let written = 0
     return submit(
       async () => {
-        const answer = await replyInThread({ id: identity(), body, ...parent })
+        const answer = await replyInThread({ id: identity(), ...words, ...parent })
         written = answer.comment_id
         if (markRoot !== null) await markBlank(markRoot)
       },
