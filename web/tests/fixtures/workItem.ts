@@ -1,3 +1,4 @@
+import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
@@ -65,6 +66,12 @@ export function getButton(wrapper: VueWrapper, text: string) {
     .find((entry) => entry.text() === text || entry.attributes('aria-label') === text)
   if (button === undefined) throw new Error(`Missing button: ${text}`)
   return button
+}
+
+/** Open a card's Relations, where its chain stands. */
+export async function showRelations(wrapper: VueWrapper) {
+  await getButton(wrapper, 'Relations').trigger('click')
+  await flushPromises()
 }
 
 export function value(wrapper: VueWrapper, label: string) {

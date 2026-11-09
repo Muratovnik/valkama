@@ -66,6 +66,29 @@
   min-width: 0;
 }
 
+/* The epic's sign stands a glyph's gap before its link, as a kind's sign stands before the
+   number on a tile; the link takes the ink of a value, against the label's quiet one. */
+.card-epic {
+  gap: var(--space-1);
+}
+
+/* «Answer» speaks in the state chip's word beside it, trimmed to its letters as that word is,
+   so the two stand on one baseline with the row's name. */
+.card-question-word {
+  font: var(--font-field-label);
+}
+
+/* The trim clips sideways at the box, and a link's underline ends a fraction past its last
+   letter: the room each side keeps that fringe, and takes none from the row. */
+.card-epic-link {
+  min-width: 0;
+  padding-inline: var(--space-half);
+  margin-inline: calc(-1 * var(--space-half));
+  color: var(--color-text);
+  font: var(--font-detail);
+  white-space: nowrap;
+}
+
 /* The holder's words take one line beside the action; only where they cannot does the name
    give way. */
 .card-holder-value {

@@ -10,7 +10,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { rootFramed, routeState, serve, smallChain } from './chainFixtures.ts'
+import { rootFramed, routeState, serve, showRelations, smallChain } from './chainFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -22,6 +22,7 @@ const REFERENCE = '.flow-node-id, .flow-node-overview-reference'
 async function chainSection(page: Page) {
   const entity = planningWorkItemEntity(workItemRef)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope, entity }))
+  await showRelations(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   return section

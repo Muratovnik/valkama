@@ -7,7 +7,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { branchedChain } from '../fixtures/chainMap.ts'
 import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
-import { largeChainHere, serve } from './chainFixtures.ts'
+import { largeChainHere, serve, showRelations } from './chainFixtures.ts'
 import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -40,6 +40,7 @@ async function leftFromDepth(page: Page, comments?: unknown[]) {
   await installBackend(page, { comments })
   await serve(page, largeChainHere())
   await page.goto(CARD)
+  await showRelations(page)
   const drawer = page.locator('.drawer')
   const body = drawer.locator('.drawer-frame-body')
   const group = drawer.locator('section.chain-group[aria-label="Backlog"]')
@@ -160,7 +161,8 @@ test('Back when the chain never answers shows the card for good, as far down as 
     .toBe(true)
   const room = await body.evaluate((node) => node.scrollHeight - node.clientHeight)
   await expect.poll(() => placeOf(body)).toBe(Math.min(place, room))
-  await expect(drawer.locator('.overview')).toBeVisible()
+  // The section it was left in: Relations, where the chain stands.
+  await expect(drawer.locator('.relations')).toBeVisible()
   await expect(drawer.locator('.drawer-frame-close')).toBeEnabled()
 })
 
@@ -176,9 +178,9 @@ test('a reader who has moved on before the chain answers is left where they are'
     .toBe(true)
   const box = await body.boundingBox()
   await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 200)
-  const landed = await placeOf(body)
+  // Relations without its chain may hold too little to scroll: the wheel is the reader
+  // moving on either way, and the place it leaves is the one the chain must not change.
   await page.mouse.wheel(0, -40)
-  await expect.poll(() => placeOf(body)).toBeLessThan(landed)
   const moved = await placeOf(body)
   // The chain has answered once its rows stand; nothing comes for the reader after that.
   await expect(drawer.locator('.chain-row').first()).toBeVisible({ timeout: 4000 })
@@ -199,6 +201,7 @@ test('Back at normal speed lands once, exactly where the card was left', async (
     ),
   )
   await page.goto(CARD)
+  await showRelations(page)
   const drawer = page.locator('.drawer')
   const body = drawer.locator('.drawer-frame-body')
   await expect(drawer.locator('.branch-map-canvas')).toBeVisible()

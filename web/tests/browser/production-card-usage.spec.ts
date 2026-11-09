@@ -12,7 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { noUsage, richUsage, usageAnswer } from '../fixtures/usage.ts'
 import { deferred } from '../fixtures/workItem.ts'
 import { installBackend } from './backend.ts'
-import { largeChainHere, serve } from './chainFixtures.ts'
+import { largeChainHere, serve, showRelations } from './chainFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { attachedWorkItemRef, projectScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
@@ -251,6 +251,7 @@ test('an epic reads its whole scope, and each member of its chain says its share
   expect(asked.map((url) => url.searchParams.get('scope'))).toEqual(
     expect.arrayContaining(['epic', 'item']),
   )
+  await showRelations(page)
   const row = page.locator(`.drawer .chain-row[data-reference="${member.reference}"]`)
   await expect(row.locator('.chain-row-usage')).toHaveText(
     /≈\u{A0}2\u{A0}h\u{A0}18\u{A0}min\s*≈\u{A0}\$34\.89/u,

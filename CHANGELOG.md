@@ -77,6 +77,27 @@ checkouts are therefore distinguishable even at the same version.
   answered fold where they stand and later gather under «Answered (N)» at the end of the list,
   never moving while your pointer or keyboard is on them or below them.
 
+- **A card's chain is under «Relations».** The chain section moved from Overview to the
+  Relations tab, after the links and references. Its «Epic | Chain» switch shows only where
+  the two differ. The chain read (`GET /api/planning/work-item/chain`, `get_work_item_chain`)
+  adds `root.totals`, how many members each scope holds; nothing it answered before changed.
+
+- **The pin is in a card's «…».** A «…» menu beside Close holds «Pin to Work», checked while
+  the item is pinned; the pin no longer stands in the line with the reference and the date.
+  The menu works from the keyboard as a menu does: arrows, Home and End, Escape back to «…».
+
+- **«Answer» in a card's facts.** Where a question waits, the facts offer «Answer» with the
+  question's sign, which goes to the question on Overview; it was a «Waiting for an answer»
+  status that acted when pressed.
+
+- **The epic in a card's facts is a link.** It draws the epic's sign, as a tile does, and its
+  number opens the epic, through the card's Back, with the epic's hover card on pointing; the
+  blocker an item waits on is a link the same way.
+
+- **A card's History and Executions open with their records.** The sentences over them saying
+  what the search searches and what an attempt is are gone; a permanent explanation is no
+  longer placed over a section.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session

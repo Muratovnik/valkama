@@ -7,7 +7,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import { chainResponse, emptyChain, largeEpicChain } from '../fixtures/chain.ts'
-import { getButton, workItemFixture } from '../fixtures/workItem.ts'
+import { getButton, showRelations, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -39,6 +39,7 @@ async function openWith(...answers: Response[]) {
   )
   const wrapper = mountInspector(ROOT)
   await flushPromises()
+  await showRelations(wrapper)
   return wrapper
 }
 

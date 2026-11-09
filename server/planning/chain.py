@@ -104,6 +104,14 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         if row["parent_id"] is not None:
             children.setdefault(str(row["parent_id"]), []).append(identity)
     members = _members(root_id, scope, rows, children, links)
+    # How many members each scope holds, whichever was asked: an epic's children are
+    # always among its chain's members, so equal totals mean the two answers are one.
+    totals = {
+        other: len(members)
+        if other == scope
+        else len(_members(root_id, other, rows, children, links))
+        for other in SCOPES
+    }
     rank = ranking.ranks(rows.values())
 
     # What an unfinished item blocks, wherever the blocker lives. A blocker whose
@@ -154,6 +162,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
             "title": root["title"],
             "kind": root["kind"],
             "has_children": root_id in children,
+            "totals": totals,
         },
         "scope": scope,
         **_counts(found),

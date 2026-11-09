@@ -127,6 +127,14 @@ and only fades the end of a strip that scrolls on past it.
   earns its place only by stating a fact the reader acts on; every module once
   carried a sentence describing what the module is, which the rail and the
   screen already said, and it took a second row of the header for it.
+- A permanent explanation is not placed. A paragraph that stands over a section
+  saying what it holds or what its search searches is read once and then pushes
+  the content down on every visit; a card's History, Executions and their intro
+  each carried one, and they came back after being taken out once. Where an
+  action is not predictable from its control, the control says it in its own
+  place: a placeholder in the field, the empty state when there is nothing, or
+  a `detail` hint on the control. A field's own hint under it (`VField`) is part
+  of that field, not a paragraph over a section.
 - The shell has two zones and they must read as two. The chrome — the
   navigation rail and the context bar — is the dark backing of the whole
   window, and the workspace is a lighter panel lying on it. Two adjacent zones
@@ -827,6 +835,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
   same control built again, and `check:ui-system` rejects one.
+- **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
+  the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
+  menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
+  first entry; the arrows walk the entries and wrap, Home and End go to the ends, a letter
+  goes to the entry it starts; Escape, a choice or a press outside close it and focus goes
+  back to the trigger. It holds actions, settings that show a check while on, and a choice of
+  a few values under a caption, each a row of the control height, and floats over a card or a
+  dialog as a choice list does. A stray press reaches neither the trigger nor an entry. A
+  menu does things to what it stands beside; picking the value a field holds is
+  `ChoiceSelect`'s.
 - **Disclosure:** what shows more of something — the rest of a long text,
   earlier replies, a chain's or a lane's further rows, a folded thread — is the
   bare `text` weight, its words in line with what it opens. The ghost's fill is
@@ -1175,7 +1193,13 @@ never in heavier ink, and reads high or urgent after its reference; its glyphs a
 not pressed, since the card is one button. A search result leads with the
 same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
-A card's chain section leads with a branch map: one lane per origin of work,
+A card's chain section stands in «Связи», after the item's links and references: what
+the work grew into is a relation of the item, and the map and its hundreds of rows held
+Overview's first screen between the next step and the description. Its «Эпик | Цепочка»
+switch stands only where the two answer differently, by the counts the chain read gives
+for both scopes: where the work grew nothing past the root's children the two are one
+list, and a root with no children has no epic scope to read.
+The section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the
 board's hues — finished green, in progress blue, review amber, ahead grey,
@@ -1437,15 +1461,25 @@ in one tertiary line — the kind (glyph and word, in its own colour), the refer
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
-Back and Close. The scroller holds the rest and moves it 1:1: the title, the facts, the
+Back, «…» and Close. «…» holds what a person does with the item that is no fact of it: the
+pin that keeps it in the side panel's «Работа», a setting checked while it is on. The pin
+stood in the identity line between the link and the date, read as one more fact there. The
+link to copy stays beside the reference: it is the reference's twin, in the head as on the
+hover card, and what it did is said at the end of that line. The scroller holds the rest and moves it 1:1: the title, the facts, the
 tabs, the content. The facts are rows 4px apart, each led by its name in the quiet ink in
 one column, «Состояние», «Приоритет», «Эпик», «Исполняет» or «Ранее отвечал», «Подписаны»
 and «Метки», with the value on the name's baseline; a run of chips with no names read as
 one heap of state, priority, holder and tags. The state is its own transition menu, said
-once, so a move the server refuses leaves the chip naming where the item is, then a
-question waiting for its answer. The priority is a menu as well, urgent to low, each
+once, so a move the server refuses leaves the chip naming where the item is, then, while a
+question waits, «Ответить» with the question's sign: a verb that goes to the question on
+Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
+that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
-The epic is its reference. The holder is bare words, shortened to its name and the start
+The epic is the epic's sign, as a tile draws it, and its reference as an item link, the
+same link a number in text is: a press opens the epic through the card's departure, its
+draft guard and Back, and resting on it shows the epic's hover card; its number is trimmed to
+its letters as every value of the facts is, so it stands on its name's baseline. A ↳ and a
+bare number there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
 of its session with the whole value and its lease in a tooltip and a warning dot once
 nobody is behind it; a plate there read as one more chip. «Подписаны» names the other
 sessions that follow the item, each as its claim's holder would print, a name moving to
@@ -1466,7 +1500,7 @@ one height, the state chip's, so a wrap adds a row of that height and never a ha
 One action ends the holder's row on a wide drawer and stands at full width under the
 labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —
-«Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите задачу из него» on an
+«Ждёт MAIN-12», the number a link, while an open blocker remains, «Эпик — возьмите задачу из него» on an
 epic.
 Reading down, the tabs stick to the top of the scroller, on one row that scrolls inside
 itself where it has to, the one shown and the one focused brought into it, and whatever
@@ -1528,8 +1562,7 @@ words in `title` and `aria-label`. An icon is a 28px target with a fine pointer 
 a finger or on a screen a phone's width, drawn bare either way, so the difference is room
 around the glyph. The words of the line wrap in a column of their own, so no name reaches the
 icons. A comment that asks and still waits for its reply says «· пока без ответа» after the
-time, as plain words of that line and the last of them, not «Ждёт ответа», the head's chip for a
-question to the person. They stay beside the time only where the author keeps the lines it has
+time, as plain words of that line and the last of them, not a status chip. They stay beside the time only where the author keeps the lines it has
 without them, and otherwise start the next line without the dot; the time never moves for them.
 They go once another session or a person replies in the thread, or the thread is resolved. Only what shows more of what an entry says keeps its words, because those say how much
 is left. Every entry has the one Reply, because threads are one level deep and an answer to a

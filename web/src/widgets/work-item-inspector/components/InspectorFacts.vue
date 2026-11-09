@@ -12,7 +12,9 @@
  * filters the Work view and ends in a × that takes it off, and a «+» attaches another.
  *
  * Every mark is the facet registry's, so the priority carries its glyph and its hue here as it
- * does on a tile. The holder's words are bare, a way to the session where there is one: a plate
+ * does on a tile. The epic is the epic's sign and its reference as an item link, the same link
+ * a number in text is: a press opens the epic through the card's own departure (its draft
+ * guard, its Back), and resting on it shows the epic's hover card. The holder's words are bare, a way to the session where there is one: a plate
  * of the same weight as the chips above it made the row one more chip. The lease is a tooltip
  * and, when nobody is behind it any more, a warning dot: a detail of the holder, not a fact of
  * its own. The other sessions that follow the item are a row under it, each printed as its
@@ -47,10 +49,13 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import RichText from '@/shared/ui/RichText.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -58,7 +63,7 @@ const props = withDefaults(
     item: WorkItem
     workflow: PlanningWorkflow | null
     writable: boolean
-    /** Whether a question on it waits for an answer. */
+    /** Whether a question on it waits for an answer: the facts offer to go and answer it. */
     asking?: boolean
     /** The epic's reference; the record carries only its id. */
     parentReference?: string | null
@@ -71,6 +76,8 @@ const emit = defineEmits<{
   /** A move to another state, another priority, or the labels it should carry now. */
   'fact': [change: FactChange]
   'filter': [token: WorkFilterToken]
+  /** An item's link in the facts was pressed: the host opens it as any item from the card. */
+  'open': [reference: string]
   'question': []
   'release': []
   'take-over': []
@@ -139,6 +146,22 @@ const labelsShown = computed(() => props.item.labels.length > 0 || props.writabl
 const context = computed(() => ({ parentReference: props.parentReference }))
 /** The one fact an item can lack; the others say their own word for having none. */
 const inEpic = computed(() => printsFacet('parent', 'card', props.item, context.value))
+
+/**
+ * An item of the card's space named in the facts — the epic, the blocker a reason waits on —
+ * links as the layers above say it does, with its address and its hover card, and opens
+ * through the host, which asks about a draft first and keeps the way back. The facts stand
+ * above the card's body and outside its layer, so they bring this part of it with them.
+ */
+provideReferenceLinks((reference, parent) => {
+  const link = parent(reference)
+  const own = props.item.reference
+  return link &&
+    reference.kind === 'work-item' &&
+    referenceSpaceKey(reference.value) === referenceSpaceKey(own)
+    ? { ...link, open: () => emit('open', reference.value) }
+    : link
+})
 
 /**
  * Whether anyone is still behind another holder's claim, and until when.
@@ -240,6 +263,8 @@ defineExpose({ actionCell })
             :label="item.state.name"
           />
         </span>
+        <!-- A verb, not a state: the state's dot already says an agent waits, and this goes
+             to the question on Overview. -->
         <VButton
           v-if="asking"
           class="card-question"
@@ -247,11 +272,11 @@ defineExpose({ actionCell })
           size="compact"
           @click="emit('question')"
         >
-          <SemanticState
-            dimension="work-item-readiness"
-            state="asking"
-            :label="t('requests.pending')"
+          <VIcon
+            name="message-square"
+            :size="16"
           />
+          <span class="card-question-word trimmed-word">{{ t('requests.answerQuestion') }}</span>
         </VButton>
       </div>
     </div>
@@ -298,12 +323,17 @@ defineExpose({ actionCell })
     >
       <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.parent') }}</span>
       <div class="card-row-value">
-        <span class="card-fact">
+        <span class="card-fact card-epic">
           <FacetMarks
             surface="card"
             :item="item"
             :facets="['parent']"
             :context="context"
+          />
+          <RichText
+            class="card-epic-link trimmed-word"
+            :source="parentReference ?? ''"
+            inline
           />
         </span>
       </div>

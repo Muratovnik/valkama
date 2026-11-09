@@ -735,7 +735,7 @@ answers with `interface_version` and `chain`:
 
 | Field | What it holds |
 | --- | --- |
-| `root` | `work_item_id`, `reference`, `title`, `kind` and `has_children`, true when any item names the root as its parent |
+| `root` | `work_item_id`, `reference`, `title`, `kind`, `has_children`, true when any item names the root as its parent, and `totals`, how many members each scope holds (`chain`, `epic`) whichever scope was asked; the root's children are always members of its chain, so equal totals mean the two scopes answer the same members |
 | `scope` | `chain` or `epic` |
 | `total`, `closed`, `open`, `ready` | how many members there are, how many are in a terminal state, how many are not, and how many are ready |
 | `by_category` | members per workflow category, for the categories that have any |

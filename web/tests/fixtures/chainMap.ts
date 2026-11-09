@@ -95,6 +95,8 @@ interface ChainExtras {
   scope?: 'chain' | 'epic'
   /** Each parent epic's title, by reference. */
   titles?: Record<string, string>
+  /** What each scope holds, where the chain's members alone do not say it. */
+  totals?: { chain: number; epic: number }
 }
 
 function originsOf(root: MapRoot, members: MapMember[], titles: Record<string, string>) {
@@ -171,6 +173,10 @@ export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras
       title: root.title ?? 'Root',
       kind: 'epic' as const,
       has_children: members.some((member) => member.parent_reference === root.reference),
+      totals: extras.totals ?? {
+        chain: members.length,
+        epic: members.filter((member) => member.parent_reference === root.reference).length,
+      },
     },
     scope: extras.scope ?? 'chain',
     total: members.length,

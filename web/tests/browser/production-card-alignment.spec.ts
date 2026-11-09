@@ -287,7 +287,7 @@ function factBaselines(page: Page) {
     const canvas = document.createElement('canvas').getContext('2d')
     if (!canvas) throw new Error('no canvas')
     const WORDS =
-      '.state-label, .facet-word:not(.facet-word-hidden), .open-action-name, .card-holder-name, .chip-face'
+      '.state-label, .card-question-word, .facet-word:not(.facet-word-hidden), .card-epic-link a, .open-action-name, .card-holder-name, .chip-face'
     const measure = (word: Element) => {
       const range = document.createRange()
       range.selectNodeContents(word)
@@ -318,11 +318,10 @@ for (const locale of ['ru', 'en'] as const) {
       await openCard(page, locale, width, FULL_HEAD)
       const lines = await factBaselines(page)
       console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
-      // The state and the question, the priority, the epic, the holder and the labels, each
-      // with its name. A phone in English moves the question under the state, and the name
-      // stays on the state's line.
+      // The state and «Answer», the priority, the epic, the holder and the labels, each with
+      // its name; «Answer» is short enough to stay on the state's line on a phone.
       expect(lines).toHaveLength(5)
-      expect(lines[0]).toHaveLength(width === 390 && locale === 'en' ? 2 : 3)
+      expect(lines[0]).toHaveLength(3)
       for (const [first, ...rest] of lines)
         for (const other of rest)
           expect(
@@ -351,7 +350,9 @@ test('a long word on the first row is cut short sideways, with an ellipsis, and 
   expect(await shapeOf(drawer.locator('.card-facts .state-label', { hasText: state }))).toEqual(
     shortened,
   )
-  const word = drawer.locator('.card-facts-block .card-fact .facet-word', { hasText: 'MAIN-12' })
+  const word = drawer.locator('.card-facts-block .card-fact .card-epic-link', {
+    hasText: 'MAIN-12',
+  })
   await word.evaluate((element) => {
     const fact = element.closest<HTMLElement>('.card-fact')
     if (fact) fact.style.maxWidth = '48px'

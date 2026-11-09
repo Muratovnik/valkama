@@ -200,8 +200,6 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
         />
       </p>
     </div>
-    <!-- What the item is made of, which its host reads and owns. -->
-    <slot name="composition" />
 
     <InspectorDescription
       :item="item"

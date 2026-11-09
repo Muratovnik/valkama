@@ -44,6 +44,11 @@ const rootSchema = strictObject({
   title: title(),
   kind: enumField(WORK_ITEM_KINDS),
   has_children: z.boolean(),
+  /**
+   * How many members each scope holds, whichever was asked. The root's children are
+   * always members of its chain, so equal totals mean both scopes answer the same work.
+   */
+  totals: strictObject({ chain: count(), epic: count() }),
 })
 
 const originSchema = strictObject({

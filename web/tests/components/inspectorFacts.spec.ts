@@ -2,10 +2,11 @@
  * The card's facts line: the state as its own menu, the registry's marks, and
  * one action — or the reason there is none — decided by who holds the item.
  */
+import { defineComponent } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
 
@@ -15,6 +16,7 @@ import type { FacetChoiceOption } from '@/entities/work-item/composables/useFace
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
 
@@ -79,6 +81,40 @@ function facts(record: WorkItem, props: { busy?: boolean; writable?: boolean } =
       stubs: { ChoiceSelect: choiceStub, VIcon: true },
     },
   })
+}
+
+/** The facts under a layer that links every item, as the open space's layer does. */
+function linkedFacts(record: WorkItem, parentReference: string | null) {
+  const elsewhere = vi.fn()
+  const preview = { describe: () => 'preview', render: () => null }
+  const wrapper = mount(
+    defineComponent({
+      components: { InspectorFacts },
+      emits: ['open'],
+      setup(_, { emit }) {
+        provideReferenceLinks((reference) =>
+          reference.kind === 'work-item'
+            ? {
+                title: `Open ${reference.value}`,
+                href: `/open/${reference.value}`,
+                open: elsewhere,
+                preview,
+              }
+            : null,
+        )
+        return { record, parentReference, workflow, open: (to: string) => emit('open', to) }
+      },
+      template:
+        '<InspectorFacts :item="record" :workflow="workflow" :busy="false" writable :parent-reference="parentReference" @open="open" />',
+    }),
+    {
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+        stubs: { ChoiceSelect: choiceStub, VIcon: true },
+      },
+    },
+  )
+  return { elsewhere, wrapper }
 }
 
 const actionText = (wrapper: ReturnType<typeof facts>) =>
@@ -172,6 +208,26 @@ describe('the state as the menu that moves it', () => {
     expect(busy.emitted('fact')).toBeUndefined()
   })
 
+  // A question waiting is a way to answer it, said as the verb: the state already says the
+  // agent waits, and a button drawn as a status read as one more fact.
+  it('offers to answer a question that waits, with its sign, and goes to it', async () => {
+    const asked = mount(InspectorFacts, {
+      props: { item: item(), workflow, busy: false, writable: true, asking: true },
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+        stubs: { ChoiceSelect: choiceStub },
+      },
+    })
+    const button = asked.get('.card-question')
+    expect(button.element.tagName).toBe('BUTTON')
+    expect(button.text()).toBe('Answer')
+    expect(button.find('svg').classes()).toContain('lucide-message-square')
+    expect(button.find('[data-dimension]').exists()).toBe(false)
+    await button.trigger('click')
+    expect(asked.emitted('question')).toHaveLength(1)
+    expect(facts(item()).find('.card-question').exists()).toBe(false)
+  })
+
   it('is a plain state where nothing can move it', () => {
     const wrapper = facts(item(), { writable: false })
     expect(wrapper.findComponent(choiceStub).exists()).toBe(false)
@@ -261,14 +317,30 @@ describe('the marks beside the state', () => {
   it('names the epic where the host knows its reference', () => {
     const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
     expect(facts(record).find('[data-facet="parent"]').exists()).toBe(false)
-    const wrapper = mount(InspectorFacts, {
-      props: { item: record, workflow, busy: false, writable: true, parentReference: 'MAIN-9' },
-      global: {
-        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
-        stubs: { ChoiceSelect: choiceStub, VIcon: true },
-      },
-    })
-    expect(wrapper.get('[data-facet="parent"]').text()).toBe('MAIN-9')
+  })
+
+  // The epic is an item link, as a number in text is: the address and the hover card of the
+  // layers above, a press through the card's own departure, and the epic's sign before it.
+  it('draws the epic as the epic sign and a link that opens through the card', async () => {
+    const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
+    const { elsewhere, wrapper } = linkedFacts(record, 'QA-9')
+    const sign = wrapper.get('[data-facet="parent"]')
+    expect(sign.attributes('data-kind')).toBe('epic')
+    expect(sign.find('svg').classes()).toContain('lucide-layers')
+    const link = wrapper.get('.card-epic a')
+    expect(link.attributes('href')).toBe('/open/QA-9')
+    expect(link.text()).toBe('QA-9')
+    await link.trigger('click', { button: 0 })
+    expect(wrapper.emitted('open')).toEqual([['QA-9']])
+    expect(elsewhere).not.toHaveBeenCalled()
+  })
+
+  it('links the blocker a reason waits on, through the card', async () => {
+    const { wrapper } = linkedFacts(item({ links: [blockedBy('QA-12', false)] }), null)
+    const link = wrapper.get('.write-reason a')
+    expect(link.attributes('href')).toBe('/open/QA-12')
+    await link.trigger('click', { button: 0 })
+    expect(wrapper.emitted('open')).toEqual([['QA-12']])
   })
 
   it('adds a pressed label to the filter', async () => {

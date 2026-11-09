@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 
 import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
-import { workItemFixture } from '../fixtures/workItem.ts'
+import { showRelations, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { withSecurityBootstrap } from '../support/request.ts'
 
@@ -58,6 +58,7 @@ describe('the chain section of a card, blocked from outside the chain', () => {
     )
     const wrapper = mountInspector(ROOT)
     await flushPromises()
+    await showRelations(wrapper)
 
     const section = wrapper.find('section.chain')
     const marks = section.findAll('.chain-row-waiting').map((mark) => mark.text())

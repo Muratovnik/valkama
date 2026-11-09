@@ -637,7 +637,6 @@ export const en = {
   },
   execution: {
     heading: 'Executions',
-    intro: 'Every attempt at this item: what the client reported, and what the checkout shows.',
     launch: 'Start an attempt',
     stop: 'Stop',
     loading: 'Reading the attempts',

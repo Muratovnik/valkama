@@ -43,6 +43,7 @@ import {
   CornerDownRight,
   createLucideIcon,
   Database,
+  Ellipsis,
   ExternalLink,
   FileText,
   Filter,
@@ -197,6 +198,8 @@ const ICONS: Record<string, Component> = {
   'language': Languages,
   'menu': Menu,
   'message-square': MessageSquare,
+  // A menu of what else can be done to what it stands beside: a card's «…».
+  'more': Ellipsis,
   // The graph's one switch for live work moving: stop it, or let it run.
   'pause': Pause,
   'play': Play,

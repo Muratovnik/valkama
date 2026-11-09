@@ -17,7 +17,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { lane, openBoard, openList, serve } from './boardPage.ts'
-import { largeChainHere, serve as serveChain } from './chainFixtures.ts'
+import { largeChainHere, serve as serveChain, showRelations } from './chainFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -335,6 +335,7 @@ test('a chain’s section reaches its list with no chart in the way', async ({ p
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
+  await showRelations(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   // Between the map and the list: the figures, a verdict, one action and a heading.
