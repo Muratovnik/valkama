@@ -152,13 +152,24 @@ test('the disclosure keys: Tab reaches folds and links, Enter and Space fold, Es
   await expect(liveRow(page, 'MAIN-12')).toBeHidden()
   await page.keyboard.press('Space')
   await expect(spaceFold).toHaveAttribute('aria-expanded', 'true')
+  // The quiet rows' fold opens with Enter, and Escape in its rows folds them back.
+  const quietFold = page.locator('.nav-quiet-fold').first()
+  await quietFold.focus()
+  await page.keyboard.press('Enter')
+  await expect(quietFold).toHaveAttribute('aria-expanded', 'true')
+  await expect(liveRow(page, 'MAIN-13')).toBeVisible()
+  await liveRow(page, 'MAIN-13').locator('.nav-row-link').focus()
+  await page.keyboard.press('Escape')
+  await expect(quietFold).toBeFocused()
+  await expect(quietFold).toHaveAttribute('aria-expanded', 'false')
+  await expect(liveRow(page, 'MAIN-13')).toBeHidden()
+  // A keyboard fold rings, as focus moved by the interface for a key does.
+  expect(await quietFold.evaluate((node) => node.matches(':focus-visible'))).toBe(true)
+  // Escape on a row of the work at hand folds its space.
   await liveRow(page, 'MAIN-12').locator('.nav-row-link').focus()
   await page.keyboard.press('Escape')
-  const epicFold = liveRow(page, 'MAIN-4').locator('.nav-row-fold')
-  await expect(epicFold).toBeFocused()
-  await expect(epicFold).toHaveAttribute('aria-expanded', 'false')
-  // A keyboard fold rings, as focus moved by the interface for a key does.
-  expect(await epicFold.evaluate((node) => node.matches(':focus-visible'))).toBe(true)
+  await expect(spaceFold).toBeFocused()
+  await expect(spaceFold).toHaveAttribute('aria-expanded', 'false')
 })
 
 test('says nobody is working when the frame is empty, in the room a row takes', async ({

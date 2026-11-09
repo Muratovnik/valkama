@@ -47,6 +47,18 @@ checkouts are therefore distinguishable even at the same version.
   no session proved, with no session at work on the item, draws nothing on the tile; the list
   and the card still name its holder.
 
+- **Settings stands at the foot of the rail.** It moved from under the last group into the
+  rail's foot, under the connection's state when that is lost, so it stays in one place
+  however long the list of work going on now grows. It is still part of the navigation.
+
+- **«Work» in the rail follows running work.** Each space lists only the items a session is
+  working on or waiting at, the most recently changed first. Items held while a session
+  works on others, or silent for over a day, fold under one row, «N more quiet», which opens
+  in place; pinned items not at work stand in a group of their own. An epic is no longer a
+  row heading its items: its title leads each of their rows, muted. The live-work frame
+  gives each row `updated_at`, when its item last changed.
+
+
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on
   one line in a card's drawer, and one quiet line under the label saying the way chosen, what

@@ -5,7 +5,9 @@ first, so it is one small read rather than a space's read model each. It reads
 every open item and every pinned one in one query, with every ancestor of them,
 and asks `live_work.placed` for the state a graph moves by. It carries no history
 and no time that moves, so a store in which nothing changed gives the same frame,
-and an unchanged frame is what lets a stream send nothing. Attached stores are not
+and an unchanged frame is what lets a stream send nothing. Each row says when its
+item last changed, `updated_at`, which only a write to the item moves: the side
+panel orders the work going on now by it, freshest first. Attached stores are not
 read: the frame is the primary store's, whichever space a stream follows.
 
 | Row | When |
@@ -58,7 +60,7 @@ _ITEMS = (
     " lineage(id) AS (SELECT id FROM shown"
     " UNION SELECT w.parent_id FROM lineage l JOIN work_items w ON w.work_item_id = l.id"
     " WHERE w.parent_id IS NOT NULL)"
-    " SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id, w.position,"
+    " SELECT w.work_item_id, w.number, w.title, w.kind, w.parent_id, w.position, w.updated_at,"
     " CASE WHEN w.checklist LIKE '%(session %' THEN w.checklist ELSE '[]' END AS checklist,"
     " p.key, s.name AS state_name, s.is_terminal, s.position AS state_position,"
     " EXISTS (SELECT 1 FROM pinned_work_items n WHERE n.work_item_id = w.work_item_id)"
@@ -85,6 +87,8 @@ class _Item:
     pinned: bool
     state_name: str
     is_terminal: bool
+    #: When the item last changed: only a write to it moves this.
+    updated_at: str
     #: The order of work: the state's place in its workflow, then the item's in its state.
     order: tuple[float, float, int]
     number: int
@@ -102,6 +106,7 @@ def _item(row: sqlite3.Row) -> _Item:
         pinned=bool(row["pinned"]),
         state_name=str(row["state_name"]),
         is_terminal=bool(row["is_terminal"]),
+        updated_at=str(row["updated_at"]),
         order=(float(row["state_position"]), float(row["position"]), number),
         number=number,
     )
@@ -230,6 +235,7 @@ def _row(item: _Item, live: Mapping[str, dict], agents: Mapping[str, int], paren
         "pinned": item.pinned,
         "state_name": item.state_name,
         "is_terminal": item.is_terminal,
+        "updated_at": item.updated_at,
     }
 
 

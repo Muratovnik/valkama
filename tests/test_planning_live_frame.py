@@ -63,6 +63,13 @@ class FrameCase(LiveWorkCase):
         )
         return str(created["reference"])
 
+    def updated_at(self, reference: str) -> str:
+        number = int(reference.rsplit("-", 1)[1])
+        row = self.conn.execute(
+            "SELECT updated_at FROM work_items WHERE number = ?", (number,)
+        ).fetchone()
+        return str(row[0])
+
     def epic(self) -> str:
         created = service.create_work_item(self.conn, space=SPACE, title="Epic", kind="epic")
         return str(created["reference"])
@@ -94,10 +101,26 @@ class RowTests(FrameCase):
                     "pinned": False,
                     "state_name": "Backlog",
                     "is_terminal": False,
+                    "updated_at": self.updated_at(reference),
                 }
             ],
             space["rows"],
         )
+
+    def test_a_row_says_when_its_item_last_changed_which_only_a_write_moves(self) -> None:
+        reference = self.item()
+        self.working(reference)
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = ? WHERE number = ?",
+            ("2026-01-02T03:04:05Z", int(reference.rsplit("-", 1)[1])),
+        )
+        self.conn.commit()
+        self.assertEqual("2026-01-02T03:04:05Z", self.rows()[reference]["updated_at"])
+        self.assertEqual(self.frame(), self.frame(), "time passing moves nothing")
+        service.update_work_item(self.conn, reference, title="Renamed")
+        moved = self.rows()[reference]["updated_at"]
+        self.assertEqual(self.updated_at(reference), moved)
+        self.assertGreater(moved, "2026-01-02T03:04:05Z")
 
     def test_a_quiet_row_is_in_the_frame_with_its_state_and_since_when(self) -> None:
         reference = self.item()

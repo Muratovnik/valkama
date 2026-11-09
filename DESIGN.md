@@ -684,9 +684,12 @@ a right-hand column of six numbers that means nothing read on its own. Only the
 compact state moves a count to the top-right of the icon box, which is the one
 place left once the label is gone; it never reserves unexplained space below it.
 
-Work and Settings own distinct icons. Settings is a destination like any other and
-stands under the last navigation group; the rail's footer holds the connection
-state and refresh and nothing you navigate to. A lost connection is said there
+Work and Settings own distinct icons. Settings is a destination like any other, in
+the navigation landmark, and stands in the rail's footer at its floor, under the
+connection state and refresh. It stood under the last navigation group, so a long
+list of work going on now carried it into the middle of the rail and a short one
+left it half way up; in the footer it is in one place whatever the list holds, and
+a lost connection said above it does not move it. A lost connection is said there
 and only there: the dot and the word change, the tooltip says that the app
 reconnects by itself and what the button does, and assistive technology hears
 it once. On a narrow rail the word is gone, so a press on the dot while the
@@ -706,15 +709,32 @@ its narrowest and widest. It starts at 260px, goes no narrower than 200px and no
 name the rail still cuts short says itself in a hint beside the rail; a name it does not
 cut shows none. At 760px and narrower the rail is its icons alone and has no edge to drag.
 
-The connection's foot shows only while the connection is lost. Connected, the streams bring
-every change as it happens, so a green dot and a refresh nobody needed stood at the foot of
-every page; connecting is the moment a page opens, and showing it would only flash. Lost,
-the foot holds the state, the reason in its hint and the refresh, as below.
+The connection's state shows in the foot only while the connection is lost. Connected, the
+streams bring every change as it happens, so a green dot and a refresh nobody needed stood at
+the foot of every page; connecting is the moment a page opens, and showing it would only
+flash. Lost, the foot holds the state, the reason in its hint and the refresh above Settings,
+with a rule over them; connected, it holds Settings alone and draws no rule.
 
-In the Work list's phone panel (the navigation at most 760px wide), only a closed
-top-level item with no sign and no fold loses its lead column, so its title takes that
-room; a group's head with items shown under it, an item with a sign and a closed item
-nested under another keep their lead column.
+The Work list under «Work» is there to follow running work across spaces at a glance.
+Each space shows, first, only the items a session is working on or waiting at, the one
+whose item changed last on top (the live frame's `updated_at`; two changed in one second
+stand by number). Under them «без задачи · N агент» counts the agents at work in the
+space on no item. Then one row, «ещё N тихих», folds the quiet work — items a session
+holds while it works on others, and items silent for over a day — in the same order; it
+starts folded, opens in place under itself, and its opening is kept on the device.
+Opening it moves nothing above it and widens nothing: the numbers' column is sized with
+the folded rows already. Last, under the caption «Закреплённые», the pinned items not at
+work, by number; a pinned item at work stands with the work instead, once. An epic, or
+any item the list holds only as the parent of others, is no row of its own: its title
+leads each of its items' rows, muted, and gives way first, down to three letters that
+the row's hint completes and never more than two fifths of the row, so the item's own
+title keeps the rest; both stay on one line. An
+epic at work is a row like any other. This replaced a tree of epics with their items
+under them, quiet and pinned items mixed in by number, which read as a heap.
+
+In the Work list's phone panel (the navigation at most 760px wide), a closed item with
+no sign loses its lead column, so its title takes that room; an item with a sign keeps
+it.
 
 The shell owns one page scroll surface. Horizontal scrolling belongs only to a
 data region that genuinely needs it, such as Kanban lanes or a wide table.

@@ -25,6 +25,7 @@ const row = {
   pinned: false,
   state_name: 'Dev',
   is_terminal: false,
+  updated_at: '2026-11-04T10:15:00Z',
 }
 
 const contractExample = {
@@ -43,6 +44,7 @@ const contractExample = {
           parent: null,
           state: null,
           agents: 0,
+          updated_at: '2026-10-28T08:00:00Z',
         },
         row,
         {
@@ -52,6 +54,7 @@ const contractExample = {
           state: 'quiet',
           agents: 0,
           quiet_since: '2026-11-03T18:02:11Z',
+          updated_at: '2026-11-03T17:40:00Z',
         },
         {
           ...row,
@@ -63,6 +66,7 @@ const contractExample = {
           pinned: true,
           state_name: 'Done',
           is_terminal: true,
+          updated_at: '2026-10-02T12:00:00Z',
         },
         {
           ...row,
@@ -73,6 +77,7 @@ const contractExample = {
           agents: 0,
           pinned: true,
           state_name: 'Backlog',
+          updated_at: '2026-10-30T09:30:00Z',
         },
       ],
     },
@@ -116,6 +121,14 @@ describe('the live-work frame', () => {
       },
     ],
     ['a parent that is no reference', withRow({ parent: '4' })],
+    [
+      'a row without when its item changed',
+      {
+        spaces: [{ ...contractExample.spaces[0], rows: [{ ...row, updated_at: undefined }] }],
+        elsewhere: 0,
+      },
+    ],
+    ['a change time that is not a time', withRow({ updated_at: 'yesterday' })],
     ['a negative count', withRow({ agents: -1 })],
     ['a frame without elsewhere', { spaces: [] }],
   ])('refuses %s', (_case, frame) => {

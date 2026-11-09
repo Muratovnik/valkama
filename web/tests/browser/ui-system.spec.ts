@@ -179,15 +179,15 @@ test('grouped navigation keeps one optical icon box and corner badge without per
   const badgeBox = await sessionItem.locator('.count-badge').boundingBox()
   expect(labelBox && badgeBox && badgeBox.x >= labelBox.x + labelBox.width).toBeTruthy()
   expect(labelBox && badgeBox && badgeBox.x - (labelBox.x + labelBox.width) <= 16).toBeTruthy()
-  // Two groups: Work and Settings, which is a
-  // destination too and stands under the last of them rather than in the
-  // footer beside the connection state.
+  // Two groups: Work and Settings, which is a destination too and stands in the
+  // rail's foot beside the connection state, so a long list does not move it.
   await expect(page.locator('.nav-group')).toHaveCount(2)
   // The Work heading repeats the name of its one entry: it stays for readers and takes no line.
   await expect(page.locator('.nav-group-heading-echo')).toHaveCount(1)
   const echoedHeading = await page.locator('.nav-group-heading-echo').boundingBox()
   expect(echoedHeading?.width ?? 0).toBeLessThanOrEqual(1)
-  await expect(page.locator('.nav-utility .nav-item')).toHaveCount(0)
+  await expect(page.locator('.nav-utility .nav-item')).toHaveCount(1)
+  await expect(page.locator('.nav-utility .nav-item.module-settings')).toHaveCount(1)
   // `.collapsed` was a class no template had rendered for some time, and the
   // rules that dressed it were dead in `shell.css` beside it. The rail narrows by
   // its own width now, so there is nothing left to assert the absence of.

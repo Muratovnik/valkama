@@ -109,12 +109,13 @@ test('a control states its own subject, so nothing captions it twice', () => {
   )
 })
 
-test('settings is a destination in the navigation, not a footer beside the connection', () => {
+test('settings stands in the foot beside the connection, inside the navigation', () => {
   const navigation = /<nav[\s\S]*?<\/nav>/.exec(nav)?.[0] ?? ''
-  assert.match(navigation, /systemModules/)
-  const utility = /<div\s+class="nav-utility"[\s\S]*?<\/div>/.exec(nav)?.[0] ?? ''
-  assert.doesNotMatch(utility, /systemModules/)
+  const utility = /<div\s+class="nav-utility"[\s\S]*?<\/div>/.exec(navigation)?.[0] ?? ''
   assert.match(utility, /<NavConnectionButton/)
+  assert.match(utility, /systemModules/)
+  // Only the foot holds it: under the last group it moved with the list above it.
+  assert.equal(navigation.match(/systemModules/g)?.length, 2)
 })
 
 test('the space between two tiles belongs to the stack, so a column insets evenly', () => {

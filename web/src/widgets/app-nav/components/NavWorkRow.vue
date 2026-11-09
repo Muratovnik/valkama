@@ -1,26 +1,26 @@
 <script setup lang="ts">
 /**
- * One item of the side panel's list: what its session is doing, its number, its title,
- * and how many agents are on it, as one link to its card.
+ * One item of the side panel's list: what its session is doing, its number, the title of
+ * the item it belongs to, muted, then its own title, and how many agents are on it, as one
+ * link to its card.
  *
  * The link is the row: its box is stretched over the whole row, so a press anywhere on
  * it opens the card, and it is an address, so a press with a modifier opens it elsewhere
- * as any link does. The row starts with its lead: an item's sign, and on a group's head
- * the fold, a button of its own above the link. The lead is one width on every row, so
- * a level's signs stand in one column and its numbers in the next; the number's column
- * is as wide as the list's longest number (`NavWorkTree`), so its titles start at one x.
- * On a phone a closed top-level item with no sign and no fold has no lead at all: its number
- * stands a lead to the left of the open rows' numbers, and its title takes the room. Nested
- * items keep their lead.
+ * as any link does. The row starts with its lead, which holds the item's sign. The lead is
+ * one width on every row, so the signs stand in one column and the numbers in the next;
+ * the number's column is as wide as the list's longest number (`NavWorkTree`), so what
+ * follows starts at one x. On a phone a closed item with no sign has no lead at all: its
+ * number stands a lead to the left of the open rows' numbers, and its title takes the room.
+ *
+ * The parent's title is the row's context, not its name: it gives way first, never taking
+ * more than two fifths of the room, and the row's own title keeps the rest. Both stay on
+ * one line, cut by an ellipsis, and the row's hint then says both whole.
  *
  * The sign: three dots that run while the session works on the item, held still while it
  * holds the item and works on others, a ring while it waits for a person, and nothing for
  * an item silent over a day, pinned with no work, or gone from the frame. Those three are
  * muted, and say why in the row's name and hover text; a pinned item that has closed says
- * its state where the agents' count would stand. A colour is never all that says it. An
- * epic at work says it with its own sign in the same column: on a phone's row the lead
- * has room for the fold's arrow and the sign side by side, and on the rail, where it has
- * not, the sign stands at rest and the arrow takes its place under the pointer and focus.
+ * its state where the agents' count would stand. A colour is never all that says it.
  *
  * The pin is the row's last part, in a column of its own that the rail keeps on every
  * row, so the title's ellipsis and the count stand clear of it, and it comes up under the
@@ -32,7 +32,7 @@ import { computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import NavWorkPin from '@/widgets/app-nav/components/NavWorkPin.vue'
-import { rowNumber } from '@/widgets/app-nav/utils/liveTree.ts'
+import { rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -50,11 +50,11 @@ const props = defineProps<{
   size: 'rail' | 'touch'
   /** A number as wide as the list's longest, which sizes the number's column. */
   widest: string
-  /** The fold of a group's head, which an item has not. */
-  fold?: { controls: string; id: string; label: string; open: boolean } | null
+  /** The title of the item this one belongs to, said before its own; null for none. */
+  epic?: string | null
 }>()
 
-const emit = defineEmits<{ fold: []; go: [route: PlatformRoute] }>()
+const emit = defineEmits<{ go: [route: PlatformRoute] }>()
 
 const { d, t } = useI18n()
 const store = useLiveWorkStore()
@@ -98,7 +98,12 @@ const stateWords = computed(() => {
     ? `${doing}, ${t('liveWork.agents', { count: row.agents }, row.agents)}`
     : doing
 })
-const said = computed(() => [`${props.row.reference} ${props.row.title}`, stateWords.value])
+const epicWords = computed(() => (props.epic ? t('liveWork.partOf', { title: props.epic }) : ''))
+const said = computed(() => [
+  `${props.row.reference} ${props.row.title}`,
+  epicWords.value,
+  stateWords.value,
+])
 const name = computed(() => said.value.filter(Boolean).join(' — '))
 const hint = computed(() => said.value.filter(Boolean).join('\n'))
 /**
@@ -123,19 +128,12 @@ const meta = computed(() => {
   return null
 })
 const pinned = computed(() => props.row.pinned)
-const head = computed(() => Boolean(props.fold))
-const headAtWork = computed(() => head.value && sign.value !== null)
 const touch = computed(() => props.size === 'touch')
-/**
- * A closed top-level item on a phone has no sign and no fold, so its lead has nothing to hold:
- * it goes. Nested items keep theirs, and so do heads and rows with a sign. Depth 1 is the top
- * level (`NavWorkTree` passes it to the spaces' own rows).
- */
-const leadless = computed(
-  () =>
-    touch.value && props.depth === 1 && props.row.is_terminal && !head.value && sign.value === null,
-)
+/** A closed item on a phone has no sign, so its lead has nothing to hold: it goes. */
+const leadless = computed(() => touch.value && props.row.is_terminal && sign.value === null)
 const depthStyle = computed(() => ({ '--nav-row-depth': props.depth }))
+/** How many letters the epic's title has: a short one keeps no more room than its letters. */
+const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.length ?? 0}ch` }))
 
 /** A plain press opens the card in place; with a modifier it is the browser's, as on any link. */
 function press(event: MouseEvent) {
@@ -156,8 +154,6 @@ function press(event: MouseEvent) {
       current,
       muted,
       pinned,
-      'nav-row-head': head,
-      'nav-row-at-work': headAtWork,
       'nav-row-touch': touch,
       'nav-row-has-pin': pinShown,
       'nav-row-leadless': leadless,
@@ -172,23 +168,6 @@ function press(event: MouseEvent) {
       v-if="!leadless"
       class="nav-row-lead"
     >
-      <button
-        v-if="fold"
-        :id="fold.id"
-        v-tooltip="fold.label"
-        class="nav-row-fold"
-        type="button"
-        :aria-expanded="fold.open"
-        :aria-controls="fold.controls"
-        :aria-label="fold.label"
-        @click="emit('fold')"
-      >
-        <VIcon
-          class="nav-row-chevron"
-          name="chevron-right"
-          :size="14"
-        />
-      </button>
       <span
         v-if="sign !== null"
         class="nav-row-sign"
@@ -223,6 +202,18 @@ function press(event: MouseEvent) {
           >{{ widest }}</span
         >
       </span>
+      <template v-if="epic">
+        <span
+          class="nav-row-epic trimmed-word"
+          :style="epicStyle"
+          >{{ epic }}</span
+        >
+        <span
+          class="nav-row-epic-mark trimmed-word"
+          aria-hidden="true"
+          >›</span
+        >
+      </template>
       <span class="nav-row-title trimmed-word">{{ row.title }}</span>
       <span
         v-if="meta"
@@ -238,6 +229,7 @@ function press(event: MouseEvent) {
     </a>
     <NavWorkPin
       v-if="pinShown"
+      class="nav-row-pin"
       :pinned="row.pinned"
       :reference="row.reference"
       :size="size"
@@ -246,16 +238,14 @@ function press(event: MouseEvent) {
 </template>
 
 <style scoped>
-/* Lead, then the link holding the number, the title and what stands at the end, then the
-   pin in a column of its own where the row has one. The lead is one width at every level
-   and a level indents one step from the same start, so the folds stand on one grid, a
-   level's signs in one column and its numbers in the next (`NavWorkTree` keeps the
-   space's head on the same values). The sign takes the lead's end: all of it on the
-   rail, and on a phone what the fold's arrow leaves. */
+/* Lead, then the link holding the number, the titles and what stands at the end, then the
+   pin in a column of its own where the row has one. The lead is one width on every row and
+   a row indents one step from the space's start, so the signs stand in one column and the
+   numbers in the next (`NavWorkTree` keeps the space's head and the folded row on the same
+   values). The sign takes the lead's end. */
 .nav-row {
   --nav-row-lead: 24px;
   --nav-row-sign: var(--nav-row-lead);
-  --nav-row-arrow-end: 0;
   --nav-row-depth: 0;
 
   position: relative;
@@ -307,13 +297,7 @@ function press(event: MouseEvent) {
   }
 }
 
-/* A group's head leads its items, as an epic's row does on the board. Only its title is
-   strong: its number keeps the weight, and so the width, of every number in its column. */
-.nav-row-head .nav-row-title {
-  font-weight: 600;
-}
-
-/* The fold and the sign share the lead's one cell, as tall as the row. */
+/* The sign stands in the lead's one cell, as tall as the row. */
 .nav-row-lead {
   display: grid;
   grid-template-areas: 'lead';
@@ -336,64 +320,8 @@ function press(event: MouseEvent) {
   pointer-events: none;
 }
 
-/* The arrow stands in what the sign leaves of the lead: all of it on the rail. */
-.nav-row-fold {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  align-self: stretch;
-  min-block-size: 0;
-  padding-block: 0;
-  padding-inline: 0 calc(var(--nav-row-arrow-end));
-  border: 0;
-  color: var(--color-navigation-text-muted);
-  background: none;
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-text-on-dark);
-  }
-
-  &:focus-visible {
-    outline-offset: -2px;
-  }
-
-  &[aria-expanded='true'] .nav-row-chevron {
-    rotate: 90deg;
-  }
-}
-
-.nav-row-chevron {
-  transition: rotate var(--duration-quick) var(--ease-out);
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-}
-
-/* The rail's lead has room for the arrow or the sign, not both: an epic at work shows its
-   sign at rest, and under the pointer and focus the arrow its press folds with. */
-.nav-row-at-work:not(.nav-row-touch) {
-  .nav-row-chevron {
-    visibility: hidden;
-  }
-
-  &:is(:hover, :has(:focus-visible)) {
-    .nav-row-chevron {
-      visibility: visible;
-    }
-
-    .nav-row-sign {
-      visibility: hidden;
-    }
-  }
-}
-
-/* The link's box is the whole row, so the row opens wherever it is pressed; the fold and
-   the pin stand over it. Its ring is the row's, inside it, and only from the keyboard. Its
+/* The link's box is the whole row, so the row opens wherever it is pressed; the pin
+   stands over it. Its ring is the row's, inside it, and only from the keyboard. Its
    words are trimmed to their capitals (`.trimmed-word`), so the capitals' middle is the row's,
    where the lead's sign stands: centred as lines, they stood up to a pixel over the sign. */
 .nav-row-link {
@@ -440,6 +368,25 @@ function press(event: MouseEvent) {
   visibility: hidden;
 }
 
+/* The parent's title, the row's context: muted, and the first to give way. It shrinks six
+   times as fast as the row's own title, down to a few letters of it that the hint completes
+   (or all of a shorter one), and never takes more than two fifths of the link. Cut sideways
+   only, like every word of the row (`.trimmed-word`). */
+.nav-row-epic {
+  --nav-row-epic-letters: 3ch;
+
+  flex: 0 6 auto;
+  min-width: min(3ch, var(--nav-row-epic-letters));
+  max-width: 40%;
+  color: var(--color-navigation-text-muted);
+  white-space: nowrap;
+}
+
+.nav-row-epic-mark {
+  flex: none;
+  color: var(--color-navigation-text-muted);
+}
+
 /* Short of room it ends in an ellipsis, cut sideways only (`.trimmed-word`). */
 .nav-row-title {
   flex: 1 1 auto;
@@ -457,11 +404,10 @@ function press(event: MouseEvent) {
 }
 
 /* A phone: a finger's row and lead, the reading size, and the pin only where there is
-   one. The lead holds the fold's arrow and, after it, the sign. */
+   one. The sign keeps to the lead's end. */
 .nav-row-touch {
   --nav-row-lead: var(--size-control-target);
   --nav-row-sign: var(--size-control-inline);
-  --nav-row-arrow-end: var(--nav-row-sign);
 
   min-height: var(--size-control-target);
 
@@ -479,7 +425,7 @@ function press(event: MouseEvent) {
     background: Highlight;
     forced-color-adjust: none;
 
-    :is(.nav-row-sign, .nav-row-fold, .nav-row-number, .nav-row-title),
+    :is(.nav-row-sign, .nav-row-number, .nav-row-epic, .nav-row-epic-mark, .nav-row-title),
     :is(.nav-row-meta, .nav-row-pin) {
       color: HighlightText;
     }
@@ -488,7 +434,7 @@ function press(event: MouseEvent) {
       background: HighlightText;
     }
 
-    :is(.nav-row-fold, .nav-row-pin):focus-visible,
+    .nav-row-pin:focus-visible,
     .nav-row-link:focus-visible::before {
       outline-color: HighlightText;
     }

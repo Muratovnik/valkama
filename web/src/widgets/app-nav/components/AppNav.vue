@@ -167,13 +167,15 @@ const iconsOnly = computed(() => viewportWidth.value <= NAV_ICONS_ONLY_WIDTH)
  */
 const railStyle = computed(() => ({ '--size-navigation-chosen-width': `${drawerWidth.value}px` }))
 
-/** The foot is drawn only while it holds the lost connection's control. */
+/** The foot draws its rule only while it holds the lost connection's control. */
 const troubled = computed(() => connectionTroubled(props.connection))
 const rail = useTemplateRef<HTMLElement>('rail')
 /** The connection came back under focus: focus goes to the entry on show, else the first one. */
 function settle() {
-  const entries = rail.value?.querySelectorAll<HTMLElement>('.app-nav button, .app-nav a')
-  const current = rail.value?.querySelector<HTMLElement>('.app-nav [aria-current]')
+  const entries = rail.value?.querySelectorAll<HTMLElement>(
+    '.app-nav-frame button, .app-nav-frame a',
+  )
+  const current = rail.value?.querySelector<HTMLElement>('.app-nav-frame [aria-current]')
   ;(current ?? entries?.[0])?.focus()
 }
 
@@ -210,68 +212,70 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
       </button>
     </div>
 
+    <!-- One landmark from the actions down to the foot: Settings stands in the foot, so it
+         is still a destination of the navigation wherever the list above it ends. -->
     <nav
-      class="app-nav"
+      class="app-nav-frame"
       :aria-label="t('modules.label')"
     >
-      <NavWorkActions
-        :pending-count="pendingRequestCount"
-        @find="emit('find')"
-        @requests="emit('requests')"
-      />
-      <NavModuleList
-        v-for="entry in groupedModules"
-        :key="entry.group"
-        :class="{ 'nav-live-group': entry.live }"
-        :active="active"
-        :badges="badges"
-        :heading="entry.heading"
-        :modules="entry.modules"
-        :disclosure="foldFor(entry.live)"
-        :within="withinFor(entry.live)"
-        @fold="toggleLive"
-        @navigate="forwardNavigate"
-        @prefetch="forwardPrefetch"
-      >
-        <NavWorkGroup
-          v-if="entry.live && liveTarget"
-          class="nav-live"
-          :fold-id="liveFold.id"
-          :list-id="liveListId"
-          :open="navOpen"
-          :shown="liveShown"
-          :target="liveTarget"
-          @go="(route) => emit('go', route)"
+      <div class="app-nav">
+        <NavWorkActions
+          :pending-count="pendingRequestCount"
+          @find="emit('find')"
+          @requests="emit('requests')"
         />
-      </NavModuleList>
+        <NavModuleList
+          v-for="entry in groupedModules"
+          :key="entry.group"
+          :class="{ 'nav-live-group': entry.live }"
+          :active="active"
+          :badges="badges"
+          :heading="entry.heading"
+          :modules="entry.modules"
+          :disclosure="foldFor(entry.live)"
+          :within="withinFor(entry.live)"
+          @fold="toggleLive"
+          @navigate="forwardNavigate"
+          @prefetch="forwardPrefetch"
+        >
+          <NavWorkGroup
+            v-if="entry.live && liveTarget"
+            class="nav-live"
+            :fold-id="liveFold.id"
+            :list-id="liveListId"
+            :open="navOpen"
+            :shown="liveShown"
+            :target="liveTarget"
+            @go="(route) => emit('go', route)"
+          />
+        </NavModuleList>
+      </div>
 
-      <!-- Settings is a destination like every other entry, so it stands under
-           the last of them, in a group of its own with no heading. It used to be
-           pinned to the floor of the rail beside the connection strip, which put
-           a place you navigate to inside the block that reports whether the app
-           is connected — two different kinds of thing sharing one footer, and a
-           gap of empty rail between the navigation and its own last item. -->
-      <NavModuleList
-        v-if="systemModules.length"
-        :active="active"
-        :badges="badges"
-        :modules="systemModules"
-        @navigate="forwardNavigate"
-        @prefetch="forwardPrefetch"
-      />
+      <!-- The foot: the connection's state while it is lost, and Settings under it at the
+           floor of the rail. Settings stood under the last group, so a long list of work
+           going on now carried it down into the middle of the rail and a short one left it
+           half way up; at the floor it is where it was the last time, whatever the list holds,
+           and a lost connection said above it does not move it. -->
+      <div
+        class="nav-utility"
+        :class="{ 'is-quiet': !troubled }"
+      >
+        <NavConnectionButton
+          :connection="connection"
+          :refreshing="refreshing"
+          @refresh="emit('refresh')"
+          @settled="settle"
+        />
+        <NavModuleList
+          v-if="systemModules.length"
+          :active="active"
+          :badges="badges"
+          :modules="systemModules"
+          @navigate="forwardNavigate"
+          @prefetch="forwardPrefetch"
+        />
+      </div>
     </nav>
-
-    <div
-      class="nav-utility"
-      :class="{ 'is-quiet': !troubled }"
-    >
-      <NavConnectionButton
-        :connection="connection"
-        :refreshing="refreshing"
-        @refresh="emit('refresh')"
-        @settled="settle"
-      />
-    </div>
 
     <OverlayResizer
       v-if="!iconsOnly"
@@ -352,9 +356,18 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   text-overflow: ellipsis;
 }
 
+/* Everything under the head: the middle, then the foot at the floor of the rail. */
+.app-nav-frame {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* The rail's middle: the actions and the groups, in a column whose one flexible part
    is the list of work going on now. Everything else keeps its height, so the list gives
-   way first and scrolls, and the last group under it — Settings — stays in sight. */
+   way first and scrolls, and the foot under it stays in sight. */
 .app-nav {
   display: flex;
   flex: 0 1 auto;
@@ -377,17 +390,20 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   flex: 0 1 auto;
 }
 
+/* Its entries start where the middle's do. A rule above it only while it says the
+   connection is lost: Settings alone is one more entry of the rail, and a line over it
+   would divide nothing. */
 .nav-utility {
   display: grid;
+  flex: none;
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-3) var(--space-3) var(--space-4);
   margin-top: auto;
   border-top: 1px solid var(--color-rule);
 
-  /* A healthy connection shows nothing here, and an empty foot draws no rule. */
   &.is-quiet {
-    padding: 0;
+    padding-top: 0;
     border-top: 0;
   }
 }
