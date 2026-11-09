@@ -4,9 +4,9 @@
  * on a pinned row it is the one mark of the pin and the way to take it off.
  *
  * It stands in a column of its own as tall as the row, with no ground of its own: the
- * row's is under it, and a ground would cover the row's keyboard ring. Whether it is in
- * sight is the row's to say, through `--nav-work-pin-sight`, since only the row knows
- * when the pointer or the keyboard is on it; where nothing can hover it stands.
+ * row's is under it, and a ground would cover the row's keyboard ring. Unpinned, it comes up
+ * under the pointer and the keyboard on its row (`reveal.css`, the row is `NavWorkRow`); where
+ * nothing can hover it stands, and a pinned row's pin, the one mark of the pin, stands always.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,6 +30,7 @@ const say = useOpenNotice()
 const words = computed(() => (props.pinned ? t('liveWork.unpin') : t('liveWork.pin')))
 const marks = computed(() => ({
   'pinned': props.pinned,
+  'reveal': !props.pinned,
   'nav-row-pin-touch': props.size === 'touch',
 }))
 
@@ -76,7 +77,6 @@ async function toggle() {
   background: none;
   border-radius: var(--radius-control);
   cursor: pointer;
-  visibility: var(--nav-work-pin-sight, visible);
 
   &:hover {
     color: var(--color-text-on-dark);
@@ -86,13 +86,8 @@ async function toggle() {
     outline-offset: -2px;
   }
 
-  @media (hover: none) {
-    visibility: visible;
-  }
-
   &.pinned {
     color: var(--color-text-on-dark-muted);
-    visibility: visible;
 
     .nav-row-pin-glyph {
       fill: currentcolor;
@@ -104,3 +99,5 @@ async function toggle() {
   inline-size: var(--size-control-target);
 }
 </style>
+
+<style scoped src="@/shared/ui/reveal.css"></style>

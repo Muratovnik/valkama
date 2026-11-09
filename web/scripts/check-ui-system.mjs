@@ -19,6 +19,7 @@ import {
   scanHiddenRules,
 } from './ui-system/lines.mjs'
 import { NATIVE_TITLES, scanNativeTitles } from './ui-system/native-titles.mjs'
+import { scanRevealCopies } from './ui-system/reveal.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
 import {
@@ -45,6 +46,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const hints = product ? NATIVE_TITLES : new Map()
   return [
     ...scanUiSources(sources),
+    ...scanRevealCopies(sources),
     ...scanSemanticStateOwnership(sources),
     ...scanTokenHygiene(sources),
     ...scanTypeStyles(sources),

@@ -121,14 +121,15 @@ test('pins from a row under the pointer, and the pinned row keeps its pin in sig
   await shown(page, streams)
   const row = liveRow(page, 'MAIN-12')
   const pin = row.locator('.nav-row-pin')
-  await expect(pin).toBeHidden()
+  // Out of sight, it keeps its place and stays a stop for the keyboard (`reveal.css`).
+  await expect(pin).toHaveCSS('opacity', '0')
   await row.hover()
-  await expect(pin).toBeVisible()
+  await expect(pin).toHaveCSS('opacity', '1')
   await expect(pin).toHaveAccessibleName('Pin to Work')
   await pin.click()
   await expect.poll(() => sent).toEqual([{ id: 'MAIN-12', pinned: true }])
   await page.mouse.move(900, 600)
-  await expect(pin).toBeVisible()
+  await expect(pin).toHaveCSS('opacity', '1')
   await expect(pin).toHaveAccessibleName('Pinned to Work: press to remove the pin')
 })
 
