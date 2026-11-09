@@ -1099,8 +1099,10 @@ file, under the same browser credential as any write, and read back with
 `Sec-Fetch-Site: same-origin`. The server decides by the first bytes whether it is
 a PNG, JPEG, WebP or GIF, refuses anything else (415) and anything over 10 MB
 (413), and answers a read with that type, `X-Content-Type-Options: nosniff` and
-`Content-Security-Policy: default-src 'none'; sandbox`. Neither the bytes nor
-their contents are logged or sent anywhere.
+`Content-Security-Policy: default-src 'none'; sandbox`. The server neither logs
+the bytes nor sends them anywhere by itself; an agent that reads a picture with
+`read_work_item_image` hands it to its client and so to its model provider (see
+[the connection contract](docs/connection-contract.md#pictures-on-an-item)).
 
 Every page the listener answers, the app's own and the document page alike, carries
 `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`: no

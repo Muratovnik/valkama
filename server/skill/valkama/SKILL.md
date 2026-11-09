@@ -238,6 +238,9 @@ reply to a question belongs to the question's thread, which
 `get_work_item_request` reads. A screenshot the owner pasted is named in the text
 by its address, `/api/images/<sha256>`, and listed in the item's `images`;
 `read_work_item_image` with the item's `id` and that `sha256` shows it to you.
+Reading one sends its bytes to your client and so to your model provider, and a
+screenshot may show anything that was on the owner's screen: read a picture only
+when the task needs what it shows.
 `get_work_item_chain` shows what an item's work grew into and whether it
 converges. Read the history before assuming who did what.
 
