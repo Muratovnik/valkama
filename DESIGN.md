@@ -1412,14 +1412,18 @@ nobody is behind it; a plate there read as one more chip. «Подписаны»
 sessions that follow the item, each as its claim's holder would print, a name moving to
 the next line whole and one wider than the line wrapping between its own words, read whole
 with no ellipsis, since plain words offer no hover to a keyboard or a finger; with nobody
-following there is no such row. The labels row ends in «+», which opens a field over the
-space's labels, the most used first, that also takes a new one; Escape gives the «+» back
-with nothing attached. Each label shows its × at its end under the pointer or keyboard
-focus, always on a touch screen, with the room for it kept at rest so no chip grows when
-it appears. A read-only item with no labels has no such row. The labels stay under the
-title, not above it: the title is what the card is found by, and editing controls over
-it would push it down by however many labels wrap. Every value stands at one height, the
-state chip's, so a wrap adds a row of that height and never a half step.
+following there is no such row. A label chip only filters, its words in its middle with
+the same room at either end, at rest and under the pointer alike. The labels are changed
+in one place, the picker the new-task dialog asks with: the «+» that ends the row, or a
+press on the row beside the chips, opens it in the row's place over the space's labels,
+the most used first, with a check on each the item carries. Choosing an unchecked one
+attaches it, choosing a checked one takes it off, and typed words add a new one; Escape,
+or focus leaving it, gives the chips back, Escape with focus on the «+». A × kept at each
+chip's end was a second way to take a label off, and the room held for it left every
+chip's words off its middle. A read-only item with no labels has no such row. The labels
+stay under the title, not above it: the title is what the card is found by, and editing
+controls over it would push it down by however many labels wrap. Every value stands at
+one height, the state chip's, so a wrap adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
 labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —

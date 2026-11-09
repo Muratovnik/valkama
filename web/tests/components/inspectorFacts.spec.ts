@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest'
 
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
 
+import WorkItemLabels from '@/features/work-item-labels/WorkItemLabels.vue'
+
 import type { FacetChoiceOption } from '@/entities/work-item/composables/useFacetChoices.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
@@ -281,19 +283,19 @@ describe('the marks beside the state', () => {
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'phase-1' }]])
   })
 
-  it('takes a label off with the × in its chip, and offers none where it cannot write', async () => {
+  it('changes the labels through their picker, and a chip only filters', () => {
     const wrapper = facts(item({ labels: ['platform', 'phase-1'] }))
-    const remove = wrapper.findAll('.card-labels .label-chip-remove')
-    expect(remove.map((button) => button.attributes('aria-label'))).toEqual([
-      'Remove label platform',
-      'Remove label phase-1',
-    ])
-    await remove[0].trigger('click')
+    // No × at a chip's end: a chip filters, and the «+» opens the picker.
+    expect(
+      wrapper.findAll('.card-labels button').map((button) => button.attributes('aria-label')),
+    ).toEqual(['Filter: label platform', 'Filter: label phase-1', 'Add a label'])
+    wrapper.getComponent(WorkItemLabels).vm.$emit('labels', ['phase-1'])
     expect(wrapper.emitted('fact')).toEqual([[{ labels: ['phase-1'] }]])
     expect(wrapper.emitted('filter')).toBeUndefined()
 
     const read = facts(item({ labels: ['platform'] }), { writable: false })
-    expect(read.find('.label-chip-remove').exists()).toBe(false)
-    expect(read.find('.card-labels button[aria-label="Add a label"]').exists()).toBe(false)
+    expect(
+      read.findAll('.card-labels button').map((button) => button.attributes('aria-label')),
+    ).toEqual(['Filter: label platform'])
   })
 })

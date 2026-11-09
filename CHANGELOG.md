@@ -20,6 +20,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The card's labels change in the new-task dialog's picker.** «+», or a press on the
+  labels row beside the chips, opens the picker with the item's labels checked: choosing one
+  attaches it, choosing a checked one takes it off, and typed words add a new one. A label
+  chip no longer ends in a ×, and its words stand in its middle.
+
 - **The new-task dialog asks in the card's order.** Title, kind and priority, labels and
   epic, and the description last, rather than the description between the two pairs.
 
