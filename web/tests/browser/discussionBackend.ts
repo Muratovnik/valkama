@@ -30,6 +30,10 @@ function markThread(item: WorkItem, body: Record<string, unknown>) {
 
 type Entry = WorkItem['comments'][number]
 
+/** The items a comment told, which the read then gives it, as the server records them. */
+const told = (body: Record<string, unknown>) =>
+  Array.isArray(body.mentions) ? { mentions: body.mentions as string[] } : {}
+
 /** Whether `entry` is the root of `reply`'s thread or another reply in it. */
 const inThread = (entry: Entry, reply: Entry) =>
   reply.reply_to_request === null
@@ -186,6 +190,7 @@ export async function installDiscussionBackend(page: Page) {
             report: null,
             body: String(body.body),
             ...checklistQuote(item, body.checklist_item_id),
+            ...told(body),
           }
       item.comments.push(entry)
       if (body.make_current === true) {

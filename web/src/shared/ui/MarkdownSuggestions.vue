@@ -1,6 +1,9 @@
 <script setup lang="ts">
 /**
- * The list of work items a `#` in an editor offers.
+ * The list an `@` in an editor offers, grouped by what each row stands for — tasks,
+ * then files — under the group's name, in the order the host gave them. The groups
+ * are the listbox's groups (WAI-ARIA APG, grouped options), so a reader hears which
+ * one a row is in; the keys walk the rows straight through, across the groups.
  *
  * It floats on the window, placed by the engine that places the choice lists:
  * under the field where the window has room, over it where it does not, never
@@ -17,7 +20,7 @@ import { useI18n } from 'vue-i18n'
 
 import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
 
-import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
+import type { EditorSuggestion, SuggestionKind } from '@/shared/ui/MarkdownEditor.vue'
 
 const props = defineProps<{
   active: number
@@ -25,7 +28,7 @@ const props = defineProps<{
   anchor: HTMLElement | null
   choices: readonly EditorSuggestion[]
   id: string
-  /** What was typed after the `#`; empty when nothing is yet. */
+  /** What was typed after the `@`; empty when nothing is yet. */
   query: string
 }>()
 const emit = defineEmits<{ choose: [index: number]; point: [index: number] }>()
@@ -59,6 +62,16 @@ const { x, y, middlewareData } = useFloating(toRef(props, 'anchor'), list, {
 /** A field scrolled out of its panel takes its list with it. */
 const detached = computed(() => middlewareData.value.hide?.referenceHidden === true)
 const isActive = (index: number) => index === props.active
+/** Runs of rows of one kind, each row with its place in the whole list, which the keys walk. */
+const groups = computed(() => {
+  const found: { kind: SuggestionKind; rows: { index: number; row: EditorSuggestion }[] }[] = []
+  for (const [index, row] of props.choices.entries()) {
+    const last = found.at(-1)
+    if (last?.kind === row.kind) last.rows.push({ index, row })
+    else found.push({ kind: row.kind, rows: [{ index, row }] })
+  }
+  return found
+})
 /** The list's one line when it has no rows: nothing matched, or nothing is typed yet. */
 const emptyLine = computed(() =>
   props.query ? t('editor.noSuggestions', { query: props.query }) : t('editor.queryPrompt'),
@@ -74,7 +87,7 @@ defineExpose({
 </script>
 
 <template>
-  <ul
+  <div
     :id="id"
     ref="list"
     class="markdown-suggestions"
@@ -83,33 +96,52 @@ defineExpose({
     :style="{ left: `${x}px`, top: `${y}px` }"
     :aria-label="t('editor.suggestions')"
   >
-    <!-- Focus stays in the field, which names the active row; a row is pointed
-         at, never focused. -->
-    <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/interactive-supports-focus -->
-    <li
-      v-for="(row, index) in choices"
-      :id="`${id}-${index}`"
-      :key="row.key"
-      class="markdown-suggestion"
-      role="option"
-      :class="{ active: isActive(index) }"
-      :aria-selected="isActive(index)"
-      @mousedown.prevent
-      @mousemove="emit('point', index)"
-      @click="emit('choose', index)"
+    <ul
+      v-for="group in groups"
+      :key="group.kind"
+      class="markdown-suggestion-group"
+      role="group"
+      :aria-labelledby="`${id}-${group.kind}`"
     >
-      <span class="markdown-suggestion-reference">{{ row.reference }}</span>
-      <span class="markdown-suggestion-title">{{ row.title }}</span>
-      <span class="markdown-suggestion-detail">{{ row.detail }}</span>
-    </li>
-    <li
+      <li
+        :id="`${id}-${group.kind}`"
+        class="markdown-suggestion-heading"
+        role="presentation"
+      >
+        {{ t(`editor.kinds.${group.kind}`) }}
+      </li>
+      <!-- Focus stays in the field, which names the active row; a row is pointed
+           at, never focused. -->
+      <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/interactive-supports-focus -->
+      <li
+        v-for="{ index, row } in group.rows"
+        :id="`${id}-${index}`"
+        :key="row.key"
+        class="markdown-suggestion"
+        role="option"
+        :class="{ active: isActive(index) }"
+        :aria-selected="isActive(index)"
+        @mousedown.prevent
+        @mousemove="emit('point', index)"
+        @click="emit('choose', index)"
+      >
+        <span class="markdown-suggestion-name">{{ row.name }}</span>
+        <span class="markdown-suggestion-title">{{ row.title }}</span>
+        <span
+          v-if="row.detail"
+          class="markdown-suggestion-detail"
+          >{{ row.detail }}</span
+        >
+      </li>
+    </ul>
+    <p
       v-if="!choices.length"
       class="markdown-suggestion-empty"
       role="presentation"
     >
       {{ emptyLine }}
-    </li>
-  </ul>
+    </p>
+  </div>
 </template>
 
 <style scoped>
@@ -129,7 +161,6 @@ defineExpose({
   overscroll-behavior: contain;
   border-radius: var(--radius-control);
   box-shadow: 0 14px 34px var(--color-shadow);
-  list-style: none;
 }
 
 /* The field has scrolled out of its panel, under the head or past the foot. */
@@ -137,9 +168,28 @@ defineExpose({
   visibility: hidden;
 }
 
+.markdown-suggestion-group {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+
+  /* Air between the groups, not a line: the next group's name says where it starts. */
+  & + & {
+    margin-top: var(--space-2);
+  }
+}
+
+/* The group's name: quieter than a row, and never a row the keys or a press reach. */
+.markdown-suggestion-heading {
+  padding: var(--space-1) var(--space-2) 0;
+  color: var(--color-text-tertiary);
+  font: var(--font-detail);
+}
+
 .markdown-suggestion {
   display: grid;
-  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
   gap: 0 var(--space-2);
   align-items: baseline;
   padding: var(--space-1) var(--space-2);
@@ -158,11 +208,16 @@ defineExpose({
   }
 }
 
-.markdown-suggestion-reference {
+/* A file's name can be long: it gives way at two fifths of the row, a width a task's
+   number never reaches, and takes no less than one would. */
+.markdown-suggestion-name {
+  min-width: 8ch;
   color: var(--color-text-muted);
   font: var(--font-line);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .markdown-suggestion-title {
@@ -173,14 +228,19 @@ defineExpose({
   text-overflow: ellipsis;
 }
 
+/* A task's state, or the line a file was found at, which can be a long one. */
 .markdown-suggestion-detail {
   grid-column: 2;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .markdown-suggestion-empty {
   padding: var(--space-1) var(--space-2);
+  margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
 }

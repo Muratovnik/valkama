@@ -4,13 +4,17 @@ import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
 /** How long typing pauses before the host is asked, and how many rows are shown. */
 const SUGGEST_DELAY = 200
-const SUGGEST_LIMIT = 8
-/** A `#` that starts a word, then the query up to the caret, which may not be begun yet. */
-const TRIGGER = /(?:^|[\s([{])#([^\s#]{0,40})$/u
+export const SUGGEST_LIMIT = 8
+/**
+ * An `@` that starts a word, then the query up to the caret, which may not be begun
+ * yet. Not a `#`: at a line's start that is a Markdown heading. An `@` inside a word,
+ * as in an address, opens nothing.
+ */
+const TRIGGER = /(?:^|[\s([{])@([^\s@]{0,40})$/u
 
 /**
- * The `#` being typed in an editor and what the host offered for it. It reads the
- * text up to the caret and nothing else, so a `#` is a `#` whoever wrote it: the
+ * The `@` being typed in an editor and what the host offered for it. It reads the
+ * text up to the caret and nothing else, so an `@` is an `@` whoever wrote it: the
  * toolbar's mention button opens this by writing one, and so does a keyboard.
  */
 export function useEditorSuggestions(options: {
@@ -20,7 +24,7 @@ export function useEditorSuggestions(options: {
   suggest: () =>
     ((query: string, signal: AbortSignal) => Promise<readonly EditorSuggestion[]>) | undefined
 }) {
-  /** Where the `#` stands while a query is being typed; null when none is. */
+  /** Where the `@` stands while a query is being typed; null when none is. */
   const trigger = ref<{ query: string; start: number } | null>(null)
   const choices = ref<readonly EditorSuggestion[]>([])
   const searched = ref(false)

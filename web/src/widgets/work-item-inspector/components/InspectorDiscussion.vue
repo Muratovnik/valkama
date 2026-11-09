@@ -47,7 +47,7 @@ import {
   selectWorkItemSummary,
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
+import { useCommentMentions } from '@/shared/lib/mentionSuggest.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -107,10 +107,8 @@ const {
 } = useThreadFilter(() => threadGroups(props.item.comments, props.questions))
 const headingCount = computed(() => counts.value.threads || '')
 
-const suggest = workItemSuggest(
-  () => props.item.planning_space_id,
-  () => props.item.work_item_id,
-)
+/** The `@` list of every field here, and the tasks the comment tells when it is sent. */
+const mentions = useCommentMentions(props, note)
 
 useDraftSource('comment', () => Boolean(note.value.trim()))
 useDraftSource('outcome', () => Boolean(outcome.done || outcome.next))
@@ -191,6 +189,7 @@ function publish() {
         id,
         body: note.value,
         ...(target ? { checklist_item_id: target } : {}),
+        ...mentions.told(),
       }),
     () => {
       note.value = ''
@@ -284,7 +283,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       :closing="waitingMove?.name ?? null"
       :error="error"
       :pending="pending"
-      :suggest="suggest"
+      :suggest="mentions.suggest"
       @back="backToComment"
       @refresh="emit('refresh')"
       @submit="publishOutcome"
@@ -340,12 +339,13 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
         v-model:preview="previewing"
         :label="t('workItem.comment')"
         :placeholder="t('checklistComment.composer')"
-        :suggest="suggest"
+        :suggest="mentions.suggest"
         :rows="5"
         :maxlength="8000"
         :disabled="pending"
         :error="error"
         hide-label
+        @chose="mentions.chose"
         @submit="publish"
       >
         <template #actions>
@@ -390,7 +390,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       :item="item"
       :pending="pending"
       :questions="questions"
-      :suggest="suggest"
+      :suggest="mentions.suggest"
       :writable="writable"
       @answered="emit('answered', $event)"
       @changed="emit('changed')"

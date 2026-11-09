@@ -378,6 +378,8 @@ export async function commentWorkItem(input: {
   id: string
   author?: string
   checklist_item_id?: string
+  /** The other items the comment tells, by reference; a number in `body` tells nobody. */
+  mentions?: string[]
 }): Promise<void> {
   await write('/api/planning/work-item/comment', { ...input })
 }

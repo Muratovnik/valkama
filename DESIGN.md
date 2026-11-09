@@ -907,15 +907,27 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **Writing free text:** `MarkdownEditor` owns the field, and draws it as one
   object: a slim toolbar, the text and a foot inside one hairline and one radius,
   told apart by tone; while the text has focus the hairline itself takes the focus
-  colour, with no ring around it. The toolbar links a task and marks the text up
+  colour, with no ring around it. The toolbar mentions a task or a file and marks the text up
   (bold, italic, code, a link, a list; Ctrl+B and Ctrl+I by the key's place, so a
   Russian layout has them too) and switches between writing and a preview drawn
   by `RichText`, which lies over the text so that switching moves nothing. Its
   buttons go through the browser's own editing, so Ctrl+Z takes them back like
   typing. The field starts
   at the lines its host asks for with `rows`, grows with its text to
-  `--size-text-area-max-height`, and then scrolls inside. A `#` opens the list of
-  tasks, whether it was typed or written by the button; the field stays a
+  `--size-text-area-max-height`, and then scrolls inside. An `@` that starts a word
+  opens the list of what can be mentioned, whether it was typed or written by the
+  button; a `#` opens nothing, since at a line's start it is a Markdown heading. The
+  list holds the space's tasks and, once something is typed, the Markdown files of the
+  project the space is bound to, found by the server's document search; each kind is a
+  group under its name, tasks first, sharing the list's eight rows evenly, and the keys
+  walk the rows straight across the groups. A task is written as its number, with no
+  `@`, and a comment sent from the card's comment field tells that task in `mentions`,
+  as long as the number still stands in the text: a number typed by hand stays a link
+  and tells nobody. A reply, an outcome and a description do not tell yet. A
+  file is written as a Markdown link from the project's root named by its file name,
+  `[plan.md](docs/plan.md)`, which opens through the same resolver as a link typed by
+  hand. What else the list offers is one more source in `mentionSuggest`'s list, with
+  its kind's name; nothing else changes. The field stays a
   multi-line text box naming that list, and the list floats beside the field
   rather than at the caret: under it where the window has room, over it where it
   does not, never taller than the room it got and scrolled to the active row. It
@@ -925,7 +937,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   task's description, a text answer to a question. Its host says three things: its
   own action for the text, in the foot's end, or nothing where that action stands
   elsewhere and no foot is drawn; whether its label shows, which it does not where
-  a heading already names the field; and where `#` searches, the space the text
+  a heading already names the field; and where `@` searches, the space the text
   belongs to, or nowhere when the host cannot name that space in the store the
   search reads. Hosts with several fields that are one answer bind them to one
   view. A launch prompt is not one: it goes to the agent's command line as typed

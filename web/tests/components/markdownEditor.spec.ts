@@ -1,9 +1,10 @@
 /**
- * The markdown editor's frame, keys, toolbar and `#` completions.
+ * The markdown editor's frame, keys, toolbar and `@` completions.
  *
- * The contract: Ctrl+Enter (or Cmd+Enter) sends; `#` asks the host once typing
- * pauses, whoever wrote it; the arrows walk the rows with focus kept in the field;
- * Enter or Tab writes the chosen reference in place of the query; Escape closes
+ * The contract: Ctrl+Enter (or Cmd+Enter) sends; `@` asks the host once typing
+ * pauses, whoever wrote it, and `#` asks nothing; the arrows walk the rows, across
+ * their groups, with focus kept in the field; Enter or Tab writes the chosen
+ * reference in place of the query and tells the host the row; Escape closes
  * the list without letting the key reach the drawer around it; the preview is the
  * text as the card will draw it. The foot exists for a host's action or a refusal.
  *
@@ -23,9 +24,31 @@ import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 import { hintOf } from '../support/hint.ts'
 
 const rows: EditorSuggestion[] = [
-  { key: '1', reference: 'MAIN-12', title: 'Parser', detail: 'Doing' },
-  { key: '2', reference: 'MAIN-13', title: 'Renderer', detail: 'Done' },
+  {
+    key: '1',
+    kind: 'task',
+    name: 'MAIN-12',
+    reference: 'MAIN-12',
+    title: 'Parser',
+    detail: 'Doing',
+  },
+  {
+    key: '2',
+    kind: 'task',
+    name: 'MAIN-13',
+    reference: 'MAIN-13',
+    title: 'Renderer',
+    detail: 'Done',
+  },
 ]
+const file: EditorSuggestion = {
+  key: 'file:docs/plan.md',
+  kind: 'file',
+  name: 'plan.md',
+  reference: '[plan.md](docs/plan.md)',
+  title: 'docs/plan.md',
+  detail: '',
+}
 
 interface EditorOptions {
   error?: string
@@ -40,6 +63,7 @@ interface EditorOptions {
 
 function mountEditor(options: EditorOptions = {}) {
   const submitted = vi.fn()
+  const chose = vi.fn()
   const suggest = vi.fn(async () => options.suggest ?? rows)
   const escapes = vi.fn()
   // The drawer the field stands in, which closes on an Escape that reaches it.
@@ -62,6 +86,7 @@ function mountEditor(options: EditorOptions = {}) {
       'onUpdate:modelValue': (value: string) => void wrapper.setProps({ modelValue: value }),
       'onUpdate:preview': (value: boolean) => void wrapper.setProps({ preview: value }),
       'onSubmit': submitted,
+      'onChose': chose,
     },
     slots: options.slots ?? {},
     global: {
@@ -73,7 +98,7 @@ function mountEditor(options: EditorOptions = {}) {
       return wrapper.props('modelValue')
     },
   }
-  return { wrapper, text, submitted, suggest, escapes }
+  return { wrapper, text, submitted, suggest, escapes, chose }
 }
 
 /** Type as a person does: the value changes, the caret stays at its end. */
@@ -107,9 +132,9 @@ describe('MarkdownEditor', () => {
     expect(submitted).toHaveBeenCalledTimes(2)
   })
 
-  it('offers tasks for # and a query, walks them with the keys and writes the chosen one', async () => {
-    const { wrapper, text, suggest } = mountEditor()
-    await type(wrapper, 'See #pars')
+  it('offers tasks for @ and a query, walks them with the keys and writes the chosen one', async () => {
+    const { wrapper, text, suggest, chose } = mountEditor()
+    await type(wrapper, 'See @pars')
     expect(suggest).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
@@ -121,7 +146,7 @@ describe('MarkdownEditor', () => {
     expect(field.attributes('role')).toBeUndefined()
     expect(field.attributes('aria-autocomplete')).toBe('list')
     expect(field.attributes('aria-controls')).toBe(wrapper.get('[role="listbox"]').attributes('id'))
-    expect(wrapper.get('[role="status"]').text()).toBe('2 tasks found')
+    expect(wrapper.get('[role="status"]').text()).toBe('2 matches found')
     expect(field.attributes('aria-activedescendant')).toBe(options[0]?.attributes('id'))
     await field.trigger('keydown', { key: 'ArrowDown' })
     expect(field.attributes('aria-activedescendant')).toBe(options[1]?.attributes('id'))
@@ -132,6 +157,7 @@ describe('MarkdownEditor', () => {
     await field.trigger('keydown', { key: 'Enter' })
     await flushPromises()
     expect(text.value).toBe('See MAIN-13 ')
+    expect(chose).toHaveBeenCalledExactlyOnceWith(rows[1])
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
     expect(field.attributes('aria-controls')).toBeUndefined()
     expect(wrapper.get('[role="status"]').text()).toBe('')
@@ -140,13 +166,13 @@ describe('MarkdownEditor', () => {
 
   it('takes a row on Tab and by pointer, keeping the text around the query', async () => {
     const { wrapper, text } = mountEditor()
-    await type(wrapper, '#ren')
+    await type(wrapper, '@ren')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
     await wrapper.get('textarea').trigger('keydown', { key: 'Tab' })
     await flushPromises()
     expect(text.value).toBe('MAIN-12 ')
-    await type(wrapper, 'Fixed (#ren')
+    await type(wrapper, 'Fixed (@ren')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
     await wrapper.findAll('[role="option"]')[1]?.trigger('click')
@@ -156,7 +182,7 @@ describe('MarkdownEditor', () => {
 
   it('closes the list on Escape and keeps the key from closing what the field stands in', async () => {
     const { wrapper, escapes } = mountEditor()
-    await type(wrapper, '#par')
+    await type(wrapper, '@par')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
     await wrapper.get('textarea').trigger('keydown', { key: 'Escape' })
@@ -169,7 +195,7 @@ describe('MarkdownEditor', () => {
 
   it('closes the list when focus leaves the field, which a press on a row does not do', async () => {
     const { wrapper } = mountEditor()
-    await type(wrapper, '#par')
+    await type(wrapper, '@par')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
     expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
@@ -177,27 +203,52 @@ describe('MarkdownEditor', () => {
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
   })
 
-  it('does not ask for a # inside a word or a heading, and says when nothing matches', async () => {
+  it('asks for neither a # nor an @ inside a word, and says when nothing matches', async () => {
     const { wrapper, suggest } = mountEditor({ suggest: [] })
     await type(wrapper, 'issue#12')
+    await type(wrapper, '#par')
+    await type(wrapper, 'See #')
     await type(wrapper, '# Heading')
-    await type(wrapper, '## Heading')
+    await type(wrapper, 'me@example.com')
     await vi.advanceTimersByTimeAsync(250)
     expect(suggest).not.toHaveBeenCalled()
-    await type(wrapper, '#zzz')
+    await type(wrapper, '@zzz')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
-    expect(wrapper.get('[role="listbox"]').text()).toContain('No tasks match “zzz”.')
+    expect(wrapper.get('[role="listbox"]').text()).toContain('Nothing matches “zzz”.')
     expect(wrapper.findAll('[role="option"]')).toHaveLength(0)
   })
 
-  it('asks the host about a # with nothing after it yet, and says what to type if it has no rows', async () => {
+  it('asks the host about an @ with nothing after it yet, and says what to type if it has no rows', async () => {
     const { wrapper, suggest } = mountEditor({ suggest: [] })
-    await type(wrapper, 'See #')
+    await type(wrapper, 'See @')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
     expect(suggest).toHaveBeenCalledExactlyOnceWith('', expect.any(AbortSignal))
-    expect(wrapper.get('[role="listbox"]').text()).toBe('Type a number or a word from the title.')
+    expect(wrapper.get('[role="listbox"]').text()).toBe(
+      "Type a task's number or a word from its title, or a file's name.",
+    )
+  })
+
+  it('groups the rows by kind under its name, and the keys walk across the groups', async () => {
+    const { wrapper, text, chose } = mountEditor({ suggest: [...rows, file] })
+    await type(wrapper, 'See @pl')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    const groups = wrapper.findAll('[role="listbox"] > [role="group"]')
+    expect(
+      groups.map((group) => wrapper.get(`#${group.attributes('aria-labelledby') ?? ''}`).text()),
+    ).toEqual(['Tasks', 'Files'])
+    expect(groups.map((group) => group.findAll('[role="option"]').length)).toEqual([2, 1])
+    const field = wrapper.get('textarea')
+    await field.trigger('keydown', { key: 'ArrowUp' })
+    const options = wrapper.findAll('[role="option"]')
+    expect(field.attributes('aria-activedescendant')).toBe(options[2]?.attributes('id'))
+    expect(options[2]?.text()).toContain('docs/plan.md')
+    await field.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(text.value).toBe('See [plan.md](docs/plan.md) ')
+    expect(chose).toHaveBeenCalledExactlyOnceWith(file)
   })
 
   it('previews the text as the card draws it, over the field, and says when there is nothing', async () => {
@@ -293,7 +344,7 @@ describe('MarkdownEditor', () => {
           return [button.attributes('aria-label'), hintOf(button)]
         })
     expect(names('en')).toEqual([
-      ['Link a task', 'Link a task'],
+      ['Mention a task or a file', 'Mention a task or a file'],
       ['Bold', 'Bold (Ctrl+B)'],
       ['Italic', 'Italic (Ctrl+I)'],
       ['Code', 'Code'],
@@ -301,7 +352,7 @@ describe('MarkdownEditor', () => {
       ['Bulleted list', 'Bulleted list'],
     ])
     expect(names('ru')).toEqual([
-      ['Сослаться на задачу', 'Сослаться на задачу'],
+      ['Упомянуть задачу или файл', 'Упомянуть задачу или файл'],
       ['Жирный', 'Жирный (Ctrl+B)'],
       ['Курсив', 'Курсив (Ctrl+I)'],
       ['Код', 'Код'],
@@ -312,7 +363,7 @@ describe('MarkdownEditor', () => {
 
   it('offers no mention where the host has no list to open', () => {
     const { wrapper } = mountEditor({ suggest: null })
-    expect(wrapper.find('button[aria-label="Link a task"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Mention a task or a file"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Bold"]').exists()).toBe(true)
   })
 
@@ -338,13 +389,13 @@ describe('MarkdownEditor', () => {
     expect(document.activeElement).toBe(field.element)
   })
 
-  it('writes a # from the button and opens the same list a typed one does', async () => {
+  it('writes an @ from the button and opens the same list a typed one does', async () => {
     const { wrapper, text, suggest } = mountEditor()
     await type(wrapper, 'See')
-    await tool(wrapper, 'Link a task').trigger('click')
+    await tool(wrapper, 'Mention a task or a file').trigger('click')
     await flushPromises()
     // After a word it needs a space to start one of its own.
-    expect(text.value).toBe('See #')
+    expect(text.value).toBe('See @')
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
     expect(suggest).toHaveBeenCalledExactlyOnceWith('', expect.any(AbortSignal))
