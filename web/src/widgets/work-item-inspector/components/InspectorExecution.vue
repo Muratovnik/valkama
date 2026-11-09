@@ -142,8 +142,6 @@ function evidence(attempt: Execution): string {
       level="panel"
       >{{ t('execution.heading') }}</SectionHeading
     >
-    <p class="quiet">{{ t('execution.intro') }}</p>
-    <p class="quiet">{{ t('history.executionScope') }}</p>
 
     <div
       v-if="writable"

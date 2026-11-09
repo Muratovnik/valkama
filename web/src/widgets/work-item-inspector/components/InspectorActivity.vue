@@ -108,15 +108,12 @@ function referenceValue(entry: ActivityEntry) {
 
 <template>
   <div class="activity">
-    <div class="activity-filters">
-      <p class="activity-scope">{{ t('history.scope') }}</p>
-      <HistoryFilterBar
-        v-model:query="query"
-        v-model:selected="selected"
-        :search-label="t('history.search')"
-        :choices="choices"
-      />
-    </div>
+    <HistoryFilterBar
+      v-model:query="query"
+      v-model:selected="selected"
+      :search-label="t('history.search')"
+      :choices="choices"
+    />
     <section
       v-for="group in groups"
       :key="group.key"
@@ -187,17 +184,6 @@ function referenceValue(entry: ActivityEntry) {
 .activity {
   display: grid;
   gap: var(--space-section);
-}
-
-.activity-filters {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.activity-scope {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 .history-group {

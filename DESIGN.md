@@ -127,6 +127,14 @@ and only fades the end of a strip that scrolls on past it.
   earns its place only by stating a fact the reader acts on; every module once
   carried a sentence describing what the module is, which the rail and the
   screen already said, and it took a second row of the header for it.
+- A permanent explanation is not placed. A paragraph that stands over a section
+  saying what it holds or what its search searches is read once and then pushes
+  the content down on every visit; a card's History, Executions and their intro
+  each carried one, and they came back after being taken out once. Where an
+  action is not predictable from its control, the control says it in its own
+  place: a placeholder in the field, the empty state when there is nothing, or
+  a `detail` hint on the control. A field's own hint under it (`VField`) is part
+  of that field, not a paragraph over a section.
 - The shell has two zones and they must read as two. The chrome — the
   navigation rail and the context bar — is the dark backing of the whole
   window, and the workspace is a lighter panel lying on it. Two adjacent zones

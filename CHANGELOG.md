@@ -38,6 +38,10 @@ checkouts are therefore distinguishable even at the same version.
   answered fold where they stand and later gather under «Answered (N)» at the end of the list,
   never moving while your pointer or keyboard is on them or below them.
 
+- **A card's History and Executions open with their records.** The sentences over them saying
+  what the search searches and what an attempt is are gone; a permanent explanation is no
+  longer placed over a section.
+
 ### Fixed
 
 - **A focus ring brought into view keeps all of its room.** When focus moves to why a send or

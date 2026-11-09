@@ -3,6 +3,7 @@ import { createI18n } from 'vue-i18n'
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import HistoryFilterBar from '@/widgets/work-item-inspector/components/HistoryFilterBar.vue'
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import {
@@ -179,6 +180,41 @@ describe('recorded history', () => {
     expect(wrapper.get('li .entry-detail').text()).toBe('retained')
     expect(wrapper.get('li > .entry-line').text()).toContain('System event: future_action')
     wrapper.unmount()
+  })
+
+  // A permanent explanation is not placed: History and Executions open with what they hold
+  // and the controls that filter it, never a paragraph saying what the search searches.
+  it('opens History and Executions with their records, not a paragraph about them', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    )
+    const activity = mount(InspectorActivity, {
+      props: { item: activityItem() },
+      global: { plugins: plugins() },
+    })
+    expect(activity.element.firstElementChild).toBe(
+      activity.findComponent(HistoryFilterBar).element,
+    )
+    expect(activity.text()).not.toContain('Searches only')
+    activity.unmount()
+
+    const attempt = present(validateHistory(executionHistory).executions[0], 'execution')
+    const executions = mount(InspectorExecution, {
+      props: {
+        identity: 'item-a',
+        busy: false,
+        error: '',
+        executions: [attempt],
+        loading: false,
+        writable: true,
+      },
+      global: { plugins: plugins() },
+    })
+    expect(executions.findAll('section.executions > p')).toHaveLength(0)
+    expect(executions.text()).not.toContain('Searches only')
+    expect(executions.text()).not.toContain('Every attempt at this item')
+    executions.unmount()
   })
 
   it('filters execution records while retaining launch, stop, session and error behavior', async () => {
