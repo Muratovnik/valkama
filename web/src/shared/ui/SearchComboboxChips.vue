@@ -72,6 +72,10 @@ const emit = defineEmits<{ remove: [index: number] }>()
 .combo-chip-remove {
   display: inline-grid;
   place-items: center;
+
+  /* The chip's height, not a control row's: the base rule's 40px stood the chip 42px tall and
+     the field round it 52px, 12px over the field beside it. */
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: var(--color-text-muted);

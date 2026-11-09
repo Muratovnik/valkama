@@ -212,12 +212,12 @@ defineExpose({ restore, reveal, view })
     <SectionHeader :title="t('workItem.chain.title')">
       <template
         v-if="chain"
-        #actions
+        #actions="{ size }"
       >
         <SegmentedControl
           v-if="chain.root.has_children"
           class="chain-scope"
-          size="compact"
+          :size="size"
           :label="t('workItem.chain.scopeLabel')"
           :model-value="scope"
           :options="scopes"
@@ -226,7 +226,7 @@ defineExpose({ restore, reveal, view })
         <VButton
           v-tooltip="t('workItem.chain.showOnGraph')"
           variant="ghost"
-          size="inline"
+          :size="size"
           :aria-label="t('workItem.chain.showOnGraph')"
           @click="emit('graph', chain, lane)"
         >

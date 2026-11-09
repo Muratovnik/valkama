@@ -391,6 +391,17 @@ and only fades the end of a strip that scrolls on past it.
   hole around it, and a list row's reference moved the row's shared baseline down
   13px, for as long as nothing compared the two boxes. A compact field gives it
   back too, or it stands 4px over the compact controls beside it.
+- **Controls of one row are one size.** A row's owner names the size, not each
+  control in it: `SectionHeader` hands its actions slot one size, compact, so a
+  section's switch and its button cannot drift apart again — the chain's heading
+  held a 36px scope switch beside a 28px «На графе». A label chip standing alone
+  is drawn across the whole 28px it is pressed across, the height of the «+»
+  beside it, rather than as tall as its words. A field holding chips keeps the
+  field's height: a chip's remove button gives the base rule's 40px back, which
+  had stood the new-task labels field 52px tall beside a 40px epic. A field's
+  advice for an empty field is its placeholder, never a hint under one field of a
+  pair, which stands that field taller than its neighbour.
+  `production-row-controls.spec.ts` measures each such row's heights and top edges.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.

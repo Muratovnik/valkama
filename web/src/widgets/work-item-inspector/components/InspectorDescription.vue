@@ -102,12 +102,13 @@ function cancel() {
     >
       <template
         v-if="writable && !editing"
-        #actions
+        #actions="{ size }"
       >
         <VButton
           ref="opener"
           v-tooltip="editLabel"
           variant="ghost"
+          :size="size"
           :aria-label="editLabel"
           icon
           @click="edit"

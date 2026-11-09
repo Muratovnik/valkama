@@ -20,6 +20,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Controls of one row stand at one height.** A section heading's actions take one compact
+  size, so the chain's scope switch and «На графе» are equal; a label chip in the card is as
+  tall as the «+» beside it; the new task's labels field stays 40px with a label chosen
+  instead of growing to 52px beside the epic, and its advice «pick one, or type a new one»
+  is the empty field's placeholder rather than a line under it.
+
 - **A review reads as a list of decisions, and a comment replaces your own option.** Each
   point of a review is one row: its label, Accept / Later / Reject and the comment's press on
   one line in a card's drawer, and one quiet line under the label saying the way chosen, what

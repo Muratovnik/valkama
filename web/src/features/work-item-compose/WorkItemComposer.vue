@@ -166,7 +166,7 @@ async function submit() {
         <SearchCombobox
           v-model="labels"
           :label="t('workItem.labels')"
-          :hint="t('compose.labelsHint')"
+          :placeholder="t('compose.labelsHint')"
           :options="labelOptions"
           :empty-label="t('compose.labelsEmpty')"
           :create-label="addLabel"

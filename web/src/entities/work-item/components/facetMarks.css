@@ -373,3 +373,10 @@
     outline-offset: -1px;
   }
 }
+
+/* A chip standing alone, outside a run of marks — the card's labels row — is drawn as tall
+   as the 28px it is pressed across, so it stands at the height of the «+» after it. A face
+   as tall as its words stood 9px short of that button inside the same row. */
+.label-chip.filters:not(.facet-chip) > .chip-face {
+  padding-block: calc(var(--size-control-inline) / 2 - 0.5lh);
+}

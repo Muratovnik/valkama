@@ -9,6 +9,10 @@
  * refresh standing on a row of its own above an empty message. The row is one
  * decision, so it has one owner; `SectionHeading` stays the heading element and
  * nothing more.
+ *
+ * The row also owns how tall its actions stand. The chain's heading held a 36px scope switch
+ * beside a 28px «На графе», each sized by the section that placed it; the actions slot hands
+ * every action the one size, compact, which is what a control riding a dense header is.
  */
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 
@@ -22,6 +26,11 @@ withDefaults(
   }>(),
   { as: 'h3', count: '', level: 'panel' },
 )
+
+/** The size every action of a section's heading takes, from the slot that places it. */
+const ACTION_SIZE = 'compact'
+
+defineSlots<{ actions?: (scope: { size: typeof ACTION_SIZE }) => unknown }>()
 </script>
 
 <template>
@@ -44,7 +53,10 @@ withDefaults(
       v-if="$slots.actions"
       class="section-header-actions"
     >
-      <slot name="actions" />
+      <slot
+        name="actions"
+        :size="ACTION_SIZE"
+      />
     </div>
   </div>
 </template>
