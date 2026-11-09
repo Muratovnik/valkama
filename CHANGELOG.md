@@ -38,6 +38,13 @@ checkouts are therefore distinguishable even at the same version.
   answered fold where they stand and later gather under «Answered (N)» at the end of the list,
   never moving while your pointer or keyboard is on them or below them.
 
+### Fixed
+
+- **A focus ring brought into view keeps all of its room.** When focus moves to why a send or
+  a read failed, to a reply or to a reference in text and scrolls it into view, the scroll now
+  stops a pixel further in, so the ring is never short of the edge by a fraction of a pixel
+  when the text above it ends on a fractional height.
+
 ## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) - 2026-11-08
 
 ### Added

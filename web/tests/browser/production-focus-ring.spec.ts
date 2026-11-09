@@ -293,3 +293,26 @@ for (const locale of ['en', 'ru'] as const)
     expect(await ringCut(sent)).toBe(0)
     await shot(page, `send-failed-ring-${locale}-390`)
   })
+
+// The scroll stops at the nearest whole pixel, so a landing whose words above end on a fraction
+// of one is brought in short by up to half a pixel: with the ring's room alone as its margin,
+// that much of the ring stood cut, wherever the fraction fell under a half.
+for (const shift of [0.125, 0.25, 0.375])
+  test(`at 390 the ring round why a send failed is whole with the question ${shift}px lower`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const { card, requests } = await openQuestion(page, [asked()])
+    await card.evaluate((node, by) => {
+      ;(node.parentElement as HTMLElement).style.paddingTop = `${by}px`
+    }, shift)
+    await card.getByRole('radio', { name: 'Move them', exact: true }).check()
+    requests.failNext(503)
+    await send(card).press('Enter')
+    const sent = card.locator('.request-foot .request-error')
+    await expect(sent).toBeFocused()
+    await frames(page.locator(':root'))
+    expect(await outline(sent)).toBe('solid')
+    expect(await ringCut(sent)).toBe(0)
+  })

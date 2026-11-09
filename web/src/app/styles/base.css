@@ -151,9 +151,11 @@ input:is([type='checkbox'], [type='radio']) {
    line into a capsule round the words, and the recipe stood copied in six components. Words
    that only say something about a question describe the question, which takes the focus
    instead. Focus scrolls a landing only just into view, so it keeps the ring's room as its
-   scroll margin: flush with the foot of a phone's screen the ring's lower side was cut. */
+   scroll margin: flush with the foot of a phone's screen the ring's lower side was cut. The
+   scroll stops at a whole pixel, the nearest, so the margin is a hair wider than the ring:
+   with the ring's room alone, words above of a fractional height left a fraction of it cut. */
 .focus-landing {
-  scroll-margin: calc(var(--space-1) + var(--size-focus-ring));
+  scroll-margin: calc(var(--space-1) + var(--size-focus-ring) + var(--space-hair));
 
   &:focus-visible {
     border-radius: calc(var(--radius-control) - var(--space-1));
