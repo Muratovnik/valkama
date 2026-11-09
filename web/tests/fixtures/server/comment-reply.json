@@ -3,5 +3,12 @@
   "comment_count": 2,
   "comment_id": 2,
   "reply_to": 1,
-  "reply_to_request": null
+  "reply_to_request": null,
+  "mentions": [
+    {
+      "reference": "MAIN-2",
+      "holders": [],
+      "told": "nobody yet: no holder, it stays on the item"
+    }
+  ]
 }

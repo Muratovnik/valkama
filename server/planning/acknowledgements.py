@@ -90,9 +90,12 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
 
 
 def updated(item: dict, arguments: Mapping[str, object]) -> dict:
-    """Names of the edited fields; the caller sent the values and can read them back."""
+    """Names of the edited fields; the caller sent the values and can read them back.
 
-    return {**_base(item), "updated": model.updated_fields(arguments)}
+    And who hears the items its description named, when it named any.
+    """
+
+    return {**_base(item), "updated": model.updated_fields(arguments), **_told(item)}
 
 
 def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
@@ -164,7 +167,7 @@ def applied(item: dict, arguments: Mapping[str, object]) -> dict:
     caller needs no read to reply to one or withdraw one.
     """
 
-    return {**transitioned(item, arguments), "applied": item["applied"]}
+    return {**transitioned(item, arguments), **_told(item), "applied": item["applied"]}
 
 
 def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
@@ -179,4 +182,15 @@ def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
 def _written_beside(item: dict) -> dict:
     """What a report's write put beside it: the list under it, and who hears the items it named."""
 
-    return {name: item[name] for name in ("list_request_id", "mentions") if name in item}
+    listed = {name: item[name] for name in ("list_request_id",) if name in item}
+    return {**listed, **_told(item)}
+
+
+def _told(item: dict) -> dict:
+    """Who hears the items a write named, as `mentions`.
+
+    The whole item carries it as `mentions_told`, since its own `mentions` are the
+    records of other texts naming it, which no write of this one is about.
+    """
+
+    return {"mentions": item["mentions_told"]} if "mentions_told" in item else {}

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
 import {
   validateDocument,
   validateFound,
@@ -30,7 +31,7 @@ import {
   validateOpenPlaces,
   validateOpenPlan,
 } from '@/shared/api/openPlanModel.ts'
-import { validateCommentResolved, validateCommentWritten } from '@/shared/api/planningModel.ts'
+import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
@@ -56,6 +57,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
+  'description-told.json': (value) => validateWorkItemRecord(value),
   'documents-read.json': validateDocument,
   'documents-refused.json': validateRefusal,
   'documents-resolve-unbound.json': validateResolved,

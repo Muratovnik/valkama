@@ -280,6 +280,7 @@ class WhoHearsTests(Harness):
         [record] = read["mentions"]
         self.assertEqual(
             {
+                "in": "comment",
                 "comment_id": said["comment_id"],
                 "from": self.source,
                 "by_person": True,
@@ -418,6 +419,231 @@ class ReadingTests(Harness):
         )
         [record] = self.agent("get_work_item", id=self.target)["mentions"]
         self.assertEqual(survivor, record["from"])
+
+
+UPDATE = "/api/planning/work-item/update"
+SUMMARY_PATH = "/api/planning/work-item/summary"
+
+
+class TextMentionTests(Harness):
+    """A summary and a description tell as a comment does, and a re-edit wakes nobody twice.
+
+    From the owner's decision that `@` makes a mention wherever a person writes about
+    work, and its recorded default: saving a summary or a description again tells only
+    the items its previous text did not name.
+    """
+
+    def records(self, reference: str) -> list[dict]:
+        return list(self.agent("get_work_item", id=reference, full=True)["mentions"])
+
+    def describe(self, text: str, mentions: list[str], **extra: object) -> dict:
+        """The person saves the source's description, naming `mentions`."""
+
+        return self.person(UPDATE, id=self.source, description=text, mentions=mentions, **extra)
+
+    def test_a_summary_tells_and_its_record_is_the_summary_comment(self) -> None:
+        said = {"done": f"Kept the new route; {self.target} can drop the old one", "next": "None"}
+        answer = self.agent(
+            "set_work_item_summary", ELSEWHERE, id=self.source, summary=said, mentions=[self.target]
+        )
+        self.assertEqual(
+            [{"reference": self.target, "holders": [], "told": mention_records.NO_HOLDER}],
+            answer["mentions"],
+        )
+        [record] = self.records(self.target)
+        self.assertEqual(
+            {
+                "in": "summary",
+                "comment_id": answer["summary_comment_id"],
+                "from": self.source,
+                "by_person": False,
+                "quote": said["done"],
+            },
+            {name: record[name] for name in ("in", "comment_id", "from", "by_person", "quote")},
+        )
+        summary = self.agent("get_work_item", id=self.source)
+        [comment] = [
+            entry for entry in summary["comments"] if entry["id"] == answer["summary_comment_id"]
+        ]
+        self.assertEqual([self.target], comment["mentions"])
+
+    def test_a_summary_written_again_tells_only_what_the_last_one_did_not_name(self) -> None:
+        other = self.item("Another route")
+        self.conn.commit()
+        first = {"done": f"Ask {self.target}", "next": "Wait"}
+        self.agent(
+            "set_work_item_summary",
+            ELSEWHERE,
+            id=self.source,
+            summary=first,
+            mentions=[self.target],
+        )
+        # One session, four saves of the same words: the hour counts only what told.
+        for _ in range(3):
+            again = self.agent(
+                "set_work_item_summary",
+                ELSEWHERE,
+                id=self.source,
+                summary=first,
+                mentions=[self.target],
+            )
+            self.assertNotIn("mentions", again, "nobody hears it twice")
+        both = {"done": f"Ask {self.target} and {other}", "next": "Wait"}
+        answer = self.agent(
+            "set_work_item_summary",
+            ELSEWHERE,
+            id=self.source,
+            summary=both,
+            mentions=[self.target, other],
+        )
+        self.assertEqual([other], [entry["reference"] for entry in answer["mentions"]])
+        self.assertEqual((1, 1), (self.events(self.target), self.events(other)))
+        # A report made current replaces the summary as well; one that is not is a comment.
+        self.agent(
+            "report_work_item",
+            ELSEWHERE,
+            id=self.source,
+            report=both,
+            make_current=True,
+            expected_revision=answer["revision"],
+            mentions=[other],
+        )
+        self.assertEqual(1, self.events(other))
+        self.agent("report_work_item", ELSEWHERE, id=self.source, report=both, mentions=[other])
+        self.assertEqual(2, self.events(other))
+        # Words that stopped naming it make the next save that names it news again.
+        plain = {"done": "Nothing to ask", "next": "Wait"}
+        self.person(SUMMARY_PATH, id=self.source, summary=plain)
+        told = self.person(SUMMARY_PATH, id=self.source, summary=first, mentions=[self.target])
+        self.assertEqual([self.target], [entry["reference"] for entry in told["mentions_told"]])
+        self.assertEqual(2, self.events(self.target))
+
+    def test_a_description_tells_and_its_record_quotes_the_line_that_names_it(self) -> None:
+        text = f"Why this exists.\n\nDrop the old route with {self.target} first.\nThen the rest."
+        answer = self.describe(text, [self.target])
+        self.assertEqual(
+            [{"reference": self.target, "holders": [], "told": mention_records.NO_HOLDER}],
+            answer["mentions_told"],
+        )
+        self.assertEqual([], answer["mentions"], "the item's own records, of texts naming it")
+        [record] = self.records(self.target)
+        self.assertEqual(
+            {
+                "in": "description",
+                "comment_id": None,
+                "from": self.source,
+                "by_person": True,
+                "author": "user",
+                "quote": f"Drop the old route with {self.target} first.\nThen the rest.",
+            },
+            {name: value for name, value in record.items() if name != "at"},
+        )
+        self.assertEqual(text, service.get_work_item(self.conn, self.source)["description"])
+        service.delete_work_item(self.conn, self.source)
+        self.conn.commit()
+        [record] = self.records(self.target)
+        self.assertEqual(
+            ("description", None, None), (record["in"], record["from"], record["quote"])
+        )
+
+    def test_a_description_saved_again_tells_nobody_twice(self) -> None:
+        other = self.item("Another route")
+        self.conn.commit()
+        text = f"Drop it with {self.target}."
+        self.describe(text, [self.target])
+        again = self.describe(text, [self.target])
+        self.assertNotIn("mentions_told", again, "the same words, saved again")
+        longer = self.describe(f"{text} And {other}.", [self.target, other])
+        self.assertEqual([other], [entry["reference"] for entry in longer["mentions_told"]])
+        self.assertEqual((1, 1), (self.events(self.target), self.events(other)))
+        self.describe("Nothing named.", [])
+        self.describe(text, [self.target])
+        self.assertEqual(2, self.events(self.target), "no longer in the text it replaced")
+
+    def test_a_description_is_held_to_a_comments_checks_and_a_refusal_writes_nothing(
+        self,
+    ) -> None:
+        before = service.get_work_item(self.conn, self.source)["revision"]
+        cases = {
+            "no description": ({"title": "Renamed"}, [self.target], "invalid_request"),
+            "itself": ({"description": "Me"}, [self.source], "invalid_request"),
+            "twice": ({"description": "Two"}, [self.target, self.target], "invalid_request"),
+            "missing": ({"description": "Gone"}, ["MAIN-99"], "not_found"),
+        }
+        for case, (fields, mentions, code) in cases.items():
+            with self.subTest(case):
+                with (
+                    calls.bind(calls.browser(), UPDATE),
+                    self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught,
+                ):
+                    api.handle_post(
+                        self.conn, UPDATE, {"id": self.source, **fields, "mentions": mentions}
+                    )
+                self.conn.rollback()
+                self.assertEqual(code, api.error_response(caught.exception)[1]["error"]["code"])
+        self.assertEqual(before, service.get_work_item(self.conn, self.source)["revision"])
+        many = [self.item(f"Item {index}") for index in range(6)]
+        self.conn.commit()
+        error = self.refused_agent(
+            "update_work_item", id=self.source, description=" ".join(many), mentions=many
+        )
+        self.assertEqual("mentions holds at most 5 items", error["message"])
+        self.assertEqual(0, self.events(self.target))
+
+    def test_a_persons_description_mention_is_the_persons_act_on_the_item_named(self) -> None:
+        self.hold()
+        self.assertIsNone(self.hook())
+        self.describe(f"Intro\n{self.target} can drop the old route", [self.target])
+        [event] = self.window(self.target)
+        self.assertEqual(
+            ("mentioned", "description", self.source),
+            (event["kind"], event["in"], event["from"]),
+        )
+        told = self.hook()
+        assert told is not None
+        self.assertIn("a person acted", told)
+        self.assertIn(
+            f" in the description of {self.source}: «{self.target} can drop the old route»", told
+        )
+
+    def test_an_agents_description_mention_reaches_the_holder_and_a_batch_says_who_hears(
+        self,
+    ) -> None:
+        self.hold()
+        self.assertIsNone(self.hook())
+        other = self.item("Another route")
+        self.conn.commit()
+        batch = self.agent(
+            "apply_work_item_changes",
+            ELSEWHERE,
+            id=self.source,
+            update={"description": f"{self.target} goes first", "mentions": [self.target]},
+            summary={"done": f"Asked {other}", "next": "Wait", "mentions": [other]},
+        )
+        self.assertEqual([self.target], [entry["reference"] for entry in batch["mentions"]])
+        self.assertEqual(["description"], batch["applied"]["update"])
+        self.assertEqual(
+            [other], [entry["reference"] for entry in batch["applied"]["summary"]["mentions"]]
+        )
+        told = self.hook()
+        assert told is not None
+        self.assertIn(AGENTS_HEAD, told)
+        self.assertIn(
+            f" by session {SPEAKER}, in the description of {self.source}: «{self.target} goes"
+            " first»",
+            told,
+        )
+        self.assertEqual([], self.window(self.target), "an agent's words are never a person's")
+
+    def test_a_write_that_names_nothing_says_nobody_hears(self) -> None:
+        """A summary's answer used to carry the item's own records under `mentions`."""
+
+        self.tells()
+        summary = self.agent("set_work_item_summary", id=self.target, summary=SUMMARY)
+        report = self.agent("report_work_item", id=self.target, report=SUMMARY)
+        edit = self.agent("update_work_item", id=self.target, description="Plain")
+        for answer in (summary, report, edit):
+            self.assertNotIn("mentions", answer)
 
 
 class LimitTests(Harness):

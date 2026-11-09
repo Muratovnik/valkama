@@ -438,6 +438,27 @@ def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _update(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """An edit, and the items its new description tells, which the one it replaced did not name.
+
+    The answer is the whole item, whose `mentions` are the records of other texts
+    naming it, so who hears the items this description named is `mentions_told`.
+    """
+
+    if payload.get("mentions") is None:
+        return _edited(conn, payload)
+    with _all_or_nothing(conn):
+        source = read_model.item_row(conn, _text(payload, "id"))
+        if _optional_text(payload, "description") is None and payload["mentions"] != []:
+            raise model.PlanningError("mentions are told by a description: send it with them")
+        named = mention_records.targets(
+            conn, source, payload["mentions"], before=str(source["description"])
+        )
+        answer = _edited(conn, payload)
+        where = mention_records.description_of(str(source["work_item_id"]))
+        return _with_mentions(conn, answer, where, named, payload, key=TOLD)
+
+
+def _edited(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.update_work_item(
         conn,
         _text(payload, "id"),
@@ -563,8 +584,11 @@ def _pin(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A summary, its list, and the items it tells that the summary it replaces did not name."""
+
     question = _list(payload)
     with _all_or_nothing(conn):
+        named = _named(conn, payload, summary=True)
         answer = service.set_summary(
             conn,
             _text(payload, "id"),
@@ -572,7 +596,9 @@ def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             expected_revision=_optional_int(payload, "expected_revision"),
             author=_author(payload),
         )
-        return _with_list(conn, answer, int(answer["summary_comment_id"]), question, payload)
+        comment_id = int(answer["summary_comment_id"])
+        answer = _with_mentions(conn, answer, str(comment_id), named, payload, key=TOLD)
+        return _with_list(conn, answer, comment_id, question, payload)
 
 
 def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -596,7 +622,7 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             awaits_reply=_flag(payload, "awaits_reply"),
         )
         comment_id = int(written["comment_id"])
-        written = _with_mentions(conn, written, comment_id, named, payload)
+        written = _with_mentions(conn, written, str(comment_id), named, payload)
         return _with_list(conn, written, comment_id, question, payload)
 
 
@@ -607,28 +633,41 @@ def _list(payload: Mapping[str, object]) -> tuple[str, list[dict]] | None:
     return None if value is None else requests.list_question(value)
 
 
-def _named(conn: sqlite3.Connection, payload: Mapping[str, object]) -> list[sqlite3.Row]:
-    """The items a comment or a report tells in `mentions`, each checked before it is written."""
+def _named(
+    conn: sqlite3.Connection, payload: Mapping[str, object], *, summary: bool = False
+) -> list[sqlite3.Row]:
+    """The items a comment, a report or a summary tells in `mentions`, checked before writing.
+
+    A `summary` replaces the item's summary, and leaves out what that one named.
+    """
 
     if payload.get("mentions") is None:
         return []
     source = read_model.item_row(conn, _text(payload, "id"))
-    return mention_records.targets(conn, source, payload["mentions"])
+    before = mention_records.summary_text(source["summary"]) if summary else None
+    return mention_records.targets(conn, source, payload["mentions"], before=before)
+
+
+#: Where an answer that is the whole item says who hears the items its write named:
+#: the item's own `mentions` are the records of other texts naming it.
+TOLD = "mentions_told"
 
 
 def _with_mentions(
     conn: sqlite3.Connection,
     answer: dict,
-    comment_id: int,
+    where: str,
     named: list[sqlite3.Row],
     payload: Mapping[str, object],
+    *,
+    key: str = "mentions",
 ) -> dict:
-    """The answer of a write, with who will hear each item its comment named."""
+    """The answer of a write, with who will hear each item its text named, under `key`."""
 
     if not named:
         return answer
-    told = mention_records.record(conn, comment_id, named, _author(payload))
-    return {**answer, "mentions": told}
+    told = mention_records.record(conn, where, named, _author(payload))
+    return {**answer, key: told}
 
 
 def _with_list(
@@ -746,7 +785,7 @@ def _expire_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
 def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     question = _list(payload)
     with _all_or_nothing(conn):
-        named = _named(conn, payload)
+        named = _named(conn, payload, summary=_flag(payload, "make_current"))
         answer = service.report_work_item(
             conn,
             _text(payload, "id"),
@@ -757,7 +796,7 @@ def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         )
         # The report this call wrote is the item's newest comment.
         comment_id = int(answer["comments"][-1]["id"])
-        answer = _with_mentions(conn, answer, comment_id, named, payload)
+        answer = _with_mentions(conn, answer, str(comment_id), named, payload, key=TOLD)
         return _with_list(conn, answer, comment_id, question, payload)
 
 
@@ -825,7 +864,7 @@ _COMMENT_FIELDS = frozenset(
 APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
     ("subscribe", frozenset()),
-    ("update", frozenset(model.UPDATABLE_FIELDS)),
+    ("update", frozenset({*model.UPDATABLE_FIELDS, "mentions"})),
     ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done"})),
     ("refs", frozenset({"kind", "value", "label"})),
@@ -837,7 +876,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         "questions",
         frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
     ),
-    ("summary", frozenset({"done", "next", "why", "friction", "list"})),
+    ("summary", frozenset({"done", "next", "why", "friction", "list", "mentions"})),
     ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
@@ -944,8 +983,11 @@ def _apply_step(
         row = read_model.item_row(conn, _text(base, "id"))
         return {}, subscriptions.subscribe(conn, row, entry["follows"])
     if group == "update":
-        _update(conn, {**entry, **base})
-        return {}, model.updated_fields(entry)
+        # Who hears the items its description named stands where the single edit puts it.
+        edited = _update(conn, {**entry, **base})
+        return {name: edited[name] for name in (TOLD,) if name in edited}, model.updated_fields(
+            entry
+        )
     if group == "checklist":
         replaced = _checklist(conn, {**entry, **base})
         return {}, [
@@ -972,14 +1014,17 @@ def _apply_step(
         asked = _create_request(conn, {**entry, **base})
         return {}, {name: asked[name] for name in ("request_id", "revision")}
     if group == "summary":
-        listed = {"list": entry["list"]} if "list" in entry else {}
-        summary = {name: value for name, value in entry.items() if name != "list"}
-        answer = _summary(conn, {**base, **listed, "summary": summary})
-        return {}, {
+        beside = {name: entry[name] for name in ("list", "mentions") if name in entry}
+        summary = {name: value for name, value in entry.items() if name not in beside}
+        answer = _summary(conn, {**base, **beside, "summary": summary})
+        written = {
             name: answer[name]
             for name in ("summary_comment_id", "list_request_id")
             if name in answer
         }
+        if TOLD in answer:
+            written["mentions"] = answer[TOLD]
+        return {}, written
     answer = _transition(conn, {**entry, **base})
     found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
     moved = {"state": answer["state"]["key"]}

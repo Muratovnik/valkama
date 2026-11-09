@@ -196,6 +196,15 @@ _MENTIONS = {
     f" tells nobody. A session names one item at most {mention_records.MAX_PER_HOUR} times an"
     " hour. The answer says who will hear each.",
 }
+#: The other items a summary or a description tells: the same, but a text saved again
+#: tells only what the text it replaces did not name.
+_TEXT_MENTIONS = {
+    **_MENTIONS,
+    "description": "Other items the summary or the description tells, by reference, as a"
+    " comment's mentions do; a description's go with the description. A number in the text"
+    " tells nobody. Saved again, it tells only the items the text it replaces did not name."
+    " The answer's mentions says who will hear each.",
+}
 _AWAITS_REPLY = {
     "type": "boolean",
     "description": "Set only before ending your turn to wait for another agent, never for"
@@ -499,6 +508,7 @@ TOOLS = [
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "parent": _REFERENCE,
             "rank": _RANK,
+            "mentions": _TEXT_MENTIONS,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -719,6 +729,7 @@ TOOLS = [
                 "required": ["done", "next"],
             },
             "list": _LIST,
+            "mentions": _TEXT_MENTIONS,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -841,7 +852,7 @@ TOOLS = [
                 "description": "Edit the item's fields as update_work_item does;"
                 " applied.update names the fields sent.",
                 "properties": {name: _STR for name in model.UPDATABLE_FIELDS if name != "labels"}
-                | {"labels": _LABELS},
+                | {"labels": _LABELS, "mentions": _TEXT_MENTIONS},
             },
             "checklist": {
                 "type": "object",
@@ -967,6 +978,7 @@ TOOLS = [
                     "why": _STR,
                     "friction": _FRICTION,
                     "list": _LIST,
+                    "mentions": _TEXT_MENTIONS,
                 },
                 "required": ["done", "next"],
             },

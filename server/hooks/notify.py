@@ -1296,6 +1296,10 @@ def _thread(entry: dict) -> str:
         return f" on thread #{entry['comment_id']}"
     if kind in ("blocker_closed", "blocker_changed"):
         return f" on {entry['blocker']}, now {entry['state']}"
+    if kind == "mentioned" and entry.get("in") == "description":
+        # Another item's description named this one: no thread, the item is where to read it.
+        where = entry.get("from")
+        return f" in the description of {where}" if where else " in a deleted description"
     if kind == "mentioned":
         # The comment that named this item stands on another one, where its thread is.
         where = entry.get("from")

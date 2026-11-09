@@ -201,7 +201,7 @@ const refSchema = strictObject({
  * A root's resolved mark: who set it, when, and the one-line decision, which may
  * be blank. `by_person` is the server's fact about the call, as on a comment.
  */
-const resolutionSchema = strictObject({
+export const resolutionSchema = strictObject({
   at: boundedText(ISO, 96),
   by: actor(),
   by_person: z.boolean().nullable(),
@@ -226,16 +226,27 @@ const commentIdentity = {
 }
 
 /**
- * A comment on another item that told this one. `from` is where that comment stands
- * now and `quote` the start of what it said; both are null once that item is deleted.
+ * A text on another item that told this one: `in` a comment, a report, the summary or
+ * the description, the first three by `comment_id`. `from` is the item the words stand
+ * on now and `quote` what they said; both are null once that item is deleted.
  */
 const mentionRecordSchema = strictObject({
-  comment_id: positiveInt(),
+  in: enumField(['comment', 'report', 'summary', 'description'] as const),
+  comment_id: positiveInt().nullable(),
   from: boundedText(WORK_ITEM_REFERENCE, 20).nullable(),
   at: boundedText(ISO, 96),
   by_person: z.boolean().nullable(),
   author: actor(),
   quote: blankable(300).nullable(),
+})
+/**
+ * Who will hear an item a write told, as the write answers it: the holders of its claim
+ * and its steps, and `told` when nobody will.
+ */
+export const toldSchema = strictObject({
+  reference: boundedText(WORK_ITEM_REFERENCE, 20),
+  holders: boundedList(holderField(), 101),
+  told: serverText().optional(),
 })
 const commentSchema = z.union([
   strictObject({
@@ -367,6 +378,8 @@ const workItemSchema = strictObject({
   // The read of one item carries the newest of these and how many there are.
   mentions: boundedList(mentionRecordSchema, 50).optional(),
   mentions_total: positiveInt(true).optional(),
+  // A write whose text told other items answers who will hear them.
+  mentions_told: boundedList(toldSchema, 20).optional(),
   subscribers: z.array(subscriberSchema).optional(),
   // A transition answers with these; a plain read does not.
   warnings: z.array(serverText()).optional(),
@@ -482,22 +495,6 @@ const pendingSchema = strictObject({
   }),
 })
 
-/** A comment write's answer: a reply names the root it landed under, a root names none. */
-const commentWrittenSchema = strictObject({
-  work_item: boundedText(WORK_ITEM_REFERENCE, 20),
-  comment_count: positiveInt(true),
-  comment_id: positiveInt(),
-  reply_to: positiveInt().nullable(),
-  reply_to_request: boundedText(UUID, 36).nullable(),
-})
-
-/** A mark's answer: the root's mark as it now stands, null once reopened. */
-const commentResolvedSchema = strictObject({
-  work_item: boundedText(WORK_ITEM_REFERENCE, 20),
-  comment_id: positiveInt(),
-  resolution: resolutionSchema.nullable(),
-})
-
 export type WorkflowState = z.infer<typeof workflowStateSchema>
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
@@ -507,8 +504,6 @@ export type PlanningReadModel = z.infer<typeof readModelSchema>
 export type PlanningEdge = z.infer<typeof edgeSchema>
 export type PlanningRefusal = z.infer<typeof refusalSchema>
 export type PlanningPending = z.infer<typeof pendingSchema>
-export type CommentWritten = z.infer<typeof commentWrittenSchema>
-export type CommentResolved = z.infer<typeof commentResolvedSchema>
 
 export function validateReadModel(value: unknown, path = 'planning'): PlanningReadModel {
   return parseContract(readModelSchema, value, path, invalid)
@@ -521,14 +516,6 @@ export function validateWorkItemRecord(value: unknown, path = 'planning.workItem
 /** The brief record a space's list carries, as one item's preview reads it alone. */
 export function validateWorkItemBrief(value: unknown, path = 'planning.workItem'): WorkItemBrief {
   return parseContract(workItemBriefSchema, value, path, invalid)
-}
-
-export function validateCommentWritten(value: unknown): CommentWritten {
-  return parseContract(commentWrittenSchema, value, 'planning.comment', invalid)
-}
-
-export function validateCommentResolved(value: unknown): CommentResolved {
-  return parseContract(commentResolvedSchema, value, 'planning.resolution', invalid)
 }
 
 export function readRefusal(value: unknown): PlanningRefusal | null {
