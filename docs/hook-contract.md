@@ -594,11 +594,13 @@ model's own description and is kept to the one place the store holds it:
 - thread_reopened at 2026-11-03T11:05:00Z on thread #41
 - question_changed at 2026-11-03T12:00:00Z: «changed: route flat→threads»
 - mentioned at 2026-11-05T20:31:00Z from MAIN-12 #61: «Decided to keep the old route; MAIN-14 can drop it.»
+- mentioned at 2026-11-05T20:40:00Z in the description of MAIN-12: «MAIN-14 drops the old route first.»
 ```
 
 `thread_resolved` quotes the decision, and `question_changed` quotes
 [what changed](connection-contract.md#the-difference-between-two-answers), row by
-row. A person's `mentioned` names the item and the comment that named this one. A
+row. A person's `mentioned` names the item and the comment that named this one, or
+the item whose description did, quoted from the line that names this one. A
 subagent's notice says "work you hold or threads you started". When it carries a
 person's act on an item the session only follows, the head says "work this session
 holds, follows or started threads on", and "you hold, follow or started threads on"

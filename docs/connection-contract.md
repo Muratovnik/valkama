@@ -92,13 +92,13 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 | Tool | Also carries |
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
-| `update_work_item` | `updated`, the names of the fields it edited |
+| `update_work_item` | `updated`, the names of the fields it edited; `mentions` when its description named other items |
 | `transition_work_item` | `released`, the holder a close released (see [A close ends the claims](#a-close-ends-the-claims)); `warnings` and `overridden`; each when there is one |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued` and `warnings` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
 | `set_work_item_checklist` | `checklist`, the steps as `item_id`, `text` and `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
-| `set_work_item_summary` | `summary_recorded: true` |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
+| `set_work_item_summary` | `summary_recorded: true`; `mentions` when it named other items |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 **Since 2.5.** `comment_work_item` answers with `work_item`, `comment_count`,
@@ -109,8 +109,9 @@ landed under; `resolve_work_item_comment` answers with `work_item`,
 
 `comment_work_item`, `report_work_item` and `set_work_item_summary` also answer
 with `list_request_id` when the call wrote a [list](#a-list-on-a-comment), and
-`comment_work_item` and `report_work_item` with `mentions` when the call named
-other items (see [Mentions](#mentions)).
+`comment_work_item`, `report_work_item`, `set_work_item_summary` and
+`update_work_item` with `mentions` when the call named other items (see
+[Mentions](#mentions)).
 
 Every tool that writes to a work item and leaves it standing -- all of the above,
 `claim_ready_work_item`, `link_work_items`, `attach_work_item_ref`,
@@ -356,7 +357,7 @@ counts its calls. A call is counted on the item it acted on first: a link counts
 for its source item, not its target. Because Valkama records this itself, a
 caller does not attach its own session id as a ref.
 
-The read also carries `mentions`, the comments on other items that named this
+The read also carries `mentions`, the texts on other items that named this
 one; see [Mentions](#mentions).
 
 ### Pictures on an item
@@ -1057,7 +1058,7 @@ these groups, and applies them in this order:
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
-| `update` | `{title?, description?, labels?, priority?, rank?, kind?, parent?, source?}` | `update_work_item` |
+| `update` | `{title?, description?, labels?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
 | `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
@@ -1065,7 +1066,7 @@ these groups, and applies them in this order:
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `comment_work_item` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
-| `summary` | `{done, next, why?, friction?, list?}` | `set_work_item_summary` |
+| `summary` | `{done, next, why?, friction?, list?, mentions?}` | `set_work_item_summary` |
 | `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
 
 A summary or a report is `done` and `next`, with `why` only when the choice is not
@@ -1148,8 +1149,10 @@ The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent, as `update_work_item` answers in `updated`;
 `comments` and `questions` list every comment and question the call wrote, so
 a reply or a withdrawal needs no read first. A comment or a summary that carried a
-[list](#a-list-on-a-comment) adds its `list_request_id`, and a comment that named
-other items adds who will hear them as [`mentions`](#mentions):
+[list](#a-list-on-a-comment) adds its `list_request_id`, and a comment or a summary
+that named other items adds who will hear them as [`mentions`](#mentions). Who will
+hear the items an `update`'s description named stands beside `applied`, as
+`mentions`, where `update_work_item` answers it:
 
 ```json
 {"claim": true, "update": ["title", "priority"],
@@ -1698,7 +1701,7 @@ One more kind is a person's words about this item written on another one:
 
 | `kind` | When | Also carries |
 | --- | --- | --- |
-| `mentioned` | a person named this item in the `mentions` of a comment on another item (see [Mentions](#mentions)) | `comment_id`; `from`, the reference of the item that comment stands on; `text`, the comment |
+| `mentioned` | a person named this item in the `mentions` of a comment, a report, a summary or a description on another item (see [Mentions](#mentions)) | `comment_id`; `from`, the reference of the item that comment stands on; `text`, the comment. For a description: `in: "description"` and no `comment_id`; `from`, the item whose description it is; `text`, the description from the line that names this item |
 
 ```json
 {"kind": "mentioned", "via": "interface", "at": "2026-11-05T20:31:00.000000Z",
@@ -1740,21 +1743,34 @@ merge with `person_spoke`, and `force` records it on that item once.
 
 ### Mentions
 
-A number in a comment is a link and tells nobody: comments name other items all
-the time. To tell the work on another item, a comment names that item in
-`mentions`. The comment stays where it is written, and the item it names gets a
-record that points to it.
+A number in a text is a link and tells nobody: texts name other items all the
+time. To tell the work on another item, the write that puts the text names that
+item in `mentions`, a list of items by reference or work item id. The text stays
+where it is written, and the item it names gets a record that points to it.
 
-**Writing.** `comment_work_item`, `report_work_item`, the HTTP write
-`POST /api/planning/work-item/comment`, the `comment` group of
-`apply_work_item_changes` and each comment where a batch writes several take
-`mentions`, a list of items by reference or work item id, on a root and on a reply
-alike. The text of the comment is not changed and is not read for references.
+**Writing.** These writes take `mentions`:
+
+| The text | Writes |
+| --- | --- |
+| a comment, a root or a reply alike | `comment_work_item`, `POST /api/planning/work-item/comment`, the `comment` group of `apply_work_item_changes` and each comment where a batch writes several |
+| a report | `report_work_item`, `POST /api/planning/work-item/report` |
+| the summary | `set_work_item_summary`, `POST /api/planning/work-item/summary`, the batch's `summary` |
+| the description | `update_work_item` and `POST /api/planning/work-item/update` beside `description`, the batch's `update` |
+
+The text is not changed and is not read for references.
 
 ```json
 {"id": "MAIN-12", "body": "Decided to keep the old route; MAIN-14 can drop it.",
  "mentions": ["MAIN-14", "MAIN-15"]}
 ```
+
+A summary and a description are written again and again, so their write tells
+only the items the text it replaces did not name, as prose names them: saving the
+same words twice wakes nobody twice, and an item a save leaves out of the text is
+news again when a later save names it. A report made current replaces the summary
+and follows the same rule; any other report, and every comment, tells each item it
+names. An item left out this way is checked like the others, but it gets no record
+and counts toward no hour.
 
 A call through the interface names at most 20 items, any other call at most 5, and
 a session mentions one item at most 3 times an hour. Refused before anything is
@@ -1764,9 +1780,10 @@ written:
 | --- | --- |
 | more items than the call may name | `invalid_request`: `mentions holds at most 5 items` (20 for the interface) |
 | an item named twice | `invalid_request`: `mentions names MAIN-14 twice` |
-| the comment's own item | `invalid_request`: `an item does not mention itself` |
+| the item written on | `invalid_request`: `an item does not mention itself` |
 | an item that does not exist | `not_found` |
 | a fourth mention of one item within an hour by one session | `mention_limit`: `MAIN-14 was mentioned 3 times in the last hour by this session; write once there, or wait` |
+| an edit that names items and sends no `description` | `invalid_request`: `mentions are told by a description: send it with them` |
 
 The hour counts the mentions of that item whose confirmed call names the same
 session, its subagents included. A call with no session, the interface's or an
@@ -1774,11 +1791,12 @@ unconfirmed one, is not counted, and an unconfirmed call tells nobody either. A
 closed item can be mentioned: the record is written and nobody is told. Over HTTP,
 `mention_limit` answers 429.
 
-**What is written.** Each item named gets one history event, `mentioned`, whose
-detail is the comment's id, under the call that wrote the comment. That call
-belongs to the comment's item, so a mention does not move the
-[window](#what-a-person-did-reaches-the-agent) of the item it names, as the far
-end of a link does not.
+**What is written.** Each item named gets one history event, `mentioned`, under the
+call that wrote the text. Its detail says where the words are: the comment's id, a
+report and a summary being comments too, or `description:` and the work item id of
+the item whose description it is. That call belongs to the item written on, so a
+mention does not move the [window](#what-a-person-did-reaches-the-agent) of the
+item it names, as the far end of a link does not.
 
 **The answer** says who will hear, beside the comment's own keys:
 
@@ -1793,29 +1811,37 @@ end of a link does not.
 `holders` are the holder of the item's claim and of each held step, as `claim_ref`
 and `claimed_by` name them. `told` is there only when they will not hear it:
 `nobody yet: no holder, it stays on the item`, `nobody: closed`, or `nobody: this
-call proved no session`. A batch's `applied.comment`, and each entry of
-`applied.comments`, carries the same `mentions`.
+call proved no session`. The tools' acknowledgements carry it as `mentions`, and
+only when the call told an item. An HTTP answer that is the whole item -- the
+report, summary and edit writes -- carries it as `mentions_told`, since that
+item's own `mentions` are the records described below. A batch's
+`applied.comment`, each entry of `applied.comments` and `applied.summary` carry
+the same `mentions`; an `update`'s stand beside `applied`.
 
 **Reading.** Every comment, in every read, carries `mentions`, the references it
 named, `[]` when it named none. `get_work_item` carries `mentions`, the 5 newest
-comments that named this item, oldest first, and `mentions_total`; with
+texts that named this item, oldest first, and `mentions_total`; with
 `full: true` it carries all of them and no total. The HTTP item read carries the
 newest 50 and the total, and so does every answer that is the whole item: the
 HTTP writes and a tool's `verbose` answer.
 
 ```json
-{"comment_id": 61, "from": "MAIN-12", "at": "2026-11-05T20:31:00.000000Z",
- "by_person": false, "author": "codex",
+{"in": "comment", "comment_id": 61, "from": "MAIN-12",
+ "at": "2026-11-05T20:31:00.000000Z", "by_person": false, "author": "codex",
  "quote": "Decided to keep the old route; MAIN-14 can drop it."}
 ```
 
-`from` is the reference of the item the comment stands on now, and `quote` the
-first 300 characters of its body, or of a report's `done`, the last one `…` when
-cut. When that comment went with a
-deleted item, the record stays and both are `null`. `by_person` is read from the
-call, as on a comment. The card of the item named shows each record as a quiet line
-in its discussion, by time, leading to the comment; it is not a thread there, and
-an answer goes in the comment's own thread.
+`in` says where the words are: `comment` for a comment or a reply, `report`,
+`summary` for a report that is its item's summary now, or `description`.
+`comment_id` is that comment's id, and null for a description. `from` is the
+reference of the item the words stand on now, and `quote` the first 300
+characters of a comment's body or a report's `done`, or of a description from the
+start of the line that names this item, the last one `…` when cut. When that
+comment, or that description, went with a deleted item, the record stays and both
+are `null`. `by_person` is read from the call, as on a comment. The card of the
+item named shows each record as a quiet line in its discussion, by time, leading
+to the comment; it is not a thread there, and an answer goes in the comment's own
+thread.
 
 **Who hears.** A person's mention is the person's act on the item named: it is a
 `mentioned` event in [`from_person`](#what-a-person-did-reaches-the-agent), counts
@@ -1831,7 +1857,8 @@ the record waits on it for whoever takes it next.
 
 **Merging.** A record stays where it was written: the mentions of a merged item
 stay on it and do not move to the survivor. A comment that moves in a merge keeps
-what it named, and its records then name the survivor in `from`.
+what it named, and its records then name the survivor in `from`. A description
+stays on its item, so its records go on naming the merged item.
 
 ### Questions and decisions
 
