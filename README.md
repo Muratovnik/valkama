@@ -809,7 +809,10 @@ also takes a file whose path from the root holds the text, case aside, at `line`
 and ahead of the files found by a line. Each `path` is what `resolve` takes from the
 same space; the root is never told. At most 20 files, one hit each; nothing typed,
 or a space the registry does not bind to one existing root, offers none. A file
-reached through a link or a junction out of the root is left out. No `space`, one
+reached through a link or a junction out of the root is left out, and so is one the
+project's Git ignores, such as scratch or private evidence: where a root lies in a
+Git work tree that does not ignore it, Git lists its files, and only a root outside
+any work tree is walked, past `node_modules`, `dist` and the like. No `space`, one
 that is not a planning space's identity, or a text over 200 characters is
 `invalid_request`.
 

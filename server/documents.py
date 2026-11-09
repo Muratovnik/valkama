@@ -13,12 +13,14 @@ import hashlib
 import ntpath
 import os
 import stat
+import subprocess
 import sys
 import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Literal, NamedTuple
 
+from . import git_worktrees
 from .ops import configuration
 from .projects import project_registry
 
@@ -463,38 +465,29 @@ def search_documents(
     for root in roots if roots is not None else doc_roots():
         if not os.path.isdir(root):
             continue
-        for directory, subdirectories, files in os.walk(root):
-            subdirectories[:] = [name for name in subdirectories if name not in SKIP_DIRECTORIES]
-            for name in sorted(files):
-                if not name.lower().endswith(DOC_SUFFIXES):
-                    continue
-                path = os.path.join(directory, name)
-                relative = os.path.relpath(path, root).replace("\\", "/")
-                if by_path and needle in relative.lower():
+        for relative in _documents_in(root):
+            path = os.path.join(root, relative)
+            if by_path and needle in relative.lower():
+                if os.path.isfile(path):
                     hits.append({"path": relative, "root": root, "line": 0, "text": ""})
-                    if len(hits) >= MAX_DOC_HITS:
-                        return _named_first(hits)
-                    continue
-                try:
-                    if os.path.getsize(path) > MAX_DOC_BYTES:
-                        continue
-                    with open(path, encoding="utf-8", errors="replace") as handle:
-                        lines = handle.read().splitlines()
-                except OSError:
-                    continue
-                for number, line in enumerate(lines, start=1):
-                    if needle in line.lower():
-                        hits.append(
-                            {
-                                "path": relative,
-                                "root": root,
-                                "line": number,
-                                "text": line.strip()[:240],
-                            }
-                        )
-                        break  # one hit per document keeps the list readable
                 if len(hits) >= MAX_DOC_HITS:
                     return _named_first(hits)
+                continue
+            try:
+                if os.path.getsize(path) > MAX_DOC_BYTES:
+                    continue
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    lines = handle.read().splitlines()
+            except OSError:
+                continue
+            for number, line in enumerate(lines, start=1):
+                if needle in line.lower():
+                    hits.append(
+                        {"path": relative, "root": root, "line": number, "text": line.strip()[:240]}
+                    )
+                    break  # one hit per document keeps the list readable
+            if len(hits) >= MAX_DOC_HITS:
+                return _named_first(hits)
     return _named_first(hits)
 
 
@@ -502,6 +495,69 @@ def _named_first(hits: list[dict]) -> list[dict]:
     """Documents named by their path ahead of those found by a line, each in the order found."""
 
     return sorted(hits, key=lambda hit: hit["line"] != 0)
+
+
+def _documents_in(root: str) -> list[str]:
+    """The Markdown files under a root, as `/`-separated paths from it in path order.
+
+    Where the root lies in a Git work tree that does not ignore it, Git names them:
+    the files it tracks and those it would add, so nothing its ignore rules cover,
+    such as scratch, private evidence or build output, is read or offered, and its
+    index answers instead of a walk of the whole tree on every search. A root Git
+    cannot answer for is walked, past `SKIP_DIRECTORIES`.
+    """
+
+    listed = _listed_by_git(root)
+    if listed is None:
+        listed = []
+        for directory, subdirectories, files in os.walk(root):
+            subdirectories[:] = [name for name in subdirectories if name not in SKIP_DIRECTORIES]
+            for name in files:
+                listed.append(
+                    os.path.relpath(os.path.join(directory, name), root).replace("\\", "/")
+                )
+    return sorted(
+        {
+            path
+            for path in listed
+            if path.lower().endswith(DOC_SUFFIXES)
+            and SKIP_DIRECTORIES.isdisjoint(path.split("/")[:-1])
+        }
+    )
+
+
+def _listed_by_git(root: str) -> list[str] | None:
+    """The files under a root that its Git does not ignore, or None where Git has no say.
+
+    No say is no Git, a root outside any work tree, or a root its enclosing work tree
+    ignores, which is not that repository's to describe. Git that takes too long or
+    names a file in other than UTF-8 offers nothing rather than a walk that would
+    offer what it ignores.
+    """
+
+    try:
+        ignored = git_worktrees.git_text(
+            root, "check-ignore", "-q", "--", ".", timeout=REF_RESOLVE_TIMEOUT
+        )
+        # 0: the root is ignored; 1: it is not; anything else: not a work tree.
+        if ignored.returncode != 1:
+            return None
+        found = git_worktrees.git_text(
+            root,
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            timeout=REF_RESOLVE_TIMEOUT,
+        )
+    except OSError:
+        return None
+    except (subprocess.TimeoutExpired, UnicodeDecodeError):
+        return []
+    if found.returncode != 0:
+        return None
+    return [path for path in found.stdout.split("\0") if path]
 
 
 #: How many documents one search of a space's project answers with.

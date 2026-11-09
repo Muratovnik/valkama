@@ -467,6 +467,16 @@ class SearchTests(DocumentRoutesHarness):
             ["b.md"], [entry["path"] for entry in self.search("b.md", SPACE_B)[1]["documents"]]
         )
 
+    def test_what_the_project_s_git_ignores_is_neither_offered_nor_read(self) -> None:
+        made = processes.run_text(["git", "-C", str(self.workspace), "init", "-q"])
+        self.assertEqual(0, made.returncode, made.stderr)
+        write(self.workspace / ".gitignore", b"tmp/\n.private/\n")
+        write(self.workspace / "tmp" / "scratch.md", b"the plan as drafted\n")
+        write(self.workspace / ".private" / "plan-evidence.md", b"# evidence\n")
+        _, body = self.search("plan")
+        # Untracked but not ignored is still the project's; ignored is not.
+        self.assertEqual(["docs/plan.md"], [entry["path"] for entry in body["documents"]])
+
     def test_nothing_typed_and_an_unbound_space_offer_nothing(self) -> None:
         self.assertEqual((200, {"documents": []}), self.search(""))
         self.assertEqual((200, {"documents": []}), self.search("plan", space_identity("NONE")))

@@ -22,7 +22,8 @@ checkouts are therefore distinguishable even at the same version.
   grouped apart from the tasks. A chosen file is written as a Markdown link from the
   project's root, `[plan.md](docs/plan.md)`, which opens in the document viewer. The list
   comes from the new `GET /api/documents/search?space=<id>&q=<text>`, the existing
-  document search over that one project.
+  document search over that one project. Neither it nor `GET /api/search` offers or
+  reads a file the project's Git ignores.
 
 ### Changed
 
