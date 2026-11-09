@@ -690,8 +690,9 @@ Opening it moves nothing above it and widens nothing: the numbers' column is siz
 the folded rows already. Last, under the caption «Закреплённые», the pinned items not at
 work, by number; a pinned item at work stands with the work instead, once. An epic, or
 any item the list holds only as the parent of others, is no row of its own: its title
-leads each of its items' rows, muted, and gives way first, never taking more than two
-fifths of the row, so the item's own title keeps the rest; both stay on one line. An
+leads each of its items' rows, muted, and gives way first, down to three letters that
+the row's hint completes and never more than two fifths of the row, so the item's own
+title keeps the rest; both stay on one line. An
 epic at work is a row like any other. This replaced a tree of epics with their items
 under them, quiet and pinned items mixed in by number, which read as a heap.
 

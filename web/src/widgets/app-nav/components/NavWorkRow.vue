@@ -132,6 +132,8 @@ const touch = computed(() => props.size === 'touch')
 /** A closed item on a phone has no sign, so its lead has nothing to hold: it goes. */
 const leadless = computed(() => touch.value && props.row.is_terminal && sign.value === null)
 const depthStyle = computed(() => ({ '--nav-row-depth': props.depth }))
+/** How many letters the epic's title has: a short one keeps no more room than its letters. */
+const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.length ?? 0}ch` }))
 
 /** A plain press opens the card in place; with a modifier it is the browser's, as on any link. */
 function press(event: MouseEvent) {
@@ -201,7 +203,11 @@ function press(event: MouseEvent) {
         >
       </span>
       <template v-if="epic">
-        <span class="nav-row-epic">{{ epic }}</span>
+        <span
+          class="nav-row-epic"
+          :style="epicStyle"
+          >{{ epic }}</span
+        >
         <span
           class="nav-row-epic-mark"
           aria-hidden="true"
@@ -360,10 +366,14 @@ function press(event: MouseEvent) {
   visibility: hidden;
 }
 
-/* The parent's title, the row's context: muted, and the first to give way. */
+/* The parent's title, the row's context: muted, and the first to give way. It shrinks six
+   times as fast as the row's own title, down to a few letters of it that the hint completes
+   (or all of a shorter one), and never takes more than two fifths of the link. */
 .nav-row-epic {
-  flex: 0 1 auto;
-  min-width: 0;
+  --nav-row-epic-letters: 3ch;
+
+  flex: 0 6 auto;
+  min-width: min(3ch, var(--nav-row-epic-letters));
   max-width: 40%;
   color: var(--color-navigation-text-muted);
   white-space: nowrap;
