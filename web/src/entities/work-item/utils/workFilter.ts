@@ -233,34 +233,14 @@ export function setLabelsMatch(filter: WorkFilter, match: LabelsMatch): WorkFilt
 }
 
 /**
- * A named shortcut beside the filter field. A preset is only a list of tokens,
- * so which presets the bar offers is data: the two below are the queues no
- * view shows by itself. Offering blocked and review as presets too, or none at
- * all, is a change to this list and not to the model.
+ * The two conditions no facet's values say: startable right now, and held by
+ * somebody and not yet finished. The filter's menu offers them first, as values
+ * of their own, and a chip says each; nothing beside the field stands for them.
  */
-export interface WorkFilterPreset {
-  id: string
-  /** The i18n key of its label. */
-  label: string
-  tokens: readonly WorkFilterToken[]
-}
-
-export const WORK_FILTER_PRESETS: readonly WorkFilterPreset[] = [
-  { id: 'ready', label: 'workItem.facet.ready', tokens: [{ facet: 'ready' }] },
-  { id: 'held', label: 'workItem.facet.held', tokens: [{ facet: 'held' }] },
+export const WORK_FILTER_CONDITIONS: readonly WorkFilterToken[] = [
+  { facet: 'ready' },
+  { facet: 'held' },
 ]
-
-/** A preset is on while every token it stands for is in the filter. */
-export function presetActive(filter: WorkFilter, preset: WorkFilterPreset): boolean {
-  return preset.tokens.every((token) => hasToken(filter, token))
-}
-
-export function togglePreset(filter: WorkFilter, preset: WorkFilterPreset): WorkFilter {
-  const step = presetActive(filter, preset) ? removeToken : addToken
-  let next = filter
-  for (const token of preset.tokens) next = step(next, token)
-  return next
-}
 
 // ---------------------------------------------------------------------------
 // The route's `state` object.

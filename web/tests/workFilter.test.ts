@@ -13,18 +13,16 @@ import {
   hasToken,
   isWorkFilterEmpty,
   matchesWorkFilter,
-  presetActive,
   readWorkFilter,
   removeToken,
   ROUTE_STATE_VALUE_CHARS,
   setLabelsMatch,
-  togglePreset,
   toggleToken,
-  WORK_FILTER_PRESETS,
+  WORK_FILTER_CONDITIONS,
   WORK_FILTER_STATE_KEYS,
   writeWorkFilter,
 } from '@/entities/work-item/utils/workFilter.ts'
-import type { WorkFilter, WorkFilterPreset } from '@/entities/work-item/utils/workFilter.ts'
+import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
@@ -144,35 +142,12 @@ describe('changing the filter', () => {
     ])
   })
 
-  test('the presets are the two queues no view shows by itself', () => {
-    assert.deepEqual(
-      WORK_FILTER_PRESETS.map((preset) => preset.id),
-      ['ready', 'held'],
-    )
-    const [ready] = WORK_FILTER_PRESETS
-    const on = togglePreset({ text: '' }, ready)
-    assert.deepEqual(on, { text: '', ready: true })
-    assert.equal(presetActive(on, ready), true)
-    assert.deepEqual(togglePreset(on, ready), { text: '' })
-  })
-
-  test('offering blocked and review as presets as well is a change of data, not of the model', () => {
-    const five: WorkFilterPreset[] = [
-      ...WORK_FILTER_PRESETS,
-      {
-        id: 'blocked',
-        label: 'workItem.category.blocked',
-        tokens: [{ facet: 'category', value: 'blocked' }],
-      },
-      {
-        id: 'review',
-        label: 'workItem.category.review',
-        tokens: [{ facet: 'category', value: 'review' }],
-      },
-    ]
-    const both = togglePreset(togglePreset({ text: '' }, five[2]), five[3])
-    assert.deepEqual(both, { text: '', category: ['blocked', 'review'] })
-    assert.equal(presetActive(both, five[3]), true)
+  test('the two conditions no facet says go in and out as any value does', () => {
+    assert.deepEqual(WORK_FILTER_CONDITIONS, [{ facet: 'ready' }, { facet: 'held' }])
+    const [ready, held] = WORK_FILTER_CONDITIONS
+    const on = toggleToken(toggleToken({ text: '' }, ready), held)
+    assert.deepEqual(on, { text: '', ready: true, held: true })
+    assert.deepEqual(toggleToken(on, ready), { text: '', held: true })
   })
 })
 

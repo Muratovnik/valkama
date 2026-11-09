@@ -11,7 +11,7 @@ export const workItemFacetMessages = {
   en: {
     facet: {
       ready: 'Workable',
-      held: 'Assigned',
+      held: 'Has a holder',
       heldBy: 'Held by {holder}',
       heldStale: 'Held by {holder} — the claim is stale',
       heldWorking: 'Held by {holder} — working on it',
@@ -41,7 +41,7 @@ export const workItemFacetMessages = {
   ru: {
     facet: {
       ready: 'Можно брать',
-      held: 'Назначено',
+      held: 'Есть ответственный',
       heldBy: 'Держит {holder}',
       heldStale: 'Держит {holder} — захват устарел',
       heldWorking: 'Держит {holder} — работает над ней',

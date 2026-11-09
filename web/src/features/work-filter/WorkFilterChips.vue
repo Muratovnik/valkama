@@ -60,8 +60,6 @@ const chips = computed(() => {
       join,
       joinId,
       describedBy: join && joinId,
-      // Absent rather than false: the attribute is what the style reads.
-      preset: value === undefined || undefined,
       // The operator's name is the value's whole, so it says what it would switch.
       operator: value && {
         token: value,
@@ -145,7 +143,6 @@ defineExpose({ focusLast })
       v-for="(chip, index) in chips"
       :key="chip.key"
       class="filter-chip-item"
-      :data-preset="chip.preset"
     >
       <span
         v-if="chip.join"
@@ -281,16 +278,6 @@ defineExpose({ focusLast })
 .filter-chip-remove {
   flex: 0 0 auto;
   color: var(--color-text-muted);
-}
-
-/* Where the presets stand pressed beside the field, a preset's chip would say
-   the same thing twice. The width is the presets' own (see
-   WorkFilterPresets): below it they fold into the menu and the chip is how a
-   pressed one shows. */
-@container workspace (width >= 1000px) {
-  .filter-chip-item[data-preset] {
-    display: none;
-  }
 }
 </style>
 

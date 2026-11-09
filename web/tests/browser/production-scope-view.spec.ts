@@ -68,14 +68,18 @@ for (const view of ['graph', 'list'] as const) {
 test('the board’s grouping stays from one project to another', async ({ page }) => {
   await serveTwoProjects(page)
   await page.goto(firstProject({ group: 'epic' }))
-  const grouping = page.getByRole('button', { name: 'By epic' })
-  await expect(grouping).toHaveAttribute('aria-pressed', 'true')
+  /** The grouping the view's menu checks. */
+  const grouped = async () => {
+    await page.getByRole('button', { name: 'View', exact: true }).click()
+    const checked = page.getByRole('menuitemradio', { name: 'By epic' })
+    await expect(checked).toHaveAttribute('aria-checked', 'true')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menu')).toHaveCount(0)
+  }
+  await grouped()
   await chooseScope(page, SECOND_TITLE)
   await inSecond(page)
-  await expect(page.getByRole('button', { name: 'By epic' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await grouped()
   expect(addressState(page)).toEqual({ group: 'epic' })
 })
 
@@ -123,7 +127,7 @@ for (const [view, width] of [
     // Nothing of the space it left is drawn under it, and no count stands for the next one.
     await expect(page.locator('.work-item-tile, .work-item-list, .graph')).toHaveCount(0)
     await expect(bar.locator('.workspace-figures')).toHaveText('')
-    await expect(bar.locator('.filter-preset .count-badge')).toHaveCount(0)
+    await expect(bar.locator('.count-badge')).toHaveCount(0)
 
     answer?.()
     await expect(reading).toHaveCount(0)

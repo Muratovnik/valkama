@@ -50,6 +50,8 @@ const props = defineProps<{
   stateBytes: number
   version: number
   view: PlanningViewMode
+  /** The planning space whose saved views the bar offers. */
+  viewPlace: string
   writable: boolean
   /** The chain the views are narrowed to, when the owner asked to see one. */
   chain?: WorkItemChain | null
@@ -244,6 +246,8 @@ defineExpose({ toggleFilter })
       :grouping="barGrouping"
       :items="countedItems"
       :stored="filterStored"
+      :route-state="routeState"
+      :view-place="viewPlace"
       :view="view"
       :writable="writable"
       @update:filter="setFilter"
@@ -251,6 +255,7 @@ defineExpose({ toggleFilter })
       @exit-chain="emit('exit-chain')"
       @find="(text) => emit('find', text)"
       @group="(value) => emit('group', value)"
+      @state="(state) => emit('state', state)"
       @view="(mode) => emit('view', mode)"
     />
 

@@ -1,7 +1,8 @@
+import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
@@ -52,6 +53,7 @@ function workspace(locale = 'en', large = false) {
       stale: false,
       stateBytes: 2048,
       version: 1,
+      viewPlace: 'scope:MAIN',
       view: 'list' as const,
       writable: true,
       // The route answers a write with the state it was given, as the shell does.
@@ -69,6 +71,19 @@ function button(wrapper: ReturnType<typeof workspace>, text: string) {
   if (!found) throw new Error(`Missing button: ${text}`)
   return found
 }
+/** A row of the filter's menu, opened from the field, by the words it starts with. */
+async function menuRow(wrapper: ReturnType<typeof workspace>, text: string) {
+  const input = wrapper.get('input[role="combobox"]')
+  if (input.attributes('aria-expanded') !== 'true') await input.trigger('click')
+  const found = wrapper.findAll('[role="option"]').find((entry) => entry.text().startsWith(text))
+  if (!found) throw new Error(`Missing row: ${text}`)
+  return found
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  setActivePinia(createPinia())
+})
 
 describe('work discovery', () => {
   // The list draws all 1201 rows twice, which is the point and is heavy: 0.6 s alone, 2 s
@@ -86,9 +101,10 @@ describe('work discovery', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(1201)
     expect(wrapper.emitted('view')).toBeUndefined()
   }, 15_000)
-  it('intersects the text with a preset and resets a filtered empty result', async () => {
+  it('intersects the text with a condition and resets a filtered empty result', async () => {
     const wrapper = workspace()
-    await button(wrapper, 'Workable').trigger('click')
+    const workable = await menuRow(wrapper, 'Workable')
+    await workable.trigger('click')
     expect(wrapper.get('.data-empty').text()).toContain('No work matches this filter.')
     expect(wrapper.get('.workspace-chips').text()).toBe('Workable')
     await wrapper.get('input').setValue('MAIN-264')
@@ -120,24 +136,24 @@ describe('work discovery', () => {
       expect(wrapper.get('.workspace-figures').text()).toBe(
         locale === 'en' ? '2 open of 3' : '2\u{A0}открытых из 3',
       )
-      // The held count rides its preset.
-      expect(wrapper.findAll('.filter-preset').at(-1)?.text()).toBe(
-        locale === 'en' ? 'Assigned 1' : 'Назначено 1',
-      )
+      // The held count rides its condition in the filter's menu.
+      const held = await menuRow(wrapper, locale === 'en' ? 'Has a holder' : 'Есть ответственный')
+      expect(held.get('.option-detail').text()).toBe('1')
     },
   )
   it('keeps the filter through a refresh and drops it with an address that has none', async () => {
     const wrapper = workspace()
-    const assigned = () => wrapper.findAll('.filter-preset').at(-1)
-    await assigned()?.trigger('click')
+    const held = () => wrapper.findAll('.workspace-chips .filter-chip').map((chip) => chip.text())
+    const holder = await menuRow(wrapper, 'Has a holder')
+    await holder.trigger('click')
     await wrapper.get('input').setValue('missing')
     await wrapper.setProps({ model: model(), version: 2 })
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('missing')
-    expect(assigned()?.attributes('aria-pressed')).toBe('true')
+    expect(held()).toEqual(['Has a holder'])
     // A space switch writes the new space's address without the filter.
     await wrapper.setProps({ routeState: undefined })
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('')
-    expect(assigned()?.attributes('aria-pressed')).toBe('false')
+    expect(held()).toEqual([])
     expect(wrapper.get('tbody').text()).toContain('MAIN-264')
   })
   it('keeps references, dates and long claims through sorting and opening', async () => {

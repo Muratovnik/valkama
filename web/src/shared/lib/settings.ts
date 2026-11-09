@@ -1,6 +1,7 @@
 /**
  * The owner's local preferences: opening sessions and files, whether a card offers
- * its Execution tab, and the colours of the work item kinds.
+ * its Execution tab, the colours of the work item kinds, and the views saved in each
+ * planning space (`savedViews.ts`).
  *
  * A session opens where it was last open; the server decides that. What the owner
  * sets here is only what the rule falls back to, per client family, and an
@@ -15,6 +16,8 @@ import { EDITORS } from '@/shared/api/openPlanModel.ts'
 import type { Editor, OpenPlace } from '@/shared/api/openPlanModel.ts'
 import { readKindColors } from '@/shared/lib/kindColors.ts'
 import type { KindColors } from '@/shared/lib/kindColors.ts'
+import { readSavedViews } from '@/shared/lib/savedViews.ts'
+import type { SavedViews } from '@/shared/lib/savedViews.ts'
 
 /** Sessions are set per client family; a client Valkama cannot resume is `other`. */
 export const SESSION_FAMILIES = ['claude', 'codex', 'other'] as const
@@ -37,6 +40,8 @@ export interface PlatformSettings {
   /** Only what the owner chose; a kind not here takes the stylesheet's default. */
   kindColors: KindColors
   sessions: Record<SessionFamily, SessionOpening>
+  /** Named address states, by the planning space they were saved in. */
+  views: SavedViews
 }
 
 export const MAX_CUSTOM_COMMAND_LENGTH = 400
@@ -61,6 +66,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     codex: { ...DEFAULT_OPENING },
     other: { ...DEFAULT_OPENING },
   },
+  views: {},
 }
 
 export function placesFor(family: SessionFamily): readonly OpenPlace[] {
@@ -134,6 +140,7 @@ export function mergeSettings(raw: unknown): PlatformSettings {
     executionTab: source.executionTab === true,
     kindColors: readKindColors(source.kindColors),
     sessions,
+    views: readSavedViews(source.views),
   }
 }
 

@@ -72,17 +72,17 @@ test('every icon in the board’s toolbar answers across 44px at 390px', async (
   expect(icons.filter(({ missed }) => missed.length > 0)).toEqual([])
 })
 
-test('with a filter on, the grouping toggle that is its glyph alone answers across 44px', async ({
+test('with a filter on, every icon of the phone’s bar and its chips answers across 44px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await installBackend(page)
   await serve(page)
-  // The toggle gives its word up to the filter's reset here; it drew 40×36 and answered
-  // a press across no more, since only a `VButton` reached.
+  // The grouping toggle gave its word up to the filter's reset here and drew 40×36; the
+  // grouping is a choice of the view's menu now, whose button keeps its word.
   await openBoard(page, { labels: 'coordinator' })
   const icons = await shortReaches(page.locator('.workspace-head'))
-  expect(icons.map(({ name }) => name)).toContain('Group the board by epic')
+  expect(icons.map(({ name }) => name)).toContain('New work item')
   expect(icons.filter(({ missed }) => missed.length > 0)).toEqual([])
 })
 

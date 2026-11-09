@@ -6,6 +6,8 @@
  * A drag is the browser suite's to prove, because the drop library needs real
  * pointer geometry; what a drop is handed up as is the same move tested here.
  */
+import { createPinia, setActivePinia } from 'pinia'
+
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,12 +16,17 @@ import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import type { MenuEntry } from '@/shared/ui/menuEntries.ts'
+import VMenu from '@/shared/ui/VMenu.vue'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
 import { board, epic, i18n, live, space, tile } from '../support/workItemBoardHarness.ts'
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+  setActivePinia(createPinia())
+})
 afterEach(() => {
   document.body.innerHTML = ''
 })
@@ -410,6 +417,7 @@ function workspace(view: 'kanban' | 'list') {
       stale: false,
       stateBytes: 2048,
       version: 1,
+      viewPlace: 'scope:MAIN',
       view,
       writable: true,
     },
@@ -440,12 +448,14 @@ describe('a chain narrows the board and the list', () => {
     },
   )
 
-  it('offers the grouping on the board and hands the choice up', async () => {
+  it('offers the grouping in the view’s menu on the board and hands the choice up', () => {
     const wrapper = workspace('kanban')
-    const grouping = wrapper.get('button[aria-label="Group the board by epic"]')
-    expect(grouping.attributes('aria-pressed')).toBe('false')
-    expect(grouping.text()).toBe('By epic')
-    await grouping.trigger('click')
+    const entries = wrapper.getComponent(VMenu).props('entries') as MenuEntry[]
+    const grouping = entries.find((entry) => entry.key === 'grouping')
+    if (grouping?.kind !== 'choice') throw new Error('the grouping is a choice of the view’s menu')
+    expect(grouping.value).toBe('none')
+    expect(grouping.options.map((option) => option.label)).toEqual(['No grouping', 'By epic'])
+    grouping.select('epic')
     expect(wrapper.emitted('group')).toEqual([['epic']])
   })
 })

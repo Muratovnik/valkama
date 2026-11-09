@@ -1,3 +1,4 @@
+import { createPinia, setActivePinia } from 'pinia'
 /**
  * Every number above the stage counts one population: the space, or a chain
  * with its root. A view that draws fewer items says what it leaves out, so the
@@ -91,6 +92,7 @@ function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props
       stale: false,
       stateBytes: 2048,
       version: 1,
+      viewPlace: 'scope:MAIN',
       view: 'kanban' as const,
       writable: true,
       // The route answers a write with the state it was given, as the shell does.
@@ -108,7 +110,10 @@ const figures = (wrapper: ReturnType<typeof workspace>) =>
   wrapper.findAll('.workspace-figures, .workspace-left-out').map((figure) => figure.text())
 const countsLine = (wrapper: ReturnType<typeof workspace>) => figures(wrapper).join(' · ')
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+  setActivePinia(createPinia())
+})
 afterEach(() => {
   document.body.innerHTML = ''
 })

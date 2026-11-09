@@ -1,8 +1,8 @@
 /**
  * What a screen shows first, in the built application: one thing leads a tile, a
  * short title leaves no hole around it, an epic's row is one calm line with its
- * actions a pointer or a key away, a finished cell is a line of text, the grouping
- * is the control its neighbours are, and a chain's section reaches its list without
+ * actions a pointer or a key away, a finished cell is a line of text, the view's
+ * menu is the control its neighbours are, and a chain's section reaches its list without
  * a chart in the way.
  *
  * These are read off the drawn page because every one of them failed there with
@@ -21,7 +21,9 @@ import { largeChainHere, serve as serveChain, showRelations } from './chainFixtu
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
+/** The button that grouped the board before the view's menu held the grouping. */
 const GROUPING = 'Group the board by epic'
+const VIEW = 'View'
 
 /** What a part of the page is drawn at. */
 const drawn = (part: Locator) =>
@@ -31,12 +33,6 @@ const drawn = (part: Locator) =>
   })
 
 const fill = (part: Locator) => part.evaluate((node) => getComputedStyle(node).backgroundColor)
-
-const look = (part: Locator) =>
-  part.evaluate((node) => {
-    const style = getComputedStyle(node)
-    return [style.backgroundColor, style.color, style.borderRadius, style.font]
-  })
 
 const opacity = (part: Locator) => part.evaluate((node) => Number(getComputedStyle(node).opacity))
 
@@ -207,9 +203,8 @@ const allOneRow = async (page: Page) =>
   page.locator('.workspace-tools').evaluate((row) =>
     [
       '.workspace-view-segments',
-      '.workspace-grouping',
+      '.menu-trigger',
       'input[role="combobox"]',
-      '.filter-preset',
       '.workspace-action',
     ].map((selector) => {
       const box = row.querySelector(selector)?.getBoundingClientRect()
@@ -217,45 +212,52 @@ const allOneRow = async (page: Page) =>
     }),
   )
 
-test('the grouping is the control its neighbours are, and reads as how the view is arranged', async ({
+/** The view's menu: its button in the bar, and a choice of its grouping by the keyboard. */
+const viewMenu = (page: Page) =>
+  page.locator('.workspace-tools').getByRole('button', { name: VIEW })
+async function groupFromKeyboard(page: Page, choice: string) {
+  await viewMenu(page).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('menu')).toBeVisible()
+  await page.getByRole('menuitemradio', { name: choice }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('menu')).toHaveCount(0)
+}
+
+test('the view’s menu is the control its neighbours are, and holds how the view is arranged', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serve(page)
   await openBoard(page, {})
-  const grouping = page.getByRole('button', { name: GROUPING })
   await expect(page.locator('.workspace-tools').getByRole('switch')).toHaveCount(0)
+  // No grouping or preset stands in the row as a button of its own.
+  await expect(
+    page.locator('.workspace-tools').getByRole('button', { name: GROUPING }),
+  ).toHaveCount(0)
+  await expect(page.locator('.filter-preset')).toHaveCount(0)
   // Every control of the row stands at one top and one height.
   expect(new Set(await allOneRow(page)).size).toBe(1)
-  // Pressed as the presets are: the same ground, ink and check.
-  const preset = page.locator('.filter-preset').first()
-  await page.mouse.move(0, 0)
-  expect(await look(grouping)).toEqual(await look(preset))
-  await expect(grouping).toHaveAttribute('aria-pressed', 'false')
 
-  // By the view, and before the field: Tab goes view, grouping, field. Space
-  // presses it, and it keeps its place and its focus.
-  await grouping.focus()
-  await page.keyboard.press('Space')
-  await expect(grouping).toHaveAttribute('aria-pressed', 'true')
-  await expect(grouping).toBeFocused()
+  // By the view, and before the field: Tab goes view, menu, field. The grouping is
+  // chosen from the keyboard in the menu, and focus comes back to its button.
+  await groupFromKeyboard(page, 'By epic')
+  await expect(viewMenu(page)).toBeFocused()
   await expect(page.locator('.board-lane').first()).toBeVisible()
   expect(new Set(await allOneRow(page)).size).toBe(1)
   await page.keyboard.press('Tab')
   await expect(page.locator('.workspace-tools input[role="combobox"]')).toBeFocused()
-  await grouping.focus()
-  await page.keyboard.press('Enter')
-  await expect(grouping).toHaveAttribute('aria-pressed', 'false')
-  await expect(preset).toBeVisible()
-  expect(await look(grouping)).toEqual(await look(preset))
+  await groupFromKeyboard(page, 'No grouping')
+  await expect(page.locator('.board-lane')).toHaveCount(0)
+  expect(new Set(await allOneRow(page)).size).toBe(1)
 })
 
-/** Every control of the bar as it is drawn: a press may not move one of them. */
+/** Every control of the bar as it is drawn: a choice in the view's menu may not move one of them. */
 const barControls = (page: Page) =>
   page
     .locator(
-      '.workspace-view-segments, .workspace-view-menu, .workspace-grouping, .filter-box, .filter-preset, .workspace-action',
+      '.workspace-view-segments, .workspace-view-menu, .menu-trigger, .filter-box, .workspace-action',
     )
     .evaluateAll((controls) =>
       controls
@@ -274,51 +276,59 @@ const pressMark = (chip: Locator) =>
   })
 
 for (const width of [1680, 1440, 1260, 1024, 996, 960, 900, 760, 700, 390]) {
-  test(`a press on the grouping moves nothing around it at ${width}px`, async ({ page }) => {
+  test(`a choice of grouping moves nothing in the bar at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 })
     await installBackend(page)
     await serve(page)
     await openBoard(page, {})
-    const grouping = page.getByRole('button', { name: GROUPING })
-    await expect(grouping).toBeVisible()
+    await expect(viewMenu(page)).toBeVisible()
     const resting = await barControls(page)
-    expect(await pressMark(grouping)).toBe('none')
-    await grouping.click()
-    await expect(grouping).toHaveAttribute('aria-pressed', 'true')
+    await viewMenu(page).click()
+    await page.getByRole('menuitemradio', { name: 'By epic' }).click()
     await expect(page.locator('.board-lane').first()).toBeVisible()
     expect(await barControls(page)).toEqual(resting)
-    expect(await pressMark(grouping)).toBe('2px')
-    await grouping.click()
-    await expect(grouping).toHaveAttribute('aria-pressed', 'false')
+    await viewMenu(page).click()
+    await page.getByRole('menuitemradio', { name: 'No grouping' }).click()
+    await expect(page.locator('.board-lane')).toHaveCount(0)
     expect(await barControls(page)).toEqual(resting)
   })
 }
 
-// What a preset's press itself does.
-test('a press on a preset does not change its size, and is more than a tone', async ({ page }) => {
+// What a pressed chip's press itself does: the operator on a filter chip, «=» to «≠».
+test('a press on a chip’s operator does not change its size, and is more than a tone', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await serve(page)
-  await openBoard(page, {})
-  const preset = page.locator('.filter-preset').first()
-  const resting = await preset.boundingBox()
-  await preset.click()
-  await expect(preset).toHaveAttribute('aria-pressed', 'true')
-  const pressed = await preset.boundingBox()
-  expect(pressed?.width).toBe(resting?.width)
-  expect(await pressMark(preset)).toBe('2px')
+  await openBoard(page, { labels: 'ui' })
+  const operator = page.locator('.workspace-chips .filter-chip-operator').first()
+  // The box round the sign, apart from the sign: «=» and «≠» are not one width, and
+  // what a press may not add is room of its own, as a check would.
+  const room = () =>
+    operator.evaluate((node) => {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      const box = node.getBoundingClientRect()
+      return { around: box.width - range.getBoundingClientRect().width, height: box.height }
+    })
+  const resting = await room()
+  expect(await pressMark(operator)).toBe('none')
+  await operator.click()
+  await expect(operator).toHaveAttribute('aria-pressed', 'true')
+  expect(await room()).toEqual(resting)
+  expect(await pressMark(operator)).toBe('2px')
 })
 
-test('a window of 1024px keeps the grouping’s word on the row, and its name', async ({ page }) => {
+test('a window of 1024px keeps the view menu’s word on the row, at the field’s height', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1024, height: 768 })
   await installBackend(page)
   await serve(page)
   await openBoard(page, {})
-  const grouping = page.getByRole('button', { name: GROUPING })
-  await expect(grouping.locator('.grouping-word')).toBeVisible()
-  await expect(grouping.locator('.grouping-glyph')).toBeHidden()
-  await expect(grouping).toHaveAttribute('data-tooltip', GROUPING)
-  const box = await grouping.boundingBox()
+  await expect(viewMenu(page)).toHaveText(VIEW)
+  const box = await viewMenu(page).boundingBox()
   expect(box?.height).toBe(36)
   const field = await page.locator('.filter-box').boundingBox()
   expect(box?.y).toBe(field?.y)

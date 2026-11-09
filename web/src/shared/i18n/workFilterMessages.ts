@@ -1,11 +1,11 @@
 /**
- * The Work filter: one field of text and facet chips, its two presets, the
- * menu of facet values it opens, and the counts that answer it.
+ * The Work filter: one field of text and facet chips, the menu of conditions
+ * and facet values it opens, and the counts that answer it.
  *
  * The counts answer the filter instead of describing the population: «319
  * открытых из 1267» with nothing picked, «42 из 319 открытых» once something
- * is. The held count rides its preset, so the line does not carry a third
- * number.
+ * is. The held count rides its condition in the menu, so the line does not
+ * carry a third number.
  *
  * «Из 319 открытых» takes its form from the open count, so what matched is
  * `{matched}`, never `{count}`: vue-i18n picks the form from a numeric named
@@ -41,7 +41,7 @@ export const workFilterMessages = {
           join: 'or',
         },
       },
-      presets: 'Quick filters',
+      conditions: 'Conditions',
       tokens: 'Picked facets',
       facet: {
         category: 'State',
@@ -92,7 +92,7 @@ export const workFilterMessages = {
           join: 'или',
         },
       },
-      presets: 'Быстрые фильтры',
+      conditions: 'Условия',
       tokens: 'Выбранные признаки',
       facet: {
         category: 'Состояние',

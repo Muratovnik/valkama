@@ -20,6 +20,7 @@ import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
+import { viewMenuMessages } from '@/shared/i18n/viewMenuMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemComposeMessages } from '@/shared/i18n/workItemComposeMessages.ts'
@@ -825,10 +826,6 @@ export const ru = {
     },
     columnEmpty: 'Пусто',
     lanes: {
-      groupingLabel: 'Группировать доску по эпикам',
-      grouping: {
-        epic: 'По эпикам',
-      },
       noEpic: 'Без эпика',
       counts: 'открыто {open} · закрыто {closed}',
       fold: 'Свернуть «{lane}»',
@@ -863,6 +860,7 @@ export const ru = {
     ...workItemHeadMessages.ru,
     ...workItemNextStepMessages.ru,
     filter: workFilterMessages.ru.filter,
+    ...viewMenuMessages.ru,
     kindLabel: 'Тип',
     state: 'Состояние',
     priority: 'Приоритет',

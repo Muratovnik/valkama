@@ -43,7 +43,7 @@ test('there is no Filter button; a press in the field opens the facets, a facet 
 
   await field(page).click()
   await expanded(page, 'true')
-  for (const group of ['Quick filters', 'Filter by'])
+  for (const group of ['Conditions', 'Filter by'])
     await expect(menu(page).getByRole('group', { name: group, exact: true })).toBeVisible()
   await expect(menu(page).getByRole('group')).toHaveCount(2)
   await expect(field(page)).toBeFocused()
@@ -75,7 +75,7 @@ test('`/` from the page comes to the field and opens the menu', async ({ page })
 
 test('Tab reaches the field without opening the menu, and ↓ opens it', async ({ page }) => {
   await board(page)
-  await page.getByRole('button', { name: 'Group the board by epic' }).focus()
+  await page.getByRole('button', { name: 'View', exact: true }).focus()
   await page.keyboard.press('Tab')
   await expect(field(page)).toBeFocused()
   await expanded(page, 'false')
@@ -292,12 +292,11 @@ test('a press in the open field keeps the menu; a press elsewhere closes it', as
   await page.locator('.workspace-stage').click({ position: { x: 4, y: 4 } })
   await expanded(page, 'false')
 
-  // The presets stand beside it, and a press there is not a press in the menu.
+  // The view's menu stands beside it, and a press there is not a press in the menu.
   await field(page).click()
-  const presets = page.locator('.filter-presets')
-  await expect(presets.getByRole('button')).toHaveCount(2)
-  await presets.getByRole('button').first().click()
-  await expect(presets.getByRole('button').first()).toHaveAttribute('aria-pressed', 'true')
+  await expanded(page, 'true')
+  await page.getByRole('button', { name: 'View', exact: true }).click()
+  await expect(page.getByRole('menu')).toBeVisible()
   await expanded(page, 'false')
 })
 
@@ -306,7 +305,7 @@ test('a press on a group’s name stays in the menu, and the caret stays in the 
 }) => {
   await board(page)
   await field(page).click()
-  await menu(page).getByText('Quick filters', { exact: true }).click()
+  await menu(page).getByText('Conditions', { exact: true }).click()
   await expect(menu(page)).toBeVisible()
   await expect(field(page)).toBeFocused()
 })

@@ -62,20 +62,22 @@ const press = (target: EventTarget) =>
   target.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))
 
 describe('the Work filter field', () => {
-  it('makes the same filter from a preset, the menu and a mark on a view', async () => {
-    const preset = field()
-    await preset.get('.filter-preset[aria-pressed="false"]').trigger('click')
-    const fromPreset = lastFilter(preset)
-
+  it('makes the same filter from the menu and a mark on a view, with no presets beside it', async () => {
     const menu = field()
+    // The conditions are the menu's, not buttons beside the field.
+    expect(menu.findAll('button').map((button) => button.text())).toEqual([])
     await input(menu).trigger('click')
-    await menu.findAll('[role="option"]')[0]?.trigger('click')
+    await option(menu, 'Workable').trigger('click')
     const fromMenu = lastFilter(menu)
 
     // What the workspace does with a `filter` event from a tile or a row.
     const fromMark = toggleToken(EMPTY_WORK_FILTER, { facet: 'ready' })
-    expect(fromPreset).toEqual(fromMark)
     expect(fromMenu).toEqual(fromMark)
+
+    const held = field()
+    await input(held).trigger('click')
+    await option(held, 'Has a holder7').trigger('click')
+    expect(lastFilter(held)).toEqual(toggleToken(EMPTY_WORK_FILTER, { facet: 'held' }))
 
     const label = field()
     await input(label).trigger('click')
@@ -86,13 +88,14 @@ describe('the Work filter field', () => {
     )
   })
 
-  it('opens on the facets under the presets, and a facet’s row steps into its values', async () => {
+  it('opens on the facets under the conditions, and a facet’s row steps into its values', async () => {
     const wrapper = field()
-    expect(wrapper.get('.filter-preset:last-child').text()).toBe('Assigned 7')
     await input(wrapper).trigger('click')
     expect(input(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(groupNames(wrapper)).toEqual(['Quick filters', 'Filter by'])
-    expect(options(wrapper)).toEqual(['Workable', 'Assigned7', ...FACETS])
+    expect(groupNames(wrapper)).toEqual(['Conditions', 'Filter by'])
+    // The held condition says how many it lets through, as its preset did.
+    expect(options(wrapper)).toEqual(['Workable', 'Has a holder7', ...FACETS])
+    expect(option(wrapper, 'Has a holder7').get('.option-detail').text()).toBe('7')
     // A facet's row leads somewhere and is no value, so it is not «not selected» either.
     for (const name of FACETS)
       expect(option(wrapper, name).attributes('aria-selected')).toBeUndefined()
@@ -102,7 +105,7 @@ describe('the Work filter field', () => {
     expect(options(wrapper)).toEqual(['Holder', 'claude'])
     expect(option(wrapper, 'Holder').attributes('aria-label')).toBe('Holder: back to the facets')
     await option(wrapper, 'Holder').trigger('click')
-    expect(options(wrapper)).toEqual(['Workable', 'Assigned7', ...FACETS])
+    expect(options(wrapper)).toEqual(['Workable', 'Has a holder7', ...FACETS])
 
     // Labels by how many items carry them, under the choice of how they combine.
     await option(wrapper, 'Label').trigger('click')
