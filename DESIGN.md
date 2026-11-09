@@ -816,7 +816,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,
   quotes, tables) into a tree that carries no markup: raw HTML is shown as the
   text it was, an image is a link to it, and a link with an `http`, `https` or
-  `mailto` address opens outside the app. A link with no scheme names a file or
+  `mailto` address opens outside the app. The one image drawn as a picture is one
+  this server keeps for an item, written `/api/images/<sha256>` in a card's own text
+  outside a link, as a paste writes it (`RichImage`): on a line of its own, on the
+  recessed ground of a code span, no wider than the text or 32rem and no taller than
+  six lines, so a comment `CollapsibleText` holds at eight still shows it whole. It
+  is a button named «Open the picture full size», which opens the product's dialog
+  with the picture at its own pixels, scrolled when larger; Escape closes the picture
+  and leaves the card. Not a new tab: the server hands a picture only to this page,
+  and the desktop app opens new windows in the system browser. A picture that no
+  longer loads is the words written for it; inside a link or a press, and in a
+  document, an image stays what it was. A link with no scheme names a file or
   folder of the project, as a path written in the text or in a code span does,
   and a link of any other scheme keeps its words and loses its address. Nothing
   reaches `v-html`. A single line break stays one, because these texts were `pre-wrap`
@@ -929,7 +939,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   belongs to, or nowhere when the host cannot name that space in the store the
   search reads. Hosts with several fields that are one answer bind them to one
   view. A launch prompt is not one: it goes to the agent's command line as typed
-  and nothing here draws it. A long text held by `CollapsibleText` ends on its
+  and nothing here draws it. Inside a card's Overview each field also takes a picture
+  pasted or dropped into it (`useEditorImages`, provided by the card): a PNG, JPEG,
+  WebP or GIF up to 10 MB, told by its first bytes, is sent to the item and written
+  at the caret as `![name](</api/images/<sha256>>)` on a line of its own; anything
+  else is refused in the field's foot before it is sent, and a clipboard that also
+  carries words pastes the words. A field outside a card, such as a new task's,
+  pastes as it always did. A long text held by `CollapsibleText` ends on its
   last whole line, and a link below the cut that takes focus opens the text.
 
 A screen that needs a style no primitive provides has found a gap in this

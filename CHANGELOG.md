@@ -12,6 +12,19 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
+  10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
+  is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.
+  The published text shows it inline at a bounded size, and pressing it opens it at full
+  size. Anything else, or a larger file, is refused in the field before it is sent and
+  again by the server. Pictures stay on this machine, in an `images` folder beside the
+  store, one file per content hash; deleting the item deletes the pictures no other item
+  holds, and a merge carries them to the survivor. `get_work_item` lists an item's
+  `images`, and the new read-only tool `read_work_item_image` returns one as an MCP image
+  block. Store schema 14 holds the list, under a `preschema14` snapshot taken before the
+  upgrade; every snapshot now carries the pictures in a `.images` folder beside it, and a
+  build of the previous release refuses the upgraded store.
+
 - **What a session is working on, in one read.** `GET /api/planning/held?session=<id>` lists
   the open work items an agent session holds, by its claim or by a step not yet done,
   including what its subagents hold, most recently changed first. Each item carries its

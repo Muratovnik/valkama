@@ -18,6 +18,9 @@
  * the arrows walk it, Enter or Tab takes the active row and Escape closes it
  * without closing the card around it.
  *
+ * A picture pasted or dropped into the text is sent and named in it as Markdown
+ * (`useEditorImages`), where a host above says which item keeps it.
+ *
  * What a work item is and how to find one is the host's to say: the editor is a
  * text control and knows nothing about planning. So is what sending means: a
  * host with an action of its own for this text puts it in the `actions` slot, the
@@ -37,6 +40,7 @@ import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import { useTabIds } from '@/shared/ui/tabIds.ts'
 import TabPanel from '@/shared/ui/TabPanel.vue'
+import { useEditorImages } from '@/shared/ui/useEditorImages.ts'
 import { useEditorSuggestions } from '@/shared/ui/useEditorSuggestions.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -158,11 +162,23 @@ const { active, choices, close, open, track, trigger } = useEditorSuggestions({
   suggest: () => props.suggest,
   read: () => (field.element() ? { caret: field.selection().start, text: field.text() } : null),
 })
+const pictures = useEditorImages({
+  /** On a line of its own, at the caret, as typing would write it. */
+  insert(markdown) {
+    const { start, end } = field.selection()
+    const before = field.text().slice(0, start)
+    const text = `${before && !before.endsWith('\n') ? '\n' : ''}${markdown}\n`
+    const caret = start + text.length
+    apply({ start, end, text, selection: [caret, caret] })
+  },
+})
 const list = ref<InstanceType<typeof MarkdownSuggestions> | null>(null)
 const anchor = computed(() => field.element())
 const hasText = computed(() => props.modelValue.trim() !== '')
 const invalid = computed(() => Boolean(props.error))
-const describedBy = computed(() => (props.error ? errorId : undefined))
+/** The host's refusal of the text, else why a picture was not attached. */
+const message = computed(() => props.error || pictures.refusal.value)
+const describedBy = computed(() => (message.value ? errorId : undefined))
 const errorRole = computed(() => (props.quietError ? undefined : 'alert'))
 const activeId = computed(() =>
   open.value && choices.value.length ? `${listId}-${active.value}` : undefined,
@@ -171,7 +187,9 @@ const completion = computed(() =>
   props.suggest && open.value ? { controls: listId, activeDescendant: activeId.value } : undefined,
 )
 /** What the list holds, said once it arrives, since focus stays in the field. */
-const announcement = computed(() => (open.value ? t('editor.found', choices.value.length) : ''))
+const announcement = computed(() =>
+  open.value ? t('editor.found', choices.value.length) : pictures.status.value,
+)
 
 /** Absent rather than false: `inert="false"` on an element is still inert to a stylesheet. */
 const inertMark = computed(() => (preview.value ? true : undefined))
@@ -199,6 +217,7 @@ watch(
 
 function edited(value: string) {
   emit('update:modelValue', value)
+  pictures.clear()
   track()
 }
 
@@ -319,6 +338,9 @@ defineExpose({
           :tabs="views"
           :inert="inertMark"
           @focusout="close"
+          @paste="pictures.paste"
+          @dragover="pictures.dragover"
+          @drop="pictures.drop"
         >
           <VTextInput
             ref="input"
@@ -362,8 +384,8 @@ defineExpose({
         </TabPanel>
       </div>
       <MarkdownFoot
-        v-if="$slots.actions || error"
-        :error="error"
+        v-if="$slots.actions || message"
+        :error="message"
         :error-id="errorId"
         :error-role="errorRole"
       >

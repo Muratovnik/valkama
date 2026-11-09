@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The inline half of `RichText`: words, emphasis, code, links and references.
+ * The inline half of `RichText`: words, emphasis, code, links, references and the
+ * pictures an item keeps (`RichImage`).
  *
  * A reference is a link only when the layers above say it resolves; otherwise
  * it is the text it was. Ids, hashes and code are set in the metadata font,
@@ -30,6 +31,7 @@ import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
 import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
+import RichImage from '@/shared/ui/RichImage.vue'
 import { SLASH_BREAK, slashPieces } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -153,7 +155,10 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
       rel="noopener noreferrer"
       :href="node.href"
       ><RichInlines :nodes="node.children" /></a
-    ><code
+    ><RichImage
+      v-else-if="node.kind === 'image'"
+      :sha256="node.sha256"
+      :alt="inlineWords(node.children)" /><code
       v-else-if="node.kind === 'code'"
       class="rich-code"
       :class="tight(index)"

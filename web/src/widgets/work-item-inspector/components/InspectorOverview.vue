@@ -13,6 +13,7 @@ import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspector
 import { useItemQuestions } from '@/features/input-requests/composables/useItemQuestions.ts'
 import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 
+import { uploadImage } from '@/shared/api/imageApi.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
@@ -22,6 +23,7 @@ import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSys
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import { provideEditorImages } from '@/shared/ui/useEditorImages.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -94,6 +96,9 @@ provideCardSteps({
   refresh: () => emit('refresh'),
   reveal: () => void revealChecklist(),
 })
+// A picture pasted into any text of this card — its description, a comment, a reply, an
+// answer — is kept for this item, and goes when the item does.
+provideEditorImages((file, signal) => uploadImage(props.item.work_item_id, file, signal))
 
 // A closed item is neither blocked nor waiting on a next step: both read as
 // live instructions, and on a Done card they were stale ones.
