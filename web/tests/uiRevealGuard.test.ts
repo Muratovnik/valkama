@@ -85,17 +85,6 @@ test('what hover changes besides sight, and sight that focus alone keeps, are no
     assert.deepEqual(scan('future/Row.vue', css), [], css)
 })
 
-test('the rail row may swap its sign and arrow under the pointer, and nothing else', () => {
-  const ROW = 'widgets/app-nav/components/NavWorkRow.vue'
-  const swap =
-    '.at-work { .nav-row-chevron { visibility: hidden; } &:hover { .nav-row-chevron { visibility: visible; } .nav-row-sign { visibility: hidden; } } }'
-  assert.deepEqual(scan(ROW, swap), [])
-  assert.deepEqual(scan(ROW, `${swap} .nav-row { &:hover { --pin-sight: visible; } }`), [
-    `${ROW}: ${COPIED}`,
-  ])
-  assert.deepEqual(scan('future/Row.vue', swap), [`future/Row.vue: ${COPIED}`])
-})
-
 test('the tree reveals every action through reveal.css', () => {
   assert.deepEqual(scanRevealCopies(collectVueSources()), [])
 })

@@ -25,18 +25,6 @@ export const REVEAL_OWNER = 'shared/ui/reveal.css'
 /** The one query the owner asks, spaces and case aside. */
 const CAN_HOVER = '(hover:hover)'
 
-/**
- * What is not an action kept out of sight, each with why.
- *
- * The rail's lead has room for one glyph: an epic at work shows its sign there at rest, and the
- * fold's arrow takes the sign's place under the pointer and focus. The fold is in sight at rest
- * as the sign, and pressed there it folds; the two glyphs trade one cell. Only the rule for those
- * two glyphs is let through, not the file: the pin's own copy stood in the same file.
- */
-const SWAPS = new Map([
-  ['widgets/app-nav/components/NavWorkRow.vue', /^\.nav-row-(?:chevron|sign)$/],
-])
-
 /** A condition that asks whether a pointer can hover, any pointer's included. */
 const HOVER_FEATURE = /(?<![\w-])(?:any-)?hover\s*[:)]/i
 
@@ -120,9 +108,8 @@ function copyFindings(file, css) {
       `${file}: whether a pointer can hover is asked once, in reveal.css; reveal an action with its classes`,
     )
   }
-  const swap = SWAPS.get(file)
   for (const { chain, own } of rulesOf(css)) {
-    if (!INTO_SIGHT.test(own) || swap?.test(chain.at(-1))) continue
+    if (!INTO_SIGHT.test(own)) continue
     if (!chain.some((selector) => HOVERED.test(selector))) continue
     findings.push(
       `${file}: brings something into sight under the pointer; an action kept out of sight until then takes reveal-row and reveal from reveal.css`,
