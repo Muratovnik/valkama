@@ -92,9 +92,10 @@ SCHEMA10_TABLES = {
     "usage_runs",
     "usage_segments",
     "usage_requests",
-    # Schema 12's and 13's.
+    # Schema 12's, 13's and 14's.
     "pinned_work_items",
     "work_item_subscriptions",
+    "work_item_images",
 }
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",

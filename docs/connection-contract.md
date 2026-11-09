@@ -68,7 +68,7 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 
 | Set | `readOnlyHint` | `destructiveHint` | `idempotentHint` | Tools |
 | --- | --- | --- | --- | --- |
-| read-only | `true` | — | `true` | the reading tools: `list_planning_spaces`, `get_planning_space`, `get_work_item`, `get_work_item_chain`, `list_work_items`, `search_work_items`, `list_platform_modules` |
+| read-only | `true` | — | `true` | the reading tools: `list_planning_spaces`, `get_planning_space`, `get_work_item`, `get_work_item_chain`, `read_work_item_image`, `list_work_items`, `search_work_items`, `list_platform_modules` |
 | writing | `false` | `false` | — | everything else |
 | destructive | `false` | `true` | — | `delete_work_item` |
 
@@ -76,7 +76,10 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 
 ### Tool results
 
-A tool result is one line of JSON text, without indentation.
+A tool result is one line of JSON text, without indentation. The one
+exception is `read_work_item_image` (see
+[Pictures on an item](#pictures-on-an-item)), whose result is an MCP `image`
+content block followed by a text block of JSON.
 
 A write to a work item answers with a short acknowledgement instead of the whole
 item: `reference`, `url`, `work_item_id`, `revision`, `state` (`key`, `name`,
@@ -355,6 +358,29 @@ caller does not attach its own session id as a ref.
 
 The read also carries `mentions`, the comments on other items that named this
 one; see [Mentions](#mentions).
+
+### Pictures on an item
+
+A picture pasted into an item's text in the web
+interface is kept for that item, and the text names it as
+`![name](</api/images/<sha256>>)`. The MCP read of an item carries `images`, every
+picture the item keeps, oldest first:
+
+```json
+{"sha256": "9f86d0…", "media_type": "image/png", "size": 48213,
+ "created_at": "2026-11-09T10:12:00.000000Z", "path": "/api/images/9f86d0…"}
+```
+
+`read_work_item_image` takes the item's `id` and the picture's `sha256` and answers
+with two content blocks: `{"type": "image", "data": <base64>, "mimeType": <type>}`
+and a text block with `sha256`, `media_type` and `size`. A hash the item does not
+keep is `not_found`, even when another item keeps it. `media_type` is one of
+`image/png`, `image/jpeg`, `image/webp` and `image/gif`, decided by the file's first
+bytes, and a picture is at most 10 MB. The HTTP read of the item does not carry
+`images`.
+
+Deleting an item deletes every picture no other item keeps; a merge carries the
+pictures of the merged item to the survivor.
 
 The HTTP read `GET /api/planning/work-item` answers with the complete record and
 no `sessions`, as before. It takes the same cut as opt-in parameters:

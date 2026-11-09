@@ -27,6 +27,7 @@ from typing import NamedTuple
 from . import store_adoption, store_backups, store_lock, store_rename
 from .executions import store as execution_store
 from .ops import configuration
+from .planning import images as planning_images
 from .planning import migration as planning_migration
 from .planning import store as planning_store
 from .platform import core as platform_core
@@ -251,7 +252,14 @@ MIGRATIONS = {
 # point of its own, and because a build at 12 would leave a merged item's
 # subscriptions on the closed duplicate and never let a lapsed one go, so a session
 # would go on hearing an item it had left.
-STORE_SCHEMA_VERSION = 13
+#
+# 14 added the pictures pasted into an item's text (`work_item_images`), whose files
+# live in `images/` beside the store. No existing row changed its meaning. It is
+# raised so the upgrade takes a recovery point of its own, and because a build at
+# 13 would delete an item and leave its pictures' files behind, and a screenshot
+# that outlives the item it was pasted into is what deleting the item promised to
+# take away.
+STORE_SCHEMA_VERSION = 14
 
 
 class StoreTooNewError(RuntimeError):
@@ -318,10 +326,13 @@ def db_path() -> str:
 
 
 def _backups() -> store_backups.BackupLocation:
-    """Where recovery points go, which follows the store's own path."""
+    """Where recovery points go, which follows the store's own path, with its pictures."""
 
+    path = db_path()
     return store_backups.BackupLocation(
-        os.path.join(os.path.dirname(db_path()), "backups"), DATA_PREFIX
+        os.path.join(os.path.dirname(path), "backups"),
+        DATA_PREFIX,
+        planning_images.directory_beside(path),
     )
 
 
@@ -733,8 +744,8 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 13's, one at 11 only schema 12's and 13's, and
-            # one at 12 only schema 13's.
+            # 10 only schema 11's to 14's, one at 11 only schema 12's to 14's, one
+            # at 12 only schema 13's and 14's, and one at 13 only schema 14's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a

@@ -20,6 +20,7 @@ import sqlite3
 from . import agents as planning_agents
 from . import (
     calls,
+    images,
     leases,
     model,
     ranking,
@@ -574,7 +575,11 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
         raise model.PlanningError(
             f"{read_model.reference(conn, row)} still has {children} child item(s); move or delete them first"
         )
-    conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (str(row["work_item_id"]),))
+    identity = str(row["work_item_id"])
+    pictures = images.held(conn, identity)
+    conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
+    # The rows went with the item; a file no other item holds goes with them.
+    images.release(conn, pictures)
     return {
         "work_item_id": row["work_item_id"],
         "reference": read_model.reference(conn, row),
@@ -1454,6 +1459,8 @@ def _fold(
         conn.execute("DELETE FROM pinned_work_items WHERE work_item_id = ?", (identity,))
         # So does whoever follows it: a session that subscribed hears the survivor.
         subscriptions.carry(conn, identity, survivor_id)
+        # The pictures its threads show move with them; the merged item keeps its own.
+        images.carry(conn, identity, survivor_id)
         if found:
             set_checklist(conn, identity, [], force=True, author=author)
         if not _linked(conn, identity, survivor_id, "duplicates"):

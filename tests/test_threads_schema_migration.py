@@ -51,6 +51,7 @@ ADDED_TABLES = {
     "usage_requests",
     "pinned_work_items",
     "work_item_subscriptions",
+    "work_item_images",
 }
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {

@@ -255,6 +255,22 @@ CREATE TABLE IF NOT EXISTS work_item_subscriptions(
 -- call, and a merge moves a row to an item the session's own calls never named.
 CREATE INDEX IF NOT EXISTS work_item_subscriptions_session
     ON work_item_subscriptions(session_id, agent_id);
+-- The pictures pasted into an item's text, added with schema 14: one row per item and
+-- picture. The bytes are a file named by their SHA-256 in the `images` directory beside
+-- the store (`planning.images`); a row here is what keeps that file, and the file goes
+-- once no item holds a row for it. A merge gives the survivor a row of its own.
+CREATE TABLE IF NOT EXISTS work_item_images(
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    sha256 TEXT NOT NULL CHECK(length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),
+    media_type TEXT NOT NULL
+        CHECK(media_type IN ('image/png','image/jpeg','image/webp','image/gif')),
+    size INTEGER NOT NULL CHECK(size BETWEEN 1 AND 10485760),
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id),
+    PRIMARY KEY(work_item_id, sha256)
+);
+-- Whether any item still holds a picture, asked when one is let go.
+CREATE INDEX IF NOT EXISTS work_item_images_sha256 ON work_item_images(sha256);
 
 """
 
@@ -571,6 +587,7 @@ SCHEMA_TABLES = (
     "work_item_request_answers",
     "pinned_work_items",
     "work_item_subscriptions",
+    "work_item_images",
 )
 
 
