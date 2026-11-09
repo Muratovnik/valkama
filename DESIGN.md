@@ -779,6 +779,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   move focus where showing it starts slow work, as Settings' diagnostics do. A
   row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
   same control built again, and `check:ui-system` rejects one.
+- **Menus:** `VMenu` owns a menu behind a button — a card's «…», a view's settings — as
+  the WAI-ARIA APG menu button. The trigger is a ghost `VButton`, its sign alone with the
+  menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
+  first entry; the arrows walk the entries and wrap, Home and End go to the ends, a letter
+  goes to the entry it starts; Escape, a choice or a press outside close it and focus goes
+  back to the trigger. It holds actions, settings that show a check while on, and a choice of
+  a few values under a caption, each a row of the control height, and floats over a card or a
+  dialog as a choice list does. A stray press reaches neither the trigger nor an entry. A
+  menu does things to what it stands beside; picking the value a field holds is
+  `ChoiceSelect`'s.
 - **Disclosure:** what shows more of something — the rest of a long text,
   earlier replies, a chain's or a lane's further rows, a folded thread — is the
   bare `text` weight, its words in line with what it opens. The ghost's fill is
@@ -1380,7 +1390,11 @@ in one tertiary line — the kind (glyph and word, in its own colour), the refer
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
-Back and Close. The scroller holds the rest and moves it 1:1: the title, the facts, the
+Back, «…» and Close. «…» holds what a person does with the item that is no fact of it: the
+pin that keeps it in the side panel's «Работа», a setting checked while it is on. The pin
+stood in the identity line between the link and the date, read as one more fact there. The
+link to copy stays beside the reference: it is the reference's twin, in the head as on the
+hover card, and what it did is said at the end of that line. The scroller holds the rest and moves it 1:1: the title, the facts, the
 tabs, the content. The facts are rows 4px apart, each led by its name in the quiet ink in
 one column, «Состояние», «Приоритет», «Эпик», «Исполняет» or «Ранее отвечал», «Подписаны»
 and «Метки», with the value on the name's baseline; a run of chips with no names read as

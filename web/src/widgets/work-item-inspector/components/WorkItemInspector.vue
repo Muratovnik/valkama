@@ -36,8 +36,8 @@ import { useI18n } from 'vue-i18n'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
-import InspectorBack from '@/widgets/work-item-inspector/components/InspectorBack.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
+import InspectorControls from '@/widgets/work-item-inspector/components/InspectorControls.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
 import InspectorIdentity from '@/widgets/work-item-inspector/components/InspectorIdentity.vue'
@@ -50,6 +50,7 @@ import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTab
 import InspectorTitle from '@/widgets/work-item-inspector/components/InspectorTitle.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import { agentCount } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
+import { followGuard } from '@/widgets/work-item-inspector/utils/guardStep.ts'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
@@ -248,17 +249,14 @@ const notices = computed(
 )
 
 /** The next step a guard asks for, taken where the inspector can take it. */
-function followGuard(guard: string) {
-  if (guard === 'executor') {
-    claim()
-    return
-  }
-  const move = notice.value?.move
-  dismissNotice()
-  section.value = guard === 'blocker' ? 'relations' : 'overview'
-  if (guard === 'summary' && move) void overview.value?.askOutcome(move)
-  else if (guard === 'checklist') void overview.value?.revealChecklist()
-}
+const onGuard = (guard: string) =>
+  followGuard(guard, {
+    claim,
+    dismiss: dismissNotice,
+    move: notice.value?.move,
+    overview: overview.value,
+    section,
+  })
 
 const { revealQuestion } = useQuestionReveal({
   asked: () => Boolean(props.questionAsked),
@@ -295,8 +293,10 @@ defineExpose({ close, openFrom })
     </template>
 
     <template #controls>
-      <InspectorBack
-        v-if="canGoBack"
+      <InspectorControls
+        :back="canGoBack"
+        :menu="writable && !missing && !pending"
+        :reference="reference"
         @back="void leave(() => emit('back'))"
       />
     </template>
@@ -309,7 +309,6 @@ defineExpose({ close, openFrom })
         :item="item"
         :reference="reference"
         :resource-ref="resourceRef"
-        :pinnable="writable"
       />
     </template>
 
@@ -364,7 +363,7 @@ defineExpose({ close, openFrom })
         @discard="discard"
         @dismiss="dismissNotice"
         @force="force"
-        @guard="followGuard"
+        @guard="onGuard"
         @keep="keepEditing"
         @keep-holder="takeover.keep"
         @take-over="takeover.confirm"

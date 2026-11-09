@@ -68,6 +68,7 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/SearchCombobox.vue', 2], // The field's edge, and the overlay edge of its list.
   ['shared/ui/SemanticState.vue', 1],
   ['shared/ui/TooltipHost.vue', 1], // Overlay edge of the window's one hint.
+  ['shared/ui/VMenu.vue', 1], // Overlay edge of a menu floating over what it acts on.
   // Markdown in free text: a quote's edge (the step quote's own), a thematic
   // break and a table's row dividers, which is what a reader expects of each;
   // and in a document, the start and end edges of a frame that scrolls, drawn
