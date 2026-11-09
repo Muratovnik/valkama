@@ -1484,14 +1484,22 @@ task it is and the way there. There each request is a block of questions under a
 project, the task's number, which is the way to the task, and the title, that stays at the top of
 the list while any of the block is in view, over the block's own ground to its edges, and leaves
 with the block's end; what else sticks there, a review's count, stands under it, and focus never
-stays under either. A rail of short bars stands in the dialog's start inset, one per question, a
-review's titled group or a block with none shown, the blocks a bar's pitch apart: the bar of the
-question being read is longer and in full ink, a bar names its question to the pointer and a
-reader, and a press brings that question up under the head; the rail is one Tab stop walked by
-the arrows, and Enter takes focus to where the question is answered. Each bar answers across the
-inset and 24px of height until the rail would outgrow the list, then they give up height alike. A
-phone-wide window draws no rail: its 16px inset is narrower than a target and stands on the
-screen's edge, which a finger swipes for the system. Selecting does nothing but select, nothing is chosen for
+stays under either. The way from block to block stands in the dialog's head, on the title's line
+where the head is wide and on a row of its own under the way out where it is not: «Question N of
+M», where M counts the blocks still waiting and N is the one whose head stands at the top of the
+list, at the list's end the last, and two steps, to the block before and the block after. A step
+brings that block's head up to the top of the list, where it sticks, and leaves focus on itself,
+so that pressing it again goes on; the one it brought up stays N until the reader scrolls. The
+arrows do the same from any of the three and Home and End go to the first and the last; the count
+itself takes focus to where its block is answered, the first field. The count keeps the room of
+its widest number, so nothing beside it moves as a number gains a digit, and under a finger or on
+a phone's width each of the three answers across 44px (`reach.css`). A rail of a bar per question
+stood in the start inset before, and needed decoding: it counted answered questions too, and had
+more bars than the list said were waiting. A block answered while the list is open folds where it
+stands; it goes under «Answered (N)», after those waiting and opening in place, at a later read than
+the one its own answer started, and only once it holds no typed or chosen words, no open change and
+no focus, and neither the pointer nor focus stands in it or after it in the list, which its leaving
+would move from under them. Selecting does nothing but select, nothing is chosen for
 the person, recommended or not, and Send is what sends. Every choice is a full-width row
 whatever their number: its label, a quiet word on the recommended one, and as much of
 its description as leaves the labels scannable, so that the first screen still says what

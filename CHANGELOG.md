@@ -18,6 +18,15 @@ checkouts are therefore distinguishable even at the same version.
   state, how it is held, its steps done and in all, its questions waiting for a person and
   its address. Read-only; no MCP tool.
 
+### Changed
+
+- **«Needs my answer» says which question you are on.** The rail of short bars at the start
+  edge is gone. The head of the list says «Question 2 of 5», counting only the blocks still
+  waiting, with arrows to the previous and the next block; the arrow keys, Home and End do the
+  same, and pressing the count takes you to where that block is answered. Blocks you have
+  answered fold where they stand and later gather under «Answered (N)» at the end of the list,
+  never moving while your pointer or keyboard is on them or below them.
+
 ## [2.7.0](https://github.com/Muratovnik/valkama/compare/v2.6.0...v2.7.0) - 2026-11-08
 
 ### Added
