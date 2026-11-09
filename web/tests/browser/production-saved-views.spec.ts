@@ -301,3 +301,64 @@ for (const locale of ['en', 'ru'] as const)
     await expect(page.locator('[data-reference]').first()).toBeVisible()
     expect(await listed(page, locale)).toEqual([])
   })
+
+/** An entry of the open menu reached by the arrows alone, then chosen with Enter. */
+async function pickByKeys(page: Page, role: 'menuitem' | 'menuitemradio', name: string) {
+  const entry = page.getByRole('menu').getByRole(role, { name })
+  // A menu opened from the keyboard has its first entry focused; the arrows move on from there.
+  await expect(page.getByRole('menu').locator('[role^="menuitem"]:focus')).toHaveCount(1)
+  for (let step = 0; step < 8; step += 1) {
+    if (await entry.evaluate((node) => node === document.activeElement)) break
+    await page.keyboard.press('ArrowDown')
+  }
+  await expect(entry).toBeFocused()
+  await page.keyboard.press('Enter')
+}
+
+test('the keyboard alone saves a view, cancels a save, applies a view and deletes it', async ({
+  page,
+}) => {
+  const words = WORDS.en
+  await seed(page, 'en', 1280)
+  await openSpace(page, spaceRef, { group: 'epic' })
+  await expect(page.locator('.board-lane').first()).toBeVisible()
+  const button = menuButton(page, 'en')
+  const open = async () => {
+    await button.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('menu')).toBeVisible()
+  }
+
+  // Escape in the dialog keeps nothing, and focus comes back to the menu's button.
+  await open()
+  await pickByKeys(page, 'menuitem', words.save)
+  const name = page.getByRole('dialog').getByRole('textbox', { name: words.name })
+  await expect(name).toBeFocused()
+  await page.keyboard.type('Dropped')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(await listed(page, 'en')).toEqual([])
+
+  // Enter keeps it under its name.
+  await open()
+  await pickByKeys(page, 'menuitem', words.save)
+  await expect(name).toBeFocused()
+  await page.keyboard.type('Lanes')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(await listed(page, 'en')).toEqual(['Lanes'])
+
+  // From another state, the arrows and Enter put it back.
+  await page.goto(spaceRoute(spaceRef, { view: 'list' }))
+  await expect(page.locator('.work-item-list tbody tr').first()).toBeVisible()
+  await open()
+  await pickByKeys(page, 'menuitemradio', 'Lanes')
+  await expect.poll(() => routeState(page)).toEqual({ view: 'kanban', group: 'epic' })
+  await expect(page.locator('.board-lane').first()).toBeVisible()
+
+  // And the view the address holds is deleted the same way.
+  await open()
+  await pickByKeys(page, 'menuitem', words.delete('Lanes'))
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  expect(await listed(page, 'en')).toEqual([])
+})
