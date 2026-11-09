@@ -1388,7 +1388,10 @@ one heap of state, priority, holder and tags. The state is its own transition me
 once, so a move the server refuses leaves the chip naming where the item is, then a
 question waiting for its answer. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
-The epic is its reference. The holder is bare words, shortened to its name and the start
+The epic is the epic's sign, as a tile draws it, and its reference as an item link, the
+same link a number in text is: a press opens the epic through the card's departure, its
+draft guard and Back, and resting on it shows the epic's hover card; a ↳ and a bare number
+there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
 of its session with the whole value and its lease in a tooltip and a warning dot once
 nobody is behind it; a plate there read as one more chip. «Подписаны» names the other
 sessions that follow the item, each as its claim's holder would print, a name moving to
@@ -1405,7 +1408,7 @@ state chip's, so a wrap adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
 labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —
-«Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите задачу из него» on an
+«Ждёт MAIN-12», the number a link, while an open blocker remains, «Эпик — возьмите задачу из него» on an
 epic.
 Reading down, the tabs stick to the top of the scroller, on one row that scrolls inside
 itself where it has to, the one shown and the one focused brought into it, and whatever

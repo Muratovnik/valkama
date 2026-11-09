@@ -345,6 +345,7 @@ defineExpose({ close, openFrom })
         @take-over="takeover.ask"
         @fact="changeFacts"
         @filter="(token) => emit('filter', token)"
+        @open="openFrom"
         @usage="section = 'agents'"
       />
     </template>

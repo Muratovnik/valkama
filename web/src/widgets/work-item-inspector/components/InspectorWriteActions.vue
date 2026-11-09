@@ -33,6 +33,7 @@ import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.t
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
+import RichText from '@/shared/ui/RichText.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -124,7 +125,11 @@ function press() {
         :size="14"
         :stroke-width="2"
       />
-      {{ waitingText }}
+      <!-- The blocker is an item link, as a number in text is. -->
+      <RichText
+        :source="waitingText"
+        inline
+      />
     </p>
     <p
       v-else-if="action === 'epic'"

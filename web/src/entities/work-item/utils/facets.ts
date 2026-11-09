@@ -204,10 +204,12 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     // Nobody prints nothing; a finished item names who held it before.
     preview: { form: 'glyph-word' },
   },
+  // The card's row is named «Эпик» and draws the epic's own sign, as a tile of the epic
+  // does, before the reference, which the card draws as a link to the epic.
   parent: {
     tile: { form: 'glyph-word', flatOnly: true },
     graph: { form: 'glyph-word' },
-    card: { form: 'glyph-word' },
+    card: { form: 'glyph' },
   },
   // A closed item's steps are all done, as the guard on closing asks: on a tile of
   // Done that was a line saying what the column already says.
@@ -392,6 +394,21 @@ function kindMark(item: FacetSubject, { form, plain }: FacetRule): FacetMark {
   }
 }
 
+function parentMark(surface: FacetSurface, form: FacetForm, context: FacetContext): FacetMark {
+  const reference = context.parentReference ?? ''
+  const mark = {
+    facet: 'parent',
+    value: reference,
+    form,
+    tone: PLAIN,
+    filter: null,
+    quiet: false,
+  } as const
+  return surface === 'card'
+    ? { ...mark, glyph: KIND_GLYPHS.epic, text: { key: 'workItem.kind.epic' }, ink: 'epic' }
+    : { ...mark, glyph: 'parent', text: { literal: reference } }
+}
+
 function priorityMark(item: FacetSubject, { form, plain }: FacetRule): FacetMark {
   return {
     facet: 'priority',
@@ -545,19 +562,7 @@ export function facetMarks(
   if (facet === 'labels') return labelMarks(item, rule, context)
   if (facet === 'holder') return [holderMark(item, form, surface)]
   if (facet === 'readiness') return readinessMarks(item, surface, context)
-  if (facet === 'parent')
-    return [
-      {
-        facet,
-        value: context.parentReference ?? '',
-        form,
-        glyph: 'parent',
-        text: { literal: context.parentReference ?? '' },
-        tone: PLAIN,
-        filter: null,
-        quiet: false,
-      },
-    ]
+  if (facet === 'parent') return [parentMark(surface, form, context)]
   const count = steps(item)
   return [
     {
