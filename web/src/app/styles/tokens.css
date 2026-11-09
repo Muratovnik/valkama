@@ -565,5 +565,14 @@
      round keeps room for it: a landing scrolled flush with an edge had its ring cut. */
   --size-focus-ring: 2px;
 
+  /* Where a sign beside words stands its middle: this far above the line's baseline,
+     on the middle of its capitals. A line beside a sign is nearly always a reference, a
+     number or a word that starts with a capital, whose eye stands there; the middle of
+     the lowercase letters, which every sign used before, stood each one about a pixel and
+     a half low beside «MAIN-480» or «Review». `cap` resolves in the font of the element
+     that reads the token, so a sign takes the capitals of its own line. A word box trimmed
+     to its capitals (`.trimmed-word`) has the same middle. */
+  --size-text-middle: 0.5cap;
+
   color-scheme: dark;
 }

@@ -22,13 +22,14 @@
   font: var(--font-detail);
   white-space: nowrap;
 
-  /* A chip centres its word trimmed to the letters on the row's middle, so the name beside it,
+  /* A chip centres its word trimmed to the capitals on the row's middle, so the name beside it,
      trimmed too (`.trimmed-word`), does the same: the baseline the grid takes through a mark's
      menu stands a pixel under the mark's word. On the first line's middle, not the row's, where
-     a phone wraps the question under the state. */
+     a phone wraps the question under the state. The trimmed box is the capitals' height, so its
+     top stands that middle (`--size-text-middle`) above the row's. */
   &.beside-chip {
     align-self: start;
-    margin-block-start: calc(var(--size-control-height-compact) / 2 - 0.5ex);
+    margin-block-start: calc(var(--size-control-height-compact) / 2 - var(--size-text-middle));
   }
 }
 

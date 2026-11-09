@@ -216,14 +216,14 @@ function press(event: MouseEvent) {
       @click="press"
     >
       <span class="nav-row-numeral">
-        <span class="nav-row-number">{{ number }}</span>
+        <span class="nav-row-number trimmed-word">{{ number }}</span>
         <span
-          class="nav-row-widest"
+          class="nav-row-widest trimmed-word"
           aria-hidden="true"
           >{{ widest }}</span
         >
       </span>
-      <span class="nav-row-title">{{ row.title }}</span>
+      <span class="nav-row-title trimmed-word">{{ row.title }}</span>
       <span
         v-if="meta"
         class="nav-row-meta"
@@ -233,7 +233,7 @@ function press(event: MouseEvent) {
           v-if="meta.agents"
           name="agent"
           :size="12"
-        />{{ meta.word }}
+        /><span class="trimmed-word">{{ meta.word }}</span>
       </span>
     </a>
     <NavWorkPin
@@ -393,7 +393,9 @@ function press(event: MouseEvent) {
 }
 
 /* The link's box is the whole row, so the row opens wherever it is pressed; the fold and
-   the pin stand over it. Its ring is the row's, inside it, and only from the keyboard. */
+   the pin stand over it. Its ring is the row's, inside it, and only from the keyboard. Its
+   words are trimmed to their capitals (`.trimmed-word`), so the capitals' middle is the row's,
+   where the lead's sign stands: centred as lines, they stood up to a pixel over the sign. */
 .nav-row-link {
   display: flex;
   gap: var(--space-2);
@@ -438,12 +440,11 @@ function press(event: MouseEvent) {
   visibility: hidden;
 }
 
+/* Short of room it ends in an ellipsis, cut sideways only (`.trimmed-word`). */
 .nav-row-title {
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .nav-row-meta {

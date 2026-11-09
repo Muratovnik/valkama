@@ -295,6 +295,7 @@ defineExpose({ toggleFilter })
         :filter="filter"
         :filtered="filtered"
         :grouping="boardGrouping"
+        :live="model.live_work"
         :writable="writable"
         @chain="(reference) => emit('show-chain', reference)"
         @filter="toggleFilter"

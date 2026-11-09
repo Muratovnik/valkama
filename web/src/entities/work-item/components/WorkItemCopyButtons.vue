@@ -26,7 +26,9 @@ const { t } = useI18n()
     :aria-label="t('workItem.head.copyReference', { reference })"
     @click="copyReference"
   >
-    {{ reference }}
+    <!-- Trimmed to its capitals, so the button centres their middle, where the signs beside
+         it stand (`--size-text-middle`). -->
+    <span class="trimmed-word">{{ reference }}</span>
   </button>
   <button
     v-tooltip="t('workItem.head.copyLink', { reference })"

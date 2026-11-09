@@ -213,18 +213,39 @@ const markShape = (mark: FacetMark, filters: boolean, alone = false) =>
   `facet-mark${mark.quiet ? ' quiet' : ''}${filters ? ' filters' : ''}${alone ? ' glyph-alone' : ''}`
 
 /**
+ * What an executor's session is doing, after its client's glyph and in its line, as the side
+ * panel draws it (`NavWorkRow`): three dots that run while it works on the item, held still
+ * while it works on others, and a ring while it waits for a person. The mark's words say it.
+ */
+function drawSession(mark: FacetMark): VNode[] {
+  if (!mark.session) return []
+  if (mark.session === 'waiting')
+    return [iconGlyph('live-waiting', { class: 'facet-session', size: 10, strokeWidth: 2.4 })]
+  const still = mark.session === 'held' ? ' still' : ''
+  return [
+    h('span', { 'class': `facet-session work-dots${still}`, 'aria-hidden': 'true' }, [
+      h('i'),
+      h('i'),
+      h('i'),
+    ]),
+  ]
+}
+
+/**
  * The glyph in a line of its own: the box is a line of the surface's text — trimmed
  * to its letters where the surface trims its words — and the glyph is centred on
  * that line's letters, so the box lines up with a word by baseline and the glyph
  * stands on the word's middle, on one line or the first of several. A glyph alone
- * is centred so in the mark's own line, with no box.
+ * is centred so in the mark's own line, with no box. A session's sign follows the
+ * glyph in that line, so it stands on the same middle.
  */
 function drawGlyph(mark: FacetMark, run: MarkRun, alone: boolean): VNode[] {
   if (!mark.glyph || mark.form === 'word') return []
   const glyph = iconGlyph(mark.glyph, { class: 'facet-glyph', size: 14, strokeWidth: 2 })
-  if (alone) return [glyph]
+  const line = [glyph, ...drawSession(mark)]
+  if (alone) return line
   const box = trims(run.surface) ? 'facet-glyph-box trimmed-word' : 'facet-glyph-box'
-  return [h('span', { 'class': box, 'aria-hidden': 'true' }, [glyph])]
+  return [h('span', { 'class': box, 'aria-hidden': 'true' }, line)]
 }
 
 function drawMark(mark: FacetMark, run: MarkRun): VNode {
@@ -239,6 +260,7 @@ function drawMark(mark: FacetMark, run: MarkRun): VNode {
         ...markProps(mark, run, whole, filters),
         'class': `${markShape(mark, filters, alone)}${run.solo ? ' facet-marks' : ''}`,
         'data-surface': run.solo ? run.surface : undefined,
+        'data-session': mark.session,
       },
       [...glyph, ...markWordsOf(mark, whole, run, filters)],
     ),

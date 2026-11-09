@@ -32,6 +32,7 @@ import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -42,6 +43,8 @@ const props = defineProps<{
   items: WorkItemBrief[]
   /** A tile of this lane is being dragged, so this cell can take it. */
   landable: boolean
+  /** What an agent's session is doing on each item with live work, by item id. */
+  live: Readonly<Record<string, LiveWork>>
   /** A move has landed in this cell while it was closed, so it is drawn whole. */
   revealed: boolean
   state: WorkflowState
@@ -129,6 +132,7 @@ function walk(event: KeyboardEvent) {
       :items="props.items"
       :limit="limit"
       :waiting="props.waiting"
+      :live="props.live"
       :filter="props.filter"
       :hint-id="props.hintId"
       :writable="props.writable"

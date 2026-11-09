@@ -100,7 +100,7 @@ export const UNBROKEN_TITLES = new Map([
     `a side panel's heading: the interface's words, ${ONE_LINE}`,
   ],
   [
-    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }} in span.nav-row-title',
+    'widgets/app-nav/components/NavWorkRow.vue {{ row.title }} in span.nav-row-title.trimmed-word',
     `a row of the Work list is ${ONE_LINE}`,
   ],
   [

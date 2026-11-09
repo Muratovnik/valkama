@@ -19,8 +19,15 @@
  * and its colour is the custom property the owner can set.
  */
 
+import {
+  CLIENT_GLYPHS,
+  executorOf,
+  executorWords,
+} from '@/entities/work-item/utils/facetExecutor.ts'
+import type { Executor, SessionDoing } from '@/entities/work-item/utils/facetExecutor.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import { PRIORITIES, WORK_ITEM_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -71,6 +78,11 @@ export interface FacetContext {
    * must be, rather than a count standing alone.
    */
   labelRoom?: number
+  /**
+   * What an agent's session is doing on the item now, as the read model's `live_work` says
+   * it; absent or null when no session is at it.
+   */
+  live?: LiveWork | null
   /** The parent's reference, which the brief carries only as an id. */
   parentReference?: string | null
   /**
@@ -96,6 +108,11 @@ interface FacetRule {
   form: FacetForm
   /** The surface prints this facet even when nothing holds it (a column). */
   always?: boolean
+  /**
+   * The holder is drawn as its executor: the glyph of the client that holds the item and
+   * what its session is doing, and nothing where no session stands behind the claim.
+   */
+  executor?: boolean
   /** Not on the grouped board, whose lane says it. */
   flatOnly?: boolean
   /**
@@ -194,11 +211,14 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     list: { form: 'chips', limit: 2, minWidth: 900 },
     card: { form: 'chips' },
   },
-  // A tile says that somebody holds the item, as a glyph whose hover names who and
-  // whether the claim is stale; the name and «Захват устарел» as words were the
-  // longest things on the sheet after its title. The card and the hover card say both.
+  // A tile says who holds the item as its executor: the client's glyph, and what its
+  // session is doing as the side panel says it, or that the claim is stale; the hover
+  // names who. A claim no session holds or proved prints nothing: a person's glyph there
+  // said only that a claim existed, on items nobody was working. The name and «Захват
+  // устарел» as words were the longest things on the sheet after its title; the card and
+  // the hover card say both.
   holder: {
-    tile: { form: 'glyph', openOnly: true },
+    tile: { form: 'glyph', openOnly: true, executor: true },
     list: { form: 'word', always: true },
     graph: { form: 'glyph-word' },
     card: { form: 'glyph-word', always: true },
@@ -271,6 +291,11 @@ export interface FacetMark {
   hint?: FacetText
   /** The kind whose own colour this mark's glyph and word are drawn in. */
   ink?: WorkItemBrief['kind']
+  /**
+   * What the executor's session is doing, drawn after the glyph as the side panel draws
+   * it; absent where the mark says nothing of a session.
+   */
+  session?: SessionDoing
   /**
    * Shorter words the form draws in place of `text`, which stays the name and
    * the hover text; absent, the form draws `text`.
@@ -372,6 +397,7 @@ export function printsFacet(
   const value = valueOf(facet, item, context)
   if (value === null) return rule.always === true
   if (rule.only && !rule.only.includes(value)) return false
+  if (rule.executor && executorOf(item, context.live) === null) return false
   // Where readiness takes the state's place — the graph — the state yields
   // whenever readiness prints.
   if (facet === 'state' && FACET_RULES.readiness[surface]?.replacesState)
@@ -446,16 +472,15 @@ function readinessMark(value: string, rule: FacetRule, context: FacetContext): F
  * held finished work held it before: said as a holder, the name read as
  * somebody still on it.
  */
-function holderText(item: FacetSubject, surface: FacetSurface): FacetText {
+function holderText(
+  item: FacetSubject,
+  surface: FacetSurface,
+  executor: Executor | null,
+): FacetText {
   const holder = holderRef(item)
   // A glyph alone says its words on hover, where a bare name would not say what it is.
-  if (holder && surface === 'tile') {
-    const stale = item.claim_state === 'stale' && !item.state.is_terminal
-    return {
-      key: stale ? 'workItem.facet.heldStale' : 'workItem.facet.heldBy',
-      params: { holder: holderName(holder) },
-    }
-  }
+  if (holder && surface === 'tile')
+    return { key: executorWords(executor), params: { holder: holderName(holder) } }
   if (holder && item.state.is_terminal)
     return { key: 'workItem.previousHolder', params: { holder: holderName(holder) } }
   if (holder) return { literal: holderName(holder) }
@@ -473,19 +498,28 @@ export function holderRef(item: FacetSubject): string {
   return item.state.is_terminal ? item.last_claim_ref || current : current
 }
 
-function holderMark(item: FacetSubject, form: FacetForm, surface: FacetSurface): FacetMark {
+function holderMark(
+  item: FacetSubject,
+  rule: FacetRule,
+  surface: FacetSurface,
+  context: FacetContext,
+): FacetMark {
   const stale = item.claim_state === 'stale' && !item.state.is_terminal
   const holder = holderRef(item)
+  const executor = rule.executor ? executorOf(item, context.live) : null
+  let glyph: IconName | null = holder ? 'holder' : null
+  if (executor) glyph = CLIENT_GLYPHS[executor.client]
   return {
     facet: 'holder',
     value: holder,
-    form,
-    glyph: holder ? 'holder' : null,
-    text: holderText(item, surface),
+    form: rule.form,
+    glyph,
+    text: holderText(item, surface, executor),
     // Only a stale claim has something to say; a live or unconfirmed one is quiet.
     tone: stale ? { dimension: 'claim-lease', state: 'stale' } : PLAIN,
     filter: null,
     quiet: !holder,
+    ...(executor?.session ? { session: executor.session } : {}),
   }
 }
 
@@ -544,7 +578,7 @@ export function facetMarks(
   if (facet === 'priority') return [priorityMark(item.priority, rule)]
   if (facet === 'state') return [stateMark(item.state, form)]
   if (facet === 'labels') return labelMarks(item, rule, context)
-  if (facet === 'holder') return [holderMark(item, form, surface)]
+  if (facet === 'holder') return [holderMark(item, rule, surface, context)]
   if (facet === 'readiness') return readinessMarks(item, surface, context)
   if (facet === 'parent')
     return [

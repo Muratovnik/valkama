@@ -36,6 +36,7 @@ import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import { byState } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -49,6 +50,8 @@ const props = withDefaults(
     /** A queue or search filter narrowed `items`. */
     filtered?: boolean
     grouping?: BoardGrouping
+    /** What an agent's session is doing on each item with live work, by item id. */
+    live?: Readonly<Record<string, LiveWork>>
     /** The items the board is scoped to before any filter; `items` when absent. */
     scopeItems?: WorkItemBrief[]
     /** The planning space, which names epics outside the scope and owns the folded lanes. */
@@ -60,6 +63,7 @@ const props = withDefaults(
     filter: () => EMPTY_WORK_FILTER,
     filtered: false,
     grouping: 'none',
+    live: () => ({}),
     scopeItems: undefined,
     spaceId: '',
     spaceItems: undefined,
@@ -187,6 +191,7 @@ watch(
       :lanes="lanes"
       :states="states"
       :waiting="waiting"
+      :live="props.live"
       :filter="props.filter"
       :filtered="props.filtered"
       :hint-id="hint"
@@ -206,6 +211,7 @@ watch(
         :state="column.state"
         :items="column.items"
         :waiting="waiting"
+        :live="props.live"
         :filter="props.filter"
         :hint-id="hint"
         :writable="props.writable"
