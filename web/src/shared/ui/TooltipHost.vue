@@ -87,6 +87,18 @@ function shows(element: HTMLElement) {
     : !tooltip.clipped || textIsClipped(element)
 }
 
+/**
+ * The hint that speaks for the element the pointer is on: its own, or, while its own is a
+ * `clipped` hint of words that stand whole, the hint of what holds it. A one-line word inside a
+ * control that has a hint of its own took the pointer from that hint everywhere it stood whole.
+ */
+function speakerOf(element: HTMLElement | null): HTMLElement | null {
+  let speaker = element
+  while (speaker && tooltipOf(speaker)?.clipped && !textIsClipped(speaker))
+    speaker = tooltipAnchorOf(speaker.parentElement)
+  return speaker ?? element
+}
+
 function pointAt(element: HTMLElement) {
   if (anchor === element) return
   anchor = element
@@ -103,7 +115,7 @@ function request(next: boolean) {
     open.value = false
     return
   }
-  const element = anchor
+  const element = heldByFocus ? anchor : speakerOf(anchor)
   if (!element?.isConnected || !shows(element)) return
   const reached = heldByFocus ? element === document.activeElement : element.matches(':hover')
   if (!reached) return

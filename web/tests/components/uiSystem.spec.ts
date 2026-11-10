@@ -9,6 +9,7 @@ import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 import { present } from '../support/present.ts'
@@ -100,6 +101,22 @@ describe('shared UI contracts', () => {
     expect(wrapper.attributes('data-tone')).toBe('danger')
     expect(wrapper.classes()).not.toContain('tone-danger')
     expect(wrapper.attributes('data-dimension')).toBe('session')
+  })
+
+  it('holds a state’s word to one line by the shared rule, and says it whole while it is cut', () => {
+    const label = 'A state whose name is longer than its column'
+    const word = mount(SemanticState, {
+      props: { dimension: 'execution', state: 'running', label },
+    }).get('.state-label')
+    expect(word.classes()).toEqual(expect.arrayContaining(['one-line', 'trimmed-word']))
+    expect(tooltipOf(word.element)).toMatchObject({ clipped: true, kind: 'clipped', text: label })
+    // A dot's word is hidden for the reader, not cut: it says nothing over the dot's host.
+    for (const props of [{ variant: 'dot' as const }, { compact: true }]) {
+      const hidden = mount(SemanticState, {
+        props: { dimension: 'execution', state: 'running', label, ...props },
+      }).get('.state-label')
+      expect(tooltipOf(hidden.element)).toBeUndefined()
+    }
   })
 
   it('owns project binding severity in the shared state table', () => {

@@ -136,3 +136,18 @@ test('a detail on a cut name says the name whole over it, and on a whole name th
     under: null,
   })
 })
+
+test('a whole word with a clipped hint leaves the pointer to the hint of the control it is in', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await page.goto('/tests/browser/harness.html?lang=en&surface=hints')
+  const words = page.getByRole('tooltip')
+  await page.locator('.hints-whole').hover()
+  await page.clock.runFor(1000)
+  await expect(words).toHaveText('What the control does')
+  // A cut word still says itself, over whatever holds it.
+  await page.locator('.hints-name').hover()
+  await page.clock.runFor(1000)
+  await expect(words).toHaveText('A name cut short by its box')
+})

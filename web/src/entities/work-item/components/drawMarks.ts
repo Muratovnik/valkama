@@ -366,6 +366,7 @@ function drawEntry(mark: FacetMark, run: MarkRun): VNode {
       dimension: 'work-item-state',
       state: mark.value,
       label: run.words.say(mark.text),
+      inPreview: run.surface === 'preview',
     })
   return drawMark(mark, run)
 }
