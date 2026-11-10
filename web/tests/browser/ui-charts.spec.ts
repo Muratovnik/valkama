@@ -323,6 +323,42 @@ test('with reduced motion asked for, nothing in the charts moves on hover or foc
   expect(moving).toEqual([])
 })
 
+test('in a forced palette the series, the neutral, the floor, a change and the running day stay drawn', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' })
+  await page.goto('/tests/browser/harness.html?lang=en&surface=charts')
+  const paints = await page.evaluate(() => {
+    const probe = document.createElement('i')
+    document.body.append(probe)
+    const system = (name: string) => {
+      probe.style.color = name
+      return getComputedStyle(probe).color
+    }
+    const style = (selector: string) => {
+      const found = document.querySelector(selector)
+      if (!found) throw new Error(`${selector} is not drawn`)
+      return getComputedStyle(found)
+    }
+    const result = {
+      canvasText: system('CanvasText'),
+      grayText: system('GrayText'),
+      segment: style('[data-harness="days"] .period-segment').backgroundColor,
+      neutral: style('[data-harness="ranked"] .ranked-rest .ranked-bar').backgroundColor,
+      floor: style('[data-harness="days"] .period-baseline').backgroundColor,
+      change: style('[data-harness="days"] .period-mark').backgroundColor,
+      hatch: style('[data-harness="days"] .period-incomplete > .period-segment').maskImage,
+    }
+    probe.remove()
+    return result
+  })
+  expect(paints.segment).toBe(paints.canvasText)
+  expect(paints.neutral).toBe(paints.grayText)
+  expect(paints.floor).toBe(paints.grayText)
+  expect(paints.change).toBe(paints.canvasText)
+  expect(paints.hatch).toContain('repeating-linear-gradient')
+})
+
 test('an empty chart says so in a status and draws no plot', async ({ page }) => {
   await page.goto('/tests/browser/harness.html?lang=en&surface=charts')
   const empty = page.locator('[data-harness="empty"]')

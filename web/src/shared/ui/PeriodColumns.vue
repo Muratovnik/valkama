@@ -345,6 +345,15 @@ function keySegment(event: KeyboardEvent) {
   &.period-baseline {
     background: var(--color-rule-strong);
   }
+
+  /* A forced palette drops a painted background; the scale keeps its lines in the quiet ink. */
+  @media (forced-colors: active) {
+    &,
+    &.period-baseline {
+      background: GrayText;
+      forced-color-adjust: none;
+    }
+  }
 }
 
 .period-bars {
@@ -427,6 +436,12 @@ function keySegment(event: KeyboardEvent) {
   inline-size: var(--space-hair);
   background: var(--color-text-tertiary);
   pointer-events: none;
+
+  /* A change is part of what the chart says, so it keeps its line in a forced palette. */
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 .period-notes {
