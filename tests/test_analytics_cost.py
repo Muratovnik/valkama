@@ -15,9 +15,10 @@ from tests.analytics_fixtures import DAY, UsageStore, day, stamp
 
 STRETCHES = 25_000
 DAYS = 90
-#: Seconds. Measured at 0.23 s by project and model and 0.48 s by item and executor,
-#: the slowest of five reads each, at the day step.
-BUDGET = 1.5
+#: Seconds. Measured at the day step at 0.23 s by project and model and 0.48 s by item
+#: and executor, the slowest of five reads each, and at 0.68 s and 1.17 s under coverage,
+#: which is how the gate runs the suite: more than three times the slower of those.
+BUDGET = 4.0
 #: The period's stretches, the folders of the sessions on no item, one read of labels
 #: per labelled dimension and the freshness: the same however many stretches there are.
 MAX_STATEMENTS = 6
