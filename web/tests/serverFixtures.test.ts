@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { validateUsageAnswer } from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
 import {
   validateDocument,
@@ -56,6 +57,7 @@ const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${n
 
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
+  'analytics-usage.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
@@ -94,18 +96,10 @@ const agentOnly = new Set([
   'mcp-get-work-item-unresolved.json',
 ])
 
-/**
- * Answers a page will read once it exists: their schema comes with that page, and
- * `tests/test_web_contract_fixtures.py` holds their shape until then.
- */
-const awaitingPage = new Set(['analytics-usage.json'])
-
 describe('the server fixtures', () => {
-  it('are each read by the web, named as an agent read or awaiting their page', () => {
+  it('are each read by the web or named as an agent read', () => {
     const files = readdirSync(directory).filter((name) => name.endsWith('.json'))
-    expect(files.toSorted()).toEqual(
-      [...Object.keys(readers), ...agentOnly, ...awaitingPage].toSorted(),
-    )
+    expect(files.toSorted()).toEqual([...Object.keys(readers), ...agentOnly].toSorted())
   })
 
   it.each(Object.entries(readers))(

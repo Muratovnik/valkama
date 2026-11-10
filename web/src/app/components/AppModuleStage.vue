@@ -44,6 +44,10 @@ async function refresh() {
 function stateValue(key: string, fallback = '') {
   return String(props.route.state?.[key] ?? fallback)
 }
+/** The project a module scoped to one reads alone; null at the top. */
+const scopeProject = computed(() =>
+  props.scope.kind === 'project' ? props.scope.project_ref.project_id : null,
+)
 /** The work item whose card is on show, for as long as its module is. */
 const openCardId = computed(() => planningSurface.value?.selectedId ?? null)
 defineExpose({ openCardId, refresh })
@@ -72,7 +76,11 @@ defineExpose({ openCardId, refresh })
     module="analytics"
     :label="moduleTitle"
   >
-    <AnalyticsView />
+    <AnalyticsView
+      :route-state="route.state"
+      :project-id="scopeProject"
+      @state="(state) => emit('state', state)"
+    />
   </ModuleFrame>
 
   <ModuleFrame

@@ -715,9 +715,9 @@ class ServerFixtureTests(unittest.TestCase):
     def test_generating_twice_gives_the_same_text(self) -> None:
         self.assertEqual(generate(), generate())
 
-    def test_the_analytics_answer_has_the_shape_its_page_will_read(self) -> None:
-        # The web's schema for this answer comes with its page; until then the shape is
-        # held here, on the committed fixture the page's schema will be written against.
+    def test_the_analytics_answer_has_the_shape_its_page_reads(self) -> None:
+        # The page's strict schema reads this fixture too (`web/tests/serverFixtures.test.ts`);
+        # the shape is held here as well, so a change of the answer fails on this side first.
         answer = json.loads((FIXTURES / "analytics-usage.json").read_text(encoding="utf-8"))
         self.assertEqual({"interface_version", "usage"}, set(answer))
         self.assertEqual("valkama-analytics-api", answer["interface_version"])

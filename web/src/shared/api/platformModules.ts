@@ -142,7 +142,8 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     navigation_group: 'understand',
     title_key: 'platform.modules.analytics',
     icon_key: 'chart-no-axes-combined',
-    allowed_keys: [],
+    // The page's view (`pages/analytics/utils/analyticsAddress.ts`).
+    allowed_keys: ['period', 'from', 'to', 'by', 'measure', 'filters'],
     readGlobal: ['analytics.usage', 'analytics.uses'],
     readProject: ['analytics.usage', 'analytics.uses'],
     actionGlobal: ['module.analytics.report-use'],

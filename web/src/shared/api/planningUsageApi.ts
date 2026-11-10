@@ -24,7 +24,8 @@ const runText = () => boundedText(RUN_TEXT, 200)
 /** A kind no request reported is null, and null is no data: never a zero. */
 const tokenCount = () => positiveInt(true).nullable()
 
-const tokensSchema = strictObject({
+/** Tokens by kind, as every usage read gives them; the analytics read too. */
+export const tokensSchema = strictObject({
   input: tokenCount(),
   cached_read: tokenCount(),
   cache_write_5m: tokenCount(),

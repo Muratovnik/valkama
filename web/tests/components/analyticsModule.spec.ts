@@ -1,17 +1,19 @@
 /**
  * The Analytics module's place in the shell: an entry under «Understand», an address that
- * opens its page, and a page that says honestly that nothing has been collected yet.
+ * opens its page with its part of the address, and a page that reads its view from there,
+ * writes every change back, and waits, fails and stands empty through the shared state panel.
  */
 import { ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { VueWrapper } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 
-import AnalyticsView from '@/pages/analytics/AnalyticsView.vue'
+import { DEFAULT_VIEW, writeAddress } from '@/pages/analytics/utils/analyticsAddress.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
@@ -19,8 +21,10 @@ import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
-import { uiError, uiLoading } from '@/shared/api/platformUiState.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+
+import { task, usageAnswer } from '../fixtures/analytics.ts'
+import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
 function i18n(locale: 'en' | 'ru' = 'en') {
   return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages, pluralRules })
@@ -33,17 +37,30 @@ const drawable: readonly ModuleManifest[] = OFFLINE_MODULE_FALLBACK.filter((modu
 
 const PROJECT = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
 
-// The page reports each opening to the server. There is none here, so the report fails
-// and is dropped, as it is whenever its write fails.
-beforeEach(() => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn<typeof fetch>(() => Promise.reject(new TypeError('no server'))),
-  )
-})
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
+const ITEM = task(12, 'Answer a review in one form')
+const DAY = 86_400_000
+
+/** A week that spent something on one task, from this Monday to now. */
+function aWeek() {
+  const now = new Date()
+  const back = (now.getDay() + 6) % 7
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back)
+  return usageAnswer({
+    first: monday,
+    days: back + 1,
+    end: now,
+    groupBy: ['work_item'],
+    stretches: [
+      { day: 0, group: { work_item: ITEM }, spend: { seconds: 3600, tokens: 1200, cost: 0.4 } },
+    ],
+  })
+}
+
+const nothingSpent = () =>
+  usageAnswer({ first: new Date(2026, 10, 9), days: 1, groupBy: ['work_item'], stretches: [] })
+
+const radio = (wrapper: Pick<VueWrapper, 'findAll'>, name: string) =>
+  wrapper.findAll('[role="radio"]').find((one) => one.text() === name)
 
 describe('the Analytics entry on the rail', () => {
   it('stands under Understand and goes to its module', async () => {
@@ -90,7 +107,8 @@ describe('the Analytics address', () => {
     },
   )
 
-  it('opens the Analytics page on the stage', async () => {
+  it('opens the Analytics page on the stage, with its part of the address', async () => {
+    const reads = stubAnalyticsReads(aWeek)
     const stage = mount(AppModuleStage, {
       props: {
         activeModule: 'analytics',
@@ -99,7 +117,11 @@ describe('the Analytics address', () => {
         moduleTitle: 'Analytics',
         primaryWriteScopeId: null,
         questionAsked: false,
-        route: { module_id: 'analytics', scope: PROJECT },
+        route: {
+          module_id: 'analytics',
+          scope: PROJECT,
+          state: { by: 'model', filters: JSON.stringify({ work_item: [ITEM.id] }) },
+        },
         scope: PROJECT,
         stateBytes: 2048,
       },
@@ -110,38 +132,87 @@ describe('the Analytics address', () => {
     expect(stage.get('.module-frame').attributes('aria-label')).toBe('Analytics')
     expect(stage.find('.analytics-page').exists()).toBe(true)
     expect(stage.find('.work-item-board').exists()).toBe(false)
+    const query = reads.grouped('model')[0]
+    expect(query?.get('work_item')).toBe(ITEM.id)
+    expect(query?.get('project')).toBe('sample')
+    await radio(stage, 'Past 4 weeks')?.trigger('click')
+    expect(stage.emitted('state')?.at(-1)?.[0]).toEqual({
+      period: 'weeks4',
+      by: 'model',
+      filters: JSON.stringify({ work_item: [ITEM.id] }),
+    })
   })
 })
 
 describe('the Analytics page', () => {
-  it('says that usage appears once it is collected, and shows no figure', () => {
-    const page = mount(AnalyticsView, { global: { plugins: [i18n()] } })
-    const empty = page.get('[role="status"]')
-    expect(empty.text()).toContain('No usage collected yet')
-    expect(empty.text()).toContain('will appear here once Valkama collects them')
-    expect(page.text()).not.toMatch(/\d/)
-    expect(page.find('svg:not(.empty-mark), canvas').exists()).toBe(false)
+  it("asks for this week by task, in the browser's own time, beside the week before", async () => {
+    const reads = stubAnalyticsReads(aWeek)
+    await mountAnalytics()
+    const [query] = reads.asked
+    expect(query?.get('group_by')).toBe('work_item')
+    expect(query?.get('compare')).toBe('true')
+    expect(query?.get('step')).toBe('day')
+    expect(query?.get('utc_offset')).toBe(String(-new Date().getTimezoneOffset()))
   })
 
-  it('says the same in Russian', () => {
-    const page = mount(AnalyticsView, { global: { plugins: [i18n('ru')] } })
-    expect(page.text()).toContain('Расход ещё не собран')
-    expect(page.text()).toContain('появятся здесь')
+  it('opens filtered from a link that names a task, and says a filter is set', async () => {
+    const reads = stubAnalyticsReads(aWeek)
+    const link = writeAddress({ ...DEFAULT_VIEW, filters: { work_item: [ITEM.id] } })
+    const page = await mountAnalytics({ routeState: link })
+    expect(reads.grouped('work_item')[0]?.get('work_item')).toBe(ITEM.id)
+    expect(page.get('.disclosure-toggle').text()).toBe('Filters · 1')
+    // The chosen task is named, from the values its filter offers.
+    const chip = page.get('[data-dimension="work_item"]')
+    expect(chip.text()).toContain('MAIN-12 Answer a review in one form')
   })
 
-  it('waits and fails through the shared state panel', async () => {
-    const loading = mount(AnalyticsView, {
-      props: { state: uiLoading<never>() },
-      global: { plugins: [i18n()] },
-    })
-    expect(loading.find('[aria-busy="true"]').exists()).toBe(true)
+  it('writes a change of the period into its address and reads it again from there', async () => {
+    const reads = stubAnalyticsReads(aWeek)
+    const page = await mountAnalytics()
+    await radio(page, 'Past 4 weeks')?.trigger('click')
+    const written = page.emitted<[Record<string, string>]>('state')?.at(-1)?.[0]
+    expect(written).toEqual({ period: 'weeks4' })
+    await page.setProps({ routeState: written })
+    await flushPromises()
+    const from = reads.grouped('work_item').at(-1)?.get('from') ?? ''
+    const back = Date.now() - new Date(`${from}T00:00`).getTime()
+    expect(back).toBeGreaterThan(27 * DAY)
+    expect(back).toBeLessThan(28 * DAY)
+  })
 
-    const failed = mount(AnalyticsView, {
-      props: { state: uiError<never>('The usage read failed.') },
-      global: { plugins: [i18n()] },
-    })
-    expect(failed.get('[role="alert"]').text()).toContain('The usage read failed.')
-    await failed.get('.platform-state-retry').trigger('click')
-    expect(failed.emitted('retry')).toHaveLength(1)
+  it("reads a project's figures alone at its scope, and offers no project filter there", async () => {
+    const reads = stubAnalyticsReads(aWeek)
+    const page = await mountAnalytics({ projectId: 'sample' })
+    expect(reads.asked[0]?.get('project')).toBe('sample')
+    expect(page.find('[data-dimension="project"]').exists()).toBe(false)
+    expect(page.find('[data-dimension="work_item"]').exists()).toBe(true)
+  })
+
+  it('waits for the read through the shared state panel', async () => {
+    stubAnalyticsReads(() => 'hold')
+    const page = await mountAnalytics()
+    expect(page.find('[aria-busy="true"]').exists()).toBe(true)
+  })
+
+  it('says a failed read failed, and asks again on retry', async () => {
+    const reads = stubAnalyticsReads(() => ({ status: 500 }))
+    const page = await mountAnalytics()
+    expect(page.get('[role="alert"]').text()).toContain('could not be read')
+    await page.get('.platform-state-retry').trigger('click')
+    await flushPromises()
+    expect(reads.asked).toHaveLength(2)
+  })
+
+  it('says a period that spent nothing spent nothing, and keeps its controls', async () => {
+    stubAnalyticsReads(nothingSpent)
+    const page = await mountAnalytics()
+    expect(page.get('[role="status"]').text()).toContain('Nothing was spent in this period')
+    expect(radio(page, 'This week')).toBeDefined()
+  })
+
+  it('says the same in Russian', async () => {
+    stubAnalyticsReads(nothingSpent)
+    const page = await mountAnalytics({}, 'ru')
+    expect(page.text()).toContain('За этот период ничего не потрачено')
   })
 })
