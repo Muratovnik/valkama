@@ -20,7 +20,9 @@ give the same rows, whatever chunks they took.
 
 Tokens: a request is written as many records, and each holds its usage so far, so what a
 record adds is its difference from the previous one, and the sum is what the last one
-says. A request seen before and no longer open is a replay and adds nothing.
+says, for each part of it apart (`Part.key`: the executor's, and each advisor's even when
+it runs the executor's model). A request seen before and no longer open is a replay and
+adds nothing.
 """
 
 from __future__ import annotations
@@ -217,11 +219,11 @@ class Ledger:
                 )
             else:
                 before = known
-            self.requests[key] = {part.model: [part.tokens, part.cost] for part in step.parts}
+            self.requests[key] = {part.key: [part.tokens, part.cost] for part in step.parts}
             for stale in list(self.requests)[:-_OPEN_REQUESTS]:
                 del self.requests[stale]
         for part in step.parts:
-            self._add(part, before.get(part.model), step.at)
+            self._add(part, before.get(part.key), step.at)
 
     def _add(self, part: Part, before: list | None, at: float) -> None:
         tokens = part.tokens

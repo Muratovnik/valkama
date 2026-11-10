@@ -81,6 +81,16 @@ class Part:
     #: A sub-inference on the side, which does not change the agent's own model.
     advisor: bool = False
 
+    @property
+    def key(self) -> str:
+        """Which part of its request this is, from one record to the next.
+
+        The executor's part is its model, as it always was; an advisor's is marked as one,
+        since an advisor may run the executor's own model and the two must not meet.
+        """
+
+        return f"advisor:{self.model}" if self.advisor else self.model
+
 
 @dataclass(slots=True)
 class Step:
@@ -157,7 +167,7 @@ def _claude_parts(model: str, usage: Mapping[str, object]) -> list[Part]:
     length is what a price tier reads. Its top level adds up the iterations, except that
     the split of its writes is only the first one's, so the writes are added up here.
     Advisor calls are one part per model: a request's parts are matched record to record by
-    model, and two calls to one adviser would read as one call that shrank.
+    `Part.key`, and two calls to one adviser would read as one call that shrank.
     """
 
     geo = usage.get("inference_geo")

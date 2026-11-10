@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import unittest
 
+from server.telemetry import liveness
+from server.telemetry.usage_ledger import TOKEN_COLUMNS, Ledger
+from server.telemetry.usage_steps import REPLY, Part, Step
 from tests.usage_fixtures import HOUR, Case, usage
+
+
+def _nothing(_at: float) -> tuple[str | None, str | None]:
+    return None, None
 
 
 class TokenTests(Case):
@@ -227,6 +234,70 @@ class TokenTests(Case):
         self.assertEqual(3000, sum(row["input_tokens"] for row in rows))
         self.assertEqual(30, sum(row["output_tokens"] for row in rows))
         self.assertTrue(all(row["input_tokens"] >= 0 for row in self.segments()))
+
+    def test_an_advisor_of_the_executors_model_counts_once_over_many_records(self) -> None:
+        # A request written as nine records with the same usage, its advisor call run by
+        # the executor's own model or by another one: each part counts once.
+        for adviser in ("claude-opus-5-5", "claude-fable-5-1"):
+            with self.subTest(adviser=adviser):
+                run = self.session(f"advised-{adviser}")
+                self.ticks((0, HOUR))
+                run.prompt(0)
+                spent = usage(input_tokens=4, read=447_974, write_5m=10_419, output=2504)
+                spent["iterations"] = [
+                    {
+                        "type": "message",
+                        "input_tokens": 4,
+                        "cache_read_input_tokens": 447_974,
+                        "cache_creation_input_tokens": 10_419,
+                        "output_tokens": 2504,
+                    },
+                    {
+                        "type": "advisor_message",
+                        "model": adviser,
+                        "input_tokens": 208_923,
+                        "output_tokens": 16_586,
+                    },
+                ]
+                for record in range(9):
+                    run.reply(1 + record, request=f"m-{adviser}", stop="end_turn", spent=spent)
+                self.read()
+                rows = self.segments(run.session)
+                self.assertEqual(4 + 208_923, self.tokens("input_tokens", run.session))
+                self.assertEqual(2504 + 16_586, self.tokens("output_tokens", run.session))
+                self.assertEqual(447_974, self.tokens("cached_read_tokens", run.session))
+                self.assertEqual(10_419, self.tokens("cache_write_5m_tokens", run.session))
+                cells = [
+                    row[column]
+                    for row in rows
+                    for column in (*TOKEN_COLUMNS.values(), "estimated_api_cost_usd")
+                    if row[column] is not None
+                ]
+                self.assertTrue(all(cell >= 0 for cell in cells), cells)
+
+    def test_a_request_held_open_by_a_former_reader_goes_on(self) -> None:
+        # A reader before the advisor had a part of its own kept a request's parts by model
+        # alone. Its state is read on: the executor goes on from what it held, and the
+        # advisor it cannot tell apart counts in full.
+        model = "claude-opus-5-5"
+        former = {"requests": {"m1": {model: [{"input": 4, "output": 100}, None]}}}
+        ledger = Ledger([], former, liveness.Coverage([]), frozenset().__contains__, _nothing)
+        ledger.count(
+            Step(
+                1.0,
+                REPLY,
+                request="m1",
+                parts=[
+                    Part(model, {"input": 4, "output": 150}, None),
+                    Part(model, {"input": 200, "output": 20}, None, advisor=True),
+                ],
+            )
+        )
+        spent: dict[str, int] = {}
+        for row in ledger.rows:
+            for kind, count in row.tokens.items():
+                spent[kind] = spent.get(kind, 0) + count
+        self.assertEqual({"input": 200, "output": 70}, spent)
 
     def test_a_change_of_model_starts_a_new_row(self) -> None:
         run = self.session()
