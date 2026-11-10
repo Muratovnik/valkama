@@ -904,7 +904,7 @@ a store in which nothing changed gives the same frame. Attached stores are not r
       "parent": "MAIN-4", "state": "working", "agents": 2, "long": false, "asks": false,
       "since": "2026-11-04T10:08:12Z", "quiet_since": null,
       "executor": {"session": "6f1c2a8e-0000-4000-8000-000000000002", "agent": null,
-                   "opened_in": "vscode", "opened_host": "", "family": "claude",
+                   "opened_in": "ide", "opened_host": "vscode", "family": "claude",
                    "state": "live"},
       "pinned": false, "state_name": "Dev", "is_terminal": false,
       "updated_at": "2026-11-04T10:15:00Z"},
@@ -933,7 +933,7 @@ a store in which nothing changed gives the same frame. Attached stores are not r
       "folder": "example-project", "state": "working", "long": false, "asks": false,
       "agents": 1, "since": "2026-11-04T10:02:40Z",
       "executor": {"session": "6f1c2a8e-0000-4000-8000-000000000001", "agent": null,
-                   "opened_in": "vscode", "opened_host": "", "family": "claude",
+                   "opened_in": "ide", "opened_host": "vscode", "family": "claude",
                    "state": "live"}}]}],
  "elsewhere": []}
 ```
