@@ -107,6 +107,89 @@ test('what cuts no words a reader sees, or no words at all, passes', () => {
   )
 })
 
+test('a copy split over rules is still a copy', () => {
+  // Two rules for one selector are one rule: its one line, and the clip written further down.
+  assert.match(
+    scan('future/Name.vue', '.name { white-space: nowrap; } .name { overflow: hidden; }').join(
+      '\n',
+    ),
+    new RegExp(`\\.name: ${CLIPPED}`, 'u'),
+  )
+  // An ellipsis is refused wherever the one line comes from.
+  assert.match(
+    scan(
+      'future/Name.vue',
+      '.row { white-space: nowrap; } .row .name { text-overflow: ellipsis; }',
+    ).join('\n'),
+    new RegExp(`\\.row \\.name: ${ELLIPSIS}`, 'u'),
+  )
+  // Rules for different selectors, or under a condition, are not merged.
+  assert.deepEqual(
+    scan('future/Fine.vue', '.row { white-space: nowrap; } .box { overflow: hidden; }'),
+    [],
+  )
+})
+
+/** A component whose template is given, with a stylesheet of its own. */
+const component = (template: string, css: string, register?: ReadonlyMap<string, string>) =>
+  scanOneLineCopies(
+    [
+      {
+        file: 'future/Row.vue',
+        source: `<template>${template}</template><style scoped>${css}</style>`,
+      },
+    ],
+    register ?? new Map(),
+  )
+
+/** What the guard says of a trimmed word its component holds to one line. */
+const finding = (classes: string, holder: string) =>
+  `future/Row.vue <span> class="${classes}": is a trimmed word, which ends in an ellipsis, held to one line by .${holder}; write the shared one-line class (${ONE_LINE_OWNER}) on the element, or trimmed-word one-line on a trimmed word, with a clipped hint of its whole words, or register why it cannot`
+
+test('a trimmed word that its component holds to one line is a one-line label without its class', () => {
+  // Held by what holds it, as the state's word was by the state.
+  assert.deepEqual(
+    component(
+      '<p class="row"><b v-if="a"><span class="trimmed-word">{{ a }}</span></b></p>',
+      '.row { display: flex; white-space: nowrap; }',
+    ),
+    [finding('trimmed-word', 'row')],
+  )
+  // Held itself, by a nested rule or one of a list.
+  assert.deepEqual(
+    component(
+      '<span class="label trimmed-word">{{ a }}</span>',
+      '.box { & .label, .other { white-space: nowrap; } }',
+    ),
+    [finding('label trimmed-word', 'label')],
+  )
+  // With the class it is the shared label; a rule that hides its element whole holds no line.
+  for (const [template, css] of [
+    [
+      '<p class="row"><span class="trimmed-word one-line">{{ a }}</span></p>',
+      '.row { white-space: nowrap; }',
+    ],
+    [
+      '<p class="row"><span class="trimmed-word">{{ a }}</span></p>',
+      '.row { white-space: nowrap; overflow: hidden; clip-path: inset(50%); }',
+    ],
+    [
+      '<p class="row"><span class="trimmed-word">{{ a }}</span></p>',
+      '.other { white-space: nowrap; }',
+    ],
+  ])
+    assert.deepEqual(component(template, css), [], template)
+  const register = new Map([['future/Row.vue <span> class="trimmed-word"', 'never cut']])
+  assert.deepEqual(
+    component(
+      '<p class="row"><span class="trimmed-word">{{ a }}</span></p>',
+      '.row { white-space: nowrap; }',
+      register,
+    ),
+    [],
+  )
+})
+
 test('the owner writes the two rules, and a third in it is a copy too', () => {
   assert.deepEqual(scan(ONE_LINE_OWNER, OWNER), [])
   const third = `${OWNER}\n.label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }`
