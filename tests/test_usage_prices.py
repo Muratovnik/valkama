@@ -175,6 +175,19 @@ class UnknownTests(unittest.TestCase):
             20.0, request_cost("claude-opus-5-5", {"output": 10**6, "reasoning": 10**6})
         )
 
+    def test_the_listings_carry_the_long_prices_and_where_they_start(self) -> None:
+        listed = usage_prices.listings()
+        self.assertEqual(
+            (100_000, 0.50),
+            (listed["claude-haiku-5-5"].long_prompt, listed["claude-haiku-5-5"].long.input),
+        )
+        self.assertEqual(
+            (272_000, 4), (listed["gpt-6.1-sol"].long_prompt, listed["gpt-6.1-sol"].long.input)
+        )
+        self.assertIsNone(listed["gpt-5.3-codex"].long)
+        self.assertEqual("openai", listed["gpt-6.1-sol"].vendor)
+        self.assertEqual("anthropic", listed["claude-fable-5-2"].vendor)
+
     def test_each_listing_holds_the_prices_a_request_pays(self) -> None:
         # The release check compares the listings with another list, so they must be
         # what requests are priced at, the long prices past their length included.
