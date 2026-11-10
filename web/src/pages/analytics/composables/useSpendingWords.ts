@@ -7,7 +7,7 @@
 import { useI18n } from 'vue-i18n'
 
 import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
-import type { Change, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
@@ -97,5 +97,38 @@ export function useSpendingWords() {
     return categoryLabel(name, value as UsageGroupValue & { id: string })
   }
 
-  return { change, days, dimension, figure, measure, noneLabel, unpriced, valueLabel }
+  /** A line of a breakdown by its name: a value, or the folded tail with how many it holds. */
+  const lineLabel = (name: UsageDimension, line: SpendingLine) =>
+    line.value
+      ? valueLabel(name, line.value)
+      : t('analytics.values.other', { count: line.folded }, line.folded)
+
+  /**
+   * A line's figure in a measure; a cost says beside it the tokens it leaves out, so a line
+   * with no price reads as that and never as a zero.
+   */
+  function lineFigure(name: Measure, spent: Spent) {
+    const left = name === 'cost' ? unpriced(spent) : ''
+    return left && spent.cost === null
+      ? left
+      : [figure(name, spent), left].filter(Boolean).join(', ')
+  }
+
+  /** What a chart of a measure by a dimension is called: «Agent time by task». */
+  const chartTitle = (name: Measure, by: UsageDimension) =>
+    t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
+
+  return {
+    change,
+    chartTitle,
+    days,
+    dimension,
+    figure,
+    lineFigure,
+    lineLabel,
+    measure,
+    noneLabel,
+    unpriced,
+    valueLabel,
+  }
 }

@@ -54,7 +54,13 @@ function add(left: UsageMeasures, right: UsageMeasures): UsageMeasures {
   })
 }
 
+export const value = (id: string): UsageGroupValue => ({ id, unknown: false })
 const unknownValue: UsageGroupValue = { id: null, unknown: true }
+
+/** Work on no task: no id, and known to be on none. */
+export const noTask: UsageGroupValue = { id: null, unknown: false, reference: null, title: null }
+/** Work the store cannot place: no id, and unknown. */
+export const unknownTask: UsageGroupValue = { ...noTask, unknown: true }
 
 export const task = (number: number, title: string): UsageGroupValue => ({
   id: `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`,
