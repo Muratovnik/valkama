@@ -16,9 +16,8 @@
  * be brought up on a screen nothing hovers.
  */
 
-import { uncommented } from './comments.mjs'
+import { rulesOf, stylesOf } from './css-rules.mjs'
 import { conditionsOf } from './finger.mjs'
-import { styleBlocks } from './sfc.mjs'
 
 export const REVEAL_OWNER = 'shared/ui/reveal.css'
 
@@ -37,42 +36,6 @@ const INTO_SIGHT =
 
 /** A declaration that takes something out of sight. */
 const OUT_OF_SIGHT = /(?:^|[;{])\s*(?:opacity\s*:\s*0(?:\.0*)?\s*(?:;|$)|visibility\s*:\s*hidden)/im
-
-/** The stylesheet text of a source: a CSS file whole, a component's style blocks. */
-function stylesOf(file, source) {
-  if (file.endsWith('.css')) return uncommented(file, source)
-  if (!file.endsWith('.vue')) return ''
-  return styleBlocks(source)
-    .map((block) => uncommented('style.css', block.content))
-    .join('\n')
-}
-
-/**
- * Every rule at any depth, with the selectors that enclose it and the declarations it makes
- * itself. Nested rules are taken out of a rule's own text, so a parent is not credited with what
- * its child declares.
- */
-function* rulesOf(css) {
-  const open = []
-  let mark = 0
-  for (let index = 0; index < css.length; index += 1) {
-    const character = css[index]
-    if (character === '{') {
-      const selector = css.slice(mark, index).split(/[;}]/).pop().trim()
-      open.push({ selector, own: '' })
-      mark = index + 1
-    } else if (character === '}') {
-      const rule = open.pop()
-      if (!rule) continue
-      rule.own += css.slice(mark, index)
-      yield { chain: [...open.map((each) => each.selector), rule.selector], own: rule.own }
-      mark = index + 1
-    } else if (character === ';' && open.length) {
-      open.at(-1).own += css.slice(mark, index + 1)
-      mark = index + 1
-    }
-  }
-}
 
 /** The query lists of every `@media` rule in a stylesheet. */
 const mediaLists = (css) => [...css.matchAll(/@media\b([^{;]*)\{/gi)].map(([, list]) => list)

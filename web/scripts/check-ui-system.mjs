@@ -24,6 +24,7 @@ import {
   scanNativeTitles,
   scanTooltipKinds,
 } from './ui-system/native-titles.mjs'
+import { ONE_LINE_COPIES, scanOneLineCopies } from './ui-system/one-line.mjs'
 import { scanRevealCopies } from './ui-system/reveal.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
@@ -52,6 +53,7 @@ export function scanUiTree(root = defaultSourceRoot) {
   const hints = product ? NATIVE_TITLES : new Map()
   const details = product ? DETAIL_TOOLTIPS : new Map()
   const stateReads = product ? STATE_NAME_READS : new Map()
+  const oneLines = product ? ONE_LINE_COPIES : new Map()
   return [
     ...scanUiSources(sources),
     ...scanRevealCopies(sources),
@@ -62,6 +64,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanMeaningFills(sources, fills),
     ...scanHiddenRules(sources),
     ...scanTrimmedWords(sources),
+    ...scanOneLineCopies(sources, oneLines),
     ...scanTitleBreaks(sources, titles),
     ...scanNativeTitles(sources, hints),
     ...scanTooltipKinds(sources, details),
