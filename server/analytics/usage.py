@@ -29,6 +29,7 @@ one offset; a caller that minds asks for it in two.
 | `project` | the project of the item's planning space; with no item, the project whose root holds the session's working directory | the space, the session and the projects registry |
 | `work_item` | the item a stretch is counted to, `null` for work on no item | the segment |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `planning.executors` |
+| `role` | who spent it: `main`, a session's own run; `subagent`; `advisor`, a segment an adviser spent, in either | the run and the segment |
 | `launch_class` | how a subagent's run was launched, `null` for a session's own run | the run |
 | `model`, `effort`, `environment` | as the segment holds them | the segment |
 
@@ -57,11 +58,24 @@ ACCOUNT = "account"
 PROJECT = "project"
 WORK_ITEM = "work_item"
 EXECUTOR = "executor"
+ROLE = "role"
 LAUNCH_CLASS = "launch_class"
 MODEL = "model"
 EFFORT = "effort"
 ENVIRONMENT = "environment"
-DIMENSIONS = (ACCOUNT, PROJECT, WORK_ITEM, EXECUTOR, LAUNCH_CLASS, MODEL, EFFORT, ENVIRONMENT)
+DIMENSIONS = (
+    ACCOUNT,
+    PROJECT,
+    WORK_ITEM,
+    EXECUTOR,
+    ROLE,
+    LAUNCH_CLASS,
+    MODEL,
+    EFFORT,
+    ENVIRONMENT,
+)
+#: Who spent a stretch: a session's own run, a subagent's, or an adviser in either.
+ROLES = ("main", "subagent", "advisor")
 
 #: The length of each step, in seconds. A day is always 24 hours at one offset.
 STEPS = {"hour": 3600, "day": 86400}
@@ -94,8 +108,8 @@ _PRICED = tuple(
 _STARTED, _ENDED, _SECONDS, _QUALITY, _COST, _MODEL = range(6)
 _FIRST_TOKEN = 6
 _ORGANIZATION = _FIRST_TOKEN + _TOKENS
-_ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_PROJECT, _AGENT = range(
-    _ORGANIZATION + 1, _ORGANIZATION + 8
+_ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_PROJECT, _AGENT, _ADVISOR = range(
+    _ORGANIZATION + 1, _ORGANIZATION + 9
 )
 #: The token columns stand in `TOKEN_KINDS` order.
 SEGMENTS = (
@@ -103,7 +117,7 @@ SEGMENTS = (
     " s.input_tokens, s.cached_read_tokens, s.cache_write_5m_tokens, s.cache_write_1h_tokens,"
     " s.output_tokens, s.reasoning_tokens,"
     " s.organization, s.work_item_id, s.session_id, r.launch_class, s.effort, s.environment,"
-    " p.project_id, s.agent_id"
+    " p.project_id, s.agent_id, s.advisor"
     " FROM usage_segments s"
     " LEFT JOIN usage_runs r ON r.id = s.run_id"
     " LEFT JOIN work_items i ON i.work_item_id = s.work_item_id"
@@ -183,7 +197,10 @@ def _dimensions(names: Iterable[str], parameter: str) -> list[str]:
     found = list(names)
     for name in found:
         if name not in DIMENSIONS:
-            raise UsageQueryError(f"{parameter} names no dimension called {name}")
+            raise UsageQueryError(
+                f"{parameter} names no dimension called {name}; the dimensions are "
+                + ", ".join(DIMENSIONS)
+            )
     if len(set(found)) != len(found):
         raise UsageQueryError(f"{parameter} names a dimension twice")
     return found
@@ -195,6 +212,8 @@ def _admitted(values: Sequence[str], dimension: str) -> set[Value]:
     for value in values:
         if not value or len(value) > MAX_VALUE_LENGTH:
             raise UsageQueryError(f"{dimension} takes values of 1 to {MAX_VALUE_LENGTH} characters")
+        if dimension == ROLE and value not in ROLES:
+            raise UsageQueryError(f"role is one of {', '.join(ROLES)}, not {value}")
     return set(values)
 
 
@@ -446,6 +465,8 @@ def _readers(
             readers[dimension] = operator.itemgetter(_COLUMN_OF[dimension])
     if LAUNCH_CLASS in needed:
         readers[LAUNCH_CLASS] = _launch_class
+    if ROLE in needed:
+        readers[ROLE] = _role
     if PROJECT in needed:
         held = _session_projects(
             conn, (row[_SESSION] for row in rows if row[_ITEM] is None), projects
@@ -468,6 +489,14 @@ def _launch_class(row: Sequence) -> Value:
         return None
     found = row[_LAUNCH]
     return UNKNOWN if found is None else found
+
+
+def _role(row: Sequence) -> Value:
+    """Who spent the stretch. An adviser's segment is the adviser's in whichever run it is."""
+
+    if row[_ADVISOR]:
+        return "advisor"
+    return "main" if row[_AGENT] == "" else "subagent"
 
 
 # -- the answer ----------------------------------------------------------------

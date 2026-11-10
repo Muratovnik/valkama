@@ -262,6 +262,50 @@ class GroupTests(UsageStore):
         self.assertEqual(180.0, seconds(launch_class="interactive", none="launch_class"))
         self.assertEqual(120.0, seconds(launch_class="interactive"))
 
+    def test_a_role_says_who_spent_it_and_an_adviser_keeps_its_runs_launch_class(
+        self,
+    ) -> None:
+        self.session("s-1")
+        self.segment("s-1", 0, 60)
+        self.segment("s-1", 60, 90, advisor=True)
+        self.segment("s-1", 0, 120, agent="worker", launch_class="interactive")
+        self.segment("s-1", 120, 135, agent="worker", launch_class="interactive", advisor=True)
+        period = {"from": day(0), "to": day(1)}
+        read = self.read(**period, group_by="role")
+        self.assertEqual(
+            [("subagent", 120.0), ("main", 60.0), ("advisor", 45.0)],
+            [(row["group"]["role"]["id"], row["agent_seconds"]) for row in read["rows"]],
+        )
+        self.assertEqual({False}, {row["group"]["role"]["unknown"] for row in read["rows"]})
+        self.assertEqual(225.0, read["total"]["agent_seconds"])
+        paired = self.read(**period, group_by="role,launch_class")
+        self.assertEqual(
+            [
+                ("subagent", "interactive", False, 120.0),
+                ("main", None, False, 60.0),
+                ("advisor", None, False, 30.0),
+                ("advisor", "interactive", False, 15.0),
+            ],
+            [
+                (
+                    row["group"]["role"]["id"],
+                    row["group"]["launch_class"]["id"],
+                    row["group"]["launch_class"]["unknown"],
+                    row["agent_seconds"],
+                )
+                for row in paired["rows"]
+            ],
+        )
+
+        def seconds(**filters: str) -> float:
+            return self.read(**period, **filters)["total"]["agent_seconds"]
+
+        self.assertEqual(45.0, seconds(role="advisor"))
+        self.assertEqual(180.0, seconds(role="main,subagent"))
+        self.assertEqual(15.0, seconds(role="advisor", launch_class="interactive"))
+        # A role is never missing.
+        self.assertEqual(0.0, seconds(none="role"))
+
     def test_the_series_is_broken_down_by_the_first_grouping(self) -> None:
         self.session("s-1")
         self.segment("s-1", 0, 60, model="m-1", effort="high")
@@ -342,6 +386,8 @@ class RefusalTests(UsageStore):
             {**good, "group_by": "model,effort,account"},
             {**good, "group_by": "model,model"},
             {**good, "group_by": "colour"},
+            {**good, "role": "boss"},
+            {**good, "group_by": "role,launch_class,model"},
             {**good, "group_by": "model,"},
             {**good, "none": "colour"},
             {**good, "model": "m-1,,m-2"},
@@ -363,6 +409,13 @@ class RefusalTests(UsageStore):
                 self.assertEqual({"error"}, set(body))
                 self.assertEqual("invalid_request", body["error"]["code"])
                 self.assertTrue(body["error"]["message"])
+
+    def test_a_refusal_for_a_dimension_names_all_nine(self) -> None:
+        _, body = self.answer(**{"from": day(0), "to": day(1), "group_by": "colour"})
+        message = body["error"]["message"]
+        self.assertEqual(9, len(usage.DIMENSIONS))
+        for name in usage.DIMENSIONS:
+            self.assertIn(name, message)
 
     def test_a_repeated_parameter_is_refused(self) -> None:
         from server.analytics import api

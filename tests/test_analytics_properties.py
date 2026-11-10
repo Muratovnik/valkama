@@ -56,6 +56,7 @@ STRETCHES = st.lists(
             "length": st.sampled_from([0, 1, 7, 59_999, 3_600_000, 5_400_001, 30 * 3_600_000]),
             "timed": st.booleans(),
             "on_item": st.booleans(),
+            "advisor": st.booleans(),
             "model": st.sampled_from([None, "claude-opus-5-5", "claude-unknown-9"]),
             "tokens": st.tuples(
                 *(st.one_of(st.none(), st.integers(min_value=0, max_value=999)) for _ in KINDS)
@@ -212,6 +213,7 @@ class ReferenceTests(UsageStore):
                 effort=stretch["effort"],
                 environment=stretch["environment"],
                 launch_class=LAUNCH[stretch["agent"]],
+                advisor=stretch["advisor"],
             )
 
     def value(self, stretch: Mapping, dimension: str) -> tuple[str | None, bool]:
@@ -228,6 +230,11 @@ class ReferenceTests(UsageStore):
             # A session's own run is launched by no one; a subagent's run may not say how.
             launch = LAUNCH[stretch["agent"]]
             return launch, launch is None and stretch["agent"] != ""
+        if dimension == "role":
+            # An adviser's segment is the adviser's in whichever run it is.
+            if stretch["advisor"]:
+                return "advisor", False
+            return ("main" if stretch["agent"] == "" else "subagent"), False
         found = {
             "account": stretch["organization"],
             "executor": stretch["session"],

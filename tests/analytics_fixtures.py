@@ -128,14 +128,15 @@ class UsageStore(unittest.TestCase):
         effort: str | None = None,
         environment: str | None = None,
         launch_class: str | None = None,
+        advisor: bool = False,
     ) -> None:
         run = self.add_run(session, agent, launch_class)
         self.conn.execute(
             "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at, ended_at,"
             " seconds, work_item_id, input_tokens, cached_read_tokens, cache_write_5m_tokens,"
             " cache_write_1h_tokens, output_tokens, reasoning_tokens, estimated_api_cost_usd,"
-            " price_book, quality, organization, effort, environment)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " price_book, quality, organization, effort, environment, advisor)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run,
                 session,
@@ -152,6 +153,7 @@ class UsageStore(unittest.TestCase):
                 organization,
                 effort,
                 environment,
+                int(advisor),
             ),
         )
         self.conn.execute(
