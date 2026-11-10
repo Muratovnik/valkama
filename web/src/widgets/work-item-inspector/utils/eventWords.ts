@@ -11,6 +11,9 @@
  * the discussion anyway, so this costs no read. One the card has not read — older than the
  * newest the read brings, or a read that failed — says nothing beyond the row's title.
  */
+import { mentionHistoryWords } from '@/widgets/work-item-inspector/utils/mentionLines.ts'
+import type { MentionRecord } from '@/widgets/work-item-inspector/utils/mentionLines.ts'
+
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
@@ -80,13 +83,15 @@ function moveWords(detail: string, nameState: StateNamer) {
 interface EventContext {
   comments: WorkItem['comments']
   t: Translate
+  /** The records of texts naming this item that the card's read brought. */
+  mentions?: readonly MentionRecord[]
   /** Names a transition's state; with none, the line stays as recorded. */
   nameState?: StateNamer
   questions?: readonly InputRequestEntry[]
 }
 
 export function eventWords(event: RecordedEvent, context: EventContext) {
-  const { comments, t, questions = [], nameState = () => null } = context
+  const { comments, t, questions = [], mentions = [], nameState = () => null } = context
   switch (event.action) {
     case 'transitioned': {
       return moveWords(event.detail, nameState)
@@ -108,9 +113,10 @@ export function eventWords(event: RecordedEvent, context: EventContext) {
       return questionWords(event.detail, questions, t)
     }
     // The detail is the id of a comment on another item, or `description:` and that item's
-    // id: a bare number or id a reader cannot follow.
+    // id: a bare number or id a reader cannot follow. The record of that comment names the
+    // item, where the card's read brought it.
     case 'mentioned': {
-      return ''
+      return mentionHistoryWords(event.detail, mentions, t)
     }
     default: {
       return event.detail

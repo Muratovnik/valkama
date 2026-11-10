@@ -67,3 +67,19 @@ export function olderMentions(item: Pick<WorkItem, 'mentions' | 'mentions_total'
 export function mentionWhere(line: Pick<MentionLine, 'place' | 'from'>, t: Translate): string {
   return t(`mentions.line.${line.place}`, { from: line.from ?? '' })
 }
+
+/**
+ * The words of a `mentioned` history row whose detail is a comment's id: where it was
+ * said and from which item, when a loaded record has that comment. A mention in a
+ * description is recorded by its item's id, which no record carries, and one older than
+ * the records the read brought is not among them; both say nothing beyond the row's title.
+ */
+export function mentionHistoryWords(
+  detail: string,
+  records: readonly MentionRecord[],
+  t: Translate,
+): string {
+  const id = /^\d+$/u.test(detail.trim()) ? Number(detail.trim()) : null
+  const record = id === null ? undefined : records.find((entry) => entry.comment_id === id)
+  return record ? t(`mentions.history.${placeOf(record)}`, { from: record.from ?? '' }) : ''
+}

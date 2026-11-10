@@ -1676,7 +1676,10 @@ the item's link, as a number in any text is, and opens that item, since no addre
 at a comment. Under the head the words' first line stands in the tertiary ink after the rule a
 quote has, on one line with the whole of it in its hint. A record whose item is deleted reads
 «Упомянута в удалённой задаче», with no link and no words. When the item has more records than
-the read brings, one line under the list says how many older ones are not shown.
+the read brings, one line under the list says how many older ones are not shown. The history's
+«Упомянуто в другой задаче» row names the same item, «В комментарии MAIN-12», while the record of
+that comment is among those the read brings; a mention in a description, recorded by its item's
+id, keeps the bare title.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
 task it is and the way there. There each request is a block of questions under a head, the
 project, the task's number, which is the way to the task, and the title, that stays at the top of

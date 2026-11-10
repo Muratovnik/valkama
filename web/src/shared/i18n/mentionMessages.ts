@@ -17,6 +17,13 @@ export const mentionMessages = {
         description: 'Mentioned in the description of {from}',
         deleted: 'Mentioned in a deleted work item',
       },
+      history: {
+        comment: 'In a comment on {from}',
+        report: 'In a work report on {from}',
+        summary: 'In the task outcome of {from}',
+        description: 'In the description of {from}',
+        deleted: 'In a work item since deleted',
+      },
       older: '{n} older mention not shown | {n} older mentions not shown',
     },
   },
@@ -31,6 +38,13 @@ export const mentionMessages = {
         summary: 'Упомянута в итоге задачи {from}',
         description: 'Упомянута в описании {from}',
         deleted: 'Упомянута в удалённой задаче',
+      },
+      history: {
+        comment: 'В комментарии {from}',
+        report: 'В отчёте о работе {from}',
+        summary: 'В итоге задачи {from}',
+        description: 'В описании {from}',
+        deleted: 'В задаче, которой больше нет',
       },
       older:
         'Ещё {n} более раннее упоминание не показано | Ещё {n} более ранних упоминания не показаны | Ещё {n} более ранних упоминаний не показаны',
