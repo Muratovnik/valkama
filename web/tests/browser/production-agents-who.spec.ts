@@ -162,9 +162,19 @@ for (const width of [1440, 1024, 390]) {
     // Where the drawer gives the figures columns, each lines up down the list.
     const { inColumns, spread } = columnSpread(rows)
     expect(spread).toBeLessThanOrEqual(1)
+    // The way to Analytics starts at the lists' edge, on one line, inside the tab.
+    const link = section.locator('.work-usage-analytics')
+    const { box, size } = await link.evaluate((element) => ({
+      box: element.getBoundingClientRect().toJSON() as Box,
+      size: Number.parseFloat(getComputedStyle(element).fontSize),
+    }))
+    expect(Math.abs(box.left - rows[0].list.left)).toBeLessThanOrEqual(1)
+    expect(box.right).toBeLessThanOrEqual(rows[0].list.right + 0.5)
+    // A second line would make it at least two of its letters tall.
+    expect(box.bottom - box.top).toBeLessThan(2 * size)
     info.annotations.push({
       type: 'layout',
-      description: `R3 ${width}px (${inColumns}): list ${brief(rows[0].list)}, names ${rows.map((row) => brief(row.name)).join(' ')}, figure ends ${rows[0].facts.map((fact) => tenth(fact.right)).join(' ')}`,
+      description: `R3 ${width}px (${inColumns}): list ${brief(rows[0].list)}, names ${rows.map((row) => brief(row.name)).join(' ')}, figure ends ${rows[0].facts.map((fact) => tenth(fact.right)).join(' ')}; R4 link ${brief(box)} h ${tenth(box.bottom - box.top)}`,
     })
     console.log(info.annotations.at(-1)?.description)
     await expectNoSilentClipping(page, `who did the work at ${width}px`)
