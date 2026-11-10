@@ -25,6 +25,7 @@ import sqlite3
 from typing import NamedTuple
 
 from . import store_adoption, store_backups, store_lock, store_rename
+from .analytics import store as analytics_store
 from .executions import store as execution_store
 from .ops import configuration
 from .planning import images as planning_images
@@ -195,6 +196,9 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     # How much was worked on what, added with schema 11. Additive and empty in an
     # upgraded store, so this script is the whole of its migration.
     + usage_store.SCHEMA
+    # How often each analytics surface was opened, added with schema 15. Additive
+    # and empty in an upgraded store, so this script is the whole of its migration.
+    + analytics_store.SCHEMA
 )
 
 
@@ -269,7 +273,8 @@ MIGRATIONS = {
 # its own run never counted, add its tokens again, and lose its own row to the key
 # without a word (`INSERT OR IGNORE`). 15 also gives a usage run the
 # reading its rows came from (every run stale after the upgrade, so the reader reads it
-# again), and a segment the columns its later dimensions fill.
+# again), a segment the columns its later dimensions fill, and Analytics the counts of
+# how often each of its surfaces was opened (`analytics_surface_uses`, empty).
 STORE_SCHEMA_VERSION = 15
 
 
@@ -394,6 +399,7 @@ SCHEMA_TABLES = (
     *platform_core.SCHEMA_TABLES,
     "owner_alert_settings",
     *usage_store.SCHEMA_TABLES,
+    *analytics_store.SCHEMA_TABLES,
 )
 
 #: What a session row learned to say about itself when session identity

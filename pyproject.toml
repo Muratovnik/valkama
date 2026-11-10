@@ -247,6 +247,10 @@ source_modules = [
 forbidden_modules = [
   "server.analytics",
 ]
+# The store brings up every domain's tables, Analytics' own counts among them, from a
+# module that declares that table and imports nothing: whoever opens the store reaches
+# it that way, and reads nothing of Analytics through it.
+ignore_imports = ["server.store -> server.analytics.store"]
 
 [tool.mypy]
 python_version = "3.11"

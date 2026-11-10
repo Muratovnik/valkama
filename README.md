@@ -590,7 +590,9 @@ pasted into an item's text (`work_item_images`); the files themselves stand in
 an `images` folder beside the database, one per content hash. Its snapshot is
 labelled `preschema14`. Schema 15 counts each usage request once in the whole
 store and records which reading wrote each usage run, so that the background
-reader reads every older run again. Its snapshot is labelled `preschema15`, and
+reader reads every older run again, and it adds the counts of how often each
+Analytics surface was opened (`analytics_surface_uses`, empty until one is). Its
+snapshot is labelled `preschema15`, and
 beside it stands `<snapshot>.liveness`, a verified copy of the liveness file
 the store had then. Going back to a build at schema 14 is the restore described
 below with the `preschema15` snapshot, plus that copy put beside the store as

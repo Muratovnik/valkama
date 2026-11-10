@@ -1,12 +1,13 @@
-"""Schema 15: the usage columns, one row per request in the whole store, and the reading.
+"""Schema 15: the usage columns, one row per request, the reading, and the analytics counts.
 
 The source is a store built from the catalog the last schema-14 build created, holding
 planning rows and usage rows as that build wrote them, several requests counted in more
 than one run among them, and a liveness file. What this suite holds the migration to:
 every former value of every former column stays byte for byte, the new columns arrive
-empty and every run is stale, each request keeps exactly the row of the run the rule
-puts first, all of it under one recovery point `preschema15` with a verified copy of the
-liveness file beside it; a second open writes nothing, the recovery point brings back
+empty and every run is stale, the analytics counts arrive as an empty table, each
+request keeps exactly the row of the run the rule puts first, all of it under one
+recovery point `preschema15` with a verified copy of the liveness file beside it,
+which holds no counts; a second open writes nothing, the recovery point brings back
 the former store with its per-run key and the migration runs again, a fresh store has
 the same catalog directly, and a build that knows only 14 refuses the result. The new
 names and the rule's outcome are stated here rather than read from the code under test.
@@ -39,6 +40,8 @@ ADDED = {
     ],
     "usage_segments": ["organization", "environment", "effort", "advisor", "advisor_model"],
 }
+#: The table schema 15 adds, as Analytics declares it: a day, a kind and a count.
+COUNTS = "analytics_surface_uses"
 LABEL = "preschema15"
 #: The item `schema9.populate` holds.
 HELD = "11111111-1111-4111-8111-111111111111"
@@ -154,6 +157,8 @@ class SchemaFifteenTests(unittest.TestCase):
             [row[2] for row in conn.execute("PRAGMA index_info(usage_requests_run)")],
             "the claims of one run are read by the run",
         )
+        self.assertEqual(["day", "kind", "count"], columns[COUNTS])
+        self.assertEqual(0, conn.execute(f"SELECT COUNT(*) FROM {COUNTS}").fetchone()[0])
         self.assertEqual("ok", conn.execute("PRAGMA integrity_check").fetchone()[0])
 
     def test_a_store_at_14_reaches_15_keeping_every_former_value(self) -> None:
@@ -207,6 +212,7 @@ class SchemaFifteenTests(unittest.TestCase):
         backup = sqlite3.connect(f"file:{snapshot}?mode=ro", uri=True)
         self.addCleanup(backup.close)
         self.assertEqual(14, backup.execute("PRAGMA user_version").fetchone()[0])
+        self.assertNotIn(COUNTS, _columns(backup), "the store as it was, before the counts")
         self.assertEqual(self.before, _former_rows(backup, self.shape))
         self.assertEqual(self.former_requests, _requests(backup))
 
