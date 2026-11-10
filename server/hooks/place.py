@@ -102,6 +102,21 @@ class Place:
     host_session_id: str = ""
 
 
+#: Where a Codex thread was created, by the `originator` its rollout's first record names.
+_CODEX_ORIGINATORS = {
+    "Codex Desktop": Place("app", "codex-app"),
+    "codex_vscode": Place("ide", "vscode"),
+    "codex-tui": Place("terminal"),
+    "codex_cli_rs": Place("terminal"),
+}
+
+
+def codex_place(originator: object) -> Place:
+    """Where a Codex thread was created, from its rollout's `originator`; empty if unknown."""
+
+    return _CODEX_ORIGINATORS.get(originator, Place()) if isinstance(originator, str) else Place()
+
+
 def whitelisted(environ: Mapping[str, str]) -> dict[str, str]:
     """The named variables of an environment, empty when unset."""
 

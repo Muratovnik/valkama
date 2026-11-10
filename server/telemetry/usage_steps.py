@@ -39,7 +39,9 @@ A Claude transcript, as measured:
 A Codex rollout: every record has `timestamp` and `payload`. `task_started` and
 `task_complete` bound a turn, `token_usage_record` holds one response's usage under its
 `response_id`, and an older rollout has only `token_count` events, repeated when nothing
-changed. Input there includes the cache, so it is made non-overlapping here.
+changed. Input there includes the cache, so it is made non-overlapping here. Its first
+record, `session_meta`, names the account that created the thread (`creator_account_id`)
+and the client (`originator`); a `turn_context` opens each turn with its `effort`.
 
 What a record says about the conditions work runs under is a step's `settings`: only the
 names it speaks of, each a column of `usage_segments`, a value of None saying that the
@@ -477,9 +479,13 @@ def codex_step(row: Mapping[str, object], memo: dict) -> Step | None:
     if stamp is None:
         return None
     at = stamp.timestamp()
+    if kind == "session_meta":
+        surface = place.codex_place(payload.get("originator")).opened_in
+        account = _word(payload.get("creator_account_id"), _ACCOUNT_ID)
+        return Step(at, SETTING, settings={ORGANIZATION: account, ENVIRONMENT: surface or None})
     if kind == "turn_context":
         memo["model"] = payload.get("model") or memo.get("model")
-        return None
+        return Step(at, SETTING, settings={EFFORT: _word(payload.get("effort"), _EFFORT)})
     if kind == "event_msg":
         return _codex_event(at, payload, memo)
     if kind == "token_usage_record":

@@ -7,10 +7,10 @@ import unittest
 from tests.usage_fixtures import HOUR, Case, CodexRun, stamp
 
 
-class CodexTests(Case):
-    def rollout(self, thread: str = "sess-1", folder: str = "2030/03/04") -> CodexRun:
+class CodexCase(Case):
+    def rollout(self, thread: str = "sess-1", folder: str = "2030/03/04", **meta: str) -> CodexRun:
         path = self.root / "codex" / folder / f"rollout-{thread}.jsonl"
-        run = CodexRun(path, thread)
+        run = CodexRun(path, thread, **meta)
         self.conn.execute(
             "INSERT INTO sessions(id, client, transcript_path, status, started_at, last_seen)"
             " VALUES (?, 'codex', ?, 'active', ?, ?)",
@@ -19,6 +19,8 @@ class CodexTests(Case):
         self.conn.commit()
         return run
 
+
+class CodexTests(CodexCase):
     def test_a_turn_counts_and_the_idle_time_after_it_does_not(self) -> None:
         run = self.rollout()
         self.ticks((0, 2 * HOUR))
@@ -182,6 +184,61 @@ class CodexTests(Case):
         self.assertEqual(HOUR - 10, row["human_seconds"])
         self.assertEqual(HOUR - 10, row["subagent_seconds"])
         self.assertEqual(9 + 10 + 5, self.seconds())
+
+
+class CodexSettingsTests(CodexCase):
+    """What a rollout says its work ran under: the account and client of the thread, the
+    effort of each turn."""
+
+    def test_the_thread_names_its_account_and_client_and_each_turn_its_effort(self) -> None:
+        run = self.rollout(originator="Codex Desktop", creator_account_id="acct-0001")
+        self.ticks((0, 2 * HOUR))
+        run.settings(1, effort="high")
+        run.started(1)
+        run.call(10, "c1")
+        run.output(20, "c1")
+        run.usage_record(25, input_tokens=100, cached=0, output=5)
+        run.complete(30)
+        run.settings(HOUR, effort="low")
+        run.started(HOUR)
+        run.usage_record(HOUR + 10, input_tokens=100, cached=0, output=5)
+        run.complete(HOUR + 20)
+        self.read()
+        self.assertEqual(
+            [("acct-0001", "app", "high", 29.0), ("acct-0001", "app", "low", 20.0)],
+            [
+                (row["organization"], row["environment"], row["effort"], row["seconds"])
+                for row in self.segments()
+            ],
+        )
+        self.assertIsNone(self.run_row()["launch_class"])
+
+    def test_a_turn_context_in_a_running_turn_ends_the_row_at_its_record(self) -> None:
+        run = self.rollout(originator="codex_vscode")
+        self.ticks((0, HOUR))
+        run.settings(1, effort="medium")
+        run.started(1)
+        run.call(10, "c1")
+        run.output(20, "c1")
+        run.settings(25, effort="xhigh")
+        run.complete(30)
+        self.read()
+        self.assertEqual(
+            [("ide", "medium", 24.0), ("ide", "xhigh", 5.0)],
+            [(row["environment"], row["effort"], row["seconds"]) for row in self.segments()],
+        )
+
+    def test_a_rollout_that_names_none_of_it_leaves_the_columns_empty(self) -> None:
+        run = self.rollout(originator="someone-else")
+        self.ticks((0, HOUR))
+        run.settings(1)
+        run.started(1)
+        run.complete(30)
+        self.read()
+        self.assertEqual(
+            [(None, None, None)],
+            [(row["organization"], row["environment"], row["effort"]) for row in self.segments()],
+        )
 
 
 if __name__ == "__main__":

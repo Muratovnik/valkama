@@ -247,13 +247,17 @@ class ClaudeRun:
 class CodexRun:
     """One rollout being written."""
 
-    def __init__(self, path: Path, thread: str, parent: str = "") -> None:
+    def __init__(self, path: Path, thread: str, parent: str = "", **meta_fields: str) -> None:
+        """`meta_fields` go into the first record as they are, `originator` and
+        `creator_account_id` among them."""
+
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
         meta: dict[str, object] = {
             "id": thread,
             "session_id": parent or thread,
             "timestamp": stamp(0),
+            **meta_fields,
         }
         if parent:
             meta["parent_thread_id"] = parent
@@ -266,8 +270,17 @@ class CodexRun:
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(row) + "\n")
 
-    def settings(self, at: float, model: str = "gpt-6.1-sol", tier: str = "default") -> None:
-        self._row(at, "turn_context", {"model": model, "turn_id": "t"})
+    def settings(
+        self,
+        at: float,
+        model: str = "gpt-6.1-sol",
+        tier: str = "default",
+        effort: str | None = None,
+    ) -> None:
+        context = {"model": model, "turn_id": "t"}
+        if effort is not None:
+            context["effort"] = effort
+        self._row(at, "turn_context", context)
         self._row(
             at,
             "event_msg",

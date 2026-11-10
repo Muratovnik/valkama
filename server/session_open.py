@@ -127,12 +127,6 @@ SILENCE_BEFORE_RESUME_OFFER = timedelta(days=1)
 
 _TAIL_BYTES = 64 * 1024
 _HEAD_BYTES = 256 * 1024
-_ORIGINATORS = {
-    "Codex Desktop": Place("app", "codex-app"),
-    "codex_vscode": _VSCODE,
-    "codex-tui": Place("terminal"),
-    "codex_cli_rs": Place("terminal"),
-}
 
 
 class OpenPlanError(ValueError):
@@ -215,7 +209,7 @@ def _derived(family: str, transcript: str) -> Place:
         entrypoint = _last_entrypoint(transcript)
         return places.classify("claude", {"CLAUDE_CODE_ENTRYPOINT": entrypoint})
     if family == "codex":
-        return _ORIGINATORS.get(_originator(transcript), Place())
+        return places.codex_place(_originator(transcript))
     return Place()
 
 

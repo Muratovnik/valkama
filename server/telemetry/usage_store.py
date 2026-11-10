@@ -40,15 +40,18 @@ Schema 15 added, all empty or 0 in an upgraded store until its runs are read aga
   - `organization`: the id of the organization the requests were made for, the only
     account identifier kept. At Claude it is the latest `credential_org` attachment
     before the row: the client writes one before a request whenever the organization
-    changed, so a row before the first one is NULL and a row ends at each new one.
+    changed, so a row before the first one is NULL and a row ends at each new one. At
+    Codex it is the account that created the thread (`creator_account_id` in the
+    rollout's first record), for the whole rollout.
   - `environment`: how the client ran, one of `ide` (an IDE extension), `terminal` (the
     CLI), `app` (a desktop application) and `headless` (the SDK, no window), from
-    Claude's `entrypoint`. A transcript a client in WSL wrote, whose reported path is
+    Claude's `entrypoint` or the `originator` a Codex rollout starts with. A transcript a client in WSL wrote, whose reported path is
     on the distribution's share (`\\\\wsl.localhost\\<distribution>\\...` or
     `\\\\wsl$\\<distribution>\\...`), adds `@wsl:<distribution>`: `terminal@wsl:Ubuntu`.
     NULL for a client outside the list, whatever the path.
   - `effort`: the effort the requests ran with, as the client names it (`low` to
-    `max`): Claude's per-turn override where the turn has one, else the session's.
+    `max`): Claude's per-turn override where the turn has one, else the session's; at
+    Codex the one each turn's `turn_context` names.
   - `advisor`: 1 on a row holding an advisor call's tokens. Such a row is its own, with
     no seconds and the adviser's `model`, even when that is the executor's model.
   - `advisor_model`: the adviser the turn had configured. On the executor's rows it is
@@ -60,8 +63,8 @@ Schema 15 added, all empty or 0 in an upgraded store until its runs are read aga
 - to a run, `launch_class`: the class a Claude subagent's launch declared in front of its
   description (`<class>: ...`), read from the client's metadata file beside the
   transcript (`agent-<id>.meta.json`) while it is there, else from the label the hooks
-  recorded for the launch. NULL for a session's own run and a description that declares
-  none, and a class once read stays. Also to a run: `reading`, the reading its rows
+  recorded for the launch. NULL for a session's own run, a Codex thread and a description
+  that declares none, and a class once read stays. Also to a run: `reading`, the reading its rows
   were written by (`READING`), and 0 for rows from before readings were counted or that
   a later input outside the transcript (a price) made stale; `reread_refused` with
   `refused_reading`, why re-reading it was refused and for which reading;
