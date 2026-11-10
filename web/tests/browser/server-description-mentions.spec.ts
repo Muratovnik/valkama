@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -24,6 +26,8 @@ if (!store) throw new Error('VALKAMA_BROWSER_STORE names no store: this runs on 
 const stamp = Date.now().toString(36).toUpperCase().slice(-6)
 const KEY = `M${stamp}`
 const PROJECT = `check-${stamp.toLowerCase()}`
+// A project's root is its own: two runs in one store cannot share one.
+const ROOT = join(store, 'projects', PROJECT)
 
 /** The server's own command line, in the store the server runs with. */
 function valkama(...args: string[]) {
@@ -67,7 +71,8 @@ test('a task chosen in a description is told once, and saved again tells nobody 
   page,
 }) => {
   await page.goto('/')
-  valkama('projects', 'add', PROJECT, '--name', 'Browser check', '--root', store)
+  mkdirSync(ROOT, { recursive: true })
+  valkama('projects', 'add', PROJECT, '--name', 'Browser check', '--root', ROOT)
   await call(page, '/api/planning/spaces', { project_id: PROJECT, name: 'Browser check', key: KEY })
   await call(page, '/api/planning/work-items', { space: KEY, title: 'The source' })
   await call(page, '/api/planning/work-items', { space: KEY, title: 'Drop the old route' })
