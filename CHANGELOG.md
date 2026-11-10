@@ -52,6 +52,28 @@ checkouts are therefore distinguishable even at the same version.
   liveness arrived after the reader had passed; `--dry-run` reports the same and rebuilds
   nothing.
 
+- **Stale usage is read again in the background.** Each usage run records which reading
+  wrote its rows. A run goes stale when a newer build reads transcripts differently, when a
+  request it counted moves to another run, or when this build's price table prices a model
+  whose tokens it holds without a cost (checked once per price table, when the reader
+  starts). Once nothing new is left to read, the background reader reads stale runs again
+  through the same path as `valkama usage rebuild`. It reads them one run per transaction,
+  newest first, and starts none after its pass's time is up, so live reading never waits
+  for history. Without the liveness file nothing is read again. Before the first run a
+  process reads again, there is a verified snapshot with the liveness file copied beside
+  it: the schema-15 upgrade's own, or else one `usagerebuild` snapshot.
+  A run that cannot be read again, because its transcript is gone, shorter or unreadable,
+  is tried once each time it goes stale, and the run keeps the reason. A run that something
+  moved meanwhile is tried on a later pass. `usage rebuild` marks the runs it rebuilds
+  current. The upgrade makes every run read before it stale, so the first passes after it
+  read the whole history again, and a turn that started with no item can then move to
+  another item, as the fix below now places it.
+- **`valkama doctor` on usage reading.** One line counts the usage runs that are current,
+  wait to be read again, were read again, and were refused, by reason, and warns when a
+  reading again failed. Another counts the requests met in more than one run, and how many
+  runs left them to the run that counts each. The line on models with no price now says that
+  their runs are read again once the price table has the model.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.
@@ -90,6 +112,17 @@ checkouts are therefore distinguishable even at the same version.
   times, so a fresh clone whose bundle matches stays silent.
 
 ### Changed
+
+- **A usage request counts once in the whole store, at store schema 15.** `usage_requests`
+  is now keyed by the request alone and names the one run that counts it: a main
+  transcript's run before a subagent's, then the run whose first record is earlier, then
+  the lower run id. A request found in two transcripts is counted by that run. A run reading
+  the request later counts it only when it comes first by the rule and the run holding it
+  can still be read again, and every run that left a request to another records how many.
+  Schema 15 also records the client's request id and which reading wrote each run, and
+  adds columns this build leaves empty. The upgrade keeps one row per request by the same
+  rule, under a verified `preschema15` snapshot with the liveness file copied beside it,
+  and a build at schema 14 or older then refuses the store.
 
 - **State names read in the interface's language.** A state of the workflow a new space is
   given that still has its own name — Backlog, Todo, Dev, Review, Done, Blocked, Cancelled —
@@ -251,6 +284,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A subagent transcript copied into a forked session no longer counts twice.** Forking a
+  session copies the original's subagent transcripts into the fork's folder, and every
+  record of a copy still names the original session. The usage reader counted a copy's time
+  and tokens again under the fork. It now skips a subagent file's records of another
+  session, as it already did in a session's own transcript. A store that counted a copy
+  gives the copy's time and tokens back to the original once both runs are read again.
 - **A subagent's time stays out of its parent's run after its transcript is deleted.** The
   usage reader took a subagent whose file the client had deleted for one that never kept a
   transcript, and counted its time in the parent's run as well as in its own. Valkama's

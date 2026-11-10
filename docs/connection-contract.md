@@ -864,6 +864,14 @@ What none of them places has no item and stands as a line of its own in a sessio
 read. A stretch of a turn still running reads under the item the rule gives so far, and
 a later write in that turn moves it there.
 
+A request's tokens count once in the whole store, even when a client copied its record
+into a second transcript. The request counts in one run: a session's own before a
+subagent's, then the run whose first record is earlier, then the one read first. A
+subagent transcript's records that name another session are copies and count nothing.
+A run whose rows an older reading wrote, or whose model has since been priced, is read
+again in the background once nothing new is left to read, so its numbers can change
+after they were first read.
+
 `GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|epic`
 reads one item, or with `chain` or `epic` the item with the members
 [its chain](#reading-a-chain-of-work) has in that scope. `GET
