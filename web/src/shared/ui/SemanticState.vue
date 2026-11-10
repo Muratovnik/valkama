@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -6,10 +8,13 @@ import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 type Props = {
   label: string
   compact?: boolean
+  /** Whether a name cut short says itself whole on hover; a hint's own content has none. */
+  hint?: boolean
   variant?: 'inline' | 'badge' | 'dot'
 } & SemanticStatePair
 
-const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inline' })
+const props = withDefaults(defineProps<Props>(), { compact: false, hint: true, variant: 'inline' })
+const clippedHint = computed(() => (props.hint ? props.label : null))
 </script>
 
 <template>
@@ -26,7 +31,7 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
       aria-hidden="true"
     />
     <span
-      v-tooltip.clipped="label"
+      v-tooltip.clipped="clippedHint"
       class="state-label trimmed-word"
       >{{ label }}</span
     >

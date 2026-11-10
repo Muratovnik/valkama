@@ -344,6 +344,7 @@ function drawEntry(mark: FacetMark, run: MarkRun): VNode {
       key,
       class: 'facet-state',
       dimension: 'work-item-state',
+      hint: run.surface !== 'preview',
       state: mark.value,
       label: run.words.say(mark.text),
     })
