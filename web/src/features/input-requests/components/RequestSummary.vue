@@ -135,9 +135,10 @@ function wordOf(field: InputRequestField) {
         >
           {{ section.group }}
         </p>
-        <template
+        <div
           v-for="field in section.fields"
           :key="field.id"
+          class="request-summary-entry"
         >
           <div
             v-if="field.type === 'verdict'"
@@ -180,7 +181,7 @@ function wordOf(field: InputRequestField) {
             :own="own[child.id]"
             :value="answers[child.id]"
           />
-        </template>
+        </div>
       </section>
     </div>
   </div>
@@ -216,10 +217,27 @@ function wordOf(field: InputRequestField) {
   margin-inline-start: calc(-1 * var(--space-fill-inset));
 }
 
-.request-summary-rows,
+/* The rows read by levels, each step narrower than the one holding it: a group 24px from the
+   next, a point 12px from a point and from its group's heading, a way under a point 8px from it,
+   a way's options 4px from its label, a point's word 2px from its label. One 12px gap for the
+   first three made a group's heading one more row of the group above and a way float between
+   two points. */
+.request-summary-rows {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
 .request-summary-group {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+/* A point with what its answer opened, or a field with none under it: one entry of the group. */
+.request-summary-entry {
+  display: grid;
+  gap: var(--space-2);
   min-width: 0;
 }
 
