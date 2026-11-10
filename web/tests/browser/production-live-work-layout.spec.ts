@@ -326,7 +326,7 @@ test('a forced palette keeps the signs, and the open row is the system’s own p
     }
     probe.remove()
     const parts = row.querySelectorAll(
-      '.nav-row-lead, .nav-row-number, .nav-row-title, .nav-row-meta, .session-sign',
+      '.nav-row-lead, .nav-row-number, .nav-row-title, .nav-row-meta, .nav-row-detail, .session-sign',
     )
     return {
       pair,
@@ -335,7 +335,7 @@ test('a forced palette keeps the signs, and the open row is the system’s own p
     }
   })
   expect(seen.ground).toBe(seen.pair.ground)
-  expect(seen.inks).toHaveLength(5)
+  expect(seen.inks).toHaveLength(6)
   for (const ink of seen.inks) expect(ink).toBe(seen.pair.ink)
 })
 
