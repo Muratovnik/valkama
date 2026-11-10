@@ -4,6 +4,8 @@
  * dot — and each option through the `option` slot: a host that draws its values with more
  * than words, a priority's glyph or a state's dot, draws both, so a list and its button say
  * a value one way. What a value means stays the option's note under it in the list.
+ * A host's drawing keeps the one-line rule the default title has, and its box says the value's
+ * words whole while it is cut: the trigger's box the chosen value's, as each row its option's.
  */
 import { computed, nextTick, ref } from 'vue'
 
@@ -128,7 +130,10 @@ function updateOpen(value: boolean) {
           :name="selected.icon"
           :size="24"
         />
-        <span class="choice-value">
+        <span
+          v-tooltip.clipped="$slots.value && selected?.label"
+          class="choice-value"
+        >
           <SelectValue
             class="choice-value-content"
             :placeholder="placeholder"

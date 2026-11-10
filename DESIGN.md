@@ -818,7 +818,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `production-icon-size.spec.ts` finds labels by how they are drawn rather than by the class. A word trimmed to its capitals (`trimmed-word`)
   takes both classes and keeps the trim's cut, sideways only, so its accents stay whole. What
   a host draws in a choice's option is held to the row, so its own one-line word gives way,
-  and the row's hint says the option's words. A menu's entry is not such a label: it wraps,
+  and the row's hint says the option's words; what it draws for the chosen value is held to
+  the trigger the same way, and the trigger's value box says it. A menu's entry is not such a label: it wraps,
   and every word of it stays on screen.
 - **The mark:** one drawing — a spark: a long stroke, a triangle under its short
   arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the

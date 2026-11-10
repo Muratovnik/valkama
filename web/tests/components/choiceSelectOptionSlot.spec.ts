@@ -28,7 +28,8 @@ afterEach(() => {
 
 /** A state and a priority menu as the card builds one: each value drawn by its mark. */
 const Menu = defineComponent({
-  setup() {
+  props: { chosen: { type: String, default: '' }, drawsValue: { type: Boolean, default: false } },
+  setup(props) {
     const choices = useFacetChoices()
     const options = computed(() =>
       choices([
@@ -43,10 +44,14 @@ const Menu = defineComponent({
     return () =>
       h(
         ChoiceSelect<FacetChoiceOption>,
-        { label: 'State', modelValue: '', options: options.value },
+        { label: 'State', modelValue: props.chosen, options: options.value },
         {
           option: ({ option }: { option: FacetChoiceOption }) =>
             h(FacetChoiceMark, { mark: option.mark }),
+          ...(props.drawsValue && {
+            value: ({ selected }: { selected?: FacetChoiceOption }) =>
+              selected ? h(FacetChoiceMark, { mark: selected.mark }) : null,
+          }),
         },
       )
   },
@@ -87,4 +92,30 @@ it('a host’s drawing of an option is held to the row and its words are the row
   expect(slottedStamp(mark)).toBe(true)
   expect(mark.querySelector('.facet-word')?.classList).toContain('one-line')
   wrapper.unmount()
+})
+
+it('a host’s drawing of the chosen value is held to the trigger, which says its words whole', () => {
+  const plugins = [createI18n({ legacy: false, locale: 'en', messages, pluralRules })]
+  const drawn = mount(Menu, {
+    attachTo: document.body,
+    global: { plugins },
+    props: { chosen: 'signoff', drawsValue: true },
+  })
+  const box = drawn.get('.choice-trigger .choice-value')
+  expect(box.find('.choice-title').exists()).toBe(false)
+  expect(box.find('.semantic-state').exists()).toBe(true)
+  // The box offers the chosen value's whole name, shown only while what the host drew is cut.
+  expect(tooltipOf(box.element)).toMatchObject({ clipped: true, kind: 'clipped', text: LONG })
+  drawn.unmount()
+
+  // The default title says its own words: the box around it has nothing to add.
+  const plain = mount(Menu, {
+    attachTo: document.body,
+    global: { plugins },
+    props: { chosen: 'signoff' },
+  })
+  const title = plain.get('.choice-trigger .choice-title')
+  expect(tooltipOf(title.element)).toMatchObject({ clipped: true, text: LONG })
+  expect(tooltipOf(plain.get('.choice-trigger .choice-value').element)).toBeUndefined()
+  plain.unmount()
 })
