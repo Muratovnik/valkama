@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 type Props = {
   label: string
@@ -24,7 +25,11 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
       class="state-dot"
       aria-hidden="true"
     />
-    <span class="state-label trimmed-word">{{ label }}</span>
+    <span
+      v-tooltip.clipped="label"
+      class="state-label trimmed-word"
+      >{{ label }}</span
+    >
   </span>
 </template>
 
@@ -55,7 +60,8 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
    `--color-state-label`: on a ground lighter than the ladder's, a tone that reads
    as a dot is too dark for words, and the dot alone keeps saying it. Its box is trimmed to
    the letters (`.trimmed-word`), so the dot centres on their middle rather than on the em box,
-   which stood about a pixel high. */
+   which stood about a pixel high. A name is the space's data and may be long: cut short, it
+   ends in an ellipsis and says itself whole in a `clipped` hint, wherever a state is drawn. */
 .state-label {
   min-width: 0;
   color: var(--color-state-label, currentcolor);

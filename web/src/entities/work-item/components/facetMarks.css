@@ -394,3 +394,15 @@
 .label-chip.filters:not(.facet-chip) > .chip-face {
   padding-block: calc(var(--size-control-inline) / 2 - 0.5lh);
 }
+
+/* The finder's detail is one line, and its run keeps to it: a state's name, the space's own
+   and as long as the space made it, ends there in an ellipsis and its hint rather than
+   running under the line's end cut mid-letter. */
+.facet-marks[data-surface='finder'] {
+  flex-wrap: nowrap;
+  max-width: 100%;
+
+  > .facet-state {
+    min-width: 0;
+  }
+}
