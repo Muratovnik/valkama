@@ -67,7 +67,7 @@ def moment(text: str) -> float:
 
 
 def request_key(request: str) -> int:
-    """A request id as the 63-bit number `usage_requests` keeps."""
+    """A request id as the 63-bit number `usage_requests` keeps, its key or `request_id`."""
 
     digest = hashlib.blake2b(request.encode("utf-8"), digest_size=8).digest()
     return int.from_bytes(digest, "big") >> 1
@@ -113,7 +113,8 @@ class Ledger:
         #: until it closes. None for a memo from before this was kept: its turn in flight
         #: goes on as it was read, looked for while it has no item and kept once found.
         self.open_placement: bool | None = memo.get("open_placement")
-        self.new_requests: set[int] = set()
+        #: What this pass counted, each with the hash of the client's own request id.
+        self.new_requests: dict[int, int | None] = {}
         self.coverage = coverage
         self.seen = seen
         self.fallback = fallback
@@ -211,7 +212,9 @@ class Ledger:
                 number = request_key(key)
                 if number in self.new_requests or self.seen(number):
                     return
-                self.new_requests.add(number)
+                self.new_requests[number] = (
+                    request_key(step.request_id) if step.request_id is not None else None
+                )
             else:
                 before = known
             self.requests[key] = {part.model: [part.tokens, part.cost] for part in step.parts}
@@ -250,9 +253,10 @@ class Ledger:
         return fresh
 
     def flush(self, conn: sqlite3.Connection, run_id: int, session: str, agent: str) -> None:
-        """Write what this pass did, inside the caller's transaction."""
+        """Write this pass's rows, inside the caller's transaction; its requests are claims
+        (`usage_claims.write`)."""
 
-        write_rows(conn, run_id, session, agent, [*self.closed, *self.rows], self.new_requests)
+        write_rows(conn, run_id, session, agent, [*self.closed, *self.rows])
 
 
 #: A segment's columns as `segment_values` gives them, which is also how `_INSERT` and
@@ -296,7 +300,6 @@ def write_rows(
     session: str,
     agent: str,
     rows: list[Row],
-    requests: set[int],
 ) -> None:
     """Insert the new rows and update the ones read back, inside the caller's transaction."""
 
@@ -306,10 +309,6 @@ def write_rows(
             conn.execute(_INSERT, (run_id, session, agent, *values))
         else:
             conn.execute(_UPDATE, (*values, row.identity))
-    conn.executemany(
-        "INSERT OR IGNORE INTO usage_requests(run_id, request) VALUES (?, ?)",
-        ((run_id, number) for number in requests),
-    )
 
 
 _INSERT = (

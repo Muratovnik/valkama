@@ -5,13 +5,17 @@ only through this. So it never loses what is already counted:
 
 - It reads the same bytes the reader already read, from the start to the run's
   `read_offset`, through the reader's own path (`Collector.read_again`, which feeds
-  `Collector.parse` the chunks the reader takes). The run's former `usage_requests` are
-  not taken as seen: only what this reading counted is.
+  `Collector.parse` the chunks the reader takes). The run's former claims in
+  `usage_requests` are not taken as seen: only what this reading counted is, and a
+  request another run counts goes as `usage_claims` says.
 - Parsing happens outside the write transaction. The transaction only deletes the run's
-  segments and requests, inserts the new ones and moves the run's row, and the move names
+  segments and claims, inserts the new ones and moves the run's row, and the move names
   the `read_offset` the rebuild started from, as the reader's does. A reader pass that
-  moved the run meanwhile, or marked it, makes the rebuild of that run write nothing and
-  say so.
+  moved the run meanwhile, or marked it, or a run that claimed one of its requests
+  meanwhile, makes the rebuild of that run write nothing and say so. A claim the run no
+  longer makes is released (`usage_claims.release`).
+- A rebuilt run is current: its `reading` becomes `READING`, and a refusal it carried
+  goes.
 - Only a run being read, whose transcript (its own path, else the archive, as the reader
   resolves it) is there and no shorter than what was read, is rebuilt. Every other run is
   left as it is and named with the reason, and so is every run when the liveness file is
@@ -34,18 +38,20 @@ item (and no item) had before and after.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import sqlite3
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from .. import store, store_backups
-from . import liveness, usage_collect
+from . import liveness, usage_claims, usage_collect
 from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT
 from .usage_collect import Collector, Reading
-from .usage_ledger import SEGMENT_COLUMNS, TOKEN_COLUMNS, segment_values, write_rows
+from .usage_ledger import SEGMENT_COLUMNS, TOKEN_COLUMNS, segment_values, stamp, write_rows
+from .usage_prices import PRICE_BOOK
+from .usage_store import READING
 from .usage_targets import Target
 
 #: The label of the snapshot taken before every run is rebuilt.
@@ -64,6 +70,8 @@ REASONS = {
     "shorter": "its transcript is now shorter than what was read",
     "changed": "its transcript no longer ends a line where reading stopped",
     "moved": "a reader pass moved it meanwhile; nothing was written, run the rebuild again",
+    "claimed": "another run claimed one of its requests meanwhile; nothing was written, run"
+    " the rebuild again",
     "no-transcript": "no transcript is known for it",
     "failed": "the rebuild failed; nothing was written",
     "no-liveness": "no liveness file beside the store: observed time would come back as"
@@ -78,8 +86,8 @@ _RUN_SECONDS = {
     "gap_seconds": GAP,
 }
 _COST = "estimated_api_cost_usd"
-#: What a liveness copy is called until it is verified.
-_PARTIAL = ".partial"
+#: Refusals that say only that something moved meanwhile: tried again, never recorded.
+RETRIED = frozenset({"moved", "claimed"})
 
 #: A row as the store gives it or as a reading makes it: read by column name either way.
 _Record = Mapping[str, Any] | sqlite3.Row
@@ -179,17 +187,20 @@ def rebuild(
     coverage = liveness.Coverage(liveness.intervals(store_path))
     for run in runs:
         target = targets.get((str(run["session_id"]), str(run["agent_id"])))
-        report.runs.append(_one(collector, run, target, coverage, dry_run))
+        report.runs.append(rebuild_run(collector, run, target, coverage, dry_run=dry_run))
     return report
 
 
-def _one(
+def rebuild_run(
     collector: Collector,
     run: sqlite3.Row,
     target: Target | None,
     coverage: liveness.Coverage,
-    dry_run: bool,
+    *,
+    dry_run: bool = False,
 ) -> RunReport:
+    """Rebuild one run, or say why not. Takes no snapshot: the caller owns the recovery point."""
+
     line = RunReport(int(run["id"]), str(run["session_id"]), str(run["agent_id"]), run["client"])
     try:
         target, reading = _read(collector, run, target, coverage)
@@ -233,7 +244,7 @@ def _read(
     end = int(run["read_offset"])
     if os.path.getsize(path) < end:
         raise _RefusedError("shorter")
-    reading = collector.read_again(target, path, end, coverage)
+    reading = collector.read_again(target, path, end, coverage, int(run["id"]))
     if reading is None:
         raise _RefusedError("changed")
     return target, reading
@@ -242,9 +253,6 @@ def _read(
 def _replace(collector: Collector, run: sqlite3.Row, target: Target, reading: Reading) -> None:
     """Put the new rows in place of the run's as one transaction, or write nothing."""
 
-    if reading.last is None:
-        # Nothing was read before either, so there is nothing to put back.
-        return
     conn = collector.conn
     run_id = int(run["id"])
     conn.execute("BEGIN IMMEDIATE")
@@ -253,19 +261,36 @@ def _replace(collector: Collector, run: sqlite3.Row, target: Target, reading: Re
             "SELECT status FROM usage_runs WHERE id = ? AND read_offset = ?",
             (run_id, run["read_offset"]),
         ).fetchone()
-        # The read place stays where it was: the same bytes were read again.
+        # The read place stays where it was: the same bytes were read again. With nothing
+        # read before either, there is nothing to put back, and the run is current.
         if (
             status is None
             or status[0] != "reading"
-            or not collector.record(
-                run_id, run["read_offset"], int(run["read_offset"]), reading.last
+            or (
+                reading.last is not None
+                and not collector.record(
+                    run_id, run["read_offset"], int(run["read_offset"]), reading.last
+                )
             )
         ):
             conn.execute("ROLLBACK")
             raise _RefusedError("moved")
-        conn.execute("DELETE FROM usage_segments WHERE run_id = ?", (run_id,))
-        conn.execute("DELETE FROM usage_requests WHERE run_id = ?", (run_id,))
-        write_rows(conn, run_id, target.session, target.agent, reading.rows, reading.requests)
+        if reading.last is not None:
+            former = usage_claims.held(conn, run_id)
+            conn.execute("DELETE FROM usage_segments WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM usage_requests WHERE run_id = ?", (run_id,))
+            write_rows(conn, run_id, target.session, target.agent, reading.rows)
+            if not usage_claims.write(
+                conn, reading.last.claimant, reading.requests, reading.yielded, whole=True
+            ):
+                conn.execute("ROLLBACK")
+                raise _RefusedError("claimed")
+            usage_claims.release(conn, run_id, former, reading.requests)
+        conn.execute(
+            "UPDATE usage_runs SET reading = ?, reread_refused = NULL, refused_reading = NULL,"
+            " reread_at = ?, priced_with = ? WHERE id = ?",
+            (READING, stamp(time.time()), PRICE_BOOK, run_id),
+        )
         conn.execute("COMMIT")
     except BaseException:
         if conn.in_transaction:
@@ -395,51 +420,7 @@ def take_snapshot(conn: sqlite3.Connection, store_path: str) -> str:
     is copying both.
     """
 
-    path, _identity = store_backups.verified_snapshot(
-        conn, SNAPSHOT_LABEL, locate=store.backup_location
-    )
-    _copy_liveness(liveness.path_for(store_path), liveness.path_for(path))
-    _drop_stale_copies(os.path.dirname(path))
+    location = store.backup_location
+    path, _identity = store_backups.verified_snapshot(conn, SNAPSHOT_LABEL, locate=location)
+    liveness.copy_beside(store_path, path, location().prefix)
     return path
-
-
-def _copy_liveness(source: str, destination: str) -> None:
-    """Copy the liveness database whole, and refuse a copy that does not hold the same rows.
-
-    The copy is made under a name of its own and takes `destination` only once verified,
-    so a restore never finds a copy that failed beside a good snapshot. A tick waits while
-    it is copied: the read lock is held from the hash to the end of the copy, and a tick
-    gives up after a second, which the next tick makes good.
-    """
-
-    partial = destination + _PARTIAL
-    try:
-        with (
-            contextlib.closing(sqlite3.connect(source, timeout=1.0, isolation_level=None)) as held,
-            contextlib.closing(sqlite3.connect(partial)) as copy,
-        ):
-            held.execute("BEGIN")
-            try:
-                identity = store_backups.logical_identity(held)
-                held.backup(copy)
-            finally:
-                held.execute("COMMIT")
-        if store_backups.snapshot_identity(partial) != identity:
-            raise RuntimeError("the liveness copy does not hold what the liveness file holds")
-        os.replace(partial, destination)
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(partial)
-
-
-def _drop_stale_copies(directory: str) -> None:
-    """Remove a liveness copy whose snapshot retention has removed."""
-
-    prefix = f"{store.backup_location().prefix}-{SNAPSHOT_LABEL}-"
-    for name in os.listdir(directory):
-        path = os.path.join(directory, name)
-        if not name.startswith(prefix) or not name.endswith(".liveness"):
-            continue
-        snapshot = path.removesuffix(".liveness")
-        if liveness.path_for(snapshot) == path and not os.path.isfile(snapshot):
-            os.remove(path)

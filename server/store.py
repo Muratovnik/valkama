@@ -36,7 +36,7 @@ from .platform import relations as platform_relations
 from .projects import project_registry
 from .store_identity import metadata as store_metadata
 from .store_identity.refs import planning_space_ref
-from .telemetry import usage_store
+from .telemetry import liveness, usage_store
 
 # -- the legacy Board schema, kept only so a store can be migrated off it ----
 #
@@ -262,7 +262,15 @@ MIGRATIONS = {
 # `mentioned` event's detail is then `description:` and the id of the item whose
 # description named it, where every earlier one was a comment's id, which a build
 # at 13 reads as a number and refuses the whole card over.
-STORE_SCHEMA_VERSION = 14
+#
+# 15 counts a request once in the whole store: `usage_requests` is keyed by the request
+# alone, where every run kept its own rows, and the upgrade keeps one row of each request
+# several runs counted. A build at 14 would take a request another run counts for one
+# its own run never counted, add its tokens again, and lose its own row to the key
+# without a word (`INSERT OR IGNORE`). 15 also gives a usage run the
+# reading its rows came from (every run stale after the upgrade, so the reader reads it
+# again), and a segment the columns its later dimensions fill.
+STORE_SCHEMA_VERSION = 15
 
 
 class StoreTooNewError(RuntimeError):
@@ -473,6 +481,7 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
     if absent:
         raise RuntimeError(f"post-migration sessions lacks {', '.join(absent)}")
     planning_store.assert_threads_postconditions(conn)
+    usage_store.assert_current(conn)
 
 
 def _snapshot_before_new_tables(conn: sqlite3.Connection) -> str | None:
@@ -747,8 +756,9 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 14's, one at 11 only schema 12's to 14's, one
-            # at 12 only schema 13's and 14's, and one at 13 only schema 14's.
+            # 10 only schema 11's to 15's, one at 11 only schema 12's to 15's, one
+            # at 12 only schema 13's to 15's, one at 13 only schema 14's and 15's, and
+            # one at 14 only schema 15's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a
@@ -760,21 +770,27 @@ def connect() -> sqlite3.Connection:
             source_identity = None
             source_generation = None
             pretable_backup = None
+            recovery_point = None
             if historical:
                 source_generation = platform_migrations.classify_product_model_source(
                     conn, stored_version
                 )
-                _, source_identity = store_backups.verified_snapshot(
+                recovery_point, source_identity = store_backups.verified_snapshot(
                     conn, "preproductmodel", locate=backup_location
                 )
             elif before_schema9:
-                _, source_identity = store_backups.verified_snapshot(
+                recovery_point, source_identity = store_backups.verified_snapshot(
                     conn, "preschema9", locate=backup_location
                 )
             elif upgrade:
-                _, source_identity = store_backups.verified_snapshot(
+                recovery_point, source_identity = store_backups.verified_snapshot(
                     conn, f"preschema{stored_version + 1}", locate=backup_location
                 )
+            if recovery_point is not None:
+                # From schema 15 on the upgrade leaves every usage run to be read again,
+                # and what a reading makes of time depends on the liveness file, which
+                # no snapshot of the store holds: its verified copy goes beside it.
+                liveness.copy_beside(path, recovery_point, DATA_PREFIX)
             else:
                 pretable_backup = _snapshot_before_new_tables(conn)
                 if store_rename.predates_rename(conn) and pretable_backup is None:
@@ -846,6 +862,8 @@ def connect() -> sqlite3.Connection:
             # existing table alone, so they are appended here.
             planning_store.migrate_threads(conn)
             _migrate_session_place(conn)
+            # Schema 15: the usage columns, and one row per request in the whole store.
+            usage_store.migrate(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)

@@ -28,10 +28,13 @@ from dataclasses import dataclass, field
 
 from .. import transcripts
 from ..planning import agents, calls, ladder
-from . import liveness
+from . import liveness, usage_claims
+from .usage_claims import Claimant
 from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT, Clock
 from .usage_ledger import SELECT_PROVISIONAL, Fallback, Ledger, Row, moment, row_from, stamp
+from .usage_prices import PRICE_BOOK
 from .usage_steps import Step, claude_step, codex_step, worth_parsing
+from .usage_store import READING
 from .usage_targets import CLAUDE, CODEX, Finder, Target
 
 #: How long one pass may keep starting work. The server has more to do than this: a
@@ -42,6 +45,9 @@ PASS_SECONDS = 1.0
 CHUNK_BYTES = 8 * 1024 * 1024
 #: A longer line is skipped unread: every one measured is a request body nobody needs.
 _MOST_LINE_BYTES = 64 * 1024 * 1024
+#: How many requests a run left to others it remembers between chunks, so the records of
+#: one request on both sides of a chunk's end count as one yield.
+_RECENT_YIELDS = 16
 
 
 @dataclass
@@ -88,6 +94,9 @@ class Parsed:
     #: `new_requests` what it counted.
     ledger: Ledger
     clock: Clock
+    #: The run as `usage_claims`' rule sees it, and the requests it left to another run.
+    claimant: Claimant
+    yielded: set[int] = field(default_factory=set)
 
 
 @dataclass
@@ -96,10 +105,12 @@ class Reading:
 
     #: Every segment, the closed ones first and the provisional ones of the last turn after.
     rows: list[Row]
-    #: Every request counted.
-    requests: set[int]
+    #: Every request counted, each with the hash of the client's own request id.
+    requests: dict[int, int | None]
     #: What the last chunk left, for the run's row; None when there was nothing to read.
     last: Parsed | None
+    #: Every request left to another run.
+    yielded: set[int] = field(default_factory=set)
 
 
 def source(target: Target) -> str | None:
@@ -173,10 +184,12 @@ class Collector:
         found = conn.execute(*select).fetchone()
         if found is not None and found["path"] == path:
             return found
+        # A new run's rows are all this reading's own, read with this price table.
         conn.execute(
-            "INSERT INTO usage_runs(session_id, agent_id, client, path) VALUES (?, ?, ?, ?)"
+            "INSERT INTO usage_runs(session_id, agent_id, client, path, reading, priced_with)"
+            " VALUES (?, ?, ?, ?, ?, ?)"
             " ON CONFLICT(session_id, agent_id) DO UPDATE SET path = excluded.path",
-            (target.session, target.agent, target.client, path),
+            (target.session, target.agent, target.client, path, READING, PRICE_BOOK),
         )
         return conn.execute(*select).fetchone()
 
@@ -233,15 +246,25 @@ class Collector:
             work,
             lambda number: (
                 conn.execute(
-                    "SELECT 1 FROM usage_requests WHERE run_id = ? AND request = ?",
-                    (run_id, number),
+                    "SELECT 1 FROM usage_requests WHERE request = ? AND run_id = ?",
+                    (number, run_id),
                 ).fetchone()
                 is not None
             ),
+            run_id,
         )
         conn.execute("BEGIN IMMEDIATE")
         try:
-            if not self.record(run_id, run["read_offset"], reached, parsed):
+            # A claim lost since parsing fails the chunk; the next pass reads it again.
+            if not self.record(run_id, run["read_offset"], reached, parsed) or not (
+                usage_claims.write(
+                    conn,
+                    parsed.claimant,
+                    parsed.ledger.new_requests,
+                    parsed.yielded,
+                    whole=False,
+                )
+            ):
                 conn.execute("ROLLBACK")
                 return False
             parsed.ledger.flush(conn, run_id, target.session, target.agent)
@@ -253,7 +276,7 @@ class Collector:
         return True
 
     def read_again(
-        self, target: Target, path: str, end: int, coverage: liveness.Coverage
+        self, target: Target, path: str, end: int, coverage: liveness.Coverage, run_id: int
     ) -> Reading | None:
         """Read `path` from its start to `end` as this reader reads it, writing nothing.
 
@@ -266,19 +289,21 @@ class Collector:
         work = _Pass(coverage, math.inf)
         progress = Progress()
         rows: list[Row] = []
-        counted: set[int] = set()
+        counted: dict[int, int | None] = {}
+        yielded: set[int] = set()
         last: Parsed | None = None
         offset = 0
         while offset < end:
             lines, reached, _more = _read_lines(path, offset, min(CHUNK_BYTES, end - offset))
             if reached == offset or reached > end:
                 return None
-            last = self.parse(target, progress, lines, work, counted.__contains__)
+            last = self.parse(target, progress, lines, work, counted.__contains__, run_id)
             rows.extend(last.ledger.closed)
             counted |= last.ledger.new_requests
+            yielded |= last.yielded
             progress = last.progress
             offset = reached
-        return Reading([*rows, *progress.provisional], counted, last)
+        return Reading([*rows, *progress.provisional], counted, last, yielded)
 
     def parse(
         self,
@@ -287,23 +312,43 @@ class Collector:
         lines: list[bytes],
         work: _Pass,
         seen: Callable[[int], bool],
+        run_id: int,
     ) -> Parsed:
         """Turn one chunk into rows in memory, from where `start` says the run stands.
 
         The only path from transcript bytes to segments: the background reader feeds it a
         chunk at a time from the store, and a rebuild (`usage_rebuild`) the same chunks
         from the start of the file, keeping what one chunk leaves for the next in memory.
-        `seen` says whether a request was already counted before this chunk. Nothing is
-        written here.
+        `seen` says whether this run already counted a request before this chunk; one
+        another run counts is left to it as `usage_claims` advises. Nothing is written
+        here.
         """
 
         state = start.state
         packet = {"item": start.packet_item}
+        recent: list[int] = state.setdefault("yielded", [])
+        yielded: set[int] = set()
+
+        def claimant() -> Claimant:
+            first = stamp(clock.first) if clock.first is not None else None
+            return Claimant(run_id, bool(target.agent), first)
+
+        def counted_before(number: int) -> bool:
+            if seen(number):
+                return True
+            if usage_claims.counts(self.conn, claimant(), number):
+                return False
+            if number not in recent:
+                recent.append(number)
+                del recent[:-_RECENT_YIELDS]
+                yielded.add(number)
+            return True
+
         ledger = Ledger(
             start.provisional,
             state.get("ledger", {}),
             work.coverage,
-            seen,
+            counted_before,
             self._fallback(target, packet, work),
         )
         clock = Clock(state.get("clock", {}), work.coverage, ledger, self._keeps(target))
@@ -324,7 +369,9 @@ class Collector:
             # A turn placed by `fallback` is placed again at the latest moment read.
             ledger.place_open_turn(clock.high)
         state["clock"], state["ledger"] = clock.state(), ledger.memo()
-        return Parsed(Progress(state, packet["item"], after, ledger.rows), ledger, clock)
+        return Parsed(
+            Progress(state, packet["item"], after, ledger.rows), ledger, clock, claimant(), yielded
+        )
 
     def record(self, run_id: int, read_from: object, reached: int, parsed: Parsed) -> bool:
         """Move a run's row to what `parsed` leaves, inside the caller's transaction.

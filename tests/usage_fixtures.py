@@ -73,6 +73,9 @@ class ClaudeRun:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.model = "claude-opus-5-5"
         self._requests = 0
+        # A request id is the client's and unique to the response it names, so two
+        # transcripts share one only when one copied the other's records.
+        self._request_prefix = f"msg_{session}_{agent}"
 
     def _write(self, row: dict) -> None:
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
@@ -120,7 +123,7 @@ class ClaudeRun:
 
         if request is None:
             self._requests += 1
-            request = f"msg_{self.agent}_{self._requests}"
+            request = f"{self._request_prefix}_{self._requests}"
         content = [
             {
                 "type": "tool_use",
@@ -234,6 +237,7 @@ class CodexRun:
             meta["parent_thread_id"] = parent
         self._row(0, "session_meta", meta)
         self._responses = 0
+        self._thread = thread
 
     def _row(self, at: float, kind: str, payload: dict) -> None:
         row = {"timestamp": stamp(at), "ordinal": 0, "type": kind, "payload": payload}
@@ -282,7 +286,7 @@ class CodexRun:
             at,
             "token_usage_record",
             {
-                "response_id": f"resp_{self._responses}",
+                "response_id": f"resp_{self._thread}_{self._responses}",
                 "usage": {
                     "input_tokens": input_tokens,
                     "cached_input_tokens": cached,

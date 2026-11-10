@@ -468,7 +468,10 @@ class SchemaFourteenTests(unittest.TestCase):
     def test_a_store_at_13_reaches_14_under_preschema14_keeping_every_row(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(14, conn.execute("PRAGMA user_version").fetchone()[0])
+        # The chain runs on to this build's own schema in the same open.
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(
             ["work_item_id", "sha256", "media_type", "size", "created_at", "call_id"],
             [row[1] for row in conn.execute("PRAGMA table_info(work_item_images)")],
@@ -492,7 +495,10 @@ class SchemaFourteenTests(unittest.TestCase):
         restored.close()
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(14, conn.execute("PRAGMA user_version").fetchone()[0])
+        # The chain runs on to this build's own schema in the same open.
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(self.before, self.dump(conn))
         self.assertEqual(1, len(self.snapshots()))
 
@@ -504,7 +510,10 @@ class SchemaFourteenTests(unittest.TestCase):
             self.assertRaises(store.StoreTooNewError) as refusal,
         ):
             store.connect()
-        self.assertEqual((14, 13), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 13),
+            (refusal.exception.stored, refusal.exception.supported),
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
     def test_the_rows_hold_only_what_a_picture_is(self) -> None:

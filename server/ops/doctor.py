@@ -318,6 +318,7 @@ def _store_checks() -> list[dict]:
     checks.extend(_execution_event_checks(path))
     checks.append(_transcript_check(path))
     checks.append(_unpriced_usage_check(path))
+    checks.append(_usage_copies_check(path))
     return checks
 
 
@@ -578,6 +579,54 @@ def _unpriced_usage_check(path: str) -> dict:
         " cost it was read with.",
         presentation_code="usage-prices-missing",
         parameters={"models": listed, "count": len(found)},
+    )
+
+
+def _usage_copies_check(path: str) -> dict:
+    """Requests met in more than one usage run: what a copied transcript leaves.
+
+    Each is counted once, by the run `usage_claims`' rule picks, and the others record
+    that they left it (`yielded`). The reader skips the copies it knows of, so a number
+    here is a new source of copies to find rather than one to assume away. One
+    aggregate query over the runs.
+    """
+
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            requests, runs = conn.execute(
+                "SELECT COALESCE(SUM(yielded), 0), COALESCE(SUM(yielded > 0), 0) FROM usage_runs"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return _check(
+            "usage-copies",
+            "Requests in more than one run",
+            "unknown",
+            f"the usage runs could not be read: {failure}",
+            "Open the store once with the current build; it adds the columns.",
+            presentation_code="usage-copies-unreadable",
+        )
+    if not requests:
+        return _check(
+            "usage-copies",
+            "Requests in more than one run",
+            "ok",
+            "no request was met in more than one usage run",
+            presentation_code="usage-copies-none",
+        )
+    return _check(
+        "usage-copies",
+        "Requests in more than one run",
+        "warn",
+        f"{requests} request(s) were met in more than one usage run: {runs} run(s) left them"
+        " to the run that counts each, so each is counted once",
+        "Two transcripts holding one request means a client copied records between them."
+        " The runs whose `yielded` is above 0 in usage_runs name the files; find what wrote"
+        " the copies. The totals are right either way.",
+        presentation_code="usage-copies-found",
+        parameters={"requests": int(requests), "runs": int(runs)},
     )
 
 

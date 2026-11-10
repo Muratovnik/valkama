@@ -34,11 +34,12 @@ class RebuildCase(Case):
         self.chunks = patch
 
     def counted(self, session: str = "sess-1", agent: str = "") -> tuple:
-        """What a run counts: its row but for when it was read, its segments but for their
-        ids, and its requests."""
+        """What a run counts: its row but for when it was read and read again, its segments
+        but for their ids, and its requests."""
 
         run = dict(self.run_row(session, agent))
         run.pop("read_at")
+        run.pop("reread_at")
         columns = ("run_id", "session_id", "agent_id", *SEGMENT_COLUMNS)
         segments = sorted(
             (tuple(row[column] for column in columns) for row in self.segments(session, agent)),

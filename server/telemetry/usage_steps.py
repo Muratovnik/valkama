@@ -85,6 +85,8 @@ class Step:
     at: float
     kind: str
     request: str | None = None
+    #: The client's own id of the request, where its record carries one.
+    request_id: str | None = None
     parts: list[Part] = field(default_factory=list)
     #: Tool calls this record opens: id and what each waits for.
     calls: dict[str, str] = field(default_factory=dict)
@@ -297,10 +299,12 @@ def claude_step(row: Mapping[str, object], own_session: str | None) -> Step | No
         for block in content:
             if isinstance(block, dict) and block.get("type") == "tool_use":
                 calls[str(block.get("id"))] = _tool_kind(str(block.get("name")))
+    request_id = row.get("requestId")
     return Step(
         at,
         REPLY,
         request=str(message["id"]),
+        request_id=request_id if isinstance(request_id, str) and request_id else None,
         parts=_claude_parts(model, usage) if isinstance(usage, Mapping) and not synthetic else [],
         calls=calls,
         ends_turn=message.get("stop_reason") in _ENDS_TURN and not calls,

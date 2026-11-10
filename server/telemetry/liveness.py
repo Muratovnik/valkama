@@ -19,15 +19,23 @@ The connection is opened for each tick and closed after it, so a process holds n
 between ticks, and the defaults of SQLite's rollback journal apply: each new interval
 and extension is on disk before the commit returns, which is what a power cut needs.
 Several processes tick at once and only the first in `_LEAST_ADVANCE` writes.
+
+A recovery point that reads usage again needs the file as it was, so `copy_beside` puts
+a verified copy next to a snapshot of the store, under the name a store restored from
+that snapshot looks for. Restoring is copying both. The schema-15 upgrade and a rebuild
+of every run take one; the copies this process made are what `recovery_point` answers.
 """
 
 from __future__ import annotations
 
 import bisect
+import contextlib
 import datetime as dt
 import os
 import sqlite3
 from collections.abc import Sequence
+
+from .. import store_backups
 
 TICK_SECONDS = 60.0
 #: A tick this much later than the last one starts a new interval: two missed ticks, so
@@ -55,6 +63,78 @@ def path_for(store_path: str) -> str:
     """Where one store's intervals are: beside it, under its name."""
 
     return f"{store_path}.liveness"
+
+
+#: What a copy is called until it is verified.
+_PARTIAL = ".partial"
+#: The snapshots this process put a verified liveness copy beside, by the store's path.
+_TAKEN: dict[str, str] = {}
+
+
+def _key(store_path: str) -> str:
+    return os.path.normcase(os.path.abspath(store_path))
+
+
+def copy_beside(store_path: str, snapshot_path: str, prefix: str) -> bool:
+    """Put a verified copy of the store's liveness file beside one of its snapshots.
+
+    False, and nothing copied, when the store has no liveness file. A copy whose
+    snapshot retention has removed goes too: `prefix` is the one the snapshots' names
+    start with, and only a `.liveness` file beside such a name is touched.
+    """
+
+    source = path_for(store_path)
+    if not os.path.isfile(source):
+        return False
+    _copy(source, path_for(snapshot_path))
+    _TAKEN[_key(store_path)] = snapshot_path
+    directory = os.path.dirname(snapshot_path)
+    for name in os.listdir(directory):
+        if not (name.startswith(f"{prefix}-") and name.endswith(".sqlite3.liveness")):
+            continue
+        copy = os.path.join(directory, name)
+        if not os.path.isfile(copy.removesuffix(".liveness")):
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(copy)
+    return True
+
+
+def recovery_point(store_path: str) -> str | None:
+    """The newest snapshot this process took of the store with its liveness copy, if still there."""
+
+    snapshot = _TAKEN.get(_key(store_path))
+    if snapshot is None or not (os.path.isfile(snapshot) and os.path.isfile(path_for(snapshot))):
+        return None
+    return snapshot
+
+
+def _copy(source: str, destination: str) -> None:
+    """Copy the liveness database whole, and refuse a copy that does not hold the same rows.
+
+    The copy is made under a name of its own and takes `destination` only once verified,
+    so a restore never finds a copy that failed beside a good snapshot. A tick waits while
+    it is copied: the read lock is held from the hash to the end of the copy, and a tick
+    gives up after a second, which the next tick makes good.
+    """
+
+    partial = destination + _PARTIAL
+    try:
+        with (
+            contextlib.closing(sqlite3.connect(source, timeout=1.0, isolation_level=None)) as held,
+            contextlib.closing(sqlite3.connect(partial)) as copy,
+        ):
+            held.execute("BEGIN")
+            try:
+                identity = store_backups.logical_identity(held)
+                held.backup(copy)
+            finally:
+                held.execute("COMMIT")
+        if store_backups.snapshot_identity(partial) != identity:
+            raise RuntimeError("the liveness copy does not hold what the liveness file holds")
+        os.replace(partial, destination)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(partial)
 
 
 def _text(moment: float) -> str:
