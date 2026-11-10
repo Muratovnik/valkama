@@ -4,7 +4,8 @@
  * the agents spent together, the cost, the tokens processed anew, and in words what each of them
  * is, since a finger has no tooltip. Under them everything by kind, by model and by who did the
  * work — the session's own agent, a subagent by the class it was launched with, an adviser — with
- * the effort it ran at, then under which organization the work ran.
+ * the effort it ran at, then under which organization the work ran, and a way to the same work on
+ * the Analytics page.
  *
  * A kind or a cost nobody reported says so and is never a zero. A read that failed says that it
  * failed, because not knowing is not the same as there being nothing, and offers to read again.
@@ -14,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 
 import UsageAccounts from '@/widgets/work-item-inspector/components/UsageAccounts.vue'
 import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
+import { itemAnalyticsAddress } from '@/widgets/work-item-inspector/utils/analyticsAddress.ts'
 import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import {
   isEstimated,
@@ -23,6 +25,7 @@ import {
 } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { UsageRole, UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import ScreenLink from '@/shared/ui/ScreenLink.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -242,6 +245,11 @@ const breakdowns = computed(() =>
         :estimated="isEstimated(usage)"
       />
     </div>
+    <ScreenLink
+      class="work-usage-analytics"
+      :href="itemAnalyticsAddress(usage.work_item_id)"
+      >{{ t('workItem.usage.inAnalytics') }}</ScreenLink
+    >
   </section>
   <p
     v-if="failed || runsFailed"
@@ -377,6 +385,11 @@ const breakdowns = computed(() =>
   .work-usage-line {
     grid-column: 1;
   }
+}
+
+/* The way to the same work on the Analytics page, as long as its words and no wider. */
+.work-usage-analytics {
+  justify-self: start;
 }
 
 .work-usage-failed {

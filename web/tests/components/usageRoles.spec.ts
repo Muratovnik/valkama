@@ -4,20 +4,12 @@
  * tokens and cost, in the order the read ranks them. «None» and «unknown» are rows apart and say
  * which they are. The rows add up to the tab's own totals.
  */
-import { computed, defineComponent, h, ref } from 'vue'
-import { createI18n } from 'vue-i18n'
-
-import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import AgentsUsageSummary from '@/widgets/work-item-inspector/components/AgentsUsageSummary.vue'
-import { provideInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
-import type { InspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
-
 import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
-import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { NO_TOKENS, whoUsage } from '../fixtures/usage.ts'
+import { mountSummary } from './usageSummaryHost.ts'
 
 type Role = ItemUsage['roles'][number]
 
@@ -49,37 +41,6 @@ function usageOf(roles: Role[]): ItemUsage {
     accounts: [],
     roles,
   })
-}
-
-/** A read that has answered and never reads again. */
-const settled = () => Promise.resolve()
-const drawSummary = () => h(AgentsUsageSummary)
-
-function mountSummary(usage: ItemUsage) {
-  const answer = ref<ItemUsage | null>(usage)
-  const read = {
-    failed: ref(false),
-    read: settled,
-    settled,
-    usage: answer,
-    version: ref(0),
-  } as unknown as InspectorUsage['read']
-  const Host = defineComponent({
-    setup() {
-      provideInspectorUsage({
-        isEpic: computed(() => false),
-        read,
-        rows: computed(() => answer.value),
-        runs: read,
-        news: () => usage.reference,
-        readable: () => true,
-        reference: () => usage.reference,
-      })
-      return drawSummary
-    },
-  })
-  const i18n = createI18n({ legacy: false, locale: 'en', messages, pluralRules })
-  return mount(Host, { attachTo: document.body, global: { plugins: [i18n] } })
 }
 
 /** Each row of the roles' list as it is read: its name and its three figures. */

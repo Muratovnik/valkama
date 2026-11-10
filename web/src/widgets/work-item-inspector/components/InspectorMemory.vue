@@ -28,10 +28,10 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import ScreenLink from '@/shared/ui/ScreenLink.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
@@ -202,14 +202,7 @@ function when(value: string): string {
         inline
       >
         <template #action>
-          <a
-            class="memory-repair"
-            :href="diagnostics"
-            >{{ t('memory.openDiagnostics')
-            }}<VIcon
-              name="chevron-right"
-              :size="15"
-          /></a>
+          <ScreenLink :href="diagnostics">{{ t('memory.openDiagnostics') }}</ScreenLink>
         </template>
       </DataEmptyState>
       <form
@@ -349,21 +342,6 @@ function when(value: string): string {
   gap: var(--space-label-value) var(--space-2);
   align-items: end;
   margin-top: var(--space-heading-content);
-}
-
-/* A way to another screen, drawn as the product draws one (the portfolio's binding repair). */
-.memory-repair {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-  color: var(--color-accent);
-  font-size: var(--font-size-dense);
-  font-weight: 600;
-  text-underline-offset: 0.2em;
-
-  &:hover {
-    text-decoration: underline;
-  }
 }
 
 .memory-hint {

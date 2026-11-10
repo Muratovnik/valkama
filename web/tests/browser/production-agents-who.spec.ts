@@ -2,7 +2,8 @@
  * Who spent an item's work and under which organization, on its Agents tab in the real app, at
  * the three widths the card is used at: the strip of organizations with its marks where the
  * organization changed, and each organization with its share. Every box is measured after the
- * last write, and nothing on the tab may clip what it holds.
+ * last write, and nothing on the tab may clip what it holds. The tab's link opens the Analytics
+ * page filtered to the item, and the app takes that address as the page's own.
  */
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
@@ -77,6 +78,22 @@ function columnSpread(rows: ReturnType<typeof measureRoles>) {
   })
   return { inColumns: 'columns', spread: Math.max(...spreads) }
 }
+
+test('the tab opens Analytics filtered to the item', async ({ page }) => {
+  const usage = whoUsage()
+  await serve(page, usage)
+  await page.goto(CARD)
+  const section = await openAgents(page)
+  await section.getByRole('link', { name: 'Open in Analytics' }).click()
+  await expect(page).toHaveURL(/\/modules\/analytics\/global\?state=/u)
+  const state = new URL(page.url()).searchParams.get('state') ?? ''
+  expect(JSON.parse(Buffer.from(state, 'base64url').toString('utf8'))).toEqual({
+    work_item: usage.work_item_id,
+  })
+  // The app takes the address as the page's own: it opens the page, not the route's recovery.
+  await expect(page.locator('.analytics-page')).toBeVisible()
+  await expect(page.locator('.route-recovery')).toHaveCount(0)
+})
 
 for (const width of [1440, 1024, 390]) {
   test(`the organizations the work ran under stand whole at ${width}px`, async ({ page }, info) => {
