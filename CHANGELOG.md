@@ -162,10 +162,11 @@ checkouts are therefore distinguishable even at the same version.
   longer placed over a section.
 
 - **Settings opens with its settings.** The sentences under each group's heading and under
-  «Installation health», saying what the group is for, are gone. The two facts no control
+  «Installation health», saying what the group is for, are gone. The three facts no control
   said move onto the control as a hover hint: a type's colour picker says the colour is kept
-  on this device, and «If the place is unknown or cannot be opened» says that the place is
-  the one a session was last open in.
+  on this device, «If the place is unknown or cannot be opened» says that the place is
+  the one a session was last open in, and the notifications switch says that a notification
+  comes even with the window closed and that a click on it opens the work item.
 
 ### Fixed
 

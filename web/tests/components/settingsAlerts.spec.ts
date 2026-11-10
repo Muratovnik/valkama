@@ -112,6 +112,28 @@ describe('SettingsAlerts settings', () => {
     ])
   })
 
+  // No paragraph stands over the group: what the switch does not show is its detail hint.
+  it.each([
+    [
+      'en',
+      'Valkama shows a Windows notification when an agent is waiting for you, even with its window closed. A click opens the work item.',
+    ],
+    [
+      'ru',
+      'Valkama покажет оповещение Windows, когда агент ждёт вас, даже при закрытом окне. Клик открывает карточку задачи.',
+    ],
+  ])(
+    'says on the switch that a notification comes with the window closed (%s)',
+    async (locale, words) => {
+      serve()
+      const wrapper = await mountAlerts(locale)
+      const toggle = wrapper.get('[role="switch"]')
+      expect(toggle.attributes('data-tooltip')).toBe(words)
+      expect(toggle.attributes('data-tooltip-kind')).toBe('detail')
+      expect(wrapper.find('.settings-group-head p').exists()).toBe(false)
+    },
+  )
+
   it('clears every box with the master switch and brings the choices back', async () => {
     const { writes } = serve()
     const wrapper = await mountAlerts()
