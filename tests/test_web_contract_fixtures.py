@@ -363,6 +363,20 @@ class _Scenario:
             "usage-session": self.http(
                 f"/api/planning/session/usage?{urlencode({'session_id': session})}"
             ),
+            # The Analytics read of the same rows: two of the caller's days, by item and
+            # model, beside the two days before.
+            "analytics-usage": self.http(
+                "/api/analytics/usage?"
+                + urlencode(
+                    {
+                        "from": "2026-11-09",
+                        "to": "2026-11-11",
+                        "utc_offset": "180",
+                        "group_by": "work_item,model",
+                        "compare": "true",
+                    }
+                )
+            ),
         }
 
     def live_frame(self) -> dict:
@@ -700,6 +714,52 @@ class ServerFixtureTests(unittest.TestCase):
 
     def test_generating_twice_gives_the_same_text(self) -> None:
         self.assertEqual(generate(), generate())
+
+    def test_the_analytics_answer_has_the_shape_its_page_will_read(self) -> None:
+        # The web's schema for this answer comes with its page; until then the shape is
+        # held here, on the committed fixture the page's schema will be written against.
+        answer = json.loads((FIXTURES / "analytics-usage.json").read_text(encoding="utf-8"))
+        self.assertEqual({"interface_version", "usage"}, set(answer))
+        self.assertEqual("valkama-analytics-api", answer["interface_version"])
+        usage = answer["usage"]
+        measures = {
+            "agent_seconds",
+            "estimated_seconds",
+            "quality",
+            "tokens",
+            "estimated_api_cost_usd",
+            "unpriced_tokens",
+        }
+        self.assertEqual(
+            {
+                "period",
+                "group_by",
+                "cost_basis",
+                "last_event_at",
+                "total",
+                "rows",
+                "series",
+                "comparison",
+            },
+            set(usage),
+        )
+        self.assertEqual({"from", "to", "step", "utc_offset"}, set(usage["period"]))
+        self.assertEqual(["work_item", "model"], usage["group_by"])
+        self.assertEqual(measures | {"unpriced_models"}, set(usage["total"]))
+        self.assertEqual(3, len(usage["rows"]))
+        for row in usage["rows"]:
+            self.assertEqual(measures | {"group"}, set(row))
+            self.assertEqual(
+                {"id", "unknown", "reference", "title"}, set(row["group"]["work_item"])
+            )
+            self.assertEqual({"id", "unknown"}, set(row["group"]["model"]))
+        self.assertEqual(2, len(usage["series"]))
+        for point in usage["series"]:
+            self.assertEqual(measures | {"start", "end", "groups"}, set(point))
+            for group in point["groups"]:
+                self.assertEqual({"work_item"}, set(group["group"]))
+        self.assertEqual({"period", "total", "rows"}, set(usage["comparison"]))
+        self.assertNotIn("quota", json.dumps(answer))
 
 
 if __name__ == "__main__":

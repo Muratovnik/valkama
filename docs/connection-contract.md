@@ -914,6 +914,105 @@ An item's read adds `work_item_id`, `reference`, `title` and `scope`. A session'
 
 The tools an agent calls do not carry these numbers: they would cost it context.
 
+### What agent work spent in a period
+
+The Analytics module reads the same usage rows over a period rather than for one item or
+session: in total, by up to two dimensions, step by step, and beside the period before.
+It answers `GET /api/analytics/usage` with `interface_version`
+`valkama-analytics-api` and `usage`. A later build only adds fields to this answer. No
+MCP tool reads it, for the same reason as above.
+
+| Parameter | What it takes |
+| --- | --- |
+| `from`, `to` | required. A date, `2030-03-04`, meaning the start of that day at `utc_offset`, or a time with its own offset, `2030-03-04T09:00:00+03:00`. `to` is not included and must be later than `from` |
+| `step` | `day` (the default) or `hour` |
+| `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day or an hour of the series starts at the caller's midnight or full hour. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
+| `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `launch_class`, `model`, `effort`, `environment` |
+| a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id` |
+| `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, an unknown value for the rest. Alone it keeps only the work with no value there |
+| `compare` | `true` adds the preceding period of the same length; `false` by default |
+
+A filter admits a stretch of work when its value is among those named, and every filter
+must admit it. A period may hold at most 2,400 steps. Any other parameter, a repeated
+one, a value out of its range or a list with an empty entry is refused with `400` and
+`{"error": {"code": "invalid_request", "message": …}}`, the shape the reads above refuse
+with.
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "usage": {
+   "period": {"from": "2030-03-04T00:00:00+03:00", "to": "2030-03-06T00:00:00+03:00",
+              "step": "day", "utc_offset": 180},
+   "group_by": ["work_item"],
+   "cost_basis": "An estimate at public API list prices for each request. …",
+   "last_event_at": "2030-03-05T18:12:40.512Z",
+   "total": {"agent_seconds": 5400.0, "estimated_seconds": 0.0, "quality": "observed",
+             "tokens": {"input": 1060, "cached_read": 20000, "cache_write_5m": 300,
+                        "cache_write_1h": null, "output": 408, "reasoning": 2},
+             "estimated_api_cost_usd": 0.26, "unpriced_tokens": 57,
+             "unpriced_models": ["claude-unknown-9"]},
+   "rows": [{"group": {"work_item": {"id": "6f1c2a8e-0000-4000-8000-000000000010",
+                                     "unknown": false, "reference": "MAIN-12",
+                                     "title": "Answer a review in one form"}},
+             "agent_seconds": 3600.0, "…": "the measures"},
+            {"group": {"work_item": {"id": null, "unknown": false,
+                                     "reference": null, "title": null}},
+             "agent_seconds": 1800.0, "…": "the measures"}],
+   "series": [{"start": "2030-03-04T00:00:00+03:00", "end": "2030-03-05T00:00:00+03:00",
+               "agent_seconds": 0.0, "…": "the measures", "groups": []},
+              {"start": "2030-03-05T00:00:00+03:00", "end": "2030-03-06T00:00:00+03:00",
+               "agent_seconds": 5400.0, "…": "the measures",
+               "groups": [{"group": {"work_item": {"…": "as in rows"}},
+                           "agent_seconds": 3600.0, "…": "the measures"}]}],
+   "comparison": null}}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `period` | the period and step asked for, with `from` and `to` at the caller's offset |
+| `group_by` | the dimensions asked for, in order |
+| `cost_basis` | what the cost is: an estimate at public API prices, not a bill |
+| `last_event_at` | the newest transcript record read into the store, of any session, so a screen can say how fresh the numbers are; `null` before anything was read |
+| `total` | the measures of the whole period, and `unpriced_models` as the reads above give it |
+| `rows` | one line per group of values that spent anything, the most time first: `group`, one value per dimension of `group_by`, and the measures. With no `group_by` it is one line with an empty `group` |
+| `series` | one point per step, oldest first, every step present: `start`, `end`, the measures, and `groups`, the step broken down by the first dimension of `group_by`, empty with none |
+| `comparison` | with `compare=true`, `period` (`from`, `to`), `total` and `rows` of the preceding period of the same length; otherwise `null` |
+
+The measures are the reads' above: `agent_seconds`, `estimated_seconds`, `quality`
+(`observed`, `estimated`, `mixed`, or `null` when no time was counted), `tokens` by
+kind, `estimated_api_cost_usd` and `unpriced_tokens`, each with the meaning given
+there. The answer holds no subscription quota and no percentage of any limit.
+
+Seconds here are `agent_seconds` only: the sum of each stretch of work's own seconds.
+Two agents working one hour side by side spent two hours, a subagent's time counts
+beside its coordinator's, and nothing is taken as a union. The union, `elapsed_seconds`
+above, is not given, because it does not add up across groups or steps. These do: the
+rows add up to `total`, the points of `series` add up to `total`, a point's `groups` add
+up to the point, and a period that holds the whole store adds up to the reads of each
+of its sessions. A figure is rounded where it is published, seconds to the millisecond
+and cost to the millionth of a dollar, so a sum may differ from its total by that much.
+
+A stretch of work that crosses a step boundary or an edge of the period is split in
+proportion to its time, with its tokens and its cost. Tokens stay whole: each kind is
+shared out by largest remainder, so the parts add up to what the stretch reported. A
+stretch with no length, a model called on the side, counts in the step where it starts.
+
+A value in `group` carries `id` and `unknown`, which is `true` when the store does not
+hold the value; such a value is its own group and no string stands in for it. Work on no
+item is its own group too, with an `id` of `null` and `unknown` `false`.
+
+| Dimension | Value | Beside `id` |
+| --- | --- | --- |
+| `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
+| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it | `name`, as the projects registry gives it, or `null` |
+| `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
+| `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in`, `opened_host` and `state`, as a card's executor gives them |
+| `launch_class` | how the run was launched, as the usage rows hold it | — |
+| `model`, `effort`, `environment` | as the usage rows hold them | — |
+
+The answer carries ids, the names and numbers a card already shows, times and counts.
+It holds no path, no folder and no text from a transcript.
+
 ### The live-work frame
 
 One small read says where work is going on now, across every space of the primary

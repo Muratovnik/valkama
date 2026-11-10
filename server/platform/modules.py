@@ -1,8 +1,8 @@
 """The modules this build ships, declared in code: the ``valkama-modules`` wire.
 
 Planning, Analytics, Memory and Settings are the product. Analytics is where
-agent work's usage is read -- time, tokens, an API-price estimate -- and it
-declares no read model until there is one to read. Which of them exist is decided
+agent work's usage is read -- time, tokens, an API-price estimate -- and its one
+read model, `analytics.usage`, is `GET /api/analytics/usage` (`analytics.api`). Which of them exist is decided
 here, by the build, and nowhere else: no store row records it and nothing turns
 one off. The list used to be rows in `platform_modules` that the Kernel seeded
 and Settings toggled; that table is still declared in `core` only so an
@@ -145,11 +145,11 @@ _MODULES = (
         "platform.modules.analytics",
         "chart-no-axes-combined",
         [],
+        ["analytics.usage"],
+        ["analytics.usage"],
         [],
         [],
-        [],
-        [],
-        [],
+        ["usage"],
         [],
         ["project"],
         [],

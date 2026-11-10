@@ -1,0 +1,226 @@
+{
+  "interface_version": "valkama-analytics-api",
+  "usage": {
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "step": "day",
+      "utc_offset": 180
+    },
+    "group_by": [
+      "work_item",
+      "model"
+    ],
+    "cost_basis": "An estimate at public API list prices for each request. A subscription pays differently, so this is not a bill.",
+    "last_event_at": "2026-01-02T03:04:05.000Z",
+    "total": {
+      "agent_seconds": 1800.0,
+      "estimated_seconds": 0.0,
+      "quality": "observed",
+      "tokens": {
+        "input": 1060,
+        "cached_read": 20000,
+        "cache_write_5m": 300,
+        "cache_write_1h": null,
+        "output": 408,
+        "reasoning": 2
+      },
+      "estimated_api_cost_usd": 0.26,
+      "unpriced_tokens": 57,
+      "unpriced_models": [
+        "claude-unknown-9"
+      ]
+    },
+    "rows": [
+      {
+        "group": {
+          "work_item": {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "unknown": false,
+            "reference": "MAIN-1",
+            "title": "Contract card"
+          },
+          "model": {
+            "id": "claude-opus-5-5",
+            "unknown": false
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 1000,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 400,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 0
+      },
+      {
+        "group": {
+          "work_item": {
+            "id": null,
+            "unknown": false,
+            "reference": null,
+            "title": null
+          },
+          "model": {
+            "id": "claude-opus-5-5",
+            "unknown": false
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0
+      },
+      {
+        "group": {
+          "work_item": {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "unknown": false,
+            "reference": "MAIN-1",
+            "title": "Contract card"
+          },
+          "model": {
+            "id": "claude-unknown-9",
+            "unknown": false
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 50,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 7,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 57
+      }
+    ],
+    "series": [
+      {
+        "start": "2026-01-02T03:04:05+03:00",
+        "end": "2026-01-02T03:04:05+03:00",
+        "agent_seconds": 0.0,
+        "estimated_seconds": 0.0,
+        "quality": null,
+        "tokens": {
+          "input": null,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": null,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 0,
+        "groups": []
+      },
+      {
+        "start": "2026-01-02T03:04:05+03:00",
+        "end": "2026-01-02T03:04:05+03:00",
+        "agent_seconds": 1800.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 1060,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 408,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": 0.26,
+        "unpriced_tokens": 57,
+        "groups": [
+          {
+            "group": {
+              "work_item": {
+                "id": "00000000-0000-4000-8000-000000000005",
+                "unknown": false,
+                "reference": "MAIN-1",
+                "title": "Contract card"
+              }
+            },
+            "agent_seconds": 1200.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 1050,
+              "cached_read": 20000,
+              "cache_write_5m": 300,
+              "cache_write_1h": null,
+              "output": 407,
+              "reasoning": 2
+            },
+            "estimated_api_cost_usd": 0.25,
+            "unpriced_tokens": 57
+          },
+          {
+            "group": {
+              "work_item": {
+                "id": null,
+                "unknown": false,
+                "reference": null,
+                "title": null
+              }
+            },
+            "agent_seconds": 600.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 10,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 1,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": 0.01,
+            "unpriced_tokens": 0
+          }
+        ]
+      }
+    ],
+    "comparison": {
+      "period": {
+        "from": "2026-01-02T03:04:05+03:00",
+        "to": "2026-01-02T03:04:05+03:00"
+      },
+      "total": {
+        "agent_seconds": 0.0,
+        "estimated_seconds": 0.0,
+        "quality": null,
+        "tokens": {
+          "input": null,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": null,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 0,
+        "unpriced_models": []
+      },
+      "rows": []
+    }
+  }
+}

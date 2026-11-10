@@ -38,6 +38,7 @@ from .alerts import emit as alert_emit
 from .alerts import presence as alert_presence
 from .alerts import readiness as alert_readiness
 from .alerts import settings as alert_settings
+from .analytics import api as analytics_api
 from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
@@ -471,6 +472,10 @@ def _execution_read(call: _Call) -> _Answer | None:
     return execution_api.handle_get(call.store(), call.path, call.parameters)
 
 
+def _analytics_read(call: _Call) -> _Answer | None:
+    return analytics_api.handle_get(call.store(), call.path, call.parameters)
+
+
 def _card_record(conn: sqlite3.Connection, reference: str) -> dict:
     """What the card draws: the item and the agents on it, which no tool answer carries."""
 
@@ -628,6 +633,12 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         exact=frozenset(execution_api.READ_PATHS),
         handler=_execution_read,
         errors=execution_api.error_response,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
+        exact=frozenset(analytics_api.READ_PATHS),
+        handler=_analytics_read,
+        errors=analytics_api.error_response,
         commit=_Commit.READ_ONLY,
     ),
     # The two rows below answer under `/api/platform/` and `/api/modules`.

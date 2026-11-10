@@ -20,6 +20,18 @@ checkouts are therefore distinguishable even at the same version.
   one label named in both. The same fields work on `POST /api/planning/work-item/update`
   and `/apply`.
 
+- **What agent work spent in a period.** `GET /api/analytics/usage` reads the usage rows
+  between two moments: the total, one line per group of up to two of account, project,
+  work item, executor, launch class, model, effort and environment, a series by hour or
+  by the caller's day, and on request the preceding period of the same length beside it.
+  It filters on the same dimensions and says how fresh it is. The measures are the item
+  and session reads': seconds, tokens by kind, the API-price estimate with its basis and
+  the tokens it leaves out. Seconds are the sum of each agent's work, so every cut adds
+  up to the total; work across a step or the period's edge is split in proportion to its
+  time, tokens kept whole. A value the store does not hold is its own group, named
+  unknown. The Analytics module now names this read model; its page comes later, and no
+  MCP tool reads it.
+
 - **An Analytics module for the usage of agent work.** The module list now declares
   `analytics` beside Planning, Memory and Settings, and the navigation shows it under
   «Understand». Its page is where time, tokens and an API-price estimate of agent work
