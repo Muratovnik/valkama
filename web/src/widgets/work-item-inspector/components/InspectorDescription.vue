@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * The item's description, and its editor. A task chosen from the editor's `@` list is
+ * told when the description is saved, as a comment's is, while its number still stands
+ * in the text; the server tells only those the saved text did not name before.
+ */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -7,7 +12,7 @@ import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useIns
 
 import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { mentionSuggest } from '@/shared/lib/mentionSuggest.ts'
+import { useCommentMentions } from '@/shared/lib/mentionSuggest.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -24,10 +29,7 @@ const previewing = ref(false)
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const opener = ref<InstanceType<typeof VButton> | null>(null)
 const draft = ref('')
-const suggest = mentionSuggest(
-  () => props.item.planning_space_id,
-  () => props.item.work_item_id,
-)
+const mentions = useCommentMentions(props, draft)
 let seeded = ''
 watch(
   () => props.item.work_item_id,
@@ -36,6 +38,7 @@ watch(
     seeded = props.item.description
     editing.value = false
     previewing.value = false
+    mentions.forget()
   },
   { immediate: true },
 )
@@ -80,9 +83,11 @@ function save() {
         id: props.item.work_item_id,
         description: draft.value,
         expected_revision: props.item.revision,
+        ...mentions.told(),
       }),
     () => {
       seeded = draft.value
+      mentions.forget()
       closeEditor()
     },
   )
@@ -90,6 +95,7 @@ function save() {
 function cancel() {
   draft.value = props.item.description
   seeded = props.item.description
+  mentions.forget()
   closeEditor()
 }
 </script>
@@ -127,12 +133,13 @@ function cancel() {
         v-model="draft"
         v-model:preview="previewing"
         :label="t('workItem.description')"
-        :suggest="suggest"
+        :suggest="mentions.suggest"
         :rows="6"
         :maxlength="20000"
         :disabled="pending"
         :error="error"
         hide-label
+        @chose="mentions.chose"
         @submit="save"
       >
         <template #actions>

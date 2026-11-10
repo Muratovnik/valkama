@@ -10,7 +10,8 @@
  * started. The host owns the text and the write, so a draft outlives a step back
  * to the comment, and the host answers for it from there. So it can outlive the
  * move too, and then this is only an outcome being written: no reason, and a button
- * that says what it does.
+ * that says what it does. A task chosen from either field's `@` list goes to the host,
+ * which tells it when the outcome is saved.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,7 +29,7 @@ const props = defineProps<{
   pending: boolean
   suggest: (query: string, signal: AbortSignal) => Promise<readonly EditorSuggestion[]>
 }>()
-const emit = defineEmits<{ back: []; refresh: []; submit: [] }>()
+const emit = defineEmits<{ back: []; chose: [row: EditorSuggestion]; refresh: []; submit: [] }>()
 const done = defineModel<string>('done', { required: true })
 const next = defineModel<string>('next', { required: true })
 const { t } = useI18n()
@@ -92,6 +93,7 @@ defineExpose({
       :rows="3"
       :maxlength="4000"
       :disabled="pending"
+      @chose="emit('chose', $event)"
       @submit="send"
     />
     <MarkdownEditor
@@ -103,6 +105,7 @@ defineExpose({
       :maxlength="4000"
       :disabled="pending"
       :error="error"
+      @chose="emit('chose', $event)"
       @submit="send"
     >
       <template #actions>

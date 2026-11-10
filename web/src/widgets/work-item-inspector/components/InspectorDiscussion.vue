@@ -28,7 +28,7 @@
  * keeps it, and the comment then offers the way back to it, so that the question
  * never asks about something the reader cannot find.
  */
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorOutcomeForm from '@/widgets/work-item-inspector/components/InspectorOutcomeForm.vue'
@@ -38,6 +38,7 @@ import { threadGroups } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
+import { useOutcomeDraft } from '@/widgets/work-item-inspector/utils/useOutcomeDraft.ts'
 import { useThreadFilter } from '@/widgets/work-item-inspector/utils/useThreadFilter.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -83,7 +84,7 @@ const composer = ref<HTMLFormElement | null>(null)
 const closing = ref<StateMove | null>(null)
 /** The move an unsent outcome was written for, once the form has made way for the comment. */
 const held = ref<StateMove | null>(null)
-const outcome = reactive({ done: '', next: '' })
+const outcome = useOutcomeDraft()
 /**
  * The form's move, while it still waits on an outcome. This reads the item as it stands
  * and not the way the form came to be open: a report made the outcome here, or an agent
@@ -111,7 +112,6 @@ const headingCount = computed(() => counts.value.threads || '')
 const mentions = useCommentMentions(props, note)
 
 useDraftSource('comment', () => Boolean(note.value.trim()))
-useDraftSource('outcome', () => Boolean(outcome.done || outcome.next))
 
 async function revealComposer(identity: string) {
   await nextTick()
@@ -138,7 +138,7 @@ async function askOutcome(move: StateMove) {
 }
 /** The form makes way for the comment, and what is written in it stays, if anything is. */
 function stepAside() {
-  if (outcome.done || outcome.next) held.value = closing.value ?? held.value
+  if (outcome.written()) held.value = closing.value ?? held.value
   closing.value = null
 }
 function backToComment() {
@@ -171,7 +171,7 @@ watch(
     anchor.value = null
     closing.value = null
     held.value = null
-    Object.assign(outcome, { done: '', next: '' })
+    outcome.clear()
   },
 )
 const { pending, error, submit } = useInspectorMutation(
@@ -218,7 +218,7 @@ function oweFocus() {
 function outcomeSent(move: StateMove | null) {
   closing.value = null
   held.value = null
-  Object.assign(outcome, { done: '', next: '' })
+  outcome.clear()
   oweFocus()
   if (move) emit('resume', move.key)
 }
@@ -235,7 +235,7 @@ function publishOutcome() {
     () =>
       publishWorkItemReport({
         id: props.item.work_item_id,
-        report: { ...outcome },
+        ...outcome.report(),
         make_current: true,
         expected_revision: props.item.revision,
       }),
@@ -278,13 +278,14 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
     <InspectorOutcomeForm
       v-if="writable && closing"
       ref="outcomeForm"
-      v-model:done="outcome.done"
-      v-model:next="outcome.next"
+      v-model:done="outcome.text.done"
+      v-model:next="outcome.text.next"
       :closing="waitingMove?.name ?? null"
       :error="error"
       :pending="pending"
       :suggest="mentions.suggest"
       @back="backToComment"
+      @chose="outcome.chose"
       @refresh="emit('refresh')"
       @submit="publishOutcome"
     />

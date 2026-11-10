@@ -142,11 +142,11 @@ export function mentionSuggest(space: () => string, omit: () => string | undefin
 export function chosenTasks() {
   const chosen = new Set<string>()
   return {
-    chose(row: EditorSuggestion) {
+    chose: (row: EditorSuggestion) => {
       if (row.kind === 'task') chosen.add(row.reference)
     },
     /** The write's `mentions` for `text`, or nothing when it tells nobody. */
-    told(text: string): { mentions?: string[] } {
+    told: (text: string): { mentions?: string[] } => {
       const named = new Set(
         splitIdentifiers(text).flatMap((run) =>
           typeof run !== 'string' && run.kind === 'work-item' ? [run.value] : [],
@@ -155,7 +155,7 @@ export function chosenTasks() {
       const told = [...chosen].filter((reference) => named.has(reference)).slice(0, MOST_TOLD)
       return told.length ? { mentions: told } : {}
     },
-    forget() {
+    forget: () => {
       chosen.clear()
     },
   }
