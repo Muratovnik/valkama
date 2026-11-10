@@ -8,9 +8,9 @@
  * epic before its title.
  *
  * An item's row is one link to its card and a session's row is one button that opens the
- * session (`useOpenPress`): its box is stretched over the whole row, so a press anywhere on
- * it acts, and an item's link is an address, so a press with a modifier opens it elsewhere
- * as any link does. The lead is one width on every row, so the signs stand in one column and
+ * session through the list's one opener (`useRowOpen`), whose panel outlives the row: its box
+ * is stretched over the whole row, so a press anywhere on it acts, and an item's link is an
+ * address, so a press with a modifier opens it elsewhere as any link does. The lead is one width on every row, so the signs stand in one column and
  * the numbers in the next (`NavWorkTree`). On a phone a closed item with no sign has no lead
  * at all: its number stands a lead to the left of the open rows' numbers, and its title takes
  * the room.
@@ -36,12 +36,10 @@ import NavWorkLink from '@/widgets/app-nav/components/NavWorkLink.vue'
 import NavWorkOpen from '@/widgets/app-nav/components/NavWorkOpen.vue'
 import NavWorkPin from '@/widgets/app-nav/components/NavWorkPin.vue'
 import { useMinuteClock } from '@/widgets/app-nav/composables/useMinuteClock.ts'
+import { useRowOpen } from '@/widgets/app-nav/composables/useRowOpen.ts'
 import { rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
 import type { ItemEntry, LiveEntry } from '@/widgets/app-nav/utils/liveList.ts'
 import { rowSentence, secondLine, sessionTitle } from '@/widgets/app-nav/utils/liveWords.ts'
-
-import OpenPanel from '@/features/session-open/OpenPanel.vue'
-import { useOpenPress } from '@/features/session-open/openPress.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -143,19 +141,9 @@ const rowClass = computed(() => ({
   'nav-row-leadless': leadless.value,
 }))
 
-const {
-  busy,
-  finished,
-  panel,
-  press: open,
-} = useOpenPress(
-  () => ({
-    kind: 'session',
-    session: session.value?.session ?? '',
-    family: session.value?.executor.family || undefined,
-  }),
-  () => title.value,
-)
+const opener = useRowOpen()
+/** A session's row as the list's opener knows it. */
+const pressKey = computed(() => `session:${session.value?.session ?? ''}`)
 /** The link's own: an item's address and whether it is on show, a session's glyph and press. */
 const link = computed(() =>
   row.value === null
@@ -163,7 +151,7 @@ const link = computed(() =>
         'tag': 'button',
         'glyph': true,
         'type': 'button',
-        'aria-busy': busy.value || undefined,
+        'aria-busy': opener.busy(pressKey.value) || undefined,
       } as const)
     : ({
         'tag': 'a',
@@ -176,7 +164,12 @@ const link = computed(() =>
 /** A plain press opens the card in place; with a modifier it is the browser's, as on any link. */
 function press(event: MouseEvent) {
   if (session.value !== null) {
-    void open()
+    const { executor, session: id } = session.value
+    opener.press({
+      key: pressKey.value,
+      name: title.value,
+      target: { kind: 'session', session: id, family: executor.family || undefined },
+    })
     return
   }
   if (props.route === null) return
@@ -244,16 +237,6 @@ function press(event: MouseEvent) {
     <span
       v-if="ends.pin"
       class="nav-row-end"
-    />
-    <OpenPanel
-      v-if="panel"
-      :actions="panel.actions"
-      :context="title"
-      :notice="panel.notice"
-      :offer="panel.offer"
-      :opens="panel.opens"
-      @close="panel = null"
-      @finished="finished"
     />
   </div>
 </template>
@@ -343,10 +326,6 @@ function press(event: MouseEvent) {
 
   .nav-row-link {
     font: var(--font-control);
-  }
-
-  .nav-row-end {
-    display: none;
   }
 }
 

@@ -734,10 +734,12 @@ sessions as the frame sent them. Under them up to three rows fold the rest, each
 when it holds something and named by what it holds, in this order: «ещё N у работающих
 сессий», the items held by a session at work on another item; «ещё N давно ждут», the items
 and sessions that have waited for over four hours; and «ещё N молчат больше суток», the items
-silent for over a day. Each starts folded, opens in place under itself, and its opening is
-kept on the device on its own; a device that opened the quiet work's fold before keeps
-«молчат больше суток» open. Opening one moves nothing above it and widens nothing: the
-numbers' column is sized with the folded rows already. Last, under the caption
+silent for over a day. Inside a fold the rows stand freshest first, and in «давно ждут», as in
+the run above, a row that asks a person stands first. Each starts folded, opens in place under
+itself, and its opening is kept on the device on its own; a device that opened the quiet
+work's fold before keeps «молчат больше суток» open. Opening one moves nothing above it and
+widens nothing: the numbers' column is sized with the folded rows already. Last, under the
+caption
 «Закреплённые», the pinned items not on view, by number: a pinned item on view stands with
 the work instead, once, and a pinned item that is held, waits long or is silent stands with
 the pinned. After the spaces, under the heading «Сессии вне пространств», stand the sessions
@@ -771,7 +773,8 @@ it.
 A session's row is named by its title, else its folder, else «Сессия без названия», and a
 terminal glyph stands in the number's column where an item's number would. Pressing it opens
 the session as a card's session button does; it has no card and no pin, and a session that
-leaves the frame leaves at once, where an item's row stays a while, muted. An item's row with
+leaves the frame leaves at once, where an item's row stays a while, muted, its second line
+saying «работа закончилась» as its hint does, with no state and no time. An item's row with
 a session behind it ends with «Открыть сессию» beside the pin, the same glyph, shown the way
 the pin is: in a column the rail keeps on every row, so the title neither moves nor narrows
 when it comes up, out of sight until the pointer or the keyboard is on the row, and standing

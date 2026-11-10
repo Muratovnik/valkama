@@ -5,7 +5,8 @@
  * The second line is what the session is doing, `working`, `asking` or `waiting`, then how
  * long, then after « · » where it belongs: the epic of an item, the folder of a session that
  * has a title of its own. How long counts from when the session began what it does now, in
- * whole minutes under an hour and whole hours from one, and says nothing under a minute.
+ * whole minutes under an hour and whole hours from one, and says nothing under a minute. A
+ * row that left the frame says that its work ended instead.
  *
  * The sentence says what the row is, where it belongs, the state with what it means, how long
  * and the agents on it: asking is a session stopped in the middle of a turn for a permission or
@@ -59,10 +60,17 @@ function context(entry: LiveEntry): string {
   return entry.session.title === null ? '' : entry.session.folder
 }
 
-/** A row's second line: the state, how long, and where it belongs. */
+/**
+ * A row's second line: the state, how long, and where it belongs. A row the frame dropped
+ * keeps its last state only to keep its place while it fades; its line says that the work
+ * ended, as its hint does, and never a state or a time that no longer runs.
+ */
 export function secondLine(t: Words['t'], entry: LiveEntry, now: number): string {
   const live = liveOf(entry)
-  const state = [doing(t, live), spanSince(t, live.since, now)].filter(Boolean).join(' ')
+  const state =
+    entry.kind === 'item' && entry.row.fading
+      ? t('liveWork.ended')
+      : [doing(t, live), spanSince(t, live.since, now)].filter(Boolean).join(' ')
   return [state, context(entry)].filter(Boolean).join(' · ')
 }
 

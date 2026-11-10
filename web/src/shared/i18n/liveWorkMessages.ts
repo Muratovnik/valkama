@@ -1,7 +1,9 @@
 /**
  * The side panel's list of work going on now, its phone panel, and the pin that keeps
  * an item in it. A row's state is said in one word on its second line (`doing`), and in its
- * hint with what it means (`means`); each fold is named by what it holds.
+ * hint with what it means (`means`); each fold is named by what it holds. The word for a
+ * state is the one a card's foot and the graph's key use, so a held item is «у сессии»
+ * wherever it is said.
  */
 export const liveWorkMessages = {
   en: {
@@ -62,13 +64,13 @@ export const liveWorkMessages = {
       pinnedGroup: 'Закреплённые',
       partOf: 'часть «{title}»',
       agents: '{count}\u{A0}агент | {count}\u{A0}агента | {count}\u{A0}агентов',
-      doing: { working: 'работает', asks: 'спрашивает', waiting: 'ждёт', held: 'отложена' },
+      doing: { working: 'работает', asks: 'спрашивает', waiting: 'ждёт', held: 'у сессии' },
       during: '{state} уже {span}',
       means: {
         working: '{state}',
         asks: '{state} — сессия остановилась посреди хода: ей нужно разрешение или ответ',
         waiting: '{state} — ход сессии закончен',
-        held: '{state} — её сессия работает над другой задачей',
+        held: '{state} — сессия сейчас работает над другой задачей',
       },
       quiet: 'молчит с {since}',
       session: 'Сессия «{name}»',

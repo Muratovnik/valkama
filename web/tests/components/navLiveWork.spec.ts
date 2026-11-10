@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FADING_MS } from '@/shared/stores/liveWorkStore.ts'
 
 import { busyFrame, liveFrame, liveRow, liveSession, liveSpace } from '../support/liveFrame.ts'
-import { drawn, rail, row, unmountRails } from '../support/navRail.ts'
+import { drawn, hintOf, rail, row, unmountRails } from '../support/navRail.ts'
 import type { Rail } from '../support/navRail.ts'
 
 const STORAGE = 'valkama-nav-open'
@@ -209,11 +209,15 @@ describe('the folds', () => {
   })
 })
 
+/** MAIN-5 has been at work for twelve minutes when the frame drops it. */
 const before = () =>
   liveFrame([
     liveSpace('MAIN', [
       liveRow('MAIN-3', { state: 'working' }),
-      liveRow('MAIN-5', { state: 'working' }),
+      liveRow('MAIN-5', {
+        state: 'working',
+        since: new Date(Date.now() - 12 * 60_000).toISOString(),
+      }),
       liveRow('MAIN-8', { state: 'held' }),
     ]),
   ])
@@ -234,6 +238,9 @@ describe('a row the frame no longer has', () => {
     expect(drawn(wrapper)).toEqual(['MAIN-3', 'MAIN-5', 'MAIN-8'])
     expect(row(wrapper, 'MAIN-5').classList).toContain('muted')
     expect(row(wrapper, 'MAIN-5').querySelector('.session-sign')).toBeNull()
+    // Its second line says what its hint says, and no state or time that no longer runs.
+    expect(row(wrapper, 'MAIN-5').querySelector('.nav-row-detail')?.textContent).toBe('work ended')
+    expect(hintOf(row(wrapper, 'MAIN-5'))).toBe('MAIN-5 Work MAIN-5: work ended')
     vi.advanceTimersByTime(FADING_MS - 1)
     await flushPromises()
     expect(drawn(wrapper)).toContain('MAIN-5')

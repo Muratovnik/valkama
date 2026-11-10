@@ -1,7 +1,7 @@
 /**
  * How the side panel lists a space's rows and sessions: only the work to follow now, items
  * and sessions in one run, a row that asks first and then the freshest; the rest under three
- * folds, held, waiting long and quiet; the pinned items in a group of their own, by number;
+ * folds, held, waiting long (a row that asks first there too) and quiet; the pinned items in a group of their own, by number;
  * and an item that is in the frame only as a parent said with its rows rather than as a row.
  */
 import { describe, expect, it } from 'vitest'
@@ -114,6 +114,31 @@ describe('the folds', () => {
   it('folds a session that asks once it has waited for over four hours', () => {
     const list = liveList([], [liveSession(SESSION('0001'), { asks: true, long: true })])
     expect([names(list.live), names(list.long)]).toEqual([[], ['s0001']])
+  })
+
+  it('stands the rows that ask first inside the long fold, the rest freshest first', () => {
+    const long = { state: 'waiting', long: true } as const
+    const list = liveList(
+      [
+        shown('MAIN-1', { ...long, updated_at: '2026-11-09T12:00:00Z' }),
+        shown('MAIN-2', { ...long, asks: true, updated_at: '2026-11-01T00:00:00Z' }),
+        shown('MAIN-3', { ...long, updated_at: '2026-11-08T00:00:00Z' }),
+      ],
+      [
+        liveSession(SESSION('0001'), { long: true, since: '2026-11-09T13:00:00Z' }),
+        liveSession(SESSION('0002'), { long: true, asks: true, since: '2026-11-02T00:00:00Z' }),
+      ],
+    )
+    expect(names(list.long)).toEqual(['s0002', 'MAIN-2', 's0001', 'MAIN-1', 'MAIN-3'])
+    // The same in the long fold of the sessions under no space.
+    const outside = liveList(
+      [],
+      [
+        liveSession(SESSION('0003'), { long: true, since: '2026-11-09T13:00:00Z' }),
+        liveSession(SESSION('0004'), { long: true, asks: true, since: '2026-11-01T00:00:00Z' }),
+      ],
+    )
+    expect(names(outside.long)).toEqual(['s0004', 's0003'])
   })
 })
 

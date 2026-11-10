@@ -11,11 +11,12 @@
  *
  * The rest folds under three rows, each named by what it holds and in the same order: the
  * items held by a session at work on others, what has waited for over four hours, items and
- * sessions, and the items silent for over a day. A pinned item that is not on view stands
- * with the pinned, by number, since a person put it there to find it again. An item that is
- * in the frame only as the parent of others is no row of its own: its title is said with its
- * rows, which is where an epic's name helps. A row that left the frame and fades keeps the
- * place its last state gave it.
+ * sessions, and the items silent for over a day, each freshest first; among the long waits,
+ * as in the work on view, a row that asks a person stands first. A pinned item that is not
+ * on view stands with the pinned, by number, since a person put it there to find it again.
+ * An item that is in the frame only as the parent of others is no row of its own: its title
+ * is said with its rows, which is where an epic's name helps. A row that left the frame and
+ * fades keeps the place its last state gave it.
  */
 import type { LiveSession } from '@/shared/api/liveFrameModel.ts'
 import { onView } from '@/shared/lib/liveWorkRows.ts'
@@ -42,7 +43,7 @@ export interface LiveList {
   held: ItemEntry[]
   /** Working, or waiting for less than four hours: items and sessions, asking first. */
   live: LiveEntry[]
-  /** Waiting for over four hours, items not pinned and sessions. */
+  /** Waiting for over four hours, items not pinned and sessions, asking first. */
   long: LiveEntry[]
   /** Pinned and not on view, by number. */
   pinned: ItemEntry[]
@@ -117,7 +118,7 @@ export function liveList(
   }
   list.live.sort(asking)
   list.held.sort(byFreshness)
-  list.long.sort(byFreshness)
+  list.long.sort(asking)
   list.quiet.sort(byFreshness)
   list.pinned.sort(byNumber)
   return list
