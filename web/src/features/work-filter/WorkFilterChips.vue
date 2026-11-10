@@ -159,7 +159,7 @@ defineExpose({ focusLast })
           :aria-label="chip.operator.name"
           @toggle="emit('negate', chip.operator.token)"
         >
-          {{ chip.operator.sign }}
+          <span class="filter-chip-sign">{{ chip.operator.sign }}</span>
         </ToggleChip>
         <button
           class="filter-chip"
@@ -233,6 +233,31 @@ defineExpose({ focusLast })
   min-height: var(--size-control-inline);
   font: var(--font-detail);
   background: transparent;
+}
+
+/* The sign is as wide as the wider of the two whichever it shows: «=» and «≠» are not one width
+   in the font, and a press grew or shrank the toggle by the difference, which moved its chip's
+   words. Both signs stand under the one shown, of no height and unseen, and only
+   their width counts. */
+.filter-chip-sign {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+
+  &::before,
+  &::after {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  &::before {
+    content: '=';
+  }
+
+  &::after {
+    content: '≠';
+  }
 }
 
 /* The label chip's look — control fill, muted ink — one step up, because it
