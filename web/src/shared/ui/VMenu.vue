@@ -232,14 +232,11 @@ function closed(event: Event) {
   </DropdownMenuRoot>
 </template>
 
-<style scoped>
-.menu-trigger-box {
-  display: inline-flex;
-  flex: none;
-}
-
+<!-- The menu is portalled out of this component, so its surface is not scoped. -->
+<style>
 /* The menu floats over what it stands beside, as a choice list does: the surface, its one
-   edge and its shadow, never wider than the window. */
+   edge and its shadow, never wider than the window. Reka draws the menu's element without
+   this component's scope, so a scoped rule never reached it and the menu had no surface. */
 .menu-popup {
   min-width: 200px;
   max-width: min(360px, calc(100vw - 24px));
@@ -249,6 +246,13 @@ function closed(event: Event) {
   background: var(--color-surface);
   border-radius: var(--radius-control);
   box-shadow: 0 14px 34px var(--color-shadow);
+}
+</style>
+
+<style scoped>
+.menu-trigger-box {
+  display: inline-flex;
+  flex: none;
 }
 
 /* The entries' box adds nothing to the layout; it is where a stray press is stopped. */

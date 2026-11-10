@@ -681,7 +681,7 @@ export default ts.config(
     },
   },
   {
-    // The two components whose styles cannot be scoped. `SelectPortal` renders
+    // The components whose styles cannot be scoped. `SelectPortal` renders
     // the popup at the end of `<body>`, outside this component's subtree, so
     // the data attribute `scoped` adds never reaches ten of the fifteen classes
     // in the block — the search field, the viewport, the options and their
@@ -689,7 +689,12 @@ export default ts.config(
     // popup global, which is the same exception written twice.
     // `TooltipPortal` does the same to the reference preview and to the window's
     // one tooltip, whose whole blocks are that one popup's surface.
-    files: ['src/shared/ui/ChoiceSelect.vue', 'src/shared/ui/{ReferencePreview,TooltipHost}.vue'],
+    // `DropdownMenuPortal` draws the menu's own element without the attribute, so
+    // VMenu's surface rule is its one unscoped block; scoped, the menu had no fill.
+    files: [
+      'src/shared/ui/ChoiceSelect.vue',
+      'src/shared/ui/{ReferencePreview,TooltipHost,VMenu}.vue',
+    ],
     rules: { 'vue/enforce-style-attribute': 'off' },
   },
   {

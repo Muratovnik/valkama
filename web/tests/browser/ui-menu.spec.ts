@@ -95,6 +95,29 @@ test('a choice is made, closes the menu, gives focus back and is checked next ti
   await expect(trigger).toBeFocused()
 })
 
+test('the menu is a surface over the page: its fill, its edge, its shadow and room inside', async ({
+  page,
+}) => {
+  const trigger = await openSurface(page)
+  await trigger.click()
+  const menu = page.getByRole('menu')
+  await expect(menu).toBeVisible()
+  const look = await menu.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      fill: style.backgroundColor,
+      edge: style.borderTopWidth,
+      shadow: style.boxShadow,
+      padding: style.paddingTop,
+    }
+  })
+  // Reka draws the menu through a portal, where a style scoped to the component never lands.
+  expect(look.fill, 'the menu has a fill of its own').not.toBe('rgba(0, 0, 0, 0)')
+  expect(look.edge).toBe('1px')
+  expect(look.shadow).not.toBe('none')
+  expect(Number.parseFloat(look.padding)).toBeGreaterThan(0)
+})
+
 test('every entry is a row of the control height, and the menu stays in the window', async ({
   page,
 }) => {
