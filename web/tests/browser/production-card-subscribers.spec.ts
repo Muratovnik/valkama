@@ -134,11 +134,11 @@ for (const locale of ['ru', 'en'] as const)
         0,
       )
       expect(labelWords.left, `${at}: the name against the column`).toBeCloseTo(block.x, 0)
-      // Under the holder's row, and before the labels' row.
+      // Under the holder's row, which follows the labels' in the registry's order.
       const holder = await box(drawer.locator('.card-holder-value'))
       const labels = await box(drawer.locator('.card-labels'))
       expect(labelWords.top).toBeGreaterThanOrEqual(holder.bottom - 1)
-      expect(labelWords.bottom).toBeLessThanOrEqual(labels.y)
+      expect(holder.y).toBeGreaterThan(labels.bottom)
       // The followers and their name share a line, the followers on the values' edge.
       const [nameWords] = await drawnLines(names.first())
       expect(Math.abs(nameWords.top - labelWords.top)).toBeLessThanOrEqual(1.5)
@@ -160,11 +160,18 @@ for (const locale of ['ru', 'en'] as const)
         await expect(drawer.locator('.card-holder-value')).toBeVisible()
         await expect(drawer.locator('.card-subscribers')).toHaveCount(0)
         const holder = await box(drawer.locator('.card-holder-value'))
-        const labels = await box(
-          drawer.locator('.card-row-value').filter({ has: page.locator('.card-labels') }),
-        )
-        // The rows keep the head's own room between them, 4px, and nothing more.
-        expect(labels.y - holder.bottom).toBeCloseTo(4, 0)
+        // What stands next under the holder's row — the action where a phone stands it under
+        // every fact, else the block's own end — keeps the head's room, 4px, and nothing more.
+        const next = await drawer.locator('.card-facts-block').evaluate((block, top) => {
+          const below = [
+            ...block.querySelectorAll('.card-row-label, .card-row-value, .card-action'),
+          ]
+            .map((element) => element.getBoundingClientRect())
+            .filter((bounds) => bounds.height > 0 && bounds.top >= top)
+            .map((bounds) => bounds.top - 4)
+          return Math.min(block.getBoundingClientRect().bottom, ...below)
+        }, holder.bottom)
+        expect(next - holder.bottom).toBeCloseTo(0, 0)
       })
   }
 

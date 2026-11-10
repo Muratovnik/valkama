@@ -89,9 +89,9 @@ for (const width of [1440, 1024, 390]) {
     const facts = await box(lead.locator('.card-facts-block'))
     const holder = await box(lead.locator('.card-holder-value'))
     const labels = await box(lead.locator('.card-labels'))
-    // Wide: at the end of the holder's row, above the labels, its top and height the
-    // row's. Narrow: under the labels, as wide as the facts.
-    expect(action.y < labels.y).toBe(!stacked)
+    // Wide: at the end of the holder's row, which follows the labels in the registry's
+    // order, its top and height the row's. Narrow: under every fact, as wide as the facts.
+    expect(action.y).toBeGreaterThan(labels.y)
     expect(action.x >= holder.x + holder.width - 1).toBe(!stacked)
     expect(Math.abs(action.width - facts.width) < 1).toBe(stacked)
     expect(Math.abs(action.y - holder.y) < 1).toBe(!stacked)
@@ -124,8 +124,9 @@ test('the state chip moves the item from the keyboard and says why the server re
   const { drawer, moves } = await openCard(page, 1440)
   const chip = drawer.getByRole('combobox', { name: /^Состояние: В работе/u })
   await drawer.locator('.drawer-frame-close').focus()
-  // Close, the reference, its link, the source, then the state.
-  for (let step = 0; step < 4; step += 1) await page.keyboard.press('Tab')
+  // Close, the reference, its link, the source, the priority, then the state: the facts stand
+  // in the registry's order.
+  for (let step = 0; step < 5; step += 1) await page.keyboard.press('Tab')
   await expect(chip).toBeFocused()
 
   await page.keyboard.press('Enter')

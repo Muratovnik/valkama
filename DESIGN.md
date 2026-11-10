@@ -1529,9 +1529,12 @@ stood in the identity line between the link and the date, read as one more fact 
 link to copy stays beside the reference: it is the reference's twin, in the head as on the
 hover card, and what it did is said at the end of that line. The scroller holds the rest and moves it 1:1: the title, the facts, the
 tabs, the content. The facts are rows 4px apart, each led by its name in the quiet ink in
-one column, «Состояние», «Приоритет», «Родитель», «Исполняет» or «Ранее отвечал», «Подписаны»
-and «Метки», with the value on the name's baseline; a run of chips with no names read as
-one heap of state, priority, holder and tags. The state is its own transition menu, said
+one column, «Приоритет», «Состояние», «Метки», «Исполняет» or «Ранее отвечал», «Подписаны»
+and «Родитель», with the value on the name's baseline; a run of chips with no names read as
+one heap of state, priority, holder and tags. The rows stand in the registry's order
+(`FACET_ORDER`), the order the new-task dialog asks in and every surface reads an item's
+facets in; the template only draws each row, and the parent once stood before the labels
+because the template put it there. The state is its own transition menu, said
 once, so a move the server refuses leaves the chip naming where the item is, then, while a
 question waits, «Ответить» with the question's sign: a verb that goes to the question on
 Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
@@ -1565,7 +1568,7 @@ stay under the title, not above it: the title is what the card is found by, and 
 controls over it would push it down by however many labels wrap. Every value stands at
 one height, the state chip's, so a wrap adds a row of that height and never a half step.
 One action ends the holder's row on a wide drawer and stands at full width under the
-labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
+facts on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
 another's. Where the facts argue against taking it the reason stands there instead —
 «Ждёт MAIN-12», the number a link, while an open blocker remains, «Эпик — возьмите задачу из него» on an
 epic.

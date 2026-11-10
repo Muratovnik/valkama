@@ -13,6 +13,7 @@ import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFa
 import WorkItemLabels from '@/features/work-item-labels/WorkItemLabels.vue'
 
 import type { FacetChoiceOption } from '@/entities/work-item/composables/useFacetChoices.ts'
+import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
@@ -179,9 +180,19 @@ describe('the action at rest', () => {
   )
 })
 
+/** A menu of the facts by its class, wherever the registry's order stands it. */
+function menuOf(wrapper: ReturnType<typeof facts>, name: string) {
+  const menu = wrapper.findAllComponents(choiceStub).find((found) => found.classes(name))
+  if (!menu) throw new Error(`no ${name} menu`)
+  return menu
+}
+
+/** The menu that moves the state. */
+const stateMenu = (wrapper: ReturnType<typeof facts>) => menuOf(wrapper, 'card-state')
+
 describe('the state as the menu that moves it', () => {
   it('names where the item is, unchoosable, above where it may go', () => {
-    const chip = facts(item()).getComponent(choiceStub)
+    const chip = stateMenu(facts(item()))
     expect(chip.props('modelValue')).toBe('todo')
     expect(chip.props('label')).toBe('State: To do. Move to another state')
     const options = chip.props('options') as FacetChoiceOption[]
@@ -199,12 +210,12 @@ describe('the state as the menu that moves it', () => {
 
   it('asks for a move to another state, and not while a write is in flight', async () => {
     const idle = facts(item())
-    idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
-    idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'todo')
+    stateMenu(idle).vm.$emit('update:modelValue', 'dev')
+    stateMenu(idle).vm.$emit('update:modelValue', 'todo')
     expect(idle.emitted('fact')).toEqual([[{ state: 'dev' }]])
 
     const busy = facts(item(), { busy: true })
-    busy.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
+    stateMenu(busy).vm.$emit('update:modelValue', 'dev')
     expect(busy.emitted('fact')).toBeUndefined()
   })
 
@@ -235,8 +246,8 @@ describe('the state as the menu that moves it', () => {
   })
 })
 
-/** The second menu of the head: the state's is the first. */
-const priorityMenu = (wrapper: ReturnType<typeof facts>) => wrapper.findAllComponents(choiceStub)[1]
+/** The menu that changes the priority, wherever the registry's order stands it. */
+const priorityMenu = (wrapper: ReturnType<typeof facts>) => menuOf(wrapper, 'card-priority')
 
 /** What the head's rows are called, top to bottom. */
 const rowLabels = (wrapper: ReturnType<typeof facts>) =>
@@ -286,7 +297,9 @@ describe('the priority as the menu that changes it', () => {
 })
 
 describe('each fact in a row that says what it is', () => {
-  it('labels the state, the priority, the parent, the holder and the labels', () => {
+  // One registry orders every surface: the rows stand in `FACET_ORDER`, as the new-task form's
+  // fields do, not in the template's order, which had stood the parent before the labels.
+  it('names each fact in a row, in the order every surface reads an item’s facets', () => {
     const record = item({ labels: ['platform'], parent_id: '00000000-0000-4000-8000-000000000099' })
     const wrapper = mount(InspectorFacts, {
       props: {
@@ -301,7 +314,17 @@ describe('each fact in a row that says what it is', () => {
         stubs: { ChoiceSelect: choiceStub, VIcon: true },
       },
     })
-    expect(rowLabels(wrapper)).toEqual(['State', 'Priority', 'Parent', 'Held by', 'Labels'])
+    expect(rowLabels(wrapper)).toEqual(['Priority', 'State', 'Labels', 'Held by', 'Parent'])
+    const rows = {
+      priority: 'Priority',
+      state: 'State',
+      labels: 'Labels',
+      holder: 'Held by',
+      parent: 'Parent',
+    }
+    expect(rowLabels(wrapper)).toEqual(
+      FACET_ORDER.filter((facet) => facet in rows).map((facet) => rows[facet as keyof typeof rows]),
+    )
   })
 
   it('has no labels row where there are none and none can be attached', () => {

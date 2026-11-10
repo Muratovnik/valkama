@@ -1,7 +1,7 @@
 /**
- * The head of a card as labelled rows, in the built application: the state, the priority, the
- * epic, who is on it with the action about them, and the labels, each named in one column with
- * its value on the name's line. The facts stood as one run of chips the owner read as tags,
+ * The head of a card as labelled rows, in the built application, in the registry's order
+ * (`FACET_ORDER`): the priority, the state, the labels, who is on it with the action about
+ * them, and the parent, each named in one column with its value on the name's line. The facts stood as one run of chips the owner read as tags,
  * work, status, priority and the next task mixed together.
  */
 import { expect } from '@playwright/test'
@@ -27,7 +27,7 @@ const CARD = serializePlatformRoute({
 const ROW_GAP = 4
 /** The height of a compact control, which every fact of a row stands at. */
 const ROW_HEIGHT = 36
-/** Below this drawer width the action stands under the labels at full width. */
+/** Below this drawer width the action stands under the facts at full width. */
 const WIDE = 1280
 const PHONE = 390
 
@@ -132,10 +132,10 @@ for (const width of [WIDE, PHONE]) {
       width,
     })
     await expect(drawer.locator('.card-question')).toBeVisible()
-    const names = ['Состояние', 'Приоритет', 'Родитель', 'Исполняет', 'Метки']
+    const names = ['Приоритет', 'Состояние', 'Метки', 'Исполняет', 'Родитель']
     await expect(drawer.locator('.card-row-label')).toHaveText(names)
     await expect(row(drawer, 'Родитель').value).toContainText(blockedWorkItem.reference)
-    // The state and the question waiting for its answer share the first row's line.
+    // The state and the question waiting for its answer share the state's row's line.
     const state = await box(drawer.locator('.card-facts .card-state').first())
     const question = await box(drawer.locator('.card-question'))
     expect(state.height).toBe(ROW_HEIGHT)
@@ -198,15 +198,16 @@ test('the holder and the action about it stand on one row, the action at its end
   expect(await head.ariaSnapshot()).not.toContain('Ответственный')
 })
 
-test('with no labels the row holds only the «+», and the head ends with it', async ({ page }) => {
+test('with no labels the row holds only the «+», and adds no room under it', async ({ page }) => {
   const drawer = await openHead(page, {
     card: (read) => ({ ...shortHolderCard(read), labels: [] }),
   })
   const labels = row(drawer, 'Метки')
   await expect(labels.value.locator('.label-chip')).toHaveCount(0)
   await expect(labels.value.getByRole('button', { name: 'Добавить метку' })).toBeVisible()
-  const blockBox = await box(drawer.locator('.card-facts-block'))
-  expect(blockBox.bottom).toBeCloseTo(await bottomOf(labels.value), 0)
+  // The holder's row follows the labels' in the registry's order, one gap under it.
+  const holder = await box(row(drawer, 'Исполняет').value)
+  expect(holder.y - (await bottomOf(labels.value))).toBeCloseTo(ROW_GAP, 0)
 })
 
 for (const width of [WIDE, PHONE]) {
@@ -223,14 +224,14 @@ for (const width of [WIDE, PHONE]) {
     const holder = row(drawer, 'Ранее отвечал')
     await expect(holder.value).toContainText('Никто не взял')
     await expect(drawer.locator('.card-row-label')).toHaveText([
-      'Состояние',
       'Приоритет',
-      'Ранее отвечал',
+      'Состояние',
       'Метки',
+      'Ранее отвечал',
     ])
     const holderBox = await box(holder.value)
-    const priorityBox = await box(row(drawer, 'Приоритет').value)
-    expect(holderBox.y - priorityBox.bottom).toBeCloseTo(ROW_GAP, 0)
+    const labelsBox = await box(row(drawer, 'Метки').value)
+    expect(holderBox.y - labelsBox.bottom).toBeCloseTo(ROW_GAP, 0)
     expect(holderBox.height).toBe(ROW_HEIGHT)
   })
 }

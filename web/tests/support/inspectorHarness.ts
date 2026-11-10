@@ -119,7 +119,10 @@ export function mountInspector(
 }
 
 export async function choose(wrapper: VueWrapper, stateKey: string) {
-  wrapper.getComponent(choiceStub).vm.$emit('update:modelValue', stateKey)
+  // The state's menu by its class: the facts stand in the registry's order, the priority first.
+  const menu = wrapper.findAllComponents(choiceStub).find((found) => found.classes('card-state'))
+  if (!menu) throw new Error('no state menu')
+  menu.vm.$emit('update:modelValue', stateKey)
   await flushPromises()
 }
 

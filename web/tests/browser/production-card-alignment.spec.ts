@@ -287,7 +287,7 @@ for (const locale of ['ru', 'en'] as const) {
 
 /**
  * The baseline of each row's name and of the words of its value on the value's first line: the
- * state and the question, the priority, the epic, the holder and the first labels.
+ * priority, the state and the question, the first labels, the holder and the parent.
  */
 function factBaselines(page: Page) {
   return page.evaluate(() => {
@@ -325,10 +325,11 @@ for (const locale of ['ru', 'en'] as const) {
       await openCard(page, locale, width, FULL_HEAD)
       const lines = await factBaselines(page)
       console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
-      // The state and «Answer», the priority, the epic, the holder and the labels, each with
-      // its name; «Answer» is short enough to stay on the state's line on a phone.
+      // The priority, the state and «Answer», the labels, the holder and the parent, each with
+      // its name, in the registry's order; «Answer» is short enough to stay on the state's line
+      // on a phone.
       expect(lines).toHaveLength(5)
-      expect(lines[0]).toHaveLength(3)
+      expect(lines[1]).toHaveLength(3)
       for (const [first, ...rest] of lines)
         for (const other of rest)
           expect(
