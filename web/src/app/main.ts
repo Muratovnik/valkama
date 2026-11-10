@@ -2,19 +2,10 @@ import { createPinia } from 'pinia'
 /**
  * Application entry.
  *
- * `src` has three roots and imports run in one direction only:
- *
- *   app/      the shell that composes modules: navigation, module frame, this
- *             entry. It may import from anywhere.
- *   modules/  one folder per platform module — planning, sessions, analytics,
- *             improvements, skills, settings. A module owns what only it uses
- *             and never reaches into another module.
- *   shared/   what more than one module imports: api, platform contracts, ui
- *             primitives, composables, lib, i18n, types, styles. It imports
- *             nothing from app/ or modules/.
- *
- * Placement follows the import graph, not a template: when a second module
- * starts importing something, it moves to shared/.
+ * `src` is laid out in Feature-Sliced Design layers — app, pages, widgets,
+ * features, entities, shared — and a file imports only from a layer below its
+ * own. `.agents/rules/web-architecture.md` holds the grammar, and
+ * `npm run check:ui-system` holds the imports to it.
  */
 import { createApp } from 'vue'
 
