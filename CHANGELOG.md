@@ -27,6 +27,17 @@ checkouts are therefore distinguishable even at the same version.
   collected, with no figures or charts. `GET /api/modules` and `list_platform_modules`
   name it. The flow-metrics Analytics dashboards an earlier build retired stay retired.
 
+- **Prices for Claude Fable 5.2 and Claude Mythos 5.2, and a missing price no longer
+  passes unseen.** Usage of either model is now estimated at the published API prices
+  ($8 input, $0.20 cache reads, $10 and $16 for five-minute and one-hour cache writes,
+  $40 output per million tokens, doubled in fast mode); requests read before this build
+  keep the cost they were read with. `valkama doctor` warns about each model that spent
+  tokens with no known price, with how many usage rows and tokens it has, since those
+  tokens add nothing to any cost. The release check compares the price table with
+  LiteLLM's public price list and fails on any rate that differs; a model that list does
+  not name yet is reported without failing, and a list that cannot be read stops the
+  check instead of passing it.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.

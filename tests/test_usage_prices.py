@@ -27,10 +27,10 @@ class ClaudeTests(unittest.TestCase):
             with self.subTest(model):
                 self.assertAlmostEqual(expected, request_cost(model, ONE_OF_EACH))
 
-    def test_fable_5_2_prices_each_kind_at_its_own_rate(self) -> None:
-        # The pricing page, read 2026-11-10: $8 input, $0.20 cache hits, $10 and $16 for
-        # five-minute and one-hour writes, $40 output, per million tokens. A different
-        # count of each kind, so two rates swapped give another total.
+    def test_fable_and_mythos_5_2_price_each_kind_at_its_own_rate(self) -> None:
+        # The pricing page, read 2026-11-10, lists both at $8 input, $0.20 cache hits, $10
+        # and $16 for five-minute and one-hour writes, $40 output, per million tokens. A
+        # different count of each kind, so two rates swapped give another total.
         spent = {
             "input": 1_000_000,
             "cached_read": 2_000_000,
@@ -38,16 +38,20 @@ class ClaudeTests(unittest.TestCase):
             "cache_write_1h": 4_000_000,
             "output": 5_000_000,
         }
-        self.assertAlmostEqual(
-            8 + 2 * 0.20 + 3 * 10 + 4 * 16 + 5 * 40, request_cost("claude-fable-5-2", spent)
-        )
+        for model in ("claude-fable-5-2", "claude-mythos-5-2"):
+            with self.subTest(model):
+                self.assertAlmostEqual(
+                    8 + 2 * 0.20 + 3 * 10 + 4 * 16 + 5 * 40, request_cost(model, spent)
+                )
 
-    def test_fable_5_2_in_fast_mode_pays_the_pages_fast_prices(self) -> None:
-        # The page's fast-mode table: $16 input and $80 output per million tokens.
-        self.assertAlmostEqual(
-            16 + 80,
-            request_cost("claude-fable-5-2", {"input": 10**6, "output": 10**6}, speed="fast"),
-        )
+    def test_fable_and_mythos_5_2_in_fast_mode_pay_the_pages_fast_prices(self) -> None:
+        # The page's fast-mode table: $16 input and $80 output per million tokens for both.
+        for model in ("claude-fable-5-2", "claude-mythos-5-2"):
+            with self.subTest(model):
+                self.assertAlmostEqual(
+                    16 + 80,
+                    request_cost(model, {"input": 10**6, "output": 10**6}, speed="fast"),
+                )
 
     def test_a_write_for_an_hour_costs_more_than_one_for_five_minutes(self) -> None:
         self.assertAlmostEqual(5.0, request_cost("claude-opus-5-5", {"cache_write_5m": 10**6}))

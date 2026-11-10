@@ -7,13 +7,14 @@ A model neither page names has no price: the answer is None and never a guess.
 
 Anthropic, read 2026-11-05 at https://platform.claude.com/docs/en/about-claude/pricing
 and https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool, and the
-pricing page read again 2026-11-10 for Claude Fable 5.2:
+pricing page read again 2026-11-10 for Claude Fable 5.2 and Claude Mythos 5.2, which it
+lists at the same prices:
 
 - Claude Haiku 5.5 is priced by prompt length, over 100,000 tokens the whole request
   pays the higher prices, and the length counts cache reads and writes too.
 - `inference_geo: "us"` multiplies every token price by 1.1.
-- Fast mode (`speed: "fast"`) doubles Fable 5.2, Opus 5.5, Opus 5 and Opus 4.8, and the
-  cache multipliers apply on top of it, which doubles those prices too.
+- Fast mode (`speed: "fast"`) doubles Fable 5.2, Mythos 5.2, Opus 5.5, Opus 5 and Opus
+  4.8, and the cache multipliers apply on top of it, which doubles those prices too.
 - `server_tool_use.web_search_requests` costs $10 per 1,000 searches, on top of tokens.
 - An advisor call is a sub-inference at the advisor model's own prices. The top-level
   usage leaves it out, and `usage.iterations` is where it is reported.
@@ -89,6 +90,7 @@ _HAIKU_55_LONG = Rates(0.50, 0.05, 0.625, 1, 2.50)
 
 _ANTHROPIC: dict[str, Rates] = {
     "claude-fable-5-2": _FABLE_52,
+    "claude-mythos-5-2": _FABLE_52,
     "claude-fable-5-1": _FABLE,
     "claude-mythos-5-1": _FABLE,
     "claude-fable-5": _FABLE_5,
@@ -115,7 +117,7 @@ _ANTHROPIC_LONG: dict[str, tuple[Rates, int]] = {
     "claude-haiku-5-5": (_HAIKU_55_LONG, _HAIKU_LONG_PROMPT),
 }
 _ANTHROPIC_FAST = frozenset(
-    {"claude-fable-5-2", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"}
+    {"claude-fable-5-2", "claude-mythos-5-2", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"}
 )
 
 #: `(short, long)` by model; a model the long table has no prices for has only one.
