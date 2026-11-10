@@ -12,7 +12,8 @@
  * Which item is open is in the route, not here (`usePlanningRouteSelection`),
  * which is what makes an item linkable.
  *
- * The local trail holds navigation depth; the route holds the item's identity.
+ * The local trail holds navigation depth (`usePlanningCardTrail`); the route holds
+ * the item's identity.
  * Each step of the trail also holds where its card was left, which the card
  * hands over as it opens another, so Back reopens it there and not at its top.
  * The panel lives as long as any item is open and only the card inside it is
@@ -31,6 +32,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } fro
 import { useI18n } from 'vue-i18n'
 
 import { useOpenCardModel } from '@/pages/planning/composables/useOpenCardModel.ts'
+import { usePlanningCardTrail } from '@/pages/planning/composables/usePlanningCardTrail.ts'
 import {
   groupingOf,
   viewOf,
@@ -50,7 +52,6 @@ import { graphView } from '@/pages/planning/utils/graphView.ts'
 import { readingModel } from '@/pages/planning/utils/readingModel.ts'
 
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
-import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
@@ -169,9 +170,14 @@ const version = ref(0)
 /** Moves when an agent changed: an open card reads again, and nothing else does. */
 const agentsVersion = ref(0)
 
-const trail = ref<{ left: InspectorReturn | null; reference: string }[]>([])
-/** Where the card Back is reopening was left; read by that card alone. */
-const returning = ref<InspectorReturn | null>(null)
+const {
+  canGoBack,
+  closeItem,
+  goBack,
+  openItem,
+  reset: resetTrail,
+  returning,
+} = usePlanningCardTrail({ open: () => open.value, show })
 const composerOpen = ref(false)
 
 const planningKey = computed(() =>
@@ -195,6 +201,7 @@ const {
   exitBranch,
   failure: chainFailure,
   narrow,
+  own: ownChain,
   pending: chainPending,
   retry: retryChain,
   setClosed: setChainClosed,
@@ -309,8 +316,7 @@ const readKey = computed(() =>
 watch(
   readKey,
   () => {
-    trail.value = []
-    returning.value = null
+    resetTrail()
     composerOpen.value = false
     invalidatePortfolio()
     void loadPlanning()
@@ -332,9 +338,6 @@ const writable = computed(() => primaryStore.value && (model.value !== null || r
 onBeforeUnmount(() => {
   resource.value = cancelResource(resource.value)
 })
-
-/** True once the operator reached this item from another one. */
-const canGoBack = computed(() => trail.value.length > 0)
 
 /** Route to one item of the bound space, or back to the space itself. */
 function show(reference: string | null) {
@@ -358,27 +361,6 @@ usePlanningReferenceLinks(boundSpace, model, openFromPage)
 function openFromPage(reference: string) {
   if (!card.value) openItem(reference)
   else if (reference !== open.value) card.value.openFrom(reference)
-}
-
-function openItem(reference: string, related = false, left: InspectorReturn | null = null) {
-  returning.value = null
-  if (related && open.value !== null && open.value !== reference)
-    trail.value = [...trail.value, { reference: open.value, left }]
-  show(reference)
-}
-
-function closeItem() {
-  trail.value = []
-  returning.value = null
-  show(null)
-}
-
-function goBack() {
-  const previous = trail.value.at(-1)
-  if (previous === undefined) return
-  trail.value = trail.value.slice(0, -1)
-  returning.value = previous.left
-  show(previous.reference)
 }
 
 /** Another view of the same field: a chain the route names narrows that one too. */
@@ -487,6 +469,7 @@ defineExpose({ refresh, selectedId })
         :workflow="model.workflow"
         :writable="writable"
         :parent-reference="parentReference"
+        :own-chain="ownChain"
         :kind="openRecord?.kind"
         :question-asked="questionAsked"
         @back="goBack"

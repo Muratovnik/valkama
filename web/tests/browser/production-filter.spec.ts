@@ -122,12 +122,14 @@ test('a former preset is a condition of the menu, and makes the filter it made',
 }) => {
   await open(page)
   // Nothing beside the field stands for it any more.
-  await expect(page.getByRole('button', { name: /^(Assigned|Has a holder)/u })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: /^(Assigned|Has a holder|Has an assignee)/u }),
+  ).toHaveCount(0)
   await field(page).click()
-  await page.getByRole('option', { name: /^Has a holder/u }).click()
+  await page.getByRole('option', { name: /^Has an assignee/u }).click()
   await expect.poll(() => addressState(page)).toEqual({ held: true })
-  await expect(chips(page)).toHaveText(['Has a holder'])
-  await page.getByRole('option', { name: /^Has a holder/u }).click()
+  await expect(chips(page)).toHaveText(['Has an assignee'])
+  await page.getByRole('option', { name: /^Has an assignee/u }).click()
   await expect.poll(() => addressState(page)).toEqual({})
   await expect(chips(page)).toHaveCount(0)
 })
@@ -296,3 +298,52 @@ test('on a phone the field’s hint fits it, and a filter turned on does not mak
   expect(filtered.figuresTop).toBe(resting.figuresTop)
   await expectNoSilentClipping(page, 'Work bar at 390px with a filter')
 })
+
+/**
+ * A press on a chip's operator keeps the toggle's box and its chip's words where they were. «≠»
+ * is wider than «=» in the font, and the toggle drawn round whichever sign it showed grew by that
+ * much on a press (31.16 to 32.61px), pushing its chip's words aside. The words themselves then
+ * say «not», which may widen the chip and move what follows it; what stands before it, the
+ * toggle and the start of its words hold still. One value a facet, so nothing changes order.
+ */
+for (const width of [1280, 390])
+  test(`a press on a chip’s operator keeps the toggle’s width and its chip in place, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await installBackend(page)
+    await page.goto(
+      serializePlatformRoute({
+        module_id: 'planning',
+        scope: projectScope,
+        state: { kind: 'bug', pri: 'low' },
+      }),
+    )
+    await expect(chips(page)).toHaveCount(2)
+    const operators = page.locator('.workspace-chips .filter-chip-operator')
+    // The boxes in the order they stand: each chip's toggle, then its words.
+    const line = () =>
+      page.locator('.workspace-chips').evaluate((list) =>
+        [...list.querySelectorAll('.filter-chip-operator, .filter-chip')].map((node) => {
+          const box = node.getBoundingClientRect()
+          return { left: box.left, top: box.top, width: box.width }
+        }),
+      )
+    const resting = await line()
+    expect(resting).toHaveLength(4)
+
+    for (const index of [0, 1]) {
+      await operators.nth(index).click()
+      await expect(operators.nth(index)).toHaveAttribute('aria-pressed', 'true')
+      const pressed = await line()
+      // Up to and including the toggle every box is where it was, and its words start there too.
+      const still = 2 * index + 1
+      expect(pressed.slice(0, still), `toggle ${index + 1} pressed`).toEqual(
+        resting.slice(0, still),
+      )
+      expect(pressed[still]?.left, `chip ${index + 1}'s words`).toBe(resting[still]?.left)
+      await operators.nth(index).click()
+      await expect(operators.nth(index)).toHaveAttribute('aria-pressed', 'false')
+      expect(await line()).toEqual(resting)
+    }
+  })

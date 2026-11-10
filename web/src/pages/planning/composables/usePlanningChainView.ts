@@ -160,6 +160,16 @@ export function usePlanningChainView(options: ChainViewOptions) {
     branch: computed(() => branchOf(options.state()) ?? null),
     /** Widen the graph from the branch back to the whole chain. */
     exitBranch: () => options.write(withBranch(options.state(), null)),
+    /**
+     * The scope of the chain the address names when its root is the open card: the card's own
+     * chain, as its «Show on graph» names it, so the card opens on its Relations. The card's
+     * section is not in the address, and Back after «Show on graph» reopened it on Overview,
+     * a tab away from the chain just looked at. Any other card opens as it always has.
+     */
+    own: computed(() => {
+      const target = chainTarget(options.state())
+      return target.status === 'chain' && target.reference === options.open() ? target.scope : null
+    }),
     shown,
   }
 }

@@ -871,7 +871,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   menu's name as its hint, or its sign and words; Enter, Space and ArrowDown open it on its
   first entry; the arrows walk the entries and wrap, Home and End go to the ends, a letter
   goes to the entry it starts; Escape, a choice or a press outside close it and focus goes
-  back to the trigger. It holds actions, settings that show a check while on, and a choice of
+  back to the trigger. An entry that opens a dialog, «Save view…», opens it from there in the
+  same moment, and the dialog gives focus back to the trigger as it closes. It holds actions, settings that show a check while on, and a choice of
   a few values under a caption, each a row of the control height, and floats over a card or a
   dialog as a choice list does. A stray press reaches neither the trigger nor an entry. A
   menu does things to what it stands beside; picking the value a field holds is
@@ -1088,8 +1089,8 @@ own settings, and a kept view is a choice the menu marks while the address holds
 exactly; choosing it puts its state back, and the marked one can be deleted. A
 space never lists another space's views. Nothing in the row is a pressed filter of
 its own any more: everything to the right of the field narrows it, and the two
-conditions that once stood beside it as presets, «Workable» and «Has a
-holder», are the first group of the filter's menu. A usable filter is as wide as a
+conditions that once stood beside it as presets, «Workable» and «Has an
+assignee», are the first group of the filter's menu. A usable filter is as wide as a
 phone's, 108px with the longest words; where the view's segments and the action
 cannot stand beside that, the bar takes its phone form, where the menu is its sign
 alone. The filter's

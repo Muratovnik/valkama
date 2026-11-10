@@ -117,6 +117,7 @@ function readinessDetail(answer: AlertReadiness): string {
         :failure="failureOf('enabled')"
       >
         <ToggleSwitch
+          v-tooltip.detail="t('alerts.enabledDetail')"
           class="settings-alerts-control settings-alerts-switch"
           :model-value="settings.enabled"
           :label="t('alerts.enabled')"

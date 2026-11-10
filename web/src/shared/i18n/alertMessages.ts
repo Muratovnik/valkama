@@ -8,6 +8,9 @@ export const alertMessages = {
       saveFailed: 'Not saved: {reason}',
       enabled: 'Notify me when an agent is waiting for me',
       enabledHint: 'Turning this off keeps the events you chose.',
+      // What the switch does not show: where a notification reaches, and what a click on it does.
+      enabledDetail:
+        'Valkama shows a Windows notification when an agent is waiting for you, even with its window closed. A click opens the work item.',
       on: 'On',
       off: 'Off',
       events: 'Events',
@@ -83,6 +86,8 @@ export const alertMessages = {
       saveFailed: 'Не сохранено: {reason}',
       enabled: 'Оповещать, когда агент ждёт меня',
       enabledHint: 'Выключение сохраняет выбранные события.',
+      enabledDetail:
+        'Valkama покажет оповещение Windows, когда агент ждёт вас, даже при закрытом окне. Клик открывает карточку задачи.',
       on: 'Включено',
       off: 'Выключено',
       events: 'События',

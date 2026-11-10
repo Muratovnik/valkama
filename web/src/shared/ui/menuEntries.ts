@@ -3,7 +3,8 @@
  * order the host lists them. Each entry says what a choice of it does; the menu closes
  * after any of them, as a menu does.
  *
- * - `action` does something once: `menuitem`.
+ * - `action` does something once: `menuitem`. One that `opens` what takes focus next, such
+ *   as a dialog, runs once the menu has gone, with focus already back on the menu's button.
  * - `toggle` turns one thing on or off and shows which: `menuitemcheckbox`, a check when on.
  * - `choice` picks one value of a few under its own caption: a group of `menuitemradio`,
  *   set apart from what stands before it by a rule.
@@ -15,6 +16,11 @@ export type MenuEntry =
       label: string
       disabled?: boolean
       icon?: string
+      /**
+       * Choosing it opens something that takes focus, a dialog: what it opens gives focus
+       * back to the menu's button when it closes, and the menu does not take it from there.
+       */
+      opens?: boolean
       select: () => void
     }
   | {

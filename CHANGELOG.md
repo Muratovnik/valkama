@@ -54,7 +54,7 @@ checkouts are therefore distinguishable even at the same version.
   holds is marked, and it can be deleted. Kept views live in the browser's interface
   settings, one list per space. The «Workable» and «Assigned» buttons and the «By epic»
   toggle left the header: the two conditions are the first group of the filter's menu,
-  and «Assigned» now reads «Has a holder». On a phone the menu is its sign alone.
+  and «Assigned» now reads «Has an assignee», the card's word for who holds it. On a phone the menu is its sign alone.
 
 - **The card's labels change in the new-task dialog's picker.** «+», or a press on the
   labels row beside the chips, opens the picker with the item's labels checked: choosing one
@@ -162,10 +162,11 @@ checkouts are therefore distinguishable even at the same version.
   longer placed over a section.
 
 - **Settings opens with its settings.** The sentences under each group's heading and under
-  «Installation health», saying what the group is for, are gone. The two facts no control
+  «Installation health», saying what the group is for, are gone. The three facts no control
   said move onto the control as a hover hint: a type's colour picker says the colour is kept
-  on this device, and «If the place is unknown or cannot be opened» says that the place is
-  the one a session was last open in.
+  on this device, «If the place is unknown or cannot be opened» says that the place is
+  the one a session was last open in, and the notifications switch says that a notification
+  comes even with the window closed and that a click on it opens the work item.
 
 ### Fixed
 

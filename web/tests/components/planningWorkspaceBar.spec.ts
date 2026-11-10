@@ -94,7 +94,7 @@ describe('the work bar', () => {
     expect(menu.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     // No preset and no grouping stands in the row as a button of its own.
     const buttons = row.findAll('button').map((button) => button.text())
-    for (const word of ['Workable', 'Has a holder', 'Assigned', 'By epic'])
+    for (const word of ['Workable', 'Has an assignee', 'Has a holder', 'Assigned', 'By epic'])
       expect(buttons).not.toContain(word)
     // The one primary action ends the row, not the line of state under it.
     expect(row.get('.workspace-action').text()).toBe('+New work item')

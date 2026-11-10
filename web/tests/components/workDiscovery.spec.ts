@@ -137,19 +137,19 @@ describe('work discovery', () => {
         locale === 'en' ? '2 open of 3' : '2\u{A0}открытых из 3',
       )
       // The held count rides its condition in the filter's menu.
-      const held = await menuRow(wrapper, locale === 'en' ? 'Has a holder' : 'Есть ответственный')
+      const held = await menuRow(wrapper, locale === 'en' ? 'Has an assignee' : 'Есть исполнитель')
       expect(held.get('.option-detail').text()).toBe('1')
     },
   )
   it('keeps the filter through a refresh and drops it with an address that has none', async () => {
     const wrapper = workspace()
     const held = () => wrapper.findAll('.workspace-chips .filter-chip').map((chip) => chip.text())
-    const holder = await menuRow(wrapper, 'Has a holder')
+    const holder = await menuRow(wrapper, 'Has an assignee')
     await holder.trigger('click')
     await wrapper.get('input').setValue('missing')
     await wrapper.setProps({ model: model(), version: 2 })
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('missing')
-    expect(held()).toEqual(['Has a holder'])
+    expect(held()).toEqual(['Has an assignee'])
     // A space switch writes the new space's address without the filter.
     await wrapper.setProps({ routeState: undefined })
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('')

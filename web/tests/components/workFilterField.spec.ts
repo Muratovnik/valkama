@@ -51,7 +51,7 @@ const highlighted = (wrapper: ReturnType<typeof field>) =>
 const groupNames = (wrapper: ReturnType<typeof field>) =>
   wrapper.findAll('[role="listbox"] [role="group"] .option-group-name').map((name) => name.text())
 const everywhere = (text: string) => `Search for “${text}” in all projects`
-const FACETS = ['State', 'Kind', 'Priority', 'Holder', 'Label']
+const FACETS = ['State', 'Kind', 'Priority', 'Assignee', 'Label']
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -76,7 +76,7 @@ describe('the Work filter field', () => {
 
     const held = field()
     await input(held).trigger('click')
-    await option(held, 'Has a holder7').trigger('click')
+    await option(held, 'Has an assignee7').trigger('click')
     expect(lastFilter(held)).toEqual(toggleToken(EMPTY_WORK_FILTER, { facet: 'held' }))
 
     const label = field()
@@ -94,18 +94,20 @@ describe('the Work filter field', () => {
     expect(input(wrapper).attributes('aria-expanded')).toBe('true')
     expect(groupNames(wrapper)).toEqual(['Conditions', 'Filter by'])
     // The held condition says how many it lets through, as its preset did.
-    expect(options(wrapper)).toEqual(['Workable', 'Has a holder7', ...FACETS])
-    expect(option(wrapper, 'Has a holder7').get('.option-detail').text()).toBe('7')
+    expect(options(wrapper)).toEqual(['Workable', 'Has an assignee7', ...FACETS])
+    expect(option(wrapper, 'Has an assignee7').get('.option-detail').text()).toBe('7')
     // A facet's row leads somewhere and is no value, so it is not «not selected» either.
     for (const name of FACETS)
       expect(option(wrapper, name).attributes('aria-selected')).toBeUndefined()
 
-    await option(wrapper, 'Holder').trigger('click')
+    await option(wrapper, 'Assignee').trigger('click')
     // Holders by the name the claim gives; the group's name is the way back.
-    expect(options(wrapper)).toEqual(['Holder', 'claude'])
-    expect(option(wrapper, 'Holder').attributes('aria-label')).toBe('Holder: back to the facets')
-    await option(wrapper, 'Holder').trigger('click')
-    expect(options(wrapper)).toEqual(['Workable', 'Has a holder7', ...FACETS])
+    expect(options(wrapper)).toEqual(['Assignee', 'claude'])
+    expect(option(wrapper, 'Assignee').attributes('aria-label')).toBe(
+      'Assignee: back to the facets',
+    )
+    await option(wrapper, 'Assignee').trigger('click')
+    expect(options(wrapper)).toEqual(['Workable', 'Has an assignee7', ...FACETS])
 
     // Labels by how many items carry them, under the choice of how they combine.
     await option(wrapper, 'Label').trigger('click')

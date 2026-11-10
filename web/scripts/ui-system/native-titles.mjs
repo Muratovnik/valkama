@@ -183,6 +183,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
+    `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
+    'that a notification comes with the window closed too, and that a click on it opens the card; it stood as a paragraph over the group',
+  ],
+  [
     `pages/settings/components/SettingsKindColors.vue <input> v-tooltip.detail="t('settings.kindColors.kept')"`,
     'where a chosen colour is kept, which the swatch does not say; it stood as a paragraph over the group',
   ],

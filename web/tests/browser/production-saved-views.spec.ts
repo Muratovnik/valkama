@@ -44,10 +44,10 @@ const WORDS = {
     delete: (name: string) => `Delete view “${name}”`,
     filter: 'Filter work',
     ready: 'Workable',
-    held: 'Has a holder',
+    held: 'Has an assignee',
     list: 'List',
     // What stood in the header before, as buttons of its own.
-    gone: ['Workable', 'Assigned', 'By epic', 'Group the board by epic'],
+    gone: ['Workable', 'Assigned', 'Has a holder', 'By epic', 'Group the board by epic'],
   },
   ru: {
     menu: 'Вид',
@@ -59,9 +59,15 @@ const WORDS = {
     delete: (name: string) => `Удалить вид «${name}»`,
     filter: 'Фильтр работы',
     ready: 'Можно брать',
-    held: 'Есть ответственный',
+    held: 'Есть исполнитель',
     list: 'Список',
-    gone: ['Можно брать', 'Назначено', 'По эпикам', 'Группировать доску по эпикам'],
+    gone: [
+      'Можно брать',
+      'Назначено',
+      'Есть ответственный',
+      'По эпикам',
+      'Группировать доску по эпикам',
+    ],
   },
 } as const
 
@@ -302,8 +308,8 @@ for (const locale of ['en', 'ru'] as const)
     expect(await listed(page, locale)).toEqual([])
   })
 
-/** An entry of the open menu reached by the arrows alone, then chosen with Enter. */
-async function pickByKeys(page: Page, role: 'menuitem' | 'menuitemradio', name: string) {
+/** An entry of the open menu reached by the arrows alone. */
+async function reachByKeys(page: Page, role: 'menuitem' | 'menuitemradio', name: string) {
   const entry = page.getByRole('menu').getByRole(role, { name })
   // A menu opened from the keyboard has its first entry focused; the arrows move on from there.
   await expect(page.getByRole('menu').locator('[role^="menuitem"]:focus')).toHaveCount(1)
@@ -312,6 +318,11 @@ async function pickByKeys(page: Page, role: 'menuitem' | 'menuitemradio', name: 
     await page.keyboard.press('ArrowDown')
   }
   await expect(entry).toBeFocused()
+}
+
+/** An entry of the open menu reached by the arrows alone, then chosen with Enter. */
+async function pickByKeys(page: Page, role: 'menuitem' | 'menuitemradio', name: string) {
+  await reachByKeys(page, role, name)
   await page.keyboard.press('Enter')
 }
 
@@ -362,3 +373,33 @@ test('the keyboard alone saves a view, cancels a save, applies a view and delete
   await expect(page.getByRole('menu')).toHaveCount(0)
   expect(await listed(page, 'en')).toEqual([])
 })
+
+/**
+ * «Save view…» opens its dialog as the menu goes, with no timer between them. The dialog once
+ * waited for the menu's late return of focus to its button, or 300 ms, because that return took
+ * focus from a dialog opened earlier. With the page's clock held no timer runs, so the field
+ * has the caret only if nothing waits on one; Escape then gives focus back to the button.
+ */
+for (const width of [1280, 390])
+  test(`the save dialog takes focus from the menu with no timer between them (${width}px)`, async ({
+    page,
+  }) => {
+    const words = WORDS.en
+    await page.clock.install()
+    await seed(page, 'en', width)
+    await openSpace(page)
+    const button = menuButton(page, 'en')
+    await button.focus()
+    await page.keyboard.press('Enter')
+    await reachByKeys(page, 'menuitem', words.save)
+
+    await page.clock.pauseAt(Date.now() + 2000)
+    await page.keyboard.press('Enter')
+    const name = page.getByRole('dialog').getByRole('textbox', { name: words.name })
+    await expect(name).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(button).toBeFocused()
+    await page.clock.resume()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(button).toBeFocused()
+  })
