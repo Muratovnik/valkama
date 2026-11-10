@@ -237,6 +237,7 @@ const CHILD_RUNS: ItemUsage['agents'] = [
     seconds: 9520,
     tokens: NO_TOKENS,
     estimated_api_cost_usd: 20,
+    unpriced_tokens: 0,
   },
   {
     session_id: PARENT_SESSION,
@@ -244,6 +245,7 @@ const CHILD_RUNS: ItemUsage['agents'] = [
     seconds: 10_000,
     tokens: NO_TOKENS,
     estimated_api_cost_usd: 21,
+    unpriced_tokens: 0,
   },
 ]
 
@@ -354,6 +356,7 @@ for (const width of [390, 1280]) {
       seconds: index === 0 ? 1 : 3_600_000 - index,
       tokens: { ...NO_TOKENS, input: 9_000_000_000, output: index },
       estimated_api_cost_usd: 13_000.55,
+      unpriced_tokens: 0,
     }))
     await serve(
       page,

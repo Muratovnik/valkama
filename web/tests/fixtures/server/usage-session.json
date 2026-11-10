@@ -1,0 +1,177 @@
+{
+  "interface_version": "valkama-planning-api",
+  "usage": {
+    "session_id": "sess-usage",
+    "first_at": "2026-01-02T03:04:05.000Z",
+    "last_at": "2026-01-02T03:04:05.000Z",
+    "elapsed_seconds": 1500.0,
+    "agent_seconds": 1800.0,
+    "tokens": {
+      "input": 1060,
+      "cached_read": 20000,
+      "cache_write_5m": 300,
+      "cache_write_1h": null,
+      "output": 408,
+      "reasoning": 2
+    },
+    "estimated_api_cost_usd": 0.26,
+    "unpriced_tokens": 57,
+    "cost_basis": "An estimate at public API list prices for each request. A subscription pays differently, so this is not a bill.",
+    "unpriced_models": [
+      "claude-unknown-9"
+    ],
+    "agents": [
+      {
+        "session_id": "sess-usage",
+        "agent_id": null,
+        "seconds": 1200.0,
+        "tokens": {
+          "input": 1010,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 401,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.26,
+        "unpriced_tokens": 0
+      },
+      {
+        "session_id": "sess-usage",
+        "agent_id": "worker",
+        "seconds": 600.0,
+        "tokens": {
+          "input": 50,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 7,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 57
+      }
+    ],
+    "models": [
+      {
+        "model": "claude-opus-5-5",
+        "seconds": 1200.0,
+        "tokens": {
+          "input": 1010,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 401,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.26,
+        "unpriced_tokens": 0
+      },
+      {
+        "model": "claude-unknown-9",
+        "seconds": 600.0,
+        "tokens": {
+          "input": 50,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 7,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 57
+      }
+    ],
+    "signals": [
+      {
+        "signal": "next_write",
+        "seconds": 600.0,
+        "share": 0.3333
+      },
+      {
+        "signal": "held_step",
+        "seconds": 600.0,
+        "share": 0.3333
+      },
+      {
+        "signal": null,
+        "seconds": 600.0,
+        "share": 0.3333
+      }
+    ],
+    "quality": "observed",
+    "estimated_seconds": 0,
+    "excluded": {
+      "human": 0.0,
+      "subagent": 0.0,
+      "external": 0.0,
+      "gap": 0.0
+    },
+    "by_item": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
+        "reference": "MAIN-1",
+        "title": "Contract card",
+        "elapsed_seconds": 900.0,
+        "agent_seconds": 1200.0,
+        "tokens": {
+          "input": 1050,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 407,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 57
+      },
+      {
+        "work_item_id": null,
+        "reference": null,
+        "title": null,
+        "elapsed_seconds": 600.0,
+        "agent_seconds": 600.0,
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0
+      }
+    ],
+    "runs": [
+      {
+        "agent_id": null,
+        "client": "claude",
+        "status": "reading",
+        "first_at": "2026-01-02T03:04:05.000Z",
+        "last_at": "2026-01-02T03:04:05.000Z",
+        "read_at": "2026-01-02T03:04:05.000Z",
+        "excluded": {
+          "human": 0.0,
+          "subagent": 0.0,
+          "external": 0.0,
+          "gap": 0.0
+        }
+      },
+      {
+        "agent_id": "worker",
+        "client": "claude",
+        "status": "reading",
+        "first_at": "2026-01-02T03:04:05.000Z",
+        "last_at": "2026-01-02T03:04:05.000Z",
+        "read_at": "2026-01-02T03:04:05.000Z",
+        "excluded": {
+          "human": 0.0,
+          "subagent": 0.0,
+          "external": 0.0,
+          "gap": 0.0
+        }
+      }
+    ]
+  }
+}

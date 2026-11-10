@@ -1,0 +1,120 @@
+{
+  "interface_version": "valkama-planning-api",
+  "usage": {
+    "work_item_id": "00000000-0000-4000-8000-000000000005",
+    "reference": "MAIN-1",
+    "title": "Contract card",
+    "scope": "item",
+    "elapsed_seconds": 900.0,
+    "agent_seconds": 1200.0,
+    "tokens": {
+      "input": 1050,
+      "cached_read": 20000,
+      "cache_write_5m": 300,
+      "cache_write_1h": null,
+      "output": 407,
+      "reasoning": 2
+    },
+    "estimated_api_cost_usd": 0.25,
+    "unpriced_tokens": 57,
+    "cost_basis": "An estimate at public API list prices for each request. A subscription pays differently, so this is not a bill.",
+    "unpriced_models": [
+      "claude-unknown-9"
+    ],
+    "agents": [
+      {
+        "session_id": "sess-usage",
+        "agent_id": null,
+        "seconds": 600.0,
+        "tokens": {
+          "input": 1000,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 400,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 0
+      },
+      {
+        "session_id": "sess-usage",
+        "agent_id": "worker",
+        "seconds": 600.0,
+        "tokens": {
+          "input": 50,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 7,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 57
+      }
+    ],
+    "models": [
+      {
+        "model": "claude-opus-5-5",
+        "seconds": 600.0,
+        "tokens": {
+          "input": 1000,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 400,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 0
+      },
+      {
+        "model": "claude-unknown-9",
+        "seconds": 600.0,
+        "tokens": {
+          "input": 50,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 7,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 57
+      }
+    ],
+    "signals": [
+      {
+        "signal": "next_write",
+        "seconds": 600.0,
+        "share": 0.5
+      },
+      {
+        "signal": "held_step",
+        "seconds": 600.0,
+        "share": 0.5
+      }
+    ],
+    "quality": "observed",
+    "estimated_seconds": 0,
+    "by_item": [
+      {
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
+        "reference": "MAIN-1",
+        "title": "Contract card",
+        "elapsed_seconds": 900.0,
+        "agent_seconds": 1200.0,
+        "tokens": {
+          "input": 1050,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 407,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 57
+      }
+    ]
+  }
+}

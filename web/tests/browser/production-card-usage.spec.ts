@@ -240,6 +240,7 @@ test('an epic reads its whole scope, and each member of its chain says its share
             agent_seconds: 9000,
             tokens: richUsage().tokens,
             estimated_api_cost_usd: 34.89,
+            unpriced_tokens: 0,
           },
         ],
       }),

@@ -36,6 +36,8 @@ const tokensSchema = strictObject({
 const spent = {
   tokens: tokensSchema,
   estimated_api_cost_usd: z.number().nonnegative().nullable(),
+  /** The tokens of the rows with no cost: what the cost beside it leaves out. */
+  unpriced_tokens: positiveInt(true),
 }
 
 const lineSchema = strictObject({
@@ -130,6 +132,16 @@ async function readUsage(path: string, parameters: URLSearchParams, signal?: Abo
   return payload
 }
 
+/** An item's usage answer, or a refusal naming what does not fit the contract. */
+export function validateItemUsageAnswer(payload: unknown): ItemUsage {
+  return parseContract(itemAnswer, payload, 'planning.usage', invalid).usage
+}
+
+/** A session's usage answer, or a refusal naming what does not fit the contract. */
+export function validateSessionUsageAnswer(payload: unknown): SessionUsage {
+  return parseContract(sessionAnswer, payload, 'planning.sessionUsage', invalid).usage
+}
+
 export async function fetchItemUsage(
   id: string,
   scope: UsageScope,
@@ -140,7 +152,7 @@ export async function fetchItemUsage(
     new URLSearchParams({ id, scope }),
     signal,
   )
-  return parseContract(itemAnswer, payload, 'planning.usage', invalid).usage
+  return validateItemUsageAnswer(payload)
 }
 
 export async function fetchSessionUsage(
@@ -152,5 +164,5 @@ export async function fetchSessionUsage(
     new URLSearchParams({ session_id: sessionId }),
     signal,
   )
-  return parseContract(sessionAnswer, payload, 'planning.sessionUsage', invalid).usage
+  return validateSessionUsageAnswer(payload)
 }

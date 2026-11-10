@@ -293,6 +293,78 @@ class _Scenario:
         )
         return self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}")
 
+    def usage(self) -> dict[str, dict]:
+        """The usage reads of the card: a priced row, a row of a model with no price, no item."""
+
+        session = "sess-usage"
+        conn = store.connect()
+        try:
+            item = str(read_model.item_row(conn, self.reference)["work_item_id"])
+            runs = {}
+            for agent in ("", "worker"):
+                runs[agent] = conn.execute(
+                    "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                    " read_at) VALUES (?, ?, 'claude', 'transcript.jsonl', ?, ?, ?)",
+                    (
+                        session,
+                        agent,
+                        *("2026-11-10T10:00:00.000Z",) * 2,
+                        "2026-11-10T11:00:00.000Z",
+                    ),
+                ).lastrowid
+            for agent, model, work_item, signal, start, cost, tokens in (
+                (
+                    "",
+                    "claude-opus-5-5",
+                    item,
+                    "next_write",
+                    "10:00",
+                    0.25,
+                    (1000, 20000, 300, None, 400, None),
+                ),
+                (
+                    "worker",
+                    "claude-unknown-9",
+                    item,
+                    "held_step",
+                    "10:05",
+                    None,
+                    (50, None, None, None, 7, 2),
+                ),
+                ("", "claude-opus-5-5", None, None, "10:20", 0.01, (10, None, None, None, 1, None)),
+            ):
+                conn.execute(
+                    "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+                    " ended_at, seconds, work_item_id, signal, input_tokens, cached_read_tokens,"
+                    " cache_write_5m_tokens, cache_write_1h_tokens, output_tokens, reasoning_tokens,"
+                    " estimated_api_cost_usd, price_book, quality)"
+                    " VALUES (?, ?, ?, ?, ?, ?, 600, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'observed')",
+                    (
+                        runs[agent],
+                        session,
+                        agent,
+                        model,
+                        f"2026-11-10T{start}:00.000Z",
+                        f"2026-11-10T{start[:3]}{int(start[3:]) + 10:02d}:00.000Z",
+                        work_item,
+                        signal,
+                        *tokens,
+                        cost,
+                        None if cost is None else "2026-11-10",
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        return {
+            "usage-item": self.http(
+                f"/api/planning/work-item/usage?{urlencode({'id': self.reference, 'scope': 'item'})}"
+            ),
+            "usage-session": self.http(
+                f"/api/planning/session/usage?{urlencode({'session_id': session})}"
+            ),
+        }
+
     def live_frame(self) -> dict:
         """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
 
@@ -546,6 +618,7 @@ class _Scenario:
             **self.documents(),
             **self.open_plans(),
             "live-frame": self.live_frame(),
+            **self.usage(),
         }
 
 

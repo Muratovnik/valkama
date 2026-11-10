@@ -36,7 +36,9 @@ checkouts are therefore distinguishable even at the same version.
   tokens add nothing to any cost. The release check compares the price table with
   LiteLLM's public price list and fails on any rate that differs; a model that list does
   not name yet is reported without failing, and a list that cannot be read stops the
-  check instead of passing it.
+  check instead of passing it. Beside every cost, the usage reads of an item and of a
+  session now carry `unpriced_tokens`, the tokens that cost leaves out because their
+  model has no price, so a screen can say so rather than show the undercount as the cost.
 
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it

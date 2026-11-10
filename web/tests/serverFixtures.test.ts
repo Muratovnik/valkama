@@ -33,6 +33,10 @@ import {
 } from '@/shared/api/openPlanModel.ts'
 import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import {
+  validateItemUsageAnswer,
+  validateSessionUsageAnswer,
+} from '@/shared/api/planningUsageApi.ts'
+import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
@@ -78,6 +82,8 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
+  'usage-item.json': validateItemUsageAnswer,
+  'usage-session.json': validateSessionUsageAnswer,
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
@@ -137,6 +143,17 @@ describe('the server fixtures', () => {
     expect(validateFound(read('documents-search.json')).documents).toEqual([
       { path: 'docs/plan.md', line: 0, text: '' },
     ])
+  })
+
+  it('say beside each cost how many tokens it leaves out', () => {
+    // The fixture's model with no price spent 50 input and 7 output tokens on the item.
+    const usage = validateItemUsageAnswer(read('usage-item.json'))
+    expect(usage.unpriced_models).toEqual(['claude-unknown-9'])
+    expect(usage.unpriced_tokens).toBe(57)
+    expect(usage.by_item.map((line) => line.unpriced_tokens)).toEqual([57])
+    expect(
+      validateSessionUsageAnswer(read('usage-session.json')).by_item.at(-1)?.unpriced_tokens,
+    ).toBe(0)
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

@@ -42,6 +42,7 @@ function usageLine(overrides: Partial<UsageLine> = {}): UsageLine {
     agent_seconds: 0,
     tokens: NO_TOKENS,
     estimated_api_cost_usd: null,
+    unpriced_tokens: 0,
     ...overrides,
   }
 }
@@ -57,6 +58,7 @@ export function noUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
     agent_seconds: 0,
     tokens: NO_TOKENS,
     estimated_api_cost_usd: null,
+    unpriced_tokens: 0,
     cost_basis: COST_BASIS,
     unpriced_models: [],
     agents: [],
@@ -83,6 +85,7 @@ export function richUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
         seconds: 30_000,
         tokens: { ...SPENT, cached_read: 300_000_000 },
         estimated_api_cost_usd: 180,
+        unpriced_tokens: 0,
       },
       {
         session_id: PARENT_SESSION,
@@ -90,6 +93,7 @@ export function richUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
         seconds: 10_480,
         tokens: { ...NO_TOKENS, input: 1000, output: 500 },
         estimated_api_cost_usd: 60.67,
+        unpriced_tokens: 0,
       },
     ],
     models: [
@@ -98,12 +102,14 @@ export function richUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
         seconds: 40_480,
         tokens: SPENT,
         estimated_api_cost_usd: 174.35,
+        unpriced_tokens: 0,
       },
       {
         model: 'claude-example-2',
         seconds: 0,
         tokens: { ...NO_TOKENS, input: 1000, output: 500 },
         estimated_api_cost_usd: 66.32,
+        unpriced_tokens: 0,
       },
     ],
     signals: [{ signal: 'next_write', seconds: 40_480, share: 1 }],
@@ -122,6 +128,7 @@ export function sessionUsage(overrides: Partial<SessionUsage> = {}): SessionUsag
     agent_seconds: 864_114,
     tokens: SPENT,
     estimated_api_cost_usd: 4888.76,
+    unpriced_tokens: 0,
     cost_basis: usage.cost_basis,
     unpriced_models: [],
     agents: usage.agents,
