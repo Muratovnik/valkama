@@ -936,6 +936,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as error:  # the boundary's own normalized contract
                 if boundary.commit in _ROLLED_BACK_AT_SURFACE and conn is not None:
                     conn.rollback()
+                if conn is not None:
+                    # Before the answer: a caller that has its refusal must find no note
+                    # of the write left, and the `finally` below runs after it has it.
+                    planning_images.forget(conn)
                 self._answer(boundary.errors(error))
         finally:
             if conn is not None:
