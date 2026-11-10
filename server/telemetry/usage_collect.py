@@ -447,7 +447,14 @@ class Collector:
         return for_agent
 
     def _keeps(self, target: Target) -> Callable[[str], bool]:
-        """Whether a subagent this run started keeps a transcript of its own."""
+        """Whether a subagent this run started keeps a transcript of its own.
+
+        Its time is then counted in its own run and is left out of this one. The client's
+        file says so while it is there; after the client deleted it, Valkama's archived
+        copy does, and after that the segments its run already holds. Without the last
+        two, reading this run again after a deletion would count the subagent's time in
+        both runs.
+        """
 
         known: dict[str, bool] = {}
 
@@ -456,7 +463,17 @@ class Collector:
                 return True
             if agent not in known:
                 path = agents.agent_transcript(target.parent, target.session, agent)
-                known[agent] = bool(path) and os.path.isfile(path)
+                archive = self.finder.archives.get(target.session, {}).get(agent, "")
+                known[agent] = (
+                    (bool(path) and os.path.isfile(path))
+                    or (bool(archive) and os.path.isfile(archive))
+                    or self.conn.execute(
+                        "SELECT 1 FROM usage_segments WHERE session_id = ? AND agent_id = ?"
+                        " LIMIT 1",
+                        (target.session, agent),
+                    ).fetchone()
+                    is not None
+                )
             return known[agent]
 
         return keeps

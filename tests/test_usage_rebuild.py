@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from server import store_backups
 from server.planning import ladder
 from server.telemetry import liveness, usage_collect, usage_rebuild
 from server.telemetry.usage_ledger import SEGMENT_COLUMNS
@@ -96,7 +97,7 @@ class EquivalenceTests(RebuildCase):
         (line,) = report.runs
         self.assertEqual(usage_rebuild.REBUILT, line.outcome)
         self.assertEqual(line.before, line.after)
-        self.assertEqual(0, line.item_changed)
+        self.assertEqual([], [entry for entry in line.items if entry["before"] != entry["after"]])
         self.assertEqual(read, self.counted(session, agent))
 
     def test_a_claude_session_read_in_passes_and_chunks(self) -> None:
@@ -196,6 +197,90 @@ class EquivalenceTests(RebuildCase):
         self.assertEqual(90, self.tokens("output_tokens"))
         self.assertEqual(HOUR, round(self.run_row()["human_seconds"]))
         self.assert_rebuilds_to_the_same()
+
+
+class SubagentTimeTests(RebuildCase):
+    """Time a subagent's own run counts is never counted in its parent's as well."""
+
+    def parent_and_worker(self) -> None:
+        """A coordinator that waits an hour for a background subagent, both read live."""
+
+        run = self.session()
+        self.ticks((0, 3 * HOUR))
+        run.prompt(0)
+        run.reply(10, tools=(("a1", "Agent"),))
+        run.agent_launched(10, "a1", "worker")
+        run.end_turn(20)
+        run.system(21, "stop_hook_summary")
+        self.worker = self.subagent("sess-1", "worker")
+        self.worker.prompt(13, "build it", origin=None)
+        self.worker.reply(14, tools=(("s1", "Bash"),))
+        self.worker.result(HOUR - 1, "s1")
+        self.worker.end_turn(HOUR)
+        run.enqueue(HOUR + 1, tool="a1", task="worker")
+        run.notice(HOUR + 2, tool="a1", task="worker")
+        run.end_turn(HOUR + 12)
+        self.read()
+        self.assertEqual(HOUR + 2 - 21, round(self.run_row()["subagent_seconds"]))
+
+    def both(self) -> float:
+        return round(self.seconds("sess-1", "") + self.seconds("sess-1", "worker"), 3)
+
+    def assert_parent_rebuilds_unchanged(self) -> None:
+        parent, total = self.counted(), self.both()
+        report = self.rebuild(session="sess-1")
+        self.assertFalse(report.failed, usage_rebuild.render(report))
+        self.assertEqual(parent, self.counted())
+        self.assertEqual(total, self.both())
+
+    def archive_worker(self) -> Path:
+        """Valkama's copy of the worker's transcript, and the client's original deleted."""
+
+        archived = self.root / "transcripts" / "sess-1" / "agent-worker.jsonl"
+        archived.parent.mkdir(parents=True)
+        archived.write_bytes(self.worker.path.read_bytes())
+        self.worker.path.unlink()
+        self.conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " session_id, agent_id, archive_path) VALUES"
+            " ('x', 'transcript_archived', 'confirmed', 'valkama', 'sess-1', 'worker', ?)",
+            ("sess-1/agent-worker.jsonl",),
+        )
+        self.conn.commit()
+        self.read()
+        return archived
+
+    def test_a_subagent_read_from_its_archive_still_takes_its_wait(self) -> None:
+        self.parent_and_worker()
+        archived = self.archive_worker()
+        self.assertEqual(str(archived), self.run_row("sess-1", "worker")["path"])
+        self.assert_parent_rebuilds_unchanged()
+
+    def test_a_subagent_whose_every_copy_is_gone_still_takes_its_wait(self) -> None:
+        self.parent_and_worker()
+        self.archive_worker().unlink()
+        self.read()
+        self.assertEqual("missing", self.run_row("sess-1", "worker")["status"])
+        self.assert_parent_rebuilds_unchanged()
+
+    def test_a_subagent_deleted_with_no_copy_still_takes_its_wait(self) -> None:
+        self.parent_and_worker()
+        self.worker.path.unlink()
+        self.read()
+        # Nothing names the file any more, so the reader leaves its run as it was.
+        self.assertEqual("reading", self.run_row("sess-1", "worker")["status"])
+        self.assert_parent_rebuilds_unchanged()
+
+    def test_a_subagent_that_never_kept_a_transcript_leaves_the_wait_with_its_parent(self) -> None:
+        run = self.session()
+        self.ticks((0, 3 * HOUR))
+        run.prompt(0)
+        run.reply(10, tools=(("a1", "Agent"),))
+        run.result(HOUR, "a1", status="completed", agentId="gone")
+        run.end_turn(HOUR + 10)
+        self.read()
+        self.assertEqual(HOUR + 10, self.seconds())
+        self.assert_parent_rebuilds_unchanged()
 
 
 class RefusalTests(RebuildCase):
@@ -386,11 +471,87 @@ class DryRunTests(RebuildCase):
         self.assertIsNone(report.snapshot)
         (line,) = report.runs
         self.assertEqual(usage_rebuild.WOULD_REBUILD, line.outcome)
-        self.assertEqual(1, line.item_changed)
-        self.assertIn("now name another item", usage_rebuild.render(report))
+        self.assertEqual(
+            {None: (620.0, 0.0), identity: (0.0, 620.0)},
+            {
+                entry["work_item_id"]: (entry["before"]["seconds"], entry["after"]["seconds"])
+                for entry in line.items
+            },
+        )
+        self.assertIn(f"item {identity}: seconds 0.0 -> 620.0", usage_rebuild.render(report))
         self.assertEqual(before, self.exact())
         self.rebuild()
         self.assertEqual({identity}, {row["work_item_id"] for row in self.segments()})
+
+
+class WorkBetweenItemsTests(RebuildCase):
+    """The report says how much work moved between items, not only whether totals did."""
+
+    def moved(self, line: usage_rebuild.RunReport) -> dict:
+        return {
+            entry["work_item_id"]: (entry["before"]["seconds"], entry["after"]["seconds"])
+            for entry in line.items
+            if entry["before"] != entry["after"]
+        }
+
+    def test_a_boundary_that_shifts_moves_seconds_with_the_totals_equal(self) -> None:
+        first, first_id = self.item()
+        second, second_id = self.item()
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.reply(10, tools=(("t1", "Bash"),))
+        self.write("sess-1", first, 15)
+        self.write("sess-1", second, 400)
+        run.result(610, "t1")
+        run.end_turn(620)
+        self.read()
+        # The first write turns out to have come later than the reader was told.
+        self.conn.execute(
+            "UPDATE execution_events SET received_at = ? WHERE work_item_id = ?",
+            (stamp(300), first_id),
+        )
+        self.conn.commit()
+        report = self.rebuild(session="sess-1", dry_run=True)
+        (line,) = report.runs
+        self.assertEqual(line.before, line.after)
+        self.assertEqual(line.segments[0], line.segments[1])
+        self.assertEqual({first_id: (15.0, 300.0), second_id: (605.0, 320.0)}, self.moved(line))
+        text = usage_rebuild.render(report)
+        self.assertNotIn("totals unchanged\n", text + "\n")
+        self.assertIn("totals unchanged, work moved between items", text)
+        self.assertIn(f"item {first_id}: seconds 15.0 -> 300.0", text)
+        self.assertIn(f"item {second_id}: seconds 605.0 -> 320.0", text)
+
+    def test_a_turn_with_no_write_is_placed_by_the_holds_at_the_end_of_its_reading(self) -> None:
+        # Pinned behaviour, not a late input: the reader settles a turn with no write at
+        # the end of each chunk, so where the holds changed during the turn, a reading in
+        # two passes and a reading of the whole turn name different items.
+        held, held_id = self.item()
+        other, _ = self.item()
+        self.session()
+        self.ticks((0, HOUR))
+        self.claim("sess-1", held, 120)
+        self.claim("sess-1", other, 180)
+        worker = self.subagent("sess-1", "worker")
+        worker.prompt(100, "go on", origin=None)
+        worker.reply(110, tools=(("s1", "Bash"),))
+        worker.result(150, "s1")
+        self.read()
+        worker.reply(160, tools=(("s2", "Bash"),))
+        worker.result(190, "s2")
+        worker.end_turn(200)
+        self.read()
+        # At 150 s the parent held one item; from 180 s it holds two, which names none.
+        self.assertEqual(
+            {held_id}, {row["work_item_id"] for row in self.segments("sess-1", "worker")}
+        )
+        report = self.rebuild(session="sess-1", agent="worker")
+        (line,) = report.runs
+        self.assertEqual(line.before, line.after)
+        self.assertEqual({held_id: (100.0, 0.0), None: (0.0, 100.0)}, self.moved(line))
+        self.assertIn(f"item {held_id}: seconds 100.0 -> 0.0", usage_rebuild.render(report))
+        self.assertEqual({None}, {row["work_item_id"] for row in self.segments("sess-1", "worker")})
 
 
 class RecoveryTests(RebuildCase):
@@ -444,6 +605,24 @@ class RecoveryTests(RebuildCase):
         copies = [name for name in names if name.endswith(".liveness")]
         self.assertEqual(5, len(snapshots))
         self.assertEqual(sorted(f"{name}.liveness" for name in snapshots), sorted(copies))
+
+    def test_a_liveness_copy_that_fails_its_check_is_not_left_beside_the_snapshot(self) -> None:
+        self.one_turn()
+        real = store_backups.snapshot_identity
+
+        def torn_liveness(path: str) -> str:
+            # The store's snapshot verifies; the liveness copy does not.
+            return "torn" if not path.endswith(".sqlite3") else real(path)
+
+        with (
+            mock.patch.object(store_backups, "snapshot_identity", torn_liveness),
+            self.assertRaises(RuntimeError),
+        ):
+            self.rebuild()
+        backups = os.path.join(os.path.dirname(self.store_path), "backups")
+        names = os.listdir(backups)
+        (snapshot,) = [name for name in names if name.endswith(".sqlite3")]
+        self.assertEqual([snapshot], names)
 
 
 if __name__ == "__main__":

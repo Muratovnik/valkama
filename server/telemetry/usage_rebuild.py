@@ -21,11 +21,24 @@ only through this. So it never loses what is already counted:
   is where a store restored from that snapshot looks for it. The store's snapshot does
   not hold it.
 
-What lies outside the transcript also shapes segments: liveness, writes and permission
-requests in `execution_events`, holds, steps and labels behind the fallback item, and
-whether a subagent kept a transcript of its own. The reader saw those as they were at each
-pass, so a rebuild may differ where they arrived late. The report shows it: per run, the
-totals before and after and how many segments now name another item.
+A rebuild can still give other numbers than the reader did, for two reasons, and its
+reading is the reference in both:
+
+- What lies outside the transcript also shapes segments: liveness, writes and permission
+  requests in `execution_events`, holds, steps and labels behind the fallback item. The
+  reader saw them as they were at each pass, so a rebuild differs where they arrived late.
+  Whether a subagent keeps a transcript of its own is not one of them: its archived copy
+  or its run's segments still say so after the client deleted the file, so its time is
+  never counted in its parent's run as well.
+- The reader settles the fallback item of a turn with no write at the end of each chunk
+  (`Ledger.retry_fallback`), at the moment its last record reached, so its attribution
+  depends on when its passes ran. A rebuild reads the finished stretch from the start and
+  settles it at the end of its own chunks. Where the parent's holds changed in between,
+  as for a subagent with no write, held step, packet number or label, the same seconds
+  can go to another item with nothing having arrived late.
+
+The report shows either: per run, the totals before and after, and the time, tokens and
+cost each work item (and no item) had before and after.
 """
 
 from __future__ import annotations
@@ -37,12 +50,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from .. import store, store_backups, transcripts
+from .. import store, store_backups
 from . import liveness, usage_collect
 from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT
 from .usage_collect import Collector, Reading
 from .usage_ledger import SEGMENT_COLUMNS, TOKEN_COLUMNS, segment_values, write_rows
-from .usage_targets import Finder, Target
+from .usage_targets import Target
 
 #: The label of the snapshot taken before every run is rebuilt.
 SNAPSHOT_LABEL = "usagerebuild"
@@ -74,6 +87,8 @@ _RUN_SECONDS = {
     "gap_seconds": GAP,
 }
 _COST = "estimated_api_cost_usd"
+#: What a liveness copy is called until it is verified.
+_PARTIAL = ".partial"
 
 #: A row as the store gives it or as a reading makes it: read by column name either way.
 _Record = Mapping[str, Any] | sqlite3.Row
@@ -95,8 +110,10 @@ class RunReport:
     after: dict | None = None
     #: How many segments the run had and has.
     segments: tuple[int, int] | None = None
-    #: Segments starting at the same moment with the same model that now name another item.
-    item_changed: int = 0
+    #: Per work item, `None` for the time no item took: the same figures as `before` and
+    #: `after` but the left-out classes, before and after, one entry for every item either
+    #: side names.
+    items: list[dict] = field(default_factory=list)
     #: The kind of error behind a `failed` refusal.
     error: str | None = None
 
@@ -165,7 +182,8 @@ def rebuild(
         report.snapshot = take_snapshot(conn, store_path)
     targets = {
         (target.session, target.agent): target
-        for target in Finder(conn, transcripts.directory(store_path)).targets(set())
+        # The collector's own finder, whose archives its `_keeps` reads.
+        for target in collector.finder.targets(set())
     }
     coverage = liveness.Coverage(liveness.intervals(store_path))
     for run in runs:
@@ -191,7 +209,7 @@ def _one(
         line.before = _totals(run, before)
         line.after = _totals(_run_after(run, reading), after)
         line.segments = (len(before), len(after))
-        line.item_changed = _item_changes(before, after)
+        line.items = _by_item(before, after)
         if not dry_run:
             _replace(collector, run, target, reading)
         line.outcome = WOULD_REBUILD if dry_run else REBUILT
@@ -206,7 +224,7 @@ def _one(
 def _refuse(line: RunReport, reason: str) -> None:
     line.outcome, line.reason = REFUSED, reason
     line.before = line.after = line.segments = None
-    line.item_changed = 0
+    line.items = []
 
 
 def _read(
@@ -281,28 +299,47 @@ def _run_after(run: sqlite3.Row, reading: Reading) -> _Record:
 
 
 def _totals(run: _Record, segments: Sequence[_Record]) -> dict:
-    totals: dict = {column: round(float(run[column]), 3) for column in _RUN_SECONDS}
-    totals["seconds"] = round(sum(float(row["seconds"]) for row in segments), 3)
-    totals["estimated_seconds"] = round(
-        sum(float(row["seconds"]) for row in segments if row["quality"] == liveness.ESTIMATED), 3
-    )
+    return {
+        **{column: round(float(run[column]), 3) for column in _RUN_SECONDS},
+        **_spent(segments),
+    }
+
+
+def _spent(segments: Sequence[_Record]) -> dict:
+    """The seconds, the estimated part of them, each token column and the cost of some rows."""
+
+    spent: dict = {
+        "seconds": round(sum((float(row["seconds"]) for row in segments), 0.0), 3),
+        "estimated_seconds": round(
+            sum(
+                (float(row["seconds"]) for row in segments if row["quality"] == liveness.ESTIMATED),
+                0.0,
+            ),
+            3,
+        ),
+    }
     for column in TOKEN_COLUMNS.values():
-        totals[column] = sum(int(row[column]) for row in segments if row[column] is not None)
+        spent[column] = sum(int(row[column]) for row in segments if row[column] is not None)
     costs = [float(row[_COST]) for row in segments if row[_COST] is not None]
-    totals[_COST] = round(sum(costs), 6) if costs else None
-    return totals
+    spent[_COST] = round(sum(costs), 6) if costs else None
+    return spent
 
 
-def _item_changes(before: Sequence[_Record], after: Sequence[_Record]) -> int:
-    """New segments whose former one (same start, same model) named another item."""
+def _by_item(before: Sequence[_Record], after: Sequence[_Record]) -> list[dict]:
+    """What each work item had and has, no item last: where work moved between items."""
 
-    former = {(row["started_at"], row["model"]): row["work_item_id"] for row in before}
-    return sum(
-        1
-        for row in after
-        if (row["started_at"], row["model"]) in former
-        and former[(row["started_at"], row["model"])] != row["work_item_id"]
+    items = sorted(
+        {row["work_item_id"] for row in [*before, *after]},
+        key=lambda item: (item is None, item or ""),
     )
+    return [
+        {
+            "work_item_id": item,
+            "before": _spent([row for row in before if row["work_item_id"] == item]),
+            "after": _spent([row for row in after if row["work_item_id"] == item]),
+        }
+        for item in items
+    ]
 
 
 def render(report: Report) -> str:
@@ -315,7 +352,7 @@ def render(report: Report) -> str:
     verb = "would rebuild" if report.dry_run else "rebuilt"
     lines = [f"usage rebuild: {verb} {done} run(s), refused {refused}"]
     if report.dry_run:
-        lines.append("dry run: nothing was written")
+        lines.append("dry run: nothing was rebuilt")
     if report.snapshot is not None:
         lines.append(f"snapshot: {report.snapshot} (the liveness file is copied beside it)")
     for run in report.runs:
@@ -327,20 +364,32 @@ def render(report: Report) -> str:
             error = f" ({run.error})" if run.error else ""
             lines.append(f"{name}: refused ({reason}): {REASONS[reason]}{error}")
             continue
-        lines.append(f"{name}: {run.outcome}, {_changes(run)}")
+        moved = [
+            f"  item {entry['work_item_id'] or '(none)'}: "
+            + _changes(entry["before"], entry["after"])
+            for entry in run.items
+            if entry["before"] != entry["after"]
+        ]
+        changed = _changes(run.before or {}, run.after or {})
+        if run.segments is not None and run.segments[0] != run.segments[1]:
+            changed = "; ".join(
+                filter(None, (changed, f"segments {run.segments[0]} -> {run.segments[1]}"))
+            )
+        if not changed and not moved:
+            changed = "totals unchanged"
+        elif not changed:
+            changed = "totals unchanged, work moved between items"
+        lines.append(f"{name}: {run.outcome}, {changed}")
+        lines.extend(moved)
     return "\n".join(lines)
 
 
-def _changes(run: RunReport) -> str:
-    before, after = run.before or {}, run.after or {}
-    changed = [
+def _changes(before: dict, after: dict) -> str:
+    """Each figure that differs, as `name before -> after`; empty when none does."""
+
+    return "; ".join(
         f"{name} {before[name]} -> {after[name]}" for name in after if before[name] != after[name]
-    ]
-    if run.segments is not None and run.segments[0] != run.segments[1]:
-        changed.append(f"segments {run.segments[0]} -> {run.segments[1]}")
-    if run.item_changed:
-        changed.append(f"{run.item_changed} segment(s) now name another item")
-    return "; ".join(changed) if changed else "totals unchanged"
+    )
 
 
 # -- the recovery point -------------------------------------------------------
@@ -366,22 +415,30 @@ def take_snapshot(conn: sqlite3.Connection, store_path: str) -> str:
 def _copy_liveness(source: str, destination: str) -> None:
     """Copy the liveness database whole, and refuse a copy that does not hold the same rows.
 
-    A tick waits while it is copied: the read lock is held from the hash to the end of
-    the copy, and a tick gives up after a second, which the next tick makes good.
+    The copy is made under a name of its own and takes `destination` only once verified,
+    so a restore never finds a copy that failed beside a good snapshot. A tick waits while
+    it is copied: the read lock is held from the hash to the end of the copy, and a tick
+    gives up after a second, which the next tick makes good.
     """
 
-    with (
-        contextlib.closing(sqlite3.connect(source, timeout=1.0, isolation_level=None)) as held,
-        contextlib.closing(sqlite3.connect(destination)) as copy,
-    ):
-        held.execute("BEGIN")
-        try:
-            identity = store_backups.logical_identity(held)
-            held.backup(copy)
-        finally:
-            held.execute("COMMIT")
-    if store_backups.snapshot_identity(destination) != identity:
-        raise RuntimeError("the liveness copy does not hold what the liveness file holds")
+    partial = destination + _PARTIAL
+    try:
+        with (
+            contextlib.closing(sqlite3.connect(source, timeout=1.0, isolation_level=None)) as held,
+            contextlib.closing(sqlite3.connect(partial)) as copy,
+        ):
+            held.execute("BEGIN")
+            try:
+                identity = store_backups.logical_identity(held)
+                held.backup(copy)
+            finally:
+                held.execute("COMMIT")
+        if store_backups.snapshot_identity(partial) != identity:
+            raise RuntimeError("the liveness copy does not hold what the liveness file holds")
+        os.replace(partial, destination)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(partial)
 
 
 def _drop_stale_copies(directory: str) -> None:

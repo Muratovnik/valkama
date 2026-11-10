@@ -315,7 +315,7 @@ class UsageRebuildTests(CliTestCase):
         self.assertIn("would rebuild 1 run(s)", output)
         self.assertIn("seconds 620.0 -> 30.0", output)
         self.assertIn("human_seconds 0.0 -> 590.0", output)
-        self.assertIn("dry run: nothing was written", output)
+        self.assertIn("dry run: nothing was rebuilt", output)
         self.assertEqual(before, self.counted())
         payload = json.loads(
             self.invoke("usage", "rebuild", "--session", "sess-cli", "--dry-run", "--json")

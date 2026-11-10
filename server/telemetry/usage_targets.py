@@ -85,11 +85,13 @@ class Finder:
         self.archive_root = archive_root
         self._rollouts: dict[str, tuple[str, str] | None] = {}
         self._settled: dict[str, str] = {}
+        #: The archived copies found by the last `targets`, by session and then agent.
+        self.archives: dict[str, dict[str, str]] = {}
 
     def targets(self, moved: set[str]) -> Iterator[Target]:
         """Everything to look at. `moved` is filled in by the caller as it finds new bytes."""
 
-        archives = self._archives()
+        archives = self.archives = self._archives()
         rows = self.conn.execute(
             "SELECT id, client, transcript_path, status, last_seen FROM sessions"
             " WHERE parent_session_id = '' ORDER BY status != 'active', last_seen DESC"

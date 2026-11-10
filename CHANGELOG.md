@@ -46,9 +46,13 @@ checkouts are therefore distinguishable even at the same version.
   each. A run the reader moved meanwhile is left to the reader. A run whose transcript is
   gone or shorter than what was read is left untouched and named, and without the liveness
   file nothing is rebuilt. `--all` first takes a verified `usagerebuild` snapshot and copies
-  the liveness file beside it. The report gives each run's time, tokens and cost before and
-  after and how many segments now name another item, which shows where writes, holds or
-  liveness arrived after the reader had passed; `--dry-run` writes nothing.
+  the liveness file beside it; it holds the store's writes off meanwhile, so run it while no
+  agent session is working. The report gives each run's time, tokens and cost before and
+  after and how much of them moved between work items. The rebuild's numbers are the
+  reference: they differ from the reader's where writes, holds or liveness arrived after the
+  reader had passed, and for a turn with no write, which the reader placed by the holds at
+  the end of each pass and the rebuild places by the holds at the end of its reading.
+  `--dry-run` reports the same and rebuilds nothing.
 
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
@@ -249,6 +253,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A subagent's time stays out of its parent's run after its transcript is deleted.** The
+  usage reader took a subagent whose file the client had deleted for one that never kept a
+  transcript, and counted its time in the parent's run as well as in its own. Valkama's
+  archived copy, or the segments the subagent's own run already holds, now say it kept one.
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
   sign in the side panel and the marks of a chain now centre on the middle of the capitals of
   the line they stand on — a reference, a number or a capitalized word — on a tile, a list row,

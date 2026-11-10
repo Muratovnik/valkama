@@ -793,13 +793,18 @@ def main(argv: list[str] | None = None) -> None:
     which = rebuild_cmd.add_mutually_exclusive_group(required=True)
     which.add_argument("--session", metavar="ID", help="the session whose run to rebuild")
     which.add_argument(
-        "--all", action="store_true", help="every run, after a verified snapshot of the store"
+        "--all",
+        action="store_true",
+        help="every run, after a verified snapshot of the store; run it while no agent session"
+        " is working, since the snapshot holds the store's writes off and hooks may time out",
     )
     rebuild_cmd.add_argument(
         "--agent", default="", metavar="ID", help="its subagent's or child thread's run instead"
     )
     rebuild_cmd.add_argument(
-        "--dry-run", action="store_true", help="report the differences and write nothing"
+        "--dry-run",
+        action="store_true",
+        help="report what a rebuild would change; rebuilds nothing",
     )
     rebuild_cmd.add_argument("--json", action="store_true")
     options = parser.parse_args(argv)
