@@ -86,13 +86,17 @@ export interface MarkRun {
 interface MarkHint {
   kind: TooltipKind
   text: string
+  /** A detail's element's own words, said whole first while they are cut. */
+  words?: string
 }
 
 /** The element with its hover text in the window's one tooltip, when it has one. */
 function hinted(node: VNode, hint: MarkHint | undefined): VNode {
   if (!hint) return node
   if (hint.kind === 'detail')
-    return withDirectives(node, [[vTooltip, hint.text, undefined, { detail: true }]])
+    return withDirectives(node, [
+      [vTooltip, { text: hint.text, words: hint.words }, undefined, { detail: true }],
+    ])
   if (hint.kind === 'clipped')
     return withDirectives(node, [[vTooltip, hint.text, undefined, { clipped: true }]])
   return withDirectives(node, [[vTooltip, hint.text, undefined, { name: true }]])
@@ -123,8 +127,12 @@ export interface ChipDrawing {
  * keyboard reaches the same filter through the card and the bar instead.
  */
 export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
-  const face = h('span', { class: 'chip-face' }, chip.label)
-  if (!chip.filterable) return h('span', { class: `label-chip${extraClass}` }, [face])
+  const face = h('span', { class: 'chip-face one-line' }, chip.label)
+  // Its word is on screen and its name is the button's, so the chip says its word only while
+  // a narrow place cuts it.
+  const whole: MarkHint = { kind: 'clipped', text: chip.label }
+  if (!chip.filterable)
+    return hinted(h('span', { class: `label-chip${extraClass}` }, [face]), whole)
   const name = chip.words.filterName('labels', chip.active, chip.label)
   const button = h(
     'button',
@@ -143,8 +151,7 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
     },
     [face],
   )
-  // Its word is on screen and its name is the button's: a hover hint would say both again.
-  return button
+  return hinted(button, whole)
 }
 
 /**
@@ -154,8 +161,14 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
  * surfaces line a mark up by its baseline or beside marks alone, and keep the box.
  */
 const trims = (surface: FacetSurface) => surface === 'card' || surface === 'preview'
-const wordClass = (surface: FacetSurface) =>
-  trims(surface) ? 'facet-word trimmed-word' : 'facet-word'
+/**
+ * A word keeps to one line and ends in an ellipsis short of room (`.one-line`), save in the
+ * hover card, where an item is read in full and a long word wraps under its glyph.
+ */
+const wordClass = (surface: FacetSurface) => {
+  if (surface === 'preview') return 'facet-word trimmed-word'
+  return trims(surface) ? 'facet-word trimmed-word one-line' : 'facet-word one-line'
+}
 
 /** What a mark draws beside its glyph: its short words, its word alone, or its word. */
 function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolean): VNode[] {
@@ -179,19 +192,24 @@ const isActive = (mark: FacetMark, run: MarkRun) =>
 
 /**
  * What a mark says on hover, never the words it shows: a glyph alone is named by its word
- * (or by what its press does), a word that folds out of sight or stands shortened says its
- * whole words while it is cut, and what a value means — a priority's — is said beside the
- * word on screen. A mark whose word is all there is to say has no hint. A preview is the
- * tooltip's own content and brings no hover text of its own.
+ * (or by what its press does), a word that is cut short of room, folds out of sight or stands
+ * shortened says its whole words while it is cut, and what a value means — a priority's — is
+ * said beside the word on screen, after the word itself while that is cut. A mark whose word
+ * stands whole has nothing to say. A preview is the tooltip's own content, where words wrap
+ * rather than end in an ellipsis, and brings no hover text of its own.
+ *
+ * `ownLine` is false for a word in a table cell, which the cell cuts rather than the word, so
+ * the cell carries the hint.
  */
 function markHint(
   mark: FacetMark,
   run: MarkRun,
-  whole: string,
-  filters: boolean,
+  { filters, ownLine = true, whole }: { filters: boolean; whole: string; ownLine?: boolean },
 ): MarkHint | undefined {
   const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
   const name = filters ? run.words.filterName(mark.facet, isActive(mark, run), whole) : whole
+  // A word on screen that its own line can end in an ellipsis.
+  const cuttable = ownLine && !glyphOnly && run.surface !== 'preview'
   if (mark.hint !== undefined && run.surface !== 'preview') {
     const meaning = run.words.say(mark.hint)
     return glyphOnly
@@ -199,12 +217,14 @@ function markHint(
           kind: 'detail',
           text: run.words.say({ key: 'priorityMeaning.hint', params: { priority: name, meaning } }),
         }
-      : { kind: 'detail', text: meaning }
+      : { kind: 'detail', text: meaning, words: cuttable ? whole : undefined }
   }
   if (glyphOnly) return { kind: 'name', text: name }
   // A glyph whose word may fold out of sight tells the pointer its word once it has.
   const foldable = run.fold === true && mark.glyph !== null
-  return foldable || mark.short !== undefined ? { kind: 'clipped', text: whole } : undefined
+  return foldable || mark.short !== undefined || cuttable
+    ? { kind: 'clipped', text: whole }
+    : undefined
 }
 
 /** What a mark is and does, whatever it draws inside: its tone, its name and its press. */
@@ -293,7 +313,7 @@ function drawMark(mark: FacetMark, run: MarkRun): VNode {
       },
       [...glyph, ...markWordsOf(mark, whole, run, filters)],
     ),
-    markHint(mark, run, whole, filters),
+    markHint(mark, run, { filters, whole }),
   )
 }
 
@@ -317,7 +337,7 @@ export function drawWordCell([mark]: readonly FacetMark[], run: MarkRun): VNode 
       },
       whole,
     ),
-    markHint(mark, run, whole, filters),
+    markHint(mark, run, { filters, ownLine: false, whole }),
   )
 }
 
@@ -346,6 +366,7 @@ function drawEntry(mark: FacetMark, run: MarkRun): VNode {
       dimension: 'work-item-state',
       state: mark.value,
       label: run.words.say(mark.text),
+      inPreview: run.surface === 'preview',
     })
   return drawMark(mark, run)
 }

@@ -1,8 +1,9 @@
 /**
  * The harness page for the window's one hint (`TooltipHost`): a control with a hint of its
  * own, drawn under a control its hint stands over, a control with none inside an element
- * that has one, two cut words side by side on one line, as a row's name and title stand, and
- * names with a detail to add, one cut and one whole, beside a cut name with none.
+ * that has one, two cut words side by side on one line, as a row's name and title stand,
+ * names with a detail to add, one cut and one whole, beside a cut name with none, and a whole
+ * one-line word inside a control that has a hint of its own.
  */
 import { h, withDirectives } from 'vue'
 
@@ -46,5 +47,13 @@ export const hintsSurface = () =>
         [vTooltip, { text: '', words: 'A name with nothing to add' }, undefined, { detail: true }],
       ]),
     ]),
+    withDirectives(
+      h('button', { class: 'hints-named', type: 'button' }, [
+        withDirectives(h('span', { class: 'hints-whole' }, 'Whole'), [
+          [vTooltip, 'Whole', undefined, { clipped: true }],
+        ]),
+      ]),
+      [[vTooltip, 'What the control does', undefined, { name: true }]],
+    ),
     h(TooltipHost),
   ])

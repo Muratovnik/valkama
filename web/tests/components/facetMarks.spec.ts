@@ -13,6 +13,7 @@ import LabelChip from '@/entities/work-item/components/LabelChip.vue'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { boardItem } from '../fixtures/board.ts'
 import { hintOf } from '../support/hint.ts'
@@ -130,8 +131,11 @@ describe('FacetMarks', () => {
     const context = { waitingOn: 'MAIN-7' }
     const loose = marks({ item, context, surface: 'list', facets: ['readiness'] })
     expect(loose.get('.facet-marks').classes()).not.toContain('fold')
-    // Unfolded, a glyph shown with its word needs no hover text.
-    expect(hintOf(loose.get('[data-facet="readiness"]'))).toBeUndefined()
+    // Unfolded, a glyph shown with its word says it only while a narrow line cuts it.
+    expect(tooltipOf(loose.get('[data-facet="readiness"]').element)).toMatchObject({
+      kind: 'clipped',
+      clipped: true,
+    })
     const folded = marks({ item, context, surface: 'list', facets: ['readiness'], fold: true })
     expect(folded.get('.facet-marks').classes()).toContain('fold')
     const mark = folded.get('[data-facet="readiness"]')

@@ -49,7 +49,7 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
   <!-- The rule does not count separator among the interactive roles. -->
   <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
   <div
-    v-tooltip.detail="folded?.state"
+    v-tooltip.detail="{ text: folded?.state, words: folded?.name }"
     class="overlay-resizer"
     role="separator"
     aria-orientation="vertical"
@@ -75,7 +75,7 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
           name="chevron-left"
           :size="16"
         />
-        <span class="overlay-resizer-name">{{ folded.name }}</span>
+        <span class="overlay-resizer-name one-line">{{ folded.name }}</span>
       </span>
       <span
         :id="descriptionId"
@@ -151,14 +151,12 @@ const describedBy = computed(() => (props.folded ? descriptionId : undefined))
   padding-block: var(--space-4);
 }
 
-/* Read from the bottom up, as a spine is; cut short rather than run off the window. */
+/* Read from the bottom up, as a spine is; cut short (`.one-line`) rather than run off the
+   window, and its line runs down the strip, so what it may not outgrow is the strip's height. */
 .overlay-resizer-name {
   min-height: 0;
   font: var(--font-note);
-  white-space: nowrap;
   writing-mode: sideways-lr;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* A forced palette takes a background away, and with it the only thing that says the edge

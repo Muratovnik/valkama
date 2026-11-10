@@ -162,6 +162,7 @@ defineExpose({ focusLast })
           <span class="filter-chip-sign">{{ chip.operator.sign }}</span>
         </ToggleChip>
         <button
+          v-tooltip.clipped="chip.name"
           class="filter-chip"
           type="button"
           :aria-describedby="chip.describedBy"
@@ -169,7 +170,7 @@ defineExpose({ focusLast })
           @click="remove(index)"
           @keydown="keydown($event, index)"
         >
-          <span class="filter-chip-name">{{ chip.name }}</span>
+          <span class="filter-chip-name one-line">{{ chip.name }}</span>
           <VIcon
             class="filter-chip-remove"
             name="close"
@@ -291,12 +292,6 @@ defineExpose({ focusLast })
     outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: 1px;
   }
-}
-
-.filter-chip-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .filter-chip-remove {

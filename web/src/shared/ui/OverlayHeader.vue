@@ -21,7 +21,7 @@ const props = withDefaults(
     focusableTitle?: boolean
     /** What the title is in the page's outline: the top of it, on a page that is only this. */
     heading?: 'h1' | 'h2'
-    /** A title that may run long stays on its line, and the whole of it is elsewhere. */
+    /** A title that may run long stays on its line, and says the whole of it while it is cut. */
     singleLine?: boolean
     subtitle?: string
   }>(),
@@ -41,6 +41,8 @@ const name = ref<HTMLElement | null>(null)
 const nameFocus = computed(() => (props.focusableTitle ? -1 : undefined))
 /** Absent where the title takes no focus, or F6 would be sent to something that cannot. */
 const nameMark = computed(() => (props.focusableTitle ? '' : undefined))
+/** A title held to one line says itself whole while it is cut; one that wraps is never cut. */
+const cutTitle = computed(() => (props.singleLine ? props.title : ''))
 defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
 </script>
 
@@ -59,8 +61,9 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
       <component
         :is="heading"
         ref="name"
+        v-tooltip.clipped="cutTitle"
         class="overlay-header-name"
-        :class="{ 'single-line': singleLine }"
+        :class="{ 'one-line': singleLine }"
         :tabindex="nameFocus"
         :data-pane-title="nameMark"
       >
@@ -150,12 +153,6 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   &:focus-visible {
     outline: var(--size-focus-ring) solid var(--color-focus-ring);
     outline-offset: 2px;
-  }
-
-  &.single-line {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 }
 

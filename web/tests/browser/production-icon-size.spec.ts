@@ -8,6 +8,10 @@
  * An icon in a row short of room used to give way: a flex item shrinks, and the page's
  * `svg { max-width: 100% }` lets a drawing go narrower than its box. A label with no rule of its
  * own wrapped under itself. Both are read off the page by measurement, not by the rules.
+ *
+ * A one-line label is found by how it is drawn — no wrap, an ellipsis where it ends — and not by
+ * the shared class: picked by `.one-line`, a label that wrote the rule again passed unseen, cut
+ * with no hint, which is what a copy of the rule leaves out.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -44,9 +48,6 @@ const PORTFOLIO = serializePlatformRoute({ module_id: 'planning', scope: globalS
 
 /** The navigation's least width, which `Home` on its edge sets. */
 const NARROWEST = 200
-
-/** Labels that are one line by design, whatever their component calls them. */
-const ONE_LINE_LABELS = '.one-line, .work-action .action-label'
 
 async function prepare(page: Page, locale: Locale, width: Width) {
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
@@ -180,12 +181,18 @@ function measureIcons() {
   return { navigation: Math.round(rail?.getBoundingClientRect().width ?? 0), shown, shrunk }
 }
 
-/** Every one-line label that takes more than one line, and every cut one with no hint. */
-function measureLabels(labels: string) {
+/**
+ * Every one-line label that takes more than one line, and every cut one with no hint. A label is
+ * one line by the style it is drawn with, whatever its component calls it or writes it with.
+ */
+function measureLabels() {
   const wrapped: string[] = []
   const unhinted: string[] = []
   let shown = 0
-  for (const label of document.querySelectorAll<HTMLElement>(labels)) {
+  for (const label of document.querySelectorAll<HTMLElement>('body *')) {
+    const style = getComputedStyle(label)
+    if (style.textOverflow !== 'ellipsis' || style.getPropertyValue('text-wrap-mode') !== 'nowrap')
+      continue
     const words = label.textContent?.trim() ?? ''
     if (!label.checkVisibility({ visibilityProperty: true }) || !words) continue
     shown += 1
@@ -194,7 +201,8 @@ function measureLabels(labels: string) {
     const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.bottom)))
     if (lines.size > 1) wrapped.push(`«${words}»: ${lines.size} lines`)
     const cut = label.clientWidth > 1 && label.scrollWidth > label.clientWidth + 1
-    if (cut && !label.closest('[data-tooltip]')) unhinted.push(`«${words}»`)
+    if (cut && !label.closest('[data-tooltip]'))
+      unhinted.push(`«${words}» .${label.classList.value}`)
   }
   return { shown, unhinted, wrapped }
 }
@@ -210,8 +218,9 @@ for (const width of Object.keys(VIEWPORTS) as Width[])
         await narrowest(page, width)
         await page.evaluate(async () => document.fonts.ready)
         const icons = await page.evaluate(measureIcons)
-        const labels = await page.evaluate(measureLabels, ONE_LINE_LABELS)
+        const labels = await page.evaluate(measureLabels)
         expect(icons.shown).toBeGreaterThan(5)
+        expect(labels.shown).toBeGreaterThan(0)
         expect({
           shrunk: icons.shrunk,
           wrapped: labels.wrapped,

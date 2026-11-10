@@ -58,6 +58,8 @@ const lost = computed(() => connectionTroubled(props.connection))
 const notice = computed(() => (lost.value ? t('connection.lost') : ''))
 /** The hint, and the description assistive technology reads: the loss, then the action. */
 const hint = computed(() => `${notice.value} ${t('refresh.title')}`)
+/** What the control says the connection is: its name, and its word while the rail has room. */
+const status = computed(() => t(`status.${props.connection}`))
 
 /**
  * Whether the rail hides the word, which is when the press opens the sentence.
@@ -120,13 +122,13 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
       <template #trigger="{ toggle, popup }">
         <button
           ref="control"
-          v-tooltip:right.detail="hint"
+          v-tooltip:right.detail="{ text: hint, words: status }"
           type="button"
           class="nav-refresh"
           :class="{ refreshing }"
           :data-tone="statePresentation('connection-lifecycle', connection).tone"
           :disabled="refreshing"
-          :aria-label="t(`status.${connection}`)"
+          :aria-label="status"
           :aria-controls="popup.controls"
           :aria-expanded="popup.expanded"
           @click="press(toggle, $event)"
@@ -135,7 +137,7 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
             class="connection-dot"
             aria-hidden="true"
           />
-          <span class="connection-copy">{{ t(`status.${connection}`) }}</span>
+          <span class="connection-copy one-line">{{ status }}</span>
           <VIcon
             class="refresh-icon"
             name="refresh"
@@ -231,12 +233,8 @@ function press(toggle: (event?: Event) => void, event: MouseEvent) {
 }
 
 .connection-copy {
-  min-width: 0;
   color: var(--color-text-on-dark);
   font: var(--font-label);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The narrow rail keeps the dot and drops everything that needs a line: the word

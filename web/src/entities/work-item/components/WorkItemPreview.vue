@@ -98,6 +98,7 @@ const copied = useWorkItemCopy(() => props.reference)
           dimension="claim-lease"
           state="stale"
           :label="t('workItem.lease.mark')"
+          in-preview
         />
       </p>
       <p

@@ -1,14 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 type Props = {
   label: string
   compact?: boolean
+  /** It stands in a reference's preview, a hint's own content, which brings no hint of its own. */
+  inPreview?: boolean
   variant?: 'inline' | 'badge' | 'dot'
 } & SemanticStatePair
 
-const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inline' })
+const props = withDefaults(defineProps<Props>(), {
+  compact: false,
+  inPreview: false,
+  variant: 'inline',
+})
+
+/** The word said whole while it is cut; a dot's word is hidden for the reader, not cut. */
+const cutLabel = computed(() =>
+  props.variant === 'dot' || props.compact || props.inPreview ? '' : props.label,
+)
 </script>
 
 <template>
@@ -24,7 +38,11 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
       class="state-dot"
       aria-hidden="true"
     />
-    <span class="state-label trimmed-word">{{ label }}</span>
+    <span
+      v-tooltip.clipped="cutLabel"
+      class="state-label trimmed-word one-line"
+      >{{ label }}</span
+    >
   </span>
 </template>
 
@@ -39,7 +57,6 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
   min-height: 24px;
   color: var(--color-text-muted);
   font: var(--font-field-label);
-  white-space: nowrap;
 }
 
 .state-dot {

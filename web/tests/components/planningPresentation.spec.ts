@@ -82,7 +82,8 @@ describe('Planning semantic presentation', () => {
     expect(wrapper.get('.list-claim').text()).toBe('claude')
     await wrapper.setProps({ items: [{ ...item, state: { ...item.state, is_terminal: true } }] })
     expect(wrapper.get('.list-claim').text()).toBe('Previously responsible: claude')
-    expect(hintOf(wrapper.get('.list-claim'))).toBe('Previously responsible: claude')
+    // The cell cuts a long holder, so the cell says it whole.
+    expect(hintOf(wrapper.get('.list-holder'))).toBe('Previously responsible: claude')
   })
 
   it('says the holder and a stale claim with one glyph, and only while the work is open', async () => {

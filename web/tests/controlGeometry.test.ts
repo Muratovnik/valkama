@@ -100,13 +100,15 @@ test('a control states its own subject, so nothing captions it twice', () => {
   // The connection strip is the refresh control; the word under the state was
   // the button's own name printed inside it, and it cost the dot its alignment.
   assert.doesNotMatch(navConnection, /refresh\.label/)
-  // Its hint names the refresh, after the lost connection it is there for.
-  assert.match(navConnection, /v-tooltip:right.detail="hint"/)
+  // Its hint names the refresh, after the lost connection it is there for, and its word
+  // first while the rail cuts it.
+  assert.match(navConnection, /v-tooltip:right.detail="\{ text: hint, words: status \}"/)
   assert.match(navConnection, /t\('refresh\.title'\)/)
   assert.match(
     navConnection,
-    /<span class="connection-copy">\{\{ t\(`status\.\$\{connection\}`\) \}\}<\/span>/,
+    /const status = computed\(\(\) => t\(`status\.\$\{props\.connection\}`\)\)/,
   )
+  assert.match(navConnection, /<span class="connection-copy one-line">\{\{ status \}\}<\/span>/)
 })
 
 test('settings stands in the foot beside the connection, inside the navigation', () => {
