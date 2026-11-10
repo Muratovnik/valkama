@@ -50,6 +50,11 @@ export const workItemUsageMessages = {
       noItem: 'No task',
       failed: 'Could not read how much work this took.',
       rootOwn: 'The epic itself',
+      accounts: 'By organization',
+      accountUnknown: 'Unknown organization',
+      accountShare: '{share} of the time',
+      accountStart: 'From the start',
+      accountChanges: 'Where the organization changed',
     },
   },
   ru: {
@@ -100,6 +105,11 @@ export const workItemUsageMessages = {
       noItem: 'Без задачи',
       failed: 'Не удалось прочитать, сколько заняла работа.',
       rootOwn: 'Сам эпик',
+      accounts: 'По организациям',
+      accountUnknown: 'Неизвестная организация',
+      accountShare: '{share} времени',
+      accountStart: 'С начала',
+      accountChanges: 'Где сменилась организация',
     },
   },
 }

@@ -9,8 +9,6 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import {
   NO_TOKENS,
@@ -20,54 +18,12 @@ import {
   sessionUsage,
   usageAnswer,
 } from '../fixtures/usage.ts'
+import { CARD, named, openAgents, serve } from './agentsUsagePage.ts'
 import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
-
-const CARD = serializePlatformRoute({
-  module_id: 'planning',
-  scope: projectScope,
-  entity: planningWorkItemEntity(workItemRef),
-})
-
-/** The one agent the record names, the same run the read counts first. */
-const named = {
-  agent_id: 'agent00000000000',
-  session_id: PARENT_SESSION,
-  agent_type: 'general-purpose',
-  label: 'Build the export',
-  started_at: '2026-08-13T08:00:00Z',
-  last_activity_at: '2026-08-13T08:29:00Z',
-  ended_at: '2026-08-13T16:20:00Z',
-  steps: [],
-  link: 'exact',
-  coordinator_items: null,
-}
-
-async function serve(
-  page: Page,
-  item: ReturnType<typeof richUsage> | null,
-  session = sessionUsage(),
-) {
-  await installBackend(page, { agents: () => [named] })
-  await page.route('**/api/planning/work-item/usage?*', (route) =>
-    item
-      ? route.fulfill({ contentType: 'application/json', body: JSON.stringify(usageAnswer(item)) })
-      : route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
-  )
-  await page.route('**/api/planning/session/usage?*', (route) =>
-    route.fulfill({ contentType: 'application/json', body: JSON.stringify(usageAnswer(session)) }),
-  )
-}
-
-async function openAgents(page: Page) {
-  const tab = page.locator('.drawer .inspector-tabs').getByRole('tab', { name: /^Agents \d+$/u })
-  await tab.click()
-  return page.locator('.drawer .agents')
-}
 
 test('the tab counts the session’s own run with the agents the record names', async ({ page }) => {
   await serve(page, richUsage())

@@ -288,6 +288,10 @@ export const DETAIL_TOOLTIPS = new Map([
     "the follower's whole session id, where the card prints its start; never the name the card prints",
   ],
   [
+    'widgets/work-item-inspector/components/UsageAccounts.vue <span> v-tooltip.detail="row.full"',
+    'the whole organization id, of which the row prints the start',
+  ],
+  [
     'widgets/work-item-inspector/components/UsageFacts.vue <span> v-tooltip.detail="fact.title"',
     'how a figure is counted, which the figure does not say',
   ],

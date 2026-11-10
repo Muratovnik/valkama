@@ -2,7 +2,8 @@
 /**
  * How much work the item took, whole, at the head of its agents: the time on the clock and what
  * the agents spent together, the cost, the tokens processed anew, and in words what each of them
- * is, since a finger has no tooltip. Under them everything by kind and by model.
+ * is, since a finger has no tooltip. Under them everything by kind and by model, then under
+ * which organization the work ran.
  *
  * A kind or a cost nobody reported says so and is never a zero. A read that failed says that it
  * failed, because not knowing is not the same as there being nothing, and offers to read again.
@@ -10,6 +11,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import UsageAccounts from '@/widgets/work-item-inspector/components/UsageAccounts.vue'
 import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
 import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import {
@@ -189,6 +191,16 @@ const models = computed(() =>
           />
         </li>
       </ul>
+    </div>
+    <div
+      v-if="usage.account_stretches.length"
+      class="work-usage-part"
+    >
+      <span class="work-usage-caption">{{ t('workItem.usage.accounts') }}</span>
+      <UsageAccounts
+        :usage="usage"
+        :estimated="isEstimated(usage)"
+      />
     </div>
   </section>
   <p
