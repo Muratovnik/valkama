@@ -321,7 +321,8 @@ class Collector:
                 cursor += 1
             clock.feed(step)
         if clock.high is not None:
-            ledger.retry_fallback(clock.high)
+            # A turn placed by `fallback` is placed again at the latest moment read.
+            ledger.place_open_turn(clock.high)
         state["clock"], state["ledger"] = clock.state(), ledger.memo()
         return Parsed(Progress(state, packet["item"], after, ledger.rows), ledger, clock)
 

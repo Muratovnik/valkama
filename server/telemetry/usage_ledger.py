@@ -7,11 +7,16 @@ is written at once under the item the rule gives so far, marked `provisional`, a
 - a write moves every provisional row of its turn to its own item and closes them; the
   rows after it start under the same item, since a turn's last write is what they go to
   unless another one follows;
-- a new turn closes what is left. A turn with no write has kept the item it started
-  with: the agent's last write before it, or else what `fallback` says.
+- a new turn closes what is left. A turn with no write keeps the item it started with:
+  the agent's last write before it, or else what `fallback` says at its start.
+- a turn that started with no item at all (no write before it, and `fallback` named
+  none) is placed by `fallback` at the latest moment read while it runs, again at the end
+  of every chunk, and settled by `fallback` at its last moment when the next turn starts.
 
 So a row of a turn still running always names an item, and a later pass changes it in
 the same transaction that moves the reading place: no row is ever read twice or lost.
+Where a reader's passes ended changes nothing: two readings that reach the same place
+give the same rows, whatever chunks they took.
 
 Tokens: a request is written as many records, and each holds its usage so far, so what a
 record adds is its difference from the previous one, and the sum is what the last one
@@ -104,6 +109,10 @@ class Ledger:
         self.item: str | None = memo.get("item")
         self.signal: str | None = memo.get("signal")
         self.requests: dict[str, dict] = memo.get("requests", {})
+        #: Whether the turn in flight started with no item and so is placed by `fallback`
+        #: until it closes. None for a memo from before this was kept: its turn in flight
+        #: goes on as it was read, looked for while it has no item and kept once found.
+        self.open_placement: bool | None = memo.get("open_placement")
         self.new_requests: set[int] = set()
         self.coverage = coverage
         self.seen = seen
@@ -116,22 +125,41 @@ class Ledger:
             "item": self.item,
             "signal": self.signal,
             "requests": self.requests,
+            "open_placement": self.open_placement,
         }
 
-    def new_turn(self, at: float) -> None:
+    def new_turn(self, at: float, last: float | None = None) -> None:
+        """A turn starts at `at`; the one before it last read a record at `last`.
+
+        A turn before it that is still placed by `fallback` is settled first, by what
+        `fallback` says at its last moment.
+        """
+
+        if last is not None and self.open_placement:
+            self.place_open_turn(last)
         self.closed.extend(self.rows)
         for row in self.rows:
             row.provisional = False
         self.rows = []
         if self.last_write is not None:
             self.item, self.signal = self.last_write, ladder.EARLIER_WRITE
+            self.open_placement = False
         else:
             self.item, self.signal = self.fallback(at)
+            self.open_placement = self.item is None
 
-    def retry_fallback(self, at: float) -> None:
-        """A label may arrive after its agent's first records, and a turn is not over yet."""
+    def place_open_turn(self, at: float) -> None:
+        """Place a turn that started with no item by what `fallback` says at `at`.
 
-        if self.last_write is None and self.item is None:
+        Called at the end of every chunk with the latest moment read, and when the turn
+        closes with its last moment, so the item never depends on where a pass ended. A
+        label may arrive after its agent's first records, and a hold may start or end
+        while the turn runs. A turn that started with an item keeps it.
+        """
+
+        if self.open_placement or (
+            self.open_placement is None and self.last_write is None and self.item is None
+        ):
             self.item, self.signal = self.fallback(at)
             self._repoint(self.item, self.signal)
 
@@ -143,6 +171,7 @@ class Ledger:
         self.rows = []
         self.last_write = item
         self.item, self.signal = item, ladder.LAST_WRITE
+        self.open_placement = False
 
     def _repoint(self, item: str | None, signal: str | None) -> None:
         for row in self.rows:

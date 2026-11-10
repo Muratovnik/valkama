@@ -289,10 +289,12 @@ class Clock:
     def _input(self, step: Step, klass: str) -> None:
         """Something that starts a turn arrived, and the time before it was `klass`."""
 
+        # The latest moment read before this record, which is the last of the turn it ends.
+        last = self.high
         self._to(step.at, klass)
         self.phase = _BUSY
         self.asking = False
-        self.ledger.new_turn(step.at)
+        self.ledger.new_turn(step.at, last)
 
     def _on_notice(self, step: Step) -> None:
         call = self._linked(step.links)

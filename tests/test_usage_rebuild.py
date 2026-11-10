@@ -19,7 +19,7 @@ from unittest import mock
 from server import store_backups
 from server.planning import ladder
 from server.telemetry import liveness, usage_collect, usage_rebuild
-from server.telemetry.usage_ledger import SEGMENT_COLUMNS
+from server.telemetry.usage_ledger import SEGMENT_COLUMNS, Ledger
 from tests.usage_fixtures import HOUR, Case, CodexRun, stamp, usage
 
 
@@ -523,35 +523,128 @@ class WorkBetweenItemsTests(RebuildCase):
         self.assertIn(f"item {first_id}: seconds 15.0 -> 300.0", text)
         self.assertIn(f"item {second_id}: seconds 605.0 -> 320.0", text)
 
-    def test_a_turn_with_no_write_is_placed_by_the_holds_at_the_end_of_its_reading(self) -> None:
-        # Pinned behaviour, not a late input: the reader settles a turn with no write at
-        # the end of each chunk, so where the holds changed during the turn, a reading in
-        # two passes and a reading of the whole turn name different items.
-        held, held_id = self.item()
+
+class OpenTurnPlacementTests(RebuildCase):
+    """A turn with no write that started with no item is placed by the transcript and the
+    store's records alone, never by where a reader pass happened to end.
+
+    The parent holds one item from 120 s and two, which names none, from 180 s, so a
+    subagent turn from 100 s to 200 s with no write of its own names an item only at
+    some moments of it.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        held, _ = self.item()
         other, _ = self.item()
         self.session()
         self.ticks((0, HOUR))
         self.claim("sess-1", held, 120)
         self.claim("sess-1", other, 180)
-        worker = self.subagent("sess-1", "worker")
-        worker.prompt(100, "go on", origin=None)
-        worker.reply(110, tools=(("s1", "Bash"),))
-        worker.result(150, "s1")
-        self.read()
-        worker.reply(160, tools=(("s2", "Bash"),))
-        worker.result(190, "s2")
-        worker.end_turn(200)
-        self.read()
-        # At 150 s the parent held one item; from 180 s it holds two, which names none.
-        self.assertEqual(
-            {held_id}, {row["work_item_id"] for row in self.segments("sess-1", "worker")}
-        )
+        self.worker = self.subagent("sess-1", "worker")
+
+    def assert_rebuilds_to_the_same(self) -> None:
+        read = self.counted("sess-1", "worker")
         report = self.rebuild(session="sess-1", agent="worker")
         (line,) = report.runs
         self.assertEqual(line.before, line.after)
-        self.assertEqual({held_id: (100.0, 0.0), None: (0.0, 100.0)}, self.moved(line))
-        self.assertIn(f"item {held_id}: seconds 100.0 -> 0.0", usage_rebuild.render(report))
-        self.assertEqual({None}, {row["work_item_id"] for row in self.segments("sess-1", "worker")})
+        self.assertEqual([], [entry for entry in line.items if entry["before"] != entry["after"]])
+        self.assertIn("totals unchanged", usage_rebuild.render(report))
+        self.assertEqual(read, self.counted("sess-1", "worker"))
+
+    def first_pass_inside_the_turn(self) -> None:
+        self.worker.prompt(100, "go on", origin=None)
+        self.worker.reply(110, tools=(("s1", "Bash"),))
+        self.worker.result(150, "s1")
+        # This pass ends at 150 s, when the parent holds exactly one item.
+        self.read()
+        self.worker.reply(160, tools=(("s2", "Bash"),))
+        self.worker.result(190, "s2")
+        self.worker.end_turn(200)
+
+    def test_a_closed_turn_read_in_two_passes_rebuilds_to_the_same(self) -> None:
+        self.first_pass_inside_the_turn()
+        self.worker.prompt(300, "and then", origin=None)
+        self.worker.end_turn(310)
+        self.read()
+        self.assert_rebuilds_to_the_same()
+
+    def test_a_turn_still_open_read_in_two_passes_rebuilds_to_the_same(self) -> None:
+        self.first_pass_inside_the_turn()
+        self.read()
+        self.assert_rebuilds_to_the_same()
+
+    def test_a_turn_read_before_this_rule_goes_on_as_it_was_read(self) -> None:
+        # A memo written without `open_placement`: its turn in flight is looked for while
+        # it has no item and kept once found, and is not settled again when it closes.
+        answers = iter([("one", ladder.SINGLE_HOLD), ("two", ladder.SINGLE_HOLD)])
+        coverage = liveness.Coverage([])
+        ledger = Ledger([], {}, coverage, frozenset().__contains__, lambda _at: next(answers))
+        ledger.place_open_turn(10.0)
+        self.assertEqual("one", ledger.item)
+        ledger.place_open_turn(20.0)
+        ledger.new_turn(30.0, 25.0)
+        self.assertEqual("two", ledger.item)
+        self.assertTrue(ledger.open_placement is False)
+        found_once = Ledger(
+            [], {"item": "one"}, coverage, frozenset().__contains__, lambda _at: ("x", None)
+        )
+        found_once.place_open_turn(10.0)
+        self.assertEqual("one", found_once.item)
+
+    def placement(self) -> tuple:
+        """The worker's rows as `counted` gives them, but for the ids a fresh reading changes."""
+
+        run, segments, requests = self.counted("sess-1", "worker")
+        run = {key: value for key, value in run.items() if key != "id"}
+        return run, sorted((segment[1:] for segment in segments), key=repr), requests
+
+    def forget_the_worker(self) -> None:
+        run_id = self.run_row("sess-1", "worker")["id"]
+        for table, column in (
+            ("usage_segments", "run_id"),
+            ("usage_requests", "run_id"),
+            ("usage_runs", "id"),
+        ):
+            self.reader.execute(f"DELETE FROM {table} WHERE {column} = ?", (run_id,))
+
+    def test_one_pass_small_chunks_and_passes_split_anywhere_give_the_same_rows(self) -> None:
+        # Turns from 50 s (no hold), from 100 s to 170 s (one hold at its end), from 175 s
+        # (one hold at its start) and from 300 s (two holds), the last still open.
+        self.worker.prompt(50, "look first", origin=None)
+        self.worker.end_turn(60)
+        self.worker.prompt(100, "go on", origin=None)
+        self.worker.reply(110, tools=(("s1", "Bash"),))
+        self.worker.result(150, "s1")
+        self.worker.end_turn(170)
+        self.worker.prompt(175, "more", origin=None)
+        self.worker.reply(180, tools=(("s2", "Bash"),))
+        self.worker.result(190, "s2")
+        self.worker.end_turn(200)
+        self.worker.prompt(300, "and then", origin=None)
+        self.worker.reply(305, tools=(("s3", "Bash"),))
+        self.worker.result(400, "s3")
+        lines = self.worker.path.read_bytes().splitlines(keepends=True)
+        self.read()
+        whole = self.placement()
+        self.assertGreater(len({row[6] for row in whole[1]}), 1, "the case places nothing")
+
+        def again(*parts: list[bytes]) -> tuple:
+            self.forget_the_worker()
+            self.worker.path.write_bytes(b"")
+            for part in parts:
+                with self.worker.path.open("ab") as handle:
+                    handle.write(b"".join(part))
+                self.read()
+            return self.placement()
+
+        with mock.patch.object(usage_collect, "CHUNK_BYTES", 256):
+            self.assertEqual(whole, again(lines), "small chunks")
+        for split in range(1, len(lines)):
+            with self.subTest(split=split):
+                self.assertEqual(whole, again(lines[:split], lines[split:]))
+        self.assertEqual(whole, again(*([line] for line in lines)), "a pass per line")
+        self.assert_rebuilds_to_the_same()
 
 
 class RecoveryTests(RebuildCase):

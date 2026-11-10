@@ -21,24 +21,15 @@ only through this. So it never loses what is already counted:
   is where a store restored from that snapshot looks for it. The store's snapshot does
   not hold it.
 
-A rebuild can still give other numbers than the reader did, for two reasons, and its
-reading is the reference in both:
-
-- What lies outside the transcript also shapes segments: liveness, writes and permission
-  requests in `execution_events`, holds, steps and labels behind the fallback item. The
-  reader saw them as they were at each pass, so a rebuild differs where they arrived late.
-  Whether a subagent keeps a transcript of its own is not one of them: its archived copy
-  or its run's segments still say so after the client deleted the file, so its time is
-  never counted in its parent's run as well.
-- The reader settles the fallback item of a turn with no write at the end of each chunk
-  (`Ledger.retry_fallback`), at the moment its last record reached, so its attribution
-  depends on when its passes ran. A rebuild reads the finished stretch from the start and
-  settles it at the end of its own chunks. Where the parent's holds changed in between,
-  as for a subagent with no write, held step, packet number or label, the same seconds
-  can go to another item with nothing having arrived late.
-
-The report shows either: per run, the totals before and after, and the time, tokens and
-cost each work item (and no item) had before and after.
+Where its passes ended does not shape what the reader makes (`usage_ledger` says how a
+turn with no write is placed), so a rebuild gives other numbers than the reader only
+through what lies outside the transcript and arrived after the reader passed: liveness,
+writes and permission requests in `execution_events`, and the holds, steps and labels
+behind the fallback item. Whether a subagent keeps a transcript of its own is not one of
+them: its archived copy or its run's segments still say so after the client deleted the
+file, so its time is never counted in its parent's run as well. The report shows the
+difference: per run, the totals before and after, and the time, tokens and cost each work
+item (and no item) had before and after.
 """
 
 from __future__ import annotations
