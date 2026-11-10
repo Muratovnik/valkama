@@ -6,13 +6,14 @@ transcript is read, and the row keeps `PRICE_BOOK` to say which table it came fr
 A model neither page names has no price: the answer is None and never a guess.
 
 Anthropic, read 2026-11-05 at https://platform.claude.com/docs/en/about-claude/pricing
-and https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool:
+and https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool, and the
+pricing page read again 2026-11-10 for Claude Fable 5.2:
 
 - Claude Haiku 5.5 is priced by prompt length, over 100,000 tokens the whole request
   pays the higher prices, and the length counts cache reads and writes too.
 - `inference_geo: "us"` multiplies every token price by 1.1.
-- Fast mode (`speed: "fast"`) doubles Opus 5.5, Opus 5 and Opus 4.8, and the cache
-  multipliers apply on top of it, which doubles those prices too.
+- Fast mode (`speed: "fast"`) doubles Fable 5.2, Opus 5.5, Opus 5 and Opus 4.8, and the
+  cache multipliers apply on top of it, which doubles those prices too.
 - `server_tool_use.web_search_requests` costs $10 per 1,000 searches, on top of tokens.
 - An advisor call is a sub-inference at the advisor model's own prices. The top-level
   usage leaves it out, and `usage.iterations` is where it is reported.
@@ -34,9 +35,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
-PRICE_BOOK = "2026-11-05"
+PRICE_BOOK = "2026-11-10"
 
 #: Tokens per unit a price is stated in.
 _MILLION = 1_000_000
@@ -58,6 +59,26 @@ class Rates:
     output: float
 
 
+#: The token kinds a price applies to, named as `Rates` names them. `reasoning` is part
+#: of `output` and has no price of its own.
+PRICED_KINDS = tuple(field.name for field in fields(Rates))
+
+
+@dataclass(frozen=True)
+class Listing:
+    """One model as this table prices it, for comparing the table with another list.
+
+    `long` is what a request pays for all of it once its prompt is over `long_prompt`
+    tokens; a model without one pays `rates` at any length.
+    """
+
+    vendor: str
+    rates: Rates
+    long: Rates | None = None
+    long_prompt: int | None = None
+
+
+_FABLE_52 = Rates(8, 0.20, 10, 16, 40)
 _FABLE = Rates(10, 0.25, 12.5, 20, 50)
 _FABLE_5 = Rates(10, 1, 12.5, 20, 50)
 _OPUS_FORMER = Rates(5, 0.5, 6.25, 10, 25)
@@ -67,6 +88,7 @@ _HAIKU_55 = Rates(0.10, 0.01, 0.125, 0.20, 0.50)
 _HAIKU_55_LONG = Rates(0.50, 0.05, 0.625, 1, 2.50)
 
 _ANTHROPIC: dict[str, Rates] = {
+    "claude-fable-5-2": _FABLE_52,
     "claude-fable-5-1": _FABLE,
     "claude-mythos-5-1": _FABLE,
     "claude-fable-5": _FABLE_5,
@@ -88,7 +110,13 @@ _ANTHROPIC: dict[str, Rates] = {
     "claude-haiku-4-5": Rates(1, 0.10, 1.25, 2, 5),
     "claude-haiku-3-5": Rates(0.80, 0.08, 1, 1.60, 4),
 }
-_ANTHROPIC_FAST = frozenset({"claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"})
+#: The prices a request pays for all of it once its prompt is over the length named.
+_ANTHROPIC_LONG: dict[str, tuple[Rates, int]] = {
+    "claude-haiku-5-5": (_HAIKU_55_LONG, _HAIKU_LONG_PROMPT),
+}
+_ANTHROPIC_FAST = frozenset(
+    {"claude-fable-5-2", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"}
+)
 
 #: `(short, long)` by model; a model the long table has no prices for has only one.
 _OPENAI: dict[str, tuple[Rates, Rates | None]] = {
@@ -122,12 +150,29 @@ def prompt_tokens(tokens: Mapping[str, int]) -> int:
     )
 
 
+def listings() -> dict[str, Listing]:
+    """Every model this table prices, by the id it is listed under."""
+
+    found = {}
+    for name, rates in _ANTHROPIC.items():
+        long = _ANTHROPIC_LONG.get(name)
+        found[name] = Listing(
+            "anthropic", rates, long[0] if long else None, long[1] if long else None
+        )
+    for name, (short, long_prompt) in _OPENAI.items():
+        found[name] = Listing(
+            "openai", short, long_prompt, _OPENAI_LONG_PROMPT if long_prompt else None
+        )
+    return found
+
+
 def _rates(model: str, prompt: int) -> tuple[Rates, bool] | None:
     name = _anthropic_name(model)
     rates = _ANTHROPIC.get(name)
     if rates is not None:
-        if name == "claude-haiku-5-5" and prompt > _HAIKU_LONG_PROMPT:
-            return _HAIKU_55_LONG, True
+        long = _ANTHROPIC_LONG.get(name)
+        if long is not None and prompt > long[1]:
+            return long[0], True
         return rates, True
     tiers = _OPENAI.get(model)
     if tiers is None:
@@ -174,15 +219,10 @@ def request_cost(
     if anthropic and geo == "us":
         factor *= _US_ONLY
     total = 0.0
-    for kind, price in (
-        ("input", rates.input),
-        ("cached_read", rates.cached_read),
-        ("cache_write_5m", rates.cache_write_5m),
-        ("cache_write_1h", rates.cache_write_1h),
-        ("output", rates.output),
-    ):
+    for kind in PRICED_KINDS:
         count = tokens.get(kind, 0)
         if count:
+            price = getattr(rates, kind)
             if price is None:
                 return None
             total += count * price

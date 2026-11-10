@@ -27,6 +27,28 @@ class ClaudeTests(unittest.TestCase):
             with self.subTest(model):
                 self.assertAlmostEqual(expected, request_cost(model, ONE_OF_EACH))
 
+    def test_fable_5_2_prices_each_kind_at_its_own_rate(self) -> None:
+        # The pricing page, read 2026-11-10: $8 input, $0.20 cache hits, $10 and $16 for
+        # five-minute and one-hour writes, $40 output, per million tokens. A different
+        # count of each kind, so two rates swapped give another total.
+        spent = {
+            "input": 1_000_000,
+            "cached_read": 2_000_000,
+            "cache_write_5m": 3_000_000,
+            "cache_write_1h": 4_000_000,
+            "output": 5_000_000,
+        }
+        self.assertAlmostEqual(
+            8 + 2 * 0.20 + 3 * 10 + 4 * 16 + 5 * 40, request_cost("claude-fable-5-2", spent)
+        )
+
+    def test_fable_5_2_in_fast_mode_pays_the_pages_fast_prices(self) -> None:
+        # The page's fast-mode table: $16 input and $80 output per million tokens.
+        self.assertAlmostEqual(
+            16 + 80,
+            request_cost("claude-fable-5-2", {"input": 10**6, "output": 10**6}, speed="fast"),
+        )
+
     def test_a_write_for_an_hour_costs_more_than_one_for_five_minutes(self) -> None:
         self.assertAlmostEqual(5.0, request_cost("claude-opus-5-5", {"cache_write_5m": 10**6}))
         self.assertAlmostEqual(8.0, request_cost("claude-opus-5-5", {"cache_write_1h": 10**6}))
@@ -152,6 +174,25 @@ class UnknownTests(unittest.TestCase):
         self.assertAlmostEqual(
             20.0, request_cost("claude-opus-5-5", {"output": 10**6, "reasoning": 10**6})
         )
+
+    def test_each_listing_holds_the_prices_a_request_pays(self) -> None:
+        # The release check compares the listings with another list, so they must be
+        # what requests are priced at, the long prices past their length included.
+        for model, listing in usage_prices.listings().items():
+            with self.subTest(model):
+                for kind in usage_prices.PRICED_KINDS:
+                    rate = getattr(listing.rates, kind)
+                    # A thousand tokens stays under every length a long price starts at.
+                    cost = request_cost(model, {kind: 1_000})
+                    if rate is None or cost is None:
+                        self.assertEqual(rate, cost, kind)
+                    else:
+                        self.assertAlmostEqual(rate, cost * 1_000, msg=kind)
+                if listing.long is not None and listing.long_prompt is not None:
+                    over = listing.long_prompt + 1
+                    self.assertAlmostEqual(
+                        listing.long.input * over / 1e6, request_cost(model, {"input": over})
+                    )
 
     def test_the_book_is_a_date(self) -> None:
         self.assertRegex(usage_prices.PRICE_BOOK, r"^\d{4}-\d{2}-\d{2}$")
