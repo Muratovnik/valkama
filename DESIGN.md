@@ -907,11 +907,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   they are wanted, and then all of them by one rule, `reveal.css`: the row is `reveal-row`,
   the action or its group `reveal`. Where a pointer can hover, the action is see-through at
   rest and keeps its place, so nothing in the row moves when it comes up; it comes up under
-  the pointer anywhere on the row, with the keyboard anywhere in it, and while a popup it
-  opened is open, and Tab reaches it from either side. A press with the pointer does not
-  leave it up. Where nothing can hover it stands. It serves a checklist step's discussion,
-  the pin of an unpinned row of the Work list and a lane heading's card and chain;
-  `check:ui-system` refuses a copy of it elsewhere.
+  the pointer anywhere on the row, with the keyboard anywhere in it, while a popup it
+  opened is open and while a press on it is carried out, and Tab reaches it from either
+  side. A press with the pointer does not leave it up. Where nothing can hover it stands.
+  It serves a checklist step's discussion, the pin of an unpinned row of the Work list and
+  a lane heading's card and chain. One action gives its place up as well, `reveal-room`:
+  «Open session» on a rail row of the Work list, which few rows carry, so the row's words
+  have that room until it comes up and shorten while it is up. `check:ui-system` refuses a
+  copy of the rule elsewhere.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
   alternatives" — view switches, chart encodings, ledger filters, a card's
   sections. Picking a value — the board's view, the graph's filter, a chain's
