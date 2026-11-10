@@ -195,8 +195,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'the chosen option’s hint, which no row of the field draws; while its own words are cut, they come first, whole',
   ],
   [
-    'shared/ui/ChoiceSelect.vue <SelectItem> v-tooltip.detail="option.title"',
-    'an option’s hint, which its row does not draw',
+    'shared/ui/ChoiceSelect.vue <SelectItem> v-tooltip.detail="{ text: option.title, words: option.label }"',
+    'an option’s hint, which its row does not draw; while the option’s words are cut, whatever the host draws them with, they come first, whole',
   ],
   [
     'shared/ui/OptionGroups.vue <div> v-tooltip.detail="entry.option.title"',

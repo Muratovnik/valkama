@@ -194,7 +194,7 @@ function updateOpen(value: boolean) {
             <SelectItem
               v-for="option in filtered"
               :key="option.value"
-              v-tooltip.detail="option.title"
+              v-tooltip.detail="{ text: option.title, words: option.label }"
               class="choice-option"
               :class="{ 'has-icon': option.icon }"
               :value="optionToken(option.value)"
@@ -212,11 +212,7 @@ function updateOpen(value: boolean) {
                   <slot
                     name="option"
                     :option="option"
-                    ><strong
-                      v-tooltip.clipped="option.label"
-                      class="choice-title one-line"
-                      >{{ option.label }}</strong
-                    ></slot
+                    ><strong class="choice-title one-line">{{ option.label }}</strong></slot
                   >
                   <small
                     v-if="option.description"
@@ -442,5 +438,15 @@ function updateOpen(value: boolean) {
   .choice-chevron {
     transition: none;
   }
+}
+</style>
+
+<style scoped>
+/* What a host draws in an option's place — a state with its dot, a priority with its glyph — is
+   held to the row's width, so its word gives way and ends in its own ellipsis, as the default
+   title does, and the row's hint says the option's words whole. Unheld, an inline box as wide
+   as its word ran past the row and was cut with no ellipsis and nothing to read it by. */
+.choice-value > :slotted(*) {
+  max-width: 100%;
 }
 </style>
