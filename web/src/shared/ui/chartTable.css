@@ -39,7 +39,17 @@
   font: var(--font-column-head);
 }
 
+/* A series named at length, a task by its title, wraps over its figures instead of widening
+   the table by its whole name; its figures still keep to one line. */
+.chart-heading[data-numeric='true'] {
+  min-inline-size: 8em;
+  white-space: normal;
+}
+
+/* A name breaks between words before it breaks inside one: in a table wider than its frame,
+   «Wednesday, November 11» otherwise falls apart a letter to a line. */
 .chart-name {
+  min-inline-size: 8em;
   color: var(--color-text);
   font: inherit;
   overflow-wrap: anywhere;

@@ -200,7 +200,7 @@ describe('the Analytics page', () => {
     expect(page.get('[role="alert"]').text()).toContain('could not be read')
     await page.get('.platform-state-retry').trigger('click')
     await flushPromises()
-    expect(reads.asked).toHaveLength(2)
+    expect(reads.grouped('work_item')).toHaveLength(2)
   })
 
   it('says a period that spent nothing spent nothing, and keeps its controls', async () => {

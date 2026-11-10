@@ -118,9 +118,43 @@ export function useSpendingWords() {
   const chartTitle = (name: Measure, by: UsageDimension) =>
     t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
 
+  const dayFormat = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(i18n.locale.value, options)
+
+  /** A day as the time axis names it, «Mon 9», and in full for the readout and the table. */
+  const day = (start: string) =>
+    dayFormat({ weekday: 'short', day: 'numeric' }).format(new Date(start))
+  const fullDay = (start: string) =>
+    dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(start))
+
+  /** A step of the value axis in the measure's units: hours as a span, tokens, dollars. */
+  function scale(name: Measure, amount: number) {
+    if (amount <= 0) return '0'
+    if (name === 'time') return usage.time(amount * 3600)
+    if (name === 'tokens') return compact(amount)
+    return new Intl.NumberFormat(i18n.locale.value, { style: 'currency', currency: 'USD' }).format(
+      amount,
+    )
+  }
+
+  /** What changed in the accounts that worked: «Accounts: a → a, b». */
+  const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
+    t('analytics.days.accounts', {
+      before: before.map((value) => valueLabel('account', value)).join(', '),
+      after: after.map((value) => valueLabel('account', value)).join(', '),
+    })
+
+  const dayChartTitle = (name: Measure, by: UsageDimension) =>
+    t('analytics.days.title', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
+
   return {
+    accounts,
     change,
     chartTitle,
+    day,
+    dayChartTitle,
+    fullDay,
+    scale,
     days,
     dimension,
     figure,

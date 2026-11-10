@@ -204,6 +204,8 @@ const emptyDescription = computed(() =>
       <template #default="{ payload }">
         <SpendingReport
           :usage="payload"
+          :accounts="read.accounts.value"
+          :read-at="read.askedAt.value"
           :measure="view.measure"
           @update:measure="(measure) => change({ measure })"
         />

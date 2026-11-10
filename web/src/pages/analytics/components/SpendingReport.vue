@@ -9,13 +9,20 @@ import { computed, ref } from 'vue'
 import { useResizeObserver } from '@vueuse/core'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
+import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 
-const props = defineProps<{ usage: Usage }>()
+const props = defineProps<{
+  /** The period by account, for where the accounts that worked changed. */
+  accounts: Usage | null
+  /** When the answer was asked for, which says which day is not over yet. */
+  readAt: Date
+  usage: Usage
+}>()
 const measure = defineModel<Measure>('measure', { required: true })
 
 /**
@@ -54,6 +61,14 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
       :measure="measure"
       :narrow="narrow"
       :rows="usage.rows"
+    />
+    <SpendingDays
+      :accounts="accounts"
+      :by="by"
+      :measure="measure"
+      :narrow="narrow"
+      :read-at="readAt"
+      :usage="usage"
     />
   </div>
 </template>

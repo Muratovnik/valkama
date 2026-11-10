@@ -21,6 +21,7 @@ export const analyticsMessages = {
         to: 'To',
         reversed: 'The last day comes before the first.',
         incomplete: 'Choose the first and the last day of the period.',
+        choose: 'Choose the days of the period',
       },
       by: 'Break down by',
       dimensions: {
@@ -56,6 +57,16 @@ export const analyticsMessages = {
         model: 'by model',
         effort: 'by effort',
         environment: 'by environment',
+      },
+      days: {
+        title: '{measure} per day, {by}',
+        soFar: 'so far',
+        note: 'Note',
+        day: 'Day',
+        total: 'total',
+        empty: 'No day in this period spent anything.',
+        other: 'Other',
+        accounts: 'Accounts: {before} → {after}',
       },
       shown: {
         label: 'Show {chart} as',
@@ -112,6 +123,7 @@ export const analyticsMessages = {
         to: 'По',
         reversed: 'Последний день стоит раньше первого.',
         incomplete: 'Выберите первый и последний день периода.',
+        choose: 'Выберите дни периода',
       },
       by: 'В разрезе',
       dimensions: {
@@ -147,6 +159,16 @@ export const analyticsMessages = {
         model: 'по моделям',
         effort: 'по усилию',
         environment: 'по средам',
+      },
+      days: {
+        title: '{measure} по дням, {by}',
+        soFar: 'пока',
+        note: 'Примечание',
+        day: 'День',
+        total: 'всего',
+        empty: 'Ни в один день периода ничего не потрачено.',
+        other: 'Остальное',
+        accounts: 'Аккаунты: {before} → {after}',
       },
       shown: {
         label: 'Показать «{chart}» как',

@@ -64,6 +64,11 @@ export function useUsageRead(options: {
   /** The moment the shown answer was asked at, which says which day is not over yet. */
   const askedAt = shallowRef<Date>(now())
   const filterValues = ref<Partial<Record<UsageDimension, FilterValues>>>({})
+  /**
+   * The period by account, for where the accounts that worked changed; the page's own answer
+   * when that is already by account. Null until read, or when it could not be.
+   */
+  const accounts = shallowRef<Usage | null>(null)
 
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => {
@@ -94,17 +99,34 @@ export function useUsageRead(options: {
     const period = periodBounds(options.view(), at)
     bounds.value = period
     askedAt.value = at
-    if (!period) return
+    if (!period) {
+      state.value = uiEmpty('analytics.period.choose')
+      return
+    }
     const controller = new AbortController()
     reading = controller
     const shown = state.value
     state.value = 'payload' in shown ? refreshing(shown.payload) : uiLoading()
+    const { by } = options.view()
+    const asking = fetchUsage(query(period, [by], true), controller.signal)
+    if (by !== 'account') void readAccounts(period, controller.signal)
     try {
-      const usage = await fetchUsage(query(period, [options.view().by], true), controller.signal)
+      const usage = await asking
       if (controller.signal.aborted) return
+      if (by === 'account') accounts.value = usage
       state.value = spentNothing(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
     } catch {
       if (!controller.signal.aborted) state.value = uiError('analytics.failed')
+    }
+  }
+
+  /** The accounts behind each day; without them the days are drawn with no account marks. */
+  async function readAccounts(period: PeriodBounds, signal: AbortSignal) {
+    try {
+      const usage = await fetchUsage(query(period, ['account'], false), signal)
+      if (!signal.aborted) accounts.value = usage
+    } catch {
+      if (!signal.aborted) accounts.value = null
     }
   }
 
@@ -145,5 +167,5 @@ export function useUsageRead(options: {
     offering?.abort()
   })
 
-  return { askedAt, bounds, filterValues, offer, retry: read, state }
+  return { accounts, askedAt, bounds, filterValues, offer, retry: read, state }
 }
