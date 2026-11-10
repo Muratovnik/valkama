@@ -989,8 +989,9 @@ prints the same counts and changes nothing.
 hook event from each client, and the transcript archive: copies kept, copies
 still owed and files no record names. For the usage read from transcripts it
 reports the models that spent tokens with no price, the requests met in more
-than one run, and how many runs are current, wait to be read again, were read
-again, or were refused by reason. The fields, the spool format, the session
+than one run, how many runs are current, wait to be read again, were read
+again, or were refused by reason, and what share of the usage segments, and of
+their seconds, names the organization they ran for. The fields, the spool format, the session
 rules and the archive's retention are in
 [the client hook contract](docs/hook-contract.md).
 

@@ -872,6 +872,16 @@ A run whose rows an older reading wrote, or whose model has since been priced, i
 again in the background once nothing new is left to read, so its numbers can change
 after they were first read.
 
+Each stretch of work also records what it ran under, as far as its transcript says, and
+ends where any of it changes: the organization its requests were made for (at Codex, the
+account that created the thread), how the client ran (`ide`, `terminal`, `app` or
+`headless`, with `@wsl:<distribution>` for a transcript written in WSL), the effort the
+requests ran with, and the adviser its turn had configured. An advisor call's tokens are
+a stretch of their own with no time, flagged as an advisor's, even when the advisor runs
+the executor's model. A Claude subagent's run records the class its launch description
+declares in front of a colon. What a transcript does not say stays unknown. The reads
+below do not return these yet.
+
 `GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|epic`
 reads one item, or with `chain` or `epic` the item with the members
 [its chain](#reading-a-chain-of-work) has in that scope. `GET

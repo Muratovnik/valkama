@@ -77,6 +77,21 @@ checkouts are therefore distinguishable even at the same version.
   runs left them to the run that counts each. The line on models with no price now says that
   their runs are read again once the price table has the model.
 
+- **What each stretch of usage ran under.** A usage segment now records, from the
+  transcript alone, the organization its requests were made for, how the client ran
+  (`ide`, `terminal`, `app` or `headless`, with `@wsl:<distribution>` for a transcript
+  written in WSL), the effort the requests ran with and the adviser the turn had
+  configured. At Claude Code the organization is the one the client names before a
+  request whenever it changes, and a segment before the first such record has none; at
+  Codex it is the account that created the thread. An advisor call's tokens are a segment
+  of their own, flagged as an advisor's, even when the advisor runs the executor's model.
+  A segment now also ends where any of these changes. A Claude subagent's usage run
+  records the class its launch description declares in front of a colon, as in
+  `review: check the diff`. Only ids and short labels are kept, never an e-mail, a name or a
+  path, and whatever a transcript does not say stays empty. Every run is read again in the
+  background to fill them in, and `valkama doctor` says what share of the segments, and of
+  their seconds, names its organization, warning when none does.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.
@@ -126,9 +141,9 @@ checkouts are therefore distinguishable even at the same version.
   while any run that left a request to another can no longer be read: the request stays
   counted once, where it was, instead of ending up in no run. A run that left a request
   and loses its transcript after the holder gave it up, before being read again itself,
-  can still leave that request uncounted. Schema 15 also records the client's request id and which reading wrote each run, and
-  adds columns this build leaves empty. The upgrade keeps one row per request by the same
-  rule, under a verified `preschema15` snapshot with the liveness file copied beside it,
+  can still leave that request uncounted. Schema 15 also records the client's request id
+  and which reading wrote each run, and adds the columns for what each segment ran under.
+  The upgrade keeps one row per request by the same rule, under a verified `preschema15` snapshot with the liveness file copied beside it,
   and a build at schema 14 or older then refuses the store.
 
 - **State names read in the interface's language.** A state of the workflow a new space is
@@ -291,6 +306,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **An advisor running the executor's own model no longer turns usage negative.** A request
+  is written as several records, and the usage reader counts each as its difference from
+  the last. It told a request's parts apart by model, so an advisor call on the executor's
+  model took the executor's place: every later record of the request added the executor's
+  tokens minus the advisor's, which made input and output negative and counted cached reads
+  and cache writes again in full. The executor's part and each advisor's are now kept
+  apart whatever their models. Every run is read again in the background, which corrects
+  the rows already written.
 - **A subagent transcript copied into a forked session no longer counts twice.** Forking a
   session copies the original's subagent transcripts into the fork's folder, and every
   record of a copy still names the original session. The usage reader counted a copy's time
