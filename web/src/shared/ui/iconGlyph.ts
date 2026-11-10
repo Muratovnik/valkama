@@ -58,7 +58,6 @@ import {
   Link,
   List,
   ListChecks,
-  LoaderCircle,
   Menu,
   MessageSquare,
   Monitor,
@@ -125,6 +124,16 @@ function clientMark(
     ]),
   )
 }
+
+/**
+ * The sign of a session at work: an open arc that turns. Lucide's `LoaderCircle` draws its arc
+ * at radius 9, a unit inside the ring of radius 10 the other four signs share, so at 14px the
+ * working ring stood about a pixel narrower than the rest. This is the same arc, its gap where
+ * Lucide leaves it, on their ring.
+ */
+const WORKING_RING = createLucideIcon('session-working', [
+  ['path', { d: 'M22 12a10 10 0 1 1-6.91-9.511' }],
+])
 
 /**
  * Manifest-owned icon keys. An unknown key intentionally gets one generic glyph (`GENERIC`).
@@ -262,7 +271,7 @@ const ICONS: Record<string, Component> = {
   // What a session is doing, as one ring of one size whose inside says it (`SessionSign`):
   // at work, asking a person in the middle of a turn, waiting with its turn over, at work on
   // other items, silent for over a day.
-  'session-working': LoaderCircle,
+  'session-working': WORKING_RING,
   'session-asks': CircleQuestionMark,
   'session-waiting': CircleCheck,
   'session-held': CirclePause,

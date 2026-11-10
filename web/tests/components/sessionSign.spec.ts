@@ -9,13 +9,7 @@ import type { Component } from 'vue'
  * from assistive technology, turning only while motion is allowed and drawn in its host's
  * ink in a forced palette.
  */
-import {
-  CircleCheck,
-  CircleDashed,
-  CirclePause,
-  CircleQuestionMark,
-  LoaderCircle,
-} from '@lucide/vue'
+import { CircleCheck, CircleDashed, CirclePause, CircleQuestionMark } from '@lucide/vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
@@ -28,9 +22,46 @@ const strokes = (html: string) => html.replaceAll(/^<svg[^>]*>|<\/svg>$|\sdata-v
 const drawnBy = (icon: Component) =>
   strokes(mount({ render: () => h(icon, { 'size': 14, 'stroke-width': 2 }) }).html())
 
+const SIGNS: readonly LiveSign[] = ['working', 'asks', 'waiting', 'held', 'quiet']
+
+/**
+ * The radii of the ring a sign draws about the centre of its 24-unit square: a circle there, or
+ * an arc whose start lies as far from the centre as its radius, which is an arc of that ring. The
+ * strokes inside the ring, a question's hook among them, are neither.
+ */
+function ringRadii(svg: Element): number[] {
+  const circles = [...svg.querySelectorAll('circle')]
+    .filter((circle) => circle.getAttribute('cx') === '12' && circle.getAttribute('cy') === '12')
+    .map((circle) => Number(circle.getAttribute('r')))
+  const arcs = [...svg.querySelectorAll('path')].flatMap((path) => {
+    const start = /^M([\d.]+)[ ,]([\d.]+)a([\d.]+)[ ,]([\d.]+)[ ,]/u.exec(
+      path.getAttribute('d') ?? '',
+    )
+    if (!start) return []
+    const [x, y, rx, ry] = start.slice(1).map(Number)
+    const onRing = rx === ry && Math.abs(Math.hypot(x - 12, y - 12) - rx) < 0.01
+    return onRing ? [rx] : []
+  })
+  return [...circles, ...arcs]
+}
+
 describe('a session’s sign', () => {
+  it('draws every sign on one ring, of radius 10, the working arc included', () => {
+    const rings = SIGNS.map((sign) =>
+      ringRadii(mount(SessionSign, { props: { sign } }).get('svg').element),
+    )
+    for (const radii of rings) expect(radii.length).toBeGreaterThan(0)
+    expect(rings.map((radii) => [...new Set(radii)])).toEqual(SIGNS.map(() => [10]))
+  })
+
+  it('draws the working sign as one open arc, so its turning shows', () => {
+    const svg = mount(SessionSign, { props: { sign: 'working' } }).get('svg').element
+    expect([svg.querySelectorAll('circle').length, svg.querySelectorAll('path').length]).toEqual([
+      0, 1,
+    ])
+  })
+
   it.each<[LiveSign, Component]>([
-    ['working', LoaderCircle],
     ['asks', CircleQuestionMark],
     ['waiting', CircleCheck],
     ['held', CirclePause],
@@ -42,8 +73,7 @@ describe('a session’s sign', () => {
   })
 
   it('draws five different shapes', () => {
-    const signs: LiveSign[] = ['working', 'asks', 'waiting', 'held', 'quiet']
-    const shapes = signs.map((sign) => strokes(mount(SessionSign, { props: { sign } }).html()))
+    const shapes = SIGNS.map((sign) => strokes(mount(SessionSign, { props: { sign } }).html()))
     expect(new Set(shapes).size).toBe(5)
   })
 
