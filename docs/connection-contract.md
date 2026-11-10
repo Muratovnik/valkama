@@ -881,8 +881,8 @@ a stretch of their own with no time, flagged as an advisor's, even when the advi
 the executor's model. A change of any of these changes nothing about what the time counts
 as. A Claude subagent's run records the class its launch description declares in front of
 a colon, and keeps the first one recorded. What a transcript does not say, or says as
-something other than a short label, stays unknown. The reads below do not return these
-yet.
+something other than a short label, stays unknown. An item's read below returns the
+account, the launch class, the effort and who did the work; the session's read does not.
 
 `GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|epic`
 reads one item, or with `chain` or `epic` the item with the members
@@ -905,7 +905,31 @@ answers with `interface_version` and `usage`:
 | `quality` | `observed`, `estimated`, `mixed`, or `null` when no time was counted; `estimated_seconds` says how much |
 | `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
 
-An item's read adds `work_item_id`, `reference`, `title` and `scope`. A session's adds
+An item's read adds `work_item_id`, `reference`, `title` and `scope`, and says who spent
+the work and under which account:
+
+| Field | What it holds |
+| --- | --- |
+| `account_stretches` | the work in time order, one line for each run of stretches under one account: `account`, `started_at` (its first stretch's start), `ended_at` (the latest end among them), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. Two neighbouring lines never share an account, so each line after the first is a change of account. Stretches of agents working side by side follow one another by their start |
+| `accounts` | each account the work ran under, the most time first, then the most cost: `account`, `share` of `agent_seconds`, and the same figures |
+| `roles` | the work by who did it, ranked the same way: `role` — `main` for the session's own agent, `subagent`, or `advisor` for an adviser's own calls, whoever it advised — with `launch_class`, `effort` and the same figures |
+
+`account`, `launch_class` and `effort` each carry `id` and `unknown`, as a value of the
+[period read](#what-agent-work-spent-in-a-period) does. `account` is the organization the
+requests were made for. `unknown` is `true` where the store does not hold the value: an
+account or an effort the transcript did not say, a subagent's class nobody recorded. A
+value that is none by its nature has an `id` of `null` and `unknown` `false`: the launch
+class of the session's own agent, and an adviser's class and effort, since an adviser's
+row holds its executor's effort rather than one of its own.
+
+The `seconds` of each of these lists add up to `agent_seconds` and their costs to
+`estimated_api_cost_usd` exactly, in thousandths of a second and millionths of a dollar,
+and their tokens and `unpriced_tokens` to the item's. A line's figure is what the lines up
+to it add up to, rounded, less what those before it do, so it is within one unit of its
+own and the last line ends on the item's total. A line whose stretches had no price has a
+cost of `null`.
+
+A session's adds
 `session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and
 `gap` in seconds) and `runs`, one per transcript: `agent_id`, `client`, `status`
 (`reading`, or `missing`, `truncated` or `unreadable` for one that cannot be read now),

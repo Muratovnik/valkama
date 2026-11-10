@@ -43,7 +43,6 @@ from __future__ import annotations
 import bisect
 import datetime as dt
 import json
-import math
 import operator
 import re
 import sqlite3
@@ -52,6 +51,7 @@ from dataclasses import dataclass, field
 
 from ..planning import executors
 from ..planning import usage as item_usage
+from ..planning.usage import UNKNOWN, Value
 from ..projects import project_registry
 
 ACCOUNT = "account"
@@ -134,20 +134,8 @@ _COLUMN_OF = {
 }
 
 
-class _Unknown:
-    """A value the store does not hold, in a dimension where `None` is a value of its own."""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "UNKNOWN"
-
-
-UNKNOWN = _Unknown()
-#: A dimension's value: a string, `None` for none or, outside `_NONE_IS_A_VALUE`, for one
-#: the store does not hold, and `UNKNOWN` for one it does not hold inside it.
-Value = str | _Unknown | None
 #: Where `None` is a group of its own and not unknown: work on no item, a session's own run.
+#: Outside these `None` is a value the store does not hold; inside them that is `UNKNOWN`.
 _NONE_IS_A_VALUE = frozenset({WORK_ITEM, LAUNCH_CLASS})
 
 
@@ -371,20 +359,14 @@ def _spent(total: int, moment: int, started: int, ended: int) -> int:
     return (2 * total * (moment - started) + length) // (2 * length)
 
 
-def _whole(value: float) -> int:
-    """A stored figure in whole units, rounded half up once per stretch."""
-
-    return math.floor(value + 0.5)
-
-
 def _parts(row: Sequence, bounds: Sequence[int]) -> list[tuple[int, _Part]]:
     """What a stretch spends in each interval it falls in."""
 
     started, ended = _stored(str(row[_STARTED])), _stored(str(row[_ENDED]))
-    milliseconds = _whole(float(row[_SECONDS]) * _MILLISECOND)
+    milliseconds = item_usage.whole_units(float(row[_SECONDS]) * _MILLISECOND)
     estimated = milliseconds if row[_QUALITY] == "estimated" else 0
     cost = row[_COST]
-    micro_usd = None if cost is None else _whole(float(cost) * _SECOND)
+    micro_usd = None if cost is None else item_usage.whole_units(float(cost) * _SECOND)
     tokens: list[int | None] = [
         None if count is None else int(count) for count in row[_FIRST_TOKEN:_ORGANIZATION]
     ]
@@ -563,9 +545,8 @@ class _Namer:
         dimension = self.group_by[index]
         named = value if isinstance(value, str) else None
         return {
-            "id": named,
             # Work on no item, or a session's own launch class, is a group of its own.
-            "unknown": value is UNKNOWN or (value is None and dimension not in _NONE_IS_A_VALUE),
+            **item_usage.value(value, unknown=dimension not in _NONE_IS_A_VALUE),
             **_UNNAMED.get(dimension, {}),
             **(self.labels[index].get(named, {}) if named is not None else {}),
         }
@@ -578,14 +559,7 @@ def _order(entry: tuple[tuple[Value, ...], _Tally]) -> tuple:
     """The most time first, then the most cost, then by value with none and unknown last."""
 
     key, tally = entry
-    return (
-        -tally.milliseconds,
-        -(tally.micro_usd or 0),
-        tuple(
-            (not isinstance(value, str), value is UNKNOWN, value if isinstance(value, str) else "")
-            for value in key
-        ),
-    )
+    return item_usage.ranking(tally.milliseconds, tally.micro_usd, key)
 
 
 def _rows(window: _Window, namer: _Namer) -> list[dict]:

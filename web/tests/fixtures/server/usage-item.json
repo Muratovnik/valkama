@@ -97,6 +97,93 @@
     ],
     "quality": "observed",
     "estimated_seconds": 0,
+    "accounts": [
+      {
+        "account": {
+          "id": null,
+          "unknown": true
+        },
+        "share": 1.0,
+        "seconds": 1200.0,
+        "tokens": {
+          "input": 1050,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 407,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 57
+      }
+    ],
+    "account_stretches": [
+      {
+        "account": {
+          "id": null,
+          "unknown": true
+        },
+        "started_at": "2026-01-02T03:04:05.000Z",
+        "ended_at": "2026-01-02T03:04:05.000Z",
+        "seconds": 1200.0,
+        "tokens": {
+          "input": 1050,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 407,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 57
+      }
+    ],
+    "roles": [
+      {
+        "role": "main",
+        "launch_class": {
+          "id": null,
+          "unknown": false
+        },
+        "effort": {
+          "id": null,
+          "unknown": true
+        },
+        "seconds": 600.0,
+        "tokens": {
+          "input": 1000,
+          "cached_read": 20000,
+          "cache_write_5m": 300,
+          "cache_write_1h": null,
+          "output": 400,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.25,
+        "unpriced_tokens": 0
+      },
+      {
+        "role": "subagent",
+        "launch_class": {
+          "id": null,
+          "unknown": true
+        },
+        "effort": {
+          "id": null,
+          "unknown": true
+        },
+        "seconds": 600.0,
+        "tokens": {
+          "input": 50,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 7,
+          "reasoning": 2
+        },
+        "estimated_api_cost_usd": null,
+        "unpriced_tokens": 57
+      }
+    ],
     "by_item": [
       {
         "work_item_id": "00000000-0000-4000-8000-000000000005",

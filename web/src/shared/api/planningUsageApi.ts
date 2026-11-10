@@ -83,12 +83,43 @@ const excludedSchema = strictObject({
   gap: seconds(),
 })
 
+/**
+ * A value of what the work ran under. `unknown` is the store not holding it; an `id` of null
+ * that is not unknown is none by its nature, such as the class of a session's own agent.
+ */
+const valueSchema = strictObject({ id: runText().nullable(), unknown: z.boolean() })
+
+const ROLES = ['main', 'subagent', 'advisor'] as const
+
+/** The parts below add up to the item's whole exactly, in milliseconds and millionths of a dollar. */
+const part = { seconds: seconds(), ...spent }
+
 const itemUsageSchema = strictObject({
   work_item_id: boundedText(UUID, 36),
   reference: boundedText(WORK_ITEM_REFERENCE, 20),
   title: boundedText(TITLE, 200),
   scope: enumField(SCOPES),
   ...summary,
+  /** In time order; two neighbours never share an account, so each after the first is a change. */
+  account_stretches: z.array(
+    strictObject({
+      account: valueSchema,
+      started_at: boundedText(ISO, 96),
+      ended_at: boundedText(ISO, 96),
+      ...part,
+    }),
+  ),
+  /** Each account, the most time first, with its share of the agents' time. */
+  accounts: z.array(strictObject({ account: valueSchema, share: z.number(), ...part })),
+  /** Who did the work, with the class it was launched with and its effort, ranked. */
+  roles: z.array(
+    strictObject({
+      role: enumField(ROLES),
+      launch_class: valueSchema,
+      effort: valueSchema,
+      ...part,
+    }),
+  ),
 })
 
 const sessionUsageSchema = strictObject({

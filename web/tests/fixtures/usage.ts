@@ -66,6 +66,9 @@ export function noUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
     signals: [],
     quality: null,
     estimated_seconds: 0,
+    account_stretches: [],
+    accounts: [],
+    roles: [],
     by_item: [usageLine()],
     ...overrides,
   }
