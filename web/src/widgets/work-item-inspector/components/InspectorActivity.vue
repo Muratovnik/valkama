@@ -81,7 +81,13 @@ function nameState(key: string) {
 /** The row's second line in words; the recorded line stays in the entry for the search. */
 function detail(entry: ActivityEntry) {
   return entry.kind === 'event'
-    ? eventWords(entry, { comments: props.item.comments, t, questions: props.questions, nameState })
+    ? eventWords(entry, {
+        comments: props.item.comments,
+        t,
+        questions: props.questions,
+        mentions: props.item.mentions,
+        nameState,
+      })
     : entry.detail
 }
 const groups = computed(() => {

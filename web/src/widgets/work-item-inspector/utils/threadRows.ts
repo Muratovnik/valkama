@@ -1,3 +1,5 @@
+import type { MentionLine } from '@/widgets/work-item-inspector/utils/mentionLines.ts'
+
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
@@ -152,6 +154,42 @@ export function threadRows(
     ...rows.filter((row) => stillOpen(row, kept)).sort(freshest),
     ...rows.filter((row) => !stillOpen(row, kept)).sort(freshest),
   ]
+}
+
+/** A record of another item's text naming this one: a line among the threads, not one of them. */
+export interface MentionRow {
+  key: string
+  kind: 'mention'
+  line: MentionLine
+}
+
+/**
+ * The discussion with the mention lines standing among its threads by their time: under
+ * what still waits for an answer, as every other thread is, and over a thread whose place
+ * is older; a thread keeps its place over a line of its own time. A line with no time it
+ * can read stands last. The threads keep the order `threadRows` gave them.
+ */
+export function amongThreads(
+  ordered: readonly ThreadRow[],
+  lines: readonly MentionLine[],
+  kept: ReadonlySet<string>,
+  places: ReadonlyMap<string, ThreadPlace>,
+): (ThreadRow | MentionRow)[] {
+  const mentions = lines
+    .map((line, index) => ({ line, index, time: time(line.at) }))
+    .sort((left, right) => right.time - left.time || right.index - left.index)
+    .map(({ line, time: at }) => ({ row: { key: line.key, kind: 'mention', line } as const, at }))
+  const result: (ThreadRow | MentionRow)[] = []
+  let next = 0
+  for (const row of ordered) {
+    if (!stillOpen(row, kept)) {
+      const at = (places.get(row.key) ?? threadPlace(row)).time
+      while (next < mentions.length && mentions[next].at > at) result.push(mentions[next++].row)
+    }
+    result.push(row)
+  }
+  for (const { row } of mentions.slice(next)) result.push(row)
+  return result
 }
 
 /**

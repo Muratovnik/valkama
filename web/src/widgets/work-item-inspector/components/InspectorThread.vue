@@ -27,14 +27,22 @@
  * Replying is the one icon on the head of an entry, on a question as on a comment. What it
  * opens stands under the replies of the thread; the sheet under a question exists only while
  * it has something to hold.
+ *
+ * Each record of another item's text naming this one stands among the threads by its time as
+ * a quiet line (`InspectorMentionLine`), in the whole view only: it is not a thread, so the
+ * heading and the filter do not count it and the unresolved view has nothing to keep of it.
+ * Older records than the read brings are said in one line under the list.
  */
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorCommentThread from '@/widgets/work-item-inspector/components/InspectorCommentThread.vue'
+import InspectorMentionLine from '@/widgets/work-item-inspector/components/InspectorMentionLine.vue'
 import InspectorThreadFlags from '@/widgets/work-item-inspector/components/InspectorThreadFlags.vue'
 import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
+import { mentionLines, olderMentions } from '@/widgets/work-item-inspector/utils/mentionLines.ts'
 import {
+  amongThreads,
   hasNewReply,
   isUnresolved,
   keepThreadPlaces,
@@ -132,9 +140,14 @@ watch(
   { immediate: true },
 )
 const rows = computed(() => threadRows(groups.value, kept.value, places.value))
+const mentions = computed(() => mentionLines(props.item.mentions ?? []))
+/** The lines of other items' texts naming this one; the unresolved view shows threads only. */
 const shown = computed(() =>
-  props.filter === 'all' ? rows.value : rows.value.filter((row) => stays(row)),
+  props.filter === 'all'
+    ? amongThreads(rows.value, mentions.value, kept.value, places.value)
+    : rows.value.filter((row) => stays(row)),
 )
+const older = computed(() => (props.filter === 'all' ? olderMentions(props.item) : 0))
 const hiddenRows = computed(() => rows.value.filter((row) => !shown.value.includes(row)))
 const hiddenCount = computed(() => hiddenRows.value.length)
 const emptyLine = computed(() =>
@@ -282,6 +295,15 @@ defineExpose({ revealQuestion })
         </InspectorCommentThread>
       </li>
       <li
+        v-else-if="row.kind === 'mention'"
+        class="thread-row"
+      >
+        <InspectorMentionLine
+          :line="row.line"
+          :when="when"
+        />
+      </li>
+      <li
         v-else
         class="thread-row thread-tail"
       >
@@ -302,6 +324,12 @@ defineExpose({ revealQuestion })
     :title="emptyLine"
     inline
   />
+  <p
+    v-if="older"
+    class="thread-hidden"
+  >
+    {{ t('mentions.older', older) }}
+  </p>
   <p
     v-if="hiddenCount"
     class="thread-hidden"

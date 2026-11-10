@@ -42,6 +42,7 @@ export const ru = {
   time: timeMessages.ru.time,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   threads: discussionThreadMessages.ru.threads,
+  mentions: mentionMessages.ru.mentions,
   commentSteps: commentStepsMessages.ru.commentSteps,
   finder: globalFinderMessages.ru.finder,
   requests: inputRequestMessages.ru.requests,

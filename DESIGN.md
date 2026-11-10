@@ -1047,7 +1047,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   walk the rows straight across the groups. A task is written as its number, with no
   `@`, and a comment sent from the card's comment field tells that task in `mentions`,
   as long as the number still stands in the text: a number typed by hand stays a link
-  and tells nobody. A reply, an outcome and a description do not tell yet. A
+  and tells nobody. A reply, an outcome and a description tell the same way. A
   file is written as a Markdown link from the project's root named by its file name,
   `[plan.md](docs/plan.md)`, which opens through the same resolver as a link typed by
   hand. What else the list offers is one more source in `mentionSuggest`'s list, with
@@ -1667,6 +1667,20 @@ on the filter, whichever way the view is set. The unresolved view hides marked t
 many, and a thread marked in that view stays under the reader's hands until the view
 changes, as a question answered does. A reply whose question could not be read stands on
 its own and says so: not knowing what it answers is no reason to hide what it says.
+Where another item's comment, reply, report, outcome or description named this one, its
+discussion shows the record as a quiet line among the threads, by its time and in the order
+the threads take; it is not a thread, so it has no sheet, no Reply, no mark, is not counted
+and stands only in the whole view. It says where and from which item, «Упомянута в
+комментарии MAIN-12», the number the item's link, as a number in any text is, which opens that
+item, since no address opens a card at a comment; under that, who wrote it and when, as a
+comment's head says it; and under that the words' first line in the tertiary ink after the rule a
+quote has, on one line with the whole of it in its hint. Where and who on one line, a dot between,
+made one run too wide for a phone and broke the number at its hyphen. A record whose item is deleted reads
+«Упомянута в удалённой задаче», with no link and no words. When the item has more records than
+the read brings, one line under the list says how many older ones are not shown. The history's
+«Упомянуто в другой задаче» row names the same item, «В комментарии MAIN-12», while the record of
+that comment is among those the read brings; a mention in a description, recorded by its item's
+id, keeps the bare title.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
 task it is and the way there. There each request is a block of questions under a head, the
 project, the task's number, which is the way to the task, and the title, that stays at the top of
