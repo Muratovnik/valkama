@@ -203,10 +203,16 @@ function remove(index: number) {
   field.value?.$el.focus()
 }
 
-/** Focus in the field and the list open, for a host that shows the field on a press of its own. */
+/**
+ * Focus in the field and the list open, for a host that shows the field on a press of its own.
+ * It opens through the field's own press: a list opened from outside Reka counts as nobody
+ * typing, and Reka then empties the field at each change of the value, so a write that lands
+ * while the person types took the letters typed before it.
+ */
 function show() {
-  field.value?.$el.focus()
-  opened(true)
+  const input = field.value?.$el
+  input?.focus()
+  input?.click()
 }
 
 /**

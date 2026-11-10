@@ -25,17 +25,18 @@ const CARD = serializePlatformRoute({
 })
 
 /**
- * The card with a label write answered as the server would: the list asked for, one revision
- * on, and the card's next read carrying it.
+ * The card with a label write answered as the server would, after `slow` ms: the list asked
+ * for, one revision on, and the card's next read carrying it.
  */
-async function openCard(page: Page, width: number) {
+async function openCard(page: Page, width: number, slow = 0) {
   await page.setViewportSize({ width, height: 900 })
   const sent: string[][] = []
   let written: { labels: string[]; revision: number } | null = null
   await installBackend(page, { card: (read) => ({ ...read, ...written }) })
-  await page.route('**/api/planning/work-item/update', (route) => {
+  await page.route('**/api/planning/work-item/update', async (route) => {
     const { labels } = route.request().postDataJSON() as { labels: string[] }
     sent.push(labels)
+    if (slow) await new Promise((done) => setTimeout(done, slow))
     written = { labels, revision: (written?.revision ?? workItem.revision) + 1 }
     return route.fulfill({ json: { ...workItem, ...written } })
   })
@@ -113,6 +114,23 @@ test('the «+» opens the picker with the item’s labels checked; it attaches a
   await expect(picker).toHaveCount(0)
   await expect(drawer.locator('.card-labels .label-chip')).toHaveText(['platform', 'release-2'])
   await expect(drawer.getByRole('button', { name: 'Add a label' })).toBeFocused()
+})
+
+test('a label write that lands while a new one is typed leaves every letter typed', async ({
+  page,
+}) => {
+  const { drawer, sent } = await openCard(page, 1280, 400)
+  await drawer.getByRole('button', { name: 'Add a label' }).click()
+  const picker = drawer.getByRole('combobox', { name: 'Add a label' })
+  await expect(picker).toBeFocused()
+  const list = page.getByRole('listbox', { name: 'Add a label' })
+  await list.getByRole('option', { name: 'phase-1' }).click()
+  await expect.poll(() => sent).toEqual([['platform']])
+  // Nine letters 100ms apart: the write answers, and the card reads it, halfway through.
+  await page.keyboard.type('release-2', { delay: 100 })
+  await expect(picker).toHaveValue('release-2')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => sent).toEqual([['platform'], ['platform', 'release-2']])
 })
 
 test('a press on the row beside the chips opens the picker', async ({ page }) => {
