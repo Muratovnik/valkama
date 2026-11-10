@@ -22,21 +22,30 @@ interface Scroller {
 const HOLD_MS = 250
 
 interface ChainReading {
+  /** The section's element, which a card opened on its own chain brings into view. */
+  $el?: unknown
   restore(view: Omit<ChainView, 'scope'>): Promise<void>
   reveal(reference: string): Promise<HTMLElement | null>
   view(): Omit<ChainView, 'scope'>
 }
 
+/** What the card was opened with, read as the card's own props. */
+interface CardOpening {
+  readonly reference: string
+  /** The address names the card's own chain, in this scope: the graph was asked for from here. */
+  readonly ownChain?: ChainScope | null
+  /** The point this card was opened to return to, if it was reached by Back. */
+  readonly returnTo?: InspectorReturn | null
+}
+
 interface ReturnOptions {
+  card: CardOpening
   chain: Ref<ChainReading | null>
   frame: Ref<Scroller | null>
-  /** The point this card was opened to return to, if it was reached by Back. */
-  returnTo: InspectorReturn | null
   scope: Ref<ChainScope>
   section: Ref<string>
   /** The record has answered, so the card has something to show. */
   read: () => boolean
-  reference: () => string
   /** The item and its chain have both answered, so the body is as tall as it will be. */
   settled: () => boolean
 }
@@ -57,10 +66,33 @@ interface ReturnOptions {
  * the chain does answer, it moves once to the place, unless the reader has moved on.
  */
 export function useInspectorReturn(options: ReturnOptions) {
-  const point = options.returnTo?.reference === options.reference() ? options.returnTo : null
+  const { card } = options
+  const point = card.returnTo?.reference === card.reference ? card.returnTo : null
   if (point) {
     options.section.value = point.section
     if (point.chain) options.scope.value = point.chain.scope
+  }
+
+  if (!point && card.ownChain) openOnChain(card.ownChain)
+
+  /**
+   * Back after «Show on graph» is the card again, over the graph of its own chain, and it opens
+   * where that graph was asked for: its Relations, the chain in the scope the graph drew and in
+   * view once the card's answers are in. It reopened on Overview, a tab away from the chain.
+   */
+  function openOnChain(scope: ChainScope) {
+    options.section.value = 'relations'
+    options.scope.value = scope
+    const stop = watch(
+      options.settled,
+      (settled) => {
+        if (!settled) return
+        stop()
+        const shown = options.chain.value?.$el
+        if (shown instanceof Element) shown.scrollIntoView({ block: 'nearest' })
+      },
+      { flush: 'post' },
+    )
   }
 
   const restoring = ref((point?.scroll ?? 0) > 0)
@@ -69,7 +101,7 @@ export function useInspectorReturn(options: ReturnOptions) {
   function capture(opened: string): InspectorReturn {
     const chain = options.chain.value
     return {
-      reference: options.reference(),
+      reference: card.reference,
       section: options.section.value,
       scroll: options.frame.value?.position() ?? 0,
       opened,

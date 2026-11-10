@@ -70,7 +70,7 @@ import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
-import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
@@ -94,6 +94,11 @@ const props = defineProps<{
   agentsToken?: number
   /** The item's kind as the host's model has it, so its usage can be read with its record. */
   kind?: string
+  /**
+   * The address names this card's own chain, in this scope: the graph was opened from the
+   * card's Relations, and the card opens there, its chain in that scope and in view.
+   */
+  ownChain?: ChainScope | null
   /** The epic's reference, which the record names only by id; the host's model knows it. */
   parentReference?: string | null
   /** An address asked this card to go to its waiting question. */
@@ -225,12 +230,12 @@ const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
 const settled = () => item.value !== null && chain.answered.value
 
 const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
+
 const { capture, holding } = useInspectorReturn({
+  card: props,
   chain: chainSection,
   frame,
   read: () => item.value !== null,
-  returnTo: props.returnTo ?? null,
-  reference: () => props.reference,
   scope: chain.scope,
   section: shownSection,
   settled,
