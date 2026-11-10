@@ -219,7 +219,7 @@ const {
   write: (state) => emit('state', state),
 })
 
-const { openRecord, parentReference } = useOpenCardModel(model, open)
+const { openRecord, parent } = useOpenCardModel(model, open)
 /** The card on show: every way of closing the panel asks it about its drafts first. */
 const card = useTemplateRef<InstanceType<typeof WorkItemInspector>>('card')
 const closePanel = () => card.value?.close()
@@ -468,7 +468,7 @@ defineExpose({ refresh, selectedId })
         :agents-token="agentsVersion"
         :workflow="model.workflow"
         :writable="writable"
-        :parent-reference="parentReference"
+        :parent="parent"
         :own-chain="ownChain"
         :kind="openRecord?.kind"
         :question-asked="questionAsked"

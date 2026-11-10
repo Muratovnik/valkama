@@ -38,10 +38,15 @@ const WORDS = {
   en: {
     create: 'New work item',
     labels: 'Labels',
-    epic: 'Epic',
+    epic: 'Parent',
     hint: 'pick one, or type a new one',
   },
-  ru: { create: 'Новая работа', labels: 'Метки', epic: 'Эпик', hint: 'выберите или введите новую' },
+  ru: {
+    create: 'Новая работа',
+    labels: 'Метки',
+    epic: 'Родитель',
+    hint: 'выберите или введите новую',
+  },
 } as const
 
 type Locale = keyof typeof WORDS

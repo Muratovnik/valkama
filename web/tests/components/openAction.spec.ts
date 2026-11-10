@@ -39,8 +39,9 @@ import {
 /**
  * What the button is called, what it shows, its tooltip and the note under it, and what a
  * screen reader hears after the name. What it shows is the name, then each glyph by the words
- * it is named and hinted by, which are the words it stands for; a place said in words has no
- * hint, since it would say them again.
+ * it is named and hinted by, which are the words it stands for: the client's sign, as a tile
+ * draws the executor, then that it runs and that a setting chose the place. The place itself is
+ * what a press does, so the tooltip and the name say it.
  */
 function read(wrapper: ReturnType<typeof mountAction>) {
   const button = wrapper.get('button.open-action')
@@ -89,7 +90,7 @@ describe('what stands before any press', () => {
     await flushPromises()
     expect(read(wrapper)).toMatchObject({
       name: `Open session ${NAME} in Claude Desktop`,
-      shown: `${NAME} Claude Desktop`,
+      shown: `${NAME} Claude Code`,
     })
     // The hint says what a press does, never the holder the button shows.
     expect(read(wrapper)).toMatchObject({ title: 'Open in Claude Desktop', note: '' })
@@ -116,7 +117,7 @@ describe('what stands before any press', () => {
     )
     const wrapper = mountAction({ executor: executor(nowhere) })
     await flushPromises()
-    expect(read(wrapper).shown).toBe(`${NAME} VS Code`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code`)
     expect(read(wrapper).title).toBe('Open in VS Code')
     expect(read(wrapper).description).toContain('Where it is open is unknown; it opens in VS Code')
     wrapper.unmount()
@@ -131,7 +132,8 @@ describe('what stands before any press', () => {
     )
     const wrapper = mountAction({ executor: executor(nowhere) })
     await flushPromises()
-    expect(read(wrapper).shown).toBe(`${NAME} Codex`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code`)
+    expect(read(wrapper).title).toBe('Open in Codex')
     expect(read(wrapper).description).toContain('by where it was first opened')
     wrapper.unmount()
   })
@@ -147,14 +149,17 @@ describe('what stands before any press', () => {
     )
     const wrapper = mountAction({ executor: executor(terminal, 'live') })
     await flushPromises()
-    expect(read(wrapper).shown).toBe(`${NAME} Terminal · running`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code · running`)
     expect(read(wrapper).name).toContain('is running in a terminal')
-    // The place and that it runs are glyphs: the button's words are its name alone.
-    expect(read(wrapper).glyphs).toEqual(['place', 'live'])
+    // The client and that it runs are glyphs: the button's words are its name alone.
+    expect(read(wrapper).glyphs).toEqual(['client', 'live'])
     expect(wrapper.get('button.open-action .open-action-words').text()).toBe(NAME)
-    expect(wrapper.find('.open-action [data-mark="place"] svg').exists()).toBe(true)
-    // One line for what a press does, and the state under it in the quiet ink.
-    expect(read(wrapper)).toMatchObject({ title: 'Show what can be done', note: 'running' })
+    expect(wrapper.find('.open-action [data-mark="client"] svg').exists()).toBe(true)
+    // One line for what a press does, and the state under it in the quiet ink, with where.
+    expect(read(wrapper)).toMatchObject({
+      title: 'Show what can be done',
+      note: 'running in a terminal',
+    })
 
     const pressed = wrapper.get('button.open-action').element as HTMLElement
     pressed.focus()
@@ -212,7 +217,8 @@ describe('what stands before any press', () => {
   it('says running in a terminal before any plan has answered', () => {
     answerPlans(new Promise(() => {}))
     const wrapper = mountAction({ executor: executor(terminal, 'live') })
-    expect(read(wrapper).shown).toBe(`${NAME} Terminal · running`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code · running`)
+    expect(read(wrapper).note).toBe('running in a terminal')
     wrapper.unmount()
   })
 
@@ -324,7 +330,8 @@ describe('"always open in" is named while it is on', () => {
     const reads = answerPlans(plan(desktop, { ...vscode, source: 'always' }, windowSteps))
     const wrapper = mountAction({ executor: executor(desktop) })
     await flushPromises()
-    expect(read(wrapper).shown).toBe(`${NAME} VS Code · by your setting`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code · by your setting`)
+    expect(read(wrapper).title).toBe('Open in VS Code')
     expect(read(wrapper).name).toBe(`Open session ${NAME} in VS Code — by your setting`)
     expect(read(wrapper).description).toContain('opens in VS Code — by your setting')
     expect(String(reads.mock.calls[0])).toContain('always=vscode')
@@ -335,7 +342,8 @@ describe('"always open in" is named while it is on', () => {
     always('vscode')
     answerPlans(new Promise(() => {}))
     const wrapper = mountAction({ executor: executor(desktop) }, 'ru')
-    expect(read(wrapper).shown).toBe(`${NAME} VS Code · по настройке`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code · по настройке`)
+    expect(read(wrapper).title).toBe('Открыть в VS Code')
     expect(read(wrapper).description).toContain('откроется в VS Code — по настройке')
     wrapper.unmount()
   })
@@ -345,7 +353,8 @@ describe('"always open in" is named while it is on', () => {
     const reads = answerPlans({})
     const wrapper = mountAction({ executor: executor(desktop) })
     await flushPromises()
-    expect(read(wrapper).shown).toBe(`${NAME} Your own command · by your setting`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code · by your setting`)
+    expect(read(wrapper).title).toBe('Your own command')
     expect(reads).not.toHaveBeenCalled()
     wrapper.unmount()
   })
@@ -385,7 +394,8 @@ describe('reading the plan before a press', () => {
     )
     const wrapper = mountAction({ executor: executor(desktop) })
     await flushPromises()
-    expect(read(wrapper).shown).toBe(`${NAME} Claude Desktop`)
+    expect(read(wrapper).shown).toBe(`${NAME} Claude Code`)
+    expect(read(wrapper).title).toBe('Open in Claude Desktop')
     expect(wrapper.html()).not.toContain('secret')
     wrapper.unmount()
   })
@@ -397,7 +407,7 @@ describe('reading the plan before a press', () => {
     await flushPromises()
     expect(read(wrapper)).toMatchObject({
       name: 'Open session in Claude Desktop',
-      shown: 'Open session Claude Desktop',
+      shown: 'Open session Claude Code',
     })
     wrapper.unmount()
   })

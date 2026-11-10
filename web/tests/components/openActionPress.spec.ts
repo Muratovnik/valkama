@@ -227,7 +227,7 @@ describe('a session long silent', () => {
     const wrapper = await openPanel()
     expect(
       wrapper.findAll('button.open-action .open-action-mark').map((mark) => hintOf(mark)),
-    ).toEqual(['Terminal', 'running'])
+    ).toEqual(['Claude Code', 'running'])
     const panel = document.querySelector('[role="dialog"]')?.textContent ?? ''
     expect(panel).toContain('Last sign of it:')
     // In the units every span of the app takes; the exact span is the browser spec's, on its clock.

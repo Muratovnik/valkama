@@ -931,7 +931,7 @@ export const en = {
     title: 'Title',
     description: 'Description',
     labels: 'Labels',
-    parent: 'Epic',
+    parent: 'Parent',
     create: 'New work item',
     newTitle: 'New work',
     cancel: 'Cancel',

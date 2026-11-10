@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * What holds for an item, under its title, as rows that each say what they are: the label in
- * the quiet ink at the start of the row, in a column of its own, and the fact after it. The
- * state, its priority, its epic, who is on it, who else follows it and its labels are each a
- * row. They used to share three unlabelled rows, the state, the priority and the epic in one,
+ * the quiet ink at the start of the row, in a column of its own, and the fact after it. Its
+ * priority, the state, its labels, who is on it, who else follows it and its parent are each a
+ * row, in the registry's order (`ROWS`). They used to share three unlabelled rows, the state, the priority and the epic in one,
  * so the epic's arrow read as a next task and nothing said which word was which.
  *
  * The state and the priority are each said once, by the control that changes them: the chip is
@@ -12,9 +12,10 @@
  * filters the Work view and ends in a × that takes it off, and a «+» attaches another.
  *
  * Every mark is the facet registry's, so the priority carries its glyph and its hue here as it
- * does on a tile. The epic is the epic's sign and its reference as an item link, the same link
- * a number in text is: a press opens the epic through the card's own departure (its draft
- * guard, its Back), and resting on it shows the epic's hover card. The holder's words are bare, a way to the session where there is one: a plate
+ * does on a tile. The parent is its own kind's sign — the epic's for an epic, the generic
+ * parent's for a plain task — and its reference as an item link, the same link a number in
+ * text is: a press opens it through the card's own departure (its draft guard, its Back), and
+ * resting on it shows its hover card. Any item may hold others, so the row is «Parent». The holder's words are bare, a way to the session where there is one: a plate
  * of the same weight as the chips above it made the row one more chip. The lease is a tooltip
  * and, when nobody is behind it any more, a warning dot: a detail of the holder, not a fact of
  * its own. The other sessions that follow the item are a row under it, each printed as its
@@ -43,7 +44,8 @@ import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import { useFacetChoices } from '@/entities/work-item/composables/useFacetChoices.ts'
 import { PRIORITY_CHOICES } from '@/entities/work-item/utils/facetChoices.ts'
-import { holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { FACET_ORDER, holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
+import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
@@ -66,10 +68,10 @@ const props = withDefaults(
     writable: boolean
     /** Whether a question on it waits for an answer: the facts offer to go and answer it. */
     asking?: boolean
-    /** The epic's reference; the record carries only its id. */
-    parentReference?: string | null
+    /** The parent by its reference and its kind; the record carries only its id. */
+    parent?: Pick<WorkItem, 'kind' | 'reference'> | null
   }>(),
-  { asking: false, parentReference: null },
+  { asking: false, parent: null },
 )
 
 const emit = defineEmits<{
@@ -84,6 +86,21 @@ const emit = defineEmits<{
   'take-over': []
   'usage': []
 }>()
+
+/**
+ * The facts that stand as rows, in the one order every surface reads an item's facets
+ * (`FACET_ORDER`), as the new-task form asks for them: the template draws each row and never
+ * decides where it stands. The kind stands in the head, readiness is the holder's action and
+ * the steps are Overview's. The rows stood in the template's order, the parent before labels.
+ */
+const ROW_FACETS: ReadonlySet<FacetId> = new Set([
+  'holder',
+  'labels',
+  'parent',
+  'priority',
+  'state',
+])
+const ROWS = FACET_ORDER.filter((facet) => ROW_FACETS.has(facet))
 
 const { t, d } = useI18n()
 const stateName = useStateName()
@@ -147,12 +164,15 @@ function choosePriority(priority: string) {
 /** The labels' row stands where there are labels, or where one can be attached. */
 const labelsShown = computed(() => props.item.labels.length > 0 || props.writable)
 
-const context = computed(() => ({ parentReference: props.parentReference }))
+const context = computed(() => ({
+  parentKind: props.parent?.kind,
+  parentReference: props.parent?.reference,
+}))
 /** The one fact an item can lack; the others say their own word for having none. */
-const inEpic = computed(() => printsFacet('parent', 'card', props.item, context.value))
+const hasParent = computed(() => printsFacet('parent', 'card', props.item, context.value))
 
 /**
- * An item of the card's space named in the facts — the epic, the blocker a reason waits on —
+ * An item of the card's space named in the facts — the parent, the blocker a reason waits on —
  * links as the layers above say it does, with its address and its hover card, and opens
  * through the host, which asks about a draft first and keeps the way back. The facts stand
  * above the card's body and outside its layer, so they bring this part of it with them.
@@ -233,203 +253,217 @@ defineExpose({ actionCell })
 <template>
   <div class="card-facts-block">
     <!-- Each row is a label and its fact, laid into the block's columns; a row draws no box. -->
-    <div class="card-row card-facts">
-      <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.state') }}</span>
-      <div class="card-row-value">
-        <ChoiceSelect
-          v-if="movable"
-          class="card-state"
-          size="compact"
-          :model-value="item.state.key"
-          :options="stateOptions"
-          :label="t('workItem.head.state', { state: here })"
-          @update:model-value="move"
-        >
-          <template #option="{ option }">
-            <FacetChoiceMark :mark="option.mark" />
-          </template>
-          <template #value>
+    <template
+      v-for="facet in ROWS"
+      :key="facet"
+    >
+      <div
+        v-if="facet === 'state'"
+        class="card-row card-facts"
+      >
+        <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.state') }}</span>
+        <div class="card-row-value">
+          <ChoiceSelect
+            v-if="movable"
+            class="card-state"
+            size="compact"
+            :model-value="item.state.key"
+            :options="stateOptions"
+            :label="t('workItem.head.state', { state: here })"
+            @update:model-value="move"
+          >
+            <template #option="{ option }">
+              <FacetChoiceMark :mark="option.mark" />
+            </template>
+            <template #value>
+              <SemanticState
+                dimension="work-item-state"
+                :state="item.state.category"
+                :label="here"
+              />
+            </template>
+          </ChoiceSelect>
+          <span
+            v-else
+            class="card-fact"
+          >
             <SemanticState
+              class="card-state"
               dimension="work-item-state"
               :state="item.state.category"
               :label="here"
             />
-          </template>
-        </ChoiceSelect>
-        <span
-          v-else
-          class="card-fact"
-        >
-          <SemanticState
-            class="card-state"
-            dimension="work-item-state"
-            :state="item.state.category"
-            :label="here"
-          />
-        </span>
-        <!-- A verb, not a state: the state's dot already says an agent waits, and this goes
-             to the question on Overview. -->
-        <VButton
-          v-if="asking"
-          v-tooltip.clipped="t('requests.answerQuestion')"
-          class="card-question"
-          variant="ghost"
-          size="compact"
-          @click="emit('question')"
-        >
-          <VIcon
-            name="message-square"
-            :size="16"
-          />
-          <span class="card-question-word trimmed-word one-line">{{
-            t('requests.answerQuestion')
-          }}</span>
-        </VButton>
-      </div>
-    </div>
-    <div class="card-row">
-      <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.priority') }}</span>
-      <div class="card-row-value">
-        <ChoiceSelect
-          v-if="writable"
-          class="card-priority"
-          size="compact"
-          :model-value="item.priority"
-          :options="priorityOptions"
-          :label="t('workItem.head.priority', { priority: priorityName })"
-          @update:model-value="choosePriority"
-        >
-          <template #option="{ option }">
-            <FacetChoiceMark :mark="option.mark" />
-          </template>
-          <template #value>
-            <span class="card-priority-value">
-              <FacetMarks
-                surface="card"
-                :item="item"
-                :facets="['priority']"
-              />
-            </span>
-          </template>
-        </ChoiceSelect>
-        <span
-          v-else
-          class="card-fact"
-        >
-          <FacetMarks
-            surface="card"
-            :item="item"
-            :facets="['priority']"
-          />
-        </span>
-      </div>
-    </div>
-    <div
-      v-if="inEpic"
-      class="card-row"
-    >
-      <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.parent') }}</span>
-      <div class="card-row-value">
-        <span class="card-fact card-epic">
-          <FacetMarks
-            surface="card"
-            :item="item"
-            :facets="['parent']"
-            :context="context"
-          />
-          <RichText
-            class="card-epic-link trimmed-word one-line"
-            :source="parentReference ?? ''"
-            inline
-          />
-        </span>
-      </div>
-    </div>
-    <div class="card-row card-holder">
-      <span class="card-row-label card-holder-label">{{ holderLabel }}</span>
-      <div class="card-row-value card-holder-value">
-        <!-- A session's link says the holder in its own hint; a bare name carries it here. -->
-        <ExecutorLink
-          v-if="holderExecutor?.session"
-          class="card-holder-link"
-          :holder="holder"
-          :executor="holderExecutor"
-          :detail="leaseText"
-        />
-        <span
-          v-else-if="holder"
-          v-tooltip.detail="holderTitle"
-          class="card-holder-name one-line"
-          >{{ holderName(holder) }}</span
-        >
-        <FacetMarks
-          v-else
-          surface="card"
-          :item="item"
-          :facets="['holder']"
-        />
-        <SemanticState
-          v-if="lease?.state === 'stale'"
-          class="card-holder-stale"
-          dimension="claim-lease"
-          state="stale"
-          variant="dot"
-          :label="t('workItem.lease.mark')"
-        />
-        <span
-          v-if="leaseText"
-          class="visually-hidden"
-          >{{ leaseText }}</span
-        >
+          </span>
+          <!-- A verb, not a state: the state's dot already says an agent waits, and this goes
+               to the question on Overview. -->
+          <VButton
+            v-if="asking"
+            v-tooltip.clipped="t('requests.answerQuestion')"
+            class="card-question"
+            variant="ghost"
+            size="compact"
+            @click="emit('question')"
+          >
+            <VIcon
+              name="message-square"
+              :size="16"
+            />
+            <span class="card-question-word trimmed-word one-line">{{
+              t('requests.answerQuestion')
+            }}</span>
+          </VButton>
+        </div>
       </div>
       <div
-        v-if="writable"
-        ref="actionCell"
-        class="card-action"
+        v-else-if="facet === 'priority'"
+        class="card-row"
       >
-        <InspectorWriteActions
-          :item="item"
-          :busy="busy"
-          @claim="emit('claim')"
-          @release="emit('release')"
-          @take-over="emit('take-over')"
-        />
+        <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.priority') }}</span>
+        <div class="card-row-value">
+          <ChoiceSelect
+            v-if="writable"
+            class="card-priority"
+            size="compact"
+            :model-value="item.priority"
+            :options="priorityOptions"
+            :label="t('workItem.head.priority', { priority: priorityName })"
+            @update:model-value="choosePriority"
+          >
+            <template #option="{ option }">
+              <FacetChoiceMark :mark="option.mark" />
+            </template>
+            <template #value>
+              <span class="card-priority-value">
+                <FacetMarks
+                  surface="card"
+                  :item="item"
+                  :facets="['priority']"
+                />
+              </span>
+            </template>
+          </ChoiceSelect>
+          <span
+            v-else
+            class="card-fact"
+          >
+            <FacetMarks
+              surface="card"
+              :item="item"
+              :facets="['priority']"
+            />
+          </span>
+        </div>
       </div>
-    </div>
-    <div
-      v-if="followers.length"
-      class="card-row card-subscribers"
-    >
-      <span class="card-row-label">{{ t('workItem.head.subscribers') }}</span>
-      <p class="card-row-value card-subscriber-list">
-        <span
-          v-for="follower in followers"
-          :key="follower.label"
-          v-tooltip.detail="follower.label"
-          class="card-subscriber"
-          ><template
-            v-for="(word, at) in follower.words"
-            :key="at"
-            >{{ word.before }}<span class="card-subscriber-word">{{ word.text }}</span></template
-          ></span
+      <div
+        v-else-if="facet === 'labels' && labelsShown"
+        class="card-row"
+      >
+        <span class="card-row-label">{{ t('workItem.labels') }}</span>
+        <div class="card-row-value">
+          <WorkItemLabels
+            class="card-labels"
+            :labels="item.labels"
+            :writable="writable"
+            @labels="(labels) => emit('fact', { labels })"
+            @filter="filterLabel"
+          />
+        </div>
+      </div>
+      <template v-else-if="facet === 'holder'">
+        <div class="card-row card-holder">
+          <span class="card-row-label card-holder-label">{{ holderLabel }}</span>
+          <div class="card-row-value card-holder-value">
+            <!-- A session's link says the holder in its own hint; a bare name carries it here. -->
+            <ExecutorLink
+              v-if="holderExecutor?.session"
+              class="card-holder-link"
+              :holder="holder"
+              :executor="holderExecutor"
+              :detail="leaseText"
+            />
+            <span
+              v-else-if="holder"
+              v-tooltip.detail="holderTitle"
+              class="card-holder-name one-line"
+              >{{ holderName(holder) }}</span
+            >
+            <FacetMarks
+              v-else
+              surface="card"
+              :item="item"
+              :facets="['holder']"
+            />
+            <SemanticState
+              v-if="lease?.state === 'stale'"
+              class="card-holder-stale"
+              dimension="claim-lease"
+              state="stale"
+              variant="dot"
+              :label="t('workItem.lease.mark')"
+            />
+            <span
+              v-if="leaseText"
+              class="visually-hidden"
+              >{{ leaseText }}</span
+            >
+          </div>
+          <div
+            v-if="writable"
+            ref="actionCell"
+            class="card-action"
+          >
+            <InspectorWriteActions
+              :item="item"
+              :busy="busy"
+              @claim="emit('claim')"
+              @release="emit('release')"
+              @take-over="emit('take-over')"
+            />
+          </div>
+        </div>
+        <div
+          v-if="followers.length"
+          class="card-row card-subscribers"
         >
-      </p>
-    </div>
-    <div
-      v-if="labelsShown"
-      class="card-row"
-    >
-      <span class="card-row-label">{{ t('workItem.labels') }}</span>
-      <div class="card-row-value">
-        <WorkItemLabels
-          class="card-labels"
-          :labels="item.labels"
-          :writable="writable"
-          @labels="(labels) => emit('fact', { labels })"
-          @filter="filterLabel"
-        />
+          <span class="card-row-label">{{ t('workItem.head.subscribers') }}</span>
+          <p class="card-row-value card-subscriber-list">
+            <span
+              v-for="follower in followers"
+              :key="follower.label"
+              v-tooltip.detail="follower.label"
+              class="card-subscriber"
+              ><template
+                v-for="(word, at) in follower.words"
+                :key="at"
+                >{{ word.before
+                }}<span class="card-subscriber-word">{{ word.text }}</span></template
+              ></span
+            >
+          </p>
+        </div>
+      </template>
+      <div
+        v-else-if="facet === 'parent' && hasParent"
+        class="card-row"
+      >
+        <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.parent') }}</span>
+        <div class="card-row-value">
+          <span class="card-fact card-parent">
+            <FacetMarks
+              surface="card"
+              :item="item"
+              :facets="['parent']"
+              :context="context"
+            />
+            <RichText
+              class="card-parent-link trimmed-word one-line"
+              :source="parent?.reference ?? ''"
+              inline
+            />
+          </span>
+        </div>
       </div>
-    </div>
+    </template>
     <MissingPlaces class="card-missing" />
     <div class="card-usage">
       <InspectorUsageLine @details="emit('usage')" />

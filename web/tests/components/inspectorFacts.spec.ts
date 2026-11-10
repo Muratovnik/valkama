@@ -13,6 +13,7 @@ import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFa
 import WorkItemLabels from '@/features/work-item-labels/WorkItemLabels.vue'
 
 import type { FacetChoiceOption } from '@/entities/work-item/composables/useFacetChoices.ts'
+import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
@@ -84,7 +85,7 @@ function facts(record: WorkItem, props: { busy?: boolean; writable?: boolean } =
 }
 
 /** The facts under a layer that links every item, as the open space's layer does. */
-function linkedFacts(record: WorkItem, parentReference: string | null) {
+function linkedFacts(record: WorkItem, parent: Pick<WorkItem, 'kind' | 'reference'> | null) {
   const elsewhere = vi.fn()
   const preview = { describe: () => 'preview', render: () => null }
   const wrapper = mount(
@@ -102,10 +103,10 @@ function linkedFacts(record: WorkItem, parentReference: string | null) {
               }
             : null,
         )
-        return { record, parentReference, workflow, open: (to: string) => emit('open', to) }
+        return { record, parent, workflow, open: (to: string) => emit('open', to) }
       },
       template:
-        '<InspectorFacts :item="record" :workflow="workflow" :busy="false" writable :parent-reference="parentReference" @open="open" />',
+        '<InspectorFacts :item="record" :workflow="workflow" :busy="false" writable :parent="parent" @open="open" />',
     }),
     {
       global: {
@@ -179,9 +180,19 @@ describe('the action at rest', () => {
   )
 })
 
+/** A menu of the facts by its class, wherever the registry's order stands it. */
+function menuOf(wrapper: ReturnType<typeof facts>, name: string) {
+  const menu = wrapper.findAllComponents(choiceStub).find((found) => found.classes(name))
+  if (!menu) throw new Error(`no ${name} menu`)
+  return menu
+}
+
+/** The menu that moves the state. */
+const stateMenu = (wrapper: ReturnType<typeof facts>) => menuOf(wrapper, 'card-state')
+
 describe('the state as the menu that moves it', () => {
   it('names where the item is, unchoosable, above where it may go', () => {
-    const chip = facts(item()).getComponent(choiceStub)
+    const chip = stateMenu(facts(item()))
     expect(chip.props('modelValue')).toBe('todo')
     expect(chip.props('label')).toBe('State: To do. Move to another state')
     const options = chip.props('options') as FacetChoiceOption[]
@@ -199,12 +210,12 @@ describe('the state as the menu that moves it', () => {
 
   it('asks for a move to another state, and not while a write is in flight', async () => {
     const idle = facts(item())
-    idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
-    idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'todo')
+    stateMenu(idle).vm.$emit('update:modelValue', 'dev')
+    stateMenu(idle).vm.$emit('update:modelValue', 'todo')
     expect(idle.emitted('fact')).toEqual([[{ state: 'dev' }]])
 
     const busy = facts(item(), { busy: true })
-    busy.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
+    stateMenu(busy).vm.$emit('update:modelValue', 'dev')
     expect(busy.emitted('fact')).toBeUndefined()
   })
 
@@ -235,8 +246,8 @@ describe('the state as the menu that moves it', () => {
   })
 })
 
-/** The second menu of the head: the state's is the first. */
-const priorityMenu = (wrapper: ReturnType<typeof facts>) => wrapper.findAllComponents(choiceStub)[1]
+/** The menu that changes the priority, wherever the registry's order stands it. */
+const priorityMenu = (wrapper: ReturnType<typeof facts>) => menuOf(wrapper, 'card-priority')
 
 /** What the head's rows are called, top to bottom. */
 const rowLabels = (wrapper: ReturnType<typeof facts>) =>
@@ -286,16 +297,34 @@ describe('the priority as the menu that changes it', () => {
 })
 
 describe('each fact in a row that says what it is', () => {
-  it('labels the state, the priority, the epic, the holder and the labels', () => {
+  // One registry orders every surface: the rows stand in `FACET_ORDER`, as the new-task form's
+  // fields do, not in the template's order, which had stood the parent before the labels.
+  it('names each fact in a row, in the order every surface reads an item’s facets', () => {
     const record = item({ labels: ['platform'], parent_id: '00000000-0000-4000-8000-000000000099' })
     const wrapper = mount(InspectorFacts, {
-      props: { item: record, workflow, busy: false, writable: true, parentReference: 'MAIN-9' },
+      props: {
+        item: record,
+        workflow,
+        busy: false,
+        writable: true,
+        parent: { reference: 'MAIN-9', kind: 'epic' },
+      },
       global: {
         plugins: [createI18n({ legacy: false, locale: 'en', messages })],
         stubs: { ChoiceSelect: choiceStub, VIcon: true },
       },
     })
-    expect(rowLabels(wrapper)).toEqual(['State', 'Priority', 'Epic', 'Held by', 'Labels'])
+    expect(rowLabels(wrapper)).toEqual(['Priority', 'State', 'Labels', 'Held by', 'Parent'])
+    const rows = {
+      priority: 'Priority',
+      state: 'State',
+      labels: 'Labels',
+      holder: 'Held by',
+      parent: 'Parent',
+    }
+    expect(rowLabels(wrapper)).toEqual(
+      FACET_ORDER.filter((facet) => facet in rows).map((facet) => rows[facet as keyof typeof rows]),
+    )
   })
 
   it('has no labels row where there are none and none can be attached', () => {
@@ -321,18 +350,37 @@ describe('the marks beside the state', () => {
 
   // The epic is an item link, as a number in text is: the address and the hover card of the
   // layers above, a press through the card's own departure, and the epic's sign before it.
-  it('draws the epic as the epic sign and a link that opens through the card', async () => {
+  it('draws an epic parent as the epic sign and a link that opens through the card', async () => {
     const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
-    const { elsewhere, wrapper } = linkedFacts(record, 'QA-9')
+    const { elsewhere, wrapper } = linkedFacts(record, { reference: 'QA-9', kind: 'epic' })
     const sign = wrapper.get('[data-facet="parent"]')
     expect(sign.attributes('data-kind')).toBe('epic')
     expect(sign.find('svg').classes()).toContain('lucide-layers')
-    const link = wrapper.get('.card-epic a')
+    const link = wrapper.get('.card-parent a')
     expect(link.attributes('href')).toBe('/open/QA-9')
     expect(link.text()).toBe('QA-9')
     await link.trigger('click', { button: 0 })
     expect(wrapper.emitted('open')).toEqual([['QA-9']])
     expect(elsewhere).not.toHaveBeenCalled()
+  })
+
+  // Any item may be a parent: a task holding others is named «Parent» and drawn by the
+  // parent's sign in the task's ink, never by the epic's.
+  it.each([
+    { kind: 'task', icon: 'lucide-corner-down-right', word: 'Task' },
+    { kind: 'bug', icon: 'lucide-bug', word: 'Bug' },
+  ] as const)('draws a $kind parent by its own kind, not as an epic', ({ kind, icon, word }) => {
+    const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
+    const { wrapper } = linkedFacts(record, { reference: 'QA-9', kind })
+    const names = wrapper.findAll('.card-row-label').map((label) => label.text())
+    expect(names).toContain('Parent')
+    expect(names).not.toContain('Epic')
+    const sign = wrapper.get('[data-facet="parent"]')
+    expect(sign.attributes('data-kind')).toBe(kind)
+    expect(sign.find('svg').classes()).toContain(icon)
+    expect(sign.find('svg').classes()).not.toContain('lucide-layers')
+    expect(sign.html()).not.toContain('Epic')
+    expect(sign.html()).toContain(word)
   })
 
   it('links the blocker a reason waits on, through the card', async () => {

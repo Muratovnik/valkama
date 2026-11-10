@@ -18,6 +18,12 @@ export const workItemFacetMessages = {
       heldElsewhere: 'Held by {holder} — working on other items',
       heldWaiting: 'Held by {holder} — waiting for a person',
       waiting: 'Waiting on {reference}',
+      // An executor's sign, named by its client wherever it stands: a tile, a card's holder.
+      client: {
+        claude: 'Claude Code',
+        codex: 'Codex',
+        other: 'Another client',
+      },
       steps: '{done}/{total}',
       moreLabels: '+{count}',
       filterAdd: 'Filter: {facet} {value}',
@@ -58,6 +64,11 @@ export const workItemFacetMessages = {
       heldElsewhere: 'Держит {holder} — работает над другими задачами',
       heldWaiting: 'Держит {holder} — ждёт человека',
       waiting: 'Ждёт {reference}',
+      client: {
+        claude: 'Claude Code',
+        codex: 'Codex',
+        other: 'Другой клиент',
+      },
       steps: '{done}/{total}',
       moreLabels: '+{count}',
       filterAdd: 'Фильтр: {facet} {value}',

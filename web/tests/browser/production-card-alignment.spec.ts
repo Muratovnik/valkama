@@ -8,136 +8,9 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { installBackend } from './backend.ts'
-import { openPlanFor } from './openSessionFixtures.ts'
-import { blockedWorkItem, projectScope, workItem, workItemRef } from './planningFixtures.ts'
-import { asked, installQuestions } from './questionBackend.ts'
+import { alignmentGaps, BASELINE_ROOM, FULL_HEAD, measure, openCard } from './cardHeadPage.ts'
+import type { Spec } from './cardHeadPage.ts'
 import { test } from './test.ts'
-
-const CARD = serializePlatformRoute({
-  module_id: 'planning',
-  scope: projectScope,
-  entity: planningWorkItemEntity(workItemRef),
-})
-
-/** The room two texts of one line may stand apart from one baseline. */
-const TOLERANCE = 1
-/** The room a sign may stand off the middle of the capitals of its line, on every surface. */
-const MIDDLE_ROOM = 0.5
-/** Under half a pixel, so that two words of one line never round to two rows of pixels. */
-const BASELINE_ROOM = 0.25
-
-interface TextMeasure {
-  /** The text's baseline, from the top of its own run plus the font's ascent. */
-  baseline: number
-  /** The middle of its capitals: the baseline less half the height of an `H`. */
-  capCentre: number
-  text: string
-}
-
-interface Measured {
-  /** Each mark's vertical middle. */
-  marks: Record<string, number>
-  texts: Record<string, TextMeasure>
-}
-
-interface Spec {
-  marks: Record<string, string>
-  root: string
-  texts: Record<string, string>
-}
-
-function measure(page: Page, spec: Spec): Promise<Measured> {
-  return page.evaluate((input) => {
-    const root = document.querySelector(input.root)
-    if (!root) throw new Error(`no ${input.root}`)
-    const canvas = document.createElement('canvas').getContext('2d')
-    if (!canvas) throw new Error('no canvas')
-    const texts: Record<string, TextMeasure> = {}
-    for (const [name, selector] of Object.entries(input.texts)) {
-      const element = root.querySelector(selector)
-      if (!element) throw new Error(`no text ${selector}`)
-      // A text the line has stepped aside is not drawn, so it has no line to measure.
-      if (element.getClientRects().length === 0) continue
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-      let node: Node | null = walker.nextNode()
-      while (node && !node.textContent?.trim()) node = walker.nextNode()
-      if (!node) throw new Error(`no words in ${selector}`)
-      const range = document.createRange()
-      range.selectNodeContents(node)
-      const box = range.getBoundingClientRect()
-      const style = getComputedStyle(element)
-      canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-      const baseline = box.top + canvas.measureText('H').fontBoundingBoxAscent
-      const capCentre = baseline - canvas.measureText('H').actualBoundingBoxAscent / 2
-      texts[name] = { baseline, capCentre, text: node.textContent?.trim() ?? '' }
-    }
-    const marks: Record<string, number> = {}
-    for (const [name, selector] of Object.entries(input.marks)) {
-      const element = root.querySelector(selector)
-      if (!element) throw new Error(`no mark ${selector}`)
-      const box = element.getBoundingClientRect()
-      marks[name] = (box.top + box.bottom) / 2
-    }
-    return { texts, marks }
-  }, spec)
-}
-
-/** What a head holds beyond the state: each fact that prints a word beside its glyph. */
-interface Head {
-  asking?: boolean
-  /** The reference of the item's epic, which is a link in the first row. */
-  epic?: string
-  kind?: string
-  priority?: string
-  /** The name of the state the item stands in. */
-  state?: string
-}
-
-const FULL_HEAD: Head = { asking: true, epic: 'MAIN-12', kind: 'epic', priority: 'high' }
-
-/** The item under its epic: the card's read says the id, the space's whose reference that is. */
-function inEpic(model: Record<string, unknown>, reference: string) {
-  const items = model.work_items as { reference: string; work_item_id: string }[]
-  return {
-    ...model,
-    work_items: items.map((item) => {
-      if (item.work_item_id === workItem.work_item_id)
-        return { ...item, parent_id: blockedWorkItem.work_item_id }
-      return item.work_item_id === blockedWorkItem.work_item_id ? { ...item, reference } : item
-    }),
-  }
-}
-
-/** The head of a card in the built app, on a state that moves, with the facts it is given. */
-async function openCard(page: Page, locale: 'ru' | 'en', width: number, head: Head = {}) {
-  const { asking, epic, kind, priority, state = 'Review' } = head
-  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await page.setViewportSize({ width, height: 900 })
-  await installBackend(page, {
-    openPlan: openPlanFor,
-    card: (read) => ({
-      ...read,
-      state: { ...(read.state as object), key: 'review', name: state, category: 'review' },
-      ...(kind ? { kind } : {}),
-      ...(priority ? { priority } : {}),
-      ...(epic ? { parent_id: blockedWorkItem.work_item_id } : {}),
-    }),
-    ...(epic ? { space: (model) => inEpic(model, epic) } : {}),
-  })
-  if (asking) await installQuestions(page, [asked()])
-  await page.goto(CARD)
-  const drawer = page.locator('.drawer')
-  await expect(drawer.locator('.card-facts')).toBeVisible()
-  await expect(drawer.locator('.card-identity')).toBeVisible()
-  await expect(drawer).toHaveCSS('transform', 'none')
-  if (asking) await expect(drawer.locator('.card-question')).toBeVisible()
-  if (epic) await expect(drawer.getByText(epic, { exact: true }).first()).toBeVisible()
-  return drawer
-}
 
 /** The drawn words trimmed to their letters, and which box of theirs cuts those letters. */
 function trimmedWords(page: Page) {
@@ -170,28 +43,6 @@ function trimmedWords(page: Page) {
       return { cuts, text: word.textContent?.trim() ?? '' }
     })
   })
-}
-
-/**
- * Every text of the line shares the first one's baseline, and each mark stands on the middle of
- * the capitals of the text it is paired with.
- */
-function alignmentGaps(measured: Measured, pairs: [string, string][]) {
-  const [first, ...rest] = Object.values(measured.texts)
-  const baselines = rest.map((other) => ({
-    gap: Math.abs(other.baseline - first.baseline),
-    label: `baseline of “${other.text}” against “${first.text}”`,
-    room: TOLERANCE,
-  }))
-  const marks = pairs.map(([mark, text]) => {
-    const target = measured.texts[text]
-    return {
-      gap: Math.abs(measured.marks[mark] - target.capCentre),
-      label: `${mark} against the middle of “${target.text}”`,
-      room: MIDDLE_ROOM,
-    }
-  })
-  return [...baselines, ...marks]
 }
 
 const IDENTITY: Spec = {
@@ -280,14 +131,14 @@ for (const locale of ['ru', 'en'] as const) {
 
 /**
  * The baseline of each row's name and of the words of its value on the value's first line: the
- * state and the question, the priority, the epic, the holder and the first labels.
+ * priority, the state and the question, the first labels, the holder and the parent.
  */
 function factBaselines(page: Page) {
   return page.evaluate(() => {
     const canvas = document.createElement('canvas').getContext('2d')
     if (!canvas) throw new Error('no canvas')
     const WORDS =
-      '.state-label, .card-question-word, .facet-word:not(.facet-word-hidden), .card-epic-link a, .open-action-name, .card-holder-name, .chip-face'
+      '.state-label, .card-question-word, .facet-word:not(.facet-word-hidden), .card-parent-link a, .open-action-name, .card-holder-name, .chip-face'
     const measure = (word: Element) => {
       const range = document.createRange()
       range.selectNodeContents(word)
@@ -318,10 +169,11 @@ for (const locale of ['ru', 'en'] as const) {
       await openCard(page, locale, width, FULL_HEAD)
       const lines = await factBaselines(page)
       console.info(`facts ${locale} ${width}px`, JSON.stringify(lines))
-      // The state and «Answer», the priority, the epic, the holder and the labels, each with
-      // its name; «Answer» is short enough to stay on the state's line on a phone.
+      // The priority, the state and «Answer», the labels, the holder and the parent, each with
+      // its name, in the registry's order; «Answer» is short enough to stay on the state's line
+      // on a phone.
       expect(lines).toHaveLength(5)
-      expect(lines[0]).toHaveLength(3)
+      expect(lines[1]).toHaveLength(3)
       for (const [first, ...rest] of lines)
         for (const other of rest)
           expect(
@@ -350,7 +202,7 @@ test('a long word on the first row is cut short sideways, with an ellipsis, and 
   expect(await shapeOf(drawer.locator('.card-facts .state-label', { hasText: state }))).toEqual(
     shortened,
   )
-  const word = drawer.locator('.card-facts-block .card-fact .card-epic-link', {
+  const word = drawer.locator('.card-facts-block .card-fact .card-parent-link', {
     hasText: 'MAIN-12',
   })
   await word.evaluate((element) => {

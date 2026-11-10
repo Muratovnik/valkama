@@ -9,7 +9,14 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { box, settledBox } from './editorPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { asked, crowdedField, mixedField, openQuestion, send } from './questionBackend.ts'
+import {
+  answerMark,
+  asked,
+  crowdedField,
+  mixedField,
+  openQuestion,
+  send,
+} from './questionBackend.ts'
 import { test } from './test.ts'
 
 const SIZES = [
@@ -32,7 +39,7 @@ for (const [width, height] of SIZES) {
     const { drawer, card } = await openQuestion(page, [
       asked({ prompt: 'Which **option** should it be?', fields: [crowdedField] }),
     ])
-    await drawer.getByRole('button', { name: 'Waiting for an answer', exact: true }).click()
+    await answerMark(drawer).click()
     const rows = card.locator('.request-option')
     await expect(rows).toHaveCount(12)
     // The labels are what is read; no paragraph of any description stands yet.
@@ -192,7 +199,7 @@ for (const [width, height] of SIZES) {
   }) => {
     await page.setViewportSize({ width, height })
     const { drawer, card } = await openQuestion(page, [asked({ fields: [crowdedField] })])
-    await drawer.getByRole('button', { name: 'Waiting for an answer', exact: true }).click()
+    await answerMark(drawer).click()
     const rows = card.locator('.request-option')
     const scroller = drawer.locator('.drawer-frame-body')
     await settledBox(rows.first())

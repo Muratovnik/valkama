@@ -346,7 +346,9 @@ describe('WorkItemInspector resource state', () => {
       // The state is the menu that moves it, wherever the card can write.
       expect(wrapper.findComponent({ name: 'ChoiceSelect' }).exists()).toBe(writable)
       if (writable) {
-        expect(wrapper.getComponent({ name: 'ChoiceSelect' }).props()).toMatchObject({
+        const menus = wrapper.findAllComponents({ name: 'ChoiceSelect' })
+        const state = menus.find((menu) => menu.classes('card-state'))
+        expect(state?.props()).toMatchObject({
           disabled: false,
           modelValue: 'dev',
           options: [

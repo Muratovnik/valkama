@@ -162,7 +162,8 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   const firstAgent = page.locator('.drawer .agents .agent-group').first()
   await expect
     .poll(() => markNames(firstAgent.locator('button.open-action')))
-    .toEqual(['VS Code', 'running'])
+    .toEqual(['Claude Code', 'running'])
+  await expect(firstAgent.locator('button.open-action')).toHaveAttribute('aria-label', /VS Code/u)
   lost.add(IN_VSCODE)
 
   await head.locator('button.open-action').focus()
@@ -175,11 +176,9 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   await expect(firstAgent.locator('.open-action-still')).toContainText('session gone')
   await expect(firstAgent.locator('button.open-action')).toHaveCount(0)
   // Another session's row is left as it was.
-  await expect
-    .poll(() =>
-      markNames(page.locator('.drawer .agents .agent-group').nth(1).locator('button.open-action')),
-    )
-    .toContain('Claude Desktop')
+  await expect(
+    page.locator('.drawer .agents .agent-group').nth(1).locator('button.open-action'),
+  ).toHaveAttribute('aria-label', /Claude Desktop/u)
   // Focus stays on the holder, now on the way to why it opens nothing.
   await expect(head.locator('.open-action-why')).toBeFocused()
   await page.keyboard.press('Enter')

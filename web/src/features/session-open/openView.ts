@@ -24,12 +24,12 @@ import type { Refusal } from '@/features/session-open/openPlan.ts'
 import { placeKey, refusalWords, whereWords } from '@/features/session-open/placeWords.ts'
 import type { PlaceName, Translate } from '@/features/session-open/placeWords.ts'
 
+import { clientGlyph } from '@/entities/work-item/utils/facetExecutor.ts'
+
 import type { Executor } from '@/shared/api/executorModel.ts'
 import type { OpenPlace, OpenPlan } from '@/shared/api/openPlanModel.ts'
-import type { AlwaysChoice } from '@/shared/lib/settings.ts'
+import type { AlwaysChoice, SessionFamily } from '@/shared/lib/settings.ts'
 import type { IconName } from '@/shared/lib/uiSystem.ts'
-import type { ControlIconName } from '@/shared/ui/choiceControls.ts'
-import { placeIcon } from '@/shared/ui/placeIcon.ts'
 
 export interface OpenFacts {
   /** What the card's read says; absent where a surface's read names no holder. */
@@ -193,31 +193,36 @@ export function openView(t: Translate, facts: OpenFacts): OpenView {
 
 /** One thing a button says beside its name, as a glyph named by its words. */
 export interface OpenMark {
-  key: 'place' | 'live' | 'setting'
+  glyph: IconName
+  key: 'client' | 'live' | 'setting'
   /** What the glyph stands for: its accessible name and its hover hint. */
   label: string
-  /** The place's glyph, as Settings draws a client (`placeIcon`). */
-  client?: ControlIconName
-  /** The glyph of anything else. */
-  glyph?: IconName
-  /** A place no glyph stands for, which says its word instead. */
-  word?: boolean
 }
 
-/** What stands beside a button's name: where it opens, that the session runs, and that a setting chose the place. */
-export function openMarks(t: Translate, view: OpenView): OpenMark[] {
+/**
+ * What stands beside a button's name: whose session it is, by its client's sign as a tile draws
+ * its executor, that the session runs, and that a setting chose the place. The place it opens
+ * in is what a press does, so the hint and the name say it (`openTip`, `openName`): drawn as
+ * the executor's sign, VS Code's mark on the card and Claude's on the tile were two signs for
+ * one executor. A client not yet known draws no sign rather than a guess.
+ */
+export function openMarks(t: Translate, view: OpenView, client?: SessionFamily): OpenMark[] {
   const marks: OpenMark[] = []
-  if (view.text) {
-    const client = placeIcon(view.place)
-    marks.push(
-      client
-        ? { key: 'place', label: view.text, client }
-        : { key: 'place', label: view.text, word: true },
-    )
-  }
+  if (client)
+    marks.push({
+      key: 'client',
+      label: t(`workItem.facet.client.${client}`),
+      glyph: clientGlyph(client),
+    })
   if (view.state) marks.push({ key: 'live', label: view.state, glyph: 'activity' })
   if (view.setting) marks.push({ key: 'setting', label: t('open.mark.setting'), glyph: 'settings' })
   return marks
+}
+
+/** What a session that cannot be opened says in words: the place or the reason, and its state. */
+export function openWords(t: Translate, view: OpenView): string {
+  const setting = view.setting ? t('open.mark.setting') : ''
+  return [view.text, view.state, setting].filter(Boolean).join(' · ')
 }
 
 /**
@@ -232,8 +237,11 @@ export function openTip(
   who: { action?: string },
 ): { note: string; text: string } {
   const note = view.state
-  if (view.running) return { text: t('open.tip.running'), note }
+  // Where it runs is no sign beside the name, so the state under the hint says it.
+  if (view.running) return { text: t('open.tip.running'), note: `${note} ${view.where}`.trim() }
   if (view.where) return { text: t('open.tip.at', { where: view.where }), note }
+  // The owner's own command opens it, which is no place to be in.
+  if (view.place === 'custom') return { text: view.text, note }
   // A button that says its action already says what the hint would.
   return { text: who.action ? '' : t('open.tip.plain'), note }
 }

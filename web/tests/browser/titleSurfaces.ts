@@ -17,7 +17,7 @@ import { branchedChain } from '../fixtures/chainMap.ts'
 import { broadSpace } from '../fixtures/graphSpaces.ts'
 import { installBackend } from './backend.ts'
 import { boardRoute, openList } from './boardPage.ts'
-import { graphRoute, serve as serveChain } from './chainFixtures.ts'
+import { graphRoute, serve as serveChain, showRelations } from './chainFixtures.ts'
 import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { held, openReported, reference, rest, SPACE } from './previewPage.ts'
@@ -215,7 +215,7 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
       .click()
     await page
       .getByRole('dialog', { name: 'New work' })
-      .getByRole('combobox', { name: 'Epic' })
+      .getByRole('combobox', { name: 'Parent' })
       .click()
     const option = page.getByRole('option').filter({ hasText: workItemRef.reference })
     return option.locator('.combo-title')
@@ -244,6 +244,8 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
     )
     await serveChain(page, retitledChain(chain, title))
     await page.goto(CARD)
+    // The chain stands in the card's Relations.
+    await showRelations(page)
     const section = page.locator('.drawer section.chain')
     const lane = section.getByRole('slider').first()
     await expect(lane).toBeVisible()

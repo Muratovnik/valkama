@@ -7,9 +7,11 @@
  * `OpenPanel`, as does an app that answers with a next step. What came of it is said
  * in the shell's status region.
  *
- * Where it opens, whether it runs and that a setting chose the place stand after the name
+ * Whose session it is, whether it runs and that a setting chose the place stand after the name
  * as glyphs, each named by its words and saying them under the pointer: as words they made
- * a second run of text in another ink and weight beside the name. A holder's name takes the
+ * a second run of text in another ink and weight beside the name. Whose is the client's sign,
+ * as a tile draws the executor; where a press opens it is what the press does, so the hint and
+ * the name say the place. A holder's name takes the
  * weight of the words round it, so it reads as a value of its line rather than as a label of
  * its own. Where nothing can be pressed, the words stand, since they are the reason.
  *
@@ -25,8 +27,13 @@ import OpenPanel from '@/features/session-open/OpenPanel.vue'
 import { currentSettings, prepareOpen } from '@/features/session-open/openPlan.ts'
 import type { OpenAction, OpenTarget, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 import { heardOfSession, previewOpen, sessionNews } from '@/features/session-open/openPreview.ts'
-import { openMarks, openName, openTip, openView } from '@/features/session-open/openView.ts'
-import type { OpenMark } from '@/features/session-open/openView.ts'
+import {
+  openMarks,
+  openName,
+  openTip,
+  openView,
+  openWords,
+} from '@/features/session-open/openView.ts'
 import { outcomeKind, outcomeWords } from '@/features/session-open/placeWords.ts'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
@@ -35,7 +42,6 @@ import { sessionName } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { SessionFamily } from '@/shared/lib/settings.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
-import ControlIcon from '@/shared/ui/ControlIcon.vue'
 import InfoTip from '@/shared/ui/InfoTip.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -135,12 +141,12 @@ const stillName = computed(() => props.name ?? (marked.value ? props.action : un
 const nameWhole = computed(() => props.name === undefined)
 /** A bare button stands its words at its fill's inset, which words standing beside it match. */
 const textInset = computed(() => props.variant === 'text')
-/** What stands beside the name: the place, that it runs and that a setting chose it. */
-const marks = computed(() => openMarks(t, view.value))
-/** The same, as the words a session that cannot be opened says them. */
-const markWords = computed(() => marks.value.map(({ label }) => label).join(' · '))
-/** A glyph's hint is its name; a place that says its word has said it. */
-const markHint = (mark: OpenMark) => (mark.word ? undefined : mark.label)
+/** Whose session it is, as the plan names the client once the caller does not. */
+const client = computed(() => family.value ?? (plan.value?.client || undefined))
+/** What stands beside the name: the client's sign, that it runs and that a setting chose it. */
+const marks = computed(() => openMarks(t, view.value, client.value))
+/** Where it opens or why it does not, as the words a session that cannot be opened says. */
+const markWords = computed(() => openWords(t, view.value))
 /** A running session's glyph, in the hue a live session has wherever one is listed. */
 const liveTone = semanticStatePresentation({ dimension: 'session', state: 'active' }).tone
 
@@ -244,33 +250,25 @@ function finished(outcome: Outcome) {
           <span
             v-for="mark in marks"
             :key="mark.key"
-            v-tooltip.name="markHint(mark)"
+            v-tooltip.name="mark.label"
             class="open-action-mark"
             role="img"
-            :class="{ word: mark.word }"
             :aria-label="mark.label"
             :data-mark="mark.key"
           >
-            <ControlIcon
-              v-if="mark.client"
-              class="open-action-glyph"
-              :name="mark.client"
-              :size="14"
-            />
             <VIcon
-              v-else-if="mark.glyph && mark.key === 'live'"
+              v-if="mark.key === 'live'"
               class="open-action-glyph"
               :name="mark.glyph"
               :data-tone="liveTone"
               :size="14"
             />
             <VIcon
-              v-else-if="mark.glyph"
+              v-else
               class="open-action-glyph"
               :name="mark.glyph"
               :size="14"
             />
-            <template v-else>{{ mark.label }}</template>
           </span>
         </span>
       </span>
@@ -355,6 +353,7 @@ function finished(outcome: Outcome) {
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
+  align-items: baseline;
   min-width: 0;
   padding-block: var(--space-1);
 }
@@ -377,28 +376,32 @@ function finished(outcome: Outcome) {
 }
 
 /* The glyphs give way to no name: where a line cannot hold both they take a line of their
-   own. Each is centred on the name's line, as a letter's middle would stand. */
+   own. They are a line of the name's text, holding a zero-width letter for its baseline, and
+   line up with the name by it; each glyph stands its middle on the middle of the capitals
+   (`--size-text-middle`), as a facet's glyph does. Centred on the name's line box, the client's
+   sign stood 0.8px under the capitals of the holder's name. */
 .open-action-marks {
-  display: inline-flex;
+  display: inline-block;
   flex: 0 0 auto;
-  gap: var(--space-1);
-  align-items: center;
-  align-self: center;
+  white-space: nowrap;
+
+  &::before {
+    content: '\200b' / '';
+  }
 }
 
 .open-action-mark {
-  display: inline-grid;
-  place-items: center;
-  min-width: 14px;
-  height: 14px;
+  display: inline;
 
-  &.word {
-    height: auto;
-    white-space: nowrap;
+  & + .open-action-mark {
+    margin-inline-start: var(--space-1);
   }
 }
 
 .open-action-glyph {
+  display: inline;
+  vertical-align: calc(var(--size-text-middle) - 7px);
+
   &[data-tone='success'] {
     color: var(--color-success);
   }

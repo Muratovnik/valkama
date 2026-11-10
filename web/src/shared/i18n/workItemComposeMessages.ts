@@ -1,4 +1,4 @@
-/* What the new-task dialog's searching fields say: the labels and the epic. */
+/* What the new-task dialog's searching fields say: the labels and the parent. */
 
 export const workItemComposeMessages = {
   en: {
@@ -7,8 +7,8 @@ export const workItemComposeMessages = {
       labelsEmpty: 'No labels yet: type one',
       addLabel: 'Add “{label}”',
       removeLabel: 'Remove label {label}',
-      noEpic: 'No epic',
-      epicsEmpty: 'No epic matches',
+      noParent: 'No parent',
+      parentsEmpty: 'No parent matches',
     },
   },
   ru: {
@@ -17,8 +17,8 @@ export const workItemComposeMessages = {
       labelsEmpty: 'Меток пока нет: введите новую',
       addLabel: 'Добавить «{label}»',
       removeLabel: 'Убрать метку {label}',
-      noEpic: 'Без эпика',
-      epicsEmpty: 'Такого эпика нет',
+      noParent: 'Без родителя',
+      parentsEmpty: 'Такого родителя нет',
     },
   },
 } as const
