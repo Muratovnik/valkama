@@ -208,8 +208,8 @@ a turn (a start, a prompt, the end of a turn, the end of the session) and its cl
 seen alive: the later of its last event and the time its transcript was last written is
 within fifteen minutes. A notice that the client waits for a person stops the turn until
 the transcript is written again after it, which is the answer arriving. Where no
-transcript can be read, a turn runs while a prompt is its last event, and a notice stops
-it until the next prompt. Then:
+transcript can be read, the time the session was last heard from stands in for it, and
+a notice stops the turn until the next prompt. Then:
 
 - `working`: a session at work is seen working on this item, whether or not it holds it.
   A session whose own turn runs stands on one item: among the items it holds, the one its

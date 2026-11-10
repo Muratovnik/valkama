@@ -194,7 +194,7 @@ def _written_beside_waiting(case: LiveWorkCase, reference: str) -> None:
     """A claim taken after one session's prompt, and a step another holds after its turn."""
 
     claimer, stepper = _session(), _session()
-    case.hook(claimer, "user-prompt-submit", ago(minutes=30))
+    case.hook(claimer, "user-prompt-submit", ago(minutes=12))
     case.claim(reference, claimer)
     case.hold_step(reference, stepper)
     case.hook(stepper, "user-prompt-submit", ago(minutes=20))
@@ -250,9 +250,9 @@ def _compacted_in_a_turn(case: LiveWorkCase, reference: str) -> None:
     session = _session()
     case.claim(reference, session)
     case.hook(session, "session-start", ago(minutes=50), source="startup")
-    case.hook(session, "user-prompt-submit", ago(minutes=40))
-    case.hook(session, "pre-compact", ago(minutes=31))
-    case.hook(session, "session-start", ago(minutes=30), source="compact")
+    case.hook(session, "user-prompt-submit", ago(minutes=14))
+    case.hook(session, "pre-compact", ago(minutes=11))
+    case.hook(session, "session-start", ago(minutes=10), source="compact")
 
 
 def _compacted_after_a_turn(case: LiveWorkCase, reference: str) -> None:
@@ -299,8 +299,8 @@ def _held_beside_written(case: LiveWorkCase, reference: str) -> None:
 
     claimer, stepper = _session(), _session()
     case.claim(reference, claimer)
-    case.hook(claimer, "user-prompt-submit", ago(minutes=30))
-    case.hook(stepper, "user-prompt-submit", ago(minutes=20))
+    case.hook(claimer, "user-prompt-submit", ago(minutes=12))
+    case.hook(stepper, "user-prompt-submit", ago(minutes=10))
     case.hold_step(reference, stepper)
 
 
@@ -458,7 +458,7 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         "silent exactly a day, after a prompt",
         None,
         _silent_for(timedelta(days=1), "user-prompt-submit"),
-        WORKING,
+        WAITING_LONG,
     ),
     (
         "silent exactly a day, after a stop",
@@ -923,9 +923,13 @@ class TurnTests(LiveWorkCase):
         self.hook(self.session, "user-prompt-submit", ago(minutes=15))
         self.assertEqual(WORKING, self.state())
 
-    def test_a_turn_with_no_transcript_file_runs_while_its_prompt_is_last(self) -> None:
+    def test_with_no_transcript_file_a_turn_runs_while_the_session_is_heard_from(self) -> None:
         self.hook(self.session, "user-prompt-submit", ago(hours=3))
-        self.assertEqual(WORKING, self.state())
+        self.assertEqual(WAITING, self.state(), "nothing heard since the prompt: it fell")
+        self.seen(self.session, second(minutes=15))
+        self.assertEqual(WORKING, self.state(), "a hook or a call of its own was heard")
+        self.seen(self.session, second(minutes=15, seconds=1))
+        self.assertEqual(WAITING, self.state())
 
     def test_a_notice_stops_the_turn_until_the_transcript_is_written_after_it(self) -> None:
         self.hook(self.session, "user-prompt-submit", ago(minutes=10))

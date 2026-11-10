@@ -891,7 +891,8 @@ store. The interface's side panel draws it, and the picker of
 [pinned](#pins) one in one query and gives each the state a graph moves by
 (`working`, `held`, `waiting` or `quiet`). Beside the items it lists the sessions
 that work or wait on none of them. It carries no history and no time that moves, so
-a store in which nothing changed gives the same frame. Attached stores are not read.
+it changes only when a state does: with a write to the store, with a client writing its
+transcript or falling silent, and with a session's title. Attached stores are not read.
 
 ```json
 {"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project",
@@ -950,7 +951,7 @@ a store in which nothing changed gives the same frame. Attached stores are not r
 | `agents` | the live subagents placed on this item, by the order usage counts by (see [How much work an item took](#how-much-work-an-item-took)), each on one item; a session's own run is not counted, since `state` already says it |
 | `long` | for a `waiting` row, whether its session has been silent for more than 4 hours; `false` for any other row. It turns once and is no time |
 | `asks` | for a `waiting` row, whether its session stopped in the middle of a turn to ask a person, for a permission or an answer, rather than ended its turn; `false` for any other row |
-| `since` | for a `waiting` or a `working` row a session stands behind, when that session began what it is doing now: its last prompt while its turn runs, the notice it asks with, or the end of its last turn. Only the session's own lifecycle events move it. `null` for any other row |
+| `since` | for a `waiting` or a `working` row a session stands behind, when that session began what it is doing now: its last prompt or notice while its turn is open, or the end of its last turn. Only the session's own lifecycle events move it. `null` for any other row |
 | `quiet_since` | for a `quiet` row, when its session last gave a sign of life; `null` otherwise. It does not move while the row stays quiet |
 | `executor` | the session the row's state comes from, as a holder is read (see [Who holds a claim or a step](#who-holds-a-claim-or-a-step)), so a client can open that session from the row; `null` for a row with no live work and for one only an attempt Valkama runs moves |
 | `pinned` | whether a person pinned the item |

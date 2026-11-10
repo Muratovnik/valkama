@@ -36,9 +36,10 @@ file's time is within `TURN_SILENT`. After a notice the turn runs again once the
 transcript is written later than the notice, which is the person's answer arriving:
 of 156 recorded notices in the middle of a turn, the next line the client wrote to the
 transcript was the person's answer in 154, and the client's own record of a hook or a
-request in two. With no such file to read, as for a client
-that keeps none there, a turn runs for as long as a prompt is its last event, and a
-notice stops it until the next prompt. A session whose open turn a notice stopped
+request in two. With no such file to read, as for a client that keeps none there or
+one that never wrote it, when the session was last heard from stands in for the file's
+time: its hooks and its calls move that, a tool's among them. A notice then stops the
+turn until the next prompt. A session whose open turn a notice stopped
 `asks`: it stands in the middle of its work until a person answers, which is not the
 wait of one whose turn is over.
 
@@ -480,11 +481,13 @@ def _runs(subagent: sqlite3.Row, session: str, transcript: str, now: datetime) -
     return started >= (now - LIVE_QUIET).strftime(_MOMENT)
 
 
-def _turn(read: _Lifecycle, transcript: str, now: datetime) -> str:
+def _turn(read: _Lifecycle, transcript: str, heard: str, now: datetime) -> str:
     """What an open turn of the session's own is doing: `_RUNS`, `_ASKS`, or neither.
 
     Neither is a turn that is over, or one whose client has not been seen alive in it
-    for `TURN_SILENT`.
+    for `TURN_SILENT`. `heard` is when the session was last heard from, which stands
+    in for a transcript there is none to read: its hooks and its calls move it, so a
+    client that fell does not read as at work for the day a silent session gets.
     """
 
     if read.turn_kind != "prompt":
@@ -496,9 +499,7 @@ def _turn(read: _Lifecycle, transcript: str, now: datetime) -> str:
     written = agents.session_transcript_moment(transcript)
     if noticed and written <= read.last_at:
         return _ASKS
-    if not written:
-        return _RUNS
-    return _RUNS if max(written, read.last_at) >= limit else ""
+    return _RUNS if max(written or heard, read.last_at) >= limit else ""
 
 
 def _states(
@@ -559,7 +560,7 @@ def _states(
                     unwritten[calls.label_id(agent)] = _Unwritten(
                         str(packet) if packet else None, label
                     )
-        turn = _turn(read, transcripts[session], now)
+        turn = _turn(read, transcripts[session], heard[session][:_SECOND], now)
         since = read.last_at if read.turn_kind == "prompt" else read.turn_at
         seen_on[session] = _SeenOn(
             items=items,
@@ -751,7 +752,12 @@ def placed(
             found[identity] = {"state": WORKING}
             shown_by[identity] = session
     for row in conn.execute(_ATTEMPTS, (identities,)):
-        found[str(row["work_item_id"])] = {"state": WORKING}
+        identity = str(row["work_item_id"])
+        if found.get(identity, {}).get("state") != WORKING:
+            # The attempt moves the row, so it shows no session's state: the one
+            # that waits behind the item is not what the row says.
+            found[identity] = {"state": WORKING}
+            shown_by.pop(identity, None)
     # In the items' order, so an unchanged map is an unchanged frame of the stream.
     live = {identity: found[identity] for identity in order if identity in found}
     agents: dict[str, int] = {}
