@@ -317,6 +317,7 @@ def _store_checks() -> list[dict]:
     checks.extend(_spool_checks(path))
     checks.extend(_execution_event_checks(path))
     checks.append(_transcript_check(path))
+    checks.append(_unpriced_usage_check(path))
     return checks
 
 
@@ -517,6 +518,66 @@ def _transcript_check(path: str) -> dict:
         detail,
         presentation_code="transcript-archive",
         parameters=parameters,
+    )
+
+
+#: The usage rows with tokens and no cost, by model, the most tokens first. A row's
+#: tokens are its priced kinds; `reasoning_tokens` is part of `output_tokens`.
+_UNPRICED_BY_MODEL = (
+    "SELECT model, COUNT(*), SUM(spent) FROM ("
+    " SELECT model, COALESCE(input_tokens, 0) + COALESCE(cached_read_tokens, 0)"
+    " + COALESCE(cache_write_5m_tokens, 0) + COALESCE(cache_write_1h_tokens, 0)"
+    " + COALESCE(output_tokens, 0) AS spent"
+    " FROM usage_segments WHERE estimated_api_cost_usd IS NULL"
+    ") WHERE spent > 0 GROUP BY model ORDER BY 3 DESC, model"
+)
+
+
+def _unpriced_usage_check(path: str) -> dict:
+    """Models that spent tokens the price table has no price for.
+
+    Such a row adds nothing to any cost, so an estimate reads low without a word
+    when a model comes into use before its price is added. One aggregate query.
+    """
+
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            found = conn.execute(_UNPRICED_BY_MODEL).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return _check(
+            "usage-prices",
+            "Usage prices",
+            "unknown",
+            f"the usage rows could not be read: {failure}",
+            "Open the store once with the current build; it adds the table.",
+            presentation_code="usage-prices-unreadable",
+        )
+    if not found:
+        return _check(
+            "usage-prices",
+            "Usage prices",
+            "ok",
+            "every model that spent tokens has a price",
+            presentation_code="usage-prices",
+        )
+    listed = "; ".join(
+        f"{model or 'no model recorded'}: {segments} segment(s), {tokens} token(s)"
+        for model, segments, tokens in found
+    )
+    return _check(
+        "usage-prices",
+        "Usage prices",
+        "warn",
+        f"{len(found)} model(s) spent tokens with no price, so every cost that includes"
+        f" them reads low: {listed}",
+        "Add each model's public API price to server/telemetry/usage_prices.py and raise"
+        " PRICE_BOOK. Requests read after that are priced; a row already stored keeps the"
+        " cost it was read with.",
+        presentation_code="usage-prices-missing",
+        parameters={"models": listed, "count": len(found)},
     )
 
 

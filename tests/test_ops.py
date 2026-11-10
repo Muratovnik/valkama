@@ -535,6 +535,81 @@ class DoctorHookTests(unittest.TestCase):
         self.assertEqual(["unknown"], [check["status"] for check in checks])
 
 
+class DoctorUsagePriceTests(unittest.TestCase):
+    """A model with tokens and no price is a finding, not a cost of zero."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._dir.cleanup)
+        self.path = os.path.join(self._dir.name, "test.sqlite3")
+        os.environ["VALKAMA_DB"] = self.path
+        self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        self.run_id = self.conn.execute(
+            "INSERT INTO usage_runs(session_id, client, path) VALUES ('S', 'claude', 't.jsonl')"
+        ).lastrowid
+
+    def segment(self, model: str | None, cost: float | None, **tokens: int) -> None:
+        columns = {
+            "run_id": self.run_id,
+            "session_id": "S",
+            "model": model,
+            "started_at": "2026-11-10T10:00:00.000Z",
+            "ended_at": "2026-11-10T10:01:00.000Z",
+            "seconds": 60,
+            "estimated_api_cost_usd": cost,
+            "quality": "observed",
+            **{f"{kind}_tokens": count for kind, count in tokens.items()},
+        }
+        self.conn.execute(
+            f"INSERT INTO usage_segments({', '.join(columns)})"
+            f" VALUES ({', '.join('?' * len(columns))})",
+            tuple(columns.values()),
+        )
+        self.conn.commit()
+
+    def check(self) -> dict:
+        found = [check for check in doctor._store_checks() if check["id"] == "usage-prices"]
+        self.assertEqual(1, len(found))
+        return found[0]
+
+    def test_each_unpriced_model_is_named_with_its_segments_and_tokens(self) -> None:
+        self.segment("claude-opus-5-5", 0.5, input=1_000, output=10)
+        # Two rows of one unknown model; reasoning is part of output and not added again.
+        self.segment("claude-unknown-9", None, input=100, cached_read=20, output=3, reasoning=2)
+        self.segment("claude-unknown-9", None, cache_write_5m=40, cache_write_1h=7)
+        self.segment("gpt-unknown", None, output=5)
+        # A row with no request spent nothing and is no finding.
+        self.segment("model-with-no-requests", None)
+        check = self.check()
+        self.assertEqual("warn", check["status"])
+        self.assertEqual(
+            {
+                "count": 2,
+                "models": "claude-unknown-9: 2 segment(s), 170 token(s);"
+                " gpt-unknown: 1 segment(s), 5 token(s)",
+            },
+            check["presentation"]["parameters"],
+        )
+        self.assertIn("claude-unknown-9: 2 segment(s), 170 token(s)", check["detail"])
+        self.assertNotIn("claude-opus-5-5", check["detail"])
+        self.assertIn("usage_prices.py", check["fix"])
+
+    def test_a_store_where_every_model_is_priced_has_no_finding(self) -> None:
+        self.segment("claude-opus-5-5", 0.5, input=1_000, output=10)
+        self.segment("claude-unknown-9", None)
+        check = self.check()
+        self.assertEqual(("ok", "usage-prices"), (check["status"], check["presentation"]["code"]))
+
+    def test_a_store_without_usage_rows_is_unknown_not_a_crash(self) -> None:
+        older = os.path.join(self._dir.name, "older.sqlite3")
+        made = sqlite3.connect(older)
+        made.execute("PRAGMA user_version=9")
+        made.close()
+        self.assertEqual("unknown", doctor._unpriced_usage_check(older)["status"])
+
+
 class _InstalledAdapter:
     """An installed adapter as the doctor sees one: its id and a health answer."""
 
