@@ -125,10 +125,14 @@ const headStyle = computed(() => ({
   '--band-fit': fit.value,
 }))
 /**
- * The title and the counts run as wide on an open frame as a folded one lets them, so
- * they take as many lines either way and the header the same room.
+ * The reference line, the title and the counts run as wide on an open frame as a folded one
+ * lets them, so they take as many lines either way and the header the same room, and the
+ * state gives way on the reference line by as much either way: on the open frame's wider line
+ * a longer state's name gave way less, and the work moving after it stood further along.
  */
 const lineWidth = { maxWidth: `${FOLDED_WIDTH - 2 * FRAME_PADDING}px` }
+/** Zoomed out the reference line is the band's, grown with the field. */
+const referenceWidth = computed(() => (overview ? undefined : lineWidth))
 
 function tabIndex(target: string): number {
   return tabStop === target ? 0 : -1
@@ -182,6 +186,7 @@ function onOpenBlur() {
     >
       <GraphFrameLine
         v-if="lineShown"
+        :style="referenceWidth"
         :epic="epic"
         :named="referenceShown"
         :overview="overview"
