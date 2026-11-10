@@ -1,17 +1,17 @@
-/* What an epic's frame on the graph says, in both languages. */
+/* What a parent's frame on the graph says, in both languages. */
 
 export const graphFrameMessages = {
   en: {
     frame: {
-      noEpic: 'No epic',
+      noEpic: 'No parent',
       epic: 'Epic {reference} “{title}”',
       parent: 'Item {reference} “{title}”',
       foldEpic: 'Collapse epic {reference} “{title}”',
       unfoldEpic: 'Expand epic {reference} “{title}”',
       foldParent: 'Collapse item {reference} “{title}”',
       unfoldParent: 'Expand item {reference} “{title}”',
-      foldNone: 'Collapse the work under no epic',
-      unfoldNone: 'Expand the work under no epic',
+      foldNone: 'Collapse the work under no parent',
+      unfoldNone: 'Expand the work under no parent',
       doneOf: '{done} of {total} done',
       noTasks: 'No tasks',
       openInside: 'open inside',
@@ -25,15 +25,15 @@ export const graphFrameMessages = {
   },
   ru: {
     frame: {
-      noEpic: 'Без эпика',
+      noEpic: 'Без родителя',
       epic: 'Эпик {reference} «{title}»',
       parent: 'Задача {reference} «{title}»',
       foldEpic: 'Свернуть эпик {reference} «{title}»',
       unfoldEpic: 'Развернуть эпик {reference} «{title}»',
       foldParent: 'Свернуть задачу {reference} «{title}»',
       unfoldParent: 'Развернуть задачу {reference} «{title}»',
-      foldNone: 'Свернуть работу без эпика',
-      unfoldNone: 'Развернуть работу без эпика',
+      foldNone: 'Свернуть работу без родителя',
+      unfoldNone: 'Развернуть работу без родителя',
       doneOf: '{done} из {total} выполнено',
       noTasks: 'Нет задач',
       openInside: 'открытая внутри | открытых внутри | открытых внутри',

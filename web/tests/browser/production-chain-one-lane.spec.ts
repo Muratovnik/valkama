@@ -56,7 +56,7 @@ for (const width of [1280, 390]) {
 
     // The lane is named and offers nothing: no control, and the pointer does not say otherwise.
     const name = section.locator('.branch-map-label')
-    await expect(name).toHaveText('no epic')
+    await expect(name).toHaveText('no parent')
     await expect(section.locator('.branch-map').getByRole('button')).toHaveCount(0)
     await expect(name).toHaveCSS('cursor', 'auto')
     await name.click()

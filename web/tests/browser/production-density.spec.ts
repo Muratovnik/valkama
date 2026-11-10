@@ -242,7 +242,7 @@ test('the view’s menu is the control its neighbours are, and holds how the vie
 
   // By the view, and before the field: Tab goes view, menu, field. The grouping is
   // chosen from the keyboard in the menu, and focus comes back to its button.
-  await groupFromKeyboard(page, 'By epic')
+  await groupFromKeyboard(page, 'By parent')
   await expect(viewMenu(page)).toBeFocused()
   await expect(page.locator('.board-lane').first()).toBeVisible()
   expect(new Set(await allOneRow(page)).size).toBe(1)
@@ -284,7 +284,7 @@ for (const width of [1680, 1440, 1260, 1024, 996, 960, 900, 760, 700, 390]) {
     await expect(viewMenu(page)).toBeVisible()
     const resting = await barControls(page)
     await viewMenu(page).click()
-    await page.getByRole('menuitemradio', { name: 'By epic' }).click()
+    await page.getByRole('menuitemradio', { name: 'By parent' }).click()
     await expect(page.locator('.board-lane').first()).toBeVisible()
     expect(await barControls(page)).toEqual(resting)
     await viewMenu(page).click()

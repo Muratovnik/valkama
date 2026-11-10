@@ -133,7 +133,7 @@ for (const width of [1440, 390]) {
     await serve(page, branchedChain(mapRoot, 'MAIN'))
     const section = await openCard(page)
     expect(await mapReading(page)).toEqual({
-      labels: ['MAIN-264', 'MAIN-7001', 'MAIN-4000', 'MAIN-7002', 'MAIN-4001', 'no epic'],
+      labels: ['MAIN-264', 'MAIN-7001', 'MAIN-4000', 'MAIN-7002', 'MAIN-4001', 'no parent'],
       lanes: 6,
       outside: 0,
     })
@@ -248,7 +248,8 @@ test('the branch map gives a small chain a segment, a dot and a name per task', 
   await installBackend(page)
   await serve(page, smallBranchedChain(mapRoot, 'MAIN'))
   const section = await openCard(page)
-  expect(await mapReading(page)).toEqual({ labels: ['MAIN-264', 'no epic'], lanes: 2, outside: 0 })
+  const small = { labels: ['MAIN-264', 'no parent'], lanes: 2, outside: 0 }
+  expect(await mapReading(page)).toEqual(small)
   await expect(section.locator('.branch-map-dot')).not.toHaveCount(0)
   await expect(section.locator('.branch-map-reference').first()).toHaveText('MAIN-1013')
   await expect(section.locator('.branch-map-count').first()).toHaveText('12 of 20 done')

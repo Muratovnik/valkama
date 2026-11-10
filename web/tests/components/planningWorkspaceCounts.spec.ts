@@ -141,7 +141,7 @@ describe('one population above the stage', () => {
 
   it('says how many epics the grouped board draws as rows, and counts the rest in its columns', () => {
     const wrapper = workspace({ grouping: 'epic' })
-    expect(countsLine(wrapper)).toBe('5 open of 7 · 2 epics as rows')
+    expect(countsLine(wrapper)).toBe('5 open of 7 · 2 parents as rows')
     const columns = wrapper
       .findAll('.lanes-state-count')
       .reduce((sum, count) => sum + Number(count.text()), 0)
@@ -153,7 +153,7 @@ describe('one population above the stage', () => {
     const wrapper = workspace({ grouping: 'epic' })
     await wrapper.get('input[role="combobox"]').setValue('item 1')
     // MAIN-1 heads a lane; MAIN-10 to MAIN-13 are tiles; all five are open.
-    expect(figures(wrapper)).toEqual(['5 of 5 open · 1 epic as a row · Reset'])
+    expect(figures(wrapper)).toEqual(['5 of 5 open · 1 parent as a row · Reset'])
   })
 
   it('promises no groups for the whole-space graph, which draws its parents as frames', () => {

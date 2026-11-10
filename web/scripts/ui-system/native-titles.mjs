@@ -280,12 +280,12 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole agent id, of which the row prints the start',
   ],
   [
-    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="holderTitle"',
-    'the holder as it was written and its lease, where the card prints the shortened name',
+    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="holderHint"',
+    "the holder's whole session id, where the card prints its start, and the lease behind the claim; the name only while it is cut",
   ],
   [
-    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="follower.label"',
-    'the follower as it was written, where the card prints the shortened name',
+    'widgets/work-item-inspector/components/InspectorFacts.vue <span> v-tooltip.detail="nameHint(follower.label)"',
+    "the follower's whole session id, where the card prints its start; never the name the card prints",
   ],
   [
     'widgets/work-item-inspector/components/UsageFacts.vue <span> v-tooltip.detail="fact.title"',

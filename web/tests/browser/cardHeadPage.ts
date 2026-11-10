@@ -106,8 +106,7 @@ export const FULL_HEAD: Head = { asking: true, epic: 'MAIN-12', kind: 'epic', pr
 
 /**
  * What no fixture card shows: a question waiting, a parent and a pasted picture. A session
- * holds it, as the hint walk's card is held: a plain holder's hint says its name again over
- * the claim, which the walk would read as a repeat.
+ * holds it, as the hint walk's card is held; the walk opens it with a plain holder too.
  */
 export const ASKING_HEAD: Head = { asking: true, epic: 'MAIN-12', held: true, picture: true }
 

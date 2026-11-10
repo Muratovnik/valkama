@@ -71,7 +71,7 @@ test('the board’s grouping stays from one project to another', async ({ page }
   /** The grouping the view's menu checks. */
   const grouped = async () => {
     await page.getByRole('button', { name: 'View', exact: true }).click()
-    const checked = page.getByRole('menuitemradio', { name: 'By epic' })
+    const checked = page.getByRole('menuitemradio', { name: 'By parent' })
     await expect(checked).toHaveAttribute('aria-checked', 'true')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('menu')).toHaveCount(0)

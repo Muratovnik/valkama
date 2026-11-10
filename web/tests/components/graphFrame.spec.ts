@@ -137,9 +137,9 @@ describe("a frame's header", () => {
     })
     expect(wrapper.find('button.graph-frame-open').exists()).toBe(false)
     expect(wrapper.find('[data-walk-target="frame:none"]').exists()).toBe(false)
-    expect(wrapper.get('.graph-frame-title').text()).toBe('No epic')
+    expect(wrapper.get('.graph-frame-title').text()).toBe('No parent')
     expect(wrapper.get('.graph-frame-fold').attributes('aria-label')).toBe(
-      'Collapse the work under no epic',
+      'Collapse the work under no parent',
     )
     expect(wrapper.get('.graph-frame-fold').attributes('data-walk-target')).toBe('frame:none:fold')
     await wrapper.get('.graph-frame-open').trigger('click')

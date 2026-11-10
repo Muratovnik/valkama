@@ -33,7 +33,7 @@ for (const [width, oneRow] of [
     const lanes = page.locator('.board-lane')
     await expect(lanes).toHaveCount(4)
     await expect(lanes.locator('.lane-reference')).toHaveText(['MAIN-401', 'MAIN-410', 'MAIN-420'])
-    await expect(lanes.nth(3)).toHaveAttribute('aria-label', 'No epic')
+    await expect(lanes.nth(3)).toHaveAttribute('aria-label', 'No parent')
     await expect(lanes.locator('.lane-counts')).toHaveText([
       '4 open · 1 closed',
       '0 open · 0 closed',
@@ -60,7 +60,7 @@ for (const [width, oneRow] of [
 
     // Unfolded by hand, the empty epic says so instead of drawing three blank cells.
     await lanes.nth(1).locator('.lane-toggle').click()
-    await expect(lanes.nth(1).locator('.lane-quiet')).toHaveText('Nothing in this epic yet.')
+    await expect(lanes.nth(1).locator('.lane-quiet')).toHaveText('Nothing under it yet.')
     await expectNoSilentClipping(page, `board by epic at ${width}px`)
     const pageOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -114,7 +114,7 @@ for (const [width, oneRow] of [
 }
 
 /** The board's grouping, chosen in the view's menu beside the view switch. */
-async function chooseGrouping(page: Page, choice: 'By epic' | 'No grouping') {
+async function chooseGrouping(page: Page, choice: 'By parent' | 'No grouping') {
   await page.getByRole('button', { name: 'View', exact: true }).click()
   await page.getByRole('menuitemradio', { name: choice }).click()
   await expect(page.getByRole('menu')).toHaveCount(0)
@@ -291,7 +291,7 @@ test('an empty cell draws no ground at rest, and its lane’s cells do while a t
   await serve(page)
   await openBoard(page)
   const epic = lane(page, LONG_EPIC)
-  const loose = lane(page, 'No epic')
+  const loose = lane(page, 'No parent')
   await loose.scrollIntoViewIfNeeded()
   const empty = loose.locator('.lane-cell.empty').first()
   await expect(empty).toBeVisible()
@@ -328,7 +328,7 @@ test('a lane is as tall as its tiles: an empty cell stays a low ground', async (
   await installBackend(page)
   await serve(page)
   await openBoard(page)
-  const loose = lane(page, 'No epic')
+  const loose = lane(page, 'No parent')
   // A lane out of sight skips its layout, so it is measured in view.
   await loose.scrollIntoViewIfNeeded()
   const height = async (state: string) => {

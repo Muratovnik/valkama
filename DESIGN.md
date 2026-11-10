@@ -1091,7 +1091,7 @@ filter, then the one primary action, every control of the row at one compact
 height, and under them what is drawn and how much of it. The view's menu, «View»
 by the view because it arranges what is drawn, holds how the view is arranged and
 the views kept: the grouping is a choice in it, offered only where the view has one
-(the board's «No grouping» or «By epic»); «Save view…» keeps the address's state —
+(the board's «No grouping» or «By parent»); «Save view…» keeps the address's state —
 the view, its grouping and the filter — under a name, per space, in the interface's
 own settings, and a kept view is a choice the menu marks while the address holds it
 exactly; choosing it puts its state back, and the marked one can be deleted. A
@@ -1193,7 +1193,12 @@ them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
-On the board grouped by epic a cell with no tile drawn takes no ground until a
+The board grouped by parent gives a lane to each item that holds others, an epic or
+an item of any other kind, and one to the work under none, «No parent» («Без
+родителя»): the grouping and its lanes name the parent, as the card does, and only an
+epic's own title and sign say it is one; the branch map's lane under none and the
+graph's frame under none are named the same way.
+On the board grouped by parent a cell with no tile drawn takes no ground until a
 tile of its lane is dragged and could land there, and a finished cell's offer of
 its tiles is a line of text. An epic's row is one line: its reference, its title
 and what it holds, and its state only once the epic has moved, since one not
@@ -1354,8 +1359,8 @@ the chain's history stand one action away, and the action's state comes back wit
 the card's other reading on Back. The scope rides the heading's row.
 
 Over the whole space the graph stands in frames. An epic, and any item that grew
-children, is drawn as a frame round its work, and the work filed under no epic has
-a frame of its own, «Без эпика» (`none`), so every open item stands somewhere on
+children, is drawn as a frame round its work, and the work filed under no parent has
+a frame of its own, «Без родителя» (`none`), so every open item stands somewhere on
 the field. A frame is told by tone and draws no line: it is ground a step above the
 field and its cards a step above it, and a frame inside a frame is a well cut a
 step below the one it stands in. Without a filter the field draws every frame with
@@ -1369,16 +1374,16 @@ lines, with the counts right under it, and the layout leaves it the room that sa
 header takes when drawn; the chevron leads its reference line, and everything in the
 header starts at one left edge, the one its cards start at. Zoomed out past reading, the header is the
 epic's reference grown with the field, as a zoomed-out card's is, with the count of
-work moving under it at the far end and a thicker edge beneath; the work under no epic
+work moving under it at the far end and a thicker edge beneath; the work under no parent
 keeps its name instead. The header is two buttons with one action each, as a card
 is one: the chevron folds or opens the frame, and the rest opens the epic's card;
-over the work under no epic the rest is plain text, with no epic to open. At the scale
+over the work under no parent the rest is plain text, with no parent to open. At the scale
 the field opens at, the chevron is a 28px target under a fine pointer and 44px under a
 finger or at a phone's width, reaching up and back into the header's padding and the air
 round the frame and never onto the epic's words, so the header is drawn no taller; each
 button's focus ring goes round its own drawing with air and no further, and the fold's face
 under the pointer covers its chevron alone, zoomed out too, where its target is the whole band
-of the work under no epic: never that band's words or its edge. Zoomed out, the chevron is as
+of the work under no parent: never that band's words or its edge. Zoomed out, the chevron is as
 tall as the band's first row and grows with it, and the ring round any of the band's buttons
 keeps the share of its words it has at reading size, so the focus reads as they do. The field
 opens with as much air above its first row as between two frames, so no edge cuts a fold's
@@ -1396,7 +1401,7 @@ A frame starts folded by its structure alone — how much open work it holds —
 never by who is working on it, or every agent's turn would lay the field out again.
 A frame holding more than 20 open items starts folded and shows its progress in its
 header instead, and so does an epic with nothing open; the frame of the work under
-no epic with nothing open folds only past 20 drawn cards, so «All» on a space with
+no parent with nothing open folds only past 20 drawn cards, so «All» on a space with
 a few finished items draws them. Every frame between those starts open, so the
 links of its work are seen at once. What the operator chooses for a frame, folded or
 open, outranks that default and is kept per space in this browser (`localStorage`,
@@ -1407,13 +1412,13 @@ field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not
 move from under the hand (`toggled`). The arrows reach a header's two buttons as
 they reach cards, the fold on its left (`frame:<id>:fold`) and the epic across the
-rest (`frame:<id>`); the work under no epic has only the first. Right from the fold
+rest (`frame:<id>`); the work under no parent has only the first. Right from the fold
 is the epic's button beside it and Left from that button is the fold, however wide
 the header, since measured from centres a wide header's second button stands further
 off than the first card under the fold. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
 innermost frame round it that is still drawn. Zoomed out past reading the fold is
-hidden and is no target, except over the work under no epic, whose header has no
+hidden and is no target, except over the work under no parent, whose header has no
 other button and keeps it (`foldIsTarget`): the arrows, the Tab stop and the way in read one
 list of the targets the field draws at its zoom, so Tab never rests on a button
 that takes no focus and the field stays one stop at any zoom. Focus on a fold the zoom

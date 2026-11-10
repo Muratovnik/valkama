@@ -192,6 +192,21 @@ for (const locale of ['en', 'ru'] as const) {
     expect(said).toEqual([])
   })
 
+  // The card above is held by a session, whose button names it; a holder with no session is
+  // its name on the line, and its hint said that name again over the claim.
+  test(`no hint on a card a plain executor holds says its name, ${locale}`, async ({ page }) => {
+    await prepare(page, locale, 1280)
+    const drawer = await openHead(page, { asking: true, epic: 'MAIN-12', picture: true })
+    const name = drawer.locator('.card-holder-name')
+    await expect(name).toHaveText('codex')
+    await pointAt(page, name)
+    await expect(hint(page)).toBeVisible()
+    await expect(hint(page)).not.toContainText('codex')
+    const { pointed, said } = await sweep(page, drawer)
+    expect(pointed).toBeGreaterThan(2)
+    expect(said).toEqual([])
+  })
+
   test(`no hint in a card's «…» menu or its Relations with the chain says what its anchor shows, ${locale}`, async ({
     page,
   }) => {

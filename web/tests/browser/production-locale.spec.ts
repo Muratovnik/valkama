@@ -178,7 +178,13 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
   ]) {
     await page.setViewportSize({ width, height })
     await expect(page.getByRole('button', { name: 'Вид', exact: true })).toBeVisible()
-    for (const gone of ['Можно брать', 'Назначено', 'По эпикам', 'Группировать доску по эпикам'])
+    for (const gone of [
+      'Можно брать',
+      'Назначено',
+      'По эпикам',
+      'По родителю',
+      'Группировать доску по эпикам',
+    ])
       await expect(page.getByRole('button', { name: gone, exact: true })).toHaveCount(0)
     expect(oneLine(await toolBoxes(page)), `one row at ${width}px`).toBe(true)
     // One row of controls, one line of state.

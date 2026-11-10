@@ -94,7 +94,7 @@ describe('the work bar', () => {
     expect(menu.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     // No preset and no grouping stands in the row as a button of its own.
     const buttons = row.findAll('button').map((button) => button.text())
-    for (const word of ['Workable', 'Has an assignee', 'Has a holder', 'Assigned', 'By epic'])
+    for (const word of ['Workable', 'Has an assignee', 'Has a holder', 'Assigned', 'By parent'])
       expect(buttons).not.toContain(word)
     // The one primary action ends the row, not the line of state under it.
     expect(row.get('.workspace-action').text()).toBe('+New work item')
@@ -107,7 +107,7 @@ describe('the work bar', () => {
     const wrapper = bar({ grouping: 'epic' })
     const { grouping } = viewMenu(wrapper)
     expect(grouping).toMatchObject({ label: 'Grouping', value: 'epic' })
-    expect(grouping?.options.map((option) => option.label)).toEqual(['No grouping', 'By epic'])
+    expect(grouping?.options.map((option) => option.label)).toEqual(['No grouping', 'By parent'])
     grouping?.select('none')
     expect(wrapper.emitted('group')).toEqual([['none']])
     await wrapper.setProps({ grouping: 'none' })
@@ -132,14 +132,14 @@ describe('the work bar', () => {
   })
 
   it.each([
-    ['en', 1, '1 epic as a row'],
-    ['en', 2, '2 epics as rows'],
-    ['ru', 1, '1\u{A0}эпик строкой'],
-    ['ru', 2, '2\u{A0}эпика строками'],
-    ['ru', 5, '5\u{A0}эпиков строками'],
-    ['ru', 21, '21\u{A0}эпик строкой'],
+    ['en', 1, '1 parent as a row'],
+    ['en', 2, '2 parents as rows'],
+    ['ru', 1, '1\u{A0}родитель строкой'],
+    ['ru', 2, '2\u{A0}родителя строками'],
+    ['ru', 5, '5\u{A0}родителей строками'],
+    ['ru', 21, '21\u{A0}родитель строкой'],
   ] as const)(
-    'says how many epics the grouped board draws as rows (%s, %i)',
+    'says how many parents the grouped board draws as rows (%s, %i)',
     (locale, epics, text) => {
       const wrapper = bar(
         { grouping: 'epic', exclusion: { kind: 'lane-heads', count: epics } },
