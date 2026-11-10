@@ -142,7 +142,7 @@ function splitTokens(tokens: UsageTokens, shares: readonly number[]): UsageToken
 const account = (id: string | null) => ({ id, unknown: id === null })
 
 export const ORG_A = '3fa1b2c4-0000-4000-8000-00000000000a'
-export const ORG_B = '9c0d77e1-0000-4000-8000-00000000000b'
+const ORG_B = '9c0d77e1-0000-4000-8000-00000000000b'
 
 /**
  * The rich item's work said by who spent it and under which organization: a subagent of one
