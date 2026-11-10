@@ -8,7 +8,7 @@ import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
-interface InspectorUsage {
+export interface InspectorUsage {
   /** The item is an epic, whose numbers take in its children. */
   isEpic: ComputedRef<boolean>
   /** The read of the card's own numbers. */
@@ -68,7 +68,7 @@ export function useInspectorRecord(
     news,
   )
   const rows = computed(() => (isEpic.value ? runs : read).usage.value)
-  provide(USAGE, {
+  provideInspectorUsage({
     isEpic,
     news,
     read,
@@ -89,6 +89,11 @@ export function useInspectorRecord(
   )
   /** The runs the rows name, which the card's count of agents takes in with its record's. */
   return { ...resource, spent: computed(() => rows.value?.agents ?? []) }
+}
+
+/** What the card's parts read their numbers from; a test hands them its own. */
+export function provideInspectorUsage(usage: InspectorUsage) {
+  provide(USAGE, usage)
 }
 
 /** The card's usage reads; none in a part drawn outside a card. */

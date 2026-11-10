@@ -2,8 +2,9 @@
 /**
  * How much work the item took, whole, at the head of its agents: the time on the clock and what
  * the agents spent together, the cost, the tokens processed anew, and in words what each of them
- * is, since a finger has no tooltip. Under them everything by kind and by model, then under
- * which organization the work ran.
+ * is, since a finger has no tooltip. Under them everything by kind, by model and by who did the
+ * work — the session's own agent, a subagent by the class it was launched with, an adviser — with
+ * the effort it ran at, then under which organization the work ran.
  *
  * A kind or a cost nobody reported says so and is never a zero. A read that failed says that it
  * failed, because not knowing is not the same as there being nothing, and offers to read again.
@@ -21,7 +22,7 @@ import {
   useUsageWords,
 } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
-import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import type { UsageRole, UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -116,12 +117,45 @@ const kinds = computed(() => {
   ]
 })
 
-const models = computed(() =>
-  (usage.value?.models ?? []).map((line, index) => ({
-    key: line.model ?? index,
-    name: line.model ?? t('workItem.usage.unknownModel'),
-    facts: rowFigures(line),
-  })),
+/** Who did the work: the role, then the class it was launched with and its effort. */
+function roleName(line: UsageRole) {
+  if (line.role === 'advisor') return t('workItem.usage.role.advisor')
+  let launch = t('workItem.usage.classNone')
+  if (line.launch_class.unknown) launch = t('workItem.usage.classUnknown')
+  else if (line.launch_class.id !== null) launch = line.launch_class.id
+  const effort = line.effort.unknown
+    ? t('workItem.usage.effortUnknown')
+    : t('workItem.usage.effortName', { name: line.effort.id ?? '' })
+  return [t(`workItem.usage.role.${line.role}`), launch, effort].join(' · ')
+}
+
+/**
+ * The breakdowns in one shape, a name and its figures in the columns they share: by model, and by
+ * who did the work, each in the order the read ranks it.
+ */
+const breakdowns = computed(() =>
+  [
+    {
+      key: 'models',
+      label: t('workItem.usage.models'),
+      ids: true,
+      rows: (usage.value?.models ?? []).map((line, index) => ({
+        key: line.model ?? String(index),
+        name: line.model ?? t('workItem.usage.unknownModel'),
+        facts: rowFigures(line),
+      })),
+    },
+    {
+      key: 'roles',
+      label: t('workItem.usage.roles'),
+      ids: false,
+      rows: (usage.value?.roles ?? []).map((line, index) => ({
+        key: `${index}:${line.role}`,
+        name: roleName(line),
+        facts: rowFigures(line),
+      })),
+    },
+  ].filter((breakdown) => breakdown.rows.length),
 )
 </script>
 
@@ -170,20 +204,26 @@ const models = computed(() =>
       </ul>
     </div>
     <div
-      v-if="models.length"
+      v-for="breakdown in breakdowns"
+      :key="breakdown.key"
       class="work-usage-part"
     >
-      <span class="work-usage-caption">{{ t('workItem.usage.models') }}</span>
+      <span class="work-usage-caption">{{ breakdown.label }}</span>
       <ul
         class="work-usage-grid has-columns"
-        :aria-label="t('workItem.usage.models')"
+        :aria-label="breakdown.label"
+        :data-breakdown="breakdown.key"
       >
         <li
-          v-for="row in models"
+          v-for="row in breakdown.rows"
           :key="row.key"
           class="work-usage-row"
         >
-          <span class="work-usage-name work-usage-model">{{ row.name }}</span>
+          <span
+            class="work-usage-name work-usage-line"
+            :class="{ 'is-id': breakdown.ids }"
+            >{{ row.name }}</span
+          >
           <UsageFacts
             class="work-usage-facts"
             :facts="row.facts"
@@ -319,9 +359,13 @@ const models = computed(() =>
   }
 }
 
-.work-usage-model {
+/* A model is named by its id, in the face ids take; who did the work, in words. */
+.work-usage-line {
   grid-column: 1 / -1;
-  font-family: var(--font-family-mono);
+
+  &.is-id {
+    font-family: var(--font-family-mono);
+  }
 }
 
 .work-usage-facts {
@@ -330,7 +374,7 @@ const models = computed(() =>
 }
 
 @container drawer (width >= 560px) {
-  .work-usage-model {
+  .work-usage-line {
     grid-column: 1;
   }
 }

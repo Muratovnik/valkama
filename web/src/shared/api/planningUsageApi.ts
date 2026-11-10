@@ -157,6 +157,7 @@ export type SessionUsage = z.infer<typeof sessionUsageSchema>
 export type UsageTokens = ItemUsage['tokens']
 export type UsageAgent = ItemUsage['agents'][number]
 export type UsageLine = ItemUsage['by_item'][number]
+export type UsageRole = ItemUsage['roles'][number]
 
 async function readUsage(path: string, parameters: URLSearchParams, signal?: AbortSignal) {
   const { response, payload } = await readJsonResponse(`${path}?${parameters}`, { signal })

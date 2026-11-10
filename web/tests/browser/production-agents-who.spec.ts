@@ -46,6 +46,38 @@ function measureAccounts(root: Element) {
   }
 }
 
+/** Each row of who did the work: the list's box, the name's and each of its three figures'. */
+function measureRoles(list: Element) {
+  const read = (element: Element): Box => {
+    const { left, right, top, bottom, width } = element.getBoundingClientRect()
+    return { left, right, top, bottom, width }
+  }
+  return [...list.querySelectorAll('.work-usage-row')].map((row) => {
+    const name = row.querySelector('.work-usage-name')
+    if (!name) throw new Error('a row without its name')
+    return {
+      list: read(list),
+      name: read(name),
+      facts: [...row.querySelectorAll('.usage-fact')].map((fact) => read(fact)),
+    }
+  })
+}
+
+/**
+ * How far the figures of one column stray from each other down the list, where the drawer gives
+ * them columns: time under time, cost under cost. A narrow drawer sets them in a line of their
+ * own under each name, where they are not columns and nothing is compared.
+ */
+function columnSpread(rows: ReturnType<typeof measureRoles>) {
+  const inColumns = rows.every((row) => row.facts[0].top < row.name.bottom - 0.5)
+  if (!inColumns) return { inColumns: 'lines', spread: 0 }
+  const spreads = [0, 1, 2].map((column) => {
+    const ends = rows.map((row) => row.facts[column].right)
+    return Math.max(...ends) - Math.min(...ends)
+  })
+  return { inColumns: 'columns', spread: Math.max(...spreads) }
+}
+
 for (const width of [1440, 1024, 390]) {
   test(`the organizations the work ran under stand whole at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 1000 })
@@ -90,5 +122,35 @@ for (const width of [1440, 1024, 390]) {
       .analyze()
     expect(results.violations.map((violation) => violation.id)).toEqual([])
     await page.screenshot(shot(info, `agents-organizations-${width}.png`))
+  })
+
+  test(`who did the work stands in its columns at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    await serve(page, whoUsage())
+    await page.goto(CARD)
+    const section = await openAgents(page)
+    const roles = section.locator('[data-breakdown="roles"]')
+    await expect(roles.locator('.work-usage-row')).toHaveCount(3)
+    await expect(roles.locator('.work-usage-row').last()).toContainText('Adviser')
+    await roles.scrollIntoViewIfNeeded()
+    const rows = await roles.evaluate(measureRoles)
+    for (const row of rows) {
+      expect(row.facts).toHaveLength(3)
+      for (const fact of row.facts) {
+        // A figure stands after its name on the name's line, or on a line of its own under it.
+        expect(fact.left >= row.name.right - 0.5 || fact.top >= row.name.bottom - 0.5).toBe(true)
+        expect(fact.right).toBeLessThanOrEqual(row.list.right + 0.5)
+      }
+    }
+    // Where the drawer gives the figures columns, each lines up down the list.
+    const { inColumns, spread } = columnSpread(rows)
+    expect(spread).toBeLessThanOrEqual(1)
+    info.annotations.push({
+      type: 'layout',
+      description: `R3 ${width}px (${inColumns}): list ${brief(rows[0].list)}, names ${rows.map((row) => brief(row.name)).join(' ')}, figure ends ${rows[0].facts.map((fact) => tenth(fact.right)).join(' ')}`,
+    })
+    console.log(info.annotations.at(-1)?.description)
+    await expectNoSilentClipping(page, `who did the work at ${width}px`)
+    await page.screenshot(shot(info, `agents-roles-${width}.png`))
   })
 }
