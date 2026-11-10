@@ -54,7 +54,7 @@ checkouts are therefore distinguishable even at the same version.
   holds is marked, and it can be deleted. Kept views live in the browser's interface
   settings, one list per space. The «Workable» and «Assigned» buttons and the «By epic»
   toggle left the header: the two conditions are the first group of the filter's menu,
-  and «Assigned» now reads «Has a holder». On a phone the menu is its sign alone.
+  and «Assigned» now reads «Has an assignee», the card's word for who holds it. On a phone the menu is its sign alone.
 
 - **The card's labels change in the new-task dialog's picker.** «+», or a press on the
   labels row beside the chips, opens the picker with the item's labels checked: choosing one

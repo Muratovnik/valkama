@@ -44,10 +44,10 @@ const WORDS = {
     delete: (name: string) => `Delete view “${name}”`,
     filter: 'Filter work',
     ready: 'Workable',
-    held: 'Has a holder',
+    held: 'Has an assignee',
     list: 'List',
     // What stood in the header before, as buttons of its own.
-    gone: ['Workable', 'Assigned', 'By epic', 'Group the board by epic'],
+    gone: ['Workable', 'Assigned', 'Has a holder', 'By epic', 'Group the board by epic'],
   },
   ru: {
     menu: 'Вид',
@@ -59,9 +59,15 @@ const WORDS = {
     delete: (name: string) => `Удалить вид «${name}»`,
     filter: 'Фильтр работы',
     ready: 'Можно брать',
-    held: 'Есть ответственный',
+    held: 'Есть исполнитель',
     list: 'Список',
-    gone: ['Можно брать', 'Назначено', 'По эпикам', 'Группировать доску по эпикам'],
+    gone: [
+      'Можно брать',
+      'Назначено',
+      'Есть ответственный',
+      'По эпикам',
+      'Группировать доску по эпикам',
+    ],
   },
 } as const
 

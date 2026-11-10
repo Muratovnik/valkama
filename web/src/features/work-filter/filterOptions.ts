@@ -54,7 +54,7 @@ export interface FilterOption {
   action: FilterAction
   /** Unique across the menu, and stable while the value is offered. */
   key: string
-  /** The value's own word: «Высокий», `coordinator`, «Есть ответственный». */
+  /** The value's own word: «Высокий», `coordinator`, «Есть исполнитель». */
   text: string
   /** A count beside the word, where one says something: how many are held. */
   detail?: string

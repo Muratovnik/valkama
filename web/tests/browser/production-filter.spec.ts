@@ -122,12 +122,14 @@ test('a former preset is a condition of the menu, and makes the filter it made',
 }) => {
   await open(page)
   // Nothing beside the field stands for it any more.
-  await expect(page.getByRole('button', { name: /^(Assigned|Has a holder)/u })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: /^(Assigned|Has a holder|Has an assignee)/u }),
+  ).toHaveCount(0)
   await field(page).click()
-  await page.getByRole('option', { name: /^Has a holder/u }).click()
+  await page.getByRole('option', { name: /^Has an assignee/u }).click()
   await expect.poll(() => addressState(page)).toEqual({ held: true })
-  await expect(chips(page)).toHaveText(['Has a holder'])
-  await page.getByRole('option', { name: /^Has a holder/u }).click()
+  await expect(chips(page)).toHaveText(['Has an assignee'])
+  await page.getByRole('option', { name: /^Has an assignee/u }).click()
   await expect.poll(() => addressState(page)).toEqual({})
   await expect(chips(page)).toHaveCount(0)
 })

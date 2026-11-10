@@ -191,7 +191,7 @@ test('Russian Work bar keeps its controls on one row, and the former presets are
   await expect(conditions).toHaveCount(0)
   await field.click()
   await expect(conditions).toBeVisible()
-  await expect(conditions.getByRole('option')).toHaveText(['Можно брать', /^Есть ответственный/u])
+  await expect(conditions.getByRole('option')).toHaveText(['Можно брать', /^Есть исполнитель/u])
   await page.keyboard.press('Escape')
   await field.click()
   // The menu opens on the facets; a state is a step further in.

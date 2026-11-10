@@ -1089,8 +1089,8 @@ own settings, and a kept view is a choice the menu marks while the address holds
 exactly; choosing it puts its state back, and the marked one can be deleted. A
 space never lists another space's views. Nothing in the row is a pressed filter of
 its own any more: everything to the right of the field narrows it, and the two
-conditions that once stood beside it as presets, «Workable» and «Has a
-holder», are the first group of the filter's menu. A usable filter is as wide as a
+conditions that once stood beside it as presets, «Workable» and «Has an
+assignee», are the first group of the filter's menu. A usable filter is as wide as a
 phone's, 108px with the longest words; where the view's segments and the action
 cannot stand beside that, the bar takes its phone form, where the menu is its sign
 alone. The filter's
