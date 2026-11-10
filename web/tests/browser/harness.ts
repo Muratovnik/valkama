@@ -26,6 +26,7 @@ import '@fontsource-variable/inter'
 
 import '@/app/styles/index.css'
 
+import { chartsSurface } from './chartsSurface.ts'
 import { DocumentLinksSurface } from './documentLinksSurface.ts'
 import { GraphSurface } from './graphSurface.ts'
 import { hintsSurface } from './hintsSurface.ts'
@@ -177,6 +178,7 @@ const Harness = defineComponent({
       surfaceDialog.value = true
     }
     const selectedRuntime = ref('codex')
+    if (requestedSurface === 'charts') return chartsSurface()
     if (requestedSurface === 'graph') return () => h(GraphSurface)
     if (requestedSurface === 'hints') return hintsSurface
     if (requestedSurface === 'marks') return marksSurface

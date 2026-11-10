@@ -188,3 +188,27 @@
     text-overflow: ellipsis;
   }
 }
+
+/* The chart primitives one under another, each section as wide as the window allows. The
+   product's body does not scroll (its panes do), so the page is a pane of its own. */
+.charts-harness {
+  display: grid;
+  gap: var(--space-6);
+  box-sizing: border-box;
+  block-size: 100%;
+  padding: var(--space-4);
+  background: var(--color-canvas);
+  overflow-y: auto;
+}
+
+.charts-harness-section {
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+}
+
+.charts-harness-selected {
+  min-block-size: var(--space-4);
+  color: var(--color-text-muted);
+}
