@@ -1,14 +1,10 @@
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import stylelint from 'stylelint'
 import { beforeAll, test } from 'vitest'
 
-import { typeSelectorDebt } from '../stylelint.config.ts'
-
 const configFile = fileURLToPath(new URL('../stylelint.config.ts', import.meta.url))
-const repoPath = (file: string) => fileURLToPath(new URL(`../${file}`, import.meta.url))
 
 /** How many type-selector warnings one file earns under the real config. */
 const typeSelectors = async (codeFilename: string, code: string) => {
@@ -182,34 +178,6 @@ test('a new file may not style an element by its tag', async () => {
   // `base.css` gives the document's own tags a starting appearance, which is
   // what a type selector is for; a class there would make every `<p>` opt in.
   assert.equal(await typeSelectors('src/app/styles/base.css', 'h2 { margin: 0; }'), 0)
-})
-
-/**
- * The type-selector debt ledger, checked against the tree rather than trusted.
- *
- * A list of exceptions decays in the two directions `componentBoundaries.test.ts`
- * names for `scopeEscapeOwners`: an entry can survive a rename or a removal, and
- * an entry can outlive the debt it was written to excuse. Neither failure is
- * loud — the file this override names simply stops earning a warning, and the
- * override goes on exempting it from nothing. Reading the ledger's own count is
- * how the Kanban rename left three renamed successors and two removed files in
- * this list with a stated selector count that had stopped matching the tree.
- */
-test('the type-selector debt ledger names files that exist and still owe one', async () => {
-  for (const file of typeSelectorDebt) {
-    const path = repoPath(file)
-    assert.ok(existsSync(path), `${file}: in the type-selector debt ledger but no longer exists`)
-    const { results } = await stylelint.lint({
-      files: path,
-      config: { rules: { 'selector-max-type': 0 } },
-      customSyntax: file.endsWith('.vue') ? 'postcss-html' : undefined,
-    })
-    const stillOwes = results[0].warnings.some((warning) => warning.rule === 'selector-max-type')
-    assert.ok(
-      stillOwes,
-      `${file}: in the type-selector debt ledger but has no bare type selector left`,
-    )
-  }
 })
 
 /** Which lines the repeated-compound rule refused, under the real config. */

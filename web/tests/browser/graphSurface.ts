@@ -26,7 +26,11 @@ import GraphFieldCorner from '@/widgets/work-item-graph/components/GraphFieldCor
 import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
-import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
+import {
+  movesOn,
+  signsOf,
+  useGraphMotion,
+} from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -101,7 +105,10 @@ export const GraphSurface = defineComponent({
               readyCount: 3,
               motion: motion.value,
               moving: moving.value.size > 0,
-              held: Object.values(live).some((work) => work.state === 'held'),
+              // The signs the drawn cards show, as the graph's key names them.
+              signs: signsOf(
+                Object.keys(live).flatMap((id) => (cardAt(id).length ? [live[id]] : [])),
+              ),
               onToggleMotion: toggleMotion,
             }),
           ]),

@@ -131,18 +131,6 @@ const TRANSITION =
 const RADIUS_PART = String.raw`(?:var\(--radius-[a-z-]+\)|${COMPUTED}|0|50%|999px)`
 const RADIUS = new RegExp(`^${RADIUS_PART}(?:\\s+${RADIUS_PART})*$`)
 
-/**
- * The files the type-selector cleanup has not yet reached, named rather than
- * counted so a rename or a removal can be checked against the tree instead of
- * taken on faith. Exported so `styleRules.test.ts` can resolve every one of
- * these against the real files stylelint lints, the same way
- * `scopeEscapeOwners` in `scripts/ui-system/boundaries.mjs` is checked against
- * the tree rather than only against itself — a list of exceptions decays
- * exactly the same way whether the exception is a scope escape or a bare type
- * selector.
- */
-export const typeSelectorDebt = ['src/app/styles/shell.css']
-
 export default {
   extends: ['stylelint-config-standard'],
   plugins: ['stylelint-order', 'stylelint-use-nesting', selectorList],
@@ -173,15 +161,6 @@ export default {
       // class to hand an element this product does not render. Every other
       // selector in that file names a class.
       files: ['src/widgets/work-item-graph/components/GraphField.vue'],
-      rules: { 'selector-max-type': null },
-    },
-    {
-      // The remainder of the type-selector cleanup, named so the debt is
-      // visible and so no new file can join the list. 73 selectors across
-      // these files; the shared primitives are done, which is where a type
-      // selector cost the most because a primitive is reused everywhere.
-      // Card #322 empties this list.
-      files: typeSelectorDebt,
       rules: { 'selector-max-type': null },
     },
   ],

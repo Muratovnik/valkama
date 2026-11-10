@@ -32,11 +32,9 @@ import {
   ChevronRight,
   ChevronsUp,
   ChevronUp,
-  Circle,
   CircleAlert,
   CircleCheck,
   CircleDashed,
-  CircleHelp,
   CirclePause,
   CircleQuestionMark,
   CircleSlash,
@@ -76,6 +74,7 @@ import {
   RotateCcw,
   Search,
   Settings,
+  Shapes,
   SquareKanban,
   SquarePen,
   TableProperties,
@@ -127,7 +126,9 @@ function clientMark(
   )
 }
 
-/** Manifest-owned icon keys. An unknown key intentionally gets one generic glyph. */
+/**
+ * Manifest-owned icon keys. An unknown key intentionally gets one generic glyph (`GENERIC`).
+ */
 const ICONS: Record<string, Component> = {
   'activity': Activity,
   // What a press could not do, beside what it said; `check` is what it did.
@@ -254,20 +255,26 @@ const ICONS: Record<string, Component> = {
   'reopen': RotateCcw,
   'outcome': Flag,
   // The side panel's list of work going on now: its button on a phone's rail, the agents a
-  // row counts, the ring of a session that waits, and the pin that keeps an item there.
+  // row counts, and the pin that keeps an item there.
   'live-work': List,
   'agent': Bot,
-  'live-waiting': Circle,
   'pin': Pin,
   // What a session is doing, as one ring of one size whose inside says it (`SessionSign`):
   // at work, asking a person in the middle of a turn, waiting with its turn over, at work on
-  // other items, silent for over a day. The asking one is the generic glyph's own shape.
+  // other items, silent for over a day.
   'session-working': LoaderCircle,
   'session-asks': CircleQuestionMark,
   'session-waiting': CircleCheck,
   'session-held': CirclePause,
   'session-quiet': CircleDashed,
 }
+
+/**
+ * What an unknown key draws: a generic shape that is none of a session's signs. A question in a
+ * ring, the glyph it used to be, is the sign of a session that asks a person (`session-asks`),
+ * and an icon a manifest misnamed would have read as one.
+ */
+const GENERIC: Component = Shapes
 
 interface GlyphShape {
   attributes: Record<string, string>
@@ -305,7 +312,7 @@ export interface GlyphOptions {
 /** One glyph as a plain `svg` element, ready to be placed in a render. */
 export function iconGlyph(name: string, options: GlyphOptions = {}): VNode {
   const { size = 20, strokeWidth = 1.8, class: extra } = options
-  const { attributes, strokes } = shapeOf(ICONS[name] ?? CircleHelp)
+  const { attributes, strokes } = shapeOf(ICONS[name] ?? GENERIC)
   return h(
     'svg',
     {

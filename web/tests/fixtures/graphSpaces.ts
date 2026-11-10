@@ -433,7 +433,8 @@ export const deepSpace = (): GraphSpace => space(DEEP)
 
 /**
  * What the server's `live_work` would say for a space: each item a live session
- * holds is working, held, waiting or quiet in turn, so all four are on the field.
+ * holds is working, held, waiting or quiet in turn, so all four are on the field,
+ * and every other waiting one asks a person, so every sign a card draws is there.
  */
 export function liveWorkFor(model: PlanningReadModel): Record<string, LiveWork> {
   const live = model.work_items.filter((item) => item.claim_state === 'live')
@@ -443,7 +444,7 @@ export function liveWorkFor(model: PlanningReadModel): Record<string, LiveWork> 
       [
         { state: 'working' } as const,
         { state: 'held' } as const,
-        { state: 'waiting', long: false, asks: false } as const,
+        { state: 'waiting', long: false, asks: index % 8 === 6 } as const,
         { state: 'quiet', quiet_since: '2026-11-02T08:00:00Z' } as const,
       ][index % 4],
     ]),

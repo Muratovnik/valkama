@@ -4,8 +4,8 @@
  * dot, grown to the card — with its reference on it. A chain view colours it
  * by progress, as the card's branch map does, at a zoom where nothing else on
  * the card survives. The root is framed in the text colour, so it is found
- * without its word. It carries no sign of what an agent is doing: three dots
- * with no word beside them said nothing on a block already filled with a colour.
+ * without its word. It carries no sign of what an agent is doing: a session's sign
+ * with no word beside it says little on a block already filled with a colour.
  * That stays on the lines' comets and the frame's count, and in the card's name
  * and tooltip.
  *

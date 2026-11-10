@@ -7,9 +7,10 @@
  * was launched to work on by its number. The session's other items stand still
  * «held», while it has a turn running or a subagent alive; a session that
  * finished its turn and waits for a person, with no subagent alive, stands still
- * with the word «waiting», and one silent for a day stands still
- * with the time it fell silent: motion that also meant holding or idling would
- * stop telling work from waiting.
+ * with the word «waiting», one stopped in the middle of its turn to ask a person
+ * stands still with «asking», and one silent for a day stands still with the time
+ * it fell silent: motion that also meant holding or idling would stop telling work
+ * from waiting.
  *
  * Moving work starts by itself and lasts as long as the work, beside the rest
  * of the field, so the reader can stop it (WCAG 2.2.2): one switch for every
@@ -24,6 +25,9 @@ import { useI18n } from 'vue-i18n'
 import { useMediaQuery, useStorage } from '@vueuse/core'
 
 import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+
+import { liveSign } from '@/shared/lib/liveSign.ts'
+import type { LiveSign } from '@/shared/lib/liveSign.ts'
 
 export type GraphMotion = 'paused' | 'reduced' | 'running'
 
@@ -42,16 +46,31 @@ export function movesOn(live: LiveWork | undefined): boolean {
 }
 
 /**
- * The word a card says for its live work: «working», «held», «waiting», or
- * «silent since» the session's last sign of life. Silence proves nothing, so a silent
- * session is not called ended; the graph says what the session's panel says.
+ * The word a card says for its live work, one for each sign it draws (`liveSign`):
+ * «working», «asking» for a session stopped in the middle of a turn for a person, «held»,
+ * «waiting» for one whose turn is over, or «silent since» the session's last sign of life.
+ * Silence proves nothing, so a silent session is not called ended; the graph says what the
+ * session's panel says.
  */
 export function useLiveWord() {
   const { d, t } = useI18n()
   return (live: LiveWork): string =>
     live.state === 'quiet'
       ? t('graph.live.quiet', { since: d(new Date(live.quiet_since), QUIET_DAY) })
-      : t(`graph.live.${live.state}`)
+      : t(`graph.live.${signOf(live)}`)
+}
+
+/** The sign a card draws for its live work: a waiting session that asks is a sign of its own. */
+export const signOf = (live: LiveWork): LiveSign =>
+  liveSign(live.state, live.state === 'waiting' && live.asks) ?? live.state
+
+/** The order the key names the signs in: from work going on to a session fallen silent. */
+const SIGN_ORDER: readonly LiveSign[] = ['working', 'asks', 'waiting', 'held', 'quiet']
+
+/** The signs some of `lives` draw, once each, in the key's order. */
+export function signsOf(lives: Iterable<LiveWork | undefined>): LiveSign[] {
+  const drawn = new Set([...lives].flatMap((live) => (live ? [signOf(live)] : [])))
+  return SIGN_ORDER.filter((sign) => drawn.has(sign))
 }
 
 export function useGraphMotion() {

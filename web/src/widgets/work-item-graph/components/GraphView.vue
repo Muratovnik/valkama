@@ -36,7 +36,11 @@ import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCa
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
 import { useGraphGroundTap } from '@/widgets/work-item-graph/composables/useGraphGroundTap.ts'
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
-import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
+import {
+  movesOn,
+  signsOf,
+  useGraphMotion,
+} from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -188,12 +192,11 @@ const anyMoving = computed(
     [...frameById.value.values()].some((frame) => workingIn(frame) > 0),
 )
 /**
- * A drawn card is held by a session not working on it now: the key names its still dots,
- * which a card zoomed out past reading does not draw.
+ * The sessions' signs the drawn cards show: the key names each of them, and none while the
+ * cards are zoomed out past reading, where they draw no sign.
  */
-const anyHeld = computed(
-  () =>
-    !overview.value && [...cardById.value.keys()].some((id) => live.value[id]?.state === 'held'),
+const liveSigns = computed(() =>
+  overview.value ? [] : signsOf([...cardById.value.keys()].map((id) => live.value[id])),
 )
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 
@@ -258,7 +261,11 @@ const switchCounts = computed(() => {
 const hasEdges = computed(() => Boolean(placed.value?.edges.length))
 /** Whether the field has a key to draw: the bar offers it on a narrow workspace. */
 const keyed = computed(
-  () => legend.value.groups.length > 0 || hasEdges.value || anyMoving.value || anyHeld.value,
+  () =>
+    legend.value.groups.length > 0 ||
+    hasEdges.value ||
+    anyMoving.value ||
+    liveSigns.value.length > 0,
 )
 
 const chainChip = computed(() =>
@@ -345,7 +352,7 @@ function toggleFrame(frameId: string) {
           :has-edges="hasEdges"
           :keep-done="keepDone"
           :moving="anyMoving"
-          :held="anyHeld"
+          :signs="liveSigns"
         />
       </template>
     </GraphBar>
@@ -382,7 +389,7 @@ function toggleFrame(frameId: string) {
           :ready-count="ready.length"
           :motion="motion"
           :moving="anyMoving"
-          :held="anyHeld"
+          :signs="liveSigns"
           @toggle-motion="toggleMotion"
         />
       </div>

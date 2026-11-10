@@ -65,27 +65,32 @@ test('an item a session holds without working on it stands still, and the key sa
 }) => {
   await page.goto(surface())
   await settled(page)
-  await expect(page.locator('.graph-legend-held')).toHaveCount(0)
+  await expect(page.locator('.graph-legend-sign[data-sign="held"]')).toHaveCount(0)
   await page.goto(surface('held'))
   await settled(page)
   const held = page.locator('.graph-live[data-live="held"]')
   await expect(held).toHaveText('held')
-  // Its dots stand still while the card being worked on pulses beside it.
-  const dots = (live: string) =>
+  // Its sign stands still while the card being worked on turns beside it.
+  const turns = (live: string) =>
     page
-      .locator(`.graph-live[data-live="${live}"] .work-dots i`)
+      .locator(`.graph-live[data-live="${live}"] .session-sign`)
       .first()
-      .evaluate((dot) => dot.getAnimations().length)
-  expect(await dots('held')).toBe(0)
-  expect(await dots('working')).toBeGreaterThan(0)
-  // The line it reaches carries no comet, and the key names the still dots.
+      .evaluate((sign) => sign.getAnimations().length)
+  expect(await turns('held')).toBe(0)
+  expect(await turns('working')).toBeGreaterThan(0)
+  // The line it reaches carries no comet, and the key names each sign the cards draw.
   expect(await comets(page)).toEqual([
     { live: true, comet: true },
     { live: false, comet: false },
   ])
-  await expect(page.locator('.graph-legend-on-field .graph-legend-held')).toHaveText(
-    'held by a session, not worked on now',
-  )
+  const key = page.locator('.graph-legend-on-field .graph-legend-sign')
+  await expect(key).toHaveText(['a session working on it', 'held by a session, not worked on now'])
+  // The key's samples stand still: they say what a sign means, not that work goes on.
+  expect(
+    await key.evaluateAll((entries) =>
+      entries.flatMap((entry) => entry.querySelector('.session-sign')?.getAnimations() ?? []),
+    ),
+  ).toHaveLength(0)
 })
 
 test('the switch stops all motion at once and the stop survives a reload', async ({ page }) => {
@@ -196,7 +201,7 @@ test('with the switch not offered, the strip keeps the switch’s place', async 
 })
 
 for (const colorScheme of ['dark', 'light'] as const)
-  test(`in the ${colorScheme} forced palette the working dots stay drawn, on a card and in the key`, async ({
+  test(`in the ${colorScheme} forced palette the sessions' signs stay drawn, on a card and in the key`, async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme, forcedColors: 'active' })
@@ -204,15 +209,16 @@ for (const colorScheme of ['dark', 'light'] as const)
     await settled(page)
     const paint = await page.evaluate(() => {
       const ground = getComputedStyle(document.body).backgroundColor
-      const dots = [
-        ...document.querySelectorAll('.graph-live .work-dots i, .graph-legend-held .work-dots i'),
+      const signs = [
+        ...document.querySelectorAll('.graph-live .session-sign, .graph-legend-sign .session-sign'),
       ]
-      return { ground, dots: dots.map((dot) => getComputedStyle(dot).backgroundColor) }
+      // A sign is a stroke in its colour, so its colour is what stays drawn.
+      return { ground, signs: signs.map((sign) => getComputedStyle(sign).color) }
     })
-    // Two cards' marks and the key's sample, three dots each.
-    expect(paint.dots).toHaveLength(9)
-    for (const dot of paint.dots) {
-      expect(dot).not.toBe('rgba(0, 0, 0, 0)')
-      expect(dot).not.toBe(paint.ground)
+    // Two cards' signs and the key's two samples.
+    expect(paint.signs).toHaveLength(4)
+    for (const sign of paint.signs) {
+      expect(sign).not.toBe('rgba(0, 0, 0, 0)')
+      expect(sign).not.toBe(paint.ground)
     }
   })

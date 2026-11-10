@@ -11,6 +11,7 @@ import { facetMarks, printsFacet } from '@/entities/work-item/utils/facets.ts'
 import type { FacetSurface } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { messages } from '@/shared/i18n/index.ts'
 
 import { boardItem } from './fixtures/board.ts'
 
@@ -28,18 +29,39 @@ const tileMark = (item: WorkItemBrief, context = {}) => {
 }
 
 describe('the executor on a tile', () => {
-  test('is the client, with its session running, held on other work or waiting', () => {
+  test('is the client, with its session running, held on other work, asking or waiting', () => {
     const cases = [
-      ['working', 'workItem.facet.heldWorking'],
-      ['held', 'workItem.facet.heldElsewhere'],
-      ['waiting', 'workItem.facet.heldWaiting'],
+      [{ state: 'working' }, 'working', 'workItem.facet.heldWorking'],
+      [{ state: 'held' }, 'held', 'workItem.facet.heldElsewhere'],
+      // A session stopped in the middle of a turn for a person is apart from one whose turn
+      // is over, long or not.
+      [{ state: 'waiting', long: false, asks: true }, 'asks', 'workItem.facet.heldAsking'],
+      [{ state: 'waiting', long: true, asks: true }, 'asks', 'workItem.facet.heldAsking'],
+      [{ state: 'waiting', long: false, asks: false }, 'waiting', 'workItem.facet.heldWaiting'],
+      [{ state: 'waiting', long: true, asks: false }, 'waiting', 'workItem.facet.heldWaiting'],
     ] as const
-    for (const [state, key] of cases) {
-      const mark = tileMark(held(), { live: { state } })
-      assert.equal(mark.glyph, 'claude', state)
-      assert.equal(mark.session, state)
+    for (const [live, session, key] of cases) {
+      const mark = tileMark(held(), { live })
+      assert.equal(mark.glyph, 'claude', session)
+      assert.equal(mark.session, session)
       assert.deepEqual(mark.text, { key, params })
     }
+  })
+
+  test('says a session asks in both languages, apart from the wait whose turn is over', () => {
+    for (const locale of ['en', 'ru'] as const) {
+      const words = messages[locale].workItem.facet
+      assert.ok(words.heldAsking.includes('{holder}'), locale)
+      assert.notEqual(words.heldAsking, words.heldWaiting, locale)
+    }
+  })
+
+  test('of a silent session draws no sign, as a claim with no session at it does not', () => {
+    const quiet = tileMark(held(), {
+      live: { state: 'quiet', quiet_since: '2026-11-01T10:00:00Z' },
+    })
+    assert.equal(quiet.session, undefined)
+    assert.equal(tileMark(held()).session, undefined)
   })
 
   test('is drawn by its client: Codex by its own glyph, any other as a client', () => {

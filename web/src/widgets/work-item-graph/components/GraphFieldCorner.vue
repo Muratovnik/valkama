@@ -15,12 +15,11 @@ import GraphMotionToggle from '@/widgets/work-item-graph/components/GraphMotionT
 import type { GraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
+import type { LiveSign } from '@/shared/lib/liveSign.ts'
 
 defineProps<{
   groups: readonly ChainGroup[]
   hasEdges: boolean
-  /** A card on the field is held by a session that is not working on it now. */
-  held: boolean
   keepDone: boolean
   motion: GraphMotion
   /** Something on the field is live work that moves. */
@@ -28,6 +27,8 @@ defineProps<{
   /** The one state a group's members share, which the key says in the group's place. */
   names: Readonly<Record<ChainGroup, string | null>>
   readyCount: number
+  /** The sessions' signs the cards on the field draw. */
+  signs: readonly LiveSign[]
 }>()
 const emit = defineEmits<{ 'toggle-motion': [] }>()
 const { t } = useI18n()
@@ -42,7 +43,7 @@ const { t } = useI18n()
     :has-edges="hasEdges"
     :keep-done="keepDone"
     :moving="moving"
-    :held="held"
+    :signs="signs"
   />
   <GraphMotionToggle
     :motion="motion"

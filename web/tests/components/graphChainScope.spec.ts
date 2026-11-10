@@ -164,23 +164,31 @@ describe('the whole-space graph and the items no link touches', () => {
     const keys = (graph: ReturnType<typeof openGraph>) =>
       graph
         .findAllComponents(GraphLegend)
-        .map((key) => ({ held: key.props('held'), moving: key.props('moving') }))
+        .map((key) => ({ signs: key.props('signs'), moving: key.props('moving') }))
     const quiet = openGraph()
     await drawn(quiet)
     expect(keys(quiet)).toEqual([
-      { held: false, moving: false },
-      { held: false, moving: false },
+      { signs: [], moving: false },
+      { signs: [], moving: false },
     ])
-    const live = openGraph({ live: { [id(5)]: { state: 'held' }, [id(6)]: { state: 'working' } } })
+    // Each sign a drawn card shows, once, in the key's order: an asking session apart from one
+    // whose turn is over.
+    const live = openGraph({
+      live: {
+        [id(5)]: { state: 'held' },
+        [id(6)]: { state: 'working' },
+        [id(7)]: { state: 'waiting', long: false, asks: true },
+        [id(8)]: { state: 'waiting', long: false, asks: false },
+        [id(3)]: { state: 'held' },
+      },
+    })
     await drawn(live)
-    expect(keys(live)).toEqual([
-      { held: true, moving: true },
-      { held: true, moving: true },
-    ])
+    const named = { signs: ['working', 'asks', 'waiting', 'held'], moving: true }
+    expect(keys(live)).toEqual([named, named])
     // Held work hidden with the closed items is not on the field, so the key says nothing of it.
     const hidden = openGraph({ live: { [id(2)]: { state: 'held' } } })
     await drawn(hidden)
-    expect(keys(hidden).map((key) => key.held)).toEqual([false, false])
+    expect(keys(hidden).map((key) => key.signs)).toEqual([[], []])
     // Work moving under a drawn frame moves on the field, card or no card: the
     // frame counts it.
     const underFrame = openGraph({ live: { [id(2)]: { state: 'working' } } })

@@ -2,10 +2,11 @@
 /**
  * The work moving under a frame, in the hue of work under way, after the state on
  * its first line, where folding does not move it: for a folded frame the one sign
- * of it. It says what its number is, «••• 5 работают», at the far end of the line.
+ * of it. It says what its number is beside the working session's sign (`SessionSign`),
+ * «◌ 5 работают», at the far end of the line.
  *
  * Zoomed out, where its line leaves the phrase no room, it shortens to the count beside
- * the working dots, «••• 5», the mark a card on the field keeps for the same work, and the
+ * the working sign, «◌ 5», the sign a card on the field draws for the same work, and the
  * header's name and hover text say it whole. It never gives way whole: a band that dropped
  * it told nobody that work was running. Its line says which it is (`short`), measured
  * against the phrase drawn once more where nothing shows it (`wholeWidth`).
@@ -16,6 +17,8 @@
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SessionSign from '@/shared/ui/SessionSign.vue'
+
 const {
   count,
   overview = false,
@@ -23,9 +26,9 @@ const {
 } = defineProps<{
   count: number
   overview?: boolean
-  /** The count alone beside the dots: the line has no room for the phrase. */
+  /** The count alone beside the sign: the line has no room for the phrase. */
   short?: boolean
-  /** The field's motion does not run, so the dots hold still. */
+  /** The field's motion does not run, so the sign holds still. */
   still?: boolean
 }>()
 const { t } = useI18n()
@@ -47,7 +50,7 @@ function wholeWidth(): number {
 defineExpose({ wholeWidth })
 </script>
 
-<!-- The phrase comes first and the dots after it, laid out from the end, so the dots stand
+<!-- The phrase comes first and the sign after it, laid out from the end, so the sign stands
      before the words. Zoomed out, the whole phrase is drawn once more, unseen, to be measured. -->
 <template>
   <span
@@ -58,12 +61,10 @@ defineExpose({ wholeWidth })
       ref="words"
       class="working-phrase"
       >{{ shown }}</span
-    ><span
-      class="work-dots"
-      aria-hidden="true"
-      :class="{ still }"
-      ><i /><i /><i /></span
-    ><span
+    ><SessionSign
+      sign="working"
+      :still="still"
+    /><span
       v-if="overview"
       ref="whole"
       class="working-phrase working-whole"

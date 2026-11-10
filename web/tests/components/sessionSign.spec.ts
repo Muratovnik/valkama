@@ -89,6 +89,16 @@ describe('a session’s sign', () => {
     )
   })
 
+  it('holds still where its host stops motion: a paused graph, a key’s sample', () => {
+    expect(mount(SessionSign, { props: { sign: 'working' } }).classes()).not.toContain('still')
+    expect(mount(SessionSign, { props: { sign: 'working', still: true } }).classes()).toContain(
+      'still',
+    )
+    expect(style).toMatch(
+      /\.session-sign-working \{(?:[^{}]|\{[^{}]*\})*&\.still \{ animation: none; \}/u,
+    )
+  })
+
   it('takes its host’s ink in a forced palette', () => {
     expect(style).toMatch(
       /@media \(forced-colors: active\) \{ \.session-sign, \.session-sign\[data-tone\] \{ color: inherit; \} \}/u,

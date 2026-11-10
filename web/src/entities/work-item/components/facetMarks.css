@@ -207,22 +207,12 @@
 }
 
 /* What an executor's session is doing, after its client's glyph in the same line and on
-   the same middle, in the hue of live work as the side panel draws it. The ring is 10px
-   and stands by its foot, as the glyph does; the dots' box is 10px and stands by the
-   middle of its dots. */
+   the same middle: the session's sign, 14px as the glyph is (`drawMarks`), set as the glyph
+   is. Its colour is the sign's own, as the side panel and the graph draw it. */
 :is(.facet-glyph-box, .facet-mark.glyph-alone) > .facet-session {
+  display: inline;
+  vertical-align: calc(var(--size-text-middle) - 7px);
   margin-inline-start: var(--space-half);
-  color: var(--color-info);
-
-  &:not(.work-dots) {
-    display: inline;
-    vertical-align: calc(var(--size-text-middle) - 5px);
-  }
-
-  &.work-dots {
-    gap: var(--space-half);
-    vertical-align: calc(var(--size-text-middle) - 2.5px);
-  }
 }
 
 /* A head lines its marks and the number up by their baseline: the number is often set in

@@ -14,14 +14,19 @@
  * the others: the switch never moves a word of the key.
  *
  * A line live work runs along is named only while some work on the field moves,
- * and the still dots of an item a session holds without working on it only
- * while a card on the field shows them.
+ * and a session's sign (`SessionSign`) only while a card on the field draws it:
+ * the same glyph at the same size, held still, with what it means — at work, asking
+ * a person in the middle of a turn, waiting with the turn over, holding the item
+ * while at work on others, silent for over a day. The card's own word is short, and
+ * «спрашивает» and «ждёт» are two waits a reader has to tell apart.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
+import type { LiveSign } from '@/shared/lib/liveSign.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import SessionSign from '@/shared/ui/SessionSign.vue'
 
 const props = defineProps<{
   /** The chain groups the field draws. */
@@ -34,10 +39,10 @@ const props = defineProps<{
    * card's chain section and the board's column say it; null keeps the group's word.
    */
   names: Readonly<Record<ChainGroup, string | null>>
-  /** A card on the field is held by a session that is not working on it now. */
-  held?: boolean
   /** Some live work on the field moves, so its line is drawn. */
   moving?: boolean
+  /** The sessions' signs the cards on the field draw, in the order the key names them. */
+  signs?: readonly LiveSign[]
 }>()
 const { t } = useI18n()
 
@@ -55,7 +60,7 @@ const entries = computed(() => {
 
 <template>
   <div
-    v-if="entries.length || hasEdges || moving || held"
+    v-if="entries.length || hasEdges || moving || signs?.length"
     class="graph-legend"
     aria-hidden="true"
   >
@@ -80,9 +85,14 @@ const entries = computed(() => {
       ><i class="stroke live" />{{ t('graph.edgeLive') }}</span
     >
     <span
-      v-if="held"
-      class="graph-legend-item graph-legend-held"
-      ><span class="work-dots still"><i /><i /><i /></span>{{ t('graph.legendHeld') }}</span
+      v-for="sign in signs"
+      :key="sign"
+      class="graph-legend-item graph-legend-sign"
+      :data-sign="sign"
+      ><SessionSign
+        :sign="sign"
+        still
+      />{{ t(`graph.legendSign.${sign}`) }}</span
     >
   </div>
 </template>
@@ -112,11 +122,6 @@ const entries = computed(() => {
   align-items: center;
   min-height: 24px;
   white-space: nowrap;
-}
-
-/* The dots as a held card shows them: still, in the hue of live work. */
-.graph-legend-held .work-dots {
-  color: var(--color-info);
 }
 
 .stroke {

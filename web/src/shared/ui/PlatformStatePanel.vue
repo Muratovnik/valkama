@@ -156,7 +156,7 @@ const failed = computed(
       v-if="shownState.status === 'loading'"
       class="work-dots"
       aria-hidden="true"
-      ><i /><i /><i
+      ><i class="work-dot" /><i class="work-dot" /><i class="work-dot"
     /></span>
     <i
       v-else-if="failed"
@@ -250,6 +250,56 @@ const failed = computed(
   border-inline-start: 3px solid var(--color-danger);
   border-start-start-radius: 0;
   border-end-start-radius: 0;
+}
+
+/* A read under way: three dots at a fixed size, pulsing. A squashed pulse reads as a
+   rendering fault rather than as a narrower one, so they never give way. They are this
+   panel's alone: a session at work is drawn by its own sign (`SessionSign`), never by dots. */
+.work-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  align-items: center;
+  height: 10px;
+}
+
+.work-dot {
+  width: 5px;
+  height: 5px;
+  background: currentcolor;
+  border-radius: 50%;
+  animation: work-pulse 1.15s ease-out infinite;
+
+  &:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+
+/* A forced palette clears every fill to its ground, and a dot is a fill, so it would
+   vanish. It is painted in the palette's own text colour instead. */
+@media (forced-colors: active) {
+  .work-dot {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
+@keyframes work-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.72;
+    transform: translateY(0);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 
 /* A filled danger disc in the icon's 22px column, so the title keeps the place an

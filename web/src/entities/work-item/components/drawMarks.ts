@@ -51,6 +51,7 @@ import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/wor
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import { iconGlyph } from '@/shared/ui/iconGlyph.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import SessionSign from '@/shared/ui/SessionSign.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import type { TooltipKind } from '@/shared/ui/tooltipAnchors.ts'
 
@@ -262,22 +263,14 @@ const markShape = (mark: FacetMark, filters: boolean, alone = false) =>
   `facet-mark${mark.quiet ? ' quiet' : ''}${filters ? ' filters' : ''}${alone ? ' glyph-alone' : ''}`
 
 /**
- * What an executor's session is doing, after its client's glyph and in its line, as the side
- * panel draws it (`NavWorkRow`): three dots that run while it works on the item, held still
- * while it works on others, and a ring while it waits for a person. The mark's words say it.
+ * What an executor's session is doing, after its client's glyph and in its line: the session's
+ * one sign (`SessionSign`), as the side panel and the graph draw it, at the glyph's size. Only a
+ * tile with a session at it spends the sign's instance. The mark's words say it.
  */
 function drawSession(mark: FacetMark): VNode[] {
-  if (!mark.session) return []
-  if (mark.session === 'waiting')
-    return [iconGlyph('live-waiting', { class: 'facet-session', size: 10, strokeWidth: 2.4 })]
-  const still = mark.session === 'held' ? ' still' : ''
-  return [
-    h('span', { 'class': `facet-session work-dots${still}`, 'aria-hidden': 'true' }, [
-      h('i'),
-      h('i'),
-      h('i'),
-    ]),
-  ]
+  return mark.session
+    ? [h(SessionSign, { class: 'facet-session', sign: mark.session, size: 14 })]
+    : []
 }
 
 /**

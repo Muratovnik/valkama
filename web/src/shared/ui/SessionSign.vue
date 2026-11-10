@@ -8,7 +8,8 @@
  * dashed, fainter still. Each sign is its own shape, so the colour is never all that says it.
  *
  * It says nothing to assistive technology: its host says the state in words. It turns only
- * while the reader allows motion, and a forced palette draws it in its host's ink.
+ * while the reader allows motion and its host lets it (`still`: the graph's paused field, a
+ * key's sample), and a forced palette draws it in its host's ink.
  */
 import { computed } from 'vue'
 
@@ -21,8 +22,10 @@ const props = withDefaults(
     sign: LiveSign
     /** The glyph's box, as `VIcon` takes it. */
     size?: number
+    /** The working sign holds still: its host's motion is stopped. */
+    still?: boolean
   }>(),
-  { size: 14 },
+  { size: 14, still: false },
 )
 
 const glyph = computed(() =>
@@ -35,7 +38,7 @@ const glyph = computed(() =>
     :is="glyph"
     class="session-sign"
     aria-hidden="true"
-    :class="`session-sign-${sign}`"
+    :class="[`session-sign-${sign}`, { still }]"
     :data-tone="statePresentation('session-sign', sign).tone"
   />
 </template>
@@ -52,6 +55,10 @@ const glyph = computed(() =>
   animation: session-sign-turn 1.4s linear infinite;
 
   @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  &.still {
     animation: none;
   }
 }

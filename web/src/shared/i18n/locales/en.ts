@@ -223,7 +223,14 @@ export const en = {
     edgeDiscovered: 'context',
     legendAhead: 'Ahead',
     edgeLive: 'work going on',
-    legendHeld: 'held by a session, not worked on now',
+    // What each session's sign a card draws means, as the key names it.
+    legendSign: {
+      working: 'a session working on it',
+      asks: 'asking a person in the middle of a turn',
+      waiting: 'waiting, its turn over',
+      held: 'held by a session, not worked on now',
+      quiet: 'silent for over a day',
+    },
     zoom: 'Graph zoom',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
@@ -250,6 +257,7 @@ export const en = {
     frame: graphFrameMessages.en.frame,
     live: {
       working: 'working',
+      asks: 'asking',
       held: 'held',
       waiting: 'waiting',
       quiet: 'silent since {since}',
