@@ -277,7 +277,9 @@ async function shortTitleRows(page: Page) {
   })
   const found: string[] = []
   let fitting = 0
-  for (let width = 320; width <= 400; width += 2) {
+  // In Russian the state, «Выполнено», first fits beside this title at 400px, so the walk runs on
+  // past it: it stands on both sides of where the state goes up beside the title in either language.
+  for (let width = 320; width <= 480; width += 2) {
     await page.setViewportSize({ width, height: 900 })
     await settle(head)
     // The toggle drawn with its title whole, the heading's gap and the state, against its width.

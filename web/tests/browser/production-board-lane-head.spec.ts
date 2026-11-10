@@ -2,8 +2,8 @@
  * A lane heading at every width a board takes, in both languages, where a pointer can hover and
  * where only a finger can press, with work out of sight on either side: its card and chain
  * actions cover nothing at rest, under the pointer or with the keyboard on them, and nothing moves
- * when they come up; no line holds the state alone, nor the actions but where nothing can come
- * down with them; the title keeps the letters the base drew; the heading takes no more lines than
+ * when they come up; no line holds the state alone but where it and the counts do not fit one,
+ * nor the actions but where nothing can come down with them; the title keeps the letters the base drew; the heading takes no more lines than
  * the base but where one of these needs it; and a tile the board brings into view under the
  * heading stands below it at the lane's own gap, however many lines the heading takes.
  *
@@ -57,9 +57,26 @@ const TOUCHED = new Set([320, 390, 760, 1280])
 
 const SIDES = ['left', 'top', 'right', 'bottom'] as const
 
-/** The state alone on a line: never forced, since it can always stand beside the counts. */
+/** The state alone on a line, which is forced only where the state and the counts do not fit one. */
 const stateAlone = (reading: Reading) =>
   reading.rows.some((row) => row.length === 1 && row[0] === 'state')
+
+/**
+ * Whether the state and the counts fit one line of the heading together. «Dev» always did; on a
+ * phone «В работе» and «Выполнено» beside Russian counts take more than the line has, and there
+ * the state stands on a line of its own above the counts. Read in the page.
+ */
+const stateFitsCounts = (head: Element) => {
+  const state = head.querySelector('.lane-state:not(.visually-hidden)')
+  const counts = head.querySelector('.lane-counts')
+  const tail = head.querySelector('.lane-tail')
+  if (!state || !counts || !tail) return true
+  const style = getComputedStyle(head)
+  const line = head.getBoundingClientRect().width - Number.parseFloat(style.paddingInlineStart)
+  const gap = Number.parseFloat(getComputedStyle(tail).columnGap)
+  const width = (element: Element) => element.getBoundingClientRect().width
+  return width(state) + gap + width(counts) <= line + 0.5
+}
 
 /** Whether the actions stand on a line of their own. */
 const actionsAlone = (reading: Reading) =>
@@ -78,14 +95,17 @@ function still(reading: Reading, rest: Reading): boolean {
   )
 }
 
-/** What is wrong with one heading in one state, against its reading at rest. */
-function faults(reading: Reading, rest: Reading): string[] {
+/**
+ * What is wrong with one heading in one state, against its reading at rest; `paired` says
+ * whether its state and its counts fit one line.
+ */
+function faults(reading: Reading, rest: Reading, paired: boolean): string[] {
   const outside = reading.parts
     .filter(({ box }) => box.left < -0.5 || box.right > reading.width + 0.5)
     .map(({ member }) => `the ${member} runs past the heading`)
   const moved = still(reading, rest) ? [] : ['something moves']
   const over = covered(reading).map((member) => `an action covers the ${member}`)
-  const alone = stateAlone(reading) ? ['the state stands on a line alone'] : []
+  const alone = paired && stateAlone(reading) ? ['the state stands on a line alone'] : []
   return [...new Set([...over, ...alone, ...outside, ...moved])]
 }
 
@@ -179,8 +199,9 @@ async function readWidth(
         ? await readStates(page, head, hover)
         : [['at rest', await readHeading(head)] as const]
       const [[, rest]] = states
+      const paired = await head.evaluate(stateFitsCounts)
       for (const [state, reading] of states)
-        found.push(...faults(reading, rest).map((one) => `${where} ${state}: ${one}`))
+        found.push(...faults(reading, rest, paired).map((one) => `${where} ${state}: ${one}`))
       if (!states.every(([, reading], at) => at === 0 || reading.actionsShown))
         found.push(`${where}: an action the pointer or keyboard is on is not up`)
       const alone = await aloneAgainst(head, states)
