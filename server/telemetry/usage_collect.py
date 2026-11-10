@@ -315,25 +315,16 @@ class Collector:
             raise
         return True
 
-    def read_again(
-        self, target: Target, path: str, end: int, coverage: liveness.Coverage, run_id: int
-    ) -> Reading | None:
-        """Read `path` from its start to `end` as this reader reads it, writing nothing.
-
-        In the chunks `_read` takes, each through `parse`, with what one leaves for the
-        next kept in memory rather than in the store. A request counts as seen only when
-        an earlier chunk of this reading counted it, never because the store says so.
-        None when the bytes no longer end a line at `end`.
-        """
-
-        again = Rereading.start(target, path, end, coverage, run_id)
-        return again.reading() if self.read_more(again, math.inf) else None
-
     def read_more(self, again: Rereading, deadline: float) -> bool:
         """Go on with a reading again, chunk by chunk, until it is done or `deadline` passed.
 
-        At least one chunk per call, so a reading always gets on. False when the bytes no
-        longer end a line where they should: the reading is then of no use.
+        The file is read from its start to the reading's `end` as this reader reads it,
+        writing nothing: in the chunks `_read` takes, each through `parse`, with what one
+        leaves for the next kept in memory rather than in the store. A request counts as
+        seen only when an earlier chunk of this reading counted it, never because the
+        store says so. At least one chunk per call, so a reading always gets on. False
+        when the bytes no longer end a line where they should: the reading is then of no
+        use.
         """
 
         while not again.done:

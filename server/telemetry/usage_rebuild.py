@@ -14,7 +14,10 @@ only through this. So it never loses what is already counted:
   the `read_offset` the rebuild started from, as the reader's does. A reader pass that
   moved the run meanwhile, or marked it, or a run that claimed one of its requests
   meanwhile, makes the rebuild of that run write nothing and say so. A claim the run no
-  longer makes is released (`usage_claims.release`).
+  longer makes is released (`usage_claims.release`), unless a run that left a request to
+  another can no longer be read: the request could then end up counted in no run, so the
+  rebuild of this run writes nothing and is refused as `stranded`. `usage_claims` says
+  what that refusal still leaves open.
 - A rebuilt run is current: its `reading` becomes `READING`, and a refusal it carried
   goes.
 - Only a run being read, whose transcript (its own path, else the archive, as the reader
@@ -76,6 +79,9 @@ REASONS = {
     "moved": "a reader pass moved it meanwhile; nothing was written, run the rebuild again",
     "claimed": "another run claimed one of its requests meanwhile; nothing was written, run"
     " the rebuild again",
+    "stranded": "it no longer holds a request it counted, and a run that left a request to"
+    " another can no longer be read, so that request could end up counted in no run;"
+    " nothing was written",
     "no-transcript": "no transcript is known for it",
     "failed": "the rebuild failed; nothing was written",
     "no-liveness": "no liveness file beside the store: observed time would come back as"
@@ -232,18 +238,27 @@ def rebuild_run(
 
     The reading stops between chunks once `deadline` has passed, and the run is then
     `unfinished`: `resume` with its `rereading` goes on from there. The run must still
-    stand where the reading started, else it moved and the reading is dropped.
+    stand where the reading started (`_stands`), else it moved and the reading is
+    dropped: a reading begun anew then finds what the run is read from now, or says why
+    it cannot be read.
     """
 
     line = RunReport(int(run["id"]), str(run["session_id"]), str(run["agent_id"]), run["client"])
     try:
         if resume is None:
             again = _start(run, target, coverage)
-        elif int(run["read_offset"]) != resume.end:
+        elif not _stands(run, resume):
             raise _RefusedError("moved")
         else:
             again = resume
-        if not collector.read_more(again, deadline):
+        try:
+            whole_lines = collector.read_more(again, deadline)
+        except OSError:
+            if resume is None:
+                raise
+            # The file went between the check and the read: as moved as any other.
+            raise _RefusedError("moved") from None
+        if not whole_lines:
             raise _RefusedError("changed")
         if not again.done:
             line.outcome, line.rereading = UNFINISHED, again
@@ -290,6 +305,23 @@ def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage)
     return Rereading.start(target, path, end, coverage, int(run["id"]))
 
 
+def _stands(run: sqlite3.Row, again: Rereading) -> bool:
+    """Whether a run still stands where a reading in part started.
+
+    It is still being read, to the same place, from the same file (not its archive
+    since, nor nothing), and that file is still as long.
+    """
+
+    if run["status"] != "reading" or int(run["read_offset"]) != again.end:
+        return False
+    if usage_collect.source(again.target) != again.path:
+        return False
+    try:
+        return os.path.getsize(again.path) >= again.end
+    except OSError:
+        return False
+
+
 def _replace(collector: Collector, run: sqlite3.Row, target: Target, reading: Reading) -> None:
     """Put the new rows in place of the run's as one transaction, or write nothing."""
 
@@ -317,6 +349,9 @@ def _replace(collector: Collector, run: sqlite3.Row, target: Target, reading: Re
             raise _RefusedError("moved")
         if reading.last is not None:
             former = usage_claims.held(conn, run_id)
+            if usage_claims.strands(conn, run_id, former, reading.requests):
+                conn.execute("ROLLBACK")
+                raise _RefusedError("stranded")
             conn.execute("DELETE FROM usage_segments WHERE run_id = ?", (run_id,))
             conn.execute("DELETE FROM usage_requests WHERE run_id = ?", (run_id,))
             write_rows(conn, run_id, target.session, target.agent, reading.rows)

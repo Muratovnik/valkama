@@ -146,6 +146,32 @@ class ReadAgainTests(ForkedCopyCase):
     def test_the_request_goes_back_to_the_original_read_again_before_the_copy(self) -> None:
         self.assert_goes_back(copy_first=False)
 
+    def test_the_copy_keeps_the_request_while_the_original_cannot_be_read_again(self) -> None:
+        # The original left the request to the copy and has lost its transcript since: read
+        # again, the copy would give the request up and no run could take it back.
+        self.original.unlink()
+        report = usage_rebuild.rebuild(self.reader, self.store_path, session=FORK, agent=WORKER)
+        self.assertEqual(
+            [(usage_rebuild.REFUSED, "stranded")],
+            [(line.outcome, line.reason) for line in report.runs],
+        )
+        # Counted once, where it was.
+        self.assertEqual(OUTPUT, self.tokens("output_tokens", FORK, WORKER))
+        self.assertIsNone(self.tokens("output_tokens", ORIGIN, WORKER))
+        owner = self.reader.execute(
+            "SELECT run_id FROM usage_requests WHERE request = ?",
+            (request_key("msg_worker_reply"),),
+        ).fetchone()[0]
+        copy = self.run_row(FORK, WORKER)
+        self.assertEqual(copy["id"], owner)
+        # Kept with the run, so it is not tried again at every pass.
+        self.assertEqual("stranded", copy["reread_refused"])
+
+    def test_a_run_that_gives_no_request_up_is_read_again_all_the_same(self) -> None:
+        self.original.unlink()
+        self.read_again((FORK, ""))
+        self.assertNotIn((FORK, ""), self.stale())
+
 
 if __name__ == "__main__":
     unittest.main()

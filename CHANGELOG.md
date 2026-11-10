@@ -122,7 +122,11 @@ checkouts are therefore distinguishable even at the same version.
   the lower run id. A request found in two transcripts is counted by that run. A run reading
   the request later counts it only when it comes first by the rule and the run holding it
   can still be read again, and every run that left a request to another records how many.
-  Schema 15 also records the client's request id and which reading wrote each run, and
+  A run that, read again, would give up a request it counted is refused as `stranded`
+  while any run that left a request to another can no longer be read: the request stays
+  counted once, where it was, instead of ending up in no run. A run that left a request
+  and loses its transcript after the holder gave it up, before being read again itself,
+  can still leave that request uncounted. Schema 15 also records the client's request id and which reading wrote each run, and
   adds columns this build leaves empty. The upgrade keeps one row per request by the same
   rule, under a verified `preschema15` snapshot with the liveness file copied beside it,
   and a build at schema 14 or older then refuses the store.

@@ -11,7 +11,8 @@ next pass comes as soon as one after a backlog does.
 - No liveness file, no reading again: observed time would come back as estimated.
 - Before the first run of a process is read again there is a verified snapshot of the
   store with its liveness copy that this process took: the schema upgrade's own recovery
-  point, or else one `usage_rebuild.take_snapshot`, once.
+  point, or else one `usage_rebuild.take_snapshot`, once. That one snapshot is not cut
+  to the pass's time: the pass that takes it lasts as long as copying the store does.
 - At its first pass a reader makes stale, once per price table, every run holding tokens
   without a cost of a model this table prices (`mark_priced`).
 - A run that cannot be read again (its transcript is gone, shorter, changed, unreadable,

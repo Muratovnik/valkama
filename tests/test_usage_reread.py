@@ -9,6 +9,7 @@ leaves every run, by its `reading` at 0.
 from __future__ import annotations
 
 import os
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -324,6 +325,79 @@ class SlicedTests(RereadCase):
         drain(self.history, SLICE_BUDGET)
         self.assertEqual(2, self.chunks.count(0))
         self.assert_as_one_go()
+
+    def test_no_other_run_starts_in_a_pass_whose_time_the_large_run_used_up(self) -> None:
+        # A pass of one chunk: the large run takes all of it, the last pass included.
+        self.assertTrue(self.history.run_pass(self.said.append, CHUNK_SECONDS))
+        self.reader.execute("UPDATE usage_runs SET reading = 0 WHERE session_id = 'live'")
+        other = self.run_row("live")["id"]
+        for _ in range(10 * MOST_PASSES):
+            self.assertTrue(self.history.run_pass(self.said.append, CHUNK_SECONDS))
+            self.assertNotIn(other, self.attempts)
+            if self.run_row("big")["reading"] == READING:
+                break
+        else:
+            self.fail("the large run was never read to its end")
+        self.assertFalse(self.history.run_pass(self.said.append, CHUNK_SECONDS))
+        self.assertIn(other, self.attempts)
+        self.assertEqual(READING, self.run_row("live")["reading"])
+
+    def part_read(self) -> tuple:
+        """The large run read again for one chunk, with what going on with it takes."""
+
+        collector = usage_collect.Collector(self.reader, self.store_path)
+        (target,) = [t for t in collector.finder.targets(set()) if t.session == "big"]
+        coverage = liveness.Coverage(liveness.intervals(self.store_path))
+        line = usage_rebuild.rebuild_run(
+            collector, self.run_row("big"), target, coverage, deadline=0.0
+        )
+        self.assertEqual(usage_rebuild.UNFINISHED, line.outcome)
+        return collector, target, coverage, line.rereading
+
+    def go_on(self, part: tuple) -> usage_rebuild.RunReport:
+        collector, target, coverage, again = part
+        return usage_rebuild.rebuild_run(
+            collector, self.run_row("big"), target, coverage, resume=again
+        )
+
+    def assert_dropped(self, line: usage_rebuild.RunReport) -> None:
+        self.assertEqual((usage_rebuild.REFUSED, "moved"), (line.outcome, line.reason))
+        row = self.run_row("big")
+        self.assertEqual((0, None), (row["reading"], row["reread_at"]), "nothing was written")
+
+    def test_a_reading_in_part_goes_on_only_while_its_run_stands_where_it_started(self) -> None:
+        with self.subTest("nothing changed"):
+            self.assertEqual(usage_rebuild.REBUILT, self.go_on(self.part_read()).outcome)
+            self.reader.execute(
+                "UPDATE usage_runs SET reading = 0, reread_at = NULL WHERE session_id = 'big'"
+            )
+        with self.subTest("the run is read from another file since"):
+            elsewhere = self.big.path.with_name("elsewhere.jsonl")
+            shutil.copyfile(self.big.path, elsewhere)
+            part = self.part_read()
+            with mock.patch.object(usage_collect, "source", return_value=str(elsewhere)):
+                self.assert_dropped(self.go_on(part))
+        with self.subTest("the file went between the check and the read"):
+            part = self.part_read()
+            with mock.patch.object(usage_collect, "_read_lines", side_effect=FileNotFoundError):
+                self.assert_dropped(self.go_on(part))
+        with self.subTest("the reader marked the run"):
+            part = self.part_read()
+            self.reader.execute("UPDATE usage_runs SET status = 'missing' WHERE session_id = 'big'")
+            self.assert_dropped(self.go_on(part))
+            self.reader.execute("UPDATE usage_runs SET status = 'reading' WHERE session_id = 'big'")
+        with self.subTest("the file is shorter now"):
+            part = self.part_read()
+            os.truncate(self.big.path, part[3].end - 1)
+            self.assert_dropped(self.go_on(part))
+
+    def test_a_transcript_gone_between_passes_is_refused_as_missing_not_as_failed(self) -> None:
+        self.assertTrue(self.history.run_pass(self.said.append, SLICE_BUDGET))
+        self.big.path.unlink()
+        drain(self.history, SLICE_BUDGET)
+        row = self.run_row("big")
+        self.assertEqual(("missing", 0), (row["reread_refused"], row["reading"]))
+        self.assertEqual("ok", self.doctor_check()["status"])
 
 
 class LivenessTests(RereadCase):
