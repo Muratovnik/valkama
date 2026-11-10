@@ -29,6 +29,11 @@
  *
  * A host that gives the row a line of its own makes it its line's width with a class on the
  * tag, and shares that width among the segments by `--segmented-option-grow`.
+ *
+ * A segment may say more than its label: the `option` slot draws what it holds, and `tile`
+ * makes each a block of its own, its words at rest in the page's type, the row as many tiles
+ * to a line as fit — the Analytics figures, each the measure its charts show. The segment's
+ * words are still its name, so a tile says in words whatever it draws.
  */
 import { computed } from 'vue'
 
@@ -49,8 +54,11 @@ const props = withDefaults(
     }[]
     /** Whether the arrows show a tab's panel as they reach it, or Enter does. */
     activation?: 'automatic' | 'manual'
-    /** `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. */
-    size?: 'default' | 'compact' | 'inline'
+    /**
+     * `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. `tile` draws
+     * each segment as a block of the `option` slot's content.
+     */
+    size?: 'default' | 'compact' | 'inline' | 'tile'
     /** The ids that make the row a tab list over the panel it shows. */
     tabs?: TabIds | null
   }>(),
@@ -58,6 +66,10 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
+defineSlots<{
+  /** What a segment holds; its label by default. */
+  option?: (scope: { chosen: boolean; option: { label: string; value: T } }) => unknown
+}>()
 
 /** The segment the model is currently on, which the marks, the Tab stop and the keys ask about. */
 function isCurrent(option: { value: T }) {
@@ -157,7 +169,12 @@ function move(event: KeyboardEvent) {
       @click="select(option)"
       @keydown="move"
     >
-      {{ option.label }}
+      <slot
+        name="option"
+        :option="option"
+        :chosen="isCurrent(option)"
+        >{{ option.label }}</slot
+      >
     </button>
   </div>
 </template>
@@ -227,6 +244,26 @@ function move(event: KeyboardEvent) {
     min-height: calc(var(--size-control-inline) - 2 * var(--space-half));
     padding: 0 var(--space-2);
     font-size: var(--font-size-dense);
+  }
+}
+
+/* Each segment a tile: the row a grid of as many to a line as fit, each tile its words in the
+   page's type from its own start, as tall as the tallest of its line. */
+.segmented.size-tile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-1);
+  padding: var(--space-1);
+
+  .segmented-option {
+    display: grid;
+    gap: var(--space-1);
+    align-content: start;
+    min-height: 0;
+    padding: var(--space-3) var(--space-4);
+    font: var(--font-note);
+    text-align: start;
+    white-space: normal;
   }
 }
 

@@ -43,7 +43,7 @@ export function stubAnalyticsReads(answer: (query: URLSearchParams) => unknown) 
   return { asked, grouped, held }
 }
 
-function analyticsI18n(locale: 'en' | 'ru' = 'en') {
+export function analyticsI18n(locale: 'en' | 'ru' = 'en') {
   return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages, pluralRules })
 }
 

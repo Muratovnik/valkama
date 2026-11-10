@@ -44,6 +44,26 @@ export const analyticsMessages = {
         unknown: 'Unknown',
         deleted: 'Deleted task',
       },
+      measures: {
+        label: 'What the charts show',
+        time: 'Agent time',
+        tokens: 'Tokens',
+        cost: 'Estimated cost at API prices',
+      },
+      figures: {
+        noTime: 'No time counted',
+        noTokens: 'No tokens',
+        noPrice: 'No price',
+        costNote: 'An estimate at API list prices, not a bill',
+        unpriced: '{count} token without a price | {count} tokens without a price',
+      },
+      change: {
+        up: '↑ {change} against {period}',
+        down: '↓ {change} against {period}',
+        same: 'The same as {period}',
+        none: 'Nothing spent in {period} to compare with',
+        before: 'the period before',
+      },
       filters: {
         title: 'Filters',
         titleCount: 'Filters · {count}',
@@ -96,6 +116,27 @@ export const analyticsMessages = {
         none: 'Без задачи',
         unknown: 'Неизвестно',
         deleted: 'Удалённая задача',
+      },
+      measures: {
+        label: 'Что показывают графики',
+        time: 'Время агентов',
+        tokens: 'Токены',
+        cost: 'Оценка стоимости по ценам API',
+      },
+      figures: {
+        noTime: 'Время не учтено',
+        noTokens: 'Нет токенов',
+        noPrice: 'Нет цены',
+        costNote: 'Оценка по прейскуранту API, а не счёт',
+        unpriced:
+          '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
+      },
+      change: {
+        up: '↑ {change} к {period}',
+        down: '↓ {change} к {period}',
+        same: 'Столько же, сколько {period}',
+        none: 'За {period} не потрачено ничего, сравнивать не с чем',
+        before: 'предыдущий период',
       },
       filters: {
         title: 'Фильтры',

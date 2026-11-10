@@ -13,6 +13,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
+import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import {
@@ -199,7 +200,15 @@ const emptyDescription = computed(() =>
       :state="read.state.value"
       :empty-description="emptyDescription"
       @retry="read.retry"
-    />
+    >
+      <template #default="{ payload }">
+        <SpendingReport
+          :usage="payload"
+          :measure="view.measure"
+          @update:measure="(measure) => change({ measure })"
+        />
+      </template>
+    </PlatformStatePanel>
   </section>
 </template>
 

@@ -13,8 +13,8 @@ import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 export const PERIODS = ['week', 'weeks4', 'custom'] as const
 export type PeriodPreset = (typeof PERIODS)[number]
 
-const MEASURES = ['time', 'tokens', 'cost'] as const
-type Measure = (typeof MEASURES)[number]
+export const MEASURES = ['time', 'tokens', 'cost'] as const
+export type Measure = (typeof MEASURES)[number]
 
 export interface AnalyticsView {
   /** The dimension the bars and the stacks break work down by. */

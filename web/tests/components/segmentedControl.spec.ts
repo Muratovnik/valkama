@@ -210,3 +210,43 @@ describe('SegmentedControl as tabs', () => {
     expect(chosen.value).toBe('graph')
   })
 })
+
+/** What a host draws in a segment: its words and whether it is the one chosen. */
+const drawSegment = ({ option, chosen: on }: { chosen: boolean; option: { label: string } }) =>
+  h('span', `${option.label}: ${on ? 'shown' : 'not shown'}`)
+
+describe('SegmentedControl with segments of its host', () => {
+  it('draws what the host gives each segment, and each stays a radio the arrows choose', async () => {
+    const chosen = ref('time')
+    const draw = () =>
+      h(
+        SegmentedControl<string>,
+        {
+          'label': 'Measure',
+          'size': 'tile',
+          'modelValue': chosen.value,
+          'options': [
+            { value: 'time', label: 'Time' },
+            { value: 'cost', label: 'Cost' },
+          ],
+          'onUpdate:modelValue': (value: string) => (chosen.value = value),
+        },
+        { option: drawSegment },
+      )
+    const wrapper = mount(
+      defineComponent(() => draw),
+      { attachTo: document.body },
+    )
+    mounted.push(wrapper)
+    const radios = wrapper.findAll('[role="radio"]')
+    expect(radios.map((radio) => radio.text())).toEqual(['Time: shown', 'Cost: not shown'])
+    expect(wrapper.get('[role="radiogroup"]').classes()).toContain('size-tile')
+    pressOn(radios[0]?.element ?? null, 'ArrowRight')
+    await wrapper.vm.$nextTick()
+    expect(chosen.value).toBe('cost')
+    expect(wrapper.findAll('[role="radio"]').map((radio) => radio.text())).toEqual([
+      'Time: not shown',
+      'Cost: shown',
+    ])
+  })
+})
