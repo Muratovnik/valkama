@@ -19,6 +19,7 @@ marks its run and costs the pass nothing.
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 import time
@@ -29,7 +30,7 @@ from .. import transcripts
 from ..planning import agents, calls, ladder
 from . import liveness
 from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT, Clock
-from .usage_ledger import SELECT_PROVISIONAL, Fallback, Ledger, moment, row_from, stamp
+from .usage_ledger import SELECT_PROVISIONAL, Fallback, Ledger, Row, moment, row_from, stamp
 from .usage_steps import Step, claude_step, codex_step, worth_parsing
 from .usage_targets import CLAUDE, CODEX, Finder, Target
 
@@ -54,6 +55,58 @@ class _Pass:
     backlog: bool = False
     #: The sessions that had something new.
     moved: set[str] = field(default_factory=set)
+
+
+@dataclass
+class Progress:
+    """Where the reading of one run stands between two chunks: all the next one starts from."""
+
+    state: dict = field(default_factory=dict)
+    packet_item: str | None = None
+    events_after: int = 0
+    #: The rows a later write of the same turn may still move.
+    provisional: list[Row] = field(default_factory=list)
+
+    @classmethod
+    def stored(cls, conn: sqlite3.Connection, run: sqlite3.Row) -> Progress:
+        """Where a run's row says it stands."""
+
+        return cls(
+            json.loads(run["state"]),
+            run["packet_item"],
+            int(run["events_after"]),
+            [row_from(row) for row in conn.execute(SELECT_PROVISIONAL, (int(run["id"]),))],
+        )
+
+
+@dataclass
+class Parsed:
+    """What one chunk made of a run, before anything is written."""
+
+    progress: Progress
+    #: `closed` holds the rows this chunk finished, `rows` the provisional ones, and
+    #: `new_requests` what it counted.
+    ledger: Ledger
+    clock: Clock
+
+
+@dataclass
+class Reading:
+    """A run read again from the start of its file, in memory."""
+
+    #: Every segment, the closed ones first and the provisional ones of the last turn after.
+    rows: list[Row]
+    #: Every request counted.
+    requests: set[int]
+    #: What the last chunk left, for the run's row; None when there was nothing to read.
+    last: Parsed | None
+
+
+def source(target: Target) -> str | None:
+    """The file a run is read from: its own path while it is there, else Valkama's archive."""
+
+    path = target.path if target.path and os.path.isfile(target.path) else target.archive
+    return path if path and os.path.isfile(path) else None
 
 
 def _read_lines(path: str, offset: int, limit: int) -> tuple[list[bytes], int, bool]:
@@ -135,8 +188,8 @@ class Collector:
             self.conn.execute("UPDATE usage_runs SET status = ? WHERE id = ?", (status, run["id"]))
 
     def _read(self, target: Target, work: _Pass) -> None:
-        path = target.path if target.path and os.path.isfile(target.path) else target.archive
-        if not path or not os.path.isfile(path):
+        path = source(target)
+        if path is None:
             self._mark(target, "missing")
             return
         size = os.path.getsize(path)
@@ -173,13 +226,11 @@ class Collector:
 
         conn = self.conn
         run_id = int(run["id"])
-        state = json.loads(run["state"])
-        packet = {"item": run["packet_item"]}
-        first = state.get("clock", {}).get("first")
-        ledger = Ledger(
-            [row_from(row) for row in conn.execute(SELECT_PROVISIONAL, (run_id,))],
-            state.get("ledger", {}),
-            work.coverage,
+        parsed = self.parse(
+            target,
+            Progress.stored(conn, run),
+            lines,
+            work,
             lambda number: (
                 conn.execute(
                     "SELECT 1 FROM usage_requests WHERE run_id = ? AND request = ?",
@@ -187,16 +238,82 @@ class Collector:
                 ).fetchone()
                 is not None
             ),
+        )
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if not self.record(run_id, run["read_offset"], reached, parsed):
+                conn.execute("ROLLBACK")
+                return False
+            parsed.ledger.flush(conn, run_id, target.session, target.agent)
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        return True
+
+    def read_again(
+        self, target: Target, path: str, end: int, coverage: liveness.Coverage
+    ) -> Reading | None:
+        """Read `path` from its start to `end` as this reader reads it, writing nothing.
+
+        In the chunks `_read` takes, each through `parse`, with what one leaves for the
+        next kept in memory rather than in the store. A request counts as seen only when
+        an earlier chunk of this reading counted it, never because the store says so.
+        None when the bytes no longer end a line at `end`.
+        """
+
+        work = _Pass(coverage, math.inf)
+        progress = Progress()
+        rows: list[Row] = []
+        counted: set[int] = set()
+        last: Parsed | None = None
+        offset = 0
+        while offset < end:
+            lines, reached, _more = _read_lines(path, offset, min(CHUNK_BYTES, end - offset))
+            if reached == offset or reached > end:
+                return None
+            last = self.parse(target, progress, lines, work, counted.__contains__)
+            rows.extend(last.ledger.closed)
+            counted |= last.ledger.new_requests
+            progress = last.progress
+            offset = reached
+        return Reading([*rows, *progress.provisional], counted, last)
+
+    def parse(
+        self,
+        target: Target,
+        start: Progress,
+        lines: list[bytes],
+        work: _Pass,
+        seen: Callable[[int], bool],
+    ) -> Parsed:
+        """Turn one chunk into rows in memory, from where `start` says the run stands.
+
+        The only path from transcript bytes to segments: the background reader feeds it a
+        chunk at a time from the store, and a rebuild (`usage_rebuild`) the same chunks
+        from the start of the file, keeping what one chunk leaves for the next in memory.
+        `seen` says whether a request was already counted before this chunk. Nothing is
+        written here.
+        """
+
+        state = start.state
+        packet = {"item": start.packet_item}
+        ledger = Ledger(
+            start.provisional,
+            state.get("ledger", {}),
+            work.coverage,
+            seen,
             self._fallback(target, packet, work),
         )
         clock = Clock(state.get("clock", {}), work.coverage, ledger, self._keeps(target))
         steps = self._steps(lines, target, state)
-        events = self._events(target, int(run["events_after"]))
-        cursor, after = 0, int(run["events_after"])
+        events = self._events(target, start.events_after)
+        cursor, after = 0, start.events_after
         for step in steps:
             if step.packet and target.agent and not state.get("packet_read"):
                 state["packet_read"] = True
-                packet["item"] = ladder.first_named_item(conn, step.packet)
+                packet["item"] = ladder.first_named_item(self.conn, step.packet)
             step.packet = None
             while cursor < len(events) and events[cursor][0] <= step.at:
                 self._mark_event(clock, events[cursor])
@@ -206,40 +323,41 @@ class Collector:
         if clock.high is not None:
             ledger.retry_fallback(clock.high)
         state["clock"], state["ledger"] = clock.state(), ledger.memo()
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            moved = conn.execute(
+        return Parsed(Progress(state, packet["item"], after, ledger.rows), ledger, clock)
+
+    def record(self, run_id: int, read_from: object, reached: int, parsed: Parsed) -> bool:
+        """Move a run's row to what `parsed` leaves, inside the caller's transaction.
+
+        Only while the row still stands at `read_from`: whether it moved. A reader that
+        lost a race to another, or a rebuild that a reader overtook, writes nothing.
+        """
+
+        clock = parsed.clock
+        return (
+            self.conn.execute(
                 "UPDATE usage_runs SET read_offset = ?, events_after = ?, state = ?, status = ?,"
                 " packet_item = COALESCE(?, packet_item), human_seconds = ?,"
                 " subagent_seconds = ?, external_seconds = ?, gap_seconds = ?, first_at = ?,"
                 " last_at = ?, read_at = ? WHERE id = ? AND read_offset = ?",
                 (
                     reached,
-                    after,
-                    json.dumps(state, separators=(",", ":")),
+                    parsed.progress.events_after,
+                    json.dumps(parsed.progress.state, separators=(",", ":")),
                     "reading",
-                    packet["item"],
+                    parsed.progress.packet_item,
                     clock.left_out[HUMAN],
                     clock.left_out[SUBAGENT],
                     clock.left_out[EXTERNAL],
                     clock.left_out[GAP],
-                    stamp(clock.first) if clock.first is not None else first,
+                    stamp(clock.first) if clock.first is not None else None,
                     stamp(clock.high) if clock.high is not None else None,
                     stamp(time.time()),
                     run_id,
-                    run["read_offset"],
+                    read_from,
                 ),
             ).rowcount
-            if moved != 1:
-                conn.execute("ROLLBACK")
-                return False
-            ledger.flush(conn, run_id, target.session, target.agent)
-            conn.execute("COMMIT")
-        except BaseException:
-            if conn.in_transaction:
-                conn.execute("ROLLBACK")
-            raise
-        return True
+            == 1
+        )
 
     def _steps(self, lines: list[bytes], target: Target, state: dict) -> list[Step]:
         steps: list[Step] = []

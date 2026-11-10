@@ -223,28 +223,64 @@ class Ledger:
     def flush(self, conn: sqlite3.Connection, run_id: int, session: str, agent: str) -> None:
         """Write what this pass did, inside the caller's transaction."""
 
-        for row in [*self.closed, *self.rows]:
-            values = (
-                row.model,
-                stamp(row.started),
-                stamp(row.ended),
-                row.seconds,
-                row.item,
-                row.signal,
-                *(row.tokens.get(kind) for kind in TOKEN_COLUMNS),
-                row.cost,
-                row.book,
-                row.quality,
-                int(row.provisional),
-            )
-            if row.identity is None:
-                conn.execute(_INSERT, (run_id, session, agent, *values))
-            else:
-                conn.execute(_UPDATE, (*values, row.identity))
-        conn.executemany(
-            "INSERT OR IGNORE INTO usage_requests(run_id, request) VALUES (?, ?)",
-            ((run_id, number) for number in self.new_requests),
-        )
+        write_rows(conn, run_id, session, agent, [*self.closed, *self.rows], self.new_requests)
+
+
+#: A segment's columns as `segment_values` gives them, which is also how `_INSERT` and
+#: `_UPDATE` name them.
+SEGMENT_COLUMNS = (
+    "model",
+    "started_at",
+    "ended_at",
+    "seconds",
+    "work_item_id",
+    "signal",
+    *TOKEN_COLUMNS.values(),
+    "estimated_api_cost_usd",
+    "price_book",
+    "quality",
+    "provisional",
+)
+
+
+def segment_values(row: Row) -> tuple:
+    """One row as the store keeps it, in the order of `SEGMENT_COLUMNS`."""
+
+    return (
+        row.model,
+        stamp(row.started),
+        stamp(row.ended),
+        row.seconds,
+        row.item,
+        row.signal,
+        *(row.tokens.get(kind) for kind in TOKEN_COLUMNS),
+        row.cost,
+        row.book,
+        row.quality,
+        int(row.provisional),
+    )
+
+
+def write_rows(
+    conn: sqlite3.Connection,
+    run_id: int,
+    session: str,
+    agent: str,
+    rows: list[Row],
+    requests: set[int],
+) -> None:
+    """Insert the new rows and update the ones read back, inside the caller's transaction."""
+
+    for row in rows:
+        values = segment_values(row)
+        if row.identity is None:
+            conn.execute(_INSERT, (run_id, session, agent, *values))
+        else:
+            conn.execute(_UPDATE, (*values, row.identity))
+    conn.executemany(
+        "INSERT OR IGNORE INTO usage_requests(run_id, request) VALUES (?, ?)",
+        ((run_id, number) for number in requests),
+    )
 
 
 _INSERT = (
