@@ -647,7 +647,7 @@ and only fades the end of a strip that scrolls on past it.
   word that wraps. Centred on the line box instead, a glyph stood 1px high on a tile,
   2–3.5px off in the hover card and up to 3px off on the graph, a different amount on each.
 - Every sign beside words — a mark's glyph, a state's dot, a chevron, the session's sign in
-  the side panel and its dots on a tile — stands its middle on the middle of the capitals of its
+  the side panel, on a tile and on a graph card — stands its middle on the middle of the capitals of its
   line, `--size-text-middle` (`0.5cap`) above the baseline, and a box that centres a word
   trims it to its capitals (`.trimmed-word`). The capitals are the reference because the
   lines a sign stands beside are a reference, a number or a word that starts with one, and
@@ -1149,9 +1149,9 @@ Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs to the epic index, including its compact state,
 and to an epic's frame on the graph, where it is the one sign of work moving
 inside a folded frame; bundle headers on the board do not repeat a “working” label.
-A frame says that sign in words, «5 working», and never as dots or a number alone.
+A frame says that sign in words, «5 working», and never as a sign or a number alone.
 Zoomed out, where its band has no room for the words, it shortens to the count beside the
-working dots, «••• 5», and the reference is cut before the mark goes; it never gives way
+working session's sign, «◌ 5», and the reference is cut before the mark goes; it never gives way
 whole, since then nothing on the field says work is running. The header's hover text says
 it whole, as a zoomed-out card's does, and so does its button's name: over the work under no
 epic, whose one button is the fold, the fold's.
@@ -1169,16 +1169,19 @@ then the labels on one line — as many whole ones as it holds, up to three, the
 «+N», which opens the card like the rest of the sheet — then the holder and the
 steps when there are any, the steps only while the item is open. The holder is
 its executor: the glyph of the client whose session holds the item — Claude's,
-Codex's, a client's for any other — and after it what that session is doing: three
-running dots while it works on the item, still dots
-while it works on others, a ring while it waits for a person. A stale claim keeps
+Codex's, a client's for any other — and after it what that session is doing, as the
+session's sign (`SessionSign`) the side panel draws, at the client glyph's 14px and on its
+middle: the turning ring while it works on the item, the paused ring while it works on
+others, the question while it asks a person in the middle of a turn and the check while it
+waits with its turn over. A session silent over a day draws none there. A stale claim keeps
 its client in the warning tone and draws no session. A claim no session proved, with
 no session at work on the item, draws nothing: a person's glyph there said only
 that a claim existed, on items nobody was working. The client is the holder's name,
 the channel the server says the session proved itself on, and the session's doing
 is the read model's `live_work`, so the tile reads nothing the board does not
 already carry. Its words, «Держит claude · 5937aa01-1234 — работает над ней», «… —
-ждёт человека» and «… — захват устарел», are its hover text and what a screen reader
+спрашивает человека: ждёт разрешения или ответа», «… — ждёт человека» and «… — захват
+устарел», are its hover text and what a screen reader
 hears, and the hover card and the card say the name and the stale claim in full.
 Printed as a name and a «Захват устарел» beside it, the holder was the loudest line
 of a tile after the title and stood it 28px taller. Only the title takes the full ink and the row-title weight; a finished
@@ -1480,9 +1483,12 @@ line, its arrow keeping their direction: solid when any of them blocks, since a
 block is the one hard dependency, and dashed as context otherwise.
 
 Live work is what the read model's `live_work` says an agent's session is doing on
-an item now. A card says it at its foot as the working dots and a word: «работает»
-(`working`), «у сессии» (`held`), «ждёт» (`waiting`) or «молчит с <date>»
-(`quiet`). The word is the one mark of the state that is not a colour, so it never
+an item now. A card says it at its foot as the session's sign (`SessionSign`), the one
+the side panel and a tile draw, in one 14px box for every state, and a word: «работает»
+(`working`), «спрашивает» (waiting with a question to a person in the middle of a turn),
+«ждёт» (`waiting`, its turn over), «у сессии» (`held`) or «молчит с <date>» (`quiet`).
+The sign and the word stand as one line of text, the sign on the middle of the word's
+capitals. The word is the one mark of the state that is not a colour, so it never
 gives way: the holder's name beside it is cut first, and the card's accessible name
 says that name whole. Beside live work the foot drops «Закреплено за», which the
 word already implies, so the word, the name and a priority share the line and some
@@ -1491,12 +1497,13 @@ silent only after a day without a sign, so the hour tells a reader nothing. Only
 subagent of it) wrote to since the last message a person sent it — a claim, a step,
 a comment, a link from it — whether or not it holds the item, by itself or through
 a subagent; an item one of its subagents holds a step of; and an item Valkama runs
-an attempt on. Its dots pulse, and every line that stands for one of its links
+an attempt on. Its sign turns, and every line that stands for one of its links
 carries a comet: a short bright stroke in the hue of work under way, running from
 the line's start to its arrow over the line as it is drawn, solid or dashed. An
 item the session holds while it works on others stands still with «у сессии», so a
 coordinator holding many items does not move them all on every turn, and the items
-of a session whose turn ended and that waits for a person stand still with «ждёт»:
+of a session whose turn ended and that waits for a person stand still with «ждёт», and
+those of one that asks a person in the middle of a turn with «спрашивает»:
 motion that also meant holding or waiting would no longer tell work from rest. The
 words say what the session's events show, as a card's «Agents» tab does, and
 never that a process was seen alive. A frame counts the items under it that move,
@@ -1504,10 +1511,13 @@ so a folded one still shows the work inside it moving. The key names the live li
 and the strip offers the switch that stops it, only while something on the field moves: a
 drawn card being worked on, or a frame, folded or open, that counts work moving
 under it. Work the filter or the chain leaves off the field moves nothing there.
-The key names the still dots of held work while a card on the field shows them.
-In a forced palette the dots keep their fill in the palette's text colour, wherever
-they are drawn, the loading panel's included: a palette clears every fill to its
-ground, and three dots made of a fill would vanish with it.
+The key explains each session's sign a card on the field shows, and only those, with the
+card's own glyph at the card's size and standing still: «сессия работает над ней»,
+«спрашивает человека посреди хода», «ждёт: ход закончен», «у сессии, сейчас не в работе»
+and «молчит больше суток». A sign is a stroke, so a forced palette draws it in its host's
+ink. The loading panel's three dots, the one indicator still drawn as dots, keep their
+fill in the palette's text colour: a palette clears every fill to its ground, and dots
+made of a fill would vanish with it.
 
 Moving work starts by itself and lasts as long as the work, so the reader can stop
 it (WCAG 2.2.2): one button in the strip above the flow, «Остановить движение» and
@@ -1517,7 +1527,7 @@ graph and every space, kept in this browser (`localStorage`, `valkama-graph-moti
 across reloads and never in the address a link carries; storage that refuses the
 write keeps it as long as the page. Stopped, there is no comet at all, since a
 frozen one would be a dot stuck at an arrow: a live line keeps its stroke and is
-held still and wider, in the hue of work under way, and every working dot on the
+held still and wider, in the hue of work under way, and every working sign on the
 field stands still. Reduced motion outranks the button and needs none: nothing
 moves, as when stopped, and the button is not offered. A forced palette clears the
 hues, so a live line and its comet take the palette's colour for what is picked out
@@ -1526,7 +1536,7 @@ outlined; and its edge fills what is finished, dashes what has begun (review and
 work under way) and leaves the rest an empty outlined track.
 
 The comet keeps the rule, stated with the motion tokens, that a background refresh
-is never animated. It is a looping indicator, as the working dots are, saying that
+is never animated. It is a looping indicator, as the working sign's turn is, saying that
 work goes on for as long as it does, and not a transition of anything being read. A
 frame of the stream turns it on or off at once, with nothing easing in or out. The
 layout and the camera do not move for it: live work is laid on the placed field by
@@ -1902,8 +1912,8 @@ nothing for more than a day, and whose process nobody saw alive, may have crashe
 row still saying it runs. Silence proves nothing, so it still says it runs; its panel says
 since when, warns about two processes on one transcript, and offers to resume apart from
 the actions, with no focus and on no press but its own. The graph reads any session silent
-for more than a day the same way: its items stand still and say «молчит с <date>», the date
-and time of its last sign of life, and no frame counts them as worked on. The graph does
+for more than a day the same way: its items draw the dashed ring, stand still and say
+«молчит с <date>», the day of its last sign of life, and no frame counts them as worked on. The graph does
 not call the session ended; it only stops moving its work.
 
 The related work/session/evidence context is one grouped relationship region,
