@@ -734,10 +734,12 @@ sessions as the frame sent them. Under them up to three rows fold the rest, each
 when it holds something and named by what it holds, in this order: «ещё N у работающих
 сессий», the items held by a session at work on another item; «ещё N давно ждут», the items
 and sessions that have waited for over four hours; and «ещё N молчат больше суток», the items
-silent for over a day. Each starts folded, opens in place under itself, and its opening is
-kept on the device on its own; a device that opened the quiet work's fold before keeps
-«молчат больше суток» open. Opening one moves nothing above it and widens nothing: the
-numbers' column is sized with the folded rows already. Last, under the caption
+silent for over a day. Inside a fold the rows stand freshest first, and in «давно ждут», as in
+the run above, a row that asks a person stands first. Each starts folded, opens in place under
+itself, and its opening is kept on the device on its own; a device that opened the quiet
+work's fold before keeps «молчат больше суток» open. Opening one moves nothing above it and
+widens nothing: the numbers' column is sized with the folded rows already. Last, under the
+caption
 «Закреплённые», the pinned items not on view, by number: a pinned item on view stands with
 the work instead, once, and a pinned item that is held, waits long or is silent stands with
 the pinned. After the spaces, under the heading «Сессии вне пространств», stand the sessions

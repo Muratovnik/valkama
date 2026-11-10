@@ -185,7 +185,7 @@ describe('the sentence a row says', () => {
     })
     const { wrapper } = rail(space([liveRow('MAIN-8', { state: 'held' })], [waiting]), 'ru')
     expect(hintOf(row(wrapper, 'MAIN-8'))).toBe(
-      'MAIN-8 Work MAIN-8: отложена — её сессия работает над другой задачей',
+      'MAIN-8 Work MAIN-8: у сессии — сессия сейчас работает над другой задачей',
     )
     const session = row(wrapper, 'Compare two exports')
     expect(session.querySelector('.nav-row-detail')?.textContent).toBe('ждёт 2\u{A0}ч')

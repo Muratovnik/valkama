@@ -13,9 +13,11 @@
  * rest, which opens the card like the rest of the sheet; and, only when there is
  * something to say, its executor and how far its steps are. The executor is the
  * glyph of the client that holds it, then what that client's session is doing, as
- * the side panel says it: dots that run while it works on the item, held still
- * while it works on others, a ring while it waits for a person. A stale claim's
- * glyph takes the stale tone, and a claim no session stands behind draws nothing.
+ * the side panel draws it (`SessionSign`): one ring whose inside says the state, an
+ * arc that turns while it works on the item, a question while it asks a person, a
+ * check while it waits with its turn over, a pause while it works on others. A
+ * stale claim's glyph takes the stale tone, and a claim no session stands behind
+ * draws nothing.
  * The hover names who holds it and says the rest: the name and «Захват устарел» as
  * words were the longest things on the sheet after its title, and the card and the
  * hover card say both in full.

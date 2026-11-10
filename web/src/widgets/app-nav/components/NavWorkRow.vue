@@ -327,10 +327,6 @@ function press(event: MouseEvent) {
   .nav-row-link {
     font: var(--font-control);
   }
-
-  .nav-row-end {
-    display: none;
-  }
 }
 
 /* The open row in the system's own pair. Taking the row out of the forced palette takes
