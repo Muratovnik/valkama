@@ -71,7 +71,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
+import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -94,8 +94,8 @@ const props = defineProps<{
   agentsToken?: number
   /** The item's kind as the host's model has it, so its usage can be read with its record. */
   kind?: string
-  /** The epic's reference, which the record names only by id; the host's model knows it. */
-  parentReference?: string | null
+  /** The parent, which the record names only by id; the host's model knows it. */
+  parent?: Pick<WorkItemBrief, 'kind' | 'reference'> | null
   /** An address asked this card to go to its waiting question. */
   questionAsked?: boolean
   /** Where this card was left, when Back is what opened it again. */
@@ -336,7 +336,7 @@ defineExpose({ close, openFrom })
         :workflow="workflow"
         :busy="busy"
         :writable="writable"
-        :parent-reference="parentReference"
+        :parent="parent"
         :asking="questionWaits"
         @question="revealQuestion"
         @claim="claim"

@@ -64,11 +64,11 @@ test('an item is created with an epic found by search, a label the space has and
   const { dialog, sent } = await openComposer(page, 1280)
   await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
 
-  const epic = dialog.getByRole('combobox', { name: 'Epic', exact: true })
-  await expect(epic).toHaveValue('No epic')
+  const epic = dialog.getByRole('combobox', { name: 'Parent', exact: true })
+  await expect(epic).toHaveValue('No parent')
   await epic.click()
   await page.keyboard.type('rework')
-  const list = page.getByRole('listbox', { name: 'Epic' })
+  const list = page.getByRole('listbox', { name: 'Parent' })
   await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}In progress`])
   await page.keyboard.press('Enter')
   await expect(list).toHaveCount(0)
@@ -112,7 +112,7 @@ for (const { width, alone } of [
     page,
   }) => {
     const { dialog } = await openComposer(page, width)
-    for (const name of ['Labels', 'Epic']) {
+    for (const name of ['Labels', 'Parent']) {
       const field = dialog.getByRole('combobox', { name, exact: true })
       await field.click()
       const list = page.getByRole('listbox', { name })
@@ -147,22 +147,22 @@ test('a pointer opens the epic list over an empty search, the chosen epic standi
   page,
 }) => {
   const { dialog } = await openComposer(page, 1280)
-  const epic = dialog.getByRole('combobox', { name: 'Epic', exact: true })
-  await expect(epic).toHaveValue('No epic')
+  const epic = dialog.getByRole('combobox', { name: 'Parent', exact: true })
+  await expect(epic).toHaveValue('No parent')
   await epic.click()
-  const list = page.getByRole('listbox', { name: 'Epic' })
+  const list = page.getByRole('listbox', { name: 'Parent' })
   await expect(list).toBeVisible()
   // Nothing painted as selected: the whole value stood highlighted on every press. The words
   // stay in sight as the field's placeholder, and whatever is typed searches from nothing.
   await expect(epic).toHaveValue('')
-  await expect(epic).toHaveAttribute('placeholder', 'No epic')
+  await expect(epic).toHaveAttribute('placeholder', 'No parent')
   await page.keyboard.type('rew')
   await expect(epic).toHaveValue('rew')
   await expect(list.getByRole('option')).toHaveText([`MAIN-12 · ${EPIC_TITLE}In progress`])
   // Left without a choice, the field says what is still chosen.
   await dialog.getByRole('heading', { name: 'New work' }).click()
   await expect(list).toHaveCount(0)
-  await expect(epic).toHaveValue('No epic')
+  await expect(epic).toHaveValue('No parent')
   await expect(epic).not.toHaveAttribute('placeholder')
 })
 
@@ -170,9 +170,9 @@ test('an epic chosen with the pointer leaves the caret in its field, as one chos
   page,
 }) => {
   const { dialog } = await openComposer(page, 1280)
-  const epic = dialog.getByRole('combobox', { name: 'Epic', exact: true })
+  const epic = dialog.getByRole('combobox', { name: 'Parent', exact: true })
   await epic.click()
-  const list = page.getByRole('listbox', { name: 'Epic' })
+  const list = page.getByRole('listbox', { name: 'Parent' })
   await list.getByRole('option', { name: new RegExp(`^MAIN-12 · ${EPIC_TITLE}`, 'u') }).click()
   await expect(list).toHaveCount(0)
   await expect(epic).toHaveValue(`MAIN-12 · ${EPIC_TITLE}`)

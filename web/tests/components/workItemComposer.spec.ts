@@ -240,13 +240,14 @@ describe('WorkItemComposer epic and labels', () => {
     brief(22, { kind: 'bug', title: 'Another', labels: ['platform'] }),
   ]
 
-  it('offers the epics and the labels the space has, in the order they are reached for', async () => {
+  // Any item may hold others, one level deep, so the field offers parents and says so.
+  it('offers the parents and the labels the space has, in the order they are reached for', async () => {
     const wrapper = open()
     const [labels, epic] = wrapper.findAll('input[role="combobox"]')
     await epic?.trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(optionNames()).toEqual([
-      'No epic',
+      'No parent',
       'MAIN-12 · ParserIn progress',
       'MAIN-7 · Holds twoIn progress',
       'MAIN-3 · Old releaseDone',
@@ -309,11 +310,11 @@ describe('WorkItemComposer field order', () => {
 
   it('asks for the facts in the card’s order and for the description last', () => {
     const wrapper = mountComposer()
-    // The decision: the title, the kind and the priority, the labels and the epic, then the
+    // The decision: the title, the kind and the priority, the labels and the parent, then the
     // description; the dialog asked for the description between the two pairs.
-    expect(fieldNames()).toEqual(['Title', 'Kind', 'Priority', 'Labels', 'Epic', 'Description'])
+    expect(fieldNames()).toEqual(['Title', 'Kind', 'Priority', 'Labels', 'Parent', 'Description'])
     // And that order is the registry's, in which every surface reads an item's facets.
-    const facetField = { kind: 'Kind', priority: 'Priority', labels: 'Labels', parent: 'Epic' }
+    const facetField = { kind: 'Kind', priority: 'Priority', labels: 'Labels', parent: 'Parent' }
     const asked = FACET_ORDER.filter((facet) => facet in facetField).map(
       (facet) => facetField[facet as keyof typeof facetField],
     )

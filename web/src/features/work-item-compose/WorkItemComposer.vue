@@ -13,10 +13,10 @@
  * closes an open `#` list first and the dialog only after.
  *
  * The fields follow the card's order (`COMPOSER_ROWS`): the kind and the priority, the labels
- * and the epic, and the description last.
+ * and the parent, and the description last.
  *
- * The epic and the labels are chosen from what the space already has, searched as they
- * are typed (`SearchCombobox`): a reference typed by hand named an epic only when it was
+ * The parent and the labels are chosen from what the space already has, searched as they
+ * are typed (`SearchCombobox`): a reference typed by hand named a parent only when it was
  * spelled right, and a label typed by hand forked the one the filter menu knew. A new
  * label is still one Enter away.
  */
@@ -25,8 +25,8 @@ import { useI18n } from 'vue-i18n'
 
 import {
   COMPOSER_ROWS,
-  epicChoices,
   labelChoices,
+  parentChoices,
 } from '@/features/work-item-compose/composerChoices.ts'
 
 import FacetChoiceMark from '@/entities/work-item/components/FacetChoiceMark.vue'
@@ -95,9 +95,9 @@ const kindOptions = computed(() => facetChoices(KIND_CHOICES))
 const priorityOptions = computed(() => facetChoices(PRIORITY_CHOICES))
 
 const stateName = useStateName()
-const epicOptions = computed(() => epicChoices(props.items, t('compose.noEpic'), stateName))
+const parentOptions = computed(() => parentChoices(props.items, t('compose.noParent'), stateName))
 const labelOptions = computed(() => labelChoices(props.items))
-/** The row an epic's title stands in, which needs more than a phone's half. */
+/** The row a parent's title stands in, which needs more than a phone's half. */
 const holdsTitles = (row: readonly FacetId[]) => row.includes('parent')
 const addLabel = (label: string) => t('compose.addLabel', { label })
 const removeLabel = (label: string) => t('compose.removeLabel', { label })
@@ -204,8 +204,8 @@ async function submit() {
             v-else
             v-model="parent"
             :label="t('workItem.parent')"
-            :options="epicOptions"
-            :empty-label="t('compose.epicsEmpty')"
+            :options="parentOptions"
+            :empty-label="t('compose.parentsEmpty')"
             :disabled="busy"
           />
         </template>
@@ -247,7 +247,7 @@ async function submit() {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-3);
 
-  /* An epic's title and a row of labels need more than a phone's half: under 240px a column,
+  /* A parent's title and a row of labels need more than a phone's half: under 240px a column,
      the two stand one above the other, and each list opens as wide as its field. Side by side
      at 172px an epic's title was cut to a few words in its field and took six lines in its
      list. */

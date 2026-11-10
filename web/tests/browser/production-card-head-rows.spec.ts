@@ -132,9 +132,9 @@ for (const width of [WIDE, PHONE]) {
       width,
     })
     await expect(drawer.locator('.card-question')).toBeVisible()
-    const names = ['Состояние', 'Приоритет', 'Эпик', 'Исполняет', 'Метки']
+    const names = ['Состояние', 'Приоритет', 'Родитель', 'Исполняет', 'Метки']
     await expect(drawer.locator('.card-row-label')).toHaveText(names)
-    await expect(row(drawer, 'Эпик').value).toContainText(blockedWorkItem.reference)
+    await expect(row(drawer, 'Родитель').value).toContainText(blockedWorkItem.reference)
     // The state and the question waiting for its answer share the first row's line.
     const state = await box(drawer.locator('.card-facts .card-state').first())
     const question = await box(drawer.locator('.card-question'))

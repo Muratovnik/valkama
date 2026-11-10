@@ -89,9 +89,11 @@ function measure(page: Page, spec: Spec): Promise<Measured> {
 /** What a head holds beyond the state: each fact that prints a word beside its glyph. */
 interface Head {
   asking?: boolean
-  /** The reference of the item's epic, which is a link in the first row. */
+  /** The reference of the item's parent, which is a link among the facts. */
   epic?: string
   kind?: string
+  /** The parent's own kind, which its sign is drawn by; the fixture's is a plain task. */
+  parentKind?: string
   priority?: string
   /** The name of the state the item stands in. */
   state?: string
@@ -99,22 +101,27 @@ interface Head {
 
 const FULL_HEAD: Head = { asking: true, epic: 'MAIN-12', kind: 'epic', priority: 'high' }
 
-/** The item under its epic: the card's read says the id, the space's whose reference that is. */
-function inEpic(model: Record<string, unknown>, reference: string) {
+/**
+ * The item under its parent: the card's read says the id, the space's whose reference and kind
+ * that is.
+ */
+function inEpic(model: Record<string, unknown>, reference: string, kind?: string) {
   const items = model.work_items as { reference: string; work_item_id: string }[]
   return {
     ...model,
     work_items: items.map((item) => {
       if (item.work_item_id === workItem.work_item_id)
         return { ...item, parent_id: blockedWorkItem.work_item_id }
-      return item.work_item_id === blockedWorkItem.work_item_id ? { ...item, reference } : item
+      return item.work_item_id === blockedWorkItem.work_item_id
+        ? { ...item, reference, ...(kind ? { kind } : {}) }
+        : item
     }),
   }
 }
 
 /** The head of a card in the built app, on a state that moves, with the facts it is given. */
 async function openCard(page: Page, locale: 'ru' | 'en', width: number, head: Head = {}) {
-  const { asking, epic, kind, priority, state = 'Review' } = head
+  const { asking, epic, kind, parentKind, priority, state = 'Review' } = head
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page, {
@@ -126,7 +133,7 @@ async function openCard(page: Page, locale: 'ru' | 'en', width: number, head: He
       ...(priority ? { priority } : {}),
       ...(epic ? { parent_id: blockedWorkItem.work_item_id } : {}),
     }),
-    ...(epic ? { space: (model) => inEpic(model, epic) } : {}),
+    ...(epic ? { space: (model) => inEpic(model, epic, parentKind) } : {}),
   })
   if (asking) await installQuestions(page, [asked()])
   await page.goto(CARD)
@@ -287,7 +294,7 @@ function factBaselines(page: Page) {
     const canvas = document.createElement('canvas').getContext('2d')
     if (!canvas) throw new Error('no canvas')
     const WORDS =
-      '.state-label, .card-question-word, .facet-word:not(.facet-word-hidden), .card-epic-link a, .open-action-name, .card-holder-name, .chip-face'
+      '.state-label, .card-question-word, .facet-word:not(.facet-word-hidden), .card-parent-link a, .open-action-name, .card-holder-name, .chip-face'
     const measure = (word: Element) => {
       const range = document.createRange()
       range.selectNodeContents(word)
@@ -332,6 +339,60 @@ for (const locale of ['ru', 'en'] as const) {
   }
 }
 
+/**
+ * The parent's row: any item may hold others, so the row is «Parent» and its sign is the
+ * parent's own kind, in that kind's ink — the epic's for an epic, the generic parent's for a
+ * plain task — at the size a facet's glyph is drawn at, as the priority's beside it, and on the
+ * middle of the reference's capitals, as every sign of the facts stands. Every parent was called «Epic» under the epic's sign, a task holding others too.
+ */
+const PARENT_SIGNS = {
+  epic: { icon: 'lucide-layers', ink: '--color-kind-epic' },
+  task: { icon: 'lucide-corner-down-right', ink: '--color-kind-task' },
+} as const
+const PARENT_ROW = { ru: 'Родитель', en: 'Parent' } as const
+
+for (const locale of ['ru', 'en'] as const) {
+  for (const width of [1280, 390]) {
+    for (const [parentKind, sign] of Object.entries(PARENT_SIGNS)) {
+      test(`a ${parentKind} parent is named a parent and drawn by its own kind, ${locale} at ${width}px`, async ({
+        page,
+      }) => {
+        const drawer = await openCard(page, locale, width, { epic: 'MAIN-12', parentKind })
+        const names = await drawer.locator('.card-row-label').allTextContents()
+        expect(names.map((name) => name.trim())).toContain(PARENT_ROW[locale])
+        expect(names.map((name) => name.trim())).not.toContain(locale === 'ru' ? 'Эпик' : 'Epic')
+        const mark = drawer.locator('.card-parent [data-facet="parent"]')
+        await expect(mark).toHaveAttribute('data-kind', parentKind)
+        const glyph = mark.locator('svg')
+        await expect(glyph).toHaveClass(new RegExp(sign.icon, 'u'))
+        const drawn = await glyph.evaluate((element, ink) => {
+          const probe = document.createElement('span')
+          probe.style.color = `var(${ink})`
+          document.body.append(probe)
+          const expected = getComputedStyle(probe).color
+          probe.remove()
+          const { width: across, height } = element.getBoundingClientRect()
+          const declared = Number(element.getAttribute('width'))
+          return { across, declared, height, ink: getComputedStyle(element).color, expected }
+        }, sign.ink)
+        // A facet's glyph is drawn at 14px on every surface (`drawMarks`).
+        expect(drawn.declared).toBe(14)
+        expect(drawn.across, 'the sign is as wide as it is drawn').toBeCloseTo(drawn.declared, 1)
+        expect(drawn.height, 'the sign is as tall as it is drawn').toBeCloseTo(drawn.declared, 1)
+        expect(drawn.ink, `the sign takes ${sign.ink}`).toBe(drawn.expected)
+        const line = await measure(page, {
+          root: '.drawer .card-parent',
+          texts: { reference: '.card-parent-link a' },
+          marks: { sign: '[data-facet="parent"] svg' },
+        })
+        console.info(`parent ${parentKind} ${locale} ${width}px`, JSON.stringify(line))
+        for (const { gap, label, room } of alignmentGaps(line, [['sign', 'reference']]))
+          expect(gap, label).toBeLessThanOrEqual(room)
+      })
+    }
+  }
+}
+
 /** What a word short of room shows: its end replaced, its box inside the row. */
 const shapeOf = (word: Locator) =>
   word.evaluate((element) => ({
@@ -350,7 +411,7 @@ test('a long word on the first row is cut short sideways, with an ellipsis, and 
   expect(await shapeOf(drawer.locator('.card-facts .state-label', { hasText: state }))).toEqual(
     shortened,
   )
-  const word = drawer.locator('.card-facts-block .card-fact .card-epic-link', {
+  const word = drawer.locator('.card-facts-block .card-fact .card-parent-link', {
     hasText: 'MAIN-12',
   })
   await word.evaluate((element) => {

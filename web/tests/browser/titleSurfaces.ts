@@ -215,7 +215,7 @@ export const TITLE_SURFACES: Record<string, (page: Page, title: string) => Promi
       .click()
     await page
       .getByRole('dialog', { name: 'New work' })
-      .getByRole('combobox', { name: 'Epic' })
+      .getByRole('combobox', { name: 'Parent' })
       .click()
     const option = page.getByRole('option').filter({ hasText: workItemRef.reference })
     return option.locator('.combo-title')

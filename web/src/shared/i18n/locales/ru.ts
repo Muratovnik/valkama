@@ -931,7 +931,7 @@ export const ru = {
     title: 'Название',
     description: 'Описание',
     labels: 'Метки',
-    parent: 'Эпик',
+    parent: 'Родитель',
     create: 'Новая работа',
     newTitle: 'Новая работа',
     cancel: 'Отмена',

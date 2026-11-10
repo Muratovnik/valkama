@@ -66,9 +66,9 @@
   min-width: 0;
 }
 
-/* The epic's sign stands a glyph's gap before its link, as a kind's sign stands before the
+/* The parent's sign stands a glyph's gap before its link, as a kind's sign stands before the
    number on a tile; the link takes the ink of a value, against the label's quiet one. */
-.card-epic {
+.card-parent {
   gap: var(--space-1);
 }
 
@@ -80,7 +80,7 @@
 
 /* The trim clips sideways at the box, and a link's underline ends a fraction past its last
    letter: the room each side keeps that fringe, and takes none from the row. */
-.card-epic-link {
+.card-parent-link {
   padding-inline: var(--space-half);
   margin-inline: calc(-1 * var(--space-half));
   color: var(--color-text);

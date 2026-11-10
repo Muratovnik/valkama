@@ -109,7 +109,7 @@ test('in a narrow window two fields side by side keep their inputs level, whatev
   await expect(dialog).toHaveCSS('transform', 'none')
   // The labels have a hint under them and the epic none.
   const labels = await dialog.getByRole('combobox', { name: 'Labels' }).boundingBox()
-  const epic = await dialog.getByRole('combobox', { name: 'Epic' }).boundingBox()
+  const epic = await dialog.getByRole('combobox', { name: 'Parent' }).boundingBox()
   expect(labels?.x ?? 0).toBeLessThan(epic?.x ?? 0)
   expect(Math.round(labels?.y ?? -1)).toBe(Math.round(epic?.y ?? -2))
 })

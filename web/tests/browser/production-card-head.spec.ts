@@ -414,10 +414,10 @@ for (const width of [1440, 390]) {
     page,
   }) => {
     const drawer = await openLongCard(page, width)
-    // This item stands in no epic, so no row names one: an empty row would still take its
+    // This item stands under no parent, so no row names one: an empty row would still take its
     // gap and read as a blank line among the facts. Every row there is has a value.
     const names = await drawer.locator('.card-row-label').allTextContents()
-    expect(names).not.toContain('Эпик')
+    expect(names).not.toContain('Родитель')
     const widths = await drawer
       .locator('.card-row-value')
       .evaluateAll((facts) => facts.map((fact) => fact.getBoundingClientRect().width))

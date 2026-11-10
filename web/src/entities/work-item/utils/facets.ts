@@ -79,6 +79,11 @@ export interface FacetContext {
    * it; absent or null when no session is at it.
    */
   live?: LiveWork | null
+  /**
+   * The parent's kind, from the same record the reference comes from: any item may hold
+   * others, so the card names the parent by what it is rather than calling every one an epic.
+   */
+  parentKind?: WorkItemBrief['kind'] | null
   /** The parent's reference, which the brief carries only as an id. */
   parentReference?: string | null
   /**
@@ -221,8 +226,10 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     // Nobody prints nothing; a finished item names who held it before.
     preview: { form: 'glyph-word' },
   },
-  // The card's row is named «Эпик» and draws the epic's own sign, as a tile of the epic
-  // does, before the reference, which the card draws as a link to the epic.
+  // The card's row is named «Родитель» and draws the parent's own kind, as a tile of that
+  // item does — the epic's sign for an epic, the generic parent's for a plain task — before
+  // the reference, which the card draws as a link to it. Any item may hold others, one level
+  // deep, and the row called every parent «Эпик» with the epic's sign.
   parent: {
     tile: { form: 'glyph-word', flatOnly: true },
     graph: { form: 'glyph-word' },
@@ -422,18 +429,14 @@ export function kindMark(kind: WorkItemBrief['kind'], { form, plain }: FacetRule
 }
 
 function parentMark(surface: FacetSurface, form: FacetForm, context: FacetContext): FacetMark {
-  const reference = context.parentReference ?? ''
-  const mark = {
-    facet: 'parent',
-    value: reference,
-    form,
-    tone: PLAIN,
-    filter: null,
-    quiet: false,
-  } as const
-  return surface === 'card'
-    ? { ...mark, glyph: KIND_GLYPHS.epic, text: { key: 'workItem.kind.epic' }, ink: 'epic' }
-    : { ...mark, glyph: 'parent', text: { literal: reference } }
+  const value = context.parentReference ?? ''
+  const mark = { facet: 'parent', value, form, tone: PLAIN, filter: null, quiet: false } as const
+  if (surface !== 'card') return { ...mark, glyph: 'parent', text: { literal: value } }
+  // A parent the card cannot place is still a parent, never an epic it may not be; a plain
+  // task has no sign of its own and takes the generic parent's, in the task's ink.
+  const kind = context.parentKind ?? undefined
+  const text = { key: kind ? `workItem.kind.${kind}` : 'workItem.parent' }
+  return { ...mark, glyph: (kind && KIND_GLYPHS[kind]) ?? 'parent', text, ink: kind }
 }
 
 export function priorityMark(

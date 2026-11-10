@@ -2,7 +2,7 @@
 /**
  * What holds for an item, under its title, as rows that each say what they are: the label in
  * the quiet ink at the start of the row, in a column of its own, and the fact after it. The
- * state, its priority, its epic, who is on it, who else follows it and its labels are each a
+ * state, its priority, its parent, who is on it, who else follows it and its labels are each a
  * row. They used to share three unlabelled rows, the state, the priority and the epic in one,
  * so the epic's arrow read as a next task and nothing said which word was which.
  *
@@ -12,9 +12,10 @@
  * filters the Work view and ends in a × that takes it off, and a «+» attaches another.
  *
  * Every mark is the facet registry's, so the priority carries its glyph and its hue here as it
- * does on a tile. The epic is the epic's sign and its reference as an item link, the same link
- * a number in text is: a press opens the epic through the card's own departure (its draft
- * guard, its Back), and resting on it shows the epic's hover card. The holder's words are bare, a way to the session where there is one: a plate
+ * does on a tile. The parent is its own kind's sign — the epic's for an epic, the generic
+ * parent's for a plain task — and its reference as an item link, the same link a number in
+ * text is: a press opens it through the card's own departure (its draft guard, its Back), and
+ * resting on it shows its hover card. Any item may hold others, so the row is «Parent». The holder's words are bare, a way to the session where there is one: a plate
  * of the same weight as the chips above it made the row one more chip. The lease is a tooltip
  * and, when nobody is behind it any more, a warning dot: a detail of the holder, not a fact of
  * its own. The other sessions that follow the item are a row under it, each printed as its
@@ -66,10 +67,10 @@ const props = withDefaults(
     writable: boolean
     /** Whether a question on it waits for an answer: the facts offer to go and answer it. */
     asking?: boolean
-    /** The epic's reference; the record carries only its id. */
-    parentReference?: string | null
+    /** The parent by its reference and its kind; the record carries only its id. */
+    parent?: Pick<WorkItem, 'kind' | 'reference'> | null
   }>(),
-  { asking: false, parentReference: null },
+  { asking: false, parent: null },
 )
 
 const emit = defineEmits<{
@@ -147,12 +148,15 @@ function choosePriority(priority: string) {
 /** The labels' row stands where there are labels, or where one can be attached. */
 const labelsShown = computed(() => props.item.labels.length > 0 || props.writable)
 
-const context = computed(() => ({ parentReference: props.parentReference }))
+const context = computed(() => ({
+  parentKind: props.parent?.kind,
+  parentReference: props.parent?.reference,
+}))
 /** The one fact an item can lack; the others say their own word for having none. */
-const inEpic = computed(() => printsFacet('parent', 'card', props.item, context.value))
+const hasParent = computed(() => printsFacet('parent', 'card', props.item, context.value))
 
 /**
- * An item of the card's space named in the facts — the epic, the blocker a reason waits on —
+ * An item of the card's space named in the facts — the parent, the blocker a reason waits on —
  * links as the layers above say it does, with its address and its hover card, and opens
  * through the host, which asks about a draft first and keeps the way back. The facts stand
  * above the card's body and outside its layer, so they bring this part of it with them.
@@ -325,12 +329,12 @@ defineExpose({ actionCell })
       </div>
     </div>
     <div
-      v-if="inEpic"
+      v-if="hasParent"
       class="card-row"
     >
       <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.parent') }}</span>
       <div class="card-row-value">
-        <span class="card-fact card-epic">
+        <span class="card-fact card-parent">
           <FacetMarks
             surface="card"
             :item="item"
@@ -338,8 +342,8 @@ defineExpose({ actionCell })
             :context="context"
           />
           <RichText
-            class="card-epic-link trimmed-word one-line"
-            :source="parentReference ?? ''"
+            class="card-parent-link trimmed-word one-line"
+            :source="parent?.reference ?? ''"
             inline
           />
         </span>

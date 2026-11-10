@@ -421,7 +421,7 @@ and only fades the end of a strip that scrolls on past it.
   its `option` slot and `OptionGroups` through its `text` slot; neither knows a facet.
   `production-choice-marks.spec.ts` compares each row with its button.
 - **A form asks in the order the card reads.** The new-task dialog asks for the title,
-  then the kind and the priority, then the labels and the epic, and the description
+  then the kind and the priority, then the labels and the parent, and the description
   last: its rows come from `FACET_ORDER` (`COMPOSER_ROWS`), the order every surface
   reads an item's facets in, and the description follows the facts as it does on the
   card. It used to ask for the description between the two pairs.
@@ -1529,7 +1529,7 @@ stood in the identity line between the link and the date, read as one more fact 
 link to copy stays beside the reference: it is the reference's twin, in the head as on the
 hover card, and what it did is said at the end of that line. The scroller holds the rest and moves it 1:1: the title, the facts, the
 tabs, the content. The facts are rows 4px apart, each led by its name in the quiet ink in
-one column, «Состояние», «Приоритет», «Эпик», «Исполняет» or «Ранее отвечал», «Подписаны»
+one column, «Состояние», «Приоритет», «Родитель», «Исполняет» or «Ранее отвечал», «Подписаны»
 and «Метки», with the value on the name's baseline; a run of chips with no names read as
 one heap of state, priority, holder and tags. The state is its own transition menu, said
 once, so a move the server refuses leaves the chip naming where the item is, then, while a
@@ -1537,10 +1537,14 @@ question waits, «Ответить» with the question's sign: a verb that goes 
 Overview, in the state chip's word and on its baseline. It was drawn as the status «Ждёт ответа», a state that acted when pressed, and
 that the agent waits the state's dot already says. The priority is a menu as well, urgent to low, each
 choice saying what it means; on an item the client cannot change both are plain marks.
-The epic is the epic's sign, as a tile draws it, and its reference as an item link, the
-same link a number in text is: a press opens the epic through the card's departure, its
-draft guard and Back, and resting on it shows the epic's hover card; its number is trimmed to
-its letters as every value of the facts is, so it stands on its name's baseline. A ↳ and a
+The parent is named «Родитель», since any item may hold others one level deep, and drawn by
+its own kind's sign in that kind's ink, as a tile of it draws it: the epic's sign for an epic,
+a bug's for a bug, and for a plain task, which has no sign, the generic parent's. Every
+parent was called «Эпик» under the epic's sign, a task holding others too. Its reference is
+an item link, the same link a number in text is: a press opens the parent through the card's
+departure, its draft guard and Back, and resting on it shows its hover card; its number is
+trimmed to its letters as every value of the facts is, so it stands on its name's baseline.
+The new-task dialog's field is «Родитель» as well, offering «Без родителя» first. A ↳ and a
 bare number there led nowhere. Every item a fact names is such a link. The holder is bare words, shortened to its name and the start
 of its session with the whole value and its lease in a tooltip — on a holder that is a
 session's button, in what a screen reader hears after its name, since its hover says what a
