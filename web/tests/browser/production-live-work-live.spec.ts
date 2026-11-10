@@ -11,7 +11,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { liveFrame, liveRow, liveSpace } from '../support/liveFrame.ts'
+import { liveFrame, liveRow, liveSession, liveSpace } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
@@ -65,11 +65,11 @@ function seededFrame() {
             updated_at: '2026-11-09T10:00:00Z',
           }),
         ],
-        { unplaced: 1 },
+        { sessions: [liveSession('00000000-0000-4000-8000-000000000101')] },
       ),
       liveSpace('NEXT', [liveRow('NEXT-5', { title: 'Second space work', state: 'working' })]),
     ],
-    0,
+    [liveSession('00000000-0000-4000-8000-000000000102')],
   )
 }
 
@@ -204,15 +204,11 @@ async function opensInPlace(list: Locator, rowHeight: number) {
 for (const { locale, words } of [
   {
     locale: 'en-US',
-    words: { quiet: '2 more quiet', pinned: 'Pinned', unplaced: 'no task · 1 agent' },
+    words: { quiet: '2 more quiet', pinned: 'Pinned' },
   },
   {
     locale: 'ru-RU',
-    words: {
-      quiet: 'ещё 2\u{A0}тихие',
-      pinned: 'Закреплённые',
-      unplaced: 'без задачи · 1\u{A0}агент',
-    },
+    words: { quiet: 'ещё 2\u{A0}тихие', pinned: 'Закреплённые' },
   },
 ]) {
   test.describe(`the list of work going on now, ${locale}`, () => {
@@ -227,7 +223,6 @@ for (const { locale, words } of [
         'MAIN-31',
         'MAIN-12',
         'MAIN-5',
-        words.unplaced,
         words.quiet,
         words.pinned,
         'MAIN-7',
@@ -252,7 +247,6 @@ for (const { locale, words } of [
         'MAIN-31',
         'MAIN-12',
         'MAIN-5',
-        words.unplaced,
         words.quiet,
         words.pinned,
         'MAIN-7',

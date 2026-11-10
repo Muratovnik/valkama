@@ -136,7 +136,12 @@ async function prepare(page: Page, locale: 'ru' | 'en', width: number) {
 const EXECUTORS = [
   [490, 'claude (session 1a2b3c4d-5e6f-4a1b-9c2d-0123456789ab)', 'live', { state: 'working' }],
   [491, 'claude (session 2b3c4d5e-6f70-4a1b-9c2d-0123456789ab)', 'live', { state: 'held' }],
-  [492, 'codex (session 019a2b3c-4d5e-7f00-8000-0123456789ab)', 'live', { state: 'waiting' }],
+  [
+    492,
+    'codex (session 019a2b3c-4d5e-7f00-8000-0123456789ab)',
+    'live',
+    { state: 'waiting', long: false, asks: false },
+  ],
   [493, 'claude', 'unconfirmed', null],
   [494, 'claude', 'unconfirmed', { state: 'quiet', quiet_since: '2026-11-01T10:00:00Z' }],
 ] as const

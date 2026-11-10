@@ -10,8 +10,6 @@ export const liveWorkMessages = {
       group: 'Work under {name}',
       space: '{key} · {name}',
       empty: 'Nobody is working right now',
-      unplaced: 'no task · {count} agent | no task · {count} agents',
-      elsewhere: 'Outside spaces · {count} agent | Outside spaces · {count} agents',
       quietMore: '{count} more quiet',
       pinnedGroup: 'Pinned',
       partOf: 'part of {title}',
@@ -40,10 +38,6 @@ export const liveWorkMessages = {
       group: 'Работа в {name}',
       space: '{key} · {name}',
       empty: 'Сейчас никто не работает',
-      unplaced:
-        'без задачи · {count}\u{A0}агент | без задачи · {count}\u{A0}агента | без задачи · {count}\u{A0}агентов',
-      elsewhere:
-        'Вне пространств · {count}\u{A0}агент | Вне пространств · {count}\u{A0}агента | Вне пространств · {count}\u{A0}агентов',
       quietMore: 'ещё {count}\u{A0}тихая | ещё {count}\u{A0}тихие | ещё {count}\u{A0}тихих',
       pinnedGroup: 'Закреплённые',
       partOf: 'часть «{title}»',

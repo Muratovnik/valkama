@@ -646,8 +646,8 @@ and only fades the end of a strip that scrolls on past it.
   stands on the same middle as its words on every surface, and on the first line of a
   word that wraps. Centred on the line box instead, a glyph stood 1px high on a tile,
   2–3.5px off in the hover card and up to 3px off on the graph, a different amount on each.
-- Every sign beside words — a mark's glyph, a state's dot, a chevron, the session's dots in
-  the side panel and on a tile — stands its middle on the middle of the capitals of its
+- Every sign beside words — a mark's glyph, a state's dot, a chevron, the session's sign in
+  the side panel and its dots on a tile — stands its middle on the middle of the capitals of its
   line, `--size-text-middle` (`0.5cap`) above the baseline, and a box that centres a word
   trims it to its capitals (`.trimmed-word`). The capitals are the reference because the
   lines a sign stands beside are a reference, a number or a word that starts with one, and
@@ -726,8 +726,7 @@ with a rule over them; connected, it holds Settings alone and draws no rule.
 The Work list under «Work» is there to follow running work across spaces at a glance.
 Each space shows, first, only the items a session is working on or waiting at, the one
 whose item changed last on top (the live frame's `updated_at`; two changed in one second
-stand by number). Under them «без задачи · N агент» counts the agents at work in the
-space on no item. Then one row, «ещё N тихих», folds the quiet work — items a session
+stand by number). Then one row, «ещё N тихих», folds the quiet work — items a session
 holds while it works on others, and items silent for over a day — in the same order; it
 starts folded, opens in place under itself, and its opening is kept on the device.
 Opening it moves nothing above it and widens nothing: the numbers' column is sized with
@@ -741,6 +740,15 @@ never takes more than half of it either: a longer name ends in an ellipsis that 
 hint completes. An
 epic at work is a row like any other. This replaced a tree of epics with their items
 under them, quiet and pinned items mixed in by number, which read as a heap.
+
+A row's lead holds the sign of its session (`SessionSign`): one ring of one size and one
+stroke, 14px in the lead's column, whose inside says the state — a turning ring in the
+accent while it works on the item, a question in the warning tone while it asks a person in
+the middle of a turn, a check in the text's colour while it waits with its turn over, a
+paused ring, muted, while it holds the item and works on others, and a dashed ring, fainter
+still, for an item silent over a day. A pinned item with no work and a row gone from the
+frame draw none. The shape says the state wherever colour is lost, and the row's name and
+hint say it in words; the ring stops turning under reduced motion.
 
 In the Work list's phone panel (the navigation at most 760px wide), a closed item with
 no sign loses its lead column, so its title takes that room; an item with a sign keeps
@@ -1161,8 +1169,8 @@ then the labels on one line — as many whole ones as it holds, up to three, the
 «+N», which opens the card like the rest of the sheet — then the holder and the
 steps when there are any, the steps only while the item is open. The holder is
 its executor: the glyph of the client whose session holds the item — Claude's,
-Codex's, a client's for any other — and after it what that session is doing, as
-the side panel draws it: three running dots while it works on the item, still dots
+Codex's, a client's for any other — and after it what that session is doing: three
+running dots while it works on the item, still dots
 while it works on others, a ring while it waits for a person. A stale claim keeps
 its client in the warning tone and draws no session. A claim no session proved, with
 no session at work on the item, draws nothing: a person's glyph there said only

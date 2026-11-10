@@ -1,8 +1,8 @@
 /**
  * The rail's list of work going on now, as `kb`-free behaviour a reader relies on: the work
  * at hand freshest first with the quiet work folded and the pinned apart, a row that left
- * fading where it stood, the folds kept on the device, and the rows that say a state other
- * than work in words and no dots.
+ * fading where it stood, the folds kept on the device, the sign each row's session draws,
+ * and the rows that say a state other than work in words.
  */
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -195,7 +195,7 @@ describe('a row the frame no longer has', () => {
     await flushPromises()
     expect(drawn(wrapper)).toEqual(['MAIN-3', 'MAIN-5', 'MAIN-8'])
     expect(row(wrapper, 'MAIN-5').classList).toContain('muted')
-    expect(row(wrapper, 'MAIN-5').querySelector('.work-dots')).toBeNull()
+    expect(row(wrapper, 'MAIN-5').querySelector('.session-sign')).toBeNull()
     vi.advanceTimersByTime(FADING_MS - 1)
     await flushPromises()
     expect(drawn(wrapper)).toContain('MAIN-5')
@@ -283,12 +283,70 @@ describe('folds', () => {
   })
 })
 
+/** The sign a row draws in its lead, by the class that names it; null for none. */
+const signOf = (wrapper: ReturnType<typeof rail>['wrapper'], reference: string) => {
+  const lead = row(wrapper, reference).querySelector('.nav-row-lead')
+  const signs = [...(lead?.querySelectorAll('.session-sign') ?? [])]
+  expect(signs.length).toBeLessThanOrEqual(1)
+  const sign = signs[0]
+  if (!sign) return null
+  // Its host says the state in words; the sign says nothing to assistive technology.
+  expect(sign.closest('[aria-hidden="true"]')).not.toBeNull()
+  return [...sign.classList].find((name) => name.startsWith('session-sign-')) ?? null
+}
+
+describe('the sign of a row', () => {
+  it('draws the sign of its session in the lead, one per live state', () => {
+    const { wrapper } = rail(
+      liveFrame([
+        liveSpace('MAIN', [
+          liveRow('MAIN-1', { state: 'working' }),
+          liveRow('MAIN-2', { state: 'waiting', asks: true }),
+          liveRow('MAIN-3', { state: 'waiting' }),
+          liveRow('MAIN-4', { state: 'waiting', long: true }),
+          liveRow('MAIN-5', { state: 'held' }),
+          liveRow('MAIN-6', { state: 'quiet', quiet_since: '2026-11-01T00:00:00Z' }),
+          liveRow('MAIN-7', { pinned: true }),
+          liveRow('MAIN-8', { pinned: true, state_name: 'Done', is_terminal: true }),
+        ]),
+      ]),
+    )
+    expect(
+      ['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-7', 'MAIN-8'].map(
+        (reference) => signOf(wrapper, reference),
+      ),
+    ).toEqual([
+      'session-sign-working',
+      'session-sign-asks',
+      'session-sign-waiting',
+      'session-sign-waiting',
+      'session-sign-held',
+      'session-sign-quiet',
+      null,
+      null,
+    ])
+    // The dots and the ring the rows drew before are gone from the list.
+    expect(wrapper.find('.nav-work-list .work-dots').exists()).toBe(false)
+  })
+
+  it('draws a closed item’s sign while a session is still on it', () => {
+    const { wrapper } = rail(
+      liveFrame([
+        liveSpace('MAIN', [
+          liveRow('MAIN-9', { state: 'working', state_name: 'Done', is_terminal: true }),
+        ]),
+      ]),
+    )
+    expect(signOf(wrapper, 'MAIN-9')).toBe('session-sign-working')
+  })
+})
+
 describe('rows with no work moving', () => {
-  it('mutes a quiet row, draws no dots for it, and says since when it is silent', () => {
+  it('mutes a quiet row, draws its quiet sign, and says since when it is silent', () => {
     const { wrapper } = rail(busyFrame(), 'ru')
     const quiet = row(wrapper, 'MAIN-14')
     expect(quiet.classList).toContain('muted')
-    expect(quiet.querySelector('.work-dots')).toBeNull()
+    expect(quiet.querySelector('.nav-row-lead .session-sign-quiet')).not.toBeNull()
     // The number and the title are on the row: its hint is the reason alone, and always shows.
     expect(hintOf(quiet)).toMatch(/^молчит с 03 нояб\.?$/u)
     expect(tooltipOf(quiet)?.clipped).toBe(false)
@@ -320,14 +378,10 @@ describe('rows with no work moving', () => {
     expect(wrapper.get('.nav-work-list').text()).toBe('Сейчас никто не работает')
   })
 
-  it('counts agents on no row in their space and outside every space', () => {
+  it('draws no caption counting the agents on no row', () => {
     const { wrapper } = rail(busyFrame(), 'ru')
     const notes = wrapper.findAll('.nav-tree-note').map((note) => note.text())
-    expect(notes).toEqual([
-      'без задачи · 2\u{A0}агента',
-      'Закреплённые',
-      'Вне пространств · 1\u{A0}агент',
-    ])
+    expect(notes).toEqual(['Закреплённые'])
   })
 })
 

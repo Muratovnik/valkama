@@ -58,7 +58,6 @@ function escape(event: KeyboardEvent) {
 
 const listShown = computed(() => props.open.isOpen('work'))
 const countWords = computed(() => t('liveWork.open', { count: store.count }))
-const elsewhere = computed(() => store.frame?.elsewhere ?? 0)
 </script>
 
 <template>
@@ -76,7 +75,6 @@ const elsewhere = computed(() => store.frame?.elsewhere ?? 0)
         size="rail"
         :prefix="`${prefix}-rail`"
         :spaces="store.spaces"
-        :elsewhere="elsewhere"
         :open="open"
         :shown="shown"
         :target="target"
@@ -114,7 +112,6 @@ const elsewhere = computed(() => store.frame?.elsewhere ?? 0)
         size="touch"
         :prefix="`${prefix}-panel`"
         :spaces="store.spaces"
-        :elsewhere="elsewhere"
         :open="open"
         :shown="shown"
         :target="target"

@@ -37,8 +37,8 @@ async function open(page: Page, viewport: { height: number; width: number }) {
     key: 'LONG',
     name: LONG_NAME,
     project_id: 'example-project',
-    unplaced: 0,
     rows: [frameRow('LONG-1', { title: LONG_TITLE, state: 'working' })],
+    sessions: [],
   })
   await streams.live(frame)
   await expect(page.locator('.nav-tree-space-name', { hasText: LONG_NAME })).toBeVisible()

@@ -40,7 +40,7 @@ test('at 390 a closed item at work keeps its lead column, and a closed one with 
   await openPanel(page)
   const atWork = liveRow(page, 'MAIN-51', PANEL)
   await expect(atWork.locator('.nav-row-lead')).toHaveCount(1)
-  await expect(atWork.locator('.nav-row-lead .work-dots')).toBeVisible()
+  await expect(atWork.locator('.nav-row-lead .session-sign')).toBeVisible()
   for (const reference of ['MAIN-7', 'MAIN-70']) {
     const closed = liveRow(page, reference, PANEL)
     await expect(closed.locator('.nav-row-lead'), reference).toHaveCount(0)

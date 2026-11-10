@@ -8,6 +8,7 @@ export type ClosedStateDimension =
   | 'platform-ui-state'
   | 'project-binding'
   | 'session-feed-result'
+  | 'session-sign'
   | 'work-item-chain-group'
   | 'work-item-facet'
   | 'work-item-node-marker'
@@ -166,6 +167,18 @@ export const STATE_PRESENTATION = {
     normal: { tone: 'neutral', emphasis: 'quiet' },
     failed: { tone: 'danger', emphasis: 'strong' },
   },
+  // What a session is doing, as its sign draws it (`liveSign`, `SessionSign`). A session
+  // that stopped in the middle of a turn to ask a person waits on a decision, the call a
+  // question waiting on an item makes; work moving is info; a session waiting with its
+  // turn over, holding an item while it works on others, or silent, is the ordinary rest
+  // of an agent and carries no meaning colour.
+  'session-sign': {
+    working: { tone: 'info', emphasis: 'quiet' },
+    asks: { tone: 'warning', emphasis: 'strong' },
+    waiting: { tone: 'neutral', emphasis: 'quiet' },
+    held: { tone: 'neutral', emphasis: 'quiet' },
+    quiet: { tone: 'neutral', emphasis: 'quiet' },
+  },
   // What one attempt at a work item came to. Read alongside the session tones
   // above and they agree: a live attempt is green, a person being waited on is
   // neutral rather than red, and only a client that actually broke is danger.
@@ -240,6 +253,7 @@ type ConnectionLifecycleState = keyof (typeof STATE_PRESENTATION)['connection-li
 type PlatformUiState = keyof (typeof STATE_PRESENTATION)['platform-ui-state']
 type ProjectBindingState = keyof (typeof STATE_PRESENTATION)['project-binding']
 type SessionFeedResultState = keyof (typeof STATE_PRESENTATION)['session-feed-result']
+type SessionSignState = keyof (typeof STATE_PRESENTATION)['session-sign']
 type WorkItemChainGroupState = keyof (typeof STATE_PRESENTATION)['work-item-chain-group']
 type WorkItemFacetState = keyof (typeof STATE_PRESENTATION)['work-item-facet']
 type WorkItemNodeMarkerState = keyof (typeof STATE_PRESENTATION)['work-item-node-marker']
@@ -258,6 +272,7 @@ export type SemanticStatePair =
   | { dimension: 'platform-ui-state'; state: PlatformUiState }
   | { dimension: 'project-binding'; state: ProjectBindingState }
   | { dimension: 'session-feed-result'; state: SessionFeedResultState }
+  | { dimension: 'session-sign'; state: SessionSignState }
   | { dimension: 'work-item-chain-group'; state: WorkItemChainGroupState }
   | { dimension: 'work-item-facet'; state: WorkItemFacetState }
   | { dimension: 'work-item-node-marker'; state: WorkItemNodeMarkerState }
@@ -272,6 +287,7 @@ const CLOSED_STATE_DIMENSIONS = {
   'platform-ui-state': true,
   'project-binding': true,
   'session-feed-result': true,
+  'session-sign': true,
   'work-item-chain-group': true,
   'work-item-facet': true,
   'work-item-node-marker': true,

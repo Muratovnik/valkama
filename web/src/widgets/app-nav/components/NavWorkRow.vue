@@ -16,11 +16,13 @@
  * more than two fifths of the room, and the row's own title keeps the rest. Both stay on
  * one line, cut by an ellipsis, and the row's hint then says both whole.
  *
- * The sign: three dots that run while the session works on the item, held still while it
- * holds the item and works on others, a ring while it waits for a person, and nothing for
- * an item silent over a day, pinned with no work, or gone from the frame. Those three are
- * muted, and say why in the row's name and hover text; a pinned item that has closed says
- * its state where the agents' count would stand. A colour is never all that says it.
+ * The sign is the session's (`SessionSign`): a turning ring while it works on the item, a
+ * paused one while it holds the item and works on others, a question while it asks a person
+ * in the middle of a turn, a check while it waits with its turn over, and a dashed ring for
+ * an item silent over a day. An item pinned with no work, or gone from the frame, has none.
+ * Quiet, pinned idle and gone rows are muted, and say why in the row's name and hover text;
+ * a pinned item that has closed says its state where the agents' count would stand. A
+ * colour is never all that says it.
  *
  * The pin is the row's last part, in a column of its own that the rail keeps on every
  * row, so the title's ellipsis and the count stand clear of it, and it comes up under the
@@ -36,9 +38,11 @@ import { rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { liveSign } from '@/shared/lib/liveSign.ts'
 import type { ShownRow } from '@/shared/lib/liveWorkRows.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
+import SessionSign from '@/shared/ui/SessionSign.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -79,12 +83,8 @@ const muted = computed(() => {
   const { fading, pinned, state } = props.row
   return fading || state === 'quiet' || props.row.is_terminal || (state === null && pinned)
 })
-/** The dots, the ring or nothing: what the session is doing, while it does something. */
-const sign = computed(() => {
-  const state = props.row.state
-  return props.row.fading || state === null || state === 'quiet' ? null : state
-})
-const still = computed(() => sign.value === 'held')
+/** What the session is doing, while the frame still has the row. */
+const sign = computed(() => (props.row.fading ? null : liveSign(props.row.state, props.row.asks)))
 
 /** What the row's state is, in words: the row's name says it, and its hover text. */
 const stateWords = computed(() => {
@@ -109,7 +109,7 @@ const name = computed(() => said.value.filter(Boolean).join(' — '))
 const hint = computed(() => said.value.filter(Boolean).join('\n'))
 /**
  * The row's hint, beside the row: its whole words while its title is cut, and on a muted row
- * the reason no mark shows (a closed row's state is its last word), under its whole words
+ * the reason it is muted (a closed row's state is its last word), under its whole words
  * while they are cut. A phone has none. */
 const reason = computed(() => (muted.value && !props.row.is_terminal ? stateWords.value : ''))
 const rowHint = computed(() => {
@@ -176,18 +176,7 @@ function press(event: MouseEvent) {
         class="nav-row-sign"
         aria-hidden="true"
       >
-        <span
-          v-if="sign !== 'waiting'"
-          class="work-dots"
-          :class="{ still }"
-          ><i /><i /><i
-        /></span>
-        <VIcon
-          v-else
-          name="live-waiting"
-          :size="10"
-          :stroke-width="2.4"
-        />
+        <SessionSign :sign="sign" />
       </span>
     </span>
     <a
@@ -311,7 +300,6 @@ function press(event: MouseEvent) {
   justify-self: end;
   align-items: center;
   inline-size: var(--nav-row-sign);
-  color: var(--color-info);
   pointer-events: none;
 }
 
@@ -418,8 +406,9 @@ function press(event: MouseEvent) {
 }
 
 /* The open row in the system's own pair. Taking the row out of the forced palette takes
-   everything in it out too, so every ink in it, the dots and the rings are that pair's:
-   a grey number or a CanvasText dot on Highlight is a pair no palette promises. */
+   everything in it out too, so every ink in it and the sign are that pair's: a grey number
+   or a CanvasText sign on Highlight is a pair no palette promises. The sign takes the ink of
+   the lead it stands in. */
 @media (forced-colors: active) {
   .nav-row.current {
     color: HighlightText;
@@ -429,10 +418,6 @@ function press(event: MouseEvent) {
     :is(.nav-row-sign, .nav-row-number, .nav-row-epic, .nav-row-epic-mark, .nav-row-title),
     :is(.nav-row-meta, .nav-row-pin) {
       color: HighlightText;
-    }
-
-    .work-dots > * {
-      background: HighlightText;
     }
 
     .nav-row-pin:focus-visible,

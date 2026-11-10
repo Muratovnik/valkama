@@ -55,7 +55,7 @@ export function departures(
 function spaceAt(spaces: ShownSpace[], departed: DepartedRow): ShownSpace {
   const found = spaces.find((space) => space.key === departed.space.key)
   if (found) return found
-  const space: ShownSpace = { ...departed.space, unplaced: 0, rows: [] }
+  const space: ShownSpace = { ...departed.space, sessions: [], rows: [] }
   const after = spaces.findIndex((other) => other.key > space.key)
   spaces.splice(after === -1 ? spaces.length : after, 0, space)
   return space

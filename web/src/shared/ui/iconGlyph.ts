@@ -35,7 +35,10 @@ import {
   Circle,
   CircleAlert,
   CircleCheck,
+  CircleDashed,
   CircleHelp,
+  CirclePause,
+  CircleQuestionMark,
   CircleSlash,
   Code,
   CodeXml,
@@ -57,6 +60,7 @@ import {
   Link,
   List,
   ListChecks,
+  LoaderCircle,
   Menu,
   MessageSquare,
   Monitor,
@@ -255,6 +259,14 @@ const ICONS: Record<string, Component> = {
   'agent': Bot,
   'live-waiting': Circle,
   'pin': Pin,
+  // What a session is doing, as one ring of one size whose inside says it (`SessionSign`):
+  // at work, asking a person in the middle of a turn, waiting with its turn over, at work on
+  // other items, silent for over a day. The asking one is the generic glyph's own shape.
+  'session-working': LoaderCircle,
+  'session-asks': CircleQuestionMark,
+  'session-waiting': CircleCheck,
+  'session-held': CirclePause,
+  'session-quiet': CircleDashed,
 }
 
 interface GlyphShape {

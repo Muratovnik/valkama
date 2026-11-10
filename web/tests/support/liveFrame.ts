@@ -1,8 +1,9 @@
 /**
  * Live-work frames for tests, in the contract's shape: a row is an open task with no live
- * work unless a test says otherwise, and a space binds the example project.
+ * work unless a test says otherwise, a space binds the example project, and a session on no
+ * row waits with its turn over.
  */
-import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
+import type { LiveFrame, LiveSession } from '@/shared/api/liveFrameModel.ts'
 
 type Space = LiveFrame['spaces'][number]
 type Row = Space['rows'][number]
@@ -15,7 +16,11 @@ export function liveRow(reference: string, overrides: Partial<Row> = {}): Row {
     parent: null,
     state: null,
     agents: 0,
+    long: false,
+    asks: false,
+    since: null,
     quiet_since: null,
+    executor: null,
     pinned: false,
     state_name: 'Dev',
     is_terminal: false,
@@ -29,20 +34,43 @@ export function liveSpace(key: string, rows: Row[], overrides: Partial<Space> = 
     key,
     name: `${key} space`,
     project_id: 'example-project',
-    unplaced: 0,
     rows,
+    sessions: [],
     ...overrides,
   }
 }
 
-export function liveFrame(spaces: Space[], elsewhere = 0): LiveFrame {
+/** A Claude Code session open in a terminal, on no row of the frame. */
+export function liveSession(session: string, overrides: Partial<LiveSession> = {}): LiveSession {
+  return {
+    session,
+    title: `Session ${session.slice(-4)}`,
+    folder: 'example-project',
+    state: 'waiting',
+    long: false,
+    asks: false,
+    agents: 0,
+    since: '2026-11-01T09:00:00Z',
+    executor: {
+      session,
+      agent: null,
+      opened_in: 'terminal',
+      opened_host: '',
+      family: 'claude',
+      state: 'live',
+    },
+    ...overrides,
+  }
+}
+
+export function liveFrame(spaces: Space[], elsewhere: LiveSession[] = []): LiveFrame {
   return { spaces, elsewhere }
 }
 
 /**
  * A busy frame: two spaces, an epic at work heading its own group, every live state, a
- * quiet row, a pinned row with no work, a pinned closed row, agents on no row, and
- * numbers of one, two and three digits side by side at both levels.
+ * quiet row, a pinned row with no work, a pinned closed row, sessions on no row in a space
+ * and under none, and numbers of one, two and three digits side by side at both levels.
  */
 export function busyFrame(): LiveFrame {
   const silent = { state: 'quiet', quiet_since: '2026-11-02T09:00:00Z' } as const
@@ -80,13 +108,17 @@ export function busyFrame(): LiveFrame {
           }),
           liveRow('MAIN-140', { parent: 'MAIN-4', title: 'Export the answers', ...silent }),
         ],
-        { unplaced: 2 },
+        {
+          sessions: [
+            liveSession('00000000-0000-4000-8000-000000000101', { state: 'working', agents: 2 }),
+          ],
+        },
       ),
       liveSpace('NEXT', [liveRow('NEXT-5', { title: 'Second space work', state: 'working' })], {
         project_id: 'second-project',
       }),
     ],
-    1,
+    [liveSession('00000000-0000-4000-8000-000000000102', { folder: '' })],
   )
 }
 

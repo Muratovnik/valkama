@@ -27,10 +27,10 @@ function tallFrame() {
     key: 'ZED',
     name: 'Long list',
     project_id: 'example-project',
-    unplaced: 0,
     rows: Array.from({ length: 20 }, (_, index) =>
       frameRow(`ZED-${index + 1}`, { state: index % 2 ? 'waiting' : 'working', agents: index % 3 }),
     ),
+    sessions: [],
   })
   return frame
 }
@@ -282,7 +282,7 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await expect(page).toHaveURL(/\/modules\/planning\/project\/example-project\?entity=/u)
 })
 
-test('a forced palette keeps the dots, and the open row is the system’s own pair throughout', async ({
+test('a forced palette keeps the signs, and the open row is the system’s own pair throughout', async ({
   page,
 }) => {
   await page.emulateMedia({ forcedColors: 'active' })
@@ -299,10 +299,15 @@ test('a forced palette keeps the dots, and the open row is the system’s own pa
   const frame = busyFrame()
   frame.spaces[0].rows.push(frameRow(workItemRef.reference, { state: 'working', agents: 1 }))
   await streams.live(frame)
-  const dot = liveRow(page, 'MAIN-12').locator('.work-dots i').first()
-  await expect(dot).toBeVisible()
-  const paint = await dot.evaluate((node) => getComputedStyle(node).backgroundColor)
-  expect(paint).not.toBe('rgba(0, 0, 0, 0)')
+  // Every sign is drawn in the palette's text, as the page's own words are, so none fades.
+  const signs = page.locator('.nav-work-list .nav-row:not(.current) .session-sign')
+  await expect(signs.first()).toBeVisible()
+  const inks = await signs.evaluateAll((nodes) => [
+    getComputedStyle(document.body).color,
+    ...nodes.map((node) => getComputedStyle(node).color),
+  ])
+  expect(inks.length).toBeGreaterThan(2)
+  expect(new Set(inks).size).toBe(1)
 
   const current = liveRow(page, workItemRef.reference)
   await expect(current.locator('.nav-row-link')).toHaveAttribute('aria-current', 'page')
@@ -317,21 +322,17 @@ test('a forced palette keeps the dots, and the open row is the system’s own pa
     }
     probe.remove()
     const parts = row.querySelectorAll(
-      '.nav-row-lead, .nav-row-number, .nav-row-title, .nav-row-meta',
+      '.nav-row-lead, .nav-row-number, .nav-row-title, .nav-row-meta, .session-sign',
     )
     return {
       pair,
       ground: getComputedStyle(row).backgroundColor,
       inks: [...parts].map((part) => getComputedStyle(part).color),
-      dots: [...row.querySelectorAll('.work-dots i')].map(
-        (part) => getComputedStyle(part).backgroundColor,
-      ),
     }
   })
   expect(seen.ground).toBe(seen.pair.ground)
-  expect(seen.inks).toHaveLength(4)
-  expect(seen.dots).toHaveLength(3)
-  for (const ink of [...seen.inks, ...seen.dots]) expect(ink).toBe(seen.pair.ink)
+  expect(seen.inks).toHaveLength(5)
+  for (const ink of seen.inks) expect(ink).toBe(seen.pair.ink)
 })
 
 const running = (page: Page) =>
@@ -339,14 +340,14 @@ const running = (page: Page) =>
     .locator('.nav-work-list')
     .evaluate(
       (list) =>
-        [...list.querySelectorAll('.work-dots i')]
-          .flatMap((dot) => dot.getAnimations())
+        [...list.querySelectorAll('.session-sign')]
+          .flatMap((sign) => sign.getAnimations())
           .filter((animation) => animation.playState === 'running').length,
     )
 
-test('the dots run, and reduced motion holds every one still', async ({ page }) => {
+test('the working sign turns, and reduced motion holds every one still', async ({ page }) => {
   await open(page, { width: 1280, height: 800 })
-  await expect(liveRow(page, 'MAIN-12').locator('.work-dots')).toBeVisible()
+  await expect(liveRow(page, 'MAIN-12').locator('.session-sign-working')).toBeVisible()
   await expect.poll(() => running(page)).toBeGreaterThan(0)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect.poll(() => running(page)).toBe(0)
@@ -378,7 +379,7 @@ for (const width of [320, 390]) {
 
     // An open row keeps its lead, with its sign in it; the lead's width and gap are its grid.
     await expect(current.locator('.nav-row-lead')).toHaveCount(1)
-    await expect(current.locator('.nav-row-lead .work-dots')).toBeVisible()
+    await expect(current.locator('.nav-row-lead .session-sign')).toBeVisible()
     const leadBox = await current.locator('.nav-row-lead').boundingBox()
     const room = await current.evaluate((node) => {
       const style = getComputedStyle(node)

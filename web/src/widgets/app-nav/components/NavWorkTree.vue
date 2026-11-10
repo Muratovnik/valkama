@@ -9,16 +9,13 @@ export const NAME_INDENT_TOUCH = 'calc(var(--size-control-target) + var(--space-
 <script setup lang="ts">
 /**
  * The side panel's list: each space the frame names, folded or open, with its work
- * under it, and what is at work in no row.
+ * under it.
  *
  * Under a space's head stand the items a session is working on or waiting at, freshest
- * first, each led by the title of the item it belongs to (`liveList`). Under them the
- * space says how many agents are at work in it on no row, «no task · N agents», as a
- * caption and not a place to go. Then one row, «N more quiet», folds the items held by a
- * session at work on others or silent for over a day; it starts folded, opens in place
- * and keeps its place when it does, so nothing above it moves. Last, under a caption of
- * their own, the pinned items not at work. The agents whose folder is under no space are
- * said once, after every space.
+ * first, each led by the title of the item it belongs to (`liveList`). Then one row,
+ * «N more quiet», folds the items held by a session at work on others or silent for over
+ * a day; it starts folded, opens in place and keeps its place when it does, so nothing
+ * above it moves. Last, under a caption of their own, the pinned items not at work.
  *
  * Every row's number stands in a column as wide as the list's longest number, folded rows
  * included, so the titles start at one x and opening the fold widens nothing.
@@ -63,7 +60,6 @@ export type NavTarget = (place: {
 }) => PlatformRoute | null
 
 const props = defineProps<{
-  elsewhere: number
   open: NavOpen
   prefix: string
   shown: NavShown | null
@@ -120,7 +116,7 @@ const trees = computed<SpaceTree[]>(() =>
   }),
 )
 const touch = computed(() => props.size === 'touch')
-const empty = computed(() => props.spaces.length === 0 && props.elsewhere === 0)
+const empty = computed(() => props.spaces.length === 0)
 /** A number as wide as the list's longest drawn, folded or not, which sizes every number column. */
 const widest = computed(() => {
   const lengths = trees.value.flatMap(({ list }) =>
@@ -130,15 +126,10 @@ const widest = computed(() => {
   )
   return '0'.repeat(Math.max(1, ...lengths))
 })
-const elsewhereWords = computed(() =>
-  t('liveWork.elsewhere', { count: props.elsewhere }, props.elsewhere),
-)
 
 /** A name cut short says itself beside the rail; the phone's panel has no room beside it. */
 const nameHint = (entry: SpaceTree) => (touch.value ? null : entry.label)
 const foldLabel = (entry: SpaceTree) => t('liveWork.group', { name: entry.label })
-const unplacedWords = (entry: SpaceTree) =>
-  t('liveWork.unplaced', { count: entry.space.unplaced }, entry.space.unplaced)
 const currentIn = (entry: SpaceTree) =>
   props.shown?.key === entry.space.key ? props.shown.reference : null
 const spaceCurrent = (entry: SpaceTree) =>
@@ -253,16 +244,6 @@ function escape(event: KeyboardEvent) {
             :widest="widest"
             @go="(next) => emit('go', next)"
           />
-          <p
-            v-if="entry.space.unplaced > 0"
-            class="nav-tree-note nav-tree-note-nested"
-          >
-            <span
-              v-tooltip.clipped="unplacedWords(entry)"
-              class="nav-tree-note-words one-line"
-              >{{ unplacedWords(entry) }}</span
-            >
-          </p>
           <NavWorkQuiet
             v-if="entry.list.quiet.length > 0"
             :entries="entry.list.quiet"
@@ -301,16 +282,6 @@ function escape(event: KeyboardEvent) {
         </div>
       </li>
     </ul>
-    <p
-      v-if="elsewhere > 0"
-      class="nav-tree-note"
-    >
-      <span
-        v-tooltip.clipped="elsewhereWords"
-        class="nav-tree-note-words one-line"
-        >{{ elsewhereWords }}</span
-      >
-    </p>
   </div>
 </template>
 

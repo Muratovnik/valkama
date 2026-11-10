@@ -440,9 +440,12 @@ export function liveWorkFor(model: PlanningReadModel): Record<string, LiveWork> 
   return Object.fromEntries(
     live.map((item, index): [string, LiveWork] => [
       item.work_item_id,
-      index % 4 === 3
-        ? { state: 'quiet', quiet_since: '2026-11-02T08:00:00Z' }
-        : { state: (['working', 'held', 'waiting'] as const)[index % 4] },
+      [
+        { state: 'working' } as const,
+        { state: 'held' } as const,
+        { state: 'waiting', long: false, asks: false } as const,
+        { state: 'quiet', quiet_since: '2026-11-02T08:00:00Z' } as const,
+      ][index % 4],
     ]),
   )
 }

@@ -52,7 +52,7 @@ describe('a card with live work', () => {
   })
 
   it('says «waiting» with still dots when the turn is over', () => {
-    const wrapper = card({ state: 'waiting' })
+    const wrapper = card({ state: 'waiting', long: false, asks: false })
     expect(wrapper.get('.graph-live-word').text()).toBe('waiting')
     expect(wrapper.get('.graph-live .work-dots').classes()).toContain('still')
   })
