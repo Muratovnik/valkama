@@ -284,6 +284,9 @@ describe('«Open session» on an item’s row', () => {
   })
 })
 
+/** The fold on «Work», the head of the list the panel's row stood in. */
+const workFold = () => document.querySelector<HTMLElement>('.nav-entry-fold')
+
 describe('the panel a press on a session goes on in', () => {
   const NAMED = { title: 'Compare two exports', state: 'working' } as const
   const holder = {
@@ -306,17 +309,21 @@ describe('the panel a press on a session goes on in', () => {
   }
 
   it.each([
-    ['a session’s row the frame drops', fromSession, () => space([])],
+    ['a session’s row the frame drops', fromSession, () => space([]), workFold],
     [
       'a session’s row the frame moves into the long fold',
       fromSession,
       () => space([], [liveSession(SESSION, { ...NAMED, state: 'waiting', long: true })]),
+      workFold,
     ],
-    ['an item’s «Open session» whose row starts to fade', fromItem, () => space([])],
-  ])('stays open and usable after a refresh: %s', async (_, from, next) => {
+    ['an item’s «Open session» whose row starts to fade', fromItem, () => space([]), workFold],
+    ['a session’s row the refresh keeps', fromSession, fromSession.frame, () => 'pressed'],
+  ])('stays open and usable after a refresh: %s', async (_, from, next, back) => {
     answerPlans(plan(vscode, { ...vscode, source: 'recorded' }, windowSteps))
     const { store, wrapper } = rail(from.frame())
-    from.press(wrapper)?.click()
+    const pressed = from.press(wrapper)
+    pressed?.focus()
+    pressed?.click()
     await flushPromises()
     const first = buttonNamed('Open the project window in VS Code')
     expect(document.activeElement).toBe(first)
@@ -332,5 +339,30 @@ describe('the panel a press on a session goes on in', () => {
     await flushPromises()
     expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK, SESSION_LINK])
     expect(document.querySelector('[role="dialog"]')).toBeNull()
+    // Focus goes back to what opened the panel, or to the list's head once that has gone.
+    const landed = back()
+    expect(document.activeElement).toBe(landed === 'pressed' ? pressed : landed)
+    expect(document.activeElement).not.toBe(document.body)
+  })
+
+  it('gives focus to the phone’s panel of the list once the row it came from has gone', async () => {
+    answerPlans(plan(vscode, { ...vscode, source: 'recorded' }, windowSteps))
+    const { store } = rail(fromSession.frame())
+    document.querySelector<HTMLElement>('.nav-work-rail')?.click()
+    await flushPromises()
+    const pressed = document.querySelector<HTMLElement>('.side-panel-body button.nav-row-link')
+    expect(pressed?.textContent).toContain(NAMED.title)
+    pressed?.focus()
+    pressed?.click()
+    await flushPromises()
+    store.accept(space([]))
+    await flushPromises()
+    buttonNamed('Open the project window in VS Code').click()
+    await flushPromises()
+    buttonNamed('Open the session in VS Code').click()
+    await flushPromises()
+    expect(pressed?.isConnected).toBe(false)
+    const sheet = document.querySelector('.side-panel-body')
+    expect(sheet?.contains(document.activeElement)).toBe(true)
   })
 })
