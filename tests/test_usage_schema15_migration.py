@@ -44,26 +44,27 @@ LABEL = "preschema15"
 HELD = "11111111-1111-4111-8111-111111111111"
 #: Runs as the schema-14 build wrote them: id, session, agent, first record.
 RUNS = (
-    (1, "main-early", "", "2030-03-04T09:00:10.000Z"),
-    (2, "main-early", "worker", "2030-03-04T09:00:00.000Z"),
-    (3, "main-late", "", "2030-03-04T09:05:00.000Z"),
-    (4, "main-unread", "", None),
-    (5, "main-same", "", "2030-03-04T09:05:00.000Z"),
+    (11, "main-late", "", "2030-03-04T09:05:00.000Z"),
+    (12, "main-early", "worker", "2030-03-04T09:00:00.000Z"),
+    (13, "main-early", "", "2030-03-04T09:00:10.000Z"),
+    (14, "main-unread", "", None),
+    (15, "main-same", "", "2030-03-04T09:05:00.000Z"),
 )
-#: Which runs counted which request, and which one keeps it.
+#: Which runs counted which request, and which one keeps it. Above the last level of the
+#: rule, the run that keeps a request has the higher id, so keeping the lowest is wrong.
 COUNTED = {
     # A main transcript's run before a subagent's, though the subagent's began first.
-    101: ((1, 2), 1),
+    101: ((12, 13), 13),
     # Two main runs: the earlier first record.
-    102: ((3, 1), 1),
+    102: ((11, 13), 13),
     # The same first record: the lower id.
-    103: ((5, 3), 3),
+    103: ((15, 11), 11),
     # A run with no first record comes after one with.
-    104: ((4, 3), 3),
+    104: ((14, 15), 15),
     # A row whose run is gone comes after every other.
-    105: ((99, 2), 2),
+    105: ((9, 12), 12),
     # Counted once already.
-    106: ((5,), 5),
+    106: ((15,), 15),
 }
 
 

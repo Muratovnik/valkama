@@ -143,12 +143,14 @@ class RuleTests(ClaimCase):
         self.assert_counted_once(self.run_of("main"), 2)
 
     def test_between_main_runs_the_earlier_first_record(self) -> None:
-        early = self.session("early")
         late = self.session("late")
         self.turn(late, 600)
         self.read()
+        early = self.session("early")
         self.turn(early, 0)
         self.read()
+        # The earlier run is the later one read, so the run id alone would pick the other.
+        self.assertLess(self.run_of("late"), self.run_of("early"))
         self.settle()
         self.assert_counted_once(self.run_of("early"), 2)
 

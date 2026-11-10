@@ -33,6 +33,19 @@ from tests.usage_fixtures import HOUR, Case, ClaudeRun, epoch, stamp, usage
 BUDGET = 2.5
 
 
+#: More passes than any test here needs; a reader still busy after them never ends.
+MOST_PASSES = 20
+
+
+def drain(reader: usage_reread.Reader, seconds: float = BUDGET) -> None:
+    """Run passes until nothing is left, and fail the test when that never comes."""
+
+    for _ in range(MOST_PASSES):
+        if not reader.run_pass(lambda _line: None, seconds):
+            return
+    raise AssertionError(f"the reader still had work after {MOST_PASSES} passes")
+
+
 class Clock:
     def __init__(self) -> None:
         self.now = 1000.0
@@ -140,8 +153,12 @@ class WorkOffTests(RereadCase):
     def test_no_run_starts_after_the_deadline(self) -> None:
         self.sessions(2)
         self.make_stale()
-        self.assertTrue(self.history.run_pass(self.said.append, 0.0))
+        # Nothing new is left, so only the deadline holds the stale runs back.
+        with mock.patch.object(self.history.collector, "run_pass", return_value=False):
+            self.assertTrue(self.history.run_pass(self.said.append, 0.0))
         self.assertEqual([], self.attempts)
+        # Nor is a recovery point taken for a pass with no time to use it.
+        self.assertEqual([], self.snapshots())
 
 
 class RefusalTests(RereadCase):
@@ -206,16 +223,14 @@ class RecoveryPointTests(RereadCase):
     def test_one_snapshot_with_its_liveness_copy_for_every_run(self) -> None:
         self.sessions(7)
         self.make_stale()
-        while self.pass_():
-            pass
+        drain(self.history)
         self.assertEqual(7, len(set(self.attempts)))
         [snapshot] = self.snapshots()
         backups = os.path.join(os.path.dirname(self.store_path), "backups")
         self.assertTrue(os.path.isfile(liveness.path_for(os.path.join(backups, snapshot))))
         # A later staleness in the same process takes none either.
         self.make_stale()
-        while self.pass_():
-            pass
+        drain(self.history)
         self.assertEqual([snapshot], self.snapshots())
 
 
@@ -257,8 +272,7 @@ class UpgradeRecoveryPointTests(unittest.TestCase):
         conn = ingest.open_light(path, store.STORE_SCHEMA_VERSION)
         self.addCleanup(conn.close)
         reader = usage_reread.Reader(conn, path)
-        while reader.run_pass(lambda _line: None, 30.0):
-            pass
+        drain(reader, 30.0)
         self.assertEqual(
             [(READING, 0)],
             [tuple(row) for row in conn.execute("SELECT reading, yielded FROM usage_runs")],
@@ -311,8 +325,7 @@ class PricedTests(RereadCase):
     def test_the_runs_of_a_newly_priced_model_are_read_again_and_no_other(self) -> None:
         self.new_table()
         reader = usage_reread.Reader(self.reader, self.store_path)
-        while reader.run_pass(self.said.append, BUDGET):
-            pass
+        drain(reader)
         cost, book = self.costs()
         self.assertGreater(float(cost), 0.0)  # type: ignore[arg-type]
         self.assertEqual(NEW_BOOK, book)
@@ -331,8 +344,7 @@ class PricedTests(RereadCase):
         for _ in range(2):
             # Each reader is a start of its own.
             reader = usage_reread.Reader(self.reader, self.store_path)
-            while reader.run_pass(self.said.append, BUDGET):
-                pass
+            drain(reader)
         self.assertEqual([self.run_row("unpriced")["id"]], self.attempts)
         self.assertEqual("missing", self.run_row("unpriced")["reread_refused"])
 
