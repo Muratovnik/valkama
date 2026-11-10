@@ -1,163 +1,35 @@
 /**
  * The live-work frame and the pin, as the connection contract writes them ("The
- * live-work frame", "Pins"). The frame is the contract's own example, so a drift
- * between it and the schema fails here; the server's real answer is checked by
- * `serverFixtures.test.ts`.
+ * live-work frame", "Pins"). The frame is the contract's own example, read from the
+ * document as it is written, so a drift between it and the schema fails here; the
+ * server's real answer is checked by `serverFixtures.test.ts`.
  */
+
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
+import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
 import { pinWorkItem } from '@/shared/api/planningApi.ts'
 
 import { requestBody, requestUrl, withSecurityBootstrap } from './support/request.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
-/*
- * The contract's example, as `docs/connection-contract.md` writes it, but for where its
- * two sessions in VS Code are open: the example says `"opened_in": "vscode"`, which is no
- * place a session is recorded in, and a server writes that place as `ide` in `vscode`.
- */
-const contractExample = {
-  spaces: [
-    {
-      key: 'MAIN',
-      name: 'Main',
-      project_id: 'example-project',
-      rows: [
-        {
-          reference: 'MAIN-4',
-          title: 'Structured answers',
-          kind: 'epic',
-          parent: null,
-          state: null,
-          agents: 0,
-          long: false,
-          asks: false,
-          since: null,
-          quiet_since: null,
-          executor: null,
-          pinned: false,
-          state_name: 'Dev',
-          is_terminal: false,
-          updated_at: '2026-10-28T08:00:00Z',
-        },
-        {
-          reference: 'MAIN-12',
-          title: 'Answer a review in one form',
-          kind: 'task',
-          parent: 'MAIN-4',
-          state: 'working',
-          agents: 2,
-          long: false,
-          asks: false,
-          since: '2026-11-04T10:08:12Z',
-          quiet_since: null,
-          executor: {
-            session: '6f1c2a8e-0000-4000-8000-000000000002',
-            agent: null,
-            opened_in: 'ide',
-            opened_host: 'vscode',
-            family: 'claude',
-            state: 'live',
-          },
-          pinned: false,
-          state_name: 'Dev',
-          is_terminal: false,
-          updated_at: '2026-11-04T10:15:00Z',
-        },
-        {
-          reference: 'MAIN-15',
-          title: 'Read the answers back',
-          kind: 'task',
-          parent: 'MAIN-4',
-          state: 'waiting',
-          agents: 0,
-          long: false,
-          asks: true,
-          since: '2026-11-04T10:11:30Z',
-          quiet_since: null,
-          executor: {
-            session: '6f1c2a8e-0000-4000-8000-000000000003',
-            agent: null,
-            opened_in: 'terminal',
-            opened_host: '',
-            family: 'claude',
-            state: 'live',
-          },
-          pinned: false,
-          state_name: 'Dev',
-          is_terminal: false,
-          updated_at: '2026-11-04T10:05:00Z',
-        },
-        {
-          reference: 'MAIN-13',
-          title: 'Tell other work',
-          kind: 'task',
-          parent: 'MAIN-4',
-          state: 'quiet',
-          agents: 0,
-          long: false,
-          asks: false,
-          since: null,
-          quiet_since: '2026-11-03T18:02:11Z',
-          executor: {
-            session: '6f1c2a8e-0000-4000-8000-000000000004',
-            agent: null,
-            opened_in: '',
-            opened_host: '',
-            family: 'claude',
-            state: 'live',
-          },
-          pinned: false,
-          state_name: 'Dev',
-          is_terminal: false,
-          updated_at: '2026-11-03T17:40:00Z',
-        },
-        {
-          reference: 'MAIN-7',
-          title: 'Old migration',
-          kind: 'task',
-          parent: null,
-          state: null,
-          agents: 0,
-          long: false,
-          asks: false,
-          since: null,
-          quiet_since: null,
-          executor: null,
-          pinned: true,
-          state_name: 'Done',
-          is_terminal: true,
-          updated_at: '2026-10-02T12:00:00Z',
-        },
-      ],
-      sessions: [
-        {
-          session: '6f1c2a8e-0000-4000-8000-000000000001',
-          title: 'Compare two exports',
-          folder: 'example-project',
-          state: 'working',
-          long: false,
-          asks: false,
-          agents: 1,
-          since: '2026-11-04T10:02:40Z',
-          executor: {
-            session: '6f1c2a8e-0000-4000-8000-000000000001',
-            agent: null,
-            opened_in: 'ide',
-            opened_host: 'vscode',
-            family: 'claude',
-            state: 'live',
-          },
-        },
-      ],
-    },
-  ],
-  elsewhere: [],
+const CONTRACT = fileURLToPath(new URL('../../docs/connection-contract.md', import.meta.url))
+
+/** The contract's example as `docs/connection-contract.md` writes it, read from the document. */
+function contractFrame(): LiveFrame {
+  const text = fs.readFileSync(CONTRACT, 'utf8')
+  const section = text.slice(text.indexOf('### The live-work frame'))
+  const block = /```json\r?\n([\s\S]*?)\r?\n```/u.exec(section)
+  if (!block) throw new Error('the contract has no example of the live-work frame')
+  return JSON.parse(block[1]) as LiveFrame
 }
 
+const contractExample = contractFrame()
 const space = contractExample.spaces[0]
 const row = space.rows[1]
 const session = space.sessions[0]
