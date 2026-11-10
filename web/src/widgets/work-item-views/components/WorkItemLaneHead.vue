@@ -206,7 +206,9 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
    that back; from the box's own edge, the counts stood 4px left of the chevron. A button's ring
    reaches 4px past it (`base.css`): the heading keeps that room above the toggle, taken back as
    margin, clear of the row of state names, and its ground covers the room the board keeps at its
-   edges (`WorkItemBoard`), where tiles showed. */
+   edges (`WorkItemBoard`), where tiles showed. It stands above a tile's first line, which rises
+   to 1 over the tile's open target (`WorkItemTile`): level with it, the later tile drew its
+   reference over the ring that reaches below a heading held at the top. */
 .lane-head {
   /* The chevron's drawn size, as the template asks `VIcon` for it. */
   --lane-chevron-size: 16px;
@@ -223,7 +225,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   position: sticky;
   top: var(--lanes-head-block);
   left: 0;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   grid-column: 1 / -1;
   gap: var(--space-1) var(--space-3);
