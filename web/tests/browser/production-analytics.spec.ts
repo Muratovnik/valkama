@@ -109,6 +109,10 @@ async function measure(page: Page) {
           shown: section.dataset.shown,
           box: box(section),
           tableScroll: frame ? frame.scrollWidth - frame.clientWidth : null,
+          // How wide the table leaves the name of each row, a day or a value.
+          rowNames: [...section.querySelectorAll('th[scope="row"]')].map((name) =>
+            Math.round(name.getBoundingClientRect().width),
+          ),
         }
       }),
     }
@@ -198,6 +202,10 @@ for (const width of [1440, 1024, 390]) {
       expect((section.box?.x ?? 0) + (section.box?.width ?? 0)).toBeLessThanOrEqual(
         measured.viewport,
       )
+    // A table wider than its frame scrolls in it, and still leaves each row's name its words:
+    // a day squeezed to a letter a line is not readable as a table.
+    for (const section of measured.sections)
+      for (const name of section.rowNames) expect(name).toBeGreaterThanOrEqual(80)
     await expectNoSilentClipping(page, `analytics at ${width}px`, '.analytics-page')
     await page.screenshot(shot(info, `analytics-${width}.png`))
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-bars-${width}.png`))

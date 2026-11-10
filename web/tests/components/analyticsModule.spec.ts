@@ -194,6 +194,18 @@ describe('the Analytics page', () => {
     expect(page.find('[aria-busy="true"]').exists()).toBe(true)
   })
 
+  it('keeps the last answer on screen while the next view is read', async () => {
+    let holding = false
+    stubAnalyticsReads(() => (holding ? 'hold' : aWeek()))
+    const page = await mountAnalytics()
+    const time = () => page.find('.tile-figure[data-measure="time"]').text().replaceAll(/\s/gu, ' ')
+    expect(time()).toBe('1 h')
+    holding = true
+    await page.setProps({ routeState: { period: 'weeks4' } })
+    await flushPromises()
+    expect(time()).toBe('1 h')
+  })
+
   it('says a failed read failed, and asks again on retry', async () => {
     const reads = stubAnalyticsReads(() => ({ status: 500 }))
     const page = await mountAnalytics()

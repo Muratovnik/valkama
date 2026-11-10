@@ -55,6 +55,22 @@ function byAccount(): Usage {
   }).usage
 }
 
+/** A week after the five days below, so none of them is still running. */
+const AFTER = new Date(2026, 10, 20)
+
+/** One task worked on the days the accounts did: Wednesday is quiet. */
+const fiveDays = () =>
+  usageAnswer({
+    first: MONDAY,
+    days: 5,
+    groupBy: ['work_item'],
+    stretches: [0, 1, 3, 4].map((day) => ({
+      day,
+      group: { work_item: task(1, 'One') },
+      spend: { seconds: 3600 },
+    })),
+  }).usage
+
 function mountDays(
   usage: Usage,
   options: { accounts?: Usage | null; measure?: Measure; narrow?: boolean; readAt?: Date } = {},
@@ -116,17 +132,7 @@ describe('the days', () => {
       new Date(2026, 10, 12).toISOString(),
       new Date(2026, 10, 13).toISOString(),
     ])
-    const usage = usageAnswer({
-      first: MONDAY,
-      days: 5,
-      groupBy: ['work_item'],
-      stretches: [0, 1, 3, 4].map((day) => ({
-        day,
-        group: { work_item: task(1, 'One') },
-        spend: { seconds: 3600 },
-      })),
-    }).usage
-    const days = mountDays(usage, { accounts: byAccount(), readAt: new Date(2026, 10, 20) })
+    const days = mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(2)
     expect(
       days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
@@ -136,16 +142,19 @@ describe('the days', () => {
     ])
   })
 
-  it('draw no mark without the period by account', () => {
-    expect(mountDays(week()).find('.period-mark').exists()).toBe(false)
-  })
-
   it('read as a table on a narrow page, with the same days, so far and the marks', () => {
-    const table = mountDays(week(), { narrow: true, accounts: byAccount() })
+    const table = mountDays(week(), { narrow: true })
     expect(table.findComponent(PeriodColumns).exists()).toBe(false)
     const rows = table.getComponent(PeriodColumnsTable).findAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows.at(-1)?.text()).toContain('so far')
+
+    const marked = mountDays(fiveDays(), { narrow: true, accounts: byAccount(), readAt: AFTER })
+    const notes = marked
+      .getComponent(PeriodColumnsTable)
+      .findAll('tbody tr')
+      .map((row) => row.findAll('td').at(-1)?.text() ?? '')
+    expect(notes).toEqual(['', '', '', 'Accounts: acc-a → acc-b', 'Accounts: acc-b → acc-a, acc-b'])
   })
 
   it('say the same in Russian', () => {
