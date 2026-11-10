@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * «Open session» at the end of an item's row in the side panel's list: it opens the session
- * the row's state comes from, as the session button of a card does (`useOpenPress`), and a
- * plan that takes more than one press goes on in `OpenPanel`.
+ * the row's state comes from, as the session button of a card does, through the list's one
+ * opener (`useRowOpen`). A plan that takes more than one press goes on in the list's panel, so
+ * the panel stays when a refresh takes the row away or moves it.
  *
  * It stands beside the pin and the way the pin does (`NavWorkPin`): in a column of its own
  * that the row keeps whether it is in sight or not, so the title neither moves nor narrows
@@ -13,8 +14,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import OpenPanel from '@/features/session-open/OpenPanel.vue'
-import { useOpenPress } from '@/features/session-open/openPress.ts'
+import { useRowOpen } from '@/widgets/app-nav/composables/useRowOpen.ts'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -35,16 +35,23 @@ const item = computed(() => `${props.reference} ${props.title}`)
 const name = computed(() =>
   t('liveWork.openSession', { reference: props.reference, title: props.title }),
 )
-const { busy, finished, panel, press } = useOpenPress(
-  () => ({
-    kind: 'session',
-    session: props.executor.session,
-    family: props.executor.family || undefined,
-  }),
-  () => item.value,
-)
+const opener = useRowOpen()
+/** This control as the list's opener knows it, apart from a session's own row. */
+const key = computed(() => `item:${props.reference}`)
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
-const busyMark = computed(() => busy.value || undefined)
+const busyMark = computed(() => opener.busy(key.value) || undefined)
+
+function press() {
+  opener.press({
+    key: key.value,
+    name: item.value,
+    target: {
+      kind: 'session',
+      session: props.executor.session,
+      family: props.executor.family || undefined,
+    },
+  })
+}
 </script>
 
 <template>
@@ -62,16 +69,6 @@ const busyMark = computed(() => busy.value || undefined)
       :size="14"
     />
   </button>
-  <OpenPanel
-    v-if="panel"
-    :actions="panel.actions"
-    :context="item"
-    :notice="panel.notice"
-    :offer="panel.offer"
-    :opens="panel.opens"
-    @close="panel = null"
-    @finished="finished"
-  />
 </template>
 
 <style scoped>

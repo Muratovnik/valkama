@@ -13,6 +13,10 @@
  * close it and give focus back to the button. The panel's rows are a finger's height
  * and the same rows: the frame is the store's, and so is what folds are open. Its heading
  * starts where the spaces' names do.
+ *
+ * The group, not a row, holds the panel a press on a session goes on in, for both lists
+ * (`useRowOpen`): a refresh that drops the row, fades it or moves it into a fold leaves the
+ * panel and the focus in it where they are.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +24,9 @@ import { useI18n } from 'vue-i18n'
 import NavWorkTree, { NAME_INDENT_TOUCH } from '@/widgets/app-nav/components/NavWorkTree.vue'
 import type { NavShown, NavTarget } from '@/widgets/app-nav/components/NavWorkTree.vue'
 import type { NavOpen } from '@/widgets/app-nav/composables/useNavOpen.ts'
+import { provideRowOpen } from '@/widgets/app-nav/composables/useRowOpen.ts'
+
+import OpenPanel from '@/features/session-open/OpenPanel.vue'
 
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
@@ -43,6 +50,7 @@ const { t } = useI18n()
 const store = useLiveWorkStore()
 const prefix = `nav-work-${useId()}`
 const panelOpen = ref(false)
+const { context: openContext, finished: openFinished, panel: openPanel } = provideRowOpen()
 
 function go(route: PlatformRoute) {
   panelOpen.value = false
@@ -121,6 +129,16 @@ const countWords = computed(() => t('liveWork.open', { count: store.count }))
         @go="go"
       />
     </SidePanel>
+    <OpenPanel
+      v-if="openPanel"
+      :actions="openPanel.actions"
+      :context="openContext"
+      :notice="openPanel.notice"
+      :offer="openPanel.offer"
+      :opens="openPanel.opens"
+      @close="openPanel = null"
+      @finished="openFinished"
+    />
   </div>
 </template>
 

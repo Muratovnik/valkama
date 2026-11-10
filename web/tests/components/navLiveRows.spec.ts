@@ -1,8 +1,9 @@
 /**
  * A row of the rail's list in words and under the hand: the second line that says what the
  * session is doing and how long, moved on by one clock for the whole list; the sentence its
- * hint and its name say; a session's own row, named and opened from the row; and «Open
- * session» at the end of an item's row where a session stands behind it.
+ * hint and its name say; a session's own row, named and opened from the row; «Open
+ * session» at the end of an item's row where a session stands behind it; and the panel a
+ * press goes on in, which outlives the row it came from.
  */
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -13,8 +14,11 @@ import { MINUTE_MS } from '@/widgets/app-nav/composables/useMinuteClock.ts'
 
 import { liveFrame, liveRow, liveSession, liveSpace } from '../support/liveFrame.ts'
 import { drawn, hintOf, rail, row, unmountRails } from '../support/navRail.ts'
+import type { Rail } from '../support/navRail.ts'
 import {
   answerPlans,
+  buttonNamed,
+  FOLDER_LINK,
   opened,
   plan,
   resetOutsideWorld,
@@ -277,5 +281,56 @@ describe('«Open session» on an item’s row', () => {
     await flushPromises()
     expect(reads.mock.calls.some((call) => String(call).includes(`session=${SESSION}`))).toBe(true)
     expect(opened.mock.calls.map(([link]) => link)).toEqual([SESSION_LINK])
+  })
+})
+
+describe('the panel a press on a session goes on in', () => {
+  const NAMED = { title: 'Compare two exports', state: 'working' } as const
+  const holder = {
+    ...vscode,
+    session: SESSION,
+    agent: null,
+    family: 'claude',
+    state: 'live',
+  } as const
+  const fromSession = {
+    frame: () => space([], [liveSession(SESSION, NAMED)]),
+    press: (wrapper: Rail) =>
+      row(wrapper, 'Compare two exports').querySelector<HTMLElement>('button.nav-row-link'),
+    name: 'Compare two exports',
+  }
+  const fromItem = {
+    frame: () => space([liveRow('MAIN-1', { state: 'working', executor: holder })]),
+    press: (wrapper: Rail) => row(wrapper, 'MAIN-1').querySelector<HTMLElement>('.nav-row-open'),
+    name: 'MAIN-1 Work MAIN-1',
+  }
+
+  it.each([
+    ['a session’s row the frame drops', fromSession, () => space([])],
+    [
+      'a session’s row the frame moves into the long fold',
+      fromSession,
+      () => space([], [liveSession(SESSION, { ...NAMED, state: 'waiting', long: true })]),
+    ],
+    ['an item’s «Open session» whose row starts to fade', fromItem, () => space([])],
+  ])('stays open and usable after a refresh: %s', async (_, from, next) => {
+    answerPlans(plan(vscode, { ...vscode, source: 'recorded' }, windowSteps))
+    const { store, wrapper } = rail(from.frame())
+    from.press(wrapper)?.click()
+    await flushPromises()
+    const first = buttonNamed('Open the project window in VS Code')
+    expect(document.activeElement).toBe(first)
+
+    store.accept(next())
+    await flushPromises()
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain(from.name)
+    expect(document.activeElement).toBe(first)
+    first.click()
+    await flushPromises()
+    buttonNamed('Open the session in VS Code').click()
+    await flushPromises()
+    expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK, SESSION_LINK])
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
   })
 })
