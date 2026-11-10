@@ -87,12 +87,40 @@ checkouts are therefore distinguishable even at the same version.
   rail's foot, under the connection's state when that is lost, so it stays in one place
   however long the list of work going on now grows. It is still part of the navigation.
 
-- **«Work» in the rail follows running work.** Each space lists only the items a session is
-  working on or waiting at, the most recently changed first. Items held while a session
-  works on others, or silent for over a day, fold under one row, «N more quiet», which opens
-  in place; pinned items not at work stand in a group of their own. An epic is no longer a
-  row heading its items: its title leads each of their rows, muted. The live-work frame
-  gives each row `updated_at`, when its item last changed.
+- **«Work» in the rail follows running work, items and sessions alike.** Each space lists
+  the items a session is working on or waiting at and, beside them, the sessions that work
+  or wait on no item, each named by the title its client gave it. A row has a second line:
+  what the session does, for how long, and the epic the item is part of or the folder the
+  session runs in. Rows that ask a person stand first, the rest most recent first. Three
+  rows fold what needs no eye and open in place: «N more with working sessions» for items
+  held while their session works on another, «N more waiting for hours» past four hours,
+  and «N more silent for over a day». Sessions bound to no space stand under «Sessions
+  outside any space», and pinned items not at work in a group of their own. A row whose
+  session is known carries «Open session». An epic is no longer a row heading its items.
+  A session's title is read from the end of its transcript when the list is built, and is
+  neither stored nor logged.
+
+- **One sign says what a session does, everywhere.** The rail, the tiles and the graph with
+  its key draw the same ring, and its inside is the state: a turning arc while the session
+  works, a question mark while it asks a person in the middle of a turn, a check when its
+  turn is over and it waits, a pause on an item held while its session works on another, a
+  dashed ring once it is silent for over a day. The dots that ran or stood still and the
+  plain ring are gone.
+
+- **A session works while its turn runs, not from its first write.** A session is at work
+  when a prompt is the last of its events that open or end a turn and its client was seen
+  alive within fifteen minutes: by its transcript, or, where none can be read, by the last
+  the session was heard from. A notice that the client waits for a person stops the turn
+  until the answer is written, and the session asks meanwhile. A session at work moves one
+  item, the one its own write named last among those it holds. Before, a session read as
+  waiting until its first write to Planning, and every item it held moved at once.
+
+- **The live-work frame and the `live_work` map have new shapes.** A waiting state carries
+  `long` and `asks`. A row carries `since`, `long`, `asks`, `updated_at` and the `executor`
+  of the session whose state it shows. Each space lists its `sessions`, `elsewhere` is a
+  list of sessions, and `unplaced` is gone. A client that validates the frame strictly
+  needs the build that ships with this server. See
+  [the connection contract](docs/connection-contract.md#the-live-work-frame).
 
 
 - **Mentions are written with `@`; `#` no longer opens a list.** The list of tasks to
