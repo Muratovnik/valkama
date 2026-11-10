@@ -1,0 +1,72 @@
+/*
+ * The table a chart is read as, read by each chart's table as its own scoped style
+ * (`RankedBarsTable`, `PeriodColumnsTable`). It holds every number its chart draws, in the
+ * chart's order, and a row that opens something in the chart opens it here as well, from the
+ * name that heads the row.
+ *
+ * Rows are told apart by air rather than lines, as the chart's rows are; numbers stand in
+ * columns of their own, aligned at their ends.
+ */
+
+/* A table wider than its column, as a phone makes one of a period table, scrolls in its own
+   frame instead of widening the page; Tab reaches the frame while it scrolls (`keyScroll`). */
+.chart-table-frame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chart-table {
+  width: 100%;
+  color: var(--color-text-muted);
+  font: var(--font-line);
+  font-variant-numeric: tabular-nums;
+  border-collapse: collapse;
+}
+
+.chart-cell {
+  vertical-align: baseline;
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+
+  &[data-numeric='true'] {
+    text-align: end;
+    white-space: nowrap;
+  }
+}
+
+.chart-heading {
+  color: var(--color-text-tertiary);
+  font: var(--font-column-head);
+}
+
+.chart-name {
+  color: var(--color-text);
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+
+/* What a row is not, said in the quiet ink: the folded tail, work with no task, work nobody
+   can place. */
+.chart-rest .chart-name {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* A name that opens what it names: a line of the table, not a control standing in it. */
+.chart-press {
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: var(--color-rule-strong);
+  text-underline-offset: var(--space-half);
+  background: none;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration-color: currentcolor;
+  }
+}

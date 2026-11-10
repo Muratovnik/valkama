@@ -1,0 +1,48 @@
+/*
+ * The hue a series' mark is filled with, read by each chart as its own scoped style: a mark
+ * carries `.series-fill` and the `data-slot` that `seriesSlots()` (`seriesColors.ts`) gave its
+ * series. One place maps a slot to its token, so a ranked bar, a stacked segment and a legend's
+ * swatch cannot disagree about which hue an account is.
+ *
+ * A forced palette clears every fill, so a mark there names the palette's ink itself and keeps
+ * the gaps between marks: the legend's order and the table say which series is which.
+ */
+.series-fill {
+  background: var(--color-series-1);
+
+  &[data-slot='2'] {
+    background: var(--color-series-2);
+  }
+
+  &[data-slot='3'] {
+    background: var(--color-series-3);
+  }
+
+  &[data-slot='4'] {
+    background: var(--color-series-4);
+  }
+
+  &[data-slot='5'] {
+    background: var(--color-series-5);
+  }
+
+  &[data-slot='6'] {
+    background: var(--color-series-6);
+  }
+
+  &[data-slot='other'] {
+    background: var(--color-series-other);
+  }
+
+  @media (forced-colors: active) {
+    &,
+    &[data-slot] {
+      background: CanvasText;
+      forced-color-adjust: none;
+    }
+
+    &[data-slot='other'] {
+      background: GrayText;
+    }
+  }
+}

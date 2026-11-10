@@ -137,6 +137,17 @@
   --color-turquoise-300: #7defdc;
   --color-steel-300: #b4c6e0;
 
+  /* The six hues a chart tells series apart by, darker and more saturated than the
+     kinds because a chart fills an area with them and writes no word in them. Each
+     stands at 3:1 or more on every ground a chart lies on, the sheet (#333) included,
+     inside the dark lightness band (OKLCH L 0.48–0.67) with chroma 0.10 or more. */
+  --color-blue-600: #3987e5;
+  --color-orange-600: #d95926;
+  --color-jade-600: #199e70;
+  --color-iris-500: #9085e9;
+  --color-ochre-600: #c98500;
+  --color-magenta-600: #d55181;
+
   /* Near-neutral graphite for the left and top chrome. Each navigation step
      has a two-point channel spread, retaining a subtle cold undertone without
      the stronger blue cast of the previous ramp. The workspace remains on its
@@ -487,11 +498,22 @@
   --color-brand-body: var(--color-gray-100);
   --color-brand-accent: var(--color-teal-500);
 
-  /* Canvas has no cascade: a chart resolves nothing, so `chartOptions.ts`
-     mirrors these literally and `sync-tokens.mjs` keeps the copies equal. */
-
-  /* Five categorical series for charts whose slices mean a name, not a state.
-     Semantic status colors must never stand in for a category. */
+  /* Six categorical series for charts whose slices mean a name, not a state; a
+     status colour never stands in for a category. The order is the palette: a stack
+     puts slot n beside slot n+1, and this order keeps every such pair apart under
+     protanopia and deuteranopia (OKLab ΔE ≥ 0.094) and under ordinary vision
+     (≥ 0.193). `seriesColors.ts` hands out the slots; a series past the sixth
+     folds into the neutral `other`, which is also what a row that is not a
+     category ("no task", "unknown") is drawn in. That grey is a light one because
+     a middle grey is what the magenta becomes under protanopia: it keeps apart
+     from every slot it can follow. tests/seriesColors.test.ts holds all of it. */
+  --color-series-1: var(--color-blue-600);
+  --color-series-2: var(--color-orange-600);
+  --color-series-3: var(--color-jade-600);
+  --color-series-4: var(--color-iris-500);
+  --color-series-5: var(--color-ochre-600);
+  --color-series-6: var(--color-magenta-600);
+  --color-series-other: var(--color-gray-300);
 
   /* The margin a module keeps from the panel edge, and how wide its content
      column grows before it stops. Five files had written one or the other out

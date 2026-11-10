@@ -29,6 +29,13 @@ colors:
   kind-epic: "#cfa0ff"
   kind-improvement: "#7defdc"
   kind-task: "#b4c6e0"
+  series-1: "#3987e5"
+  series-2: "#d95926"
+  series-3: "#199e70"
+  series-4: "#9085e9"
+  series-5: "#c98500"
+  series-6: "#d55181"
+  series-other: "#b3b3b3"
 
 typography:
   scale:
@@ -846,6 +853,27 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   card wins over it. A hint is words; anything with a control in it is `InfoTip`.
   `check:ui-system` refuses a `title` an element or a component's root would get, a hint
   that states no kind and a `detail` its register does not hold.
+- **Charts:** two primitives answer "how much, and of what". `RankedBars` breaks one
+  measure down by one dimension, largest first: a name, the value as it reads and a bar as
+  long as its share of the longest. `PeriodColumns` stands a column per day or hour, stacked
+  by a few series. Each has a table twin (`RankedBarsTable`, `PeriodColumnsTable`) that holds
+  every number its chart draws and opens what the chart opens; a page shows it beside the
+  chart or instead of it, and a twin wider than its column scrolls in its own frame
+  (`ChartTable`, `keyScroll`) rather than widening the page. They are boxes of HTML on the tokens, not a chart library, which the
+  product removed for its weight. A value axis starts at zero and names a few round steps; a
+  time axis names what it has room for, counted back from the last period. A series takes
+  its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
+  order, never by rank, so a filter repaints nothing — out of six `--color-series-*` hues
+  ordered so that neighbours in a stack stay apart under protanopia and deuteranopia. A
+  seventh series folds into `--color-series-other`, the neutral that also draws the rows that
+  are not categories — the folded tail, «no task», «unknown» — which close a ranked chart in
+  a list of their own, unranked, their names in the quiet ink. A hue never speaks alone: a
+  chart of two series or more carries a legend, and the readout over the plot and every
+  accessible name say each series by name. A period still running is hatched (a mask, which
+  adds no colour) and says «so far» under its name, so it does not read as a drop; a change
+  at a period's start, such as the account the work ran under, is a numbered line up the
+  plot with its words under the chart. The periods are one Tab stop and the arrows walk
+  them; nothing in a chart moves on its own.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
