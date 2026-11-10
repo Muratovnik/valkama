@@ -144,7 +144,7 @@ describe('the chain section of a card', () => {
     expect(chain.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAIN-384',
       'MAIN-779',
-      'no epic',
+      'no parent',
       'MAIN-900',
     ])
     expect(chain.findAll('.branch-map-count').map((count) => count.text())).toEqual([
@@ -385,9 +385,9 @@ describe('the chain section of a card', () => {
     await getButton(wrapper, 'Chart and pace').trigger('click')
     expect(section(wrapper).find('.chain-chart').exists()).toBe(true)
 
-    // Another lane takes its place; the lane of no epic has no epic to open.
-    await getButton(wrapper, 'no epic').trigger('click')
-    expect(chip().text()).toBe('Lane no epic')
+    // Another lane takes its place; the lane of no parent has no parent to open.
+    await getButton(wrapper, 'no parent').trigger('click')
+    expect(chip().text()).toBe('Lane no parent')
     expect(headings()).toEqual(['Backlog · 30'])
     expect(wrapper.findAll('button').some((button) => button.text().startsWith('Open '))).toBe(
       false,

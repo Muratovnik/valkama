@@ -52,7 +52,7 @@ describe('the board grouped by epic', () => {
     expect(lanes.map((lane) => lane.attributes('aria-label'))).toEqual([
       'Item 1',
       'Item 2',
-      'No epic',
+      'No parent',
     ])
     expect(lanes[0].get('.lane-reference').text()).toBe('MAIN-1')
     expect(lanes[0].get('.lane-counts').text()).toBe('3 open · 0 closed')
@@ -113,8 +113,8 @@ describe('the order hint of the grouped board', () => {
   it('says the order is shared by the whole board, one order per state, across epics', () => {
     const wrapper = board({ grouping: 'epic' })
     expect(wrapper.get('[id$="-reorder"]').text()).toBe(messages.en.workItem.order.hint)
-    expect(messages.en.workItem.order.hint).toContain('one order per state, across all epics')
-    expect(messages.ru.workItem.order.hint).toContain('один порядок на состояние, для всех эпиков')
+    expect(messages.en.workItem.order.hint).toContain('one order per state, across all lanes')
+    expect(messages.ru.workItem.order.hint).toContain('один порядок на состояние, для всех строк')
   })
 
   it('shows a reorder made in a lane that the order is the whole board’s, for a few seconds', async () => {
@@ -454,7 +454,7 @@ describe('a chain narrows the board and the list', () => {
     const grouping = entries.find((entry) => entry.key === 'grouping')
     if (grouping?.kind !== 'choice') throw new Error('the grouping is a choice of the view’s menu')
     expect(grouping.value).toBe('none')
-    expect(grouping.options.map((option) => option.label)).toEqual(['No grouping', 'By epic'])
+    expect(grouping.options.map((option) => option.label)).toEqual(['No grouping', 'By parent'])
     grouping.select('epic')
     expect(wrapper.emitted('group')).toEqual([['epic']])
   })

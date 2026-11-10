@@ -36,7 +36,7 @@ import { test } from './test.ts'
 const WORDS = {
   en: {
     menu: 'View',
-    grouping: 'By epic',
+    grouping: 'By parent',
     flat: 'No grouping',
     save: 'Save view…',
     name: 'Name',
@@ -47,11 +47,11 @@ const WORDS = {
     held: 'Has an assignee',
     list: 'List',
     // What stood in the header before, as buttons of its own.
-    gone: ['Workable', 'Assigned', 'Has a holder', 'By epic', 'Group the board by epic'],
+    gone: ['Workable', 'Assigned', 'Has a holder', 'By parent', 'Group the board by epic'],
   },
   ru: {
     menu: 'Вид',
-    grouping: 'По эпикам',
+    grouping: 'По родителю',
     flat: 'Без группировки',
     save: 'Сохранить вид…',
     name: 'Название',
@@ -65,7 +65,7 @@ const WORDS = {
       'Можно брать',
       'Назначено',
       'Есть ответственный',
-      'По эпикам',
+      'По родителю',
       'Группировать доску по эпикам',
     ],
   },

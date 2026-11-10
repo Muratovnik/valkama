@@ -72,7 +72,7 @@ describe('the branch map', () => {
     ).toEqual(['Done 18', 'Code review 1', 'Development 4', 'Blocked 1', 'Todo 3', 'Backlog 13'])
     expect(wrapper.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAP-1',
-      'no epic',
+      'no parent',
     ])
     // A lane's line says how much of it is done; its colours say the rest.
     expect(wrapper.findAll('.branch-map-count').map((count) => count.text())).toEqual([
@@ -81,7 +81,7 @@ describe('the branch map', () => {
     ])
     expect(lanes(wrapper).map((lane) => lane.attributes('aria-label'))).toEqual([
       'Lane MAP-1 Root: 20 items; Done 12, Code review 1, Development 2, Backlog 5',
-      'Lane no epic: 20 items; Done 6, Development 2, Blocked 1, Todo 3, Backlog 8',
+      'Lane no parent: 20 items; Done 6, Development 2, Blocked 1, Todo 3, Backlog 8',
     ])
     wrapper.unmount()
   })
@@ -155,7 +155,7 @@ describe('the branch map', () => {
     )
     expect(wrapper.find('button').exists()).toBe(false)
     const label = wrapper.get('.branch-map-label')
-    expect(label.text()).toBe('no epic')
+    expect(label.text()).toBe('no parent')
     await label.trigger('click')
     expect(wrapper.emitted('lane')).toBeUndefined()
     // Its tasks are still a way into their cards, and the states still have their key.

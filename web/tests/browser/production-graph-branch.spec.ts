@@ -89,7 +89,7 @@ for (const [width, whole] of [
     const { chain, items, edges } = smallChain()
     await serve(page, chain, items, edges)
     const section = await chainSection(page)
-    await section.locator('.branch-map-label', { hasText: 'no epic' }).click()
+    await section.locator('.branch-map-label', { hasText: 'no parent' }).click()
     await section.getByRole('button', { name: 'Show on graph' }).click()
     // The pointer rests off the field: a node under it would show its own lineage.
     await page.mouse.move(0, 0)
@@ -98,7 +98,7 @@ for (const [width, whole] of [
     await expect(page.locator('.drawer')).toHaveCount(0)
     await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
     const branchChip = page.locator('.graph-branch-chip')
-    await expect(branchChip).toHaveText('Branch no epic')
+    await expect(branchChip).toHaveText('Branch no parent')
     // Ten drawn: the root, two open children of it, and the branch's seven open
     // members — the lit ones, all inside the frame where the field has room.
     await expect(page.locator('.flow-node-card')).toHaveCount(10)
@@ -114,7 +114,7 @@ for (const [width, whole] of [
 
     await page.reload()
     await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
-    await expect(branchChip).toHaveText('Branch no epic')
+    await expect(branchChip).toHaveText('Branch no parent')
     await expect(page.locator('.flow-node-card.recessed')).toHaveCount(3)
     const relit = await litCards(page)
     expect(relit.framed || !whole).toBe(true)
