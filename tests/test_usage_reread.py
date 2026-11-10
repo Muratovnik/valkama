@@ -1,0 +1,307 @@
+"""The background reader reads stale runs again, after what is new and inside its budget.
+
+Time inside a pass is a clock the test moves: one second per run read again, none for
+anything else, so a pass of 2.5 seconds starts exactly three. A run is made stale the
+way the schema-15 upgrade leaves every run, by its `reading` at 0.
+"""
+
+from __future__ import annotations
+
+import os
+import sqlite3
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from server import store
+from server.hooks import ingest
+from server.ops import doctor
+from server.telemetry import liveness, usage_rebuild, usage_reread
+from server.telemetry.usage_store import READING
+from tests import schema14
+from tests.usage_fixtures import HOUR, Case, ClaudeRun, epoch, stamp
+
+#: A pass's budget: at one second per run it starts three.
+BUDGET = 2.5
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class RereadCase(Case):
+    def setUp(self) -> None:
+        super().setUp()
+        self.ticks((0, 3 * HOUR))
+        self.history = usage_reread.Reader(self.reader, self.store_path)
+        self.clock = Clock()
+        patch = mock.patch("time.monotonic", self.clock)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.attempts: list[int] = []
+        real = usage_rebuild.rebuild_run
+
+        def one_second(collector, run, *rest, **options):  # type: ignore[no-untyped-def]
+            self.attempts.append(int(run["id"]))
+            self.clock.now += 1.0
+            return real(collector, run, *rest, **options)
+
+        patch = mock.patch.object(usage_rebuild, "rebuild_run", one_second)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def sessions(self, count: int) -> list[ClaudeRun]:
+        runs = []
+        for number in range(count):
+            run = self.session(f"done-{number}")
+            run.prompt(number * 100)
+            run.end_turn(number * 100 + 30)
+            runs.append(run)
+        self.read()
+        return runs
+
+    def pass_(self) -> bool:
+        return self.history.run_pass(self.said.append, BUDGET)
+
+    def make_stale(self) -> None:
+        self.reader.execute("UPDATE usage_runs SET reading = 0")
+
+    def stale(self) -> set[int]:
+        return {
+            int(row[0])
+            for row in self.reader.execute(
+                "SELECT id FROM usage_runs WHERE reading < ?", (READING,)
+            )
+        }
+
+    def snapshots(self) -> list[str]:
+        backups = os.path.join(os.path.dirname(self.store_path), "backups")
+        if not os.path.isdir(backups):
+            return []
+        return sorted(
+            name
+            for name in os.listdir(backups)
+            if usage_rebuild.SNAPSHOT_LABEL in name and name.endswith(".sqlite3")
+        )
+
+    def doctor_check(self) -> dict:
+        (found,) = [check for check in doctor._store_checks() if check["id"] == "usage-reading"]
+        return found
+
+
+class WorkOffTests(RereadCase):
+    def test_every_stale_run_is_read_again_while_a_growing_file_goes_on(self) -> None:
+        self.sessions(5)
+        live = self.session("live")
+        live.prompt(0)
+        live.end_turn(20)
+        self.read()
+        totals = self.reader.execute("SELECT ROUND(SUM(seconds), 3) FROM usage_segments").fetchone()
+        self.make_stale()
+        self.assertEqual(6, len(self.stale()))
+        rounds = []
+        for number in range(4):
+            at = HOUR + number * 600
+            live.prompt(at)
+            live.end_turn(at + 30)
+            before = len(self.attempts)
+            more = self.pass_()
+            rounds.append((len(self.attempts) - before, len(self.stale()), more))
+            # The new turn was read in the same pass.
+            self.assertEqual(os.path.getsize(live.path), self.run_row("live")["read_offset"])
+        self.assertEqual([(3, 3, True), (3, 0, False), (0, 0, False), (0, 0, False)], rounds)
+        added = 4 * 30.0
+        self.assertEqual(
+            round(float(totals[0]) + added, 3),
+            self.reader.execute("SELECT ROUND(SUM(seconds), 3) FROM usage_segments").fetchone()[0],
+        )
+        rows = self.reader.execute("SELECT reading, reread_at FROM usage_runs").fetchall()
+        self.assertTrue(all(row[0] == READING and row[1] for row in rows))
+
+    def test_nothing_is_read_again_while_something_new_is_left(self) -> None:
+        self.sessions(2)
+        self.make_stale()
+        with mock.patch.object(self.history.collector, "run_pass", return_value=True):
+            self.assertTrue(self.pass_())
+        self.assertEqual([], self.attempts)
+
+    def test_no_run_starts_after_the_deadline(self) -> None:
+        self.sessions(2)
+        self.make_stale()
+        self.assertTrue(self.history.run_pass(self.said.append, 0.0))
+        self.assertEqual([], self.attempts)
+
+
+class RefusalTests(RereadCase):
+    def test_a_refused_run_is_tried_once_and_listed_by_reason(self) -> None:
+        runs = self.sessions(3)
+        runs[0].path.unlink()
+        self.make_stale()
+        gone = self.run_row("done-0")["id"]
+        for _ in range(3):
+            self.pass_()
+        self.assertEqual(1, self.attempts.count(gone))
+        row = self.run_row("done-0")
+        self.assertEqual(
+            ("missing", READING, 0),
+            tuple(row[k] for k in ("reread_refused", "refused_reading", "reading")),
+        )
+        # A new reader, as after a restart, does not try it again either.
+        usage_reread.Reader(self.reader, self.store_path).run_pass(self.said.append, BUDGET)
+        self.assertEqual(1, self.attempts.count(gone))
+        check = self.doctor_check()
+        self.assertEqual("ok", check["status"])
+        self.assertEqual(
+            {"current": 2, "waiting": 0, "reread": 2, "refused": "missing 1"},
+            check["presentation"]["parameters"],
+        )
+
+    def test_a_run_moved_meanwhile_is_tried_again_and_not_recorded(self) -> None:
+        self.sessions(1)
+        self.make_stale()
+        real = usage_rebuild.rebuild_run
+        calls: list[str] = []
+
+        def moved_once(collector, run, *rest, **options):  # type: ignore[no-untyped-def]
+            calls.append("x")
+            if len(calls) == 1:
+                line = usage_rebuild.RunReport(int(run["id"]), "", "", "claude")
+                line.reason = "moved"
+                return line
+            return real(collector, run, *rest, **options)
+
+        with mock.patch.object(usage_rebuild, "rebuild_run", moved_once):
+            self.assertTrue(self.pass_())
+            self.assertIsNone(self.run_row("done-0")["reread_refused"])
+            self.assertFalse(self.pass_())
+        self.assertEqual(2, len(calls))
+        self.assertEqual(set(), self.stale())
+
+
+class LivenessTests(RereadCase):
+    def test_without_the_liveness_file_nothing_is_read_again(self) -> None:
+        self.sessions(2)
+        self.make_stale()
+        os.remove(liveness.path_for(self.store_path))
+        for _ in range(2):
+            self.assertFalse(self.pass_())
+        self.assertEqual([], self.attempts)
+        self.assertEqual([], self.snapshots())
+        self.assertEqual(2, len(self.stale()))
+
+
+class RecoveryPointTests(RereadCase):
+    def test_one_snapshot_with_its_liveness_copy_for_every_run(self) -> None:
+        self.sessions(7)
+        self.make_stale()
+        while self.pass_():
+            pass
+        self.assertEqual(7, len(set(self.attempts)))
+        [snapshot] = self.snapshots()
+        backups = os.path.join(os.path.dirname(self.store_path), "backups")
+        self.assertTrue(os.path.isfile(liveness.path_for(os.path.join(backups, snapshot))))
+        # A later staleness in the same process takes none either.
+        self.make_stale()
+        while self.pass_():
+            pass
+        self.assertEqual([snapshot], self.snapshots())
+
+
+class UpgradeRecoveryPointTests(unittest.TestCase):
+    """The schema-15 upgrade's own recovery point, taken by this process, is the one."""
+
+    def test_the_upgrade_snapshot_counts_and_no_other_is_taken(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        path = str(root / "valkama.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": path})
+        patch.start()
+        self.addCleanup(patch.stop)
+        schema14.build(path)
+        transcript = root / "projects" / "old.jsonl"
+        old = ClaudeRun(transcript, "old")
+        old.prompt(0)
+        old.end_turn(30)
+        conn = sqlite3.connect(path)
+        conn.execute(
+            "INSERT INTO sessions(id, client, transcript_path, status, started_at, last_seen)"
+            " VALUES ('old', 'claude', ?, 'ended', ?, ?)",
+            (str(transcript), stamp(0), stamp(0)),
+        )
+        # A run the schema-14 reader had not read into yet.
+        conn.execute(
+            "INSERT INTO usage_runs(session_id, client, path) VALUES ('old', 'claude', ?)",
+            (str(transcript),),
+        )
+        conn.commit()
+        conn.close()
+        liveness.tick(path, epoch(0))
+        store.connect().close()
+        upgrade = liveness.recovery_point(path)
+        self.assertIsNotNone(upgrade)
+        assert upgrade is not None
+        self.assertIn("preschema15", os.path.basename(upgrade))
+        conn = ingest.open_light(path, store.STORE_SCHEMA_VERSION)
+        self.addCleanup(conn.close)
+        reader = usage_reread.Reader(conn, path)
+        while reader.run_pass(lambda _line: None, 30.0):
+            pass
+        self.assertEqual(
+            [(READING, 0)],
+            [tuple(row) for row in conn.execute("SELECT reading, yielded FROM usage_runs")],
+        )
+        backups = root / "backups"
+        self.assertEqual([], sorted(backups.glob(f"*{usage_rebuild.SNAPSHOT_LABEL}*")))
+
+
+class DoctorTests(RereadCase):
+    def test_the_summary_says_what_the_runs_say(self) -> None:
+        runs = self.sessions(5)
+        # The newest run is read again first.
+        runs[4].path.unlink()
+        self.make_stale()
+        self.pass_()
+        # One pass: three runs started; one of them refused, the rest wait.
+        counts = dict(
+            self.reader.execute(
+                "SELECT CASE WHEN reading >= ? THEN 'current' WHEN reread_refused IS NOT NULL"
+                " THEN 'refused' ELSE 'waiting' END, COUNT(*) FROM usage_runs GROUP BY 1",
+                (READING,),
+            ).fetchall()
+        )
+        reread = self.reader.execute(
+            "SELECT COUNT(*) FROM usage_runs WHERE reread_at IS NOT NULL"
+        ).fetchone()[0]
+        check = self.doctor_check()
+        parameters = check["presentation"]["parameters"]
+        self.assertEqual(
+            (counts.get("current", 0), counts.get("waiting", 0), reread),
+            (parameters["current"], parameters["waiting"], parameters["reread"]),
+        )
+        self.assertEqual(f"missing {counts['refused']}", parameters["refused"])
+        self.assertEqual(5, sum(counts.values()))
+        self.assertGreater(parameters["waiting"], 0)
+        self.assertIn(f"{parameters['current']} usage run(s) current", check["detail"])
+
+    def test_a_failed_reading_again_warns(self) -> None:
+        self.sessions(1)
+        self.make_stale()
+        with mock.patch.object(
+            usage_rebuild, "_replace", side_effect=sqlite3.OperationalError("disk I/O error")
+        ):
+            self.pass_()
+        check = self.doctor_check()
+        self.assertEqual(
+            ("warn", "usage-reading-failed"), (check["status"], check["presentation"]["code"])
+        )
+        self.assertIn("failed 1", check["detail"])
+
+
+if __name__ == "__main__":
+    unittest.main()

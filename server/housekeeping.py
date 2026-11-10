@@ -35,8 +35,9 @@ the store rather than in it, until the surface that started it ends. Both surfac
 start it: an on-demand listener loads no server until its first connection, and an
 agent at work has an MCP process, so one of them runs whenever work can be observed.
 
-`start_usage` reads transcripts into usage rows (`telemetry.usage_collect`), on its own
-connection in the background, a bounded amount per pass. Only the listener runs it: it
+`start_usage` reads transcripts into usage rows (`telemetry.usage_reread`: what is new
+first, then the runs an older reading left stale), on its own connection in the
+background, a bounded amount per pass. Only the listener runs it: it
 alone answers the reads of those rows, and anything an MCP process would do here
 another one would be doing too.
 """
@@ -55,7 +56,7 @@ from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
 from .planning import subscriptions as planning_subscriptions
-from .telemetry import liveness, usage_collect
+from .telemetry import liveness, usage_reread
 
 #: The whole budget of what runs before the first request. A client gives an
 #: MCP server some seconds to start (Codex ten by default), and interpreter
@@ -282,7 +283,7 @@ def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
     if stop.wait(USAGE_START_SECONDS):
         return
     conn: sqlite3.Connection | None = None
-    collector: usage_collect.Collector | None = None
+    collector: usage_reread.Reader | None = None
     said = ""
     try:
         while True:
@@ -292,7 +293,7 @@ def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
                     conn = ingest.open_light(path, store.STORE_SCHEMA_VERSION)
                     # Nobody waits for this thread, so it may wait for a writer.
                     conn.execute("PRAGMA busy_timeout = 5000")
-                    collector = usage_collect.Collector(conn, path)
+                    collector = usage_reread.Reader(conn, path)
                 backlog = collector.run_pass(report)
                 said = ""
             except Exception as error:  # noqa: BLE001 -- a background thread has nobody to raise to

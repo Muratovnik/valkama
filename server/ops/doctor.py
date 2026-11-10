@@ -41,6 +41,7 @@ from ..memory import service as memory_service
 from ..platform import installed
 from ..projects import project_registry
 from ..telemetry import journal as telemetry_journal
+from ..telemetry import usage_store
 from ..telemetry.projections import JOURNAL_ADAPTERS
 from . import configuration, desktop_app, skills, toast
 
@@ -319,6 +320,7 @@ def _store_checks() -> list[dict]:
     checks.append(_transcript_check(path))
     checks.append(_unpriced_usage_check(path))
     checks.append(_usage_copies_check(path))
+    checks.append(_usage_reading_check(path))
     return checks
 
 
@@ -627,6 +629,68 @@ def _usage_copies_check(path: str) -> dict:
         " the copies. The totals are right either way.",
         presentation_code="usage-copies-found",
         parameters={"requests": int(requests), "runs": int(runs)},
+    )
+
+
+#: The usage runs by where their reading stands: current, waiting to be read again, or
+#: refused for the current reading by reason, each with how many were read again.
+_READING_BY_CLASS = (
+    "SELECT CASE WHEN reading >= :reading THEN 'current'"
+    " WHEN reread_refused IS NOT NULL AND refused_reading >= :reading"
+    " THEN 'refused:' || reread_refused ELSE 'waiting' END AS class,"
+    " COUNT(*), COALESCE(SUM(reread_at IS NOT NULL), 0)"
+    " FROM usage_runs GROUP BY class ORDER BY class"
+)
+
+
+def _usage_reading_check(path: str) -> dict:
+    """Where reading the usage runs again stands, from what the runs say. One query."""
+
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            found = conn.execute(_READING_BY_CLASS, {"reading": usage_store.READING}).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return _check(
+            "usage-reading",
+            "Usage read again",
+            "unknown",
+            f"the usage runs could not be read: {failure}",
+            "Open the store once with the current build; it adds the columns.",
+            presentation_code="usage-reading-unreadable",
+        )
+    counts = {str(name): int(count) for name, count, _again in found}
+    current = counts.pop("current", 0)
+    waiting = counts.pop("waiting", 0)
+    reread = sum(int(again) for _name, _count, again in found)
+    refused = {name.removeprefix("refused:"): count for name, count in counts.items()}
+    listed = ", ".join(f"{reason} {count}" for reason, count in refused.items())
+    detail = (
+        f"{current} usage run(s) current, {waiting} stale and waiting to be read again,"
+        f" {reread} read again; " + (f"not readable again: {listed}" if refused else "none refused")
+    )
+    parameters = {"current": current, "waiting": waiting, "reread": reread, "refused": listed}
+    if "failed" in refused:
+        return _check(
+            "usage-reading",
+            "Usage read again",
+            "warn",
+            detail,
+            "A run whose reading again failed keeps the rows an older reading wrote, and is"
+            " not tried again until a newer reading makes it stale. `valkama usage rebuild"
+            " --session <id>` on one of them names the error.",
+            presentation_code="usage-reading-failed",
+            parameters=parameters,
+        )
+    return _check(
+        "usage-reading",
+        "Usage read again",
+        "ok",
+        detail,
+        presentation_code="usage-reading",
+        parameters=parameters,
     )
 
 
