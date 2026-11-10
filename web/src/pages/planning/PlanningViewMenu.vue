@@ -13,7 +13,7 @@
  * does, and the view whose state the address holds now is the one checked. Saving
  * asks for a name in a small dialog; the view checked can be deleted.
  */
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
@@ -49,34 +49,11 @@ const saved = useSavedViews(
 const naming = ref(false)
 
 const GROUPINGS: readonly BoardGrouping[] = ['none', 'epic']
-/** How long «Save view…» waits for the menu to give focus back before it opens anyway. */
-const FOCUS_BACK_MS = 300
 
 function apply(name: string) {
   const state = saved.stateOf(name)
   if (state) emit('state', state)
 }
-
-/**
- * «Save view…» asks for the name once the menu has closed and given focus back to
- * its button, so the dialog's field keeps the focus it takes. The menu gives it back
- * on a timer of its own after it is gone (Reka's focus scope), which a dialog opened
- * on the next tick or the next frame still lost to; so the dialog waits for that
- * focus to arrive, and opens anyway if it never does.
- */
-let asked = false
-let fallback = 0
-function openNaming() {
-  if (!asked) return
-  asked = false
-  window.clearTimeout(fallback)
-  naming.value = true
-}
-function startNaming() {
-  asked = true
-  fallback = window.setTimeout(openNaming, FOCUS_BACK_MS)
-}
-onBeforeUnmount(() => window.clearTimeout(fallback))
 
 function save(name: string) {
   saved.save(name)
@@ -122,7 +99,11 @@ const entries = computed<MenuEntry[]>(() => {
       key: 'save',
       label: t('workItem.viewMenu.save'),
       icon: 'plus',
-      select: startNaming,
+      // The dialog takes focus from the menu's button and gives it back there (`VMenu`).
+      opens: true,
+      select: () => {
+        naming.value = true
+      },
     },
     ...(active === null
       ? []
@@ -143,10 +124,7 @@ const taken = computed(() => saved.views.value.map((view) => view.name))
 <template>
   <!-- Its word where the row has room, its sign alone on a phone, where the field
        needs the room to stay usable: the bar's view switch folds the same way. -->
-  <span
-    class="view-menu"
-    @focusin="openNaming"
-  >
+  <span class="view-menu">
     <span class="view-menu-words">
       <VMenu
         size="compact"

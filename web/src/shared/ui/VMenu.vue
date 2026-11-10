@@ -6,7 +6,8 @@
  * Enter, Space and ArrowDown open it on its first entry, a press opens it too. Inside, the
  * arrows walk the entries and wrap, Home and End go to the ends, a typed letter goes to the
  * entry it starts, Enter and Space choose. Escape, a choice, a press outside or Tab close it,
- * and focus goes back to the trigger, except where Tab or a press took it elsewhere. Reka's
+ * and focus goes back to the trigger, except where Tab or a press took it elsewhere; an entry
+ * that opens a dialog hands it on from there, and the dialog gives it back on close. Reka's
  * dropdown menu does all of that; this owns how it looks and what it holds (`menuEntries`).
  *
  * A menu is not a choice control. `ChoiceSelect` picks the one value a field has and shows it
@@ -71,11 +72,16 @@ const glyphSize = computed(() => (props.size === 'compact' ? 16 : 20))
 
 type Entry<Kind extends MenuEntry['kind']> = Extract<MenuEntry, { kind: Kind }>
 
+/** The entry that `opens`, chosen and waiting for the menu to go (`closed`). */
+let opening: (() => void) | null = null
 /**
  * What choosing an entry does is the entry's own: the menu keeps no copy of a setting's or a
  * choice's state, and reads both off the entries it is handed again.
  */
-const act = (entry: Entry<'action'>) => entry.select()
+const act = (entry: Entry<'action'>) => {
+  if (entry.opens) opening = entry.select
+  else entry.select()
+}
 const toggle = (entry: Entry<'toggle'>, value: boolean | 'indeterminate') =>
   entry.select(value === true)
 const choose = (entry: Entry<'choice'>, value: unknown) => entry.select(String(value))
@@ -87,6 +93,22 @@ const trigger = useTemplateRef<HTMLElement>('trigger')
 const list = useTemplateRef<HTMLElement>('list')
 watch(trigger, stopStrayPresses, { flush: 'post' })
 watch(list, stopStrayPresses, { flush: 'post' })
+
+/**
+ * An entry that `opens` a dialog runs as the menu goes, not as it is chosen. Reka gives focus
+ * back to the trigger on a timer of its own after the menu is gone, which took it from a dialog
+ * opened in between, and nothing outside could cancel that. So the menu cancels it here
+ * (`close-auto-focus`), puts focus on its trigger at once, and only then runs the entry: what
+ * it opens takes focus from the trigger, in the same task, and gives it back there on close.
+ */
+function closed(event: Event) {
+  const run = opening
+  opening = null
+  if (!run) return
+  event.preventDefault()
+  trigger.value?.querySelector<HTMLElement>('.menu-trigger')?.focus()
+  run()
+}
 </script>
 
 <template>
@@ -123,6 +145,7 @@ watch(list, stopStrayPresses, { flush: 'post' })
         :side-offset="4"
         :collision-padding="12"
         loop
+        @close-auto-focus="closed"
       >
         <div
           ref="list"
