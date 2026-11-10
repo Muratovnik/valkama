@@ -9,6 +9,7 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
 import { uiEmpty } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
@@ -18,6 +19,8 @@ withDefaults(defineProps<{ state?: PlatformUiState<never> }>(), {
 })
 const emit = defineEmits<{ retry: [] }>()
 const { t } = useI18n()
+// Once per opening: the stage sets this page up each time it is navigated to.
+reportAnalyticsUse('page_open')
 </script>
 
 <template>

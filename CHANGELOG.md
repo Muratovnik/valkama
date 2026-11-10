@@ -28,7 +28,9 @@ checkouts are therefore distinguishable even at the same version.
   finer than the day, and nothing leaves the machine. The counts live in the store
   (`analytics_surface_uses`, added with schema 15), so a snapshot keeps them. The
   Analytics module names the read model `analytics.uses` and the action
-  `module.analytics.report-use`; no MCP tool counts or reads them.
+  `module.analytics.report-use`; no MCP tool counts or reads them. The Analytics page
+  counts each time it is opened, once, and a count that cannot be written is dropped
+  without holding the page up.
 
 - **What agent work spent in a period.** `GET /api/analytics/usage` reads the usage rows
   between two moments: the total, one line per group of up to two of account, project,

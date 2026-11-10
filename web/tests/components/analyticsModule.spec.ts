@@ -6,7 +6,7 @@ import { ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
@@ -32,6 +32,18 @@ const drawable: readonly ModuleManifest[] = OFFLINE_MODULE_FALLBACK.filter((modu
 )
 
 const PROJECT = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
+
+// The page reports each opening to the server. There is none here, so the report fails
+// and is dropped, as it is whenever its write fails.
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(() => Promise.reject(new TypeError('no server'))),
+  )
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('the Analytics entry on the rail', () => {
   it('stands under Understand and goes to its module', async () => {
