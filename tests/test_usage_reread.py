@@ -597,8 +597,8 @@ class SecondReadingTests(RereadCase):
     def test_the_runs_reading_one_wrote_are_read_again_and_filled(self) -> None:
         run = self.session("advised")
         run.entrypoint = "claude-vscode"
+        run.credential(0, ORG_A)
         run.prompt(0)
-        run.credential(1, ORG_A)
         for record in range(3):
             run.reply(10 + record, request="m1", spent=advised(run.model), advisorModel=run.model)
         run.end_turn(20, effort="high")
@@ -630,9 +630,8 @@ class SecondReadingTests(RereadCase):
                     row["advisor_model"],
                     row["input_tokens"],
                 )
+                # The later records of the request add no row of their own.
                 for row in self.segments("advised")
-                # The later records of the request add nothing to a row of their own.
-                if row["input_tokens"]
             ],
         )
         self.assertEqual("ovi", self.run_row("advised", "w1")["launch_class"])

@@ -7,7 +7,7 @@ import unittest
 from server.telemetry import liveness
 from server.telemetry.usage_ledger import TOKEN_COLUMNS, Ledger
 from server.telemetry.usage_steps import REPLY, Part, Step
-from tests.usage_fixtures import HOUR, Case, usage
+from tests.usage_fixtures import HOUR, Case, advised, usage
 
 
 def _nothing(_at: float) -> tuple[str | None, str | None]:
@@ -274,30 +274,67 @@ class TokenTests(Case):
                     if row[column] is not None
                 ]
                 self.assertTrue(all(cell >= 0 for cell in cells), cells)
+                # The later records add no row of their own: one for the executor, whose
+                # time goes on past the advisor's, and one for the advisor.
+                self.assertEqual([0, 1], [row["advisor"] for row in rows])
 
-    def test_a_request_held_open_by_a_former_reader_goes_on(self) -> None:
-        # A reader before the advisor had a part of its own kept a request's parts by model
-        # alone. Its state is read on: the executor goes on from what it held, and the
-        # advisor it cannot tell apart counts in full.
-        model = "claude-opus-5-5"
-        former = {"requests": {"m1": {model: [{"input": 4, "output": 100}, None]}}}
-        ledger = Ledger([], former, liveness.Coverage([]), frozenset().__contains__, _nothing)
-        ledger.count(
-            Step(
-                1.0,
-                REPLY,
-                request="m1",
-                parts=[
-                    Part(model, {"input": 4, "output": 150}, None),
-                    Part(model, {"input": 200, "output": 20}, None, advisor=True),
-                ],
-            )
+    def test_an_advised_request_growing_over_its_records_keeps_one_row_each(self) -> None:
+        # The executor's output grows with every record after the advisor's call: it goes
+        # on in the executor's row, past the advisor's.
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        for record in range(9):
+            spent = advised("claude-fable-5-1")
+            spent["output_tokens"] = spent["iterations"][0]["output_tokens"] = 6 + record
+            run.reply(1 + record, request="m1", stop="end_turn", spent=spent)
+        self.read()
+        self.assertEqual(
+            [(0, 4, 14, 9.0), (1, 100, 20, 0.0)],
+            [
+                (row["advisor"], row["input_tokens"], row["output_tokens"], row["seconds"])
+                for row in self.segments()
+            ],
         )
+
+    def go_on_from_a_former_reader(self, adviser: str, outputs: list[int]) -> dict[str, int]:
+        """What the records after the first of an advised request add, read on from the
+        state a reader before advisors were kept apart left after the first.
+
+        That reader counted the first record in full and kept its parts by model alone,
+        the executor's first and the adviser's after, so one of the executor's model
+        took its place. Each record is read in a pass of its own.
+        """
+
+        executor = "claude-opus-5-5"
+        first = {"input": 4, "output": 100}
+        advice = [{"input": 200, "output": 20}, None]
+        held = {executor: [first, None], adviser: advice}
+        memo: dict = {"requests": {"m1": held}}
         spent: dict[str, int] = {}
-        for row in ledger.rows:
-            for kind, count in row.tokens.items():
-                spent[kind] = spent.get(kind, 0) + count
-        self.assertEqual({"input": 200, "output": 70}, spent)
+        for number, output in enumerate(outputs):
+            ledger = Ledger([], memo, liveness.Coverage([]), frozenset().__contains__, _nothing)
+            parts = [
+                Part(executor, {"input": 4, "output": output}, None),
+                Part(adviser, dict(advice[0]), None, advisor=True),
+            ]
+            ledger.count(Step(1.0 + number, REPLY, request="m1", parts=parts))
+            for row in ledger.rows:
+                for kind, count in row.tokens.items():
+                    self.assertGreaterEqual(count, 0, (number, row))
+                    spent[kind] = spent.get(kind, 0) + count
+            memo = ledger.memo()
+        return spent
+
+    def test_a_former_readers_request_of_an_adviser_of_the_executors_model_goes_on(self) -> None:
+        # What it held is the adviser's; the executor's growth up to the first record read
+        # on is lost, and from there it counts.
+        spent = self.go_on_from_a_former_reader("claude-opus-5-5", [150, 180, 180, 210])
+        self.assertEqual({"input": 0, "output": 60}, spent)
+
+    def test_a_former_readers_request_of_another_adviser_goes_on(self) -> None:
+        spent = self.go_on_from_a_former_reader("claude-fable-5-1", [150, 180, 180, 210])
+        self.assertEqual({"input": 0, "output": 110}, spent)
 
     def test_a_change_of_model_starts_a_new_row(self) -> None:
         run = self.session()

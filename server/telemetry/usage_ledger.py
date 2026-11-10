@@ -79,6 +79,27 @@ def request_key(request: str) -> int:
     return int.from_bytes(digest, "big") >> 1
 
 
+def _former(held: dict, parts: list[Part]) -> dict:
+    """What a request's parts had said, from what a reader before advisors were kept apart
+    held of it: its parts by model alone, the executor's first and each adviser's after.
+
+    So an adviser running the executor's model took the executor's place: what it held
+    is the adviser's, and the executor's growth since is unknown and taken as none (the
+    background re-read makes it exact).
+    """
+
+    advisers = {part.model for part in parts if part.advisor}
+    known: dict = {}
+    for part in parts:
+        if part.model not in held:
+            continue
+        if part.advisor or part.model not in advisers:
+            known[part.key] = held[part.model]
+        else:
+            known[part.key] = [part.tokens, part.cost]
+    return known
+
+
 @dataclass(slots=True)
 class Row:
     """One segment, as far as this pass knows it."""
@@ -121,7 +142,10 @@ class Ledger:
         self.last_write: str | None = memo.get("last_write")
         self.item: str | None = memo.get("item")
         self.signal: str | None = memo.get("signal")
-        self.requests: dict[str, dict] = memo.get("requests", {})
+        #: Each open request's parts by `Part.key`, as its last record said them.
+        self.requests: dict[str, dict] = memo.get("request_parts", {})
+        #: Open requests as a reader before advisors were kept apart held them (`_former`).
+        self.former: dict[str, dict] = memo.get("requests", {})
         #: What the work runs under from here on, as the records so far said it.
         self.settings: dict[str, str | None] = memo.get("settings", {})
         #: Whether the turn in flight started with no item and so is placed by `fallback`
@@ -140,7 +164,8 @@ class Ledger:
             "last_write": self.last_write,
             "item": self.item,
             "signal": self.signal,
-            "requests": self.requests,
+            "request_parts": self.requests,
+            "requests": self.former,
             "open_placement": self.open_placement,
             "settings": self.settings,
         }
@@ -212,10 +237,10 @@ class Ledger:
         )
 
     def work(self, start: float, end: float, quality: str) -> None:
-        tail = self.rows[-1] if self.rows else None
+        # An advisor's rows take no time, so the executor's row goes on past them.
+        tail = next((row for row in reversed(self.rows) if not row.advisor), None)
         if (
             tail is not None
-            and not tail.advisor
             and tail.quality == quality
             and tail.model == self.model
             and tail.runs_under(self.settings)
@@ -240,6 +265,8 @@ class Ledger:
         key = step.request
         if key is not None:
             known = self.requests.pop(key, None)
+            if known is None and key in self.former:
+                known = _former(self.former.pop(key), step.parts)
             if known is None:
                 number = request_key(key)
                 if number in self.new_requests or self.seen(number):
@@ -264,6 +291,9 @@ class Ledger:
                 cost -= before[1]
         if not part.advisor:
             self.model = part.model
+        if before is not None and not any(tokens.values()) and not cost:
+            # A later record of a request that says nothing new of this part.
+            return
         row = self._row_for(part, at)
         for kind, count in tokens.items():
             row.tokens[kind] = row.tokens.get(kind, 0) + count
@@ -275,21 +305,23 @@ class Ledger:
         """The row a part's tokens go to: the last one reaching its moment with its model,
         under the same settings, and an advisor's own for an advisor's part.
 
-        An advisor's row names the adviser that ran as its `advisor_model`.
+        An advisor's row names the adviser that ran as its `advisor_model`. The rows of
+        the other kind between are passed over.
         """
 
         model = part.model
         settings = {**self.settings, ADVISOR_MODEL: model} if part.advisor else self.settings
         for row in reversed(self.rows):
+            if row.advisor != part.advisor:
+                continue
             if (
-                row.advisor == part.advisor
-                and (row.model == model or (row.model is None and not part.advisor))
+                (row.model == model or (row.model is None and not part.advisor))
                 and row.runs_under(settings)
                 and row.ended >= at - _SAME_MOMENT
             ):
                 row.model = model
                 return row
-            if row.model != model or row.advisor != part.advisor:
+            if row.model != model:
                 break
         fresh = Row(
             at,
