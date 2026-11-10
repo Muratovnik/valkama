@@ -151,3 +151,32 @@ test('the filter’s menu draws kinds, priorities and states as the card does', 
   expect(states.length).toBeGreaterThan(1)
   for (const row of states) expect(row.dot, row.word).not.toBeNull()
 })
+
+const LONG_STATE = 'Waiting for the release owner to sign off the installer build and its notes'
+
+test('a long state in the card’s state menu ends in an ellipsis inside its row, which says it whole', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await installBackend(page, {
+    card: (read) => ({ ...read, state: { ...(read.state as object), name: LONG_STATE } }),
+  })
+  await page.goto(CARD)
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.card-facts .card-row-value')).toBeVisible()
+  await drawer.locator('.card-state .choice-trigger').click()
+  const word = page.getByRole('option').locator('.state-label', { hasText: LONG_STATE })
+  await expect(word).toBeVisible()
+  // The state the menu draws is cut by its own one-line word, at the row's edge and not past it.
+  const drawn = await word.evaluate((node) => {
+    const row = node.closest('[role="option"]')?.getBoundingClientRect()
+    return {
+      cut: node.scrollWidth > node.clientWidth,
+      ending: getComputedStyle(node).textOverflow,
+      inside: row !== undefined && node.getBoundingClientRect().right <= row.right + 0.5,
+    }
+  })
+  expect(drawn).toEqual({ cut: true, ending: 'ellipsis', inside: true })
+  await word.hover()
+  await expect(page.getByRole('tooltip')).toContainText(LONG_STATE)
+})
