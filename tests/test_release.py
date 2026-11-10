@@ -10,6 +10,11 @@ These tests hold the two halves of the fix against a fake environment, never
 the real one: every tool resolves inside the running interpreter's own
 environment, and an environment that lacks a pinned tool is refused before the
 first stage with a message saying what to run.
+
+The price stage is held the same way, against a hand-written document in the
+shape of LiteLLM's list and never the network: an equal price passes, a
+different one fails naming both values, and a list that cannot be read is
+refused rather than passed.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -216,7 +221,7 @@ class ReleaseToolchainTests(unittest.TestCase):
         calls = self.checked_commands(self.root / "checkout")
         inside = (str(self.environment.executable), str(self.environment.scripts))
         python_stages = [call for call in calls if call.args[0][0] != release.NPM]
-        self.assertEqual(9, len(python_stages))
+        self.assertEqual(10, len(python_stages))
         for call in calls:
             command = call.args[0]
             if command[0] != release.NPM:
@@ -245,6 +250,18 @@ class ReleaseToolchainTests(unittest.TestCase):
         )
         # Ahead of the Python stages too: a release once ran 1102 s and then failed here.
         self.assertEqual([release.NPM, release.NPM], [command[0] for command, _ in stages[:2]])
+
+    def test_check_compares_prices_right_after_the_installs(self) -> None:
+        # A price source that cannot be reached is a network failure like a registry's,
+        # so it is met before the suite rather than after it.
+        checkout = self.root / "checkout"
+        third = self.checked_commands(checkout)[2]
+        command, cwd = third.args[0], third.kwargs["cwd"]
+        self.assertEqual(
+            (str(self.environment.executable), str(checkout / "windows" / "release.py"), "prices"),
+            command,
+        )
+        self.assertEqual(checkout, cwd)
 
     def test_a_failed_install_stops_the_check_before_any_other_stage(self) -> None:
         failure = release.subprocess.CalledProcessError(1, "npm ci")
@@ -317,6 +334,198 @@ class ReleaseToolchainTests(unittest.TestCase):
         pinned = release.pins((ROOT / "requirements-dev.txt").read_text(encoding="utf-8"))
         for name, tool in release.TOOLS.items():
             self.assertIn(tool.distribution, pinned, name)
+
+
+#: A hand-written document in the shape of LiteLLM's price list: USD per token, a
+#: vendor's longer cache write named by its length, long prices by the prompt length
+#: they start above, and fields the check has no use for. Not a copy of their file.
+LITELLM = {
+    "claude-opus-5-5": {
+        "litellm_provider": "anthropic",
+        "input_cost_per_token": 4e-06,
+        "input_cost_per_token_batches": 2e-06,
+        "cache_read_input_token_cost": 2e-07,
+        "cache_creation_input_token_cost": 5e-06,
+        "cache_creation_input_token_cost_above_1hr": 8e-06,
+        "output_cost_per_token": 2e-05,
+        "supports_fast_mode": True,
+    },
+    "claude-haiku-5-5-20261001": {
+        "litellm_provider": "anthropic",
+        "input_cost_per_token": 1e-07,
+        "cache_read_input_token_cost": 1e-08,
+        "cache_creation_input_token_cost": 1.25e-07,
+        "cache_creation_input_token_cost_above_1hr": 2e-07,
+        "output_cost_per_token": 5e-07,
+        "input_cost_per_token_above_100k_tokens": 5e-07,
+        "cache_read_input_token_cost_above_100k_tokens": 5e-08,
+        "cache_creation_input_token_cost_above_100k_tokens": 6.25e-07,
+        "cache_creation_input_token_cost_above_1hr_above_100k_tokens": 1e-06,
+        "output_cost_per_token_above_100k_tokens": 2.5e-06,
+    },
+    "gpt-6.1-sol": {
+        "litellm_provider": "openai",
+        "input_cost_per_token": 2e-06,
+        "input_cost_per_token_priority": 4e-06,
+        "cache_read_input_token_cost": 1e-07,
+        "cache_creation_input_token_cost": 2.5e-06,
+        "cache_creation_input_token_cost_above_12hr": 5e-06,
+        "output_cost_per_token": 1e-05,
+        "input_cost_per_token_above_272k_tokens": 4e-06,
+        "cache_read_input_token_cost_above_272k_tokens": 2e-07,
+        "cache_creation_input_token_cost_above_272k_tokens": 5e-06,
+        "cache_creation_input_token_cost_above_12hr_above_272k_tokens": 1e-05,
+        "output_cost_per_token_above_272k_tokens": 1.5e-05,
+    },
+    # Another vendor's listing of a model with the same name is not this model.
+    "gpt-model": {"litellm_provider": "azure", "input_cost_per_token": 1.0},
+    "sample_spec": {"input_cost_per_token": 0.0},
+}
+
+
+def price_table(**overrides: object) -> SimpleNamespace:
+    """A price table holding the three models above at the prices above, and one more."""
+
+    from server.telemetry.usage_prices import PRICED_KINDS, Listing, Rates
+
+    listings = {
+        "claude-opus-5-5": Listing("anthropic", Rates(4, 0.20, 5, 8, 20)),
+        "claude-haiku-5-5": Listing(
+            "anthropic",
+            Rates(0.10, 0.01, 0.125, 0.20, 0.50),
+            Rates(0.50, 0.05, 0.625, 1, 2.50),
+            100_000,
+        ),
+        "gpt-6.1-sol": Listing(
+            "openai", Rates(2, 0.10, 2.5, 5, 10), Rates(4, 0.20, 5, 10, 15), 272_000
+        ),
+        "gpt-model": Listing("openai", Rates(1, 0.1, None, None, 2)),
+        "claude-newest-1": Listing("anthropic", Rates(1, 0.1, 1.25, 2, 5)),
+        **overrides,
+    }
+    return SimpleNamespace(PRICED_KINDS=PRICED_KINDS, listings=lambda: dict(listings))
+
+
+class ReleasePriceTests(unittest.TestCase):
+    """The price stage compares the server's table with LiteLLM's list and copies nothing."""
+
+    def refusal(self, table: SimpleNamespace, document: dict | None = None) -> str:
+        with self.assertRaises(release.PriceCheckError) as refused:
+            release.check_prices(lambda: LITELLM if document is None else document, table)
+        return str(refused.exception)
+
+    def test_equal_prices_pass_and_say_how_many_models_were_compared(self) -> None:
+        lines = release.check_prices(lambda: LITELLM, price_table())
+        self.assertIn("the prices of 3 model(s) agree", lines[0])
+
+    def test_a_model_litellm_does_not_list_is_reported_without_failing(self) -> None:
+        lines = release.check_prices(lambda: LITELLM, price_table())
+        # The model with a name only another vendor uses there is not listed either.
+        self.assertEqual(
+            ["claude-newest-1: not listed there", "gpt-model: not listed there"], lines[1:]
+        )
+
+    def test_a_wrong_price_fails_naming_the_model_the_rate_and_both_values(self) -> None:
+        from server.telemetry.usage_prices import Listing, Rates
+
+        message = self.refusal(
+            price_table(**{"claude-opus-5-5": Listing("anthropic", Rates(4, 0.20, 5, 8, 25))})
+        )
+        self.assertIn("1 price(s) differ", message)
+        self.assertIn(
+            "claude-opus-5-5 output: Valkama 25 USD per million tokens,"
+            " LiteLLM (claude-opus-5-5) 20 USD per million tokens",
+            message,
+        )
+        # What does not differ is not named as a difference.
+        self.assertNotIn("claude-opus-5-5 input", message)
+
+    def test_a_long_price_and_a_dated_id_are_compared_too(self) -> None:
+        from server.telemetry.usage_prices import Listing, Rates
+
+        haiku = Listing(
+            "anthropic",
+            Rates(0.10, 0.01, 0.125, 0.20, 0.50),
+            Rates(0.50, 0.05, 0.625, 1.5, 2.50),
+            100_000,
+        )
+        message = self.refusal(price_table(**{"claude-haiku-5-5": haiku}))
+        self.assertIn(
+            "claude-haiku-5-5 cache_write_1h over 100000 prompt tokens: Valkama 1.5 USD per million"
+            " tokens, LiteLLM (claude-haiku-5-5-20261001) 1 USD per million tokens",
+            message,
+        )
+
+    def test_a_price_only_litellm_has_is_a_difference(self) -> None:
+        from server.telemetry.usage_prices import Listing, Rates
+
+        sol = Listing("openai", Rates(2, 0.10, 2.5, None, 10), Rates(4, 0.20, 5, 10, 15), 272_000)
+        message = self.refusal(price_table(**{"gpt-6.1-sol": sol}))
+        self.assertIn(
+            "gpt-6.1-sol cache_write_1h: Valkama no price, LiteLLM (gpt-6.1-sol) 5 USD per million"
+            " tokens",
+            message,
+        )
+
+    def test_long_prices_valkama_does_not_model_are_a_difference(self) -> None:
+        from server.telemetry.usage_prices import Listing, Rates
+
+        message = self.refusal(
+            price_table(**{"gpt-6.1-sol": Listing("openai", Rates(2, 0.10, 2.5, 5, 10))})
+        )
+        self.assertIn("gpt-6.1-sol: LiteLLM (gpt-6.1-sol) prices prompts over 272k tokens", message)
+
+    def test_a_rate_litellm_does_not_list_is_reported_without_failing(self) -> None:
+        document = {
+            "claude-opus-5-5": {
+                key: value
+                for key, value in LITELLM["claude-opus-5-5"].items()
+                if key != "cache_creation_input_token_cost_above_1hr"
+            }
+        }
+        lines = release.check_prices(lambda: document, price_table())
+        self.assertIn(
+            "claude-opus-5-5 cache_write_1h: claude-opus-5-5 lists no"
+            " cache_creation_input_token_cost_above_1hr",
+            lines,
+        )
+
+    def test_an_unreachable_source_is_refused_and_nothing_passes(self) -> None:
+        unreachable = release.urllib.error.URLError("no route to host")
+        with (
+            mock.patch.object(release.urllib.request, "urlopen", side_effect=unreachable),
+            self.assertRaises(release.PriceCheckError) as refused,
+        ):
+            release.check_prices(table=price_table())
+        message = str(refused.exception)
+        self.assertIn(release.LITELLM_PRICES, message)
+        self.assertIn("no route to host", message)
+        self.assertIn("does not pass", message)
+
+    def test_an_answer_that_is_not_a_price_list_is_refused(self) -> None:
+        for body in (b"<html>rate limited</html>", b"[]"):
+            answer = mock.MagicMock()
+            answer.__enter__.return_value.read.return_value = body
+            with (
+                self.subTest(body=body),
+                mock.patch.object(release.urllib.request, "urlopen", return_value=answer),
+                self.assertRaises(release.PriceCheckError),
+            ):
+                release.fetch_price_list()
+
+    def test_the_stage_exits_with_the_refusal(self) -> None:
+        refusal = release.PriceCheckError("release check: nothing was compared")
+        with (
+            mock.patch.object(release, "check_prices", side_effect=refusal),
+            mock.patch.object(release.sys, "argv", ["release.py", "prices"]),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            release.main()
+        self.assertEqual("release check: nothing was compared", stopped.exception.code)
+
+    def test_the_servers_own_table_loads_from_its_file(self) -> None:
+        table = release.price_table()
+        self.assertEqual("anthropic", table.listings()["claude-fable-5-2"].vendor)
 
 
 if __name__ == "__main__":

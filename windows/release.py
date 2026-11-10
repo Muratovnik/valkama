@@ -11,6 +11,10 @@ Release Kit runs every command here with its own interpreter as `{python}`, so
 else, and refuses before the first stage when that environment lacks one. Build
 and smoke need no development tool: build runs npm, and smoke runs the server,
 which imports only the standard library.
+
+`prices` is a stage of `check`: it compares the server's price table with
+LiteLLM's public price list, so a wrong or missing price is caught before a
+release. The server itself makes no network call, so the comparison lives here.
 """
 
 from __future__ import annotations
@@ -18,7 +22,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -26,10 +32,12 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import urllib.request
 import zipfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
 NPM = "npm.cmd" if sys.platform == "win32" else "npm"
@@ -302,6 +310,13 @@ def check(interpreter: Interpreter | None = None, requirements: str | None = Non
     base = tool_environment(interpreter, os.environ)
     stages: list[tuple[str, tuple[str, ...], Path]] = [
         *(("npm", (NPM, "ci"), ROOT / package) for package in NPM_PACKAGES),
+        # Early for the reason `npm ci` is: a source that cannot be reached costs
+        # seconds, not the whole suite.
+        (
+            "prices",
+            (str(interpreter.executable), str(ROOT / "windows" / "release.py"), "prices"),
+            ROOT,
+        ),
         ("ruff", (*tools["ruff"], "check", "."), ROOT),
         ("ruff", (*tools["ruff"], "format", "--check", "."), ROOT),
         ("typos", tools["typos"], ROOT),
@@ -380,6 +395,159 @@ def check(interpreter: Interpreter | None = None, requirements: str | None = Non
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
         else:
             subprocess.run(command, cwd=cwd, env=base, check=True)
+
+
+#: LiteLLM's public price list (BerriAI/litellm, MIT). The check reads it to compare
+#: and copies nothing from it.
+LITELLM_PRICES = (
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+)
+PRICE_SOURCE_TIMEOUT = 30.0
+#: The LiteLLM field for each kind the table prices, in USD per token. LiteLLM names a
+#: vendor's longer cache retention by its length, which `_LONGER_CACHE` supplies.
+_LITELLM_FIELDS = {
+    "input": "input_cost_per_token",
+    "cached_read": "cache_read_input_token_cost",
+    "cache_write_5m": "cache_creation_input_token_cost",
+    "cache_write_1h": "cache_creation_input_token_cost_above_{longer}",
+    "output": "output_cost_per_token",
+}
+_LONGER_CACHE = {"anthropic": "1hr", "openai": "12hr"}
+#: A price LiteLLM gives prompts over some length, which the table must model too.
+_LITELLM_LONG = re.compile(r"input_cost_per_token_above_(\d+)k_tokens")
+_DATED = re.compile(r"-\d{8}$")
+
+
+class PriceCheckError(RuntimeError):
+    """The price stage fails, and the message says what differs or what could not be read."""
+
+
+def fetch_price_list() -> Mapping[str, object]:
+    """LiteLLM's price list, or a refusal saying it could not be read."""
+
+    try:
+        with urllib.request.urlopen(LITELLM_PRICES, timeout=PRICE_SOURCE_TIMEOUT) as answer:
+            document = json.loads(answer.read().decode("utf-8"))
+    except (OSError, ValueError) as failure:
+        raise PriceCheckError(
+            f"release check: LiteLLM's price list could not be read from {LITELLM_PRICES}:"
+            f" {failure}. No price was compared, so the check does not pass."
+        ) from failure
+    if not isinstance(document, dict):
+        raise PriceCheckError(
+            f"release check: {LITELLM_PRICES} is not a price list. No price was compared."
+        )
+    return document
+
+
+def price_table() -> ModuleType:
+    """The server's price table, loaded from its file as the server prices with it."""
+
+    spec = importlib.util.spec_from_file_location(
+        "valkama_usage_prices", ROOT / "server" / "telemetry" / "usage_prices.py"
+    )
+    if spec is None or spec.loader is None:
+        raise PriceCheckError("release check: the server's price table cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    # A dataclass resolves its annotations through the module's sys.modules entry.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _per_million(value: float | None) -> str:
+    return "no price" if value is None else f"{value:g} USD per million tokens"
+
+
+@dataclass(frozen=True)
+class PriceComparison:
+    """What differs, what LiteLLM does not list, and how many models were compared."""
+
+    differences: list[str]
+    notes: list[str]
+    compared: int
+
+
+def compare_prices(table: ModuleType, document: Mapping[str, object]) -> PriceComparison:
+    """What differs between the table and LiteLLM's list.
+
+    Every model of the table LiteLLM lists for the same vendor is compared rate by
+    rate, its long prices included; a dated LiteLLM id of a Claude model is that
+    model. A model or a rate LiteLLM does not list is reported and does not fail: a
+    new model can precede their update. A price only one side has is a difference.
+    """
+
+    differences: list[str] = []
+    notes: list[str] = []
+    compared = 0
+    for model, listing in sorted(table.listings().items()):
+        entries = sorted(
+            (key, entry)
+            for key, entry in document.items()
+            if isinstance(entry, dict)
+            and entry.get("litellm_provider") == listing.vendor
+            and (key == model or (listing.vendor == "anthropic" and _DATED.sub("", key) == model))
+        )
+        if not entries:
+            notes.append(f"{model}: not listed there")
+            continue
+        compared += 1
+        tiers = [("", "", listing.rates)]
+        if listing.long is not None:
+            tiers.append(
+                (
+                    f"_above_{listing.long_prompt // 1000}k_tokens",
+                    f" over {listing.long_prompt} prompt tokens",
+                    listing.long,
+                )
+            )
+        for key, entry in entries:
+            for suffix, length, rates in tiers:
+                for kind in table.PRICED_KINDS:
+                    field = (
+                        _LITELLM_FIELDS[kind].format(longer=_LONGER_CACHE[listing.vendor]) + suffix
+                    )
+                    ours = getattr(rates, kind)
+                    theirs = entry.get(field)
+                    if isinstance(theirs, bool) or not isinstance(theirs, int | float):
+                        if ours is not None:
+                            notes.append(f"{model} {kind}{length}: {key} lists no {field}")
+                        continue
+                    theirs = theirs * 1_000_000
+                    if ours is None or not math.isclose(ours, theirs, rel_tol=1e-9, abs_tol=1e-12):
+                        differences.append(
+                            f"{model} {kind}{length}: Valkama {_per_million(ours)},"
+                            f" LiteLLM ({key}) {_per_million(theirs)}"
+                        )
+            for field in sorted(entry):
+                match = _LITELLM_LONG.fullmatch(field)
+                if match and int(match.group(1)) * 1000 != listing.long_prompt:
+                    differences.append(
+                        f"{model}: LiteLLM ({key}) prices prompts over {match.group(1)}k"
+                        " tokens apart, and Valkama has no long prices at that length"
+                    )
+    return PriceComparison(differences, notes, compared)
+
+
+def check_prices(
+    fetch: Callable[[], Mapping[str, object]] = fetch_price_list,
+    table: ModuleType | None = None,
+) -> list[str]:
+    """The price stage: the lines to print when it passes, or a refusal naming each difference."""
+
+    found = compare_prices(table or price_table(), fetch())
+    if found.differences:
+        listed = "\n".join(f"  - {line}" for line in (*found.differences, *found.notes))
+        raise PriceCheckError(
+            f"release check: {len(found.differences)} price(s) differ from LiteLLM's list at"
+            f" {LITELLM_PRICES}:\n{listed}\n"
+            "Check each against the vendor's own pricing page before changing"
+            " server/telemetry/usage_prices.py: the page decides, not this list."
+        )
+    return [
+        f"release check: the prices of {found.compared} model(s) agree with {LITELLM_PRICES}",
+        *found.notes,
+    ]
 
 
 def source_files() -> list[Path]:
@@ -577,7 +745,7 @@ def smoke(assets: Path, expected: str, work_dir: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("check", "build", "smoke"))
+    parser.add_argument("action", choices=("check", "prices", "build", "smoke"))
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--work-dir", type=Path)
@@ -587,6 +755,12 @@ def main() -> None:
             check()
         except ToolchainError as error:
             sys.exit(str(error))
+    elif args.action == "prices":
+        try:
+            lines = check_prices()
+        except PriceCheckError as error:
+            sys.exit(str(error))
+        sys.stdout.write("".join(f"{line}\n" for line in lines))
     elif args.assets is None or args.version is None:
         parser.error("build and smoke require --assets and --version")
     elif args.action == "build":
