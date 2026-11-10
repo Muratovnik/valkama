@@ -1667,6 +1667,16 @@ on the filter, whichever way the view is set. The unresolved view hides marked t
 many, and a thread marked in that view stays under the reader's hands until the view
 changes, as a question answered does. A reply whose question could not be read stands on
 its own and says so: not knowing what it answers is no reason to hide what it says.
+Where another item's comment, reply, report, outcome or description named this one, its
+discussion shows the record as a quiet line among the threads, by its time and in the order
+the threads take; it is not a thread, so it has no sheet, no Reply, no mark, is not counted
+and stands only in the whole view. Its head says where and from which item, «Упомянута в
+комментарии MAIN-12», then who wrote it as a comment's head does and the time; the number is
+the item's link, as a number in any text is, and opens that item, since no address opens a card
+at a comment. Under the head the words' first line stands in the tertiary ink after the rule a
+quote has, on one line with the whole of it in its hint. A record whose item is deleted reads
+«Упомянута в удалённой задаче», with no link and no words. When the item has more records than
+the read brings, one line under the list says how many older ones are not shown.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
 task it is and the way there. There each request is a block of questions under a head, the
 project, the task's number, which is the way to the task, and the title, that stays at the top of

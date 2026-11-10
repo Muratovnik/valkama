@@ -42,6 +42,7 @@ export const en = {
   time: timeMessages.en.time,
   checklistComment: checklistCommentMessages.en.checklistComment,
   threads: discussionThreadMessages.en.threads,
+  mentions: mentionMessages.en.mentions,
   commentSteps: commentStepsMessages.en.commentSteps,
   finder: globalFinderMessages.en.finder,
   requests: inputRequestMessages.en.requests,
