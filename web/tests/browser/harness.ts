@@ -8,6 +8,7 @@ import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItem
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 
 import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -36,7 +37,7 @@ import { previewSurface } from './previewSurface.ts'
 import './harness.css'
 
 const modules = structuredClone(OFFLINE_MODULE_FALLBACK).filter((module) =>
-  ['planning', 'settings'].includes(module.module_id),
+  hasModuleRenderer(module.module_id),
 )
 const sessionSpaceRef = {
   data_scope_id: '00000000-0000-4000-8000-000000000700',

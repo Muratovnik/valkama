@@ -165,8 +165,8 @@ test('grouped navigation keeps one optical icon box and corner badge without per
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/tests/browser/harness.html?lang=ru')
   const icons = page.locator('.nav-item .nav-item-icon')
-  await expect(icons).toHaveCount(2)
-  for (let index = 0; index < 2; index += 1) {
+  await expect(icons).toHaveCount(3)
+  for (let index = 0; index < 3; index += 1) {
     await expect(icons.nth(index)).toHaveCSS('width', '20px')
     await expect(icons.nth(index)).toHaveCSS('height', '20px')
   }
@@ -179,9 +179,9 @@ test('grouped navigation keeps one optical icon box and corner badge without per
   const badgeBox = await sessionItem.locator('.count-badge').boundingBox()
   expect(labelBox && badgeBox && badgeBox.x >= labelBox.x + labelBox.width).toBeTruthy()
   expect(labelBox && badgeBox && badgeBox.x - (labelBox.x + labelBox.width) <= 16).toBeTruthy()
-  // Two groups: Work and Settings, which is a destination too and stands in the
-  // rail's foot beside the connection state, so a long list does not move it.
-  await expect(page.locator('.nav-group')).toHaveCount(2)
+  // Three groups: Work, Understand with Analytics, and Settings, which is a destination too
+  // and stands in the rail's foot beside the connection state, so a long list does not move it.
+  await expect(page.locator('.nav-group')).toHaveCount(3)
   // The Work heading repeats the name of its one entry: it stays for readers and takes no line.
   await expect(page.locator('.nav-group-heading-echo')).toHaveCount(1)
   const echoedHeading = await page.locator('.nav-group-heading-echo').boundingBox()

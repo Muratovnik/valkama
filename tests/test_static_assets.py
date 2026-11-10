@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from server import http_surface, static_assets
+from server.platform import modules as platform_modules
 
 
 class StaticAssetTests(unittest.TestCase):
@@ -282,7 +283,14 @@ class StaticAssetTests(unittest.TestCase):
                     code, content_type, body = request(path)
                     self.assertEqual((404, "text/plain"), (code, content_type))
                     self.assertNotIn(b"<html", body)
-            self.assertEqual(200, request("/modules/planning/global")[0])
+            # Every module the build declares opens by a direct link, in both scopes.
+            for module_id in sorted(platform_modules.module_ids()):
+                for scope in ("global", "project/demo"):
+                    with self.subTest(module=module_id, scope=scope):
+                        self.assertEqual(
+                            (200, "text/html; charset=utf-8", b"<html>shell</html>"),
+                            request(f"/modules/{module_id}/{scope}"),
+                        )
             # The page of one document: what it names is read and refused by its own route.
             for path in ("/doc", "/doc?project=demo&path=docs%2Fplan.md", "/doc?path=..%2Fa.md"):
                 with self.subTest(path=path):

@@ -492,7 +492,7 @@ export function roundTripPlatformRoute(value: unknown): PlatformRoute {
 }
 
 export function recoverWorkRoute(route: PlatformRoute): PlatformRoute {
-  return ['analytics', 'improvements', 'memory', 'sessions', 'skills'].includes(route.module_id)
+  return ['improvements', 'memory', 'sessions', 'skills'].includes(route.module_id)
     ? { module_id: 'planning', scope: route.scope }
     : route
 }

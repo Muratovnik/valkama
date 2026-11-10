@@ -33,18 +33,18 @@ const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
     project: ['planning-space', 'work-item'],
   },
   sessions: { global: ['execution', 'session'], project: [] },
-  analytics: { global: [], project: ['planning-space', 'work-item', 'artifact'] },
+  analytics: { global: [], project: [] },
   improvements: { global: ['work-item', 'improvement-case'], project: [] },
   skills: { global: ['skill'], project: ['skill'] },
   memory: { global: ['memory-resource'], project: ['memory-resource', 'work-item'] },
   settings: { global: [], project: [] },
 } as const
 
-test('valkama-modules has exactly three registrations with both operating levels', () => {
-  assert.equal(OFFLINE_MODULE_FALLBACK.length, 3)
+test('valkama-modules has exactly four registrations with both operating levels', () => {
+  assert.equal(OFFLINE_MODULE_FALLBACK.length, 4)
   assert.deepEqual(
     OFFLINE_MODULE_FALLBACK.map((module) => module.module_id),
-    ['planning', 'memory', 'settings'],
+    ['planning', 'analytics', 'memory', 'settings'],
   )
   for (const module of OFFLINE_MODULE_FALLBACK) {
     assert.equal(module.interface_version, MODULES_INTERFACE)
@@ -81,7 +81,7 @@ test('offline secondary contexts exactly mirror the authoritative scoped contrac
 
 test('valkama-modules payload validates and rejects additive fields', () => {
   const payload = modulesPayload()
-  assert.equal(validateModulesPayload(payload).modules.length, 3)
+  assert.equal(validateModulesPayload(payload).modules.length, 4)
   const additive = structuredClone(payload) as Record<string, unknown>
   additive.extra = true
   assert.throws(() => validateModulesPayload(additive), /unknown field/)
@@ -148,7 +148,7 @@ test('every registration is enabled and fixed, and anything else is refused', ()
   assert.equal(
     validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: moduleRegistrations() })
       .modules.length,
-    3,
+    4,
   )
   for (const [field, value, message] of [
     ['state', 'disabled', /state: expected enabled/],

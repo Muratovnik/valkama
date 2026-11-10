@@ -2,7 +2,7 @@ import type { EntityKind } from '@/shared/api/platformEntityRef.ts'
 
 export const MODULES_INTERFACE = 'valkama-modules' as const
 
-export const PLATFORM_MODULE_IDS = ['planning', 'settings'] as const
+export const PLATFORM_MODULE_IDS = ['planning', 'analytics', 'settings'] as const
 export type PlatformRendererModuleId = (typeof PLATFORM_MODULE_IDS)[number]
 export type ModuleId = Lowercase<string>
 

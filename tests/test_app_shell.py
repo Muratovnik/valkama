@@ -173,7 +173,7 @@ class AppShellTests(unittest.TestCase):
         status, modules = app_shell.handle_get(self.conn, self.db, app_shell.MODULES_PATH, {})
         self.assertEqual(200, status)
         self.assertEqual(
-            ["memory", "planning", "settings"],
+            ["analytics", "memory", "planning", "settings"],
             [item["manifest"]["module_id"] for item in modules["modules"]],
         )
         with self.assertRaises(ui_state.PlatformHttpError):

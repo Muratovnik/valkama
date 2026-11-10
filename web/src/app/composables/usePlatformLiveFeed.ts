@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import type { Ref } from 'vue'
 
 import { fetchModules } from '@/shared/api/platformApi.ts'
+import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest, ModuleRegistration } from '@/shared/api/platformModuleContract.ts'
 import {
   beginResource,
@@ -27,7 +28,7 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
   const moduleRegistrations = computed(() => moduleResource.value.data ?? [])
   const modules = computed<readonly ModuleManifest[]>(() =>
     moduleRegistrations.value
-      .filter((r) => ['planning', 'settings'].includes(r.manifest.module_id))
+      .filter((r) => hasModuleRenderer(r.manifest.module_id))
       .map((r) => r.manifest),
   )
   const modulesAuthoritative = computed(() => moduleResource.value.data !== null)

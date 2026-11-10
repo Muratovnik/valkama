@@ -23,7 +23,7 @@ const REVIEW: WorkFilter = { text: '', category: ['review'] }
 afterEach(() => vi.unstubAllGlobals())
 test('retired deep routes recover into Work in the same operating scope', () => {
   const scope = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
-  for (const module_id of ['sessions', 'analytics', 'improvements', 'skills', 'memory']) {
+  for (const module_id of ['sessions', 'improvements', 'skills', 'memory']) {
     const old = parsePlatformRoute(
       serializePlatformRoute({ module_id, scope, state: { query: 'old' } }),
     )
@@ -31,6 +31,9 @@ test('retired deep routes recover into Work in the same operating scope', () => 
   }
   const unknown: PlatformRoute = { module_id: 'future', scope }
   expect(recoverWorkRoute(unknown)).toBe(unknown)
+  // Usage analytics is a module again: its address stays where it points.
+  const analytics: PlatformRoute = { module_id: 'analytics', scope }
+  expect(recoverWorkRoute(analytics)).toBe(analytics)
   expect(() => parsePlatformRoute('/modules/skills/global?unknown=x')).toThrow()
 })
 test('the filter reads readiness, the claim and the workflow category as separate facts', () => {

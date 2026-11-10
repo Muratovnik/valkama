@@ -231,8 +231,32 @@ class WorkFocusMigrationTests(unittest.TestCase):
             "/api/modules/improvements",
         ):
             self.assertIsNone(http_surface._boundary(http_surface._GET_BOUNDARIES, path))
-        self.assertEqual({"planning", "memory", "settings"}, modules.module_ids())
+        self.assertTrue({"sessions", "improvements", "skills"}.isdisjoint(modules.module_ids()))
         self.assertFalse(any("improvement" in tool["name"] for tool in mcp_surface.catalogue()))
+
+    def test_usage_analytics_brings_back_none_of_the_flow_metrics(self) -> None:
+        # The id is the retired module's; what it declared is not. Usage and quota
+        # analytics may not reopen the flow dashboard's read models, events,
+        # actions or capability under the old name.
+        retired = FORMER_MODULES["analytics"]
+        current = next(m for m in modules.module_manifests() if m["module_id"] == "analytics")
+
+        def declared(manifest: dict) -> set[str]:
+            return {
+                *manifest["required_read_models"],
+                *manifest["sse_subscriptions"],
+                *manifest["primary_actions"],
+                *manifest["secondary_actions"],
+                *manifest["feature_capabilities"],
+                *(
+                    name
+                    for level in manifest["semantics"].values()
+                    for name in (*level["read_models"], *level["action_semantics"])
+                ),
+            }
+
+        self.assertTrue(declared(retired))
+        self.assertTrue(declared(retired).isdisjoint(declared(current)))
 
     def test_session_http_returns_compact_exact_context_without_event_feed(self) -> None:
         self.populated_source()

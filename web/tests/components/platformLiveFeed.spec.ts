@@ -50,7 +50,11 @@ it('loads only module authority and context, and never opens global feeds', asyn
   vi.stubGlobal('EventSource', EventSource)
   const { feed, loadContext, wrapper } = mountFeed()
   await flushPromises()
-  expect(feed.modules.value.map((module) => module.module_id)).toEqual(['planning', 'settings'])
+  expect(feed.modules.value.map((module) => module.module_id)).toEqual([
+    'planning',
+    'analytics',
+    'settings',
+  ])
   expect(loadContext).toHaveBeenCalledOnce()
   expect(fetch).not.toHaveBeenCalled()
   expect(EventSource).not.toHaveBeenCalled()
@@ -62,7 +66,11 @@ it('retains committed authority after refresh fails with safe typed copy', async
   await flushPromises()
   fetchModules.mockRejectedValueOnce(new Error('DISTINCT private /srv/secret'))
   await feed.refreshAll()
-  expect(feed.modules.value.map((module) => module.module_id)).toEqual(['planning', 'settings'])
+  expect(feed.modules.value.map((module) => module.module_id)).toEqual([
+    'planning',
+    'analytics',
+    'settings',
+  ])
   expect(feed.modulesAuthoritative.value).toBe(true)
   expect(feed.modulesFailure.value).toEqual({
     code: 'request_failed',

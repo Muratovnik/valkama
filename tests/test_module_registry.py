@@ -26,6 +26,7 @@ _EXPECTED_SECONDARY_CONTEXTS = {
         "global": ["project", "planning-space"],
         "project": ["planning-space", "work-item"],
     },
+    "analytics": {"global": [], "project": []},
     "memory": {"global": ["memory-resource"], "project": ["memory-resource", "work-item"]},
     "settings": {"global": [], "project": []},
 }
@@ -197,12 +198,12 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertEqual(len(allowed), len(set(allowed)))
 
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
-        """Planning, Memory and Settings, enabled and fixed, the same from every door."""
+        """The four modules, enabled and fixed, the same from every door."""
 
         payload = platform_modules.modules_payload()
         self.assertEqual("valkama-modules", payload["interface_version"])
         self.assertEqual(
-            ["memory", "planning", "settings"],
+            ["analytics", "memory", "planning", "settings"],
             [item["manifest"]["module_id"] for item in payload["modules"]],
         )
         for item in payload["modules"]:
@@ -218,10 +219,17 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertEqual(
             (200, payload), app_shell.handle_get(self.conn, self.path, "/api/modules", {})
         )
+        # Neither door reads the store for it: a closed connection gets the same answer.
+        closed = sqlite3.connect(":memory:")
+        closed.close()
+        self.assertEqual(payload, mcp_surface.call_tool(closed, "list_platform_modules", {}))
+        self.assertEqual(
+            (200, payload), app_shell.handle_get(closed, self.path, "/api/modules", {})
+        )
         # A caller holding the answer cannot change the list behind it.
         payload["modules"][0]["manifest"]["title_key"] = "changed"
         payload["modules"].clear()
-        self.assertEqual(3, len(platform_modules.modules_payload()["modules"]))
+        self.assertEqual(4, len(platform_modules.modules_payload()["modules"]))
         self.assertNotEqual(
             "changed", platform_modules.modules_payload()["modules"][0]["manifest"]["title_key"]
         )

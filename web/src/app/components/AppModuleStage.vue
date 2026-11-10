@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { settingsView } from '@/app/moduleViews.ts'
+import { analyticsView, settingsView } from '@/app/moduleViews.ts'
 
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
@@ -36,6 +36,7 @@ const emit = defineEmits<{
   'state': [state: Record<string, string | number | boolean>]
 }>()
 const SettingsView = settingsView.component
+const AnalyticsView = analyticsView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
 async function refresh() {
   await planningSurface.value?.refresh()
@@ -65,6 +66,14 @@ defineExpose({ openCardId, refresh })
     @notice="(message) => emit('notice', message)"
     @open-project="(id) => emit('open-project', id)"
   />
+
+  <ModuleFrame
+    v-else-if="activeModule === 'analytics'"
+    module="analytics"
+    :label="moduleTitle"
+  >
+    <AnalyticsView />
+  </ModuleFrame>
 
   <ModuleFrame
     v-else-if="activeModule === 'settings'"

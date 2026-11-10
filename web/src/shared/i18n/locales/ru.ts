@@ -2,6 +2,7 @@
 
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
+import { analyticsMessages } from '@/shared/i18n/analyticsMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
@@ -53,6 +54,7 @@ export const ru = {
   pastedImages: pastedImageMessages.ru.pastedImages,
   ...connectionMessages.ru,
   liveWork: liveWorkMessages.ru.liveWork,
+  analytics: analyticsMessages.ru.analytics,
   app: {
     title: 'Valkama',
   },
