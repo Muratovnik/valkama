@@ -52,9 +52,17 @@ const CLIENT_GLYPHS: Readonly<Record<SessionFamily, IconName>> = {
   other: 'client',
 }
 
+/**
+ * The sign an executor is drawn by wherever it stands — a tile, the card's holder, the button
+ * that opens its session: its client's, never the place its session opens in.
+ */
+export function clientGlyph(client: SessionFamily): IconName {
+  return CLIENT_GLYPHS[client]
+}
+
 /** The glyph a holder is drawn with: its client's where an executor stands behind the claim. */
 export function holderGlyph(holder: string, executor: Executor | null): IconName | null {
-  if (executor) return CLIENT_GLYPHS[executor.client]
+  if (executor) return clientGlyph(executor.client)
   return holder ? 'holder' : null
 }
 

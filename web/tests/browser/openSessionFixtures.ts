@@ -7,8 +7,10 @@ import type { Locator } from '@playwright/test'
 import { identity } from './planningFixtures.ts'
 
 /**
- * What a session button says beside its name, in order: the place, that the session runs and
- * that a setting chose the place, each a glyph named for a reader rather than words on the line.
+ * What a session button says beside its name, in order: whose session it is, by its client's
+ * sign as a tile draws the executor, that the session runs and that a setting chose the place,
+ * each a glyph named for a reader rather than words on the line. The place is in the button's
+ * name and hint.
  */
 export const markNames = (button: Locator) =>
   button

@@ -221,7 +221,7 @@ test('with "always open in" on, the head says where and that the setting chose i
 }) => {
   await openCard(page, { always: 'cursor' })
   const head = page.locator('.drawer .card-holder-value button.open-action')
-  await expect.poll(() => markNames(head)).toEqual(['Cursor', 'running', 'by your setting'])
+  await expect.poll(() => markNames(head)).toEqual(['Claude Code', 'running', 'by your setting'])
   await expect(head).toHaveAttribute('aria-label', /in Cursor — by your setting/u)
 })
 
@@ -354,9 +354,10 @@ for (const locale of ['en', 'ru'] as const)
         }),
       )
       const dialog = page.getByRole('dialog').last()
-      await expect
-        .poll(() => markNames(dialog.locator('button.open-action')))
-        .toContain('Claude Desktop')
+      await expect(dialog.locator('button.open-action')).toHaveAttribute(
+        'aria-label',
+        /Claude Desktop/u,
+      )
       await settled(page)
       await page.screenshot(shot(info, `dialog-${locale}-${width}.png`))
       await expect(dialog.locator('button.open-action')).toBeVisible()
