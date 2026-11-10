@@ -16,7 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, liveRow, openQuiet, servePins } from './liveWorkPage.ts'
+import { installLiveStreams, liveRow, openFolds, servePins } from './liveWorkPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -44,12 +44,12 @@ async function open(page: Page, width: number, frame: LiveFrame = edgeFrame()) {
   await expect.poll(() => streams.open()).toHaveLength(1)
   await streams.live(frame)
   if (width > 760) {
-    await openQuiet(page, RAIL)
+    await openFolds(page, RAIL)
     return RAIL
   }
   await page.locator('.nav-work-rail').click()
   await settled(page.getByRole('dialog', { name: 'Work' }))
-  await openQuiet(page, PANEL)
+  await openFolds(page, PANEL)
   return PANEL
 }
 
@@ -254,16 +254,16 @@ for (const forcedColors of ['none', 'active'] as const)
   })
 
 /**
- * Bring the pin up on every row of the rail with the pointer, and say where it covers the
- * title's end or the count, where the title is cut without an ellipsis, and where it
- * stands apart from the pinned row's pin.
+ * Bring the pin up on every item's row of the rail with the pointer, and say where it covers
+ * the title's end or the count, where the title is cut without an ellipsis, and where it
+ * stands apart from the pinned row's pin. A session's own row has no pin.
  */
 async function pinsUnderThePointer(page: Page) {
   const before = await rows(page, RAIL)
   const pinned = before.find((row) => row.reference === 'MAIN-20')?.pin
   if (!pinned) return ['no pinned pin']
   const wrong: string[] = []
-  for (const { reference } of before) {
+  for (const { reference } of before.filter((row) => /-\d+$/u.test(row.reference))) {
     const row = liveRow(page, reference)
     await row.hover()
     const now = await rows(page, RAIL)
@@ -372,7 +372,10 @@ test('the panel’s heading starts where its spaces’ names do, and every fold 
   )
   expect(folds.length).toBeGreaterThan(1)
   for (const fold of folds) expect(fold, fold.label).toMatchObject({ width: 44, height: 44 })
-  // The quiet rows' fold is a row, a finger's height across the panel.
-  const quiet = await panel.locator('.nav-quiet-fold').boundingBox()
-  expect(quiet?.height).toBe(44)
+  // Each fold of the rest of the work is a row, a finger's height across the panel.
+  const rest = await panel
+    .locator('.nav-fold-toggle')
+    .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
+  expect(rest.length).toBeGreaterThan(1)
+  for (const height of rest) expect(height).toBe(44)
 })

@@ -8,17 +8,20 @@ export const NAME_INDENT_TOUCH = 'calc(var(--size-control-target) + var(--space-
 
 <script setup lang="ts">
 /**
- * The side panel's list: each space the frame names, folded or open, with its work
- * under it.
+ * The side panel's list: each space the frame names, folded or open, with its work under it,
+ * and after them the sessions that are under no space.
  *
- * Under a space's head stand the items a session is working on or waiting at, freshest
- * first, each led by the title of the item it belongs to (`liveList`). Then one row,
- * «N more quiet», folds the items held by a session at work on others or silent for over
- * a day; it starts folded, opens in place and keeps its place when it does, so nothing
- * above it moves. Last, under a caption of their own, the pinned items not at work.
+ * Under a space's head stands the work to follow now, items and the sessions on no item in
+ * one run, a row that asks first and then the freshest, each on two lines (`liveList`). Then
+ * up to three rows fold the rest, each drawn only when it holds something and named by what
+ * it holds: the items held by a session at work on others, what has waited for over four
+ * hours, and the items silent for over a day. Each starts folded, opens in place and keeps
+ * its place when it does, so nothing above it moves. Last, under a caption of their own, the
+ * pinned items not on view. The sessions under no space stand under a head of their own,
+ * with their own fold of long waits.
  *
  * Every row's number stands in a column as wide as the list's longest number, folded rows
- * included, so the titles start at one x and opening the fold widens nothing.
+ * included, so the titles start at one x and opening a fold widens nothing.
  *
  * A space's head is its key and name, which lead to its board, and a fold before them in
  * the lead's column. With nothing to show the list says that nobody is working, quietly,
@@ -27,19 +30,20 @@ export const NAME_INDENT_TOUCH = 'calc(var(--size-control-target) + var(--space-
  * phone's panel where the spaces' names would start, which is where its heading starts
  * (`NAME_INDENT_TOUCH`).
  *
- * On the rail Escape folds the quiet rows or the space around focus and gives focus to
- * its fold; folded, the next Escape goes on to the one around it, and past the spaces to
- * the list itself (`NavWorkGroup`). In the phone's panel Escape closes the panel.
+ * On the rail Escape folds the fold or the space around focus and gives focus to its fold;
+ * folded, the next Escape goes on to the one around it, and past the spaces to the list
+ * itself (`NavWorkGroup`). In the phone's panel Escape closes the panel.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import NavWorkQuiet from '@/widgets/app-nav/components/NavWorkQuiet.vue'
+import NavWorkFold from '@/widgets/app-nav/components/NavWorkFold.vue'
 import NavWorkRows from '@/widgets/app-nav/components/NavWorkRows.vue'
 import type { NavNode, NavOpen } from '@/widgets/app-nav/composables/useNavOpen.ts'
 import { liveList, rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
-import type { LiveList } from '@/widgets/app-nav/utils/liveList.ts'
+import type { LiveEntry, LiveList } from '@/widgets/app-nav/utils/liveList.ts'
 
+import type { LiveSession } from '@/shared/api/liveFrameModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { ShownSpace } from '@/shared/lib/liveWorkRows.ts'
@@ -60,6 +64,8 @@ export type NavTarget = (place: {
 }) => PlatformRoute | null
 
 const props = defineProps<{
+  /** The sessions whose folder lies under no space. */
+  elsewhere: readonly LiveSession[]
   open: NavOpen
   prefix: string
   shown: NavShown | null
@@ -72,75 +78,122 @@ const emit = defineEmits<{ go: [route: PlatformRoute] }>()
 
 const { t } = useI18n()
 
+/** A row that folds some of a space's work away, and the rows it folds. */
+interface Fold {
+  entries: readonly LiveEntry[]
+  fold: string
+  id: string
+  node: NavNode
+  open: boolean
+  words: string
+}
+
+/** A space, or the sessions under none (`space` null): its head, its rows and its folds. */
 interface SpaceTree {
   branch: string
   fold: string
   folded: boolean
+  folds: Fold[]
   href: string | undefined
+  key: string
   label: string
   list: LiveList
   node: NavNode
   pinnedHeading: string
-  /** The folded row of the space's quiet items, and the list it shows. */
-  quiet: { fold: string; id: string; node: NavNode; open: boolean }
   route: PlatformRoute | null
-  space: ShownSpace
+  space: ShownSpace | null
   rowRoute: (reference: string) => PlatformRoute | null
 }
 
-const trees = computed<SpaceTree[]>(() =>
-  props.spaces.map((space) => {
-    const node: NavNode = `space:${space.key}`
-    const quiet: NavNode = `quiet:${space.key}`
-    const route = props.target({ key: space.key, project_id: space.project_id, reference: null })
-    return {
-      branch: `${props.prefix}-space-${space.key}`,
-      fold: `${props.prefix}-space-${space.key}-fold`,
-      folded: !props.open.isOpen(node),
-      href: route === null ? undefined : serializePlatformRoute(route),
-      label: t('liveWork.space', { key: space.key, name: space.name }),
-      list: liveList(space.rows),
-      node,
-      pinnedHeading: `${props.prefix}-pinned-${space.key}`,
-      quiet: {
-        fold: `${props.prefix}-quiet-${space.key}-fold`,
-        id: `${props.prefix}-quiet-${space.key}`,
-        node: quiet,
-        open: props.open.isOpen(quiet),
-      },
-      route,
-      rowRoute: (reference: string) =>
-        props.target({ key: space.key, project_id: space.project_id, reference }),
-      space,
-    }
-  }),
-)
+/** The folds in the order they stand, and the words each is named by. */
+const FOLDS = [
+  ['held', 'liveWork.heldMore'],
+  ['long', 'liveWork.longMore'],
+  ['quiet', 'liveWork.quietMore'],
+] as const
+
+/** The folds of a list, each drawn only when it holds something; `at` makes their ids. */
+function foldsOf(list: LiveList, key: string, at: string): Fold[] {
+  return FOLDS.filter(([kind]) => list[kind].length > 0).map(([kind, words]) => {
+    const node: NavNode = `${kind}:${key}`
+    const id = `${props.prefix}-${kind}-${at}`
+    const count = list[kind].length
+    const [open, said] = [props.open.isOpen(node), t(words, { count }, count)]
+    return { entries: list[kind], fold: `${id}-fold`, id, node, open, words: said }
+  })
+}
+
+function spaceTree(space: ShownSpace): SpaceTree {
+  const node: NavNode = `space:${space.key}`
+  const route = props.target({ key: space.key, project_id: space.project_id, reference: null })
+  const list = liveList(space.rows, space.sessions)
+  return {
+    branch: `${props.prefix}-space-${space.key}`,
+    fold: `${props.prefix}-space-${space.key}-fold`,
+    folded: !props.open.isOpen(node),
+    folds: foldsOf(list, space.key, space.key),
+    href: route === null ? undefined : serializePlatformRoute(route),
+    key: space.key,
+    label: t('liveWork.space', { key: space.key, name: space.name }),
+    list,
+    node,
+    pinnedHeading: `${props.prefix}-pinned-${space.key}`,
+    route,
+    rowRoute: (reference: string) =>
+      props.target({ key: space.key, project_id: space.project_id, reference }),
+    space,
+  }
+}
+
+/** The sessions under no space, as a space of their own with no board and no items. */
+function elsewhereTree(): SpaceTree {
+  const list = liveList([], props.elsewhere)
+  return {
+    branch: `${props.prefix}-elsewhere`,
+    fold: `${props.prefix}-elsewhere-fold`,
+    folded: !props.open.isOpen('elsewhere'),
+    folds: foldsOf(list, '', 'elsewhere'),
+    href: undefined,
+    key: '',
+    label: t('liveWork.elsewhere'),
+    list,
+    node: 'elsewhere',
+    pinnedHeading: '',
+    route: null,
+    rowRoute: () => null,
+    space: null,
+  }
+}
+
+const trees = computed<SpaceTree[]>(() => [
+  ...props.spaces.map((space) => spaceTree(space)),
+  ...(props.elsewhere.length > 0 ? [elsewhereTree()] : []),
+])
 const touch = computed(() => props.size === 'touch')
-const empty = computed(() => props.spaces.length === 0)
+const empty = computed(() => trees.value.length === 0)
 /** A number as wide as the list's longest drawn, folded or not, which sizes every number column. */
 const widest = computed(() => {
-  const lengths = trees.value.flatMap(({ list }) =>
-    [...list.live, ...list.quiet, ...list.pinned].map(
-      (entry) => rowNumber(entry.row.reference).length,
-    ),
-  )
-  return '0'.repeat(Math.max(1, ...lengths))
+  const entries = trees.value.flatMap(({ list }) => Object.values(list).flat())
+  const numbers = entries.map((entry) => (entry.kind === 'item' ? entry.row.reference : '0'))
+  return '0'.repeat(Math.max(1, ...numbers.map((reference) => rowNumber(reference).length)))
 })
 
 /** A name cut short says itself beside the rail; the phone's panel has no room beside it. */
 const nameHint = (entry: SpaceTree) => (touch.value ? null : entry.label)
 const foldLabel = (entry: SpaceTree) => t('liveWork.group', { name: entry.label })
 const currentIn = (entry: SpaceTree) =>
-  props.shown?.key === entry.space.key ? props.shown.reference : null
+  entry.space !== null && props.shown?.key === entry.key ? props.shown.reference : null
 const spaceCurrent = (entry: SpaceTree) =>
-  props.shown?.key === entry.space.key && props.shown.reference === null ? 'page' : undefined
+  entry.space !== null && props.shown?.key === entry.key && props.shown.reference === null
+    ? 'page'
+    : undefined
 
 function toggle(entry: SpaceTree) {
   props.open.set(entry.node, entry.folded)
 }
 
-function toggleQuiet(entry: SpaceTree) {
-  props.open.set(entry.quiet.node, !entry.quiet.open)
+function toggleFold(fold: Fold) {
+  props.open.set(fold.node, !fold.open)
 }
 
 function pressSpace(event: MouseEvent, entry: SpaceTree) {
@@ -192,7 +245,7 @@ function escape(event: KeyboardEvent) {
     >
       <li
         v-for="entry in trees"
-        :key="entry.space.key"
+        :key="entry.node"
         class="nav-tree-space"
         :data-nav-node="entry.node"
         :data-nav-fold="entry.fold"
@@ -224,8 +277,14 @@ function escape(event: KeyboardEvent) {
             >{{ entry.label }}</a
           >
           <span
-            v-else
+            v-else-if="entry.space"
             v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"
+            class="nav-tree-space-name one-line"
+            >{{ entry.label }}</span
+          >
+          <span
+            v-else
+            v-tooltip:right.clipped="nameHint(entry)"
             class="nav-tree-space-name one-line"
             >{{ entry.label }}</span
           >
@@ -239,23 +298,26 @@ function escape(event: KeyboardEvent) {
             v-if="entry.list.live.length > 0"
             :entries="entry.list.live"
             :current="currentIn(entry)"
+            :lines="2"
             :route="entry.rowRoute"
             :size="size"
             :widest="widest"
             @go="(next) => emit('go', next)"
           />
-          <NavWorkQuiet
-            v-if="entry.list.quiet.length > 0"
-            :entries="entry.list.quiet"
-            :fold-id="entry.quiet.fold"
-            :list-id="entry.quiet.id"
-            :node="entry.quiet.node"
-            :open="entry.quiet.open"
+          <NavWorkFold
+            v-for="fold in entry.folds"
+            :key="fold.node"
+            :entries="fold.entries"
+            :fold-id="fold.fold"
+            :list-id="fold.id"
+            :node="fold.node"
+            :open="fold.open"
+            :words="fold.words"
             :current="currentIn(entry)"
             :route="entry.rowRoute"
             :size="size"
             :widest="widest"
-            @toggle="toggleQuiet(entry)"
+            @toggle="toggleFold(fold)"
             @go="(next) => emit('go', next)"
           />
           <div
@@ -273,6 +335,7 @@ function escape(event: KeyboardEvent) {
             <NavWorkRows
               :entries="entry.list.pinned"
               :current="currentIn(entry)"
+              :lines="1"
               :route="entry.rowRoute"
               :size="size"
               :widest="widest"
@@ -288,7 +351,7 @@ function escape(event: KeyboardEvent) {
 <style scoped>
 /* The column the list counts from: the start padding of a space's head and the width of
    the lead its fold stands in. A row indents by one step of 12px from the same start
-   (`NavWorkRow`, with the same values), and so does the folded row of quiet items, so
+   (`NavWorkRow`, with the same values), and so does each row that folds work away, so
    their folds and signs stand in one column and their numbers and words in the next. On a
    phone the lead is a finger wide and the arrow keeps to the room before a row's sign. */
 .nav-tree {

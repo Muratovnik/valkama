@@ -1,8 +1,8 @@
 /**
  * The actions a row keeps out of sight until it is wanted (`reveal.css`), in the built app, in
  * both languages, at 1280 and 390, where a pointer can hover and where only a finger presses:
- * a checklist step's discussion, the pin of an unpinned rail row and a lane heading's card and
- * chain.
+ * a checklist step's discussion, the pin of an unpinned rail row, a rail row's «Open session»
+ * and a lane heading's card and chain.
  *
  * Where a pointer can hover, each is out of sight at rest and keeps its place there: the row and
  * its text stand where they stood once it comes up, measured, not looked at. It comes up under
@@ -15,7 +15,7 @@ import type { Locator, Page } from '@playwright/test'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { busyFrame } from '../support/liveFrame.ts'
+import { busyFrame, liveSession } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { settled } from './documentBeside.ts'
@@ -81,13 +81,21 @@ async function stepHost(page: Page, width: number): Promise<Host> {
   }
 }
 
-async function openRail(page: Page, width: number) {
+/** The busy frame with a session behind MAIN-12, which its «Open session» opens. */
+function withSession() {
+  const frame = busyFrame()
+  const row = frame.spaces[0].rows.find((each) => each.reference === 'MAIN-12')
+  if (row) row.executor = liveSession('00000000-0000-4000-8000-000000000201').executor
+  return frame
+}
+
+async function openRail(page: Page, width: number, frame = busyFrame()) {
   await page.setViewportSize({ width, height: 844 })
   await installBackend(page)
   const streams = await installLiveStreams(page)
   await page.goto(SETTINGS)
   await expect.poll(() => streams.open()).toHaveLength(1)
-  await streams.live(busyFrame())
+  await streams.live(frame)
   if (width > 760) return '.nav-work-list'
   await page.locator('.nav-work-rail').click()
   await settled(page.getByRole('dialog', { name: /Work|Работа/u }))
@@ -107,6 +115,19 @@ async function pinHost(page: Page, width: number): Promise<Host> {
   }
 }
 
+async function sessionHost(page: Page, width: number): Promise<Host> {
+  const within = await openRail(page, width, withSession())
+  const row = liveRow(page, 'MAIN-12', within)
+  await expect(row.locator('.nav-row-open')).toHaveCount(1)
+  return {
+    row,
+    text: row.locator('.nav-row-title'),
+    action: row.locator('.nav-row-open'),
+    first: row.locator('.nav-row-open'),
+    before: row.locator('.nav-row-link'),
+  }
+}
+
 async function laneHost(page: Page, width: number): Promise<Host> {
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page)
@@ -122,7 +143,7 @@ async function laneHost(page: Page, width: number): Promise<Host> {
   }
 }
 
-const HOSTS = { step: stepHost, pin: pinHost, lane: laneHost } as const
+const HOSTS = { step: stepHost, pin: pinHost, session: sessionHost, lane: laneHost } as const
 
 /** How much of the action is drawn: its own opacity times every ancestor's, nothing if hidden. */
 const sight = (action: Locator) =>

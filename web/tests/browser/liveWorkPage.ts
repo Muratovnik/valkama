@@ -91,9 +91,9 @@ export async function servePins(page: Page, answer: (body: unknown) => LiveFrame
   return sent
 }
 
-/** Open every space's quiet rows in a list, so that every row of the frame stands in it. */
-export async function openQuiet(page: Page, within: string) {
-  for (const fold of await page.locator(`${within} .nav-quiet-fold`).all()) await fold.click()
+/** Open every fold of a list, so that every row of the frame stands in it. */
+export async function openFolds(page: Page, within: string) {
+  for (const fold of await page.locator(`${within} .nav-fold-toggle`).all()) await fold.click()
   await page.mouse.move(0, 0)
 }
 

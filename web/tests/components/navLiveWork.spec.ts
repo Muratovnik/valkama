@@ -1,85 +1,22 @@
 /**
- * The rail's list of work going on now, as `kb`-free behaviour a reader relies on: the work
- * at hand freshest first with the quiet work folded and the pinned apart, a row that left
- * fading where it stood, the folds kept on the device, the sign each row's session draws,
- * and the rows that say a state other than work in words.
+ * The rail's list of work going on now, as behaviour a reader relies on: the work to follow
+ * now freshest first with the rest under three folds and the pinned apart, the sessions under
+ * no space after the spaces, a row that left fading where it stood, the folds kept on the
+ * device, and the count on a phone's rail. The signs are `navLiveSigns.spec.ts`.
  */
 import { createPinia, setActivePinia } from 'pinia'
-import { createI18n } from 'vue-i18n'
 
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import AppNav from '@/widgets/app-nav/components/AppNav.vue'
+import { FADING_MS } from '@/shared/stores/liveWorkStore.ts'
 
-import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
-import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
-import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
-import { messages, pluralRules } from '@/shared/i18n/index.ts'
-import { FADING_MS, useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
-import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
+import { busyFrame, liveFrame, liveRow, liveSession, liveSpace } from '../support/liveFrame.ts'
+import { drawn, rail, row, unmountRails } from '../support/navRail.ts'
+import type { Rail } from '../support/navRail.ts'
 
-import { busyFrame, liveFrame, liveRow, liveSpace } from '../support/liveFrame.ts'
-
-/** The hint a row shows: its number and title, and the state when it has one. */
-const hintOf = (row: Element) => tooltipOf(row)?.text
-
-const SCOPE = '123e4567-e89b-42d3-a456-426614174000'
-const planning = {
-  icon_key: 'board',
-  module_id: 'planning',
-  navigation_group: 'work',
-  title_key: 'platform.modules.planning',
-} as ModuleManifest
-
-function target(place: { key: string; project_id: string | null; reference: string | null }) {
-  if (place.project_id === null || place.reference === null) return null
-  return planningTargetRoute({
-    project_id: place.project_id,
-    space_ref: { data_scope_id: SCOPE, space_key: place.key },
-    reference: place.reference,
-    writable: true,
-  })
-}
-
-function rail(frame: LiveFrame | null, locale: 'en' | 'ru' = 'en', shown = null as never) {
-  const store = useLiveWorkStore()
-  if (frame) store.accept(frame)
-  const wrapper = mount(AppNav, {
-    attachTo: document.body,
-    props: { active: 'planning', modules: [planning], liveTarget: target, liveShown: shown },
-    global: {
-      plugins: [
-        createI18n({
-          legacy: false,
-          locale,
-          fallbackLocale: 'en',
-          messages,
-          pluralRules,
-          datetimeFormats: {
-            en: { day: { month: 'short', day: '2-digit' } },
-            ru: { day: { month: 'short', day: '2-digit' } },
-          },
-        }),
-      ],
-    },
-  })
-  return { store, wrapper }
-}
-
-/** The references the rail's list draws, in the order it draws them. */
-const drawn = (wrapper: ReturnType<typeof rail>['wrapper']) =>
-  wrapper
-    .findAll('.nav-work-list .nav-row-link')
-    .map((link) => link.attributes('aria-label')?.split(' ')[0])
-
-const row = (wrapper: ReturnType<typeof rail>['wrapper'], reference: string) => {
-  const link = wrapper
-    .findAll('.nav-work-list .nav-row-link')
-    .find((candidate) => candidate.attributes('aria-label')?.startsWith(`${reference} `))
-  if (!link) throw new Error(`no row ${reference}`)
-  return link.element.closest('.nav-row') as HTMLElement
-}
+const STORAGE = 'valkama-nav-open'
+const stored = () => JSON.parse(localStorage.getItem(STORAGE) ?? '{}') as Record<string, boolean>
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -87,12 +24,16 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  unmountRails()
   vi.useRealTimers()
   document.body.innerHTML = ''
 })
 
+/** What a part of the list draws, an item by its reference and a session by its title. */
+const within = (wrapper: Rail, selector: string) => drawn(wrapper, `.nav-work-list ${selector}`)
+
 describe('the order of the list', () => {
-  it('lists the work going on now freshest first, the quiet work folded, the pinned apart', () => {
+  it('lists the work to follow now freshest first, the rest folded, the pinned apart', () => {
     const { wrapper } = rail(
       liveFrame([
         liveSpace('MAIN', [
@@ -105,6 +46,7 @@ describe('the order of the list', () => {
           }),
           liveRow('MAIN-30', { state: 'working', updated_at: '2026-11-09T08:00:00Z' }),
           liveRow('MAIN-8', { state: 'held', updated_at: '2026-11-09T06:00:00Z' }),
+          liveRow('MAIN-9', { state: 'waiting', long: true }),
           liveRow('MAIN-6', {
             state: 'quiet',
             quiet_since: '2026-11-01T00:00:00Z',
@@ -116,58 +58,154 @@ describe('the order of the list', () => {
         liveSpace('NEXT', [liveRow('NEXT-1', { state: 'working' })]),
       ]),
     )
-    const within = (selector: string) =>
-      wrapper
-        .findAll(`${selector} .nav-row-link`)
-        .map((link) => link.attributes('aria-label')?.split(' ')[0])
     const main = '.nav-tree-space:first-child'
-    expect(within(`${main} .nav-tree-body > .nav-rows`)).toEqual(['MAIN-12', 'MAIN-30', 'MAIN-2'])
-    expect(within(`${main} .nav-quiet`)).toEqual(['MAIN-6', 'MAIN-8'])
-    expect(within(`${main} .nav-tree-pinned`)).toEqual(['MAIN-20', 'MAIN-21'])
-    // The epic is no row of its own: its title leads its item's row.
+    expect(within(wrapper, `${main} .nav-tree-body > .nav-rows`)).toEqual([
+      'MAIN-12',
+      'MAIN-30',
+      'MAIN-2',
+    ])
+    expect(wrapper.findAll(`${main} .nav-fold`)).toHaveLength(3)
+    expect(within(wrapper, `${main} .nav-fold`)).toEqual(['MAIN-8', 'MAIN-9', 'MAIN-6'])
+    expect(within(wrapper, `${main} .nav-tree-pinned`)).toEqual(['MAIN-20', 'MAIN-21'])
+    // The epic is no row of its own: its title is said on its item's second line.
     expect(drawn(wrapper)).not.toContain('MAIN-4')
-    expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-epic')?.textContent).toBe('Earlier epic')
-    expect(row(wrapper, 'MAIN-30').querySelector('.nav-row-epic')).toBeNull()
-    // Every row stands one step in from its space.
-    expect(
-      new Set(
-        wrapper
-          .findAll('.nav-work-list .nav-row')
-          .map((each) => (each.element as HTMLElement).style.getPropertyValue('--nav-row-depth')),
-      ),
-    ).toEqual(new Set(['1']))
+    expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-detail')?.textContent).toMatch(
+      / · Earlier epic$/u,
+    )
     expect(wrapper.findAll('.nav-tree-space-name').map((name) => name.text())).toEqual([
       'MAIN · MAIN space',
       'NEXT · NEXT space',
     ])
   })
 
-  it('prints a row by its number alone, the space being named above it', () => {
-    const { wrapper } = rail(busyFrame())
-    expect(row(wrapper, 'MAIN-12').querySelector('.nav-row-number')?.textContent).toBe('12')
-    expect(hintOf(row(wrapper, 'MAIN-12'))).toBe(
-      'MAIN-12 Answer a review in one form\npart of Structured answers\nworking, 2 agents',
+  it('stands the sessions on no item among the items, and those under no space last', async () => {
+    const { wrapper } = rail(
+      liveFrame(
+        [
+          liveSpace('MAIN', [liveRow('MAIN-3', { state: 'working' })], {
+            sessions: [
+              liveSession('00000000-0000-4000-8000-000000000001', {
+                title: 'Compare two exports',
+                state: 'working',
+                since: '2026-11-01T10:00:00Z',
+              }),
+            ],
+          }),
+        ],
+        [
+          liveSession('00000000-0000-4000-8000-000000000002', { title: 'Read the logs' }),
+          liveSession('00000000-0000-4000-8000-000000000003', { title: 'Old', long: true }),
+        ],
+      ),
     )
+    expect(drawn(wrapper)).toEqual(['Compare two exports', 'MAIN-3', 'Read the logs', 'Old'])
+    const heads = wrapper.findAll('.nav-tree-space-name').map((name) => name.text())
+    expect(heads).toEqual(['MAIN · MAIN space', 'Sessions outside any space'])
+    const outside = wrapper.findAll('.nav-tree-space')[1]
+    expect(outside.find('a').exists()).toBe(false)
+    // Its long wait folds under a fold of its own, kept on the device apart from any space's.
+    const fold = outside.get('.nav-fold-toggle')
+    expect(fold.text()).toBe('1 more waiting for hours')
+    await fold.trigger('click')
+    expect(stored()).toEqual({ 'long:': true })
   })
 })
 
-describe('the quiet work', () => {
-  it('starts folded under one row that counts it, and opens in place', async () => {
-    const { wrapper } = rail(busyFrame(), 'ru')
-    const more = wrapper.get('.nav-quiet-fold')
-    expect(more.text()).toBe('ещё 5\u{A0}тихих')
-    expect(more.attributes('aria-expanded')).toBe('false')
-    const quiet = wrapper.get(`#${more.attributes('aria-controls')}`)
-    expect(quiet.isVisible()).toBe(false)
-    await more.trigger('click')
-    expect(more.attributes('aria-expanded')).toBe('true')
-    expect(quiet.isVisible()).toBe(true)
-    // An opening is what the device keeps, since folded is where this row starts.
-    expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({
-      'quiet:MAIN': true,
-    })
-    await more.trigger('click')
-    expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({})
+/** Another rail on its own store: a frame that replaced another would fade the rows it dropped. */
+function fresh() {
+  unmountRails()
+  document.body.innerHTML = ''
+  setActivePinia(createPinia())
+}
+
+const folds = (wrapper: Rail) =>
+  wrapper.findAll('.nav-work-list .nav-fold-toggle').map((fold) => fold.text())
+
+/** A space with `held` held items, `long` long waits and `quiet` quiet ones. */
+function folded(held: number, long: number, quiet: number) {
+  const rows = [
+    ...Array.from({ length: held }, (_, at) => liveRow(`MAIN-${at + 1}`, { state: 'held' })),
+    ...Array.from({ length: long }, (_, at) =>
+      liveRow(`MAIN-${at + 11}`, { state: 'waiting', long: true }),
+    ),
+    ...Array.from({ length: quiet }, (_, at) =>
+      liveRow(`MAIN-${at + 21}`, { state: 'quiet', quiet_since: '2026-11-01T00:00:00Z' }),
+    ),
+  ]
+  return liveFrame([liveSpace('MAIN', rows)])
+}
+
+describe('the folds', () => {
+  it('names each fold by what it holds, in Russian with each plural form', () => {
+    expect(folds(rail(folded(1, 1, 1), 'ru').wrapper)).toEqual([
+      'ещё 1\u{A0}у работающей сессии',
+      'ещё 1\u{A0}давно ждёт',
+      'ещё 1\u{A0}молчит больше суток',
+    ])
+    fresh()
+    expect(folds(rail(folded(2, 3, 4), 'ru').wrapper)).toEqual([
+      'ещё 2\u{A0}у работающих сессий',
+      'ещё 3\u{A0}давно ждут',
+      'ещё 4\u{A0}молчат больше суток',
+    ])
+    fresh()
+    expect(folds(rail(folded(5, 0, 0), 'ru').wrapper)).toEqual(['ещё 5\u{A0}у работающих сессий'])
+  })
+
+  it('names each fold in English, one and many, and draws none that would hold nothing', () => {
+    expect(folds(rail(folded(1, 0, 1)).wrapper)).toEqual([
+      '1 more with a working session',
+      '1 more silent for over a day',
+    ])
+    fresh()
+    expect(folds(rail(folded(2, 2, 2)).wrapper)).toEqual([
+      '2 more with working sessions',
+      '2 more waiting for hours',
+      '2 more silent for over a day',
+    ])
+  })
+
+  it('starts each fold folded and opens it in place, its rows on one line', async () => {
+    const { wrapper } = rail(folded(1, 1, 1))
+    const toggles = wrapper.findAll('.nav-work-list .nav-fold-toggle')
+    for (const toggle of toggles) {
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(wrapper.get(`#${toggle.attributes('aria-controls')}`).isVisible()).toBe(false)
+    }
+    const above = wrapper.findAll('.nav-work-list .nav-fold').map((fold) => fold.element)
+    await toggles[1].trigger('click')
+    expect(toggles[1].attributes('aria-expanded')).toBe('true')
+    const list = wrapper.get(`#${toggles[1].attributes('aria-controls')}`)
+    expect(list.isVisible()).toBe(true)
+    // In place: under its own row, inside its own fold, and the others stay folded.
+    expect(above[1].contains(list.element)).toBe(true)
+    expect(toggles.map((toggle) => toggle.attributes('aria-expanded'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ])
+    expect(list.findAll('.nav-row-detail')).toHaveLength(0)
+    expect(list.findAll('.nav-row')).toHaveLength(1)
+  })
+
+  it('keeps each fold’s opening on the device on its own', async () => {
+    const { wrapper } = rail(folded(1, 1, 1))
+    const toggles = wrapper.findAll('.nav-work-list .nav-fold-toggle')
+    await toggles[0].trigger('click')
+    await toggles[2].trigger('click')
+    expect(stored()).toEqual({ 'held:MAIN': true, 'quiet:MAIN': true })
+    await toggles[0].trigger('click')
+    expect(stored()).toEqual({ 'quiet:MAIN': true })
+  })
+
+  it('opens the quiet fold on a device that opened the one fold of quiet work before', () => {
+    localStorage.setItem(STORAGE, JSON.stringify({ 'quiet:MAIN': true }))
+    const { wrapper } = rail(folded(1, 1, 1))
+    expect(
+      wrapper
+        .findAll('.nav-work-list .nav-fold-toggle')
+        .map((toggle) => toggle.attributes('aria-expanded')),
+    ).toEqual(['false', 'false', 'true'])
   })
 })
 
@@ -237,30 +275,32 @@ describe('a row the frame no longer has', () => {
   })
 })
 
-describe('folds', () => {
+describe('the space folds', () => {
   it('opens a node nobody folded, and keeps a fold on the device', async () => {
     const { wrapper } = rail(busyFrame())
     const fold = wrapper.get('.nav-tree-fold')
     expect(fold.attributes('aria-expanded')).toBe('true')
     await fold.trigger('click')
     expect(fold.attributes('aria-expanded')).toBe('false')
-    expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({
-      'space:MAIN': false,
-    })
-    wrapper.unmount()
+    expect(stored()).toEqual({ 'space:MAIN': false })
+    unmountRails()
 
     setActivePinia(createPinia())
     const again = rail(busyFrame()).wrapper
-    const folds = again.findAll('.nav-tree-fold')
-    expect(folds.map((each) => each.attributes('aria-expanded'))).toEqual(['false', 'true'])
+    const spaceFolds = again.findAll('.nav-tree-fold')
+    expect(spaceFolds.map((each) => each.attributes('aria-expanded'))).toEqual([
+      'false',
+      'true',
+      'true',
+    ])
     // Opened again, the memory forgets the node rather than keeping it as open.
-    await folds[0].trigger('click')
-    expect(JSON.parse(localStorage.getItem('valkama-nav-open') ?? '{}')).toEqual({})
+    await spaceFolds[0].trigger('click')
+    expect(stored()).toEqual({})
   })
 
-  it('folds the quiet rows, then the space, then the list on Escape, focus going to each fold', async () => {
+  it('folds a fold, then the space, then the list on Escape, focus going to each fold', async () => {
     const { wrapper } = rail(busyFrame())
-    const more = wrapper.get('.nav-quiet-fold')
+    const more = wrapper.get('.nav-fold-toggle')
     await more.trigger('click')
     const link = row(wrapper, 'MAIN-13').querySelector<HTMLElement>('.nav-row-link')
     link?.focus()
@@ -283,120 +323,37 @@ describe('folds', () => {
   })
 })
 
-/** The sign a row draws in its lead, by the class that names it; null for none. */
-const signOf = (wrapper: ReturnType<typeof rail>['wrapper'], reference: string) => {
-  const lead = row(wrapper, reference).querySelector('.nav-row-lead')
-  const signs = [...(lead?.querySelectorAll('.session-sign') ?? [])]
-  expect(signs.length).toBeLessThanOrEqual(1)
-  const sign = signs[0]
-  if (!sign) return null
-  // Its host says the state in words; the sign says nothing to assistive technology.
-  expect(sign.closest('[aria-hidden="true"]')).not.toBeNull()
-  return [...sign.classList].find((name) => name.startsWith('session-sign-')) ?? null
-}
-
-describe('the sign of a row', () => {
-  it('draws the sign of its session in the lead, one per live state', () => {
-    const { wrapper } = rail(
-      liveFrame([
-        liveSpace('MAIN', [
-          liveRow('MAIN-1', { state: 'working' }),
-          liveRow('MAIN-2', { state: 'waiting', asks: true }),
-          liveRow('MAIN-3', { state: 'waiting' }),
-          liveRow('MAIN-4', { state: 'waiting', long: true }),
-          liveRow('MAIN-5', { state: 'held' }),
-          liveRow('MAIN-6', { state: 'quiet', quiet_since: '2026-11-01T00:00:00Z' }),
-          liveRow('MAIN-7', { pinned: true }),
-          liveRow('MAIN-8', { pinned: true, state_name: 'Done', is_terminal: true }),
-        ]),
-      ]),
-    )
-    expect(
-      ['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-7', 'MAIN-8'].map(
-        (reference) => signOf(wrapper, reference),
-      ),
-    ).toEqual([
-      'session-sign-working',
-      'session-sign-asks',
-      'session-sign-waiting',
-      'session-sign-waiting',
-      'session-sign-held',
-      'session-sign-quiet',
-      null,
-      null,
-    ])
-    // The dots and the ring the rows drew before are gone from the list.
-    expect(wrapper.find('.nav-work-list .work-dots').exists()).toBe(false)
-  })
-
-  it('draws a closed item’s sign while a session is still on it', () => {
-    const { wrapper } = rail(
-      liveFrame([
-        liveSpace('MAIN', [
-          liveRow('MAIN-9', { state: 'working', state_name: 'Done', is_terminal: true }),
-        ]),
-      ]),
-    )
-    expect(signOf(wrapper, 'MAIN-9')).toBe('session-sign-working')
-  })
-})
-
-describe('rows with no work moving', () => {
-  it('mutes a quiet row, draws its quiet sign, and says since when it is silent', () => {
-    const { wrapper } = rail(busyFrame(), 'ru')
-    const quiet = row(wrapper, 'MAIN-14')
-    expect(quiet.classList).toContain('muted')
-    expect(quiet.querySelector('.nav-row-lead .session-sign-quiet')).not.toBeNull()
-    // The number and the title are on the row: its hint is the reason alone, and always shows.
-    expect(hintOf(quiet)).toMatch(/^молчит с 03 нояб\.?$/u)
-    expect(tooltipOf(quiet)?.clipped).toBe(false)
-  })
-
-  it('keeps the sign’s room on a pinned row with no work, and says why it is there', () => {
-    const { wrapper } = rail(busyFrame())
-    const idle = row(wrapper, 'MAIN-20')
-    const working = row(wrapper, 'MAIN-31')
-    expect(idle.classList).toContain('muted')
-    expect(idle.querySelector('.nav-row-lead')?.children).toHaveLength(0)
-    expect(working.querySelector('.nav-row-lead')?.children).toHaveLength(1)
-    expect(hintOf(idle)).toBe('Pinned · no work now · Backlog')
-    expect(idle.querySelector('.nav-row-meta')).toBeNull()
-    expect(idle.querySelector('.nav-row-pin')?.getAttribute('aria-label')).toBe(
-      'Pinned to Work: press to remove the pin',
-    )
-  })
-
-  it('says a pinned closed item’s state where the agents would be counted', () => {
-    const { wrapper } = rail(busyFrame())
-    const closed = row(wrapper, 'MAIN-7')
-    expect(closed.classList).toContain('muted')
-    expect(closed.querySelector('.nav-row-meta')?.textContent?.trim()).toBe('Done')
-  })
-
-  it('says nobody is working when the frame has nothing to show', () => {
+describe('the empty line', () => {
+  it('says nobody is working when no space has rows or sessions and none is outside', () => {
     const { wrapper } = rail(liveFrame([]), 'ru')
     expect(wrapper.get('.nav-work-list').text()).toBe('Сейчас никто не работает')
   })
 
-  it('draws no caption counting the agents on no row', () => {
-    const { wrapper } = rail(busyFrame(), 'ru')
-    const notes = wrapper.findAll('.nav-tree-note').map((note) => note.text())
-    expect(notes).toEqual(['Закреплённые'])
+  it('is not drawn while sessions work on no item, in a space or outside any', async () => {
+    const session = liveSession('00000000-0000-4000-8000-000000000001', { title: 'Alone' })
+    const { store, wrapper } = rail(liveFrame([liveSpace('MAIN', [], { sessions: [session] })]))
+    expect(drawn(wrapper)).toEqual(['Alone'])
+    expect(wrapper.find('.nav-tree-empty').exists()).toBe(false)
+    store.accept(liveFrame([], [session]))
+    await flushPromises()
+    expect(drawn(wrapper)).toEqual(['Alone'])
+    expect(wrapper.find('.nav-tree-empty').exists()).toBe(false)
   })
 })
 
 describe('the count on a phone’s rail', () => {
-  it('counts the items a session is on now, and nothing that only stands in the list', async () => {
+  it('counts the rows to follow now, items and sessions, and nothing folded or pinned', async () => {
     const { store, wrapper } = rail(busyFrame())
     const count = () => wrapper.get('.nav-work-rail').attributes('aria-label')
-    // Working, held or waiting: the epic at work, MAIN-12, MAIN-13, MAIN-31 and NEXT-5.
-    // The quiet row and the two pinned rows with no work stand in the list uncounted.
-    expect(count()).toBe('Work going on now: 5')
+    // On view: the epic at work, MAIN-12, MAIN-31 and NEXT-5, the session in MAIN and the one
+    // outside any space. The held MAIN-13, the quiet rows and the pinned ones are not counted.
+    expect(count()).toBe('Work going on now: 6')
     const dropped = busyFrame()
     dropped.spaces[0].rows = dropped.spaces[0].rows.filter((each) => each.reference !== 'MAIN-12')
+    dropped.elsewhere[0] = { ...dropped.elsewhere[0], long: true }
     store.accept(dropped)
     await flushPromises()
-    // A row that left still fades in the list, but nobody is on it now.
+    // A row that left still fades in the list, but nobody is on it now; a long wait folds.
     expect(drawn(wrapper)).toContain('MAIN-12')
     expect(count()).toBe('Work going on now: 4')
   })

@@ -81,11 +81,22 @@ export function shownSpaces(
   return spaces
 }
 
-/** How many items an agent's session is on now: what the rail's count says. */
+/**
+ * Whether a row or a session is work to follow now: a session at work on it, or one waiting
+ * for a person that has not been silent for over four hours. The rest is held by a session at
+ * work elsewhere, waits long, or is quiet, and the side panel folds it away.
+ */
+export function onView(live: { long: boolean; state: string | null }): boolean {
+  return live.state === 'working' || (live.state === 'waiting' && !live.long)
+}
+
+/**
+ * How many rows the side panel shows as work to follow now, items and sessions on no item,
+ * in every space and outside them: what the rail's count says.
+ */
 export function liveCount(frame: LiveFrame | null): number {
-  return (frame?.spaces ?? []).reduce(
-    (count, space) =>
-      count + space.rows.filter((row) => row.state !== null && row.state !== 'quiet').length,
-    0,
-  )
+  if (frame === null) return 0
+  const sessions = [...frame.elsewhere, ...frame.spaces.flatMap((space) => space.sessions)]
+  const rows = frame.spaces.flatMap((space) => space.rows)
+  return [...rows, ...sessions].filter((live) => onView(live)).length
 }

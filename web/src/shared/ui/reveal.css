@@ -15,7 +15,8 @@
  * stayed up after the pointer had gone. Where nothing can hover they stand.
  *
  * Its hosts: a checklist step's discussion (`InspectorOverview`), the pin of an unpinned rail row
- * (`NavWorkPin` in `NavWorkRow`) and a lane heading's card and chain (`WorkItemLaneHead`).
+ * (`NavWorkPin` in `NavWorkRow`), its «Open session» (`NavWorkOpen`) and a lane heading's card
+ * and chain (`WorkItemLaneHead`).
  */
 @media (hover: hover) {
   .reveal {

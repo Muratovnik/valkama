@@ -18,15 +18,15 @@
  * The button keeps focus while it works, so it is marked busy rather than disabled and
  * a second press is not taken; once it has answered it can be pressed again.
  */
-import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { reportMissingPlace } from '@/features/session-open/missingPlaces.ts'
-import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 import OpenPanel from '@/features/session-open/OpenPanel.vue'
-import { currentSettings, prepareOpen } from '@/features/session-open/openPlan.ts'
-import type { OpenAction, OpenTarget, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
-import { heardOfSession, previewOpen, sessionNews } from '@/features/session-open/openPreview.ts'
+import { currentSettings } from '@/features/session-open/openPlan.ts'
+import type { OpenTarget } from '@/features/session-open/openPlan.ts'
+import { useOpenPress } from '@/features/session-open/openPress.ts'
+import { previewOpen, sessionNews } from '@/features/session-open/openPreview.ts'
 import {
   openMarks,
   openName,
@@ -34,10 +34,9 @@ import {
   openView,
   openWords,
 } from '@/features/session-open/openView.ts'
-import { outcomeKind, outcomeWords } from '@/features/session-open/placeWords.ts'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
-import type { OpenPlan, PlanOpens } from '@/shared/api/openPlanModel.ts'
+import type { OpenPlan } from '@/shared/api/openPlanModel.ts'
 import { sessionName } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { SessionFamily } from '@/shared/lib/settings.ts'
@@ -75,7 +74,6 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
-const say = useOpenNotice()
 
 const family = computed<SessionFamily | undefined>(
   () => props.family ?? (props.executor?.family || undefined),
@@ -150,23 +148,13 @@ const markWords = computed(() => openWords(t, view.value))
 /** A running session's glyph, in the hue a live session has wherever one is listed. */
 const liveTone = semanticStatePresentation({ dimension: 'session', state: 'active' }).tone
 
-const busy = ref(false)
+// The holder this button prints, or the session as a holder of it would print.
+const { busy, finished, panel, press } = useOpenPress(
+  () => target.value,
+  () => props.name ?? sessionName(family.value ?? plan.value?.client ?? '', props.session),
+)
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
 const busyMark = computed(() => busy.value || undefined)
-interface Panel {
-  actions: readonly OpenAction[]
-  notice: Refusal | null
-  offer: OpenAction | null
-  opens: PlanOpens | null
-}
-const panel = shallowRef<Panel | null>(null)
-
-function report(outcome: Outcome) {
-  // The holder this button prints, or the session as a holder of it would print.
-  const name = props.name ?? sessionName(family.value ?? plan.value?.client ?? '', props.session)
-  say(outcomeWords(t, outcome, { kind: 'session', name }), outcomeKind(outcome))
-  if (outcome.status === 'refused') heardOfSession(props.session)
-}
 
 /**
  * A press that finds the session cannot be opened turns this button into words that
@@ -183,41 +171,6 @@ watch(
     moveFocus(root.value?.querySelector<HTMLElement>('.open-action-why'))
   },
 )
-
-async function press() {
-  if (busy.value) return
-  busy.value = true
-  try {
-    const { actions, notice, offer, plan: planned } = await prepareOpen(target.value)
-    const [first] = actions
-    if (actions.length > 1 || (first && notice) || offer)
-      panel.value = { actions, notice, offer, opens: planned?.opens ?? null }
-    else if (first) answeredByTheFirst(await first.run())
-    else report({ status: 'refused', refusal: notice ?? { reason: 'no-session' } })
-  } finally {
-    busy.value = false
-  }
-}
-
-/** What came of a single action: done, or a panel where it says more can be done. */
-function answeredByTheFirst(outcome: Outcome) {
-  const offer = 'offer' in outcome ? (outcome.offer ?? null) : null
-  if (outcome.status === 'next')
-    panel.value = {
-      actions: [outcome.next],
-      notice: outcome.notice,
-      offer,
-      opens: outcome.opens,
-    }
-  else if (outcome.status === 'refused' && offer)
-    panel.value = { actions: [], notice: outcome.refusal, offer, opens: outcome.opens ?? null }
-  else report(outcome)
-}
-
-function finished(outcome: Outcome) {
-  panel.value = null
-  report(outcome)
-}
 </script>
 
 <template>

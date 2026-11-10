@@ -37,7 +37,7 @@ const OWN_RULES = new Set(['.one-line', '.trimmed-word'])
  */
 export const ONE_LINE_COPIES = new Map([
   [
-    'widgets/app-nav/components/NavWorkRow.vue <span> class="trimmed-word"',
+    'widgets/app-nav/components/NavWorkLink.vue <span> class="trimmed-word"',
     'the row’s count of agents beside its icon: the meta box never shrinks (flex: none), so its word is never cut and has nothing to say whole',
   ],
   [

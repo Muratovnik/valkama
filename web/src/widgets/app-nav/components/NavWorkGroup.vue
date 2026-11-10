@@ -7,7 +7,8 @@
  * where they are however long it grows. Escape inside it folds it and gives focus back
  * to the fold on «Work», which the entry above draws (`NavModuleList`).
  *
- * The button counts the items an agent's session is on now. A press opens the panel; a
+ * The button counts the rows of work to follow now, items and sessions on no item, as the
+ * list stands them in sight (`liveCount`). A press opens the panel; a
  * row pressed there closes it and opens the card, and the cross, the scrim and Escape
  * close it and give focus back to the button. The panel's rows are a finger's height
  * and the same rows: the frame is the store's, and so is what folds are open. Its heading
@@ -75,6 +76,7 @@ const countWords = computed(() => t('liveWork.open', { count: store.count }))
         size="rail"
         :prefix="`${prefix}-rail`"
         :spaces="store.spaces"
+        :elsewhere="store.elsewhere"
         :open="open"
         :shown="shown"
         :target="target"
@@ -112,6 +114,7 @@ const countWords = computed(() => t('liveWork.open', { count: store.count }))
         size="touch"
         :prefix="`${prefix}-panel`"
         :spaces="store.spaces"
+        :elsewhere="store.elsewhere"
         :open="open"
         :shown="shown"
         :target="target"

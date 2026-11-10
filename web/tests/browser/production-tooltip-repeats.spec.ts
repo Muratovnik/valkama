@@ -54,7 +54,7 @@ async function board(page: Page, locale: Locale, width = 1280) {
   await openBoard(page)
   await expect.poll(() => streams.open()).toHaveLength(1)
   await streams.live(busyFrame())
-  const fold = page.locator('.nav-quiet-fold').first()
+  const fold = page.locator('.nav-fold-toggle').first()
   if (width > 390) {
     await fold.click()
     await expect(fold).toHaveAttribute('aria-expanded', 'true')

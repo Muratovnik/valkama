@@ -2,7 +2,8 @@
  * The phone's list of work going on now with closed rows in it: a closed item a session is
  * still on keeps its lead column, since its sign stands there; a closed item with no sign, a
  * pinned closed epic among them, has no lead (`NavWorkRow`). A closed item that is in the
- * frame only as the parent of others is no row at all: its title leads its items' rows.
+ * frame only as the parent of others is no row at all: its title is said with its items' rows,
+ * on the second line of a row to follow now and before the title of a row in a fold.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -12,14 +13,14 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { closedFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, liveRow, openQuiet } from './liveWorkPage.ts'
+import { installLiveStreams, liveRow, openFolds } from './liveWorkPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const SETTINGS = serializePlatformRoute({ module_id: 'settings', scope: globalScope })
 const PANEL = '.side-panel-body'
 
-/** The phone's panel over the closed frame, opened the way a person opens it, quiet rows too. */
+/** The phone's panel over the closed frame, opened the way a person opens it, every fold too. */
 async function openPanel(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 })
   await installBackend(page)
@@ -31,7 +32,7 @@ async function openPanel(page: Page) {
   const panel = page.getByRole('dialog', { name: 'Work' })
   await expect(panel).toBeVisible()
   await settled(panel)
-  await openQuiet(page, PANEL)
+  await openFolds(page, PANEL)
 }
 
 test('at 390 a closed item at work keeps its lead column, and a closed one with no sign has none', async ({
@@ -48,7 +49,7 @@ test('at 390 a closed item at work keeps its lead column, and a closed one with 
   }
 })
 
-test('at 390 a closed parent is no row: its title leads the rows of its items', async ({
+test('at 390 a closed parent is no row: its title is said with the rows of its items', async ({
   page,
 }) => {
   await openPanel(page)
@@ -57,8 +58,9 @@ test('at 390 a closed parent is no row: its title leads the rows of its items', 
   await expect(liveRow(page, 'MAIN-61', PANEL).locator('.nav-row-epic')).toHaveText(
     'Closed group with children',
   )
-  // A pinned closed epic is a row of its pinned group and still leads its item's row.
-  await expect(liveRow(page, 'MAIN-71', PANEL).locator('.nav-row-epic')).toHaveText(
-    'Pinned closed epic',
-  )
+  // A pinned closed epic is a row of its pinned group, and its item, which waits, says it on
+  // its second line.
+  const waiting = liveRow(page, 'MAIN-71', PANEL)
+  await expect(waiting.locator('.nav-row-detail')).toContainText('Pinned closed epic')
+  await expect(waiting.locator('.nav-row-epic')).toHaveCount(0)
 })

@@ -1,6 +1,7 @@
 /**
  * The side panel's list of work going on now, its phone panel, and the pin that keeps
- * an item in it. A row's state is said in the words a card's foot uses for it.
+ * an item in it. A row's state is said in one word on its second line (`doing`), and in its
+ * hint with what it means (`means`); each fold is named by what it holds.
  */
 export const liveWorkMessages = {
   en: {
@@ -10,14 +11,27 @@ export const liveWorkMessages = {
       group: 'Work under {name}',
       space: '{key} · {name}',
       empty: 'Nobody is working right now',
-      quietMore: '{count} more quiet',
+      heldMore: '{count} more with a working session | {count} more with working sessions',
+      longMore: '{count} more waiting for hours',
+      quietMore: '{count} more silent for over a day',
+      elsewhere: 'Sessions outside any space',
       pinnedGroup: 'Pinned',
       partOf: 'part of {title}',
       agents: '{count} agent | {count} agents',
-      working: 'working',
-      held: 'held by a session',
-      waiting: 'waiting',
+      doing: { working: 'working', asks: 'asking', waiting: 'waiting', held: 'held' },
+      during: '{state} for {span}',
+      means: {
+        working: '{state}',
+        asks: '{state} — the session stopped in the middle of a turn for a permission or an answer',
+        waiting: '{state} — the session’s turn is over',
+        held: '{state} — its session is at work on another item',
+      },
       quiet: 'silent since {since}',
+      session: 'Session “{name}”',
+      sessionIn: 'Session “{name}” in {folder}',
+      sessionAt: 'Session in {folder}',
+      unnamed: 'Unnamed session',
+      openSession: 'Open the session of {reference} {title}',
       idle: 'Pinned · no work now · {state}',
       closed: 'Pinned · {state}',
       ended: 'work ended',
@@ -38,14 +52,30 @@ export const liveWorkMessages = {
       group: 'Работа в {name}',
       space: '{key} · {name}',
       empty: 'Сейчас никто не работает',
-      quietMore: 'ещё {count}\u{A0}тихая | ещё {count}\u{A0}тихие | ещё {count}\u{A0}тихих',
+      heldMore:
+        'ещё {count}\u{A0}у работающей сессии | ещё {count}\u{A0}у работающих сессий | ещё {count}\u{A0}у работающих сессий',
+      longMore:
+        'ещё {count}\u{A0}давно ждёт | ещё {count}\u{A0}давно ждут | ещё {count}\u{A0}давно ждут',
+      quietMore:
+        'ещё {count}\u{A0}молчит больше суток | ещё {count}\u{A0}молчат больше суток | ещё {count}\u{A0}молчат больше суток',
+      elsewhere: 'Сессии вне пространств',
       pinnedGroup: 'Закреплённые',
       partOf: 'часть «{title}»',
       agents: '{count}\u{A0}агент | {count}\u{A0}агента | {count}\u{A0}агентов',
-      working: 'работает',
-      held: 'у сессии',
-      waiting: 'ждёт',
+      doing: { working: 'работает', asks: 'спрашивает', waiting: 'ждёт', held: 'отложена' },
+      during: '{state} уже {span}',
+      means: {
+        working: '{state}',
+        asks: '{state} — сессия остановилась посреди хода: ей нужно разрешение или ответ',
+        waiting: '{state} — ход сессии закончен',
+        held: '{state} — её сессия работает над другой задачей',
+      },
       quiet: 'молчит с {since}',
+      session: 'Сессия «{name}»',
+      sessionIn: 'Сессия «{name}» в {folder}',
+      sessionAt: 'Сессия в {folder}',
+      unnamed: 'Сессия без названия',
+      openSession: 'Открыть сессию {reference} {title}',
       idle: 'Закреплена · сейчас работы нет · {state}',
       closed: 'Закреплена · {state}',
       ended: 'работа закончилась',

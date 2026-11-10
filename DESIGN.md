@@ -723,36 +723,74 @@ the foot of every page; connecting is the moment a page opens, and showing it wo
 flash. Lost, the foot holds the state, the reason in its hint and the refresh above Settings,
 with a rule over them; connected, it holds Settings alone and draws no rule.
 
-The Work list under «Work» is there to follow running work across spaces at a glance.
-Each space shows, first, only the items a session is working on or waiting at, the one
-whose item changed last on top (the live frame's `updated_at`; two changed in one second
-stand by number). Then one row, «ещё N тихих», folds the quiet work — items a session
-holds while it works on others, and items silent for over a day — in the same order; it
-starts folded, opens in place under itself, and its opening is kept on the device.
-Opening it moves nothing above it and widens nothing: the numbers' column is sized with
-the folded rows already. Last, under the caption «Закреплённые», the pinned items not at
-work, by number; a pinned item at work stands with the work instead, once. An epic, or
-any item the list holds only as the parent of others, is no row of its own: its title
-leads each of its items' rows, muted, and gives way first, down to three letters that
-the row's hint completes and never more than two fifths of the row, so the item's own
-title keeps the rest; both stay on one line. A closed item's state, at the row's end,
-never takes more than half of it either: a longer name ends in an ellipsis that the
-hint completes. An
-epic at work is a row like any other. This replaced a tree of epics with their items
-under them, quiet and pinned items mixed in by number, which read as a heap.
+The Work list under «Work» is there to follow running work across spaces at a glance: what
+each session is doing now, and which of them waits for a person. Each space shows, first,
+the work to follow now in one run: the items a session is working on or has waited at for
+less than four hours, and the sessions that work or wait on no item. A row that asks a
+person comes first, since it is the one wait a person can end now; the rest stand freshest
+first, an item by when it last changed (the live frame's `updated_at`) and a session by when
+it began what it does now (`since`), and two of one second stand items first, by number, then
+sessions as the frame sent them. Under them up to three rows fold the rest, each drawn only
+when it holds something and named by what it holds, in this order: «ещё N у работающих
+сессий», the items held by a session at work on another item; «ещё N давно ждут», the items
+and sessions that have waited for over four hours; and «ещё N молчат больше суток», the items
+silent for over a day. Each starts folded, opens in place under itself, and its opening is
+kept on the device on its own; a device that opened the quiet work's fold before keeps
+«молчат больше суток» open. Opening one moves nothing above it and widens nothing: the
+numbers' column is sized with the folded rows already. Last, under the caption
+«Закреплённые», the pinned items not on view, by number: a pinned item on view stands with
+the work instead, once, and a pinned item that is held, waits long or is silent stands with
+the pinned. After the spaces, under the heading «Сессии вне пространств», stand the sessions
+whose folder lies under no space, with the same rows on view and their own «давно ждут».
+«Сейчас никто не работает» stands only when no space has rows or sessions and none is
+outside, and the count on the phone's rail button is the number of rows on view, items and
+sessions. An epic, or any item the list holds only as the parent of others, is no row of
+its own: its title is said on its items' rows. An epic at work is a row like any other.
+This replaced a tree of epics with their items under them, quiet and pinned items mixed in
+by number, which read as a heap, and then a single fold whose one word for held and silent
+work said nothing of what each row was doing.
+
+A row on view has two lines. The first is the sign, the number, the title and the agents'
+count; it is a row of one line whatever follows it, so the sign, the number, the title and
+the controls at its end stand where they stand on a row of one line. The second, smaller and
+muted, starts under the title and says the state in a word, «работает», «спрашивает» or
+«ждёт», then how long, «N мин» under an hour and «N ч» from one and nothing under a minute,
+then after « · » the epic's title for an item or the folder for a session that has a title
+of its own. How long counts from the session's `since` and moves on once a minute, from one
+clock for the whole list; it changes words only and never the order. A row in a fold and a
+pinned row keep to one line: the sign, the number, the epic's title, muted, before the
+item's own, which gives way first, down to three letters and never more than two fifths of
+the row, and a closed item's state at the row's end, never more than half of it, cut with an
+ellipsis. The row's hint and its accessible name say the whole row in a sentence: what it
+is, its epic or folder, the state with what it means (asking: the session stopped in the
+middle of a turn for a permission or an answer; waiting: its turn is over; held: its session
+is at work on another item; silent: since which day), how long as a sentence says it
+(«ждёт уже 2 ч», "waiting for 2 h", where the second line says «ждёт 2 ч»), and the agents on
+it.
+
+A session's row is named by its title, else its folder, else «Сессия без названия», and a
+terminal glyph stands in the number's column where an item's number would. Pressing it opens
+the session as a card's session button does; it has no card and no pin, and a session that
+leaves the frame leaves at once, where an item's row stays a while, muted. An item's row with
+a session behind it ends with «Открыть сессию» beside the pin, the same glyph, shown the way
+the pin is: in a column the rail keeps on every row, so the title neither moves nor narrows
+when it comes up, out of sight until the pointer or the keyboard is on the row, and standing
+where nothing can hover. Its name names the item whose session it opens.
 
 A row's lead holds the sign of its session (`SessionSign`): one ring of one size and one
 stroke, 14px in the lead's column, whose inside says the state — a turning ring in the
 accent while it works on the item, a question in the warning tone while it asks a person in
 the middle of a turn, a check in the text's colour while it waits with its turn over, a
 paused ring, muted, while it holds the item and works on others, and a dashed ring, fainter
-still, for an item silent over a day. A pinned item with no work and a row gone from the
-frame draw none. The shape says the state wherever colour is lost, and the row's name and
-hint say it in words; the ring stops turning under reduced motion.
+still, for an item silent over a day. A session's own row draws the same signs. A pinned
+item with no work and a row gone from the frame draw none. Every sign stands at one x on
+rows of one line and of two and inside the folds. The shape says the state wherever colour
+is lost, the second line and the hint say it in words, and the ring stops turning under
+reduced motion.
 
 In the Work list's phone panel (the navigation at most 760px wide), a closed item with
 no sign loses its lead column, so its title takes that room; an item with a sign keeps
-it.
+it. There only a pinned row has a pin, and «Открыть сессию» is a finger wide.
 
 The shell owns one page scroll surface. Horizontal scrolling belongs only to a
 data region that genuinely needs it, such as Kanban lanes or a wide table.

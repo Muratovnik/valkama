@@ -33,6 +33,8 @@ export const useLiveWorkStore = defineStore('liveWork', () => {
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
   const spaces = computed(() => shownSpaces(frame.value, fading.value))
+  /** The sessions whose folder lies under no space; one that leaves goes at once. */
+  const elsewhere = computed(() => frame.value?.elsewhere ?? [])
   const count = computed(() => liveCount(frame.value))
 
   function forget(reference: string) {
@@ -92,5 +94,5 @@ export const useLiveWorkStore = defineStore('liveWork', () => {
     accept(await pinWorkItem({ id: reference, pinned: on }))
   }
 
-  return { accept, count, frame, hold, pin, pinned, spaces }
+  return { accept, count, elsewhere, frame, hold, pin, pinned, spaces }
 })

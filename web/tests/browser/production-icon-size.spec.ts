@@ -89,7 +89,7 @@ async function board(page: Page) {
   await serve(page)
   await withLiveWork(page, () => openBoard(page, { group: 'epic', labels: 'coordinator,ui' }))
   await expect(page.locator('.workspace-chips .filter-chip').first()).toBeVisible()
-  const fold = page.locator('.nav-quiet-fold').first()
+  const fold = page.locator('.nav-fold-toggle').first()
   if (await fold.isVisible()) {
     await fold.click()
     await expect(fold).toHaveAttribute('aria-expanded', 'true')

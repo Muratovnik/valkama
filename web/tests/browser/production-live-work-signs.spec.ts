@@ -12,7 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, openQuiet } from './liveWorkPage.ts'
+import { installLiveStreams, openFolds } from './liveWorkPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -34,7 +34,7 @@ async function open(page: Page, width: number) {
 
 /** Every sign in a list's leads, at rest: its box and its middle from the lead's corner. */
 async function signBoxes(page: Page, within: string) {
-  await openQuiet(page, within)
+  await openFolds(page, within)
   return page.locator(within).evaluate((root) =>
     [...root.querySelectorAll<SVGElement>('.nav-row-lead .session-sign')].map((sign) => {
       for (const animation of sign.getAnimations()) {

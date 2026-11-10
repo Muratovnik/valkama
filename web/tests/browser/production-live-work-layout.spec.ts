@@ -14,7 +14,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { busyFrame, liveRow as frameRow } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { settled } from './documentBeside.ts'
-import { installLiveStreams, liveRow, openQuiet } from './liveWorkPage.ts'
+import { installLiveStreams, liveRow, openFolds } from './liveWorkPage.ts'
 import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -55,31 +55,35 @@ interface Measured {
   lines: number
   number: number
   reference: string
+  /** A row of the work to follow now, with a second line under its title. */
+  two: boolean
 }
 
 /**
  * Every row of a list as its boxes stand: where its lead and number start, how tall it is.
- * The quiet rows' fold counts as a row: its arrow stands in the lead's column and its words
- * where the numbers start.
+ * A fold counts as a row: its arrow stands in the lead's column and its words where the
+ * numbers start. A session's glyph stands where an item's number does.
  */
 function measure(page: Page, within: string) {
   return page.locator(within).evaluate((root) =>
-    [...root.querySelectorAll<HTMLElement>('.nav-row, .nav-quiet-fold')].map((row) => {
-      const lead = row.querySelector('.nav-row-lead, .nav-quiet-lead')
-      const number = row.querySelector('.nav-row-number, .nav-quiet-words')
-      const title = row.querySelector('.nav-row-title, .nav-quiet-words')
-      const controls = [...row.querySelectorAll('button')].filter(
-        (control) => getComputedStyle(control).display !== 'none',
-      )
+    [...root.querySelectorAll<HTMLElement>('.nav-row, .nav-fold-toggle')].map((row) => {
+      const lead = row.querySelector('.nav-row-lead, .nav-fold-lead')
+      const number = row.querySelector('.nav-row-number, .nav-row-glyph, .nav-fold-words')
+      const title = row.querySelector('.nav-row-title, .nav-fold-words')
+      // The controls at the row's end; a session's row is itself a button, and no control.
+      const controls = [...row.querySelectorAll('button:not(.nav-row-link)')]
       return {
         reference:
           row.querySelector('.nav-row-link')?.getAttribute('aria-label')?.split(' ')[0] ?? 'quiet',
         depth: row.style.getPropertyValue('--nav-row-depth') || '1',
         height: row.getBoundingClientRect().height,
         leadless: row.classList.contains('nav-row-leadless'),
+        two: row.classList.contains('nav-row-two'),
         lead: lead?.getBoundingClientRect().left ?? Number.NaN,
         number: number?.getBoundingClientRect().left ?? Number.NaN,
-        controls: controls.map((control) => control.getBoundingClientRect().height),
+        controls: controls
+          .filter((control) => getComputedStyle(control).display !== 'none')
+          .map((control) => control.getBoundingClientRect().height),
         lines: title?.getClientRects().length ?? 0,
       }
     }),
@@ -96,21 +100,20 @@ function oneColumn(rows: Measured[], pick: (row: Measured) => number) {
 }
 
 function holdsTheGrid(rows: Measured[], rowHeight: number) {
+  // A row of one line is as tall as the row's line; a row of two is taller, and its controls
+  // stand on its first line, as tall as on a row of one.
   for (const row of rows) {
-    expect(Math.abs(row.height - rowHeight), row.reference).toBeLessThanOrEqual(0.5)
+    if (row.two) expect(row.height, row.reference).toBeGreaterThan(rowHeight)
+    else expect(Math.abs(row.height - rowHeight), row.reference).toBeLessThanOrEqual(0.5)
     expect(row.lines, `${row.reference} wraps`).toBe(1)
     for (const height of row.controls)
       expect(Math.abs(height - rowHeight), `${row.reference} control`).toBeLessThanOrEqual(0.5)
   }
   // A closed row without a lead keeps its number in a column of its own, one lead to the left.
-  const open = rows.filter((row) => !row.leadless)
+  const [open, leadless] = [rows.filter((row) => !row.leadless), rows.filter((row) => row.leadless)]
   const leads = oneColumn(open, (row) => row.lead)
-  oneColumn(open, (row) => row.number)
-  oneColumn(
-    rows.filter((row) => row.leadless),
-    (row) => row.number,
-  )
-  // Every row and the quiet rows' fold stand at one level, one step in from the space.
+  for (const each of [open, leadless]) oneColumn(each, (row) => row.number)
+  // Every row and the folds stand at one level, one step in from the space.
   expect([[...leads.keys()], rows.some((row) => row.reference === 'quiet')]).toEqual([['1'], true])
 }
 
@@ -122,7 +125,7 @@ async function headsHold(page: Page, within: string, rowHeight: number) {
   const heads = await page
     .locator(within)
     .evaluate((root) =>
-      [...root.querySelectorAll('.nav-tree-head, .nav-tree-fold, .nav-quiet-fold')].map(
+      [...root.querySelectorAll('.nav-tree-head, .nav-tree-fold, .nav-fold-toggle')].map(
         (node) => node.getBoundingClientRect().height,
       ),
     )
@@ -158,7 +161,7 @@ function nothingRinged(page: Page, within: string) {
 test('the rail’s list stands on one grid at 1280', async ({ page }) => {
   await open(page, { width: 1280, height: 800 })
   await expect(liveRow(page, 'ZED-1')).toBeAttached()
-  await openQuiet(page, '.nav-work-list')
+  await openFolds(page, '.nav-work-list')
   const rows = await measure(page, '.nav-work-list')
   holdsTheGrid(rows, 28)
   await headsHold(page, '.nav-work-list', 28)
@@ -236,17 +239,18 @@ test('a phone opens the list in a panel over the page, with a finger’s rows an
   await expect(page.locator('.nav-work-list')).toBeHidden()
   await expect(page.locator('.nav-entry-fold')).toBeHidden()
   await expect(button).toBeVisible()
-  // Every row a session is on now: five in the busy frame, the epic at work among them,
-  // and the twenty of the third space; the quiet and the pinned rows are not counted.
-  await expect(button).toContainText('25')
-  await expect(button).toHaveAccessibleName('Work going on now: 25')
+  // Every row on view: in the busy frame the epic at work, two items and a session in the
+  // first space, one item in the second and the session under no space; and the twenty of the
+  // third space. The held, quiet and pinned rows are not counted.
+  await expect(button).toContainText('26')
+  await expect(button).toHaveAccessibleName('Work going on now: 26')
 
   await button.click()
   const panel = page.getByRole('dialog', { name: 'Work' })
   await expect(panel).toBeVisible()
   // Measured where it comes to rest: it slides in from the rail's edge.
   await settled(panel)
-  await openQuiet(page, '.side-panel-body')
+  await openFolds(page, '.side-panel-body')
   const box = await panel.boundingBox()
   expect(box).toMatchObject({ x: 0, width: 340 })
   expect(await panel.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)

@@ -61,15 +61,18 @@ async function toggle() {
 </template>
 
 <style scoped>
-/* Above the row's link, whose box is stretched over the whole row. */
+/* Above the row's link, whose box is stretched over the whole row. It is as tall as the row's
+   first line and stands at its top (`--nav-row-line`, `NavWorkRow`), so its glyph is level
+   with the title on a row of two lines as on a row of one. */
 .nav-row-pin {
   position: relative;
   z-index: 1;
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  align-self: stretch;
+  align-self: start;
   inline-size: var(--size-control-inline);
+  block-size: var(--nav-row-line, var(--size-control-inline));
   min-block-size: 0;
   padding: 0;
   border: 0;

@@ -29,7 +29,7 @@ export const STATE_NAME_READS = new Map([
     'compares two members for one state; the name it shows comes from the function',
   ],
   [
-    'widgets/app-nav/components/NavWorkRow.vue props.row.state_name',
+    'widgets/app-nav/components/NavWorkRow.vue item.state_name',
     'the row carries the name alone, and hands it to the function',
   ],
   [

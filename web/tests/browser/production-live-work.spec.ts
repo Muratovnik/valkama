@@ -154,7 +154,7 @@ test('the disclosure keys: Tab reaches folds and links, Enter and Space fold, Es
   await page.keyboard.press('Space')
   await expect(spaceFold).toHaveAttribute('aria-expanded', 'true')
   // The quiet rows' fold opens with Enter, and Escape in its rows folds them back.
-  const quietFold = page.locator('.nav-quiet-fold').first()
+  const quietFold = page.locator('.nav-fold-toggle').first()
   await quietFold.focus()
   await page.keyboard.press('Enter')
   await expect(quietFold).toHaveAttribute('aria-expanded', 'true')
