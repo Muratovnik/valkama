@@ -94,12 +94,16 @@ describe('the description editor', () => {
       .findAll('button')
       .find((button) => button.text() === 'Cancel')
       ?.trigger('click')
+    // Opened again, only what is chosen this time is told.
     await wrapper.get('button').trigger('click')
-    await wrapper.get('textarea').setValue('Ask MAIN-7')
+    choose(wrapper, 'Description', 'MAIN-9')
+    await wrapper.get('textarea').setValue('Ask MAIN-7 and MAIN-9')
     vi.mocked(updateWorkItemDescription).mockResolvedValueOnce(item)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(vi.mocked(updateWorkItemDescription).mock.calls[0]?.[0]).not.toHaveProperty('mentions')
+    expect(vi.mocked(updateWorkItemDescription).mock.calls[0]?.[0]).toMatchObject({
+      mentions: ['MAIN-9'],
+    })
   })
 })
 
