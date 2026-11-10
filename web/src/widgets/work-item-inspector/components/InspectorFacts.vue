@@ -50,7 +50,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { holderName } from '@/shared/lib/actor.ts'
+import { actorSession, holderName, sessionStart } from '@/shared/lib/actor.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
@@ -211,10 +211,17 @@ const holder = computed(() => holderRef(props.item))
 const holderLabel = computed(() =>
   props.item.state.is_terminal ? t('workItem.previousOwner') : t('workItem.head.holder'),
 )
-/** The holder as it was written, which the line shortens, and the lease behind the claim. */
-const holderTitle = computed(
-  () => [holder.value, leaseText.value].filter(Boolean).join('\n') || undefined,
-)
+/**
+ * A name's hint says what the line does not: the whole session id where the line prints its
+ * start, never the name again. The name itself is said only while the line cuts it.
+ */
+function nameHint(raw: string, ...more: string[]) {
+  const session = actorSession(raw)
+  const whole = session === sessionStart(session) ? '' : session
+  return { text: [whole, ...more].filter(Boolean).join('\n'), words: holderName(raw) }
+}
+/** The holder's hint: its whole session and the lease behind the claim. */
+const holderHint = computed(() => nameHint(holder.value ?? '', leaseText.value))
 
 /** The session behind the holder: its claim's, or on finished work its last claim's. */
 const holderExecutor = computed(() =>
@@ -383,7 +390,7 @@ defineExpose({ actionCell })
             />
             <span
               v-else-if="holder"
-              v-tooltip.detail="holderTitle"
+              v-tooltip.detail="holderHint"
               class="card-holder-name one-line"
               >{{ holderName(holder) }}</span
             >
@@ -430,7 +437,7 @@ defineExpose({ actionCell })
             <span
               v-for="follower in followers"
               :key="follower.label"
-              v-tooltip.detail="follower.label"
+              v-tooltip.detail="nameHint(follower.label)"
               class="card-subscriber"
               ><template
                 v-for="(word, at) in follower.words"

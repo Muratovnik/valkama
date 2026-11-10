@@ -278,9 +278,14 @@ test('a holder nobody can press is the same line, and the stale mark stays besid
   const holder = row(drawer, 'Исполняет')
   await expect(holder.value.locator('.card-holder-name')).toHaveText('codex')
   await expect(holder.value.locator('.card-holder-stale')).toBeVisible()
+  // The hint is the claim, never the name the line already shows.
   await expect(holder.value.locator('.card-holder-name')).toHaveAttribute(
     'data-tooltip',
-    /^codex\n/u,
+    /^Захват: /u,
+  )
+  await expect(holder.value.locator('.card-holder-name')).not.toHaveAttribute(
+    'data-tooltip',
+    /codex/u,
   )
   const labelWords = await wordsOf(holder.label)
   const nameWords = await wordsOf(holder.value.locator('.card-holder-name'))
