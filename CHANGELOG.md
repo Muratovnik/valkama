@@ -85,7 +85,8 @@ checkouts are therefore distinguishable even at the same version.
   request whenever it changes, and a segment before the first such record has none; at
   Codex it is the account that created the thread. An advisor call's tokens are a segment
   of their own, flagged as an advisor's, even when the advisor runs the executor's model.
-  A segment now also ends where any of these changes. A Claude subagent's usage run
+  A segment now also ends where any of these changes, which changes nothing about what its
+  time counts as. A Claude subagent's usage run
   records the class its launch description declares in front of a colon, as in
   `review: check the diff`. Only ids and short labels are kept, never an e-mail, a name or a
   path, and whatever a transcript does not say stays empty. Every run is read again in the

@@ -878,7 +878,8 @@ account that created the thread), how the client ran (`ide`, `terminal`, `app` o
 `headless`, with `@wsl:<distribution>` for a transcript written in WSL), the effort the
 requests ran with, and the adviser its turn had configured. An advisor call's tokens are
 a stretch of their own with no time, flagged as an advisor's, even when the advisor runs
-the executor's model. A Claude subagent's run records the class its launch description
+the executor's model. A change of any of these changes nothing about what the time counts
+as. A Claude subagent's run records the class its launch description
 declares in front of a colon. What a transcript does not say stays unknown. The reads
 below do not return these yet.
 

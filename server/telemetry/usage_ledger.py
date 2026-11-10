@@ -148,6 +148,10 @@ class Ledger:
         self.former: dict[str, dict] = memo.get("requests", {})
         #: What the work runs under from here on, as the records so far said it.
         self.settings: dict[str, str | None] = memo.get("settings", {})
+        #: Changes a record made for the time after it, each `[moment, settings]`, not yet
+        #: reached by the time measured: they change what a row runs under from that
+        #: moment, and nothing about what the time is.
+        self.cuts: list[list] = memo.get("cuts", [])
         #: Whether the turn in flight started with no item and so is placed by `fallback`
         #: until it closes. None for a memo from before this was kept: its turn in flight
         #: goes on as it was read, looked for while it has no item and kept once found.
@@ -168,12 +172,28 @@ class Ledger:
             "requests": self.former,
             "open_placement": self.open_placement,
             "settings": self.settings,
+            "cuts": self.cuts,
         }
 
     def configure(self, settings: dict[str, str | None]) -> None:
-        """What a record says the work runs under from now on; a row ends at a change."""
+        """What a record says the work since the record before it ran under.
 
-        self.settings.update((name, settings[name]) for name in SETTINGS if name in settings)
+        A row ends at a change. After a cut not yet reached, that is the time from the cut.
+        """
+
+        target = self.cuts[-1][1] if self.cuts else self.settings
+        target.update((name, settings[name]) for name in SETTINGS if name in settings)
+
+    def cut(self, at: float, settings: dict[str, str | None]) -> None:
+        """What a record at `at` says the work after it runs under (`reach`)."""
+
+        self.cuts.append([at, {name: settings[name] for name in SETTINGS if name in settings}])
+
+    def reach(self, at: float) -> None:
+        """The time is measured up to `at`: the cuts until then hold from now on."""
+
+        while self.cuts and self.cuts[0][0] <= at:
+            self.settings.update(self.cuts.pop(0)[1])
 
     def new_turn(self, at: float, last: float | None = None) -> None:
         """A turn starts at `at`; the one before it last read a record at `last`.
@@ -237,6 +257,16 @@ class Ledger:
         )
 
     def work(self, start: float, end: float, quality: str) -> None:
+        """Work from `start` to `end`, in a row of its own from each cut within it."""
+
+        self.reach(start)
+        while self.cuts and self.cuts[0][0] < end:
+            self._work(start, self.cuts[0][0], quality)
+            start = self.cuts[0][0]
+            self.reach(start)
+        self._work(start, end, quality)
+
+    def _work(self, start: float, end: float, quality: str) -> None:
         # An advisor's rows take no time, so the executor's row goes on past them.
         tail = next((row for row in reversed(self.rows) if not row.advisor), None)
         if (

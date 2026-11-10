@@ -308,6 +308,54 @@ class SlicedTests(RereadCase):
         self.assertEqual(sorted(self.chunks), self.chunks)
         self.assert_as_one_go()
 
+    def test_settings_said_on_a_slice_border_read_as_in_one_go(self) -> None:
+        # Slices of one record each, a pass of four: every record that says what the work
+        # after it runs under ends a slice, and some end a pass.
+        run = self.session("turns")
+        for number in range(6):
+            at = 2 * HOUR + number * 60
+            run.prompt(at)
+            run.reply(at + 5, tools=((f"t{number}", "Bash"),), effort=("high", "low")[number % 2])
+            run.credential(at + 10, (ORG_A, "org-0002")[number % 2])
+            run.result(at + 15, f"t{number}")
+            run.end_turn(at + 20, effort=("high", "low")[number % 2], perTurnEffort="max")
+        with mock.patch.object(usage_collect, "CHUNK_BYTES", 1 << 30):
+            self.read()
+        one_go = self.segments_of("turns")
+        self.assertEqual({ORG_A, "org-0002"}, {row[3] for row in one_go} - {None})
+        self.reader.execute(
+            "UPDATE usage_runs SET reading = ? WHERE session_id = 'big'", (READING,)
+        )
+        self.reader.execute("UPDATE usage_runs SET reading = 0 WHERE session_id = 'turns'")
+        timed = usage_collect._read_lines
+        turns = os.path.normcase(os.path.abspath(run.path))
+        lines: list[int] = []
+
+        def one_record(path: str, offset: int, limit: int) -> tuple[list[bytes], int, bool]:
+            if os.path.normcase(os.path.abspath(path)) == turns:
+                lines.append(offset)
+                self.clock.now += CHUNK_SECONDS
+            return timed(path, offset, limit)
+
+        with (
+            mock.patch.object(usage_collect, "CHUNK_BYTES", 1),
+            mock.patch.object(usage_collect, "_read_lines", one_record),
+        ):
+            drain(self.history, SLICE_BUDGET)
+        records = run.path.read_bytes().count(b"\n")
+        self.assertEqual(records, len(set(lines)))
+        self.assertEqual(READING, self.run_row("turns")["reading"])
+        self.assertEqual(one_go, self.segments_of("turns"))
+
+    def segments_of(self, session: str) -> list[tuple]:
+        rows = self.reader.execute(
+            "SELECT started_at, ended_at, seconds, organization, environment, effort, advisor,"
+            " advisor_model, model, input_tokens, output_tokens FROM usage_segments"
+            " WHERE session_id = ? ORDER BY started_at, advisor",
+            (session,),
+        )
+        return [tuple(row) for row in rows]
+
     def test_a_run_that_moved_drops_its_reading_and_begins_again(self) -> None:
         self.assertTrue(self.history.run_pass(self.said.append, SLICE_BUDGET))
         self.assertEqual(4, len(self.chunks))

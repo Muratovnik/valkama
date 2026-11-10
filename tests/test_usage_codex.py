@@ -228,6 +228,17 @@ class CodexSettingsTests(CodexCase):
             [(row["environment"], row["effort"], row["seconds"]) for row in self.segments()],
         )
 
+    def test_a_turn_context_in_a_long_model_wait_changes_no_time(self) -> None:
+        run = self.rollout(originator="codex_vscode")
+        self.ticks((0, HOUR))
+        run.settings(0, effort="medium")
+        run.started(0)
+        run.settings(400, effort="high")
+        run.complete(800)
+        self.read()
+        self.assertEqual(800, self.run_row()["external_seconds"])
+        self.assertEqual(0, self.seconds())
+
     def test_a_rollout_that_names_none_of_it_leaves_the_columns_empty(self) -> None:
         run = self.rollout(originator="someone-else")
         self.ticks((0, HOUR))

@@ -55,6 +55,22 @@ class OrganizationTests(Case):
             [(row["organization"], row["seconds"]) for row in self.segments()],
         )
 
+    def test_an_attachment_in_a_long_model_wait_changes_no_time(self) -> None:
+        # The wait from the prompt to the reply is past the model's limit with or without
+        # the attachment in it: all of it is external, and the reply's tokens go under
+        # the organization the attachment named.
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.credential(400, ORG_A)
+        run.end_turn(800)
+        self.read()
+        self.assertEqual(800, self.run_row()["external_seconds"])
+        self.assertEqual(0, self.seconds())
+        self.assertEqual(
+            [(ORG_A, 5)], [(r["organization"], r["output_tokens"]) for r in self.segments()]
+        )
+
     def test_an_attachment_split_from_its_request_by_a_read_still_holds(self) -> None:
         run = self.session()
         self.ticks((0, HOUR))

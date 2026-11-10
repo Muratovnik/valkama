@@ -35,7 +35,9 @@ Schema 15 added, all empty or 0 in an upgraded store until its runs are read aga
 
 - to a segment, what its work ran under, read from the transcript alone and NULL where
   the transcript says nothing, never a guess. Only ids and short labels are kept: no
-  e-mail, name or path.
+  e-mail, name or path. A change of any of them ends a row at its moment and changes
+  nothing about what the time was: a record that only says what the work after it runs
+  under is no record of the work.
 
   - `organization`: the id of the organization the requests were made for, the only
     account identifier kept. At Claude it is the latest `credential_org` attachment

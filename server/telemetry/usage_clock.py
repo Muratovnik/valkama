@@ -142,18 +142,17 @@ class Clock:
     def _on_setting(self, step: Step) -> None:
         """A record that says what the work after it runs under, and nothing else.
 
-        The time up to it ran under what was said before, so a turn still running is
-        measured to it first. It starts nothing: before the first record it only sets
-        what the run starts under, and outside a turn there is no work to cut. A late
-        one is a resume writing old records again and says nothing about now.
+        The time up to it ran under what was said before. It is no record of the work, so
+        it measures nothing and moves no wait: the ledger cuts a row at its moment when
+        the time is measured past it (`Ledger.cut`). Before the first record it only sets
+        what the run starts under. A late one is a resume writing old records again and
+        says nothing about now.
         """
 
-        if self.high is not None:
-            if step.at < self.high - LATE_SECONDS:
-                return
-            if self.phase in (_BUSY, _FAILED):
-                self._to(step.at, self._running_class(step.at))
-        self.ledger.configure(step.settings)
+        if self.high is None:
+            self.ledger.configure(step.settings)
+        elif step.at >= self.high - LATE_SECONDS:
+            self.ledger.cut(max(step.at, self.high), step.settings)
 
     def mark_write(self, at: float, item: str) -> None:
         """The agent wrote to `item`: what came before it in this turn goes there."""
@@ -174,6 +173,7 @@ class Clock:
         if start is not None and at > start:
             self._span(start, at, klass)
             self.high = at
+        self.ledger.reach(at)
 
     def _span(self, start: float, end: float, klass: str) -> None:
         parts, dark = self.coverage.split(start, end)
