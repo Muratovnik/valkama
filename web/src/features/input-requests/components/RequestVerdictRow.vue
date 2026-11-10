@@ -83,6 +83,8 @@ const open = defineModel<boolean>('open', { default: false })
 const preview = defineModel<boolean>('preview', { default: false })
 const slots = defineSlots<{ under?: () => unknown }>()
 const { t } = useI18n()
+/** The chevron's size, which is also the row's first column, where nothing else stands. */
+const GLYPH = 16
 const id = useId()
 const labelId = `${id}-label`
 const opensId = `${id}-opens`
@@ -173,7 +175,10 @@ defineExpose({ focus })
     @focusin="standing = true"
     @focusout="leave"
   >
-    <div class="request-point-row">
+    <div
+      class="request-point-row"
+      :style="{ '--request-point-glyph': `${GLYPH}px` }"
+    >
       <button
         type="button"
         class="request-point-toggle"
@@ -185,7 +190,7 @@ defineExpose({ focus })
         <VIcon
           class="request-point-glyph"
           name="chevron-down"
-          :size="16"
+          :size="GLYPH"
         />
         <span
           :id="labelId"
@@ -302,6 +307,9 @@ defineExpose({ focus })
 /* The chevron's column, then the words' column, where every line under the label starts. Its
    rows are tracks with no gap, so a part it does not show leaves none: each brings its step. */
 .request-point-row {
+  /* The chevron's column, as wide as the chevron: the template sets it from `GLYPH`. */
+  --request-point-glyph: 16px;
+
   display: grid;
   grid-template-areas:
     'chevron label tools'
@@ -310,19 +318,24 @@ defineExpose({ focus })
     '. advice advice'
     '. error error'
     '. hang hang';
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: var(--request-point-glyph) minmax(0, 1fr) auto;
   column-gap: var(--space-2);
   align-items: first baseline;
   min-width: 0;
 }
 
 /* The chevron and the label are one press, the chevron in the row's first column and the words
-   in its second. A line tall at least, as a compact control is, for a finger to find. */
+   in its second. A line tall at least, as a compact control is, for a finger to find.
+
+   It repeats the row's columns rather than borrowing them as a subgrid: Chromium leaves the step
+   a baseline-aligned subgrid is moved down by out of its row's height, so a label of three lines
+   beside the verdict ran into the line under it. */
 .request-point-toggle {
   display: grid;
-  grid-template-columns: subgrid;
+  grid-template-columns: var(--request-point-glyph) minmax(0, 1fr);
   grid-row: 1;
   grid-column: chevron-start / label-end;
+  column-gap: var(--space-2);
   align-content: center;
   align-items: baseline;
   min-width: 0;
@@ -428,7 +441,7 @@ defineExpose({ focus })
       '. advice advice advice'
       '. error error error'
       '. hang hang hang';
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: var(--request-point-glyph) minmax(0, 1fr) auto auto;
   }
 
   .request-point-segments {

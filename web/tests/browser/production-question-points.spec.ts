@@ -15,6 +15,8 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
+
 import { wayReviewFields, WAYS_PROMPT } from '../support/reviewWays.ts'
 import { drawnBox } from './edges.ts'
 import { asked, openQuestion, send } from './questionBackend.ts'
@@ -303,6 +305,83 @@ for (const width of WIDTHS) {
     expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThanOrEqual(STILL)
     expect(Math.min(...lefts)).toBeGreaterThan(thread.x)
   })
+}
+
+/** A label that wraps to three lines and more beside the verdict, and on a phone under it. */
+const LONG =
+  'P30 A sign that the client is alive: when the transcript of the session at the top was ' +
+  'last written, and whether it still moves between a prompt and the end of its turn'
+
+/** The review with that label on a point of its own ahead of the twelve. */
+function withLongLabel(): InputRequestField[] {
+  const [first, way] = wayReviewFields
+  if (!first || !way) throw new Error('No point to lengthen')
+  return [
+    { ...first, id: 'p30', label: LONG },
+    { ...way, id: 'p30-way', under: { field: 'p30', option: 'accept' } },
+    ...wayReviewFields,
+  ]
+}
+
+interface Drawn {
+  bottom: number
+  left: number
+  right: number
+  top: number
+}
+
+/** Whether two drawn boxes share any area, past a layout's rounding. */
+const overlap = (one: Drawn, other: Drawn) =>
+  one.left < other.right - STILL &&
+  other.left < one.right - STILL &&
+  one.top < other.bottom - STILL &&
+  other.top < one.bottom - STILL
+
+/**
+ * Nothing in the row stands on the label's lines: the line under it starts below its last line
+ * and where its words start, and the verdict, beside the label or under it, covers none of it.
+ */
+async function expectLabelClear(row: Locator, at: string) {
+  const label = await drawnBox(row.locator('.request-point-label'))
+  const lineHeight = await row
+    .locator('.request-point-label')
+    .evaluate((node) => Number.parseFloat(getComputedStyle(node).lineHeight))
+  const under = await firstLine(row)
+  const segments = await box(segmentsOf(row))
+  const verdict = {
+    bottom: segments.y + segments.height,
+    left: segments.x,
+    right: segments.x + segments.width,
+    top: segments.y,
+  }
+  // The case this is about: the label takes three lines or more.
+  expect(label.bottom - label.top, `${at}: label lines`).toBeGreaterThan(2 * lineHeight)
+  expect(under.top, `${at}: the line under the label`).toBeGreaterThanOrEqual(label.bottom - STILL)
+  expect(Math.abs(under.left - label.left), `${at}: one start`).toBeLessThanOrEqual(STILL)
+  expect(overlap(label, verdict), `${at}: the verdict over the label`).toBe(false)
+}
+
+for (const width of WIDTHS) {
+  for (const locale of LOCALES) {
+    test(`a long label runs into nothing under it, closed and open, at ${width} in ${locale}`, async ({
+      page,
+    }) => {
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      await page.setViewportSize({ width, height: 844 })
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      const { card, drawer } = await openQuestion(page, [
+        asked({ prompt: WAYS_PROMPT, fields: withLongLabel(), title: 'Review of the board' }),
+      ])
+      await expect(drawer).toHaveCSS('transform', 'none')
+      await page.evaluate(async () => document.fonts.ready)
+      const row = point(card, 'P30 ')
+      await expectLabelClear(row, `closed, at ${width} in ${locale}`)
+      await toggleOf(row).click()
+      await expect(toggleOf(row)).toHaveAttribute('aria-expanded', 'true')
+      await settle(page)
+      await expectLabelClear(row, `open, at ${width} in ${locale}`)
+    })
+  }
 }
 
 test('a review offers no row for your own option anywhere', async ({ page }) => {
