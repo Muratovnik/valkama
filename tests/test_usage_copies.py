@@ -203,14 +203,31 @@ class ReadAgainTests(ForkedCopyCase):
         self.read_again((ORIGIN, WORKER))
         self.assert_the_original_alone()
 
-    def test_an_original_the_reader_could_not_open_just_now_strands_nothing(self) -> None:
-        # `unreadable` may pass, unlike `missing`: the original's file is there.
+    def holder(self) -> int:
+        return self.reader.execute(
+            "SELECT run_id FROM usage_requests WHERE request = ?",
+            (request_key("msg_worker_reply"),),
+        ).fetchone()[0]
+
+    def test_the_copy_keeps_the_request_while_the_reader_cannot_open_the_original(self) -> None:
+        # A rebuild of the original would be refused for its status, so it could not take
+        # the request back, though its file is there.
         self.reader.execute(
             "UPDATE usage_runs SET status = 'unreadable' WHERE session_id = ? AND agent_id = ?",
             (ORIGIN, WORKER),
         )
-        self.read_again((FORK, WORKER))
-        self.assertNotIn((FORK, WORKER), self.stale())
+        report = usage_rebuild.rebuild(self.reader, self.store_path, session=FORK, agent=WORKER)
+        self.assertEqual(["stranded"], [line.reason for line in report.runs])
+        self.assertEqual(self.run_row(FORK, WORKER)["id"], self.holder())
+        self.assertEqual(OUTPUT, self.tokens("output_tokens", FORK, WORKER))
+        # Once the original can be read, the command rebuilds the copy and the request
+        # goes back.
+        self.reader.execute(
+            "UPDATE usage_runs SET status = 'reading' WHERE session_id = ? AND agent_id = ?",
+            (ORIGIN, WORKER),
+        )
+        self.read_again((FORK, WORKER), (ORIGIN, WORKER))
+        self.assert_the_original_alone()
 
     def test_a_run_that_gives_no_request_up_is_read_again_all_the_same(self) -> None:
         self.original.unlink()

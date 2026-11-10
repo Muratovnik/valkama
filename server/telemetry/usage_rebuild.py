@@ -81,8 +81,8 @@ REASONS = {
     "claimed": "another run claimed one of its requests meanwhile; nothing was written, run"
     " the rebuild again",
     "stranded": "it no longer holds a request it counted, and a run that left a request to"
-    " another can no longer be read, so that request could end up counted in no run;"
-    " nothing was written",
+    " another cannot be read now, so that request could end up counted in no run;"
+    " nothing was written, run the rebuild of this run again once that one can be read",
     "no-transcript": "no transcript is known for it",
     "failed": "the rebuild failed; nothing was written",
     "no-liveness": "no liveness file beside the store: observed time would come back as"
@@ -293,6 +293,17 @@ def _refuse(line: RunReport, reason: str) -> None:
 def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage) -> Rereading:
     """A reading again of the run to its `read_offset`, not begun, or the reason it may not be."""
 
+    found, path, end = _readable(run, target)
+    return Rereading.start(found, path, end, coverage, int(run["id"]))
+
+
+def _readable(run: sqlite3.Row, target: Target | None) -> tuple[Target, str, int]:
+    """A run's target, the file it can be read again from and how far, or why it cannot be.
+
+    The one answer to whether a run can be read again: a rebuild starts from it, and the
+    check for a stranded request asks it of the runs that would have to take one back.
+    """
+
     if run["status"] != "reading":
         raise _RefusedError(str(run["status"]))
     if target is None:
@@ -303,24 +314,25 @@ def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage)
     end = int(run["read_offset"])
     if os.path.getsize(path) < end:
         raise _RefusedError("shorter")
-    return Rereading.start(target, path, end, coverage, int(run["id"]))
-
-
-#: The statuses the reader gives a run whose bytes are gone; `unreadable` may pass.
-_BYTES_GONE = frozenset({"missing", "truncated"})
+    return target, path, end
 
 
 def _strands(collector: Collector, yielders: Sequence[sqlite3.Row]) -> bool:
-    """Whether a run that left a request to another has lost the bytes it was read from.
+    """Whether a run that left a request to another could not be read again now.
 
     Such a run cannot take a request back, so a holder that gives one up would strand it.
-    The bytes decide, own file or archive: a refusal kept with the run for another reason
-    (a failure, or this very one) and a status that may pass say nothing of them; only
-    `changed` does, which reading alone finds. Asked inside the holder's transaction, and
-    only when the holder gives a claim up and some run yielded: rarely.
+    What a rebuild of that run would ask decides (`_readable`), and a refusal kept with it
+    only when it says its bytes changed, which reading alone finds: one kept for a
+    failure, or for this very reason, says nothing of whether it can be read. Asked
+    inside the holder's transaction, and only when the holder gives a claim up and some
+    run yielded: rarely.
 
     The targets come from a finder of its own: the collector's has been walked already,
     and one walked before leaves out every session that ended.
+
+    The holder's refusal is kept until the holder is stale anew or is rebuilt by the
+    command, also when the other run can be read again later: its request stays counted
+    once meanwhile, and `valkama doctor` lists it.
     """
 
     if not yielders:
@@ -328,16 +340,11 @@ def _strands(collector: Collector, yielders: Sequence[sqlite3.Row]) -> bool:
     finder = Finder(collector.conn, collector.finder.archive_root)
     targets = {(target.session, target.agent): target for target in finder.targets(set())}
     for run in yielders:
-        if run["status"] in _BYTES_GONE:
-            return True
         if run["reread_refused"] == "changed" and (run["refused_reading"] or 0) >= READING:
             return True
-        target = targets.get((str(run["session_id"]), str(run["agent_id"])))
-        path = None if target is None else usage_collect.source(target)
         try:
-            if path is None or os.path.getsize(path) < int(run["read_offset"]):
-                return True
-        except OSError:
+            _readable(run, targets.get((str(run["session_id"]), str(run["agent_id"]))))
+        except (_RefusedError, OSError):
             return True
     return False
 
