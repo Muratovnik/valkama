@@ -476,6 +476,10 @@ def _analytics_read(call: _Call) -> _Answer | None:
     return analytics_api.handle_get(call.store(), call.path, call.parameters)
 
 
+def _analytics_write(call: _Call) -> _Answer | None:
+    return analytics_api.handle_post(call.store(), call.path, call.payload)
+
+
 def _card_record(conn: sqlite3.Connection, reference: str) -> dict:
     """What the card draws: the item and the agents on it, which no tool answer carries."""
 
@@ -716,6 +720,15 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         exact=app_shell.WRITE_PATHS,
         handler=_shell_write,
         errors=_exact_error,
+        commit=_Commit.DOMAIN,
+    ),
+    # A use of an analytics surface, counted by the page that was opened. No view draws
+    # the count, so the row publishes nothing; like the route preference above, its
+    # commit still moves `data_version`, which the watchers take for a change.
+    _Boundary(
+        exact=frozenset(analytics_api.WRITE_PATHS),
+        handler=_analytics_write,
+        errors=analytics_api.error_response,
         commit=_Commit.DOMAIN,
     ),
     _Boundary(

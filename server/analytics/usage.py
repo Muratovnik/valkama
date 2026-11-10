@@ -193,6 +193,16 @@ def _moment(text: str, name: str, zone: dt.tzinfo) -> int:
         raise UsageQueryError(f"{name} must be a date or a time with its offset") from error
 
 
+def caller_zone(utc_offset: int) -> dt.timezone:
+    """The caller's zone, from its offset from UTC in minutes, or a refusal of the offset."""
+
+    if not -MAX_OFFSET_MINUTES <= utc_offset <= MAX_OFFSET_MINUTES:
+        raise UsageQueryError(
+            f"utc_offset must be from {-MAX_OFFSET_MINUTES} to {MAX_OFFSET_MINUTES} minutes"
+        )
+    return dt.timezone(dt.timedelta(minutes=utc_offset))
+
+
 def _dimensions(names: Iterable[str], parameter: str) -> list[str]:
     found = list(names)
     for name in found:
@@ -232,11 +242,7 @@ def query(
 
     if step not in STEPS:
         raise UsageQueryError("step must be hour or day")
-    if not -MAX_OFFSET_MINUTES <= utc_offset <= MAX_OFFSET_MINUTES:
-        raise UsageQueryError(
-            f"utc_offset must be from {-MAX_OFFSET_MINUTES} to {MAX_OFFSET_MINUTES} minutes"
-        )
-    zone = dt.timezone(dt.timedelta(minutes=utc_offset))
+    zone = caller_zone(utc_offset)
     begins, ends = _moment(start, "from", zone), _moment(end, "to", zone)
     if ends <= begins:
         raise UsageQueryError("to must be later than from")
@@ -689,6 +695,7 @@ __all__ = [
     "STEPS",
     "UsageQuery",
     "UsageQueryError",
+    "caller_zone",
     "query",
     "read",
 ]

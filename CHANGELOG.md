@@ -20,6 +20,16 @@ checkouts are therefore distinguishable even at the same version.
   one label named in both. The same fields work on `POST /api/planning/work-item/update`
   and `/apply`.
 
+- **How often each analytics surface is opened, counted on this machine.**
+  `POST /api/analytics/uses` counts one opening of the Analytics page, a panel or a
+  miniature, or a task opened from one of them, on the caller's day, and
+  `GET /api/analytics/uses` reads the counts of a range of days back. A count holds a
+  day, a kind and a number, and nothing else: no text, no item, no session, no time
+  finer than the day, and nothing leaves the machine. The counts live in the store
+  (`analytics_surface_uses`, added with schema 15), so a snapshot keeps them. The
+  Analytics module names the read model `analytics.uses` and the action
+  `module.analytics.report-use`; no MCP tool counts or reads them.
+
 - **What agent work spent in a period.** `GET /api/analytics/usage` reads the usage rows
   between two moments: the total, one line per group of up to two of account, project,
   work item, executor, role (the main agent, a subagent or an adviser), launch class,

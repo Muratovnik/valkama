@@ -1,10 +1,12 @@
 """The modules this build ships, declared in code: the ``valkama-modules`` wire.
 
 Planning, Analytics, Memory and Settings are the product. Analytics is where
-agent work's usage is read -- time, tokens, an API-price estimate -- and its one
-read model, `analytics.usage`, is `GET /api/analytics/usage` (`analytics.api`). Which of them exist is decided
-here, by the build, and nowhere else: no store row records it and nothing turns
-one off. The list used to be rows in `platform_modules` that the Kernel seeded
+agent work's usage is read -- time, tokens, an API-price estimate. Its read model
+`analytics.usage` is `GET /api/analytics/usage`; `analytics.uses`, how often each of
+its surfaces was opened, is `GET /api/analytics/uses`, and the action
+`module.analytics.report-use` counts one opening with `POST` there (`analytics.api`).
+Which of them exist is decided here, by the build, and nowhere else: no store row
+records it and nothing turns one off. The list used to be rows in `platform_modules` that the Kernel seeded
 and Settings toggled; that table is still declared in `core` only so an
 existing store opens unchanged, and no code reads or writes it.
 
@@ -145,10 +147,10 @@ _MODULES = (
         "platform.modules.analytics",
         "chart-no-axes-combined",
         [],
-        ["analytics.usage"],
-        ["analytics.usage"],
-        [],
-        [],
+        ["analytics.usage", "analytics.uses"],
+        ["analytics.usage", "analytics.uses"],
+        ["module.analytics.report-use"],
+        ["module.analytics.report-use"],
         ["usage"],
         [],
         ["project"],
@@ -195,7 +197,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-10T00:00:00Z"
+DECLARED_AT = "2026-11-11T00:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

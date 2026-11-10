@@ -1026,6 +1026,62 @@ item, and for `launch_class` a session's own run, are groups of their own too, w
 The answer carries ids, the names and numbers a card already shows, times and counts.
 It holds no path, no folder and no text from a transcript.
 
+### How often each analytics surface is opened
+
+The Analytics module counts, on this machine, how often each of its surfaces is opened
+and how often a task is opened from one, so that the owner can tell the surfaces that
+are used from the ones nobody opens. A count is kept per day and kind and holds nothing
+else: no text, no item, no session and no time finer than the day. Nothing is sent
+anywhere. The kinds are a closed list:
+
+| Kind | Counts |
+| --- | --- |
+| `page_open` | an opening of the Analytics page |
+| `panel_open` | an opening of an analytics panel |
+| `mini_open` | an opening of a miniature analytics view |
+| `task_open` | a task opened from any of those |
+
+`POST /api/analytics/uses` counts one use, under the rules of every write from the page
+([local HTTP security](../README.md#local-http-security)): an allowed `Origin`
+(`origin_refused`, 403), `Sec-Fetch-Site: same-origin` (`fetch_metadata_refused`, 403)
+and the page's session credential in `X-Valkama-Session` (401 without it), with a JSON
+object for a body:
+
+```json
+{"kind": "page_open", "utc_offset": 180}
+```
+
+`utc_offset` is the caller's offset from UTC in minutes, from `-840` to `840`, as the
+usage read takes it, and is required: the use is counted on the day it is then at that
+offset. A body with another field or without one of these, a kind outside the list, or
+an offset that is not a whole number in that range is refused with `400` and
+`{"error": {"code": "invalid_request", "message": …}}`, and counts nothing. The answer is
+the day's count of that kind, the use included:
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "use": {"day": "2030-03-04", "kind": "page_open", "count": 3}}
+```
+
+`GET /api/analytics/uses?from=2030-03-01&to=2030-03-08` reads the counts back. It is
+answered as the usage read is, to the page and to a local tool alike, and writes
+nothing. `from` and `to` are required
+dates, the days as the callers counted them; `to` is not included and must be later
+than `from`. Any other parameter, a repeated one or a value that is not a date is
+refused as above.
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "uses": {"from": "2030-03-01", "to": "2030-03-08",
+          "total": {"page_open": 3, "panel_open": 0, "mini_open": 0, "task_open": 1},
+          "days": [{"day": "2030-03-04",
+                    "counts": {"page_open": 3, "panel_open": 0, "mini_open": 0,
+                               "task_open": 1}}]}}
+```
+
+`total` names every kind, `0` for one not counted in the period; `days` lists each day
+with a count, oldest first, with every kind. No MCP tool counts or reads uses.
+
 ### The live-work frame
 
 One small read says where work is going on now, across every space of the primary
