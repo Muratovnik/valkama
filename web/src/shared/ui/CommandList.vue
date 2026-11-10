@@ -17,6 +17,7 @@ import { computed, onMounted, useId, useTemplateRef, watch } from 'vue'
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -128,7 +129,10 @@ function submit(event: KeyboardEvent) {
           v-slash-breaks="item.title"
           class="command-title"
         />
-        <span class="command-detail">
+        <span
+          v-tooltip.clipped="item.detail"
+          class="command-detail one-line"
+        >
           <slot
             name="detail"
             :item="item"
@@ -209,12 +213,6 @@ function submit(event: KeyboardEvent) {
     grid-template-areas:
       'head detail'
       'title title';
-  }
-
-  .command-detail {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 }
 

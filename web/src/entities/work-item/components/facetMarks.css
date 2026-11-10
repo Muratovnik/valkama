@@ -103,13 +103,10 @@
   }
 }
 
-/* Short of room a word is cut sideways only, so no box of it can take a letter's top. */
+/* Short of room a word ends in an ellipsis, by the shared `.one-line` its element carries, and
+   where the surface trims it (`.trimmed-word`) it is cut sideways only, so no box of it takes a
+   letter's top. */
 .facet-word {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: clip visible;
-  text-overflow: ellipsis;
-
   /* A word alone carries the tone its glyph would have: with no glyph beside
      it, the word is the only place left to say how much the fact asks. It
      comes before the quiet, picked and hovered inks, which say something else
@@ -362,14 +359,12 @@
   }
 }
 
-/* The words stand in the middle of the face, the same room at either end. */
+/* The words stand in the middle of the face, the same room at either end, on one line
+   (`.one-line`). */
 .chip-face {
   max-width: 100%;
   padding: var(--space-hair) var(--space-2);
-  white-space: nowrap;
   background: var(--color-chip-face);
-  overflow: hidden;
-  text-overflow: ellipsis;
   border-radius: var(--radius-status);
 
   /* Pointed at, or in the filter: a further lift over the same ground, so it

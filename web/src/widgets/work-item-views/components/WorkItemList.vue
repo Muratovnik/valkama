@@ -314,11 +314,11 @@ useListKeys(root, {
           </td>
           <td
             v-if="!folded('claim')"
-            class="list-cell list-holder"
+            v-tooltip.clipped="holderOf(item)"
+            class="list-cell list-holder one-line"
           >
             <component
               :is="word(item, HOLDER)"
-              v-tooltip.clipped="holderOf(item)"
               class="list-claim"
             />
           </td>
@@ -487,11 +487,10 @@ useListKeys(root, {
 }
 
 /* The one column whose values run long stops at a measure, and the cell's
-   padding is outside it; the whole name is its hover. */
+   padding is outside it; the cell is one line (`.one-line`), and the whole name is its
+   hover while the cell cuts it. */
 .list-holder {
   max-width: calc(10rem + 2 * var(--space-3));
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .list-claim {

@@ -163,8 +163,8 @@ export function scanNativeTitles(sources, register = NATIVE_TITLES) {
 /** `file <tag> v-tooltip.detail="…"` or `file script [vTooltip, …]` → what it says that the screen does not. */
 export const DETAIL_TOOLTIPS = new Map([
   [
-    'entities/work-item/components/drawMarks.ts script [vTooltip, hint.text, undefined, { detail: true }]',
-    'what a priority means; no surface prints it, and beside a glyph alone it says the priority too',
+    'entities/work-item/components/drawMarks.ts script [vTooltip, { text: hint.text, words: hint.words }, undefined, { detail: true }]',
+    'what a priority means; no surface prints it, and beside a glyph alone it says the priority too; while the word beside it is cut, the word comes first, whole',
   ],
   [
     `entities/work-item/components/WorkItemCopyButtons.vue <button> v-tooltip.detail="t('workItem.head.copyReferenceHint')"`,
@@ -203,8 +203,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a choice lets through, which its one word does not say',
   ],
   [
-    'shared/ui/OverlayResizer.vue <div> v-tooltip.detail="folded?.state"',
-    'that a folded edge holds a pane and how to bring it back; the edge is a line',
+    'shared/ui/OverlayResizer.vue <div> v-tooltip.detail="{ text: folded?.state, words: folded?.name }"',
+    'that a folded edge holds a pane and how to bring it back; the edge is a line; while the pane’s name on it is cut, the name comes first, whole',
   ],
   [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',
@@ -219,8 +219,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'where a press goes; the mark and the product’s name only say what it is',
   ],
   [
-    'widgets/app-nav/components/NavConnectionButton.vue <button> v-tooltip:right.detail="hint"',
-    'that a press refreshes now, and while the connection is lost what was lost',
+    'widgets/app-nav/components/NavConnectionButton.vue <button> v-tooltip:right.detail="{ text: hint, words: status }"',
+    'that a press refreshes now, and while the connection is lost what was lost; while its own words are cut, they come first, whole',
   ],
   [
     'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',

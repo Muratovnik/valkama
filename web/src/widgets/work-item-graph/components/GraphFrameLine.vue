@@ -110,7 +110,9 @@ useResizeObserver(
         v-else
         ref="name"
         v-slash-breaks="title"
+        v-tooltip.clipped="title"
         class="graph-frame-title"
+        :class="{ 'one-line': overview }"
       />
     </template>
     <SemanticState
@@ -190,16 +192,13 @@ useResizeObserver(
 }
 
 /* The work moving shortens first, and the reference is cut only where that is not room
-   enough: the mark that work is running never gives way. */
+   enough: the mark that work is running never gives way. Both are one line there
+   (`.one-line`). */
 .overview :is(.graph-frame-reference, .graph-frame-title) {
   display: block;
   flex: 0 1 auto;
-  min-width: 0;
   max-width: 100%;
   color: var(--color-text);
   font: inherit;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>
