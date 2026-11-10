@@ -160,10 +160,7 @@ function retryRead() {
   void load()
 }
 
-async function reloaded() {
-  await load()
-  emit('changed')
-}
+const reloaded = () => load().then(() => emit('changed'))
 
 const {
   attachMemory,
@@ -478,6 +475,7 @@ defineExpose({ close, openFrom })
               v-else-if="section === 'activity'"
               :item="payload"
               :questions="questions"
+              :workflow="workflow"
             />
           </TabPanel>
         </template>

@@ -17,11 +17,13 @@ import { validateHistory } from '@/shared/api/executionModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 import { executionHistory } from '../browser/executionFixtures.ts'
+import { boardWorkflow } from '../fixtures/board.ts'
 import { workItemFixture } from '../fixtures/workItem.ts'
 import { present } from '../support/present.ts'
 import { root } from '../support/threadCard.ts'
@@ -161,6 +163,33 @@ describe('recorded history', () => {
     await wrapper.getComponent(VTextInput).setValue('Export claims')
     expect(rows()).toEqual(['Thread “Export claims” · decision: later'])
     await wrapper.getComponent(VTextInput).setValue('5436')
+    expect(wrapper.findAll('li')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('names a transition’s state as the card’s workflow and the owner’s choice have it', async () => {
+    const item = activityItem()
+    item.events = [
+      {
+        action: 'transitioned',
+        author: 'A',
+        at: '2026-10-23T12:00:00Z',
+        detail: 'dev: started',
+        identity: unproved,
+      },
+    ]
+    item.refs = []
+    const wrapper = mount(InspectorActivity, {
+      props: { item, workflow: boardWorkflow },
+      global: { plugins: plugins() },
+    })
+    const row = () => wrapper.get('.entry-detail').text()
+    expect(row()).toBe('In progress: started')
+    useSettingsStore().settings.stateNames = 'workflow'
+    await wrapper.vm.$nextTick()
+    expect(row()).toBe('Dev: started')
+    // The record stays searchable by the key it holds.
+    await wrapper.getComponent(VTextInput).setValue('dev: started')
     expect(wrapper.findAll('li')).toHaveLength(1)
     wrapper.unmount()
   })

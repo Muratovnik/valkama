@@ -61,13 +61,36 @@ function linkWords(detail: string, t: Translate) {
   return `${t(['workItem.relation', kind, side].join('.'))} ${reference}`
 }
 
-export function eventWords(
-  event: RecordedEvent,
-  comments: WorkItem['comments'],
-  t: Translate,
-  questions: readonly InputRequestEntry[] = [],
-) {
+/** The name the reader sees for a state of the card's workflow by its key; null for none. */
+type StateNamer = (key: string) => string | null
+
+/**
+ * `key` or `key: note`, as a transition writes it: the state named as everywhere else, by the
+ * key's state in the card's workflow. A key the workflow no longer has, and a line of another
+ * shape, read as recorded.
+ */
+function moveWords(detail: string, nameState: StateNamer) {
+  const [, key, note] = /^([a-z][a-z0-9-]*)(?:: ([\s\S]*))?$/u.exec(detail) ?? []
+  const name = key === undefined ? null : nameState(key)
+  if (name === null) return detail
+  return note === undefined ? name : `${name}: ${note}`
+}
+
+/** What the card already holds that names the things an event's line refers to. */
+interface EventContext {
+  comments: WorkItem['comments']
+  t: Translate
+  /** Names a transition's state; with none, the line stays as recorded. */
+  nameState?: StateNamer
+  questions?: readonly InputRequestEntry[]
+}
+
+export function eventWords(event: RecordedEvent, context: EventContext) {
+  const { comments, t, questions = [], nameState = () => null } = context
   switch (event.action) {
+    case 'transitioned': {
+      return moveWords(event.detail, nameState)
+    }
     case 'comment_resolved':
     case 'comment_reopened': {
       return markWords(event.detail, comments, t)
