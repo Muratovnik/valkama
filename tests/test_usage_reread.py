@@ -17,10 +17,17 @@ from unittest import mock
 from server import store
 from server.hooks import ingest
 from server.ops import doctor
-from server.telemetry import liveness, usage_rebuild, usage_reread
+from server.telemetry import (
+    liveness,
+    usage_collect,
+    usage_ledger,
+    usage_prices,
+    usage_rebuild,
+    usage_reread,
+)
 from server.telemetry.usage_store import READING
 from tests import schema14
-from tests.usage_fixtures import HOUR, Case, ClaudeRun, epoch, stamp
+from tests.usage_fixtures import HOUR, Case, ClaudeRun, epoch, stamp, usage
 
 #: A pass's budget: at one second per run it starts three.
 BUDGET = 2.5
@@ -258,6 +265,81 @@ class UpgradeRecoveryPointTests(unittest.TestCase):
         )
         backups = root / "backups"
         self.assertEqual([], sorted(backups.glob(f"*{usage_rebuild.SNAPSHOT_LABEL}*")))
+
+
+#: A model the price table did not list when its tokens were read.
+NEW_MODEL = "claude-unlisted-9"
+#: The price table that lists it.
+NEW_BOOK = "2099-01-01"
+
+
+class PricedTests(RereadCase):
+    """A run holding tokens without a cost is read again once a table prices its model."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.sessions(2)
+        self.unpriced = unpriced = self.session("unpriced")
+        unpriced.model = NEW_MODEL
+        unpriced.prompt(0)
+        unpriced.end_turn(30, spent=usage(output=1000))
+        self.read()
+        # Live reading has nothing stale to read again.
+        self.assertFalse(self.pass_())
+        self.assertEqual([], self.attempts)
+        self.assertEqual((None, None), self.costs())
+
+    def costs(self) -> tuple[object, object]:
+        row = self.reader.execute(
+            "SELECT SUM(estimated_api_cost_usd), MAX(price_book) FROM usage_segments s"
+            " JOIN usage_runs r ON r.id = s.run_id WHERE r.session_id = 'unpriced'"
+            " AND s.output_tokens > 0"
+        ).fetchone()
+        return row[0], row[1]
+
+    def new_table(self) -> None:
+        """This build's table: the model listed, under a new `PRICE_BOOK`."""
+
+        rates = usage_prices._ANTHROPIC["claude-opus-5-5"]
+        patches = [mock.patch.dict(usage_prices._ANTHROPIC, {NEW_MODEL: rates})]
+        for module in (usage_prices, usage_collect, usage_ledger, usage_rebuild, usage_reread):
+            patches.append(mock.patch.object(module, "PRICE_BOOK", NEW_BOOK))
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def test_the_runs_of_a_newly_priced_model_are_read_again_and_no_other(self) -> None:
+        self.new_table()
+        reader = usage_reread.Reader(self.reader, self.store_path)
+        while reader.run_pass(self.said.append, BUDGET):
+            pass
+        cost, book = self.costs()
+        self.assertGreater(float(cost), 0.0)  # type: ignore[arg-type]
+        self.assertEqual(NEW_BOOK, book)
+        self.assertEqual([self.run_row("unpriced")["id"]], self.attempts)
+        rows = self.reader.execute(
+            "SELECT session_id, reread_at IS NOT NULL, reading FROM usage_runs ORDER BY id"
+        ).fetchall()
+        self.assertEqual(
+            [("done-0", 0, READING), ("done-1", 0, READING), ("unpriced", 1, READING)],
+            [tuple(row) for row in rows],
+        )
+
+    def test_a_run_refused_is_not_marked_again_under_the_same_table(self) -> None:
+        self.new_table()
+        self.unpriced.path.unlink()
+        for _ in range(2):
+            # Each reader is a start of its own.
+            reader = usage_reread.Reader(self.reader, self.store_path)
+            while reader.run_pass(self.said.append, BUDGET):
+                pass
+        self.assertEqual([self.run_row("unpriced")["id"]], self.attempts)
+        self.assertEqual("missing", self.run_row("unpriced")["reread_refused"])
+
+    def test_without_a_new_price_nothing_is_marked(self) -> None:
+        with mock.patch.object(usage_reread, "PRICE_BOOK", NEW_BOOK):
+            self.assertEqual(0, usage_reread.mark_priced(self.reader))
+        self.assertEqual(set(), self.stale())
 
 
 class DoctorTests(RereadCase):

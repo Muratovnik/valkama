@@ -524,18 +524,6 @@ def _transcript_check(path: str) -> dict:
     )
 
 
-#: The usage rows with tokens and no cost, by model, the most tokens first. A row's
-#: tokens are its priced kinds; `reasoning_tokens` is part of `output_tokens`.
-_UNPRICED_BY_MODEL = (
-    "SELECT model, COUNT(*), SUM(spent) FROM ("
-    " SELECT model, COALESCE(input_tokens, 0) + COALESCE(cached_read_tokens, 0)"
-    " + COALESCE(cache_write_5m_tokens, 0) + COALESCE(cache_write_1h_tokens, 0)"
-    " + COALESCE(output_tokens, 0) AS spent"
-    " FROM usage_segments WHERE estimated_api_cost_usd IS NULL"
-    ") WHERE spent > 0 GROUP BY model ORDER BY 3 DESC, model"
-)
-
-
 def _unpriced_usage_check(path: str) -> dict:
     """Models that spent tokens the price table has no price for.
 
@@ -546,7 +534,7 @@ def _unpriced_usage_check(path: str) -> dict:
     try:
         conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
         try:
-            found = conn.execute(_UNPRICED_BY_MODEL).fetchall()
+            found = conn.execute(usage_store.UNPRICED_BY_MODEL).fetchall()
         finally:
             conn.close()
     except sqlite3.Error as failure:
@@ -577,8 +565,8 @@ def _unpriced_usage_check(path: str) -> dict:
         f"{len(found)} model(s) spent tokens with no price, so every cost that includes"
         f" them reads low: {listed}",
         "Add each model's public API price to server/telemetry/usage_prices.py and raise"
-        " PRICE_BOOK. Requests read after that are priced; a row already stored keeps the"
-        " cost it was read with.",
+        " PRICE_BOOK. Requests read after that are priced, and the background reader reads"
+        " the runs holding such rows again once, which prices them too.",
         presentation_code="usage-prices-missing",
         parameters={"models": listed, "count": len(found)},
     )

@@ -168,6 +168,12 @@ def listings() -> dict[str, Listing]:
     return found
 
 
+def priced(model: str) -> bool:
+    """Whether this table has a price for a model, under any id a client gives it."""
+
+    return _rates(model, 0) is not None
+
+
 def _rates(model: str, prompt: int) -> tuple[Rates, bool] | None:
     name = _anthropic_name(model)
     rates = _ANTHROPIC.get(name)

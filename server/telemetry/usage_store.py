@@ -56,6 +56,26 @@ import sqlite3
 #: another session, counts a request once in the whole store and fills `request_id`.
 READING = 1
 
+#: The usage rows with tokens and no cost, by model, the most tokens first. A row's
+#: tokens are its priced kinds; `reasoning_tokens` is part of `output_tokens`.
+UNPRICED_BY_MODEL = (
+    "SELECT model, COUNT(*), SUM(spent) FROM ("
+    " SELECT model, COALESCE(input_tokens, 0) + COALESCE(cached_read_tokens, 0)"
+    " + COALESCE(cache_write_5m_tokens, 0) + COALESCE(cache_write_1h_tokens, 0)"
+    " + COALESCE(output_tokens, 0) AS spent"
+    " FROM usage_segments WHERE estimated_api_cost_usd IS NULL"
+    ") WHERE spent > 0 GROUP BY model ORDER BY 3 DESC, model"
+)
+#: The runs holding such rows, with the model of each.
+UNPRICED_RUNS = (
+    "SELECT DISTINCT run_id, model FROM ("
+    " SELECT run_id, model, COALESCE(input_tokens, 0) + COALESCE(cached_read_tokens, 0)"
+    " + COALESCE(cache_write_5m_tokens, 0) + COALESCE(cache_write_1h_tokens, 0)"
+    " + COALESCE(output_tokens, 0) AS spent"
+    " FROM usage_segments WHERE estimated_api_cost_usd IS NULL"
+    ") WHERE spent > 0"
+)
+
 #: The one table schema 15 rebuilds rather than extends: its key became the request alone.
 _REQUESTS_TABLE = """CREATE TABLE IF NOT EXISTS usage_requests(
     request INTEGER PRIMARY KEY,
@@ -210,4 +230,12 @@ def assert_current(conn: sqlite3.Connection) -> None:
         raise RuntimeError("post-migration usage_requests is not keyed by the request alone")
 
 
-__all__ = ["READING", "SCHEMA", "SCHEMA_TABLES", "assert_current", "migrate"]
+__all__ = [
+    "READING",
+    "SCHEMA",
+    "SCHEMA_TABLES",
+    "UNPRICED_BY_MODEL",
+    "UNPRICED_RUNS",
+    "assert_current",
+    "migrate",
+]
