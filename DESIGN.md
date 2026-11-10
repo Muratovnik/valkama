@@ -692,7 +692,7 @@ a right-hand column of six numbers that means nothing read on its own. Only the
 compact state moves a count to the top-right of the icon box, which is the one
 place left once the label is gone; it never reserves unexplained space below it.
 
-Work and Settings own distinct icons. Settings is a destination like any other, in
+Work, Analytics and Settings own distinct icons. Settings is a destination like any other, in
 the navigation landmark, and stands in the rail's footer at its floor, under the
 connection state and refresh. It stood under the last navigation group, so a long
 list of work going on now carried it into the middle of the rail and a short one

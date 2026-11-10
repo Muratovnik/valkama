@@ -205,14 +205,19 @@ and they import from the module that owns what they exercise rather than through
 one facade.
 
 Planning owns the work loop, including execution and exact session context.
-Memory and Settings supply its supporting capabilities. The module list is code:
-`server/platform/modules.py` declares the three modules, so adding one is a code
+Memory and Settings supply its supporting capabilities, and Analytics is where a
+person reads the usage and quota of agent work: time, tokens, an API-price
+estimate, subscription quota. The module list is code:
+`server/platform/modules.py` declares the four modules, so adding one is a code
 change and nothing at runtime turns one on or off. `GET /api/modules` and the
 MCP tool `list_platform_modules` answer from that list without reading the
-store. Retired Analytics, Improvements, Skills management and Sessions
-monitoring must not return to it. Removing their screens does not remove
-session identity, work-item history, execution links or installed client skills
-and settings.
+store. Analytics holds the id of a retired flow-metrics module, and only the id
+came back: the flow metrics with their portfolio and compare read models, and the
+Improvements, Skills management and Sessions monitoring screens, must not return
+to the list. `tests/test_work_focus_migration.py` holds the new declaration to
+none of the old one's read models, events, actions or capability. Removing those
+screens does not remove session identity, work-item history, execution links or
+installed client skills and settings.
 
 The extension registry (services, connections, assignments, grants, actions,
 packages, relations) is gone from the code. An external adapter is a record

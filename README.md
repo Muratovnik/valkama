@@ -81,7 +81,7 @@ python valkama.py serve
 For a Git clone, first run `git clone https://github.com/Muratovnik/valkama.git`
 and `cd valkama`.
 
-Open `http://127.0.0.1:8642/`. You should see Work and Settings navigation and
+Open `http://127.0.0.1:8642/`. You should see Work, Analytics and Settings navigation and
 an empty Planning directory. Stop the server with `Ctrl+C` — agents spawn their own copy
 and do not need this one running.
 
@@ -715,8 +715,10 @@ does not return an event feed.
 Planning owns `POST /api/ingest`, which accepts only `session_start`,
 `session_end`, `attention`, and `turn_end` lifecycle events. The standalone
 session fleet, inbox, tool stream, `/api/sessions`, `/api/session-seen`, and
-Sessions SSE view are retired. Analytics dashboards and exports, Improvements,
-and the Skills catalogue and activation API are also retired. This does not
+Sessions SSE view are retired. The flow-metrics Analytics dashboards and
+exports, Improvements, and the Skills catalogue and activation API are also
+retired; the Analytics module that stands in the navigation now is for the usage
+of agent work. This does not
 change installed skill files or agent-client settings.
 
 ## Project documents

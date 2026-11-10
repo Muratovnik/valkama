@@ -10,12 +10,13 @@ owns the two UI operating levels, module semantics on each level, and what the
 Kernel lets an adapter do. `OperatingScope` is a required route discriminant
 and is validated on every Kernel request.
 
-The shell exposes Work and Settings. The module list declares Planning, Memory,
-and Settings; Memory contributes work-item references. Session lifecycle and
-compact context are Planning-owned. Standalone Sessions, Analytics,
-Improvements, and Skills destinations and their APIs are retired, and so is the
-extension registry of services, connections, assignments, grants, actions and
-relations. [ADR 0010](decisions/0010-coordination-from-session-identity.md)
+The shell exposes Work, Analytics and Settings. The module list declares
+Planning, Analytics, Memory, and Settings; Memory contributes work-item
+references. Session lifecycle and compact context are Planning-owned.
+Standalone Sessions, Improvements, and Skills destinations and their APIs are
+retired, as are the flow-metrics Analytics dashboards that once held the
+`analytics` id, and so is the extension registry of services, connections,
+assignments, grants, actions and relations. [ADR 0010](decisions/0010-coordination-from-session-identity.md)
 records why.
 
 ## Operating levels
@@ -30,6 +31,7 @@ changes the level.
 | Module | Global | Project |
 | --- | --- | --- |
 | Planning | Portfolio of Planning spaces and their work; its current Kanban storage uses Planning-specific boards/cards | Views and actions for the exact ProjectRef; current Kanban writes require an exact Planning BoardRef |
+| Analytics | Usage of agent work across projects; until usage is collected the page shows its empty state | The same for the exact project |
 | Memory | The knowledge provider that answers for each registered project, and its health | Search and exact references linked to work items in the project |
 | Settings | Language and installation health | The same installation settings; Settings holds nothing project-owned |
 

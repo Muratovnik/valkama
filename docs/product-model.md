@@ -70,15 +70,18 @@ exception or a silent absence.
 
 ## Module list
 
-The server declares `planning`, `memory`, and `settings` in its code, and that
-list is the whole answer: no store row records it and nothing changes it at
-runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
+The server declares `planning`, `analytics`, `memory`, and `settings` in its
+code, and that list is the whole answer: no store row records it and nothing
+changes it at runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
 each module's manifest inside a registration that keeps the wire's `state`,
 `mutable`, `revision`, and `updated_at` fields; every module is `enabled`, none
 is `mutable`, and `updated_at` is when the list last changed. Memory
 contributes references inside work-item context rather than a standalone
-navigation destination. Analytics, Improvements, Skills, and standalone Sessions
-registrations, pages, and APIs are retired.
+navigation destination. Analytics is the destination for the usage of agent
+work — time, tokens and an API-price estimate — and declares no read model until
+usage is collected. Improvements, Skills, and standalone Sessions registrations,
+pages, and APIs are retired, as are the flow-metrics Analytics dashboards and
+exports that an earlier build registered under the same id.
 
 A store does not record the list. Store schema 9 dropped the
 `platform_modules` rows an earlier build wrote, their audit in

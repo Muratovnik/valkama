@@ -20,6 +20,13 @@ checkouts are therefore distinguishable even at the same version.
   one label named in both. The same fields work on `POST /api/planning/work-item/update`
   and `/apply`.
 
+- **An Analytics module for the usage of agent work.** The module list now declares
+  `analytics` beside Planning, Memory and Settings, and the navigation shows it under
+  «Understand». Its page is where time, tokens and an API-price estimate of agent work
+  will be read; nothing collects them yet, so it says that usage will appear once it is
+  collected, with no figures or charts. `GET /api/modules` and `list_platform_modules`
+  name it. The flow-metrics Analytics dashboards an earlier build retired stay retired.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.
