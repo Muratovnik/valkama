@@ -771,7 +771,8 @@ it.
 A session's row is named by its title, else its folder, else «Сессия без названия», and a
 terminal glyph stands in the number's column where an item's number would. Pressing it opens
 the session as a card's session button does; it has no card and no pin, and a session that
-leaves the frame leaves at once, where an item's row stays a while, muted. An item's row with
+leaves the frame leaves at once, where an item's row stays a while, muted, its second line
+saying «работа закончилась» as its hint does, with no state and no time. An item's row with
 a session behind it ends with «Открыть сессию» beside the pin, the same glyph, shown the way
 the pin is: in a column the rail keeps on every row, so the title neither moves nor narrows
 when it comes up, out of sight until the pointer or the keyboard is on the row, and standing
