@@ -100,6 +100,16 @@ async function measure(page: Page) {
       viewport: root.clientWidth,
       pageScroll: root.scrollWidth - root.clientWidth,
       page: box(document.querySelector('.analytics-page')),
+      // Where each part starts: the controls, the filters' chevron (its button reaches out by
+      // its fill's inset, by design), the tiles' box and the charts' headings, which stand on
+      // one edge of the page.
+      edges: [
+        '.analytics-controls',
+        '.disclosure-toggle svg',
+        '.spending-tiles',
+        '.spending-bars h2',
+        '.spending-days h2',
+      ].map((selector) => box(document.querySelector(selector))?.x ?? null),
       tiles: [...document.querySelectorAll('.spending-tiles .segmented-option')].map((tile) =>
         box(tile),
       ),
@@ -202,6 +212,8 @@ for (const width of [1440, 1024, 390]) {
       expect((section.box?.x ?? 0) + (section.box?.width ?? 0)).toBeLessThanOrEqual(
         measured.viewport,
       )
+    for (const edge of measured.edges)
+      expect(Math.abs((edge ?? Number.NaN) - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
     // A table wider than its frame scrolls in it, and still leaves each row's name its words:
     // a day squeezed to a letter a line is not readable as a table.
     for (const section of measured.sections)
