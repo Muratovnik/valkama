@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from ..planning import ladder
 from . import liveness
 from .usage_prices import PRICE_BOOK
-from .usage_steps import Part, Step
+from .usage_steps import ADVISOR_MODEL, EFFORT, ENVIRONMENT, ORGANIZATION, Part, Step
 
 #: The columns each kind goes to, which is also the order they are written in.
 TOKEN_COLUMNS = {
@@ -47,6 +47,10 @@ TOKEN_COLUMNS = {
     "output": "output_tokens",
     "reasoning": "reasoning_tokens",
 }
+
+#: What a segment runs under, each a column of `usage_segments` and a name of
+#: `Step.settings`. A row ends where one of them changes.
+SETTINGS = (ORGANIZATION, ENVIRONMENT, EFFORT, ADVISOR_MODEL)
 
 #: Requests kept open for more records of theirs. Records of one request come within
 #: a few of each other even with tool calls in parallel, and each costs a few counters.
@@ -91,6 +95,13 @@ class Row:
     book: str | None = None
     provisional: bool = True
     identity: int | None = None
+    #: What the work ran under, each as its `usage_segments` column (`SETTINGS`).
+    settings: dict[str, str | None] = field(default_factory=dict)
+    #: An advisor's tokens, which take no time of their own.
+    advisor: bool = False
+
+    def runs_under(self, settings: dict[str, str | None]) -> bool:
+        return all(self.settings.get(name) == settings.get(name) for name in SETTINGS)
 
 
 class Ledger:
@@ -111,6 +122,8 @@ class Ledger:
         self.item: str | None = memo.get("item")
         self.signal: str | None = memo.get("signal")
         self.requests: dict[str, dict] = memo.get("requests", {})
+        #: What the work runs under from here on, as the records so far said it.
+        self.settings: dict[str, str | None] = memo.get("settings", {})
         #: Whether the turn in flight started with no item and so is placed by `fallback`
         #: until it closes. None for a memo from before this was kept: its turn in flight
         #: goes on as it was read, looked for while it has no item and kept once found.
@@ -129,7 +142,13 @@ class Ledger:
             "signal": self.signal,
             "requests": self.requests,
             "open_placement": self.open_placement,
+            "settings": self.settings,
         }
+
+    def configure(self, settings: dict[str, str | None]) -> None:
+        """What a record says the work runs under from now on; a row ends at a change."""
+
+        self.settings.update((name, settings[name]) for name in SETTINGS if name in settings)
 
     def new_turn(self, at: float, last: float | None = None) -> None:
         """A turn starts at `at`; the one before it last read a record at `last`.
@@ -181,14 +200,25 @@ class Ledger:
             row.item, row.signal = item, signal
 
     def _new_row(self, start: float, end: float, quality: str) -> Row:
-        return Row(start, end, end - start, quality, self.model, self.item, self.signal)
+        return Row(
+            start,
+            end,
+            end - start,
+            quality,
+            self.model,
+            self.item,
+            self.signal,
+            settings=dict(self.settings),
+        )
 
     def work(self, start: float, end: float, quality: str) -> None:
         tail = self.rows[-1] if self.rows else None
         if (
             tail is not None
+            and not tail.advisor
             and tail.quality == quality
             and tail.model == self.model
+            and tail.runs_under(self.settings)
             and abs(tail.ended - start) <= _SAME_MOMENT
         ):
             tail.ended = end
@@ -234,23 +264,44 @@ class Ledger:
                 cost -= before[1]
         if not part.advisor:
             self.model = part.model
-        row = self._row_for(part.model, at)
+        row = self._row_for(part, at)
         for kind, count in tokens.items():
             row.tokens[kind] = row.tokens.get(kind, 0) + count
         if cost is not None:
             row.cost = (row.cost or 0.0) + cost
             row.book = PRICE_BOOK
 
-    def _row_for(self, model: str, at: float) -> Row:
-        """The row a request's tokens go to: the last one reaching its moment with its model."""
+    def _row_for(self, part: Part, at: float) -> Row:
+        """The row a part's tokens go to: the last one reaching its moment with its model,
+        under the same settings, and an advisor's own for an advisor's part.
 
+        An advisor's row names the adviser that ran as its `advisor_model`.
+        """
+
+        model = part.model
+        settings = {**self.settings, ADVISOR_MODEL: model} if part.advisor else self.settings
         for row in reversed(self.rows):
-            if row.model in (model, None) and row.ended >= at - _SAME_MOMENT:
+            if (
+                row.advisor == part.advisor
+                and (row.model == model or (row.model is None and not part.advisor))
+                and row.runs_under(settings)
+                and row.ended >= at - _SAME_MOMENT
+            ):
                 row.model = model
                 return row
-            if row.model != model:
+            if row.model != model or row.advisor != part.advisor:
                 break
-        fresh = Row(at, at, 0.0, self.coverage.quality_at(at), model, self.item, self.signal)
+        fresh = Row(
+            at,
+            at,
+            0.0,
+            self.coverage.quality_at(at),
+            model,
+            self.item,
+            self.signal,
+            settings=dict(settings),
+            advisor=part.advisor,
+        )
         self.rows.append(fresh)
         return fresh
 
@@ -275,6 +326,8 @@ SEGMENT_COLUMNS = (
     "price_book",
     "quality",
     "provisional",
+    *SETTINGS,
+    "advisor",
 )
 
 
@@ -293,6 +346,8 @@ def segment_values(row: Row) -> tuple:
         row.book,
         row.quality,
         int(row.provisional),
+        *(row.settings.get(name) for name in SETTINGS),
+        int(row.advisor),
     )
 
 
@@ -317,14 +372,16 @@ _INSERT = (
     "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at, ended_at,"
     " seconds, work_item_id, signal, input_tokens, cached_read_tokens, cache_write_5m_tokens,"
     " cache_write_1h_tokens, output_tokens, reasoning_tokens, estimated_api_cost_usd,"
-    " price_book, quality, provisional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    " price_book, quality, provisional, organization, environment, effort, advisor_model,"
+    " advisor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
 )
 _UPDATE = (
     "UPDATE usage_segments SET model = ?, started_at = ?, ended_at = ?, seconds = ?,"
     " work_item_id = ?, signal = ?, input_tokens = ?, cached_read_tokens = ?,"
     " cache_write_5m_tokens = ?, cache_write_1h_tokens = ?, output_tokens = ?,"
     " reasoning_tokens = ?, estimated_api_cost_usd = ?, price_book = ?, quality = ?,"
-    " provisional = ? WHERE id = ?"
+    " provisional = ?, organization = ?, environment = ?, effort = ?, advisor_model = ?,"
+    " advisor = ? WHERE id = ?"
 )
 SELECT_PROVISIONAL = "SELECT * FROM usage_segments WHERE run_id = ? AND provisional = 1 ORDER BY id"
 
@@ -349,4 +406,6 @@ def row_from(record: sqlite3.Row) -> Row:
         record["price_book"],
         True,
         int(record["id"]),
+        {name: record[name] for name in SETTINGS},
+        bool(record["advisor"]),
     )

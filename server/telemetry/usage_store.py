@@ -11,7 +11,8 @@ counters, the time left out by class, and the item its packet named.
 
 `usage_segments`: one row per stretch of work with no hole in it, so a reader can take
 the union of rows from any number of agents. A new row starts when the item, the
-model or the quality changes, after every hole, and at every write. `provisional` is
+model, the quality or what the work ran under (`organization`, `environment`, `effort`,
+`advisor_model`) changes, after every hole, and at every write. `provisional` is
 1 while a later write in the same turn can still move the row to its own item; such a
 row already names the item the rule gives it so far, so a reader takes it as it is.
 
@@ -30,11 +31,37 @@ old records again, or a file copied into another session's folder, counts nothin
 `request_id` is the same hash of the client's own request id where a Claude record
 carries one. Which run a request met in two runs belongs to is `usage_claims`' rule.
 
-Schema 15 added, all empty or 0 in an upgraded store:
+Schema 15 added, all empty or 0 in an upgraded store until its runs are read again:
 
-- to a segment, `organization`, `environment`, `effort`, `advisor` and `advisor_model`,
-  which the reader does not fill yet;
-- to a run, `launch_class`, likewise not filled yet; `reading`, the reading its rows
+- to a segment, what its work ran under, read from the transcript alone and NULL where
+  the transcript says nothing, never a guess. Only ids and short labels are kept: no
+  e-mail, name or path.
+
+  - `organization`: the id of the organization the requests were made for, the only
+    account identifier kept. At Claude it is the latest `credential_org` attachment
+    before the row: the client writes one before a request whenever the organization
+    changed, so a row before the first one is NULL and a row ends at each new one.
+  - `environment`: how the client ran, one of `ide` (an IDE extension), `terminal` (the
+    CLI), `app` (a desktop application) and `headless` (the SDK, no window), from
+    Claude's `entrypoint`. A transcript a client in WSL wrote, whose reported path is
+    on the distribution's share (`\\\\wsl.localhost\\<distribution>\\...` or
+    `\\\\wsl$\\<distribution>\\...`), adds `@wsl:<distribution>`: `terminal@wsl:Ubuntu`.
+    NULL for a client outside the list, whatever the path.
+  - `effort`: the effort the requests ran with, as the client names it (`low` to
+    `max`): Claude's per-turn override where the turn has one, else the session's.
+  - `advisor`: 1 on a row holding an advisor call's tokens. Such a row is its own, with
+    no seconds and the adviser's `model`, even when that is the executor's model.
+  - `advisor_model`: the adviser the turn had configured. On the executor's rows it is
+    the one its requests named, NULL with none; on an advisor row, the adviser that
+    ran. Within a run, the rows with one `advisor_model` are the executor's work with
+    that adviser and the adviser's own calls, so what the advisor cost an executor is
+    the cost of its run's rows with `advisor` 1, beside the executor's own rows.
+
+- to a run, `launch_class`: the class a Claude subagent's launch declared in front of its
+  description (`<class>: ...`), read from the client's metadata file beside the
+  transcript (`agent-<id>.meta.json`) while it is there, else from the label the hooks
+  recorded for the launch. NULL for a session's own run and a description that declares
+  none, and a class once read stays. Also to a run: `reading`, the reading its rows
   were written by (`READING`), and 0 for rows from before readings were counted or that
   a later input outside the transcript (a price) made stale; `reread_refused` with
   `refused_reading`, why re-reading it was refused and for which reading;

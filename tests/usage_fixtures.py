@@ -72,14 +72,18 @@ class ClaudeRun:
         self.agent = agent
         path.parent.mkdir(parents=True, exist_ok=True)
         self.model = "claude-opus-5-5"
+        #: The client every record names in `entrypoint`; None writes no such field.
+        self.entrypoint: str | None = None
         self._requests = 0
         # A request id is the client's and unique to the response it names, so two
         # transcripts share one only when one copied the other's records.
         self._request_prefix = f"msg_{session}_{agent}"
 
     def _write(self, row: dict) -> None:
+        # Compact, as the client writes it: what `worth_parsing` skips unparsed is told by
+        # these bytes.
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(row) + "\n")
+            handle.write(json.dumps(row, separators=(",", ":")) + "\n")
 
     def raw(self, text: str) -> None:
         with self.path.open("a", encoding="utf-8", newline="") as handle:
@@ -96,7 +100,25 @@ class ClaudeRun:
         }
         if self.agent:
             row["agentId"] = self.agent
+        if self.entrypoint is not None:
+            row["entrypoint"] = self.entrypoint
         return row
+
+    def credential(self, at: float, organization: str) -> None:
+        """The attachment a client writes before a request made for another organization."""
+
+        row = {
+            "parentUuid": str(uuid.uuid4()),
+            "isSidechain": bool(self.agent),
+            "attachment": {"type": "credential_org", "organizationUuid": organization},
+            "type": "attachment",
+            "timestamp": stamp(at),
+            "uuid": str(uuid.uuid4()),
+            "sessionId": self.session,
+        }
+        if self.entrypoint is not None:
+            row["entrypoint"] = self.entrypoint
+        self._write(row)
 
     def prompt(
         self, at: float, text: str = "do it", origin: str | None = "human", **more: object

@@ -33,7 +33,15 @@ from .usage_claims import Claimant
 from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT, Clock
 from .usage_ledger import SELECT_PROVISIONAL, Fallback, Ledger, Row, moment, row_from, stamp
 from .usage_prices import PRICE_BOOK
-from .usage_steps import Step, claude_step, codex_step, worth_parsing
+from .usage_steps import (
+    ENVIRONMENT,
+    Step,
+    claude_step,
+    codex_step,
+    environment,
+    launch_class,
+    worth_parsing,
+)
 from .usage_store import READING
 from .usage_targets import CLAUDE, CODEX, Finder, Target
 
@@ -48,6 +56,10 @@ _MOST_LINE_BYTES = 64 * 1024 * 1024
 #: How many requests a run left to others it remembers between chunks, so the records of
 #: one request on both sides of a chunk's end count as one yield.
 _RECENT_YIELDS = 16
+#: A subagent's metadata file beside its transcript, and how much of it is read.
+_TRANSCRIPT_SUFFIX = ".jsonl"
+_META_SUFFIX = ".meta.json"
+_MOST_META_BYTES = 64 * 1024
 
 
 @dataclass
@@ -97,6 +109,8 @@ class Parsed:
     #: The run as `usage_claims`' rule sees it, and the requests it left to another run.
     claimant: Claimant
     yielded: set[int] = field(default_factory=set)
+    #: The class a subagent's launch declared, when anything says it (`launch_class`).
+    launch_class: str | None = None
 
 
 @dataclass
@@ -158,6 +172,20 @@ def source(target: Target) -> str | None:
 
     path = target.path if target.path and os.path.isfile(target.path) else target.archive
     return path if path and os.path.isfile(path) else None
+
+
+def _meta_description(transcript: str) -> object:
+    """The launch `description` in the metadata file a client keeps beside a subagent's
+    transcript (`agent-<id>.meta.json`), or None when there is none to read."""
+
+    if not transcript.endswith(_TRANSCRIPT_SUFFIX):
+        return None
+    try:
+        with open(transcript[: -len(_TRANSCRIPT_SUFFIX)] + _META_SUFFIX, "rb") as handle:
+            found = json.loads(handle.read(_MOST_META_BYTES))
+    except (OSError, ValueError, RecursionError):
+        return None
+    return found.get("description") if isinstance(found, dict) else None
 
 
 def _read_lines(path: str, offset: int, limit: int) -> tuple[list[bytes], int, bool]:
@@ -413,7 +441,12 @@ class Collector:
             ledger.place_open_turn(clock.high)
         state["clock"], state["ledger"] = clock.state(), ledger.memo()
         return Parsed(
-            Progress(state, packet["item"], after, ledger.rows), ledger, clock, claimant(), yielded
+            Progress(state, packet["item"], after, ledger.rows),
+            ledger,
+            clock,
+            claimant(),
+            yielded,
+            self._launch_class(target),
         )
 
     def record(self, run_id: int, read_from: object, reached: int, parsed: Parsed) -> bool:
@@ -427,7 +460,8 @@ class Collector:
         return (
             self.conn.execute(
                 "UPDATE usage_runs SET read_offset = ?, events_after = ?, state = ?, status = ?,"
-                " packet_item = COALESCE(?, packet_item), human_seconds = ?,"
+                " packet_item = COALESCE(?, packet_item),"
+                " launch_class = COALESCE(?, launch_class), human_seconds = ?,"
                 " subagent_seconds = ?, external_seconds = ?, gap_seconds = ?, first_at = ?,"
                 " last_at = ?, read_at = ? WHERE id = ? AND read_offset = ?",
                 (
@@ -436,6 +470,7 @@ class Collector:
                     json.dumps(parsed.progress.state, separators=(",", ":")),
                     "reading",
                     parsed.progress.packet_item,
+                    parsed.launch_class,
                     clock.left_out[HUMAN],
                     clock.left_out[SUBAGENT],
                     clock.left_out[EXTERNAL],
@@ -453,6 +488,8 @@ class Collector:
     def _steps(self, lines: list[bytes], target: Target, state: dict) -> list[Step]:
         steps: list[Step] = []
         memo = state.setdefault("codex", {}) if target.client == CODEX else {}
+        # The path the client reported, which names a WSL distribution the client ran in.
+        reported = target.path or target.parent
         for line in lines:
             if not worth_parsing(line):
                 continue
@@ -468,6 +505,8 @@ class Collector:
                 else codex_step(row, memo)
             )
             if step is not None:
+                if ENVIRONMENT in step.settings:
+                    step.settings[ENVIRONMENT] = environment(step.settings[ENVIRONMENT], reported)
                 steps.append(step)
         return steps
 
@@ -539,6 +578,25 @@ class Collector:
             return (named, ladder.LABEL_NUMBER) if named is not None else single_hold(at)
 
         return for_agent
+
+    def _launch_class(self, target: Target) -> str | None:
+        """The class a Claude subagent's launch declared in front of its description.
+
+        The description is the one in the client's metadata file beside the transcript
+        while it is there, else the one the hooks recorded as the subagent's label. A
+        Codex child thread declares none.
+        """
+
+        if not target.agent or target.client != CLAUDE:
+            return None
+        declared = launch_class(_meta_description(target.path))
+        if declared is None:
+            row = self.conn.execute(
+                "SELECT label FROM sessions WHERE parent_session_id = ? AND agent_id = ?",
+                (target.session, target.agent),
+            ).fetchone()
+            declared = launch_class(row[0]) if row else None
+        return declared
 
     def _keeps(self, target: Target) -> Callable[[str], bool]:
         """Whether a subagent this run started keeps a transcript of its own.

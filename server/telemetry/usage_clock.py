@@ -44,6 +44,7 @@ from .usage_steps import (
     RESULT,
     SCRIPT,
     SERVICE,
+    SETTING,
     Step,
 )
 
@@ -124,13 +125,35 @@ class Clock:
         }
 
     def feed(self, step: Step) -> None:
+        if step.kind == SETTING:
+            self._on_setting(step)
+            return
         if self.high is None:
             self.first = self.high = step.at
             self.ledger.new_turn(step.at)
         elif step.at < self.high - LATE_SECONDS:
             self.ledger.count(step)
             return
+        # What a record says it ran under holds for the time up to it: a reply's effort is
+        # the effort its model worked with since the last record.
+        self.ledger.configure(step.settings)
         self._handlers[step.kind](step)
+
+    def _on_setting(self, step: Step) -> None:
+        """A record that says what the work after it runs under, and nothing else.
+
+        The time up to it ran under what was said before, so a turn still running is
+        measured to it first. It starts nothing: before the first record it only sets
+        what the run starts under, and outside a turn there is no work to cut. A late
+        one is a resume writing old records again and says nothing about now.
+        """
+
+        if self.high is not None:
+            if step.at < self.high - LATE_SECONDS:
+                return
+            if self.phase in (_BUSY, _FAILED):
+                self._to(step.at, self._running_class(step.at))
+        self.ledger.configure(step.settings)
 
     def mark_write(self, at: float, item: str) -> None:
         """The agent wrote to `item`: what came before it in this turn goes there."""

@@ -25,13 +25,25 @@ A Claude transcript, as measured:
   or `<task-id>` says which command.
 - `system` with `subtype: api_error` is a failed request about to be retried. Other
   subtypes (`stop_hook_summary`, `compact_boundary`) are bookkeeping inside a turn.
-- `api-request*` and `attachment` records carry nothing the clock needs and take a third
-  of the bytes, so `worth_parsing` skips them without parsing.
+- `api-request*` and `attachment` records take a third of the bytes and carry nothing the
+  clock needs, so `worth_parsing` skips them without parsing, all but one kind of
+  attachment: `credential_org`, whose `organizationUuid` names the organization the
+  requests after it are made for. The client writes one before a request whenever the
+  organization differs from the last one written, so the latest one is the organization
+  from there on, and before the first one it is unknown.
+- Every record names the client it was written by in `entrypoint`, and an `assistant`
+  record the effort its request ran with: `perTurnEffort` when the turn overrode the
+  session's, else `effort`. It names the adviser the request had configured in
+  `advisorModel`, and only when there was one.
 
 A Codex rollout: every record has `timestamp` and `payload`. `task_started` and
 `task_complete` bound a turn, `token_usage_record` holds one response's usage under its
 `response_id`, and an older rollout has only `token_count` events, repeated when nothing
 changed. Input there includes the cache, so it is made non-overlapping here.
+
+What a record says about the conditions work runs under is a step's `settings`: only the
+names it speaks of, each a column of `usage_segments`, a value of None saying that the
+record knows there is none. A record that says nothing of a name leaves it as it was.
 """
 
 from __future__ import annotations
@@ -40,6 +52,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from ..hooks import place
 from ..hooks.normalize import AGENT_TOOLS
 from .journal_values import _journal_timestamp, _token_delta, claude_request, codex_cumulative
 from .usage_prices import request_cost
@@ -53,6 +66,14 @@ RESULT = "result"
 FAILURE = "failure"
 NOTIFIED = "notified"
 SERVICE = "service"
+#: A record that only says what the work after it runs under (`Step.settings`).
+SETTING = "setting"
+
+#: The settings a record may speak of, each named as its `usage_segments` column.
+ORGANIZATION = "organization"
+ENVIRONMENT = "environment"
+EFFORT = "effort"
+ADVISOR_MODEL = "advisor_model"
 
 #: What a tool call waits for: a script, a person, or a subagent.
 SCRIPT = "script"
@@ -69,6 +90,17 @@ _TASK_ID = re.compile(r"<task-id>([^<]{1,128})</task-id>")
 _NOTICE = "<task-notification"
 #: How far into a record its `attachment` key can sit, past its two ids.
 _ATTACHMENT_HEAD = 160
+#: How far into an attachment record the type of the one kind read can sit.
+_CREDENTIAL_HEAD = 512
+_CREDENTIAL_ORG = b'"type":"credential_org"'
+#: An organization or account id, kept as it is: the one account identifier stored.
+_ACCOUNT_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+#: An effort as the clients name one: a short word.
+_EFFORT = re.compile(r"[A-Za-z0-9_-]{1,32}")
+#: A transcript a client in WSL wrote, reached through its distribution's share.
+_WSL_SHARE = re.compile(r"[\\/]{2}wsl(?:\.localhost|\$)[\\/]([A-Za-z0-9._-]{1,64})[\\/]", re.I)
+#: The class a launch description declares in front of a colon.
+_LAUNCH_CLASS = re.compile(r"([A-Za-z][A-Za-z0-9_-]{0,31}):")
 
 
 @dataclass(slots=True)
@@ -117,18 +149,49 @@ class Step:
     links: tuple[str, ...] = ()
     final: bool = False
     packet: str | None = None
+    #: What this record says the work runs under, by column name (see the module).
+    settings: dict[str, str | None] = field(default_factory=dict)
 
 
 def worth_parsing(line: bytes) -> bool:
     """False for a record the clock never reads, told without parsing it.
 
     Inside a JSON string a quote is escaped, so `"attachment":{` this early can only be
-    the record's own key.
+    the record's own key, and `"type":"credential_org"` in an attachment record its type.
     """
 
-    return not (
-        line.startswith(b'{"type":"api-request') or b'"attachment":{' in line[:_ATTACHMENT_HEAD]
+    if line.startswith(b'{"type":"api-request'):
+        return False
+    return b'"attachment":{' not in line[:_ATTACHMENT_HEAD] or (
+        _CREDENTIAL_ORG in line[:_CREDENTIAL_HEAD]
     )
+
+
+def environment(surface: str | None, transcript: str) -> str | None:
+    """A segment's `environment`: how the client ran and, under WSL, in which distribution.
+
+    `surface` is one of the `place.OPENED_IN` kinds a transcript can tell (`ide`,
+    `terminal`, `app`, `headless`) and `transcript` the path its client reported. Unknown
+    is None, whatever the path says.
+    """
+
+    if not surface:
+        return None
+    share = _WSL_SHARE.match(transcript)
+    return f"{surface}@wsl:{share.group(1)}" if share else surface
+
+
+def launch_class(description: object) -> str | None:
+    """The class a subagent's launch description declares as `<class>: ...`, or None."""
+
+    if not isinstance(description, str):
+        return None
+    declared = _LAUNCH_CLASS.match(description.strip())
+    return declared.group(1) if declared else None
+
+
+def _word(value: object, pattern: re.Pattern[str]) -> str | None:
+    return value if isinstance(value, str) and pattern.fullmatch(value) else None
 
 
 def _number(value: object) -> int | None:
@@ -281,12 +344,35 @@ def claude_step(row: Mapping[str, object], own_session: str) -> Step | None:
     if row.get("sessionId", own_session) != own_session:
         return None
     kind = row.get("type")
-    if kind not in ("user", "assistant", "system", "queue-operation"):
+    if kind not in ("user", "assistant", "system", "queue-operation", "attachment"):
         return None
     stamp = _journal_timestamp(row)
     if stamp is None:
         return None
-    at = stamp.timestamp()
+    step = _claude_record(stamp.timestamp(), str(kind), row)
+    if step is None:
+        return None
+    entrypoint = row.get("entrypoint")
+    if isinstance(entrypoint, str):
+        surface = place.classify("claude", {"CLAUDE_CODE_ENTRYPOINT": entrypoint}).opened_in
+        step.settings[ENVIRONMENT] = surface or None
+    if kind == "assistant" and not step.synthetic:
+        turn = row.get("perTurnEffort")
+        step.settings[EFFORT] = _word(turn if turn is not None else row.get("effort"), _EFFORT)
+        adviser = row.get("advisorModel")
+        step.settings[ADVISOR_MODEL] = adviser if isinstance(adviser, str) and adviser else None
+    return step
+
+
+def _claude_record(at: float, kind: str, row: Mapping[str, object]) -> Step | None:
+    """The step a record of `kind` is, before what it says of its settings."""
+
+    if kind == "attachment":
+        attachment = row.get("attachment")
+        if not isinstance(attachment, Mapping) or attachment.get("type") != "credential_org":
+            return None
+        organization = _word(attachment.get("organizationUuid"), _ACCOUNT_ID)
+        return Step(at, SETTING, settings={ORGANIZATION: organization}) if organization else None
     if kind == "queue-operation":
         content = row.get("content")
         if row.get("operation") != "enqueue" or not isinstance(content, str):
