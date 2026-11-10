@@ -38,7 +38,8 @@ of 156 recorded notices in the middle of a turn, the next line the client wrote 
 transcript was the person's answer in 154, and the client's own record of a hook or a
 request in two. With no such file to read, as for a client that keeps none there or
 one that never wrote it, when the session was last heard from stands in for the file's
-time: its hooks and its calls move that, a tool's among them. A notice then stops the
+time: its own hooks, a launch of a subagent among them, its subagents' hooks and every
+call to Planning move that, and no other tool does. A notice then stops the
 turn until the next prompt. A session whose open turn a notice stopped
 `asks`: it stands in the middle of its work until a person answers, which is not the
 wait of one whose turn is over.
@@ -486,8 +487,8 @@ def _turn(read: _Lifecycle, transcript: str, heard: str, now: datetime) -> str:
 
     Neither is a turn that is over, or one whose client has not been seen alive in it
     for `TURN_SILENT`. `heard` is when the session was last heard from, which stands
-    in for a transcript there is none to read: its hooks and its calls move it, so a
-    client that fell does not read as at work for the day a silent session gets.
+    in for a transcript there is none to read: its hooks and its calls to Planning move
+    it, so a client that fell does not read as at work for the day a silent session gets.
     """
 
     if read.turn_kind != "prompt":

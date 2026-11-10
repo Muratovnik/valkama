@@ -295,11 +295,14 @@ def _step_held_by_a_subagent(*, stopped: bool) -> _Build:
 
 
 def _held_beside_written(case: LiveWorkCase, reference: str) -> None:
-    """A claim from before one session's prompt, and a step another wrote after its own."""
+    """A claim of a session that stands on another item, and a step one at work holds."""
 
     claimer, stepper = _session(), _session()
+    other = case.item()
     case.claim(reference, claimer)
+    case.claim(other, claimer)
     case.hook(claimer, "user-prompt-submit", ago(minutes=12))
+    case.comment(other, claimer)
     case.hook(stepper, "user-prompt-submit", ago(minutes=10))
     case.hold_step(reference, stepper)
 
