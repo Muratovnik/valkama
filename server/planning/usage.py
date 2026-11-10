@@ -9,8 +9,12 @@ always adds up.
 Tokens and cost are sums: a request sits in exactly one row, so what a session's items
 and its row with no item add up to is what the session spent. A kind no request reported
 reads `null` rather than 0, and a model with no known price adds nothing to the cost and
-stands in `unpriced_models`, so a cost is as complete as that list says. The cost is an
-estimate at public API prices, not a bill, which is what its name and `cost_basis` say.
+stands in `unpriced_models`, so a cost is as complete as that list says. Beside every cost,
+`unpriced_tokens` counts the tokens of the rows with no cost, so a surface can say so
+instead of showing an undercount as the cost. A row holds one model, so that is every
+token of a model with no price, but not an unpriced request among priced ones in a row,
+whose cost is the sum of the priced ones. The cost is an estimate at public API prices, not a
+bill, which is what its name and `cost_basis` say.
 
 A row of a turn still running may yet move to another item (`usage_ledger`), and it is
 read as it stands.
@@ -39,6 +43,8 @@ _TOKEN_KINDS = (
     ("output", "output_tokens"),
     ("reasoning", "reasoning_tokens"),
 )
+#: The kinds a request is priced by: reasoning is part of the output and not added again.
+_PRICED_COLUMNS = tuple(column for kind, column in _TOKEN_KINDS if kind != "reasoning")
 _OBSERVED = "observed"
 _ESTIMATED = "estimated"
 _MIXED = "mixed"
@@ -51,6 +57,7 @@ class _Tally:
     seconds: float = 0.0
     tokens: dict[str, int] = field(default_factory=dict)
     cost: float | None = None
+    unpriced: int = 0
 
     def add(self, row: sqlite3.Row) -> None:
         self.seconds += float(row["seconds"])
@@ -59,11 +66,14 @@ class _Tally:
                 self.tokens[kind] = self.tokens.get(kind, 0) + int(row[column])
         if row["estimated_api_cost_usd"] is not None:
             self.cost = (self.cost or 0.0) + float(row["estimated_api_cost_usd"])
+        else:
+            self.unpriced += sum(int(row[column] or 0) for column in _PRICED_COLUMNS)
 
     def spent(self) -> dict:
         return {
             "tokens": {kind: self.tokens.get(kind) for kind, _ in _TOKEN_KINDS},
             "estimated_api_cost_usd": round(self.cost, 6) if self.cost is not None else None,
+            "unpriced_tokens": self.unpriced,
         }
 
 

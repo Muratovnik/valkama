@@ -78,6 +78,10 @@ class ItemReadTests(Case):
         )
         self.assertEqual([], read["unpriced_models"])
         self.assertEqual(usage.COST_BASIS, read["cost_basis"])
+        # Every token has a price, so the cost leaves none out, at any level.
+        self.assertEqual(0, read["unpriced_tokens"])
+        self.assertEqual({0}, {line["unpriced_tokens"] for line in read["models"]})
+        self.assertEqual([0], [line["unpriced_tokens"] for line in read["by_item"]])
 
     def test_an_item_with_no_rows_reads_nothing_rather_than_zero_tokens(self) -> None:
         reference, _ = self.item()
@@ -101,6 +105,30 @@ class ItemReadTests(Case):
         self.assertEqual(["claude-new-9"], read["unpriced_models"])
         self.assertAlmostEqual(20 / 1e6, read["estimated_api_cost_usd"], places=6)
         self.assertEqual(8, read["tokens"]["output"])
+        # The unknown model's request: 10 input, 100 cache reads, 20 cache writes and 7
+        # output. The priced one's single output token is not among them.
+        self.assertEqual(137, read["unpriced_tokens"])
+        self.assertEqual(
+            {"claude-new-9": 137, "claude-opus-5-5": 0},
+            {line["model"]: line["unpriced_tokens"] for line in read["models"]},
+        )
+        self.assertEqual([137], [line["unpriced_tokens"] for line in read["by_item"]])
+
+    def test_a_cost_with_no_priced_token_is_null_and_says_what_it_leaves_out(self) -> None:
+        reference, _ = self.item()
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.reply(5, tools=(("w1", "x"),), model="claude-new-9", spent=spent(output=7))
+        self.write("sess-1", reference, 6)
+        run.result(7, "w1")
+        run.end_turn(
+            9, model="claude-new-9", spent=spent(input_tokens=1, read=2, write_5m=3, output=4)
+        )
+        self.read()
+        read = get(self.reader, ITEM, id=reference)
+        self.assertIsNone(read["estimated_api_cost_usd"])
+        self.assertEqual((10 + 100 + 20 + 7) + (1 + 2 + 3 + 4), read["unpriced_tokens"])
 
     def test_an_epic_is_the_union_over_its_children_and_the_sum_of_their_spending(self) -> None:
         epic, _ = self.item("Epic", kind="epic")

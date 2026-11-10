@@ -878,11 +878,12 @@ answers with `interface_version` and `usage`:
 | `estimated_api_cost_usd` | what the requests would cost at public API prices, per request, since a price depends on a request's size; `null` when no request has a known price |
 | `cost_basis` | what that number is: an estimate, and not a bill, since a subscription pays differently |
 | `unpriced_models` | models that spent tokens and have no known price. They add nothing to the cost, so a cost is as complete as this list says |
-| `agents` | by run: `session_id`, `agent_id` (`null` for the session's own), `seconds`, `tokens`, `estimated_api_cost_usd` |
-| `models` | `model`, `seconds`, `tokens`, `estimated_api_cost_usd`. A model only called on the side has no seconds of its own |
+| `unpriced_tokens` | how many tokens the cost leaves out: the `input`, `cached_read`, `cache_write_5m`, `cache_write_1h` and `output` of every stretch of work with no cost at all, and `0` when there is none. `reasoning` is part of `output` and is not counted again. A stretch holds one model, so a model with no price is counted in full; a request with no price among priced requests of its model, such as one at a speed with no price, is not. A surface prints it beside the cost rather than presenting an undercount as the cost |
+| `agents` | by run: `session_id`, `agent_id` (`null` for the session's own), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens` |
+| `models` | `model`, `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. A model only called on the side has no seconds of its own |
 | `signals` | `signal` (`null` for no item), `seconds` and `share` of the time |
 | `quality` | `observed`, `estimated`, `mixed`, or `null` when no time was counted; `estimated_seconds` says how much |
-| `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
+| `by_item` | one line per item: `work_item_id`, `reference`, `title`, `elapsed_seconds`, `agent_seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. A chain's starts at its root and lists every member; a session's lists the items it worked on, then its line with no item, whose `work_item_id` is `null`. An item since deleted keeps its id, with a `null` number and title |
 
 An item's read adds `work_item_id`, `reference`, `title` and `scope`. A session's adds
 `session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and
