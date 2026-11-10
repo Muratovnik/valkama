@@ -5,15 +5,15 @@
       "target": {
         "project_id": "example-project",
         "space_ref": {
-          "data_scope_id": "00000000-0000-4000-8000-000000000001",
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
         },
         "reference": "MAIN-1",
         "writable": true
       },
       "request": {
-        "request_id": "00000000-0000-4000-8000-000000000007",
-        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "request_id": "00000000-0000-4000-8000-000000000008",
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
         "reference": "MAIN-1",
         "title": "Contract card",
         "kind": "question",
@@ -62,15 +62,15 @@
       "target": {
         "project_id": "example-project",
         "space_ref": {
-          "data_scope_id": "00000000-0000-4000-8000-000000000001",
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
         },
         "reference": "MAIN-1",
         "writable": true
       },
       "request": {
-        "request_id": "00000000-0000-4000-8000-000000000006",
-        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "request_id": "00000000-0000-4000-8000-000000000007",
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
         "reference": "MAIN-1",
         "title": "Contract card",
         "kind": "question",
@@ -108,15 +108,15 @@
       "target": {
         "project_id": "example-project",
         "space_ref": {
-          "data_scope_id": "00000000-0000-4000-8000-000000000001",
+          "data_scope_id": "00000000-0000-4000-8000-000000000004",
           "space_key": "MAIN"
         },
         "reference": "MAIN-1",
         "writable": true
       },
       "request": {
-        "request_id": "00000000-0000-4000-8000-000000000005",
-        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "request_id": "00000000-0000-4000-8000-000000000006",
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
         "reference": "MAIN-1",
         "title": "Contract card",
         "kind": "decision",
@@ -216,7 +216,7 @@
     {
       "project_id": "example-project",
       "space_ref": {
-        "data_scope_id": "00000000-0000-4000-8000-000000000001",
+        "data_scope_id": "00000000-0000-4000-8000-000000000004",
         "space_key": "MAIN"
       },
       "status": "searched",

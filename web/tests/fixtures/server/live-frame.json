@@ -7,7 +7,7 @@
       "unplaced": 0,
       "rows": [
         {
-          "reference": "MAIN-3",
+          "reference": "MAIN-4",
           "title": "Live epic",
           "kind": "epic",
           "parent": null,
@@ -20,10 +20,10 @@
           "updated_at": "2026-01-02T03:04:05Z"
         },
         {
-          "reference": "MAIN-4",
+          "reference": "MAIN-5",
           "title": "Quiet task",
           "kind": "task",
-          "parent": "MAIN-3",
+          "parent": "MAIN-4",
           "state": "quiet",
           "agents": 0,
           "quiet_since": "2026-01-02T03:04:05Z",
@@ -46,7 +46,7 @@
           "updated_at": "2026-01-02T03:04:05Z"
         },
         {
-          "reference": "MAIN-2",
+          "reference": "MAIN-3",
           "title": "Card with executors",
           "kind": "task",
           "parent": null,

@@ -8,7 +8,7 @@
   },
   "work_item_ref": {
     "space_ref": {
-      "data_scope_id": "00000000-0000-4000-8000-000000000001",
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
       "space_key": "MAIN"
     },
     "reference": "MAIN-1"
@@ -18,15 +18,15 @@
     "status": "ready",
     "payload": {
       "work_item": {
-        "work_item_id": "00000000-0000-4000-8000-000000000002",
-        "planning_space_id": "00000000-0000-4000-8000-000000000003",
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
         "reference": "MAIN-1",
         "number": 1,
         "title": "Contract card",
         "kind": "task",
         "priority": "medium",
         "state": {
-          "state_id": "00000000-0000-4000-8000-000000000004",
+          "state_id": "00000000-0000-4000-8000-000000000003",
           "key": "backlog",
           "name": "Backlog",
           "category": "backlog",

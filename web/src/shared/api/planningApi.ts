@@ -7,22 +7,17 @@
  * refused it, so a view can say which rather than showing a stack.
  */
 
+import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
+import type { CommentResolved, CommentWritten } from '@/shared/api/commentWriteModel.ts'
 import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
 import {
   readPending,
   readRefusal,
-  validateCommentResolved,
-  validateCommentWritten,
   validateReadModel,
   validateWorkItemRecord,
 } from '@/shared/api/planningModel.ts'
-import type {
-  CommentResolved,
-  CommentWritten,
-  PlanningReadModel,
-  WorkItem,
-} from '@/shared/api/planningModel.ts'
+import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
@@ -392,7 +387,7 @@ type ReplyParent = { reply_to: number } | { reply_to_request: string }
  * answer names the root it landed under.
  */
 export async function replyInThread(
-  input: { body: string; id: string; author?: string } & ReplyParent,
+  input: { body: string; id: string; author?: string; mentions?: string[] } & ReplyParent,
 ): Promise<CommentWritten> {
   return validateCommentWritten(await write('/api/planning/work-item/comment', { ...input }))
 }
@@ -417,6 +412,8 @@ export async function updateWorkItemDescription(input: {
   expected_revision: number
   id: string
   author?: string
+  /** The other items the description tells, by reference; a number in it tells nobody. */
+  mentions?: string[]
 }): Promise<WorkItem> {
   return validateWorkItemRecord(await write('/api/planning/work-item/update', { ...input }))
 }
@@ -440,6 +437,8 @@ export async function publishWorkItemReport(input: {
   report: { done: string; next: string; friction?: string; why?: string }
   author?: string
   expected_revision?: number
+  /** The other items the report tells, by reference; a number in it tells nobody. */
+  mentions?: string[]
 }): Promise<WorkItem> {
   return validateWorkItemRecord(await write('/api/planning/work-item/report', { ...input }))
 }

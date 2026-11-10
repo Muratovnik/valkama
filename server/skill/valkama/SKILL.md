@@ -178,19 +178,21 @@ its list are one write; the answer adds `list_request_id`. It is a question of o
 waits for it: it raises no alert and is not among the questions waiting for the
 owner. Read it with the item's questions, where it carries `comment_id`.
 
-**Telling another item.** A number in a comment's text is a link and tells
-nobody. To tell the work on another item, name it in `mentions`:
-`comment_work_item`, `report_work_item` and the batch's `comment` and `comments`
-take up to 5 references, on a root or a reply, and a session names one item at most
-3 times an hour (`mention_limit` refuses the fourth: write once on that item
-instead). The comment stays where it is, and each item named keeps a record of
-it: `get_work_item` carries the newest 5 as
-`mentions`, with `from`, `quote` and `mentions_total`, and every comment lists the
-items it told in its own `mentions`. The answer says, per item, who holds it in
-`holders`, and in `told` why nobody will hear it: no holder yet (it waits for whoever
-takes the item), the item is closed, or the call proved no session. Naming the
-comment's own item, or an item twice, is refused. Tell an item only with news for
-the work there.
+**Telling another item.** A number in a text is a link and tells nobody. To tell
+the work on another item, name it in `mentions`: `comment_work_item`,
+`report_work_item`, `set_work_item_summary`, `update_work_item` with a
+`description`, and the batch's `comment`, `comments`, `summary` and `update` take up
+to 5 references, on a root or a reply, and a session names one item at most 3 times
+an hour (`mention_limit` refuses the fourth: write once on that item instead). A
+summary or a description saved again tells only the items the text it replaces did
+not name, so rewriting one wakes nobody twice. The text stays where it is, and each
+item named keeps a record of it: `get_work_item` carries the newest 5 as
+`mentions`, with `in` (`comment`, `report`, `summary` or `description`), `from`,
+`quote` and `mentions_total`, and every comment lists the items it told in its own
+`mentions`. The answer says, per item, who holds it in `holders`, and in `told` why
+nobody will hear it: no holder yet (it waits for whoever takes the item), the item
+is closed, or the call proved no session. Naming the item written on, or an item
+twice, is refused. Tell an item only with news for the work there.
 
 **Resolved threads.** `resolve_work_item_comment` marks a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark; the `resolutions`

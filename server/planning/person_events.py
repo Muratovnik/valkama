@@ -243,7 +243,10 @@ def agents_since(conn: sqlite3.Connection, work_item_id: str, after: int) -> lis
         if action not in KINDS or (action == "summarized" and int(row[4]) in reports):
             continue
         found.append(
-            ((int(row[4]), 2, int(row[0])), _spoken(_event_entry(conn, row), row[5], row[6]))
+            (
+                (int(row[4]), 2, int(row[0])),
+                _spoken(_event_entry(conn, row, work_item_id), row[5], row[6]),
+            )
         )
     return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
 
@@ -454,7 +457,7 @@ def _window(
         # A report made current says so itself; only selecting an old one is news.
         if action not in KINDS or (action == "summarized" and int(row[4]) in reports):
             continue
-        found.append(((int(row[4]), 2, int(row[0])), _event_entry(conn, row)))
+        found.append(((int(row[4]), 2, int(row[0])), _event_entry(conn, row, work_item_id)))
     return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
 
 
@@ -527,7 +530,7 @@ def _comment_entry(row: tuple) -> dict:
     return _entry("report", at, comment_id=int(row[0]), text=text)
 
 
-def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
+def _event_entry(conn: sqlite3.Connection, row: tuple, work_item_id: str) -> dict:
     action, detail, at = str(row[1]), str(row[2]), str(row[3])
     kind = KINDS[action]
     if action.startswith("request_"):
@@ -538,6 +541,8 @@ def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
         # `<id>: <decision>` or `<id>`, as `service.resolve_comment` logs it.
         root, _colon, decision = detail.partition(": ")
         return _entry(kind, at, comment_id=int(root), text=decision)
+    if action == "mentioned" and detail.startswith(_IN_DESCRIPTION):
+        return _described(conn, at, detail.removeprefix(_IN_DESCRIPTION), work_item_id)
     if action == "mentioned":
         return _mentioned(conn, at, int(detail))
     return _entry(kind, at, text=detail)
@@ -574,6 +579,33 @@ def _mentioned(conn: sqlite3.Connection, at: str, comment_id: int) -> dict:
         if row[5]:
             entry["recent"] = True
     return entry
+
+
+#: A mention's detail when the words are a description, as `read_model.IN_DESCRIPTION` says.
+_IN_DESCRIPTION = "description:"
+_DESCRIBED = (
+    "SELECT d.description, s.key, d.number, n.key, w.number FROM work_items d"
+    " JOIN planning_spaces s ON s.planning_space_id = d.planning_space_id,"
+    " work_items w JOIN planning_spaces n ON n.planning_space_id = w.planning_space_id"
+    " WHERE d.work_item_id = ? AND w.work_item_id = ?"
+)
+
+
+def _described(conn: sqlite3.Connection, at: str, source: str, named: str) -> dict:
+    """Another item's description that named this one: that item, and the line naming it.
+
+    With that item deleted its description went with it, and `from` is null with
+    nothing to quote, as for a comment.
+    """
+
+    row = conn.execute(_DESCRIBED, (source, named)).fetchone()
+    place = {"in": "description"}
+    if row is None:
+        return _entry("mentioned", at, text="", **place, **{"from": None})
+    from .mentions import from_line_of
+
+    said = from_line_of(str(row[0]), f"{row[3]}-{row[4]}")
+    return _entry("mentioned", at, text=said, **place, **{"from": f"{row[1]}-{row[2]}"})
 
 
 def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:

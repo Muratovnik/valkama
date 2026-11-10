@@ -134,37 +134,55 @@ export function mentionSuggest(space: () => string, omit: () => string | undefin
 }
 
 /**
- * A comment field on one item: its `@` list, and the tasks the comment tells. Those
- * are the tasks chosen from the list while their number still stands in the text. A
- * number typed by hand is a link and tells nobody, as the server reads a comment; a
- * chosen one is a mention, sent in the comment's `mentions`. A text emptied, sent or
- * left for another item's forgets what was chosen in it.
+ * The tasks chosen from an `@` list for one text, and the ones that text tells: those
+ * whose number still stands in it. A number typed by hand is a link and tells nobody,
+ * as the server reads a text; a chosen one is a mention, sent in the write's
+ * `mentions`. A host that keeps several texts keeps one of these for each.
  */
-export function useCommentMentions(
-  host: { readonly item: Pick<WorkItem, 'planning_space_id' | 'work_item_id'> },
-  text: Readonly<Ref<string>>,
-) {
+export function chosenTasks() {
   const chosen = new Set<string>()
-  watch(text, (value) => {
-    if (!value.trim()) chosen.clear()
-  })
   return {
-    suggest: mentionSuggest(
-      () => host.item.planning_space_id,
-      () => host.item.work_item_id,
-    ),
-    chose(row: EditorSuggestion) {
+    chose: (row: EditorSuggestion) => {
       if (row.kind === 'task') chosen.add(row.reference)
     },
-    /** The comment write's `mentions`, or nothing when it tells nobody. */
-    told(): { mentions?: string[] } {
+    /** The write's `mentions` for `text`, or nothing when it tells nobody. */
+    told: (text: string): { mentions?: string[] } => {
       const named = new Set(
-        splitIdentifiers(text.value).flatMap((run) =>
+        splitIdentifiers(text).flatMap((run) =>
           typeof run !== 'string' && run.kind === 'work-item' ? [run.value] : [],
         ),
       )
       const told = [...chosen].filter((reference) => named.has(reference)).slice(0, MOST_TOLD)
       return told.length ? { mentions: told } : {}
     },
+    forget: () => {
+      chosen.clear()
+    },
+  }
+}
+
+/**
+ * A field on one item that writes about work — a comment, a description, a summary:
+ * its `@` list, and the tasks the text tells, as `chosenTasks` reads them. A text
+ * emptied, sent or left for another item's forgets what was chosen in it; a host whose
+ * text is not emptied when it is saved says so with `forget`.
+ */
+export function useCommentMentions(
+  host: { readonly item: Pick<WorkItem, 'planning_space_id' | 'work_item_id'> },
+  text: Readonly<Ref<string>>,
+) {
+  const chosen = chosenTasks()
+  watch(text, (value) => {
+    if (!value.trim()) chosen.forget()
+  })
+  return {
+    suggest: mentionSuggest(
+      () => host.item.planning_space_id,
+      () => host.item.work_item_id,
+    ),
+    chose: chosen.chose,
+    /** The write's `mentions`, or nothing when it tells nobody. */
+    told: () => chosen.told(text.value),
+    forget: chosen.forget,
   }
 }

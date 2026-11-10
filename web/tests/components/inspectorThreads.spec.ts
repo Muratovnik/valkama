@@ -10,7 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 
+import ReplyComposer from '@/features/discussion-thread/components/ReplyComposer.vue'
+
 import { replyInThread, resolveThread } from '@/shared/api/planningApi.ts'
+import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
 
 import { getButton } from '../fixtures/workItem.ts'
 import {
@@ -35,6 +39,15 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   replyInThread: vi.fn(),
   resolveThread: vi.fn(),
 }))
+
+const task = (reference: string): EditorSuggestion => ({
+  key: reference,
+  kind: 'task',
+  name: reference,
+  reference,
+  title: '',
+  detail: '',
+})
 
 beforeEach(() => {
   sessionStorage.clear()
@@ -222,6 +235,28 @@ describe('replying', () => {
     await inThread(wrapper, 1, 'Reply').trigger('click')
     expect((replyField(wrapper).element as HTMLTextAreaElement).value).toBe('First words')
     expect(thread(wrapper, 1).text()).not.toContain('Draft')
+  })
+
+  // The connection contract's "Mentions": a reply takes `mentions` as a root does, and a
+  // number in the text tells nobody. The choice is the draft's, so it outlives the field.
+  it('tells the task chosen from its @ list, not one typed, even after the field was set aside', async () => {
+    const item = card([root(1), root(2)])
+    const wrapper = open(item)
+    await inThread(wrapper, 1, 'Reply').trigger('click')
+    const field = wrapper.getComponent(ReplyComposer).getComponent(MarkdownEditor)
+    field.vm.$emit('chose', task('MAIN-7'))
+    await replyField(wrapper).setValue('Ask MAIN-7, not MAIN-8')
+    await inThread(wrapper, 2, 'Reply').trigger('click')
+    await inThread(wrapper, 1, 'Reply').trigger('click')
+    vi.mocked(replyInThread).mockResolvedValueOnce(written(3, 1))
+    key(replyField(wrapper), 'Enter', { ctrlKey: true })
+    await flushPromises()
+    expect(replyInThread).toHaveBeenCalledWith({
+      id: item.work_item_id,
+      body: 'Ask MAIN-7, not MAIN-8',
+      reply_to: 1,
+      mentions: ['MAIN-7'],
+    })
   })
 
   it('counts a reply set aside as a draft the card asks about before leaving', async () => {

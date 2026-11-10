@@ -57,6 +57,7 @@ const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
 const {
   cancel,
+  chose,
   errorAt,
   isOpen,
   markAgain,
@@ -212,6 +213,7 @@ function retryMark() {
       :pending="pending"
       :suggest="suggest"
       @cancel="cancel"
+      @chose="chose(threadKey, $event)"
       @refresh="emit('refresh')"
       @submit="send"
     />

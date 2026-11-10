@@ -228,6 +228,19 @@ def scan(text: str, state: ScanState, *, final: bool) -> list[Mention]:
     return found
 
 
+def from_line_of(text: str, reference: str) -> str:
+    """*text* from the start of the line where *reference* first stands as prose, else whole.
+
+    What a long text said about one item is where that item is named, more often
+    than at the text's start, so a quote of it starts there.
+    """
+
+    for found in scan(text, ScanState(), final=True):
+        if found.reference == reference:
+            return text[text.rfind("\n", 0, found.start) + 1 :]
+    return text
+
+
 def with_links(text: str, mentions: list[Mention], url_of: dict[str, str]) -> str:
     """*text* with each mention *url_of* holds as a link, and every other character as it was."""
 

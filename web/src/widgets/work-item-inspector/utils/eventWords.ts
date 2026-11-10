@@ -84,7 +84,8 @@ export function eventWords(
     case 'request_changed': {
       return questionWords(event.detail, questions, t)
     }
-    // The detail is the id of a comment on another item: a bare number a reader cannot follow.
+    // The detail is the id of a comment on another item, or `description:` and that item's
+    // id: a bare number or id a reader cannot follow.
     case 'mentioned': {
       return ''
     }

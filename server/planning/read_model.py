@@ -18,7 +18,7 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
-from . import calls, leases, model, subscriptions
+from . import calls, leases, mentions, model, subscriptions
 
 
 @contextlib.contextmanager
@@ -396,26 +396,38 @@ def comment(conn: sqlite3.Connection, comment_id: int) -> dict:
     return with_mentions(conn, [comment_record(row)])[0]
 
 
-#: How many of the comments that named an item its full record carries, the newest.
+#: How many of the texts that named an item its full record carries, the newest.
 HTTP_MENTIONS = 50
-#: How much of the naming comment a mention record quotes, the ellipsis counted.
+#: How much of the naming text a mention record quotes, the ellipsis counted.
 MENTION_QUOTE = 300
+#: A `mentioned` event's detail when the words are an item's description, its id after it;
+#: any other detail is the id of a comment.
+IN_DESCRIPTION = "description:"
+
+#: Each record with where its words stand now: the comment and its item, or the item
+#: whose description it is. A detail is one or the other, so one join finds nothing.
+_MENTION_ROWS = (
+    "SELECT e.detail, e.created_at, e.author, e.call_id, c.identity_source,"
+    " m.body, m.report, s.key, w.number, w.summary_comment_id = m.id,"
+    " d.description, ds.key, d.number"
+    " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
+    " LEFT JOIN work_item_comments m ON e.detail NOT LIKE 'description:%'"
+    " AND m.id = CAST(e.detail AS INTEGER)"
+    " LEFT JOIN work_items w ON w.work_item_id = m.work_item_id"
+    " LEFT JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
+    " LEFT JOIN work_items d ON e.detail LIKE 'description:%'"
+    " AND d.work_item_id = substr(e.detail, length('description:') + 1)"
+    " LEFT JOIN planning_spaces ds ON ds.planning_space_id = d.planning_space_id"
+    " WHERE e.work_item_id = ? AND e.action = 'mentioned' ORDER BY e.id DESC"
+)
 
 
 def mentions_of(
     conn: sqlite3.Connection, work_item_id: str, limit: int | None
 ) -> tuple[list[dict], int]:
-    """The newest `limit` records of comments that named this item, oldest first, and how many."""
+    """The newest `limit` records of texts that named this item, oldest first, and how many."""
 
-    query = (
-        "SELECT e.detail, e.created_at, e.author, e.call_id, c.identity_source,"
-        " m.body, m.report, s.key, w.number"
-        " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
-        " LEFT JOIN work_item_comments m ON m.id = CAST(e.detail AS INTEGER)"
-        " LEFT JOIN work_items w ON w.work_item_id = m.work_item_id"
-        " LEFT JOIN planning_spaces s ON s.planning_space_id = w.planning_space_id"
-        " WHERE e.work_item_id = ? AND e.action = 'mentioned' ORDER BY e.id DESC"
-    )
+    query = _MENTION_ROWS
     parameters: tuple[object, ...] = (work_item_id,)
     if limit is not None:
         query += " LIMIT ?"
@@ -427,19 +439,38 @@ def mentions_of(
             (work_item_id,),
         ).fetchone()[0]
     )
-    return [_mention_record(row) for row in reversed(rows)], total
+    named = reference(conn, item_by_id(conn, work_item_id)) if rows else ""
+    return [_mention_record(row, named) for row in reversed(rows)], total
 
 
-def _mention_record(row: sqlite3.Row) -> dict:
-    gone = row[7] is None
-    return {
-        "comment_id": int(row[0]),
-        "from": None if gone else model.human_id(str(row[7]), int(row[8])),
+def _mention_record(row: sqlite3.Row, named: str) -> dict:
+    """Where the words are and what they say: `in` a comment, a report, a summary or a description.
+
+    A report is `summary` while it is its item's summary. A description is quoted
+    from the line that names this item, since it is long and changes; a comment
+    from its start.
+    """
+
+    record = {
+        "in": "description",
+        "comment_id": None,
+        "from": None,
         "at": row[1],
         "by_person": None if row[3] is None else row[4] == calls.BROWSER,
         "author": row[2],
-        "quote": None if gone else _mention_quote(str(row[5]), str(row[6])),
+        "quote": None,
     }
+    if str(row[0]).startswith(IN_DESCRIPTION):
+        if row[11] is not None:
+            record["from"] = model.human_id(str(row[11]), int(row[12]))
+            record["quote"] = _cut_quote(mentions.from_line_of(str(row[10]), named))
+        return record
+    record["comment_id"] = int(row[0])
+    record["in"] = "summary" if row[9] else "report" if row[6] else "comment"
+    if row[7] is not None:
+        record["from"] = model.human_id(str(row[7]), int(row[8]))
+        record["quote"] = _mention_quote(str(row[5]), str(row[6]))
+    return record
 
 
 def _mention_quote(body: str, report: str) -> str:
@@ -449,6 +480,10 @@ def _mention_quote(body: str, report: str) -> str:
     if report:
         stored = model.summary(report, required=False)
         said = str(stored["done"]) if stored else ""
+    return _cut_quote(said)
+
+
+def _cut_quote(said: str) -> str:
     return said if len(said) <= MENTION_QUOTE else said[: MENTION_QUOTE - 1] + "…"
 
 

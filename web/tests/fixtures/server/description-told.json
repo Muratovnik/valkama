@@ -1,0 +1,82 @@
+{
+  "work_item_id": "00000000-0000-4000-8000-000000000001",
+  "planning_space_id": "00000000-0000-4000-8000-000000000002",
+  "reference": "MAIN-2",
+  "number": 2,
+  "title": "Told card",
+  "kind": "task",
+  "priority": "medium",
+  "state": {
+    "state_id": "00000000-0000-4000-8000-000000000003",
+    "key": "backlog",
+    "name": "Backlog",
+    "category": "backlog",
+    "is_terminal": false
+  },
+  "claim_ref": "",
+  "claim_state": null,
+  "parent_id": null,
+  "labels": [],
+  "source": "",
+  "checklist": [],
+  "revision": 1,
+  "created_at": "2026-01-02T03:04:05Z",
+  "updated_at": "2026-01-02T03:04:05Z",
+  "closed_at": null,
+  "last_claim_ref": null,
+  "container": false,
+  "ready": true,
+  "claim": null,
+  "description": "Waits on MAIN-1 first.",
+  "summary": null,
+  "summary_comment_id": null,
+  "links": [],
+  "refs": [],
+  "comments": [],
+  "events": [
+    {
+      "action": "created",
+      "detail": "backlog",
+      "author": "agent",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "unconfirmed",
+        "source": "mcp",
+        "session_id": null,
+        "agent_id": null
+      }
+    },
+    {
+      "action": "mentioned",
+      "detail": "2",
+      "author": "user",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "confirmed",
+        "source": "browser",
+        "session_id": null,
+        "agent_id": null
+      }
+    }
+  ],
+  "mentions": [
+    {
+      "in": "comment",
+      "comment_id": 2,
+      "from": "MAIN-1",
+      "at": "2026-01-02T03:04:05Z",
+      "by_person": true,
+      "author": "user",
+      "quote": "Only the claims, the steps are there; MAIN-2 has them."
+    }
+  ],
+  "mentions_total": 1,
+  "subscribers": [],
+  "mentions_told": [
+    {
+      "reference": "MAIN-1",
+      "holders": [],
+      "told": "nobody yet: no holder, it stays on the item"
+    }
+  ]
+}

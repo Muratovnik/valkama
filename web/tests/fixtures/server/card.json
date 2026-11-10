@@ -8,7 +8,7 @@
   },
   "work_item_ref": {
     "space_ref": {
-      "data_scope_id": "00000000-0000-4000-8000-000000000001",
+      "data_scope_id": "00000000-0000-4000-8000-000000000004",
       "space_key": "MAIN"
     },
     "reference": "MAIN-1"
@@ -18,15 +18,15 @@
     "status": "ready",
     "payload": {
       "work_item": {
-        "work_item_id": "00000000-0000-4000-8000-000000000002",
-        "planning_space_id": "00000000-0000-4000-8000-000000000003",
+        "work_item_id": "00000000-0000-4000-8000-000000000005",
+        "planning_space_id": "00000000-0000-4000-8000-000000000002",
         "reference": "MAIN-1",
         "number": 1,
         "title": "Contract card",
         "kind": "task",
         "priority": "medium",
         "state": {
-          "state_id": "00000000-0000-4000-8000-000000000004",
+          "state_id": "00000000-0000-4000-8000-000000000003",
           "key": "backlog",
           "name": "Backlog",
           "category": "backlog",
@@ -76,13 +76,15 @@
             "checklist_item_id": null,
             "checklist_item_text": null,
             "author": "user",
-            "body": "Only the claims, the steps are there.",
+            "body": "Only the claims, the steps are there; MAIN-2 has them.",
             "at": "2026-01-02T03:04:05Z",
             "reply_to": 1,
             "reply_to_request": null,
             "by_person": true,
             "resolution": null,
-            "mentions": []
+            "mentions": [
+              "MAIN-2"
+            ]
           },
           {
             "id": 3,
@@ -129,7 +131,7 @@
             "body": "Does the second option include the docs?",
             "at": "2026-01-02T03:04:05Z",
             "reply_to": null,
-            "reply_to_request": "00000000-0000-4000-8000-000000000005",
+            "reply_to_request": "00000000-0000-4000-8000-000000000006",
             "by_person": false,
             "resolution": null,
             "mentions": []
@@ -144,7 +146,7 @@
             "body": "Yes, the docs too.",
             "at": "2026-01-02T03:04:05Z",
             "reply_to": null,
-            "reply_to_request": "00000000-0000-4000-8000-000000000005",
+            "reply_to_request": "00000000-0000-4000-8000-000000000006",
             "by_person": true,
             "resolution": null,
             "mentions": []
@@ -179,6 +181,18 @@
             }
           },
           {
+            "action": "mentioned",
+            "detail": "description:00000000-0000-4000-8000-000000000001",
+            "author": "user",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "browser",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
             "action": "comment_resolved",
             "detail": "4: Moved to MAIN-14",
             "author": "user",
@@ -186,42 +200,6 @@
             "identity": {
               "state": "confirmed",
               "source": "browser",
-              "session_id": null,
-              "agent_id": null
-            }
-          },
-          {
-            "action": "request_created",
-            "detail": "00000000-0000-4000-8000-000000000005",
-            "author": "asking-agent",
-            "at": "2026-01-02T03:04:05Z",
-            "identity": {
-              "state": "unconfirmed",
-              "source": "mcp",
-              "session_id": null,
-              "agent_id": null
-            }
-          },
-          {
-            "action": "request_answered",
-            "detail": "00000000-0000-4000-8000-000000000005",
-            "author": "user",
-            "at": "2026-01-02T03:04:05Z",
-            "identity": {
-              "state": "confirmed",
-              "source": "browser",
-              "session_id": null,
-              "agent_id": null
-            }
-          },
-          {
-            "action": "request_changed",
-            "detail": "00000000-0000-4000-8000-000000000005",
-            "author": "codex",
-            "at": "2026-01-02T03:04:05Z",
-            "identity": {
-              "state": "unconfirmed",
-              "source": "mcp",
               "session_id": null,
               "agent_id": null
             }
@@ -239,8 +217,44 @@
             }
           },
           {
+            "action": "request_answered",
+            "detail": "00000000-0000-4000-8000-000000000006",
+            "author": "user",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "browser",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "request_changed",
+            "detail": "00000000-0000-4000-8000-000000000006",
+            "author": "codex",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
             "action": "request_created",
             "detail": "00000000-0000-4000-8000-000000000007",
+            "author": "asking-agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "request_created",
+            "detail": "00000000-0000-4000-8000-000000000008",
             "author": "agent",
             "at": "2026-01-02T03:04:05Z",
             "identity": {
@@ -265,21 +279,31 @@
         ],
         "mentions": [
           {
-            "comment_id": 9,
+            "in": "description",
+            "comment_id": null,
             "from": "MAIN-2",
+            "at": "2026-01-02T03:04:05Z",
+            "by_person": true,
+            "author": "user",
+            "quote": "Waits on MAIN-1 first."
+          },
+          {
+            "in": "comment",
+            "comment_id": 9,
+            "from": "MAIN-3",
             "at": "2026-01-02T03:04:05Z",
             "by_person": true,
             "author": "user",
             "quote": "Decided to keep the old route; the contract card can drop it."
           }
         ],
-        "mentions_total": 1,
+        "mentions_total": 2,
         "subscribers": [
           {
-            "session": "00000000-0000-4000-8000-000000000008",
+            "session": "00000000-0000-4000-8000-000000000009",
             "client": "codex",
             "agent": "c6f4e0a3b2d1c519",
-            "label": "codex agent c6f4e0a3b2d1c519 (session 00000000-0000-4000-8000-000000000008)",
+            "label": "codex agent c6f4e0a3b2d1c519 (session 00000000-0000-4000-8000-000000000009)",
             "since": "2026-01-02T03:04:05Z"
           }
         ],

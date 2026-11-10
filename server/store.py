@@ -258,7 +258,10 @@ MIGRATIONS = {
 # raised so the upgrade takes a recovery point of its own, and because a build at
 # 13 would delete an item and leave its pictures' files behind, and a screenshot
 # that outlives the item it was pasted into is what deleting the item promised to
-# take away.
+# take away. 14 also lets a summary and a description mention other items: a
+# `mentioned` event's detail is then `description:` and the id of the item whose
+# description named it, where every earlier one was a comment's id, which a build
+# at 13 reads as a number and refuses the whole card over.
 STORE_SCHEMA_VERSION = 14
 
 

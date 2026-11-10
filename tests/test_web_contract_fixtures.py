@@ -395,17 +395,24 @@ class _Scenario:
         """Build the discussion and the questions, then read them as each reader does."""
 
         ref = self.reference
+        told = self.tool("create_work_item", space=SPACE, title="Told card")["reference"]
         agent_root = self.tool(
             "comment_work_item", id=ref, body="The export leaves out claims.", awaits_reply=True
         )
+        # A person's reply that tells another card, and that card's description telling this one.
         reply = self.http(
             "/api/planning/work-item/comment",
             {
                 "id": ref,
-                "body": "Only the claims, the steps are there.",
+                "body": f"Only the claims, the steps are there; {told} has them.",
                 "author": "user",
                 "reply_to": agent_root["comment_id"],
+                "mentions": [told],
             },
+        )
+        described = self.http(
+            "/api/planning/work-item/update",
+            {"id": told, "description": f"Waits on {ref} first.", "mentions": [ref]},
         )
         self.tool(
             "comment_work_item",
@@ -496,6 +503,7 @@ class _Scenario:
         return {
             "comment-reply": reply,
             "comment-resolved": mark,
+            "description-told": described,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
             "card-executors": executors,
             "card-brief": self.http(
