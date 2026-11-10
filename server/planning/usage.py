@@ -35,7 +35,9 @@ COST_BASIS = (
     "An estimate at public API list prices for each request. A subscription pays differently,"
     " so this is not a bill."
 )
-_TOKEN_KINDS = (
+#: Each kind of token a read reports, with the column that holds it. Analytics reads
+#: the same kinds, so a number means the same thing on a card and on its page.
+TOKEN_KINDS = (
     ("input", "input_tokens"),
     ("cached_read", "cached_read_tokens"),
     ("cache_write_5m", "cache_write_5m_tokens"),
@@ -44,7 +46,7 @@ _TOKEN_KINDS = (
     ("reasoning", "reasoning_tokens"),
 )
 #: The kinds a request is priced by: reasoning is part of the output and not added again.
-_PRICED_COLUMNS = tuple(column for kind, column in _TOKEN_KINDS if kind != "reasoning")
+PRICED_COLUMNS = tuple(column for kind, column in TOKEN_KINDS if kind != "reasoning")
 _OBSERVED = "observed"
 _ESTIMATED = "estimated"
 _MIXED = "mixed"
@@ -61,17 +63,17 @@ class _Tally:
 
     def add(self, row: sqlite3.Row) -> None:
         self.seconds += float(row["seconds"])
-        for kind, column in _TOKEN_KINDS:
+        for kind, column in TOKEN_KINDS:
             if row[column] is not None:
                 self.tokens[kind] = self.tokens.get(kind, 0) + int(row[column])
         if row["estimated_api_cost_usd"] is not None:
             self.cost = (self.cost or 0.0) + float(row["estimated_api_cost_usd"])
         else:
-            self.unpriced += sum(int(row[column] or 0) for column in _PRICED_COLUMNS)
+            self.unpriced += sum(int(row[column] or 0) for column in PRICED_COLUMNS)
 
     def spent(self) -> dict:
         return {
-            "tokens": {kind: self.tokens.get(kind) for kind, _ in _TOKEN_KINDS},
+            "tokens": {kind: self.tokens.get(kind) for kind, _ in TOKEN_KINDS},
             "estimated_api_cost_usd": round(self.cost, 6) if self.cost is not None else None,
             "unpriced_tokens": self.unpriced,
         }
@@ -146,7 +148,7 @@ def _summary(rows: Sequence[sqlite3.Row]) -> dict:
                 for row in rows
                 if row["estimated_api_cost_usd"] is None
                 and row["model"] is not None
-                and any(row[column] for _, column in _TOKEN_KINDS)
+                and any(row[column] for _, column in TOKEN_KINDS)
             }
         ),
         "agents": _agents(rows),
@@ -162,12 +164,12 @@ def _summary(rows: Sequence[sqlite3.Row]) -> dict:
             }
             for name, tally in _breakdown(rows, "signal")
         ],
-        "quality": _quality(observed, estimated),
+        "quality": quality(observed, estimated),
         "estimated_seconds": round(estimated, 3),
     }
 
 
-def _quality(observed: float, estimated: float) -> str | None:
+def quality(observed: float, estimated: float) -> str | None:
     """`estimated` time has no liveness record behind it: gaps were only cut at a limit."""
 
     if estimated <= 0:
@@ -175,7 +177,7 @@ def _quality(observed: float, estimated: float) -> str | None:
     return _ESTIMATED if observed <= 0 else _MIXED
 
 
-def _names(conn: sqlite3.Connection, items: Iterable[str]) -> dict[str, dict]:
+def item_names(conn: sqlite3.Connection, items: Iterable[str]) -> dict[str, dict]:
     """The number and title of items that still exist."""
 
     return {
@@ -218,7 +220,7 @@ def for_item(conn: sqlite3.Connection, reference: object, scope: str | None = No
         " ORDER BY started_at, id",
         (json.dumps(order),),
     ).fetchall()
-    names = _names(conn, order)
+    names = item_names(conn, order)
     by_item: dict[str, list[sqlite3.Row]] = {item: [] for item in order}
     for row in rows:
         by_item[str(row["work_item_id"])].append(row)
@@ -244,7 +246,7 @@ def for_session(conn: sqlite3.Connection, session_id: str) -> dict:
     grouped: dict[str | None, list[sqlite3.Row]] = {}
     for row in rows:
         grouped.setdefault(row["work_item_id"], []).append(row)
-    names = _names(conn, [item for item in grouped if item is not None])
+    names = item_names(conn, [item for item in grouped if item is not None])
     # The time no item took stands last, however much of it there is.
     lines = sorted(
         (_item_line(item, names, found) for item, found in grouped.items()),

@@ -316,5 +316,27 @@ class ProjectRegistryTests(unittest.TestCase):
                     self.assertNotIn(marker, text)
 
 
+class ProjectHoldingTests(unittest.TestCase):
+    def test_the_deepest_root_holding_a_folder_names_its_project(self) -> None:
+        base = Path(tempfile.gettempdir()) / "made-up"
+        projects = [
+            project_entry("outer", base / "work"),
+            project_entry("inner", base / "work" / "inner"),
+            project_entry("sibling", base / "work-two"),
+        ]
+        for folder, expected in (
+            (base / "work" / "inner" / "src", "inner"),
+            (base / "work" / "inner", "inner"),
+            (base / "work" / "other", "outer"),
+            # A root is a folder, not a prefix of a name.
+            (base / "work-two-and-more", None),
+            (base / "work-two" / "a", "sibling"),
+            (base / "elsewhere", None),
+            ("", None),
+        ):
+            with self.subTest(folder=str(folder)):
+                self.assertEqual(expected, project_registry.project_holding(str(folder), projects))
+
+
 if __name__ == "__main__":
     unittest.main()

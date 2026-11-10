@@ -188,7 +188,7 @@ layers = [
   "cli",
   "on_demand",
   "http_surface | mcp_surface | mcp_front",
-  "alerts : app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : released : runner : session_open : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
+  "alerts : analytics : app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : released : runner : session_open : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
 ]
 containers = ["server"]
 
@@ -232,6 +232,20 @@ forbidden_modules = [
   "server.planning",
   "server.platform",
   "server.projects",
+]
+
+# Analytics reads what the domains below it hold and collects nothing, so the
+# reading runs one way: what it reads never reads it back.
+[[tool.importlinter.contracts]]
+name = "Analytics reads the usage rows, Planning and the projects; none of them reads it"
+type = "forbidden"
+source_modules = [
+  "server.planning",
+  "server.projects",
+  "server.telemetry",
+]
+forbidden_modules = [
+  "server.analytics",
 ]
 
 [tool.mypy]

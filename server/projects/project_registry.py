@@ -182,6 +182,25 @@ def _validate_projects(values: list[object]) -> list[dict[str, Any]]:
     return sorted(projects, key=lambda project: (project["project_id"], project["canonical_root"]))
 
 
+def project_holding(folder: str, projects: Iterable[Mapping[str, Any]]) -> str | None:
+    """The id of the project whose root holds this folder, the deepest root first.
+
+    Compared as the platform compares paths, and as written: a link is not followed,
+    so a folder reached through one is held by the root it names.
+    """
+
+    if not folder:
+        return None
+    place = os.path.normcase(os.path.normpath(folder))
+    found: tuple[int, str] | None = None
+    for project in projects:
+        root = os.path.normcase(os.path.normpath(str(project["canonical_root"])))
+        if place == root or place.startswith(root.rstrip(os.sep) + os.sep):
+            if found is None or len(root) > found[0]:
+                found = (len(root), str(project["project_id"]))
+    return None if found is None else found[1]
+
+
 def _space_result(
     resource_ref: dict[str, str] | None,
     status: str,
