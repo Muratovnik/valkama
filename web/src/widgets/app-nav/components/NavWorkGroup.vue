@@ -16,9 +16,11 @@
  *
  * The group, not a row, holds the panel a press on a session goes on in, for both lists
  * (`useRowOpen`): a refresh that drops the row, fades it or moves it into a fold leaves the
- * panel and the focus in it where they are.
+ * panel and the focus in it where they are. Closed, the panel gives focus back to the control
+ * that opened it while that control is still on the page; once a refresh has taken it away,
+ * focus comes back to the list's head instead of falling to the page (`landFocus`).
  */
-import { computed, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import NavWorkTree, { NAME_INDENT_TOUCH } from '@/widgets/app-nav/components/NavWorkTree.vue'
@@ -51,6 +53,33 @@ const store = useLiveWorkStore()
 const prefix = `nav-work-${useId()}`
 const panelOpen = ref(false)
 const { context: openContext, finished: openFinished, panel: openPanel } = provideRowOpen()
+
+const railButton = useTemplateRef<HTMLElement>('rail-button')
+const sheetTree = useTemplateRef<{ $el: HTMLElement }>('sheet-tree')
+
+/**
+ * Where focus goes once the open-session panel has closed and could not give it back: the
+ * overlay returns it only to a control still on the page, and a refresh that dropped the row,
+ * faded it or moved it into a fold took that control away, so focus fell to the page's body,
+ * out of the list and its keys. It comes to the list's head: in the phone's panel the panel's
+ * first control, else the fold on «Work», or the rail's button where the rail has no room for
+ * the list.
+ */
+async function landFocus() {
+  await nextTick()
+  const focused = document.activeElement
+  if (focused !== null && focused !== document.body) return
+  const head = panelOpen.value
+    ? sheetTree.value?.$el.querySelector<HTMLElement>('a[href], button')
+    : [document.querySelector<HTMLElement>(`#${CSS.escape(props.foldId)}`), railButton.value].find(
+        (control) => control?.checkVisibility(),
+      )
+  head?.focus()
+}
+
+watch(openPanel, (now, before) => {
+  if (now === null && before !== null) void landFocus()
+})
 
 function go(route: PlatformRoute) {
   panelOpen.value = false
@@ -92,6 +121,7 @@ const countWords = computed(() => t('liveWork.open', { count: store.count }))
       />
     </div>
     <button
+      ref="rail-button"
       v-tooltip:right.name="countWords"
       class="nav-work-rail"
       type="button"
@@ -119,6 +149,7 @@ const countWords = computed(() => t('liveWork.open', { count: store.count }))
       @close="panelOpen = false"
     >
       <NavWorkTree
+        ref="sheet-tree"
         size="touch"
         :prefix="`${prefix}-panel`"
         :spaces="store.spaces"

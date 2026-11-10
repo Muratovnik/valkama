@@ -5,9 +5,11 @@
  * and a lane heading's card and chain.
  *
  * Where a pointer can hover, each is out of sight at rest and keeps its place there: the row and
- * its text stand where they stood once it comes up, measured, not looked at. It comes up under
- * the pointer and with the keyboard on it, reached by Tab from either side. Where nothing can
- * hover it stands at rest. A pinned row's pin is the pin's mark, so it stands everywhere.
+ * its text stand where they stood once it comes up, measured, not looked at. A rail row's «Open
+ * session» is the one that gives its room up at rest: the row stands where it stood and the text
+ * starts where it started, only narrower once it comes up. It comes up under the pointer and
+ * with the keyboard on it, reached by Tab from either side. Where nothing can hover it stands at
+ * rest. A pinned row's pin is the pin's mark, so it stands everywhere.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -50,6 +52,8 @@ interface Host {
   first: Locator
   row: Locator
   text: Locator
+  /** Whether the action gives its room up at rest, so the text narrows when it comes up. */
+  room?: boolean
 }
 
 async function stepHost(page: Page, width: number): Promise<Host> {
@@ -125,6 +129,7 @@ async function sessionHost(page: Page, width: number): Promise<Host> {
     action: row.locator('.nav-row-open'),
     first: row.locator('.nav-row-open'),
     before: row.locator('.nav-row-link'),
+    room: width > 760,
   }
 }
 
@@ -166,6 +171,13 @@ async function place(host: Host) {
   return { row: await box(host.row), text: await box(host.text), action: await box(host.action) }
 }
 
+/** What stays put when the action comes up: all of it, or the row and where its text starts. */
+function fixed(host: Host, { row, text, action }: Awaited<ReturnType<typeof place>>) {
+  return host.room
+    ? { row, text: { x: text.x, y: text.y, height: text.height } }
+    : { row, text, action }
+}
+
 const away = (page: Page) => page.mouse.move(1, 1)
 
 /**
@@ -201,7 +213,10 @@ for (const locale of ['en-US', 'ru-RU']) {
           await expect.poll(() => sight(host.action)).toBe(0)
           await still(page)
           const rest = await place(host)
-          expect(rest.action.width, 'the action keeps its room at rest').toBeGreaterThan(0)
+          expect(
+            rest.action.width > 0,
+            'the action keeps its room at rest unless it gives it up',
+          ).toBe(!host.room)
 
           await host.text.hover()
           await expect.poll(() => sight(host.action)).toBe(1)
@@ -210,7 +225,10 @@ for (const locale of ['en-US', 'ru-RU']) {
             type: 'measured',
             description: JSON.stringify({ rest, hovered }),
           })
-          expect(hovered, 'nothing moves when it comes up').toEqual(rest)
+          expect(fixed(host, hovered), 'nothing moves when it comes up').toEqual(fixed(host, rest))
+          expect(hovered.text.width < rest.text.width, 'only text beside a room narrows').toBe(
+            host.room === true,
+          )
 
           await away(page)
           await expect.poll(() => sight(host.action)).toBe(0)
@@ -220,7 +238,7 @@ for (const locale of ['en-US', 'ru-RU']) {
           await page.keyboard.press('Tab')
           await expect(host.first).toBeFocused()
           await expect.poll(() => sight(host.action)).toBe(1)
-          expect(await place(host)).toEqual(rest)
+          expect(await place(host)).toEqual(hovered)
 
           // From the stop after it, Shift+Tab comes back to it: out of sight is still a stop.
           await page.keyboard.press('Tab')

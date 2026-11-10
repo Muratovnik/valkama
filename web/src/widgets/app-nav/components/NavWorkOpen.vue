@@ -5,10 +5,11 @@
  * opener (`useRowOpen`). A plan that takes more than one press goes on in the list's panel, so
  * the panel stays when a refresh takes the row away or moves it.
  *
- * It stands beside the pin and the way the pin does (`NavWorkPin`): in a column of its own
- * that the row keeps whether it is in sight or not, so the title neither moves nor narrows
- * when it comes up; out of sight at rest and up under the pointer and the keyboard in its row
- * (`reveal.css`), and standing where nothing can hover. Its glyph is the session's, the one a
+ * It stands before the pin (`NavWorkPin`), out of sight at rest and up under the pointer and
+ * the keyboard in its row and while its press is carried out (`reveal.css`). On the rail it has
+ * no column at rest: it takes one, and the row's words give it up, only while it is up, so most
+ * rows, which never show it, keep the room for their title (`reveal-room`). Where nothing can
+ * hover, and on a phone, it stands in its column. Its glyph is the session's, the one a
  * session's own row carries in its number's column. Its name says whose session it opens.
  */
 import { computed } from 'vue'
@@ -30,7 +31,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const sized = computed(() => ({ 'nav-row-open-touch': props.size === 'touch' }))
+const sized = computed(() => (props.size === 'touch' ? 'nav-row-open-touch' : 'reveal-room'))
 const item = computed(() => `${props.reference} ${props.title}`)
 const name = computed(() =>
   t('liveWork.openSession', { reference: props.reference, title: props.title }),

@@ -24,10 +24,11 @@
  * says its state where the agents' count would stand. A colour is never all that says it. A
  * session that leaves the frame leaves at once; an item stays a while, muted (`liveWorkStore`).
  *
- * An item's row ends with «Open session» where a session stands behind it (`NavWorkOpen`), and
- * with the pin (`NavWorkPin`), each in a column of its own that the rail keeps on every row, so
- * the title's ellipsis and the count stand clear of them and a session's row, which has neither,
- * keeps its count where an item's stands. On a phone only a pinned row has a pin.
+ * An item's row ends with the pin (`NavWorkPin`) in a column of its own that the rail keeps on
+ * every row, so the title's ellipsis and the count stand clear of it and a session's row, which
+ * has none, keeps its count where an item's stands. Before the pin, where a session stands behind
+ * the item, comes «Open session» (`NavWorkOpen`): on the rail it takes its column only while it
+ * is up, and the row's words shorten for it then. On a phone only a pinned row has a pin.
  */
 import { computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -123,10 +124,8 @@ const opens = computed(() => {
   const executor = row.value?.executor
   return executor?.session && !row.value?.fading ? { ...executor, session: executor.session } : null
 })
-/** The rail keeps the columns of «Open session» and the pin on every row, filled or not. */
-const ends = computed(() =>
-  touch.value ? { open: false, pin: false } : { open: !opens.value, pin: !pinShown.value },
-)
+/** The rail keeps the pin's column on every row, filled or not. */
+const pinKept = computed(() => !touch.value && !pinShown.value)
 /** A closed item on a phone has no sign, so its lead has nothing to hold: it goes. */
 const leadless = computed(
   () => touch.value && row.value?.is_terminal === true && sign.value === null,
@@ -223,10 +222,6 @@ function press(event: MouseEvent) {
       :title="row.title"
       :size="size"
     />
-    <span
-      v-if="ends.open"
-      class="nav-row-end"
-    />
     <NavWorkPin
       v-if="row && pinShown"
       class="nav-row-pin"
@@ -235,7 +230,7 @@ function press(event: MouseEvent) {
       :size="size"
     />
     <span
-      v-if="ends.pin"
+      v-if="pinKept"
       class="nav-row-end"
     />
   </div>
@@ -311,7 +306,7 @@ function press(event: MouseEvent) {
   pointer-events: none;
 }
 
-/* What the rail keeps where a row has no «Open session» or no pin: their column, empty. */
+/* What the rail keeps where a row has no pin: its column, empty. */
 .nav-row-end {
   inline-size: var(--size-control-inline);
 }
