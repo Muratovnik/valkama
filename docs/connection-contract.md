@@ -879,9 +879,10 @@ account that created the thread), how the client ran (`ide`, `terminal`, `app` o
 requests ran with, and the adviser its turn had configured. An advisor call's tokens are
 a stretch of their own with no time, flagged as an advisor's, even when the advisor runs
 the executor's model. A change of any of these changes nothing about what the time counts
-as. A Claude subagent's run records the class its launch description
-declares in front of a colon. What a transcript does not say stays unknown. The reads
-below do not return these yet.
+as. A Claude subagent's run records the class its launch description declares in front of
+a colon, and keeps the first one recorded. What a transcript does not say, or says as
+something other than a short label, stays unknown. The reads below do not return these
+yet.
 
 `GET /api/planning/work-item/usage?id=<reference or work_item_id>&scope=item|chain|epic`
 reads one item, or with `chain` or `epic` the item with the members

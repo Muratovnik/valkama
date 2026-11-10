@@ -99,8 +99,28 @@ class EffortTests(Case):
             [(row["effort"], row["seconds"]) for row in self.segments()],
         )
 
+    def test_an_override_that_is_no_effort_leaves_the_sessions(self) -> None:
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.end_turn(10, effort="high", perTurnEffort="no effort at all")
+        self.read()
+        self.assertEqual(["high"], [row["effort"] for row in self.segments()])
+
 
 class AdvisorTests(Case):
+    def test_a_configured_adviser_that_is_no_model_id_is_left_out(self) -> None:
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.reply(10, tools=(("t1", "Bash"),), advisorModel="claude-fable-5-1")
+        run.result(20, "t1")
+        run.end_turn(30, advisorModel="an adviser <b>" + "x" * 200)
+        self.read()
+        self.assertEqual(
+            ["claude-fable-5-1", None], [row["advisor_model"] for row in self.segments()]
+        )
+
     def test_an_advisor_call_on_the_executors_model_is_a_flagged_row_of_its_own(self) -> None:
         run = self.session()
         self.ticks((0, HOUR))
@@ -204,6 +224,9 @@ class EnvironmentTests(Case):
             ("app", "D:\\work\\.claude\\projects\\x.jsonl", "app"),
             (None, "\\\\wsl.localhost\\Debian\\home\\x.jsonl", None),
             ("terminal", "\\\\server\\wsl.localhost\\Debian\\x.jsonl", "terminal"),
+            # A share whose name is no short plain token names no environment.
+            ("ide", "\\\\wsl.localhost\\Debian 12\\home\\x.jsonl", None),
+            ("ide", "//wsl$/" + "D" * 65 + "/work/x.jsonl", None),
         )
         for surface, path, expected in cases:
             with self.subTest(path=path):
@@ -234,6 +257,25 @@ class LaunchClassTests(Case):
                 for agent in ("", "aaa1", "bbb2", "ccc3")
             },
         )
+
+    def test_the_first_class_a_run_got_stays(self) -> None:
+        # The metadata file is gone by the next reading, and the label says another class.
+        main = self.session()
+        self.ticks((0, HOUR))
+        main.prompt(0)
+        main.end_turn(5)
+        worker = self.subagent("sess-1", "bbb2", label="rex: review the diff")
+        meta = worker.path.with_name("agent-bbb2.meta.json")
+        meta.write_text(json.dumps({"description": "ovi: build it"}), encoding="utf-8")
+        worker.prompt(10)
+        worker.end_turn(20)
+        self.read()
+        self.assertEqual("ovi", self.run_row("sess-1", "bbb2")["launch_class"])
+        meta.unlink()
+        worker.prompt(30)
+        worker.end_turn(40)
+        self.read()
+        self.assertEqual("ovi", self.run_row("sess-1", "bbb2")["launch_class"])
 
     def test_a_class_is_a_word_in_front_of_a_colon(self) -> None:
         cases = (

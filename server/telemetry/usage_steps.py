@@ -33,8 +33,8 @@ A Claude transcript, as measured:
   from there on, and before the first one it is unknown.
 - Every record names the client it was written by in `entrypoint`, and an `assistant`
   record the effort its request ran with: `perTurnEffort` when the turn overrode the
-  session's, else `effort`. It names the adviser the request had configured in
-  `advisorModel`, and only when there was one.
+  session's, else `effort` (an override that is no effort word counts as none). It names
+  the adviser the request had configured in `advisorModel`, and only when there was one.
 
 A Codex rollout: every record has `timestamp` and `payload`. `task_started` and
 `task_complete` bound a turn, `token_usage_record` holds one response's usage under its
@@ -100,7 +100,11 @@ _ACCOUNT_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 #: An effort as the clients name one: a short word.
 _EFFORT = re.compile(r"[A-Za-z0-9_-]{1,32}")
 #: A transcript a client in WSL wrote, reached through its distribution's share.
-_WSL_SHARE = re.compile(r"[\\/]{2}wsl(?:\.localhost|\$)[\\/]([A-Za-z0-9._-]{1,64})[\\/]", re.I)
+_WSL_SHARE = re.compile(r"[\\/]{2}wsl(?:\.localhost|\$)[\\/]([^\\/]*)", re.I)
+#: A distribution's name as kept: a short plain token.
+_DISTRIBUTION = re.compile(r"[A-Za-z0-9._-]{1,64}")
+#: A model id as kept: a short plain token.
+_MODEL_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 #: The class a launch description declares in front of a colon.
 _LAUNCH_CLASS = re.compile(r"([A-Za-z][A-Za-z0-9_-]{0,31}):")
 
@@ -174,13 +178,17 @@ def environment(surface: str | None, transcript: str) -> str | None:
 
     `surface` is one of the `place.OPENED_IN` kinds a transcript can tell (`ide`,
     `terminal`, `app`, `headless`) and `transcript` the path its client reported. Unknown
-    is None, whatever the path says.
+    is None, whatever the path says, and so is a distribution whose name is no short
+    plain token.
     """
 
     if not surface:
         return None
     share = _WSL_SHARE.match(transcript)
-    return f"{surface}@wsl:{share.group(1)}" if share else surface
+    if share is None:
+        return surface
+    distribution = _word(share.group(1), _DISTRIBUTION)
+    return f"{surface}@wsl:{distribution}" if distribution else None
 
 
 def launch_class(description: object) -> str | None:
@@ -359,10 +367,10 @@ def claude_step(row: Mapping[str, object], own_session: str) -> Step | None:
         surface = place.classify("claude", {"CLAUDE_CODE_ENTRYPOINT": entrypoint}).opened_in
         step.settings[ENVIRONMENT] = surface or None
     if kind == "assistant" and not step.synthetic:
-        turn = row.get("perTurnEffort")
-        step.settings[EFFORT] = _word(turn if turn is not None else row.get("effort"), _EFFORT)
-        adviser = row.get("advisorModel")
-        step.settings[ADVISOR_MODEL] = adviser if isinstance(adviser, str) and adviser else None
+        step.settings[EFFORT] = _word(row.get("perTurnEffort"), _EFFORT) or _word(
+            row.get("effort"), _EFFORT
+        )
+        step.settings[ADVISOR_MODEL] = _word(row.get("advisorModel"), _MODEL_ID)
     return step
 
 

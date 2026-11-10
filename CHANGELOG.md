@@ -86,12 +86,13 @@ checkouts are therefore distinguishable even at the same version.
   Codex it is the account that created the thread. An advisor call's tokens are a segment
   of their own, flagged as an advisor's, even when the advisor runs the executor's model.
   A segment now also ends where any of these changes, which changes nothing about what its
-  time counts as. A Claude subagent's usage run
-  records the class its launch description declares in front of a colon, as in
-  `review: check the diff`. Only ids and short labels are kept, never an e-mail, a name or a
-  path, and whatever a transcript does not say stays empty. Every run is read again in the
-  background to fill them in, and `valkama doctor` says what share of the segments, and of
-  their seconds, names its organization, warning when none does.
+  time counts as. A Claude subagent's usage run records the class its launch description
+  declares in front of a colon, as in `review: check the diff`, and keeps the first one
+  recorded. Only ids and short labels are kept, never an e-mail, a name or a path, and
+  whatever a transcript does not say, or says as something other than a short label,
+  stays empty. Every run is read again in the background to fill them in, and
+  `valkama doctor` says what share of the segments, and of their seconds, names its
+  organization, warning when none does.
 
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it

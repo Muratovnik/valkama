@@ -461,7 +461,7 @@ class Collector:
             self.conn.execute(
                 "UPDATE usage_runs SET read_offset = ?, events_after = ?, state = ?, status = ?,"
                 " packet_item = COALESCE(?, packet_item),"
-                " launch_class = COALESCE(?, launch_class), human_seconds = ?,"
+                " launch_class = COALESCE(launch_class, ?), human_seconds = ?,"
                 " subagent_seconds = ?, external_seconds = ?, gap_seconds = ?, first_at = ?,"
                 " last_at = ?, read_at = ? WHERE id = ? AND read_offset = ?",
                 (

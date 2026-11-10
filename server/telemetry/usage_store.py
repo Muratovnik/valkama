@@ -35,9 +35,9 @@ Schema 15 added, all empty or 0 in an upgraded store until its runs are read aga
 
 - to a segment, what its work ran under, read from the transcript alone and NULL where
   the transcript says nothing, never a guess. Only ids and short labels are kept: no
-  e-mail, name or path. A change of any of them ends a row at its moment and changes
-  nothing about what the time was: a record that only says what the work after it runs
-  under is no record of the work.
+  e-mail, name or path, and a value that is no short plain token is NULL. A change of
+  any of them ends a row at its moment and changes nothing about what the time was: a
+  record that only says what the work after it runs under is no record of the work.
 
   - `organization`: the id of the organization the requests were made for, the only
     account identifier kept. At Claude it is the latest `credential_org` attachment
@@ -47,20 +47,24 @@ Schema 15 added, all empty or 0 in an upgraded store until its runs are read aga
     rollout's first record), for the whole rollout.
   - `environment`: how the client ran, one of `ide` (an IDE extension), `terminal` (the
     CLI), `app` (a desktop application) and `headless` (the SDK, no window), from
-    Claude's `entrypoint` or the `originator` a Codex rollout starts with. A transcript a client in WSL wrote, whose reported path is
-    on the distribution's share (`\\\\wsl.localhost\\<distribution>\\...` or
-    `\\\\wsl$\\<distribution>\\...`), adds `@wsl:<distribution>`: `terminal@wsl:Ubuntu`.
-    NULL for a client outside the list, whatever the path.
+    Claude's `entrypoint` or the `originator` a Codex rollout starts with. A transcript
+    a client in WSL wrote, whose reported path is on the distribution's share
+    (`\\\\wsl.localhost\\<distribution>\\...` or `\\\\wsl$\\<distribution>\\...`), adds
+    `@wsl:<distribution>`: `terminal@wsl:Ubuntu`. NULL for a client outside the list,
+    whatever the path, and for a distribution whose name is not letters, digits, `.`,
+    `_` and `-`, up to 64 of them.
   - `effort`: the effort the requests ran with, as the client names it (`low` to
-    `max`): Claude's per-turn override where the turn has one, else the session's; at
-    Codex the one each turn's `turn_context` names.
+    `max`): Claude's per-turn override where the turn has one that is such a word, else
+    the session's; at Codex the one each turn's `turn_context` names.
   - `advisor`: 1 on a row holding an advisor call's tokens. Such a row is its own, with
     no seconds and the adviser's `model`, even when that is the executor's model.
   - `advisor_model`: the adviser the turn had configured. On the executor's rows it is
-    the one its requests named, NULL with none; on an advisor row, the adviser that
-    ran. Within a run, the rows with one `advisor_model` are the executor's work with
-    that adviser and the adviser's own calls, so what the advisor cost an executor is
-    the cost of its run's rows with `advisor` 1, beside the executor's own rows.
+    the one its requests named, NULL with none or with a name that is no model id
+    (letters, digits, `.`, `_`, `-` and `:`, up to 128 of them); on an advisor row, the
+    adviser that ran. Within a run, the rows with one `advisor_model` are the
+    executor's work with that adviser and the adviser's own calls, so what the advisor
+    cost an executor is the cost of its run's rows with `advisor` 1, beside the
+    executor's own rows.
 
 - to a run, `launch_class`: the class a Claude subagent's launch declared in front of its
   description (`<class>: ...`), read from the client's metadata file beside the
