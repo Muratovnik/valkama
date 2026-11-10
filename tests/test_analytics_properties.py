@@ -38,8 +38,9 @@ GROUPINGS = [
     for names in itertools.permutations(usage.DIMENSIONS, size)
     if size < 2 or names[0] < names[1]
 ]
-#: Each agent's run is launched one way, so a stretch's launch class follows its agent.
-LAUNCH = {"": None, "worker": "interactive"}
+#: Each agent's run is launched one way, so a stretch's launch class follows its agent:
+#: a session's own run has none, and one subagent's run does not say.
+LAUNCH = {"": None, "worker": "interactive", "helper": None}
 EXAMPLES = settings(
     max_examples=30,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
@@ -49,7 +50,7 @@ STRETCHES = st.lists(
     st.fixed_dictionaries(
         {
             "session": st.sampled_from(["s-1", "s-2", "s-3"]),
-            "agent": st.sampled_from(["", "worker"]),
+            "agent": st.sampled_from(["", "worker", "helper"]),
             # Milliseconds after START, so the stored moment is exactly this one.
             "start": st.integers(min_value=-DAY * 1000, max_value=4 * DAY * 1000),
             "length": st.sampled_from([0, 1, 7, 59_999, 3_600_000, 5_400_001, 30 * 3_600_000]),
@@ -112,6 +113,12 @@ def falls_in(stretch: Mapping, low: Fraction, high: Fraction) -> bool:
     start = Fraction(stretch["start"], 1000)
     end = start + Fraction(stretch["length"], 1000)
     return low <= start < high if start == end else start < high and end > low
+
+
+def group_of(value: Mapping) -> tuple[str | None, bool]:
+    """A group's value as the answer gives it, `id` and `unknown`."""
+
+    return value["id"], value["unknown"]
 
 
 class Figures:
@@ -207,22 +214,28 @@ class ReferenceTests(UsageStore):
                 launch_class=LAUNCH[stretch["agent"]],
             )
 
-    def value(self, stretch: Mapping, dimension: str) -> str | None:
-        """A stretch's value in a dimension, from what the test wrote and the store it set up."""
+    def value(self, stretch: Mapping, dimension: str) -> tuple[str | None, bool]:
+        """A stretch's group in a dimension, as its `id` and whether it is unknown, from what
+        the test wrote and the store it set up."""
 
         if dimension == "project":
-            if stretch["on_item"]:
-                return "alpha"
-            return {"s-1": "beta"}.get(stretch["session"])
-        return {
+            project = "alpha" if stretch["on_item"] else {"s-1": "beta"}.get(stretch["session"])
+            return project, project is None
+        if dimension == "work_item":
+            # Work on no item is a group of its own.
+            return (self.item_id if stretch["on_item"] else None), False
+        if dimension == "launch_class":
+            # A session's own run is launched by no one; a subagent's run may not say how.
+            launch = LAUNCH[stretch["agent"]]
+            return launch, launch is None and stretch["agent"] != ""
+        found = {
             "account": stretch["organization"],
-            "work_item": self.item_id if stretch["on_item"] else None,
             "executor": stretch["session"],
-            "launch_class": LAUNCH[stretch["agent"]],
             "model": stretch["model"],
             "effort": stretch["effort"],
             "environment": stretch["environment"],
         }[dimension]
+        return found, found is None
 
     def test_every_figure_is_the_reference_share_of_its_stretches(self) -> None:
         @EXAMPLES
@@ -259,7 +272,7 @@ class ReferenceTests(UsageStore):
                 self.assertEqual(
                     rows,
                     {
-                        tuple(row["group"][name]["id"] for name in grouping): Figures.of(row)
+                        tuple(group_of(row["group"][name]) for name in grouping): Figures.of(row)
                         for row in read["rows"]
                     },
                     where,
@@ -270,7 +283,7 @@ class ReferenceTests(UsageStore):
                         by_step,
                         [
                             {
-                                group["group"][grouping[0]]["id"]: Figures.of(group)
+                                group_of(group["group"][grouping[0]]): Figures.of(group)
                                 for group in point["groups"]
                             }
                             for point in read["series"]

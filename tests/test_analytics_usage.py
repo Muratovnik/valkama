@@ -217,7 +217,7 @@ class GroupTests(UsageStore):
         self.segment("s-1", 0, 60)
         self.segment("s-1", 0, 120, agent="worker")
         self.segment("s-unrecorded", 0, 30)
-        read = self.read(**{"from": day(0), "to": day(1), "group_by": "executor,launch_class"})
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "executor"})
         executors = [row["group"]["executor"] for row in read["rows"]]
         self.assertEqual(["s-1", "s-unrecorded"], [e["id"] for e in executors])
         self.assertEqual(180.0, read["rows"][0]["agent_seconds"])
@@ -236,7 +236,31 @@ class GroupTests(UsageStore):
             },
             executors[1],
         )
-        self.assertEqual({"id": None, "unknown": True}, read["rows"][0]["group"]["launch_class"])
+
+    def test_a_sessions_own_run_has_no_launch_class_and_a_subagents_may_be_unknown(
+        self,
+    ) -> None:
+        self.session("s-1")
+        self.segment("s-1", 0, 60)
+        self.segment("s-1", 0, 120, agent="worker", launch_class="interactive")
+        self.segment("s-1", 0, 240, agent="helper")
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "launch_class"})
+        self.assertEqual(
+            [
+                ({"id": None, "unknown": True}, 240.0),
+                ({"id": "interactive", "unknown": False}, 120.0),
+                # The session's own run: launched by no one, so nothing is unknown.
+                ({"id": None, "unknown": False}, 60.0),
+            ],
+            [(row["group"]["launch_class"], row["agent_seconds"]) for row in read["rows"]],
+        )
+
+        def seconds(**filters: str) -> float:
+            return self.read(**{"from": day(0), "to": day(1), **filters})["total"]["agent_seconds"]
+
+        self.assertEqual(60.0, seconds(none="launch_class"))
+        self.assertEqual(180.0, seconds(launch_class="interactive", none="launch_class"))
+        self.assertEqual(120.0, seconds(launch_class="interactive"))
 
     def test_the_series_is_broken_down_by_the_first_grouping(self) -> None:
         self.session("s-1")

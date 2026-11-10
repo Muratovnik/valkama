@@ -29,11 +29,12 @@ one offset; a caller that minds asks for it in two.
 | `project` | the project of the item's planning space; with no item, the project whose root holds the session's working directory | the space, the session and the projects registry |
 | `work_item` | the item a stretch is counted to, `null` for work on no item | the segment |
 | `executor` | the session a card's holder opens: a subagent's work is its session's | `planning.executors` |
-| `launch_class` | how the run was launched | the run |
+| `launch_class` | how a subagent's run was launched, `null` for a session's own run | the run |
 | `model`, `effort`, `environment` | as the segment holds them | the segment |
 
-A value the store does not hold is its own group, `unknown`; work on no item is its own
-group too, and is not unknown. Nothing is collected here.
+A value the store does not hold is its own group, `unknown`. Work on no item and a
+session's own run, which is launched by no one, are groups of their own too, and are not
+unknown: there is nothing to know. Nothing is collected here.
 """
 
 from __future__ import annotations
@@ -93,8 +94,8 @@ _PRICED = tuple(
 _STARTED, _ENDED, _SECONDS, _QUALITY, _COST, _MODEL = range(6)
 _FIRST_TOKEN = 6
 _ORGANIZATION = _FIRST_TOKEN + _TOKENS
-_ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_PROJECT = range(
-    _ORGANIZATION + 1, _ORGANIZATION + 7
+_ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_PROJECT, _AGENT = range(
+    _ORGANIZATION + 1, _ORGANIZATION + 8
 )
 #: The token columns stand in `TOKEN_KINDS` order.
 SEGMENTS = (
@@ -102,7 +103,7 @@ SEGMENTS = (
     " s.input_tokens, s.cached_read_tokens, s.cache_write_5m_tokens, s.cache_write_1h_tokens,"
     " s.output_tokens, s.reasoning_tokens,"
     " s.organization, s.work_item_id, s.session_id, r.launch_class, s.effort, s.environment,"
-    " p.project_id"
+    " p.project_id, s.agent_id"
     " FROM usage_segments s"
     " LEFT JOIN usage_runs r ON r.id = s.run_id"
     " LEFT JOIN work_items i ON i.work_item_id = s.work_item_id"
@@ -113,13 +114,27 @@ _COLUMN_OF = {
     ACCOUNT: _ORGANIZATION,
     WORK_ITEM: _ITEM,
     EXECUTOR: _SESSION,
-    LAUNCH_CLASS: _LAUNCH,
     MODEL: _MODEL,
     EFFORT: _EFFORT,
     ENVIRONMENT: _ENVIRONMENT,
 }
 
-Value = str | None
+
+class _Unknown:
+    """A value the store does not hold, in a dimension where `None` is a value of its own."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "UNKNOWN"
+
+
+UNKNOWN = _Unknown()
+#: A dimension's value: a string, `None` for none or, outside `_NONE_IS_A_VALUE`, for one
+#: the store does not hold, and `UNKNOWN` for one it does not hold inside it.
+Value = str | _Unknown | None
+#: Where `None` is a group of its own and not unknown: work on no item, a session's own run.
+_NONE_IS_A_VALUE = frozenset({WORK_ITEM, LAUNCH_CLASS})
 
 
 class UsageQueryError(ValueError):
@@ -427,8 +442,10 @@ def _readers(
 
     readers: dict[str, Callable[[Sequence], Value]] = {}
     for dimension in needed:
-        if dimension != PROJECT:
+        if dimension in _COLUMN_OF:
             readers[dimension] = operator.itemgetter(_COLUMN_OF[dimension])
+    if LAUNCH_CLASS in needed:
+        readers[LAUNCH_CLASS] = _launch_class
     if PROJECT in needed:
         held = _session_projects(
             conn, (row[_SESSION] for row in rows if row[_ITEM] is None), projects
@@ -441,6 +458,16 @@ def _readers(
 
         readers[PROJECT] = project
     return readers
+
+
+def _launch_class(row: Sequence) -> Value:
+    """How the run was launched: none for a session's own run, unknown for a subagent's
+    run that does not say."""
+
+    if row[_AGENT] == "":
+        return None
+    found = row[_LAUNCH]
+    return UNKNOWN if found is None else found
 
 
 # -- the answer ----------------------------------------------------------------
@@ -490,7 +517,7 @@ class _Namer:
         found: list[set[str]] = [set() for _ in group_by]
         for key in keys:
             for index, value in enumerate(key):
-                if value is not None:
+                if isinstance(value, str):
                     found[index].add(value)
         self.labels = [
             _labels(conn, dimension, ids, projects) if ids else {}
@@ -499,12 +526,13 @@ class _Namer:
 
     def value(self, index: int, value: Value) -> dict:
         dimension = self.group_by[index]
+        named = value if isinstance(value, str) else None
         return {
-            "id": value,
-            # Work on no item is a group of its own, not one the store cannot name.
-            "unknown": value is None and dimension != WORK_ITEM,
+            "id": named,
+            # Work on no item, or a session's own launch class, is a group of its own.
+            "unknown": value is UNKNOWN or (value is None and dimension not in _NONE_IS_A_VALUE),
             **_UNNAMED.get(dimension, {}),
-            **(self.labels[index].get(value, {}) if value is not None else {}),
+            **(self.labels[index].get(named, {}) if named is not None else {}),
         }
 
     def group(self, key: tuple[Value, ...]) -> dict:
@@ -512,13 +540,16 @@ class _Namer:
 
 
 def _order(entry: tuple[tuple[Value, ...], _Tally]) -> tuple:
-    """The most time first, then the most cost, then by value with the unknown last."""
+    """The most time first, then the most cost, then by value with none and unknown last."""
 
     key, tally = entry
     return (
         -tally.milliseconds,
         -(tally.micro_usd or 0),
-        tuple((value is None, value or "") for value in key),
+        tuple(
+            (not isinstance(value, str), value is UNKNOWN, value if isinstance(value, str) else "")
+            for value in key
+        ),
     )
 
 
