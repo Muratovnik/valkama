@@ -178,7 +178,7 @@ class StoreAdoptionTests(unittest.TestCase):
         backups = os.path.join(store.data_root(), "backups")
 
         made = [
-            os.path.basename(store_backups.snapshot(conn, store._backups(), "preupgrade"))
+            os.path.basename(store_backups.snapshot(conn, store.backup_location(), "preupgrade"))
             for _ in range(7)
         ]
 

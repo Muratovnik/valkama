@@ -682,7 +682,7 @@ class KeptTests(QuestionCase):
     def test_a_recovery_point_holds_them(self) -> None:
         request = self.ask()
         self.answer(request, {"path": "keep"}, note="Fine")
-        snapshot = store_backups.snapshot(self.conn, store._backups(), "manual")
+        snapshot = store_backups.snapshot(self.conn, store.backup_location(), "manual")
         restored = str(self.root / "restored.sqlite3")
         shutil.copyfile(snapshot, restored)
         copy = sqlite3.connect(restored)

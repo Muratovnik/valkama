@@ -298,7 +298,9 @@ class BackupTests(StoreCase):
     ) -> None:
         data = png(20)
         images.store(self.conn, self.first, data)
-        snapshot, _ = store_backups.verified_snapshot(self.conn, "manual", locate=store._backups)
+        snapshot, _ = store_backups.verified_snapshot(
+            self.conn, "manual", locate=store.backup_location
+        )
         self.assertEqual(
             data, (Path(store_backups.images_beside(snapshot)) / sha(data)).read_bytes()
         )
@@ -332,7 +334,9 @@ class BackupTests(StoreCase):
     ) -> None:
         older, newer = png(25), png(26)
         images.store(self.conn, self.first, older)
-        snapshot, _ = store_backups.verified_snapshot(self.conn, "manual", locate=store._backups)
+        snapshot, _ = store_backups.verified_snapshot(
+            self.conn, "manual", locate=store.backup_location
+        )
         images.store(self.conn, self.second, newer)
         self.conn.close()
         # The snapshot in place of the store, its pictures copied in beside the newer one.
@@ -366,7 +370,7 @@ class BackupTests(StoreCase):
 
         with mock.patch.object(store_backups, "_copy_pictures", upload_meanwhile):
             snapshot, _ = store_backups.verified_snapshot(
-                self.conn, "manual", locate=store._backups
+                self.conn, "manual", locate=store.backup_location
             )
         self.assertEqual(["waited"], attempts)
         self.assertEqual([sha(png(27))], pictures(store_backups.images_beside(snapshot)))
@@ -375,7 +379,7 @@ class BackupTests(StoreCase):
     def test_a_snapshot_missing_a_picture_or_holding_a_wrong_one_is_refused(self) -> None:
         data = png(21)
         images.store(self.conn, self.first, data)
-        snapshot = store_backups.snapshot(self.conn, store._backups(), "manual")
+        snapshot = store_backups.snapshot(self.conn, store.backup_location(), "manual")
         copy = Path(store_backups.images_beside(snapshot)) / sha(data)
         copy.write_bytes(png(22))
         with self.assertRaisesRegex(RuntimeError, "does not hold"):
@@ -387,16 +391,22 @@ class BackupTests(StoreCase):
     def test_a_reused_snapshot_with_a_broken_picture_is_set_aside_for_a_fresh_one(self) -> None:
         data = png(23)
         images.store(self.conn, self.first, data)
-        first, _ = store_backups.verified_snapshot(self.conn, "manual", locate=store._backups)
+        first, _ = store_backups.verified_snapshot(
+            self.conn, "manual", locate=store.backup_location
+        )
         (Path(store_backups.images_beside(first)) / sha(data)).write_bytes(b"torn")
-        second, _ = store_backups.verified_snapshot(self.conn, "manual", locate=store._backups)
+        second, _ = store_backups.verified_snapshot(
+            self.conn, "manual", locate=store.backup_location
+        )
         self.assertNotEqual(first, second)
         self.assertTrue(os.path.exists(first + store_backups.UNVERIFIED_SUFFIX))
         self.assertEqual(data, (Path(store_backups.images_beside(second)) / sha(data)).read_bytes())
 
     def test_retention_takes_a_snapshot_s_pictures_with_it(self) -> None:
         images.store(self.conn, self.first, png(24))
-        taken = [store_backups.snapshot(self.conn, store._backups(), "manual") for _ in range(6)]
+        taken = [
+            store_backups.snapshot(self.conn, store.backup_location(), "manual") for _ in range(6)
+        ]
         self.assertFalse(os.path.exists(store_backups.images_beside(taken[0])))
         self.assertTrue(os.path.isdir(store_backups.images_beside(taken[-1])))
 

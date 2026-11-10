@@ -490,7 +490,7 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
         source = sqlite3.connect(self.path)
         try:
             identity = store_backups.logical_identity(source)
-            whole = store_backups.snapshot(source, store._backups(), "preschema10")
+            whole = store_backups.snapshot(source, store.backup_location(), "preschema10")
         finally:
             source.close()
         data = Path(whole).read_bytes()

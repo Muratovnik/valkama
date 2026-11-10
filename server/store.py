@@ -328,7 +328,7 @@ def db_path() -> str:
     return resolved
 
 
-def _backups() -> store_backups.BackupLocation:
+def backup_location() -> store_backups.BackupLocation:
     """Where recovery points go, which follows the store's own path, with its pictures."""
 
     path = db_path()
@@ -488,7 +488,7 @@ def _snapshot_before_new_tables(conn: sqlite3.Connection) -> str | None:
         return None  # a fresh store, or one already past the cutover
     if set(SCHEMA_TABLES) <= existing:
         return None
-    return store_backups.snapshot(conn, _backups(), "pretables")
+    return store_backups.snapshot(conn, backup_location(), "pretables")
 
 
 class _LegacyMigrationStatus(NamedTuple):
@@ -765,30 +765,30 @@ def connect() -> sqlite3.Connection:
                     conn, stored_version
                 )
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preproductmodel", locate=_backups
+                    conn, "preproductmodel", locate=backup_location
                 )
             elif before_schema9:
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preschema9", locate=_backups
+                    conn, "preschema9", locate=backup_location
                 )
             elif upgrade:
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, f"preschema{stored_version + 1}", locate=_backups
+                    conn, f"preschema{stored_version + 1}", locate=backup_location
                 )
             else:
                 pretable_backup = _snapshot_before_new_tables(conn)
                 if store_rename.predates_rename(conn) and pretable_backup is None:
-                    pretable_backup = store_backups.snapshot(conn, _backups(), "prerename")
+                    pretable_backup = store_backups.snapshot(conn, backup_location(), "prerename")
             if (
                 _store_data_migration_needs_snapshot(conn)
                 and pretable_backup is None
                 and source_identity is None
             ):
-                pretable_backup = store_backups.snapshot(conn, _backups(), "preupgrade")
+                pretable_backup = store_backups.snapshot(conn, backup_location(), "preupgrade")
 
             if planning_store.interactions_migration_needed(conn) and source_identity is None:
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preinteractions", locate=_backups
+                    conn, "preinteractions", locate=backup_location
                 )
             # Session identity is additive, so it takes its own recovery point
             # only when nothing above took one already for this same open.
@@ -798,7 +798,7 @@ def connect() -> sqlite3.Connection:
                 and _identity_migration_needed(conn)
             ):
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preidentity", locate=_backups
+                    conn, "preidentity", locate=backup_location
                 )
 
             conn.execute("PRAGMA journal_mode=WAL")
