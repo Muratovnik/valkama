@@ -1,7 +1,8 @@
 """Reading a run again from its transcript, and putting what it gives in place of what was.
 
 A later change to how segments are made (a new column, a new price) reaches the history
-only through this. So it never loses what is already counted:
+only through this. So it is built not to lose what is already counted, and the one way
+it still can is named below:
 
 - It reads the same bytes the reader already read, from the start to the run's
   `read_offset`, through the reader's own path (`Collector.read_more`, which feeds
@@ -292,6 +293,13 @@ def _refuse(line: RunReport, reason: str) -> None:
 def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage) -> Rereading:
     """A reading again of the run to its `read_offset`, not begun, or the reason it may not be."""
 
+    found, path, end = _bytes(run, target)
+    return Rereading.start(found, path, end, coverage, int(run["id"]))
+
+
+def _bytes(run: sqlite3.Row, target: Target | None) -> tuple[Target, str, int]:
+    """A run's target, the file it can be read again from and how far, or why it cannot be."""
+
     if run["status"] != "reading":
         raise _RefusedError(str(run["status"]))
     if target is None:
@@ -302,7 +310,30 @@ def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage)
     end = int(run["read_offset"])
     if os.path.getsize(path) < end:
         raise _RefusedError("shorter")
-    return Rereading.start(target, path, end, coverage, int(run["id"]))
+    return target, path, end
+
+
+def _strands(collector: Collector, yielders: Sequence[sqlite3.Row]) -> bool:
+    """Whether a run that left a request to another has lost the bytes it was read from.
+
+    Such a run cannot take a request back, so a holder that gives one up would strand it.
+    The bytes decide, own file or archive, as for a rebuild of that run: a refusal kept
+    with it for another reason (a failure, or this very one) says nothing of them, except
+    `changed`, which only reading finds. Asked inside the holder's transaction, and only
+    when the holder gives a claim up and some run yielded: rarely.
+    """
+
+    if not yielders:
+        return False
+    targets = {(target.session, target.agent): target for target in collector.finder.targets(set())}
+    for run in yielders:
+        if run["reread_refused"] == "changed" and (run["refused_reading"] or 0) >= READING:
+            return True
+        try:
+            _bytes(run, targets.get((str(run["session_id"]), str(run["agent_id"]))))
+        except (_RefusedError, OSError):
+            return True
+    return False
 
 
 def _stands(run: sqlite3.Row, again: Rereading) -> bool:
@@ -349,7 +380,7 @@ def _replace(collector: Collector, run: sqlite3.Row, target: Target, reading: Re
             raise _RefusedError("moved")
         if reading.last is not None:
             former = usage_claims.held(conn, run_id)
-            if usage_claims.strands(conn, run_id, former, reading.requests):
+            if _strands(collector, usage_claims.yielders(conn, run_id, former, reading.requests)):
                 conn.execute("ROLLBACK")
                 raise _RefusedError("stranded")
             conn.execute("DELETE FROM usage_segments WHERE run_id = ?", (run_id,))

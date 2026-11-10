@@ -38,13 +38,14 @@ instance), and the request waits until the run that yielded is read again. The r
 makes that run stale in the same transaction, so the background reader, or the rest of
 a rebuild of every run, reads it again and the request is counted once more.
 
-Only a run that can be read again takes a request back, so a reading again that gives a
-claim up is refused while any run that yielded cannot be read again (`strands`): the
-holder keeps its former rows, and the request stays counted once, in the run that had
-it. Which run yielded which request is not kept, only how many, so the refusal is wider
-than it need be: it holds for any run that yielded, whichever request the holder gives
-up. What is left is a run that yielded and loses its transcript after the holder gave
-the claim up and before it is itself read again: that request is then counted in no run.
+Only a run whose transcript is still there takes a request back, so the rebuild refuses
+a reading again that gives a claim up while the bytes of any run that yielded are gone
+(`usage_rebuild`, which knows the archives, asks `yielders` and looks): the holder keeps
+its former rows, and the request stays counted once, in the run that had it. Which run
+yielded which request is not kept, only how many, so the refusal is wider than it need
+be: it holds for any run that yielded, whichever request the holder gives up. What is
+left is a run that yielded and loses its transcript after the holder gave the claim up
+and before it is itself read again: that request is then counted in no run.
 """
 
 from __future__ import annotations
@@ -61,11 +62,6 @@ _HOLDER = (
     " run.reread_refused, run.refused_reading, run.path, run.read_offset"
     " FROM usage_requests AS claim"
     " LEFT JOIN usage_runs AS run ON run.id = claim.run_id WHERE claim.request = ?"
-)
-#: Every run that left a request to another, but one: the same columns as `_HOLDER`.
-_YIELDED = (
-    "SELECT id, id AS present, agent_id, first_at, status, reread_refused, refused_reading,"
-    " path, read_offset FROM usage_runs WHERE yielded > 0 AND id != ?"
 )
 
 
@@ -108,13 +104,9 @@ class _Holder:
 
 def _holder(conn: sqlite3.Connection, number: int) -> _Holder | None:
     row = conn.execute(_HOLDER, (number,)).fetchone()
-    return None if row is None else _as_holder(tuple(row))
-
-
-def _as_holder(row: tuple) -> _Holder:
-    """A run as `_HOLDER` and `_YIELDED` select it."""
-
-    run_id, present, agent, first_at, status, refused, refused_reading, path, offset = row
+    if row is None:
+        return None
+    run_id, present, agent, first_at, status, refused, refused_reading, path, offset = tuple(row)
     claimant = Claimant(int(run_id), bool(agent), first_at)
     refused_now = refused is not None and (refused_reading or 0) >= READING
     return _Holder(
@@ -197,17 +189,20 @@ def held(conn: sqlite3.Connection, run_id: int) -> set[int]:
     }
 
 
-def strands(conn: sqlite3.Connection, run_id: int, former: set[int], kept: Collection[int]) -> bool:
-    """Whether a reading again of `run_id` could leave a request counted in no run.
+def yielders(
+    conn: sqlite3.Connection, run_id: int, former: set[int], kept: Collection[int]
+) -> list[sqlite3.Row]:
+    """The runs that could take back a request a reading again of `run_id` gives up.
 
-    It could when it gives up a claim the run held and some other run that yielded can
-    no longer be read again, so it could not take the request back. Inside the caller's
-    transaction, before the run's claims are replaced.
+    None when it gives none up; else every other run that left a request to another,
+    since which request each left is not kept.
     """
 
     if not former - set(kept):
-        return False
-    return any(not _as_holder(tuple(row)).rereadable() for row in conn.execute(_YIELDED, (run_id,)))
+        return []
+    return conn.execute(
+        "SELECT * FROM usage_runs WHERE yielded > 0 AND id != ?", (run_id,)
+    ).fetchall()
 
 
 def release(conn: sqlite3.Connection, run_id: int, former: set[int], kept: Collection[int]) -> None:

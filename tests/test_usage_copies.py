@@ -15,6 +15,7 @@ from unittest import mock
 
 from server.telemetry import usage_collect, usage_rebuild, usage_steps
 from server.telemetry.usage_ledger import request_key
+from server.telemetry.usage_store import READING
 from tests.usage_fixtures import HOUR, Case, ClaudeRun, usage
 
 ORIGIN = "origin"
@@ -166,6 +167,37 @@ class ReadAgainTests(ForkedCopyCase):
         self.assertEqual(copy["id"], owner)
         # Kept with the run, so it is not tried again at every pass.
         self.assertEqual("stranded", copy["reread_refused"])
+
+    def test_an_original_left_only_in_the_archive_still_takes_the_request_back(self) -> None:
+        # The client deleted the original; Valkama's copy of it is there, and no reader has
+        # passed since, so the run's row still names the deleted file.
+        archived = self.root / "transcripts" / ORIGIN / f"agent-{WORKER}.jsonl"
+        archived.parent.mkdir(parents=True)
+        archived.write_bytes(self.original.read_bytes())
+        self.original.unlink()
+        self.conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " session_id, agent_id, archive_path) VALUES"
+            " ('x', 'transcript_archived', 'confirmed', 'valkama', ?, ?, ?)",
+            (ORIGIN, WORKER, f"{ORIGIN}/agent-{WORKER}.jsonl"),
+        )
+        self.conn.commit()
+        self.assertEqual(str(self.original), self.run_row(ORIGIN, WORKER)["path"])
+        self.read_again((FORK, WORKER))
+        self.assertEqual([(ORIGIN, WORKER)], [run for run in self.stale() if run[1] == WORKER])
+        self.read_again((ORIGIN, WORKER))
+        self.assert_the_original_alone()
+
+    def test_a_refusal_that_says_nothing_of_the_originals_bytes_strands_nothing(self) -> None:
+        # The original's last reading again failed for a passing reason; its file is there.
+        self.reader.execute(
+            "UPDATE usage_runs SET reread_refused = 'failed', refused_reading = ?"
+            " WHERE session_id = ? AND agent_id = ?",
+            (READING, ORIGIN, WORKER),
+        )
+        self.read_again((FORK, WORKER))
+        self.read_again((ORIGIN, WORKER))
+        self.assert_the_original_alone()
 
     def test_a_run_that_gives_no_request_up_is_read_again_all_the_same(self) -> None:
         self.original.unlink()
