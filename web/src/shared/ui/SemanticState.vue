@@ -72,7 +72,8 @@ const cutLabel = computed(() =>
    `--color-state-label`: on a ground lighter than the ladder's, a tone that reads
    as a dot is too dark for words, and the dot alone keeps saying it. Its box is trimmed to
    the letters (`.trimmed-word`), so the dot centres on their middle rather than on the em box,
-   which stood about a pixel high. */
+   which stood about a pixel high. A name is the space's data and may be long: cut short, it
+   ends in an ellipsis and says itself whole in a `clipped` hint, wherever a state is drawn. */
 .state-label {
   min-width: 0;
   color: var(--color-state-label, currentcolor);

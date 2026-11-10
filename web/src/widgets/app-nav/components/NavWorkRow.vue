@@ -386,13 +386,22 @@ function press(event: MouseEvent) {
   flex: 1 1 auto;
 }
 
+/* A closed item's state is the space's own name and may be long: it never takes more than
+   half the link, so the item's own title keeps the rest, and a longer name ends in an
+   ellipsis that the row's hint completes rather than pushing the title out of the row and
+   running under the pin. The standard closed states are shorter and stand whole. */
 .nav-row-meta {
   display: inline-flex;
   flex: none;
   gap: var(--space-half);
   align-items: center;
+  max-width: 50%;
   color: var(--color-navigation-text-muted);
   white-space: nowrap;
+
+  > .trimmed-word {
+    min-width: 0;
+  }
 }
 
 /* A phone: a finger's row and lead, the reading size, and the pin only where there is

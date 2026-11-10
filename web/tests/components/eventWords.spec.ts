@@ -1,6 +1,7 @@
 /**
  * The history in words: a mark names its thread and its decision, a link reads from this
- * task's side, and a question's id stays in the record without standing in the row.
+ * task's side, a question's id stays in the record without standing in the row, and a
+ * transition names its state as every other place does, through the card's workflow.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -9,6 +10,8 @@ import { describe, expect, it } from 'vitest'
 import { eventWords } from '@/widgets/work-item-inspector/utils/eventWords.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+import { stateName } from '@/shared/lib/stateNames.ts'
+import type { StateNaming } from '@/shared/lib/stateNames.ts'
 
 import { requestEntry } from '../support/inputRequests.ts'
 import { root } from '../support/threadCard.ts'
@@ -23,7 +26,7 @@ const questions = [
 
 function say(locale: 'en' | 'ru', action: string, detail: string) {
   const { t } = createI18n({ legacy: false, locale, messages, pluralRules }).global
-  return eventWords({ action, detail }, comments, t, questions)
+  return eventWords({ action, detail }, { comments, t, questions })
 }
 
 describe('eventWords', () => {
@@ -86,6 +89,48 @@ describe('eventWords', () => {
   it('leaves a line of an unknown shape, and every other event, as it was recorded', () => {
     expect(say('en', 'linked', 'parent of MAIN-7')).toBe('parent of MAIN-7')
     expect(say('en', 'comment_resolved', 'not a number')).toBe('not a number')
+    // With no workflow to read the key against, a transition stays as recorded.
     expect(say('en', 'transitioned', 'dev: started')).toBe('dev: started')
+  })
+})
+
+/** A workflow's states by key: two standard, one renamed and one of the space's own. */
+const STATES = [
+  { key: 'dev', name: 'Dev', category: 'active' },
+  { key: 'review', name: 'Code review', category: 'review' },
+  { key: 'done', name: 'Done', category: 'completed' },
+  { key: 'waiting', name: 'Ожидает внешнего подтверждения', category: 'blocked' },
+]
+
+function move(locale: 'en' | 'ru', detail: string, naming: StateNaming = 'translated') {
+  const { t } = createI18n({ legacy: false, locale, messages, pluralRules }).global
+  const nameState = (key: string) => {
+    const state = STATES.find((one) => one.key === key)
+    return state ? stateName(state, naming, (message) => t(message)) : null
+  }
+  return eventWords({ action: 'transitioned', detail }, { comments: [], t, nameState })
+}
+
+describe('a transition in the history', () => {
+  it.each([
+    ['ru', 'dev', 'В работе'],
+    ['en', 'dev', 'In progress'],
+    ['ru', 'done: closed by the release', 'Выполнено: closed by the release'],
+    // A reason may hold a colon of its own: only the first one ends the key.
+    ['en', 'dev: requeued: lease expired', 'In progress: requeued: lease expired'],
+    // A renamed state and a state of the space's own read as the workflow writes them.
+    ['ru', 'review', 'Code review'],
+    ['en', 'waiting: asked the vendor', 'Ожидает внешнего подтверждения: asked the vendor'],
+  ] as const)('%s «%s» reads «%s»', (locale, detail, words) => {
+    expect(move(locale, detail)).toBe(words)
+  })
+
+  it('names every state as written when the owner chose the workflow’s words', () => {
+    expect(move('ru', 'dev: started', 'workflow')).toBe('Dev: started')
+  })
+
+  it('keeps a key the workflow no longer has, and a line of another shape, as recorded', () => {
+    expect(move('ru', 'triage: moved')).toBe('triage: moved')
+    expect(move('en', 'Todo → Dev')).toBe('Todo → Dev')
   })
 })

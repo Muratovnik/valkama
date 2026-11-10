@@ -736,7 +736,9 @@ work, by number; a pinned item at work stands with the work instead, once. An ep
 any item the list holds only as the parent of others, is no row of its own: its title
 leads each of its items' rows, muted, and gives way first, down to three letters that
 the row's hint completes and never more than two fifths of the row, so the item's own
-title keeps the rest; both stay on one line. An
+title keeps the rest; both stay on one line. A closed item's state, at the row's end,
+never takes more than half of it either: a longer name ends in an ellipsis that the
+hint completes. An
 epic at work is a row like any other. This replaced a tree of epics with their items
 under them, quiet and pinned items mixed in by number, which read as a heap.
 

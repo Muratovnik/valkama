@@ -12,8 +12,9 @@ import { buildActivity } from '@/widgets/work-item-inspector/utils/inspectorActi
 import type { ActivityEntry } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
-import type { WorkItem } from '@/shared/api/planningModel.ts'
+import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
+import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
@@ -25,8 +26,10 @@ const props = withDefaults(
     item: WorkItem
     /** The card's questions as its discussion read them, which name a question's events. */
     questions?: readonly InputRequestEntry[]
+    /** The card's workflow, whose states name a transition's key; none in a global scope. */
+    workflow?: PlanningWorkflow | null
   }>(),
-  { questions: () => [] },
+  { questions: () => [], workflow: null },
 )
 
 const { t, te, locale } = useI18n()
@@ -69,10 +72,16 @@ function title(entry: ActivityEntry) {
     ? t(entry.titleKey)
     : t('history.unknownEvent', { action: entry.action ?? entry.kind })
 }
+const stateName = useStateName()
+/** A transition's key as the reader sees its state, through the card's workflow. */
+function nameState(key: string) {
+  const state = props.workflow?.states.find((one) => one.key === key)
+  return state ? stateName(state) : null
+}
 /** The row's second line in words; the recorded line stays in the entry for the search. */
 function detail(entry: ActivityEntry) {
   return entry.kind === 'event'
-    ? eventWords(entry, props.item.comments, t, props.questions)
+    ? eventWords(entry, { comments: props.item.comments, t, questions: props.questions, nameState })
     : entry.detail
 }
 const groups = computed(() => {
