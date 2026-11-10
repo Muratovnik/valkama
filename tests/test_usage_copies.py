@@ -106,6 +106,10 @@ class ReadAgainTests(ForkedCopyCase):
         self.assertEqual(1, self.run_row(ORIGIN, WORKER)["yielded"])
         # A new reading makes every run stale.
         self.reader.execute("UPDATE usage_runs SET reading = 0")
+        # Both sessions are over, as history is: a reader that has looked at them once
+        # does not look again.
+        self.conn.execute("UPDATE sessions SET status = 'ended'")
+        self.conn.commit()
 
     def read_again(self, *runs: tuple[str, str]) -> None:
         for session, agent in runs:
@@ -198,6 +202,15 @@ class ReadAgainTests(ForkedCopyCase):
         self.read_again((FORK, WORKER))
         self.read_again((ORIGIN, WORKER))
         self.assert_the_original_alone()
+
+    def test_an_original_the_reader_could_not_open_just_now_strands_nothing(self) -> None:
+        # `unreadable` may pass, unlike `missing`: the original's file is there.
+        self.reader.execute(
+            "UPDATE usage_runs SET status = 'unreadable' WHERE session_id = ? AND agent_id = ?",
+            (ORIGIN, WORKER),
+        )
+        self.read_again((FORK, WORKER))
+        self.assertNotIn((FORK, WORKER), self.stale())
 
     def test_a_run_that_gives_no_request_up_is_read_again_all_the_same(self) -> None:
         self.original.unlink()

@@ -58,7 +58,7 @@ from .usage_collect import Collector, Reading, Rereading
 from .usage_ledger import SEGMENT_COLUMNS, TOKEN_COLUMNS, segment_values, stamp, write_rows
 from .usage_prices import PRICE_BOOK
 from .usage_store import READING
-from .usage_targets import Target
+from .usage_targets import Finder, Target
 
 #: The label of the snapshot taken before every run is rebuilt.
 SNAPSHOT_LABEL = "usagerebuild"
@@ -293,13 +293,6 @@ def _refuse(line: RunReport, reason: str) -> None:
 def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage) -> Rereading:
     """A reading again of the run to its `read_offset`, not begun, or the reason it may not be."""
 
-    found, path, end = _bytes(run, target)
-    return Rereading.start(found, path, end, coverage, int(run["id"]))
-
-
-def _bytes(run: sqlite3.Row, target: Target | None) -> tuple[Target, str, int]:
-    """A run's target, the file it can be read again from and how far, or why it cannot be."""
-
     if run["status"] != "reading":
         raise _RefusedError(str(run["status"]))
     if target is None:
@@ -310,28 +303,41 @@ def _bytes(run: sqlite3.Row, target: Target | None) -> tuple[Target, str, int]:
     end = int(run["read_offset"])
     if os.path.getsize(path) < end:
         raise _RefusedError("shorter")
-    return target, path, end
+    return Rereading.start(target, path, end, coverage, int(run["id"]))
+
+
+#: The statuses the reader gives a run whose bytes are gone; `unreadable` may pass.
+_BYTES_GONE = frozenset({"missing", "truncated"})
 
 
 def _strands(collector: Collector, yielders: Sequence[sqlite3.Row]) -> bool:
     """Whether a run that left a request to another has lost the bytes it was read from.
 
     Such a run cannot take a request back, so a holder that gives one up would strand it.
-    The bytes decide, own file or archive, as for a rebuild of that run: a refusal kept
-    with it for another reason (a failure, or this very one) says nothing of them, except
-    `changed`, which only reading finds. Asked inside the holder's transaction, and only
-    when the holder gives a claim up and some run yielded: rarely.
+    The bytes decide, own file or archive: a refusal kept with the run for another reason
+    (a failure, or this very one) and a status that may pass say nothing of them; only
+    `changed` does, which reading alone finds. Asked inside the holder's transaction, and
+    only when the holder gives a claim up and some run yielded: rarely.
+
+    The targets come from a finder of its own: the collector's has been walked already,
+    and one walked before leaves out every session that ended.
     """
 
     if not yielders:
         return False
-    targets = {(target.session, target.agent): target for target in collector.finder.targets(set())}
+    finder = Finder(collector.conn, collector.finder.archive_root)
+    targets = {(target.session, target.agent): target for target in finder.targets(set())}
     for run in yielders:
+        if run["status"] in _BYTES_GONE:
+            return True
         if run["reread_refused"] == "changed" and (run["refused_reading"] or 0) >= READING:
             return True
+        target = targets.get((str(run["session_id"]), str(run["agent_id"])))
+        path = None if target is None else usage_collect.source(target)
         try:
-            _bytes(run, targets.get((str(run["session_id"]), str(run["agent_id"]))))
-        except (_RefusedError, OSError):
+            if path is None or os.path.getsize(path) < int(run["read_offset"]):
+                return True
+        except OSError:
             return True
     return False
 
