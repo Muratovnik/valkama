@@ -9,7 +9,7 @@ import type { Component, VNode } from 'vue'
  * draws: the same attributes and the same strokes, whatever the key, size and
  * stroke, so nothing about it can drift from the package it comes from.
  */
-import { Bug, ChevronUp, CircleHelp, ListChecks, User } from '@lucide/vue'
+import { Bug, ChevronUp, ListChecks, Shapes, User } from '@lucide/vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
@@ -17,6 +17,10 @@ import { iconGlyph } from '@/shared/ui/iconGlyph.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const html = (draw: () => VNode) => mount({ render: draw }).html()
+
+/** A glyph's strokes alone: its classes name the icon, and the shape is what a reader sees. */
+const shape = (name: string) =>
+  mount({ render: () => iconGlyph(name) }).get('svg').element.innerHTML
 
 /** The sources, from `web/`, where the suite runs: this environment's own URL is not a file. */
 const SRC = path.resolve(process.cwd(), 'src')
@@ -40,7 +44,7 @@ describe('a glyph drawn as a plain element', () => {
     ['priority-high', ChevronUp],
     ['steps', ListChecks],
     ['holder', User],
-    ['no-such-icon', CircleHelp],
+    ['no-such-icon', Shapes],
   ])('draws %s as its component does', (name, icon) => {
     expect(html(() => iconGlyph(name, { class: 'facet-glyph', size: 14, strokeWidth: 2 }))).toBe(
       html(() =>
@@ -58,6 +62,14 @@ describe('a glyph drawn as a plain element', () => {
     expect(names.size).toBeGreaterThan(10)
     const lost = [...names].filter(([name]) => html(() => iconGlyph(name)) === generic)
     expect(lost).toEqual([])
+  })
+
+  // A misnamed icon must not read as what a session is doing: the generic glyph was once the
+  // asking sign's own question in a ring.
+  it('draws an unknown key as none of a session’s signs', () => {
+    const generic = shape('no-such-icon')
+    for (const sign of ['working', 'asks', 'waiting', 'held', 'quiet'])
+      expect(shape(`session-${sign}`), sign).not.toBe(generic)
   })
 
   // A client's mark is its vendor's filled shapes among outlines: they take the glyph's colour

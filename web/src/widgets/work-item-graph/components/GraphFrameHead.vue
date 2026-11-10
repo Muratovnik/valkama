@@ -54,7 +54,7 @@ const {
   measure?: boolean
   /** The field is zoomed out past reading: the header is the reference and the edge. */
   overview?: boolean
-  /** The field's motion does not run, so the working dots hold still. */
+  /** The field's motion does not run, so the working sign holds still. */
   still?: boolean
   /** The walk target that takes Tab, when it is one of this frame's. */
   tabStop?: string | null

@@ -114,12 +114,16 @@ describe('the spaces the graph of frames is tested on', () => {
     expect(broadSpace().model).toEqual(broadSpace().model)
   })
 
-  it('live work names every live claim, in all four states', () => {
+  it('live work names every live claim, in all four states, and a wait that asks', () => {
     const { model } = broadSpace()
-    const live = liveWorkFor(model)
-    expect(Object.keys(live)).toHaveLength(16)
-    expect(new Set(Object.values(live).map((entry) => entry.state))).toEqual(
+    const live = Object.values(liveWorkFor(model))
+    expect(live).toHaveLength(16)
+    expect(new Set(live.map((entry) => entry.state))).toEqual(
       new Set(['working', 'held', 'waiting', 'quiet']),
+    )
+    const asks = live.map((entry) => entry.state === 'waiting' && entry.asks)
+    expect(new Set(asks.filter((_, index) => live[index].state === 'waiting'))).toEqual(
+      new Set([true, false]),
     )
   })
 

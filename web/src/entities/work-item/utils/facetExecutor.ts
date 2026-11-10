@@ -5,15 +5,20 @@
  * the claim and the live work.
  */
 
-import type { LiveWork, TIMELESS_LIVE_STATES } from '@/shared/api/liveWorkModel.ts'
+import type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import { liveSign } from '@/shared/lib/liveSign.ts'
+import type { LiveSign } from '@/shared/lib/liveSign.ts'
 import { sessionFamilyOf } from '@/shared/lib/settings.ts'
 import type { SessionFamily } from '@/shared/lib/settings.ts'
 import type { IconName } from '@/shared/lib/uiSystem.ts'
 
-/** What a session is doing on an item, of what the read model's `live_work` says. */
-export type SessionDoing = (typeof TIMELESS_LIVE_STATES)[number]
+/**
+ * What a session is doing on an item, as its sign says it (`liveSign`): every sign but the
+ * quiet one, which a tile does not draw.
+ */
+export type SessionDoing = Exclude<LiveSign, 'quiet'>
 
 /** Who holds an open item as its executor: the client, its session's doing, a stale claim. */
 export interface Executor {
@@ -38,8 +43,8 @@ export function executorOf(item: Claim, live: LiveWork | null | undefined): Exec
   const holder = item.claim_ref ?? ''
   if (!holder || item.state.is_terminal) return null
   const stale = item.claim_state === 'stale'
-  const doing = live?.state
-  const session = stale || doing === undefined || doing === 'quiet' ? null : doing
+  const doing = live ? liveSign(live.state, live.state === 'waiting' && live.asks) : null
+  const session = stale || doing === null || doing === 'quiet' ? null : doing
   return item.claim_state !== 'live' && !stale && session === null
     ? null
     : { client: sessionFamilyOf(actorName(holder)), session, stale }
@@ -76,5 +81,6 @@ export function executorWords(executor: Executor | null): string {
 const EXECUTOR_WORDS: Readonly<Record<SessionDoing, string>> = {
   working: 'workItem.facet.heldWorking',
   held: 'workItem.facet.heldElsewhere',
+  asks: 'workItem.facet.heldAsking',
   waiting: 'workItem.facet.heldWaiting',
 }

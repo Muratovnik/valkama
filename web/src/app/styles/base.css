@@ -230,22 +230,3 @@ pre,
 .flow-node-id {
   font-family: var(--font-family-mono);
 }
-
-@keyframes work-pulse {
-  0%,
-  70%,
-  100% {
-    opacity: 0.72;
-    transform: translateY(0);
-  }
-
-  35% {
-    opacity: 1;
-    transform: translateY(-2px);
-  }
-}
-
-/* `refresh-spin` was here beside it. One control spins, the connection button on
-   the rail, and a scoped block names its own keyframes — so the animation went
-   home with the rule that plays it. `work-pulse` stays because `.work-dots`
-   plays it, and five components render that (shell.css names them). */

@@ -120,7 +120,7 @@ test('zoomed out, a comet shrinks along its line with the field and stays visibl
   expect(far.width).toBeCloseTo(1.5, 1)
 })
 
-test('a card with work on it pulses and its lines run; one with no lines pulses alone', async ({
+test('a card with work on it turns its sign and its lines run; one with no lines turns alone', async ({
   page,
 }) => {
   await serveWorking(page)
@@ -129,12 +129,11 @@ test('a card with work on it pulses and its lines run; one with no lines pulses 
     has: page.locator('.graph-live[data-live="working"]'),
   })
   await expect(cards.first()).toContainText('working')
-  const dots = await cards
+  const turning = await cards
     .first()
-    .locator('.work-dots i')
-    .first()
-    .evaluate((dot) => dot.getAnimations().length)
-  expect(dots).toBeGreaterThan(0)
+    .locator('.graph-live .session-sign-working')
+    .evaluate((sign) => sign.getAnimations().length)
+  expect(turning).toBeGreaterThan(0)
   const kinds = await page
     .locator('.vue-flow__edge:has(.graph-comet)')
     .evaluateAll((edges) => edges.map((edge) => edge.classList.contains('blocks')))

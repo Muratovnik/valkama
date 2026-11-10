@@ -67,52 +67,6 @@
   text-overflow: ellipsis;
 }
 
-/* Several surfaces render this — the platform state panel while it loads, the side
-   panel's work rows, a tile's executor (`drawMarks`), and on the graph a card's live
-   mark, a zoomed-out card, a frame's header and the key — so it is a recipe that
-   belongs to no one of them and stays here, as the owner order in DESIGN.md has it.
-
-   Three dots at a fixed size: a squashed pulse reads as a rendering fault
-   rather than as a narrower one, so this is the one part of a presence block
-   that does not give way. */
-.work-dots {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: var(--space-1);
-  align-items: center;
-  height: 10px;
-
-  i {
-    width: 5px;
-    height: 5px;
-    background: currentcolor;
-    border-radius: 50%;
-    animation: work-pulse 1.15s ease-out infinite;
-
-    &:nth-child(2) {
-      animation-delay: 0.15s;
-    }
-
-    &:nth-child(3) {
-      animation-delay: 0.3s;
-    }
-  }
-
-  &.still i {
-    opacity: 0.5;
-    animation: none;
-  }
-}
-
-/* A forced palette clears every fill to its ground, and a dot is a fill, so it
-   would vanish. It is painted in the palette's own text colour instead. */
-@media (forced-colors: active) {
-  .work-dots i {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
-}
-
 .sortable-ghost {
   opacity: 0.35;
 }

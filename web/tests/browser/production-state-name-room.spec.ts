@@ -200,7 +200,7 @@ const meetFaults = (owner: Element, rows: string) => {
     range.selectNodeContents(node)
     for (const box of drawn(other, range.getClientRects())) meets(box, other)
   }
-  for (const glyph of row.querySelectorAll('svg, .state-dot, .work-dots'))
+  for (const glyph of row.querySelectorAll('svg, .state-dot'))
     if (
       !glyph.contains(owner) &&
       !owner.contains(glyph) &&

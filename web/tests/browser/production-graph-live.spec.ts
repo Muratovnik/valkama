@@ -1,6 +1,6 @@
 /**
  * Live work as the read model carries it, on the whole space's graph: a card
- * an agent's turn works on pulses «working», one its session holds aside
+ * an agent's turn works on turns its sign «working», one its session holds aside
  * stands still «held», and the strip above the field offers the switch that
  * stops the motion at every width — and offers none under reduced motion.
  *
@@ -52,12 +52,12 @@ async function serveLiveSpace(page: Page, { holder = '' } = {}) {
   })
 }
 
-/** How many animations run on the dots of the first card in that live state. */
-const dotAnimations = (page: Page, state: string) =>
+/** How many animations run on the sign of the first card in that live state. */
+const signAnimations = (page: Page, state: string) =>
   page
-    .locator(`.graph-flow .graph-live[data-live="${state}"] .work-dots i`)
+    .locator(`.graph-flow .graph-live[data-live="${state}"] .session-sign`)
     .first()
-    .evaluate((dot) => dot.getAnimations().length)
+    .evaluate((sign) => sign.getAnimations().length)
 
 /** Every animation running in the field. */
 const fieldAnimations = (page: Page) =>
@@ -79,8 +79,10 @@ for (const width of [1500, 390]) {
     await expect(page.locator('.graph-flow .graph-live[data-live="held"]').first()).toHaveText(
       'held',
     )
-    expect(await dotAnimations(page, 'working')).toBeGreaterThan(0)
-    expect(await dotAnimations(page, 'held')).toBe(0)
+    expect(await signAnimations(page, 'working')).toBeGreaterThan(0)
+    // Only work going on moves: a held, asking, waiting or silent session's sign stands still.
+    for (const still of ['held', 'asks', 'waiting', 'quiet'])
+      expect(await signAnimations(page, still), still).toBe(0)
     // The switch stands in the strip above the field, at the phone's width too.
     const toggle = page.locator('.graph-legend-place .graph-motion-toggle')
     await expect(toggle).toBeVisible()
@@ -139,7 +141,7 @@ for (const width of [1500, 390]) {
         }),
       )
       expect(new Set(rows.map((row) => row.state))).toEqual(
-        new Set(['working', 'held', 'waiting', 'quiet']),
+        new Set(['working', 'held', 'waiting', 'quiet', 'asks']),
       )
       expect(rows.filter((row) => !row.wordWhole || !row.rowWhole)).toEqual([])
       // Some of the holder's name stays, enough to know them by.

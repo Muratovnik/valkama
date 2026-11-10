@@ -1,15 +1,19 @@
 <script setup lang="ts">
 /**
- * What an agent's session behind a card is doing now: the product's three
- * working dots and a word. The dots pulse only for an item an agent is seen
- * working on while the field's motion runs; an item the session holds while it is
- * about other work, a session that waits and one fallen silent hold them still, and
- * so does a paused field. The word carries the state, so no colour has to.
+ * What an agent's session behind a card is doing now: the session's one sign
+ * (`SessionSign`), as the side panel and a tile draw it, and a word. Only the sign
+ * of an item an agent is seen working on turns, and only while the field's motion
+ * runs; an item the session holds while it is about other work, a session that
+ * asks or waits and one fallen silent draw signs that never move, and a paused
+ * field holds the working one still. The word and the shape carry the state, so no
+ * colour has to.
  */
 import { computed } from 'vue'
 
-import { useLiveWord } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
+import { signOf, useLiveWord } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+
+import SessionSign from '@/shared/ui/SessionSign.vue'
 
 const { live, still = false } = defineProps<{
   live: LiveWork
@@ -19,33 +23,40 @@ const { live, still = false } = defineProps<{
 
 const liveWord = useLiveWord()
 const word = computed(() => liveWord(live))
-const resting = computed(() => still || live.state !== 'working')
+const sign = computed(() => signOf(live))
 </script>
 
 <template>
   <span
     class="graph-live"
-    :data-live="live.state"
+    :data-live="sign"
   >
-    <span
-      class="work-dots"
-      aria-hidden="true"
-      :class="{ still: resting }"
-      ><i /><i /><i
-    /></span>
+    <SessionSign
+      class="graph-live-sign"
+      :sign="sign"
+      :still="still"
+    />
     <span class="graph-live-word">{{ word }}</span>
   </span>
 </template>
 
 <style scoped>
-/* The word is the one mark of the state that is not a colour, so it never
-   gives way: whatever stands beside it does. */
+/* The word says the state in full, so it never gives way: whatever stands
+   beside it does. It is in the line's own ink; the sign carries the hue. The mark
+   is a line of text, so it stands on the baseline the holder's name stands on. */
 .graph-live {
-  display: inline-flex;
+  display: inline-block;
   flex: 0 0 auto;
-  gap: var(--space-1);
-  align-items: center;
-  color: var(--color-info);
+  white-space: nowrap;
+}
+
+/* The sign in that line, its middle on the middle of the line's capitals
+   (`--size-text-middle`), as a mark's glyph stands (`facetMarks.css`): centred on
+   the line's box it stood 0.8px low beside the word. Its box is 14px. */
+.graph-live-sign {
+  display: inline;
+  vertical-align: calc(var(--size-text-middle) - 7px);
+  margin-inline-end: var(--space-1);
 }
 
 .graph-live-word {

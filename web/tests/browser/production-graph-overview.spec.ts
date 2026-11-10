@@ -115,8 +115,8 @@ test('a block carries no sign of its own, and its name and tooltip say the state
 }) => {
   await serve(page)
   await zoomedOut(page)
-  await expect(page.locator('.flow-node-overview .work-dots')).toHaveCount(0)
-  await expect(page.locator('.graph-legend-held')).toHaveCount(0)
+  await expect(page.locator('.flow-node-overview .session-sign')).toHaveCount(0)
+  await expect(page.locator('.graph-legend-sign')).toHaveCount(0)
   const working = page.locator('.flow-node-card').filter({ hasText: LONGEST[0] })
   await expect(working).toHaveAccessibleName(/ · working$/u)
   await expect(working).toHaveAttribute('data-tooltip', /working/u)

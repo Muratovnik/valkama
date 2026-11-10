@@ -8,7 +8,7 @@
  * half low beside them.
  */
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -18,14 +18,17 @@ import { installBackend } from './backend.ts'
 import { largeChainHere, serve as serveChain } from './chainFixtures.ts'
 import { settled } from './documentBeside.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
-import {
-  planningReadModel,
-  projectId,
-  projectScope,
-  spaceRef,
-  workItemRef,
-} from './planningFixtures.ts'
+import { projectId, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
 import { openReported, card as previewCard, reference as previewLink, rest } from './previewPage.ts'
+import {
+  expectOnTheMiddle,
+  MARKED,
+  openView,
+  prepare,
+  signOffsets,
+  withExecutors,
+} from './signMeasures.ts'
+import type { Offset } from './signMeasures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -33,156 +36,6 @@ const CARD = serializePlatformRoute({
   scope: projectScope,
   entity: planningWorkItemEntity(workItemRef),
 })
-
-/** The room a sign may stand off the middle of the capitals of its line. */
-const MIDDLE_ROOM = 0.5
-
-interface Offset {
-  label: string
-  /** The sign's vertical middle less the capitals' middle: positive when the sign stands low. */
-  offset: number
-}
-
-/**
- * Each sign in each of `rows`, against the first drawn words of its pair in the same row, in the
- * row's own pixels: a graph node zoomed out is drawn smaller, and its font's metrics are not. A
- * pair whose sign is not drawn measures nothing, so a caller says how many it expects.
- */
-function signOffsets(rows: Locator, pairs: readonly (readonly [string, string])[]) {
-  return rows.evaluateAll((elements, wanted) => {
-    const canvas = document.createElement('canvas').getContext('2d')
-    if (!canvas) throw new Error('no canvas')
-    // This body is serialized and evaluated in the page, so a module-scope helper would not be
-    // in scope here.
-    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
-    const drawn = (node: Element) =>
-      node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden'
-    const capitalsMiddle = (words: Element, scale: number) => {
-      const walker = document.createTreeWalker(words, NodeFilter.SHOW_TEXT)
-      let node: Node | null = walker.nextNode()
-      while (node && !node.textContent?.trim()) node = walker.nextNode()
-      if (!node?.parentElement) throw new Error('no words')
-      const range = document.createRange()
-      range.selectNodeContents(node)
-      const style = getComputedStyle(node.parentElement)
-      canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-      const capital = canvas.measureText('H')
-      const above = capital.fontBoundingBoxAscent - capital.actualBoundingBoxAscent / 2
-      return range.getBoundingClientRect().top + above * scale
-    }
-    return elements.flatMap((row) => {
-      const scale = row.getBoundingClientRect().width / (row as HTMLElement).offsetWidth || 1
-      return wanted.flatMap(([marks, words]) => {
-        const text = [...row.querySelectorAll(words)].find((node) => drawn(node))
-        if (!text) return []
-        const middle = capitalsMiddle(text, scale)
-        const signs = [...row.querySelectorAll(marks)].filter((node) => drawn(node))
-        return signs.map((mark) => {
-          const box = mark.getBoundingClientRect()
-          return {
-            label: `${marks} against “${text.textContent?.trim()}”`,
-            offset: ((box.top + box.bottom) / 2 - middle) / scale,
-          }
-        })
-      })
-    })
-  }, pairs)
-}
-
-function expectOnTheMiddle(offsets: Offset[], at: number) {
-  expect(offsets.length, 'signs measured').toBeGreaterThanOrEqual(at)
-  for (const { label, offset } of offsets)
-    expect(Math.abs(offset), label).toBeLessThanOrEqual(MIDDLE_ROOM)
-}
-
-/** An item with a sign of each kind: a bug, high, held by a live session, with a step to do. */
-const MARKED = {
-  ...planningReadModel.work_items[1],
-  work_item_id: '00000000-0000-4000-8000-000000000480',
-  reference: 'MAIN-480',
-  number: 480,
-  title: 'Stand every sign on the middle of its line',
-  kind: 'bug',
-  priority: 'high',
-  state: { ...planningReadModel.work_items[1].state, name: 'Review' },
-  claim_ref: 'claude (session f5f838f4-74fc-4a1b-9c2d-0123456789ab)',
-  claim_state: 'live',
-  checklist: [
-    {
-      id: '00000000-0000-4000-8000-000000000481',
-      text: 'Measure',
-      done: false,
-      claimed_by: '',
-      done_by: '',
-    },
-  ],
-}
-
-const withMarked = (model: Record<string, unknown>) => ({
-  ...model,
-  work_items: [...(model.work_items as unknown[]), MARKED],
-})
-
-async function prepare(page: Page, locale: 'ru' | 'en', width: number) {
-  await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
-  await page.setViewportSize({ width, height: 900 })
-}
-
-/**
- * Tiles held by the client of a session at work on the item, at work on other items and
- * waiting for a person, and two whose claim no session proved: one nobody's session is at
- * and one whose session went quiet.
- */
-const EXECUTORS = [
-  [490, 'claude (session 1a2b3c4d-5e6f-4a1b-9c2d-0123456789ab)', 'live', { state: 'working' }],
-  [491, 'claude (session 2b3c4d5e-6f70-4a1b-9c2d-0123456789ab)', 'live', { state: 'held' }],
-  [
-    492,
-    'codex (session 019a2b3c-4d5e-7f00-8000-0123456789ab)',
-    'live',
-    { state: 'waiting', long: false, asks: false },
-  ],
-  [493, 'claude', 'unconfirmed', null],
-  [494, 'claude', 'unconfirmed', { state: 'quiet', quiet_since: '2026-11-01T10:00:00Z' }],
-] as const
-
-const withExecutors = (model: Record<string, unknown>) => {
-  const items = EXECUTORS.map(([number, holder, claim]) => ({
-    ...MARKED,
-    work_item_id: `00000000-0000-4000-8000-000000000${number}`,
-    reference: `MAIN-${number}`,
-    number,
-    claim_ref: holder,
-    claim_state: claim,
-    checklist: [{ ...MARKED.checklist[0], id: `00000000-0000-4000-8000-000000001${number}` }],
-  }))
-  const live = Object.fromEntries(
-    EXECUTORS.flatMap((executor) =>
-      executor[3] ? [[`00000000-0000-4000-8000-000000000${executor[0]}`, executor[3]]] : [],
-    ),
-  )
-  return {
-    ...model,
-    work_items: [...(model.work_items as unknown[]), ...items],
-    live_work: { ...(model.live_work as object | undefined), ...live },
-  }
-}
-
-async function openView(
-  page: Page,
-  view: 'kanban' | 'list' | 'graph',
-  space: typeof withMarked = withMarked,
-) {
-  await installBackend(page, { space })
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
-      state: { view },
-    }),
-  )
-}
 
 /** The list of work going on now, on the rail or, on a phone, in the panel it opens. */
 async function openWorkList(page: Page, width: number) {
@@ -248,33 +101,46 @@ for (const locale of ['ru', 'en'] as const) {
           has: page.locator('.tile-reference').getByText(`MAIN-${number}`, { exact: true }),
         })
       const holder = (number: number) => tile(number).locator('[data-facet="holder"]')
-      for (const number of [490, 491, 492, 493, 494]) await expect(tile(number)).toBeVisible()
+      for (const number of [490, 491, 492, 493, 494, 495]) await expect(tile(number)).toBeVisible()
       // No tile draws a person for a holder: a client's sign, or nothing.
       await expect(page.locator('.work-item-tile svg.lucide-user')).toHaveCount(0)
-      await expect(holder(490)).toHaveAttribute('data-session', 'working')
+      // Each state draws the session's one sign, the side panel's and the graph's.
+      for (const [number, sign] of [
+        [490, 'working'],
+        [491, 'held'],
+        [492, 'waiting'],
+        [495, 'asks'],
+      ] as const) {
+        await expect(holder(number)).toHaveAttribute('data-session', sign)
+        await expect(holder(number).locator(`svg.facet-session.session-sign-${sign}`)).toHaveCount(
+          1,
+        )
+      }
       await expect(holder(490).locator('svg.facet-glyph')).toHaveClass(/lucide-asterisk/u)
-      await expect(holder(490).locator('.facet-session.work-dots:not(.still)')).toHaveCount(1)
-      await expect(holder(491)).toHaveAttribute('data-session', 'held')
-      await expect(holder(491).locator('.facet-session.work-dots.still')).toHaveCount(1)
-      await expect(holder(492)).toHaveAttribute('data-session', 'waiting')
       await expect(holder(492).locator('svg.facet-glyph')).toHaveClass(/lucide-codex/u)
-      await expect(holder(492).locator('svg.facet-session')).toHaveCount(1)
+      await expect(page.locator('.work-item-tile .work-dots')).toHaveCount(0)
       // The hover and a screen reader say who and what the session is doing.
       await expect(holder(492).locator('.facet-word-hidden')).toHaveText(
         locale === 'ru'
           ? 'Держит codex · 019a2b3c-4d5e — ждёт человека'
           : 'Held by codex · 019a2b3c-4d5e — waiting for a person',
       )
+      await expect(holder(495).locator('.facet-word-hidden')).toHaveText(
+        locale === 'ru'
+          ? 'Держит claude · 3c4d5e6f-7081 — спрашивает человека: ждёт разрешения или ответа'
+          : 'Held by claude · 3c4d5e6f-7081 — asking a person for a permission or an answer',
+      )
       // A claim no session proved, with no session at work on it, is no executor.
       await expect(holder(493)).toHaveCount(0)
       await expect(holder(494)).toHaveCount(0)
+      const executors = tile(490).or(tile(491)).or(tile(492)).or(tile(495))
       const words = '.tile-facts .facet-word:not(.facet-word-hidden)'
-      const offsets = await signOffsets(tile(490).or(tile(491)).or(tile(492)), [
+      const offsets = await signOffsets(executors, [
         ['.tile-facts [data-facet="holder"] .facet-glyph', words],
         ['.tile-facts .facet-session', words],
       ])
       console.info(`executor ${at}`, JSON.stringify(offsets))
-      expectOnTheMiddle(offsets, 6)
+      expectOnTheMiddle(offsets, 8)
     })
 
     test(`a list row's signs and state dot stand on the middle of its words, ${at}`, async ({

@@ -16,6 +16,7 @@ export const workItemFacetMessages = {
       heldStale: 'Held by {holder} — the claim is stale',
       heldWorking: 'Held by {holder} — working on it',
       heldElsewhere: 'Held by {holder} — working on other items',
+      heldAsking: 'Held by {holder} — asking a person for a permission or an answer',
       heldWaiting: 'Held by {holder} — waiting for a person',
       waiting: 'Waiting on {reference}',
       // An executor's sign, named by its client wherever it stands: a tile, a card's holder.
@@ -62,6 +63,7 @@ export const workItemFacetMessages = {
       heldStale: 'Держит {holder} — захват устарел',
       heldWorking: 'Держит {holder} — работает над ней',
       heldElsewhere: 'Держит {holder} — работает над другими задачами',
+      heldAsking: 'Держит {holder} — спрашивает человека: ждёт разрешения или ответа',
       heldWaiting: 'Держит {holder} — ждёт человека',
       waiting: 'Ждёт {reference}',
       client: {

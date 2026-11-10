@@ -6,7 +6,7 @@
  * keeps both whole in its name. Over the work under no epic the line is its name.
  * Zoomed out it is the reference and the work moving, the whole line grown with the
  * field by the `--grow` the header sets, and far out the reference gives way to what
- * a fold hides (`named`). There the work moving shortens to its count beside the dots
+ * a fold hides (`named`). There the work moving shortens to its count beside the sign
  * when the line holds no more beside the reference, or, where the band gives the line a
  * second row (`wraps`), when that row cannot hold it either; and the reference is cut
  * before the mark is. The header's name and hover text keep both whole.
@@ -42,7 +42,7 @@ const {
   /** Whether the reference or the name is drawn. */
   named?: boolean
   overview?: boolean
-  /** The field's motion does not run, so the working dots hold still. */
+  /** The field's motion does not run, so the working sign holds still. */
   still?: boolean
   /** Zoomed out, the band gives the line a second row for what the first cannot hold. */
   wraps?: boolean

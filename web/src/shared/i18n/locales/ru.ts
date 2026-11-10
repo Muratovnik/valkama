@@ -222,7 +222,14 @@ export const ru = {
     edgeDiscovered: 'контекст',
     legendAhead: 'Впереди',
     edgeLive: 'работа идёт',
-    legendHeld: 'у сессии, сейчас не в работе',
+    // What each session's sign a card draws means, as the key names it.
+    legendSign: {
+      working: 'сессия работает над ней',
+      asks: 'спрашивает человека посреди хода',
+      waiting: 'ждёт: ход закончен',
+      held: 'у сессии, сейчас не в работе',
+      quiet: 'молчит больше суток',
+    },
     zoom: 'Масштаб графа',
     zoomIn: 'Приблизить',
     zoomOut: 'Отдалить',
@@ -249,6 +256,7 @@ export const ru = {
     frame: graphFrameMessages.ru.frame,
     live: {
       working: 'работает',
+      asks: 'спрашивает',
       held: 'у сессии',
       waiting: 'ждёт',
       quiet: 'молчит с {since}',

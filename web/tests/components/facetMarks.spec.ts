@@ -308,3 +308,84 @@ describe('the words of a mark', () => {
     expect(mark.find('.facet-word').exists()).toBe(false)
   })
 })
+
+/** The sign a tile draws after its executor's client glyph, by its state, or null for none. */
+function signOf(wrapper: ReturnType<typeof marks>) {
+  const sign = wrapper.find('[data-facet="holder"] .facet-session')
+  return sign.exists()
+    ? (sign.classes().find((name) => name.startsWith('session-sign-')) ?? 'unnamed')
+    : null
+}
+
+/**
+ * A tile's executor: its client's glyph, then the session's own sign, the one the side panel
+ * and the graph draw for the same state, and its words as the hidden name and the hover.
+ */
+describe("a tile's executor", () => {
+  const CLAUDE = 'claude (session 5937aa01-1234-4c00)'
+  const executor = (live: unknown, claim: Partial<WorkItemBrief> = {}, locale?: 'en' | 'ru') =>
+    marks(
+      {
+        item: boardItem(12, 'dev', { claim_ref: CLAUDE, claim_state: 'live', ...claim }),
+        facets: ['holder'],
+        context: live === undefined ? {} : { live },
+      },
+      locale,
+    )
+
+  it.each([
+    [
+      { state: 'working' },
+      'session-sign-working',
+      'Held by claude · 5937aa01-1234 — working on it',
+    ],
+    [
+      { state: 'waiting', long: false, asks: true },
+      'session-sign-asks',
+      'Held by claude · 5937aa01-1234 — asking a person for a permission or an answer',
+    ],
+    [
+      { state: 'waiting', long: false, asks: false },
+      'session-sign-waiting',
+      'Held by claude · 5937aa01-1234 — waiting for a person',
+    ],
+    [
+      { state: 'held' },
+      'session-sign-held',
+      'Held by claude · 5937aa01-1234 — working on other items',
+    ],
+  ])('draws %o as its client and the session’s sign, named in words', (live, sign, words) => {
+    const wrapper = executor(live)
+    const holder = wrapper.get('[data-facet="holder"]')
+    expect(holder.get('svg.facet-glyph').classes()).toContain('lucide-asterisk')
+    expect(signOf(wrapper)).toBe(sign)
+    // The sign is the shared one: its size and stroke, after the glyph, hidden from a reader.
+    const svg = holder.get('.facet-session')
+    expect(svg.classes()).toContain('session-sign')
+    expect([svg.attributes('width'), svg.attributes('height')]).toEqual(['14', '14'])
+    expect(svg.attributes('aria-hidden')).toBe('true')
+    expect(holder.get('.facet-word-hidden').text()).toBe(words)
+    expect(hintOf(holder)).toBe(words)
+    // None of the old marks is left: no dots, no bare ring.
+    expect(holder.find('.work-dots').exists()).toBe(false)
+  })
+
+  it('says a session asks in Russian apart from one that waits', () => {
+    const asks = executor({ state: 'waiting', long: true, asks: true }, {}, 'ru')
+    expect(asks.get('.facet-word-hidden').text()).toBe(
+      'Держит claude · 5937aa01-1234 — спрашивает человека: ждёт разрешения или ответа',
+    )
+    const waits = executor({ state: 'waiting', long: true, asks: false }, {}, 'ru')
+    expect(waits.get('.facet-word-hidden').text()).toBe(
+      'Держит claude · 5937aa01-1234 — ждёт человека',
+    )
+  })
+
+  it('draws no sign where no session is at work: idle, stale, silent, or a claim nobody proved', () => {
+    expect(signOf(executor(undefined))).toBeNull()
+    expect(signOf(executor({ state: 'working' }, { claim_state: 'stale' }))).toBeNull()
+    expect(signOf(executor({ state: 'quiet', quiet_since: '2026-11-01T10:00:00Z' }))).toBeNull()
+    const unproved = executor(undefined, { claim_ref: 'claude', claim_state: 'unconfirmed' })
+    expect(unproved.find('[data-facet="holder"]').exists()).toBe(false)
+  })
+})

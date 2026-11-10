@@ -1,8 +1,8 @@
 /**
  * A frame's header says what its number of moving work is, at a distance too, as the built
  * app draws it: «2 working», and where a zoomed-out band has no room for the words, the count
- * beside the working dots, «••• 2». It never gives way whole, since then nothing says work is
- * running, and never as dots alone or a number cut. The header keeps its height, and its name
+ * beside the working session's sign, «◌ 2». It never gives way whole, since then nothing says work
+ * is running, and never as a sign alone or a number cut. The header keeps its height, and its name
  * and its hover text say the whole phrase.
  *
  * Served the broad synthetic space with half of the work filed under an epic being worked on,
@@ -76,8 +76,6 @@ async function zoomUnder(page: Page, ceiling: number) {
 }
 
 interface Mark {
-  /** The dots are in sight. */
-  dots: boolean
   /** The frame's id. */
   frame: string
   /** The header's height, in the field's units. */
@@ -95,6 +93,8 @@ interface Mark {
   shown: string
   /** The words drawn, read by a Range over them, stand whole inside the mark and the header. */
   shownWhole: boolean
+  /** The working sign is in sight. */
+  sign: boolean
 }
 
 /** Every frame's mark of moving work, as it is drawn. */
@@ -110,13 +110,20 @@ function marks(page: Page): Promise<Mark[]> {
       const range = document.createRange()
       if (words) range.selectNodeContents(words)
       const drawn = words ? range.getBoundingClientRect() : undefined
-      const dots = box('.work-dots')
+      // The sign as it stands, not as its turn leans it: a square turned 45° spans 1.4 times its
+      // side, while the ring it draws spans the same at every angle.
+      const turning = frame.querySelector('.graph-frame-working .session-sign')
+      for (const animation of turning?.getAnimations() ?? []) {
+        animation.pause()
+        animation.currentTime = 0
+      }
+      const sign = box('.graph-frame-working .session-sign')
       const reference = frame.querySelector<HTMLElement>('.graph-frame-reference')
       const named = reference?.getBoundingClientRect()
       const target =
         frame.querySelector<HTMLElement>('.graph-frame-open[data-walk-target]') ??
         frame.querySelector<HTMLElement>('.graph-frame-fold')
-      if (!shown || !drawn || !dots || !header) throw new Error('a mark has its words and dots')
+      if (!shown || !drawn || !sign || !header) throw new Error('a mark has its words and sign')
       const within = (part: DOMRect, outer: DOMRect = shown) =>
         part.width > 0 &&
         part.left >= outer.left - 0.5 &&
@@ -133,7 +140,7 @@ function marks(page: Page): Promise<Mark[]> {
       return {
         shown: words?.textContent?.replaceAll(/\s+/gu, ' ').trim() ?? '',
         shownWhole: within(drawn) && within(drawn, header),
-        dots: within(dots) && within(dots, header),
+        sign: within(sign) && within(sign, header),
         overReference: crossing,
         referenceCut: reference !== null && reference.scrollWidth > reference.clientWidth + 1,
         header: header.height / scale,
@@ -167,10 +174,10 @@ function expectHonest(seen: Mark[], near: Record<string, number>) {
   expect(seen.length).toBeGreaterThan(2)
   for (const mark of seen) {
     const where = `the mark of ${mark.reference || 'the work under no epic'}`
-    // Whole, or its count beside the dots: never gone, never dots or a number cut.
+    // Whole, or its count beside the sign: never gone, never a sign alone or a number cut.
     expect(mark.shown, where).toMatch(/^\d+(?: working)?$/u)
     expect(mark.shownWhole, `${where} says it in sight`).toBe(true)
-    expect(mark.dots, `${where} draws its dots in sight`).toBe(true)
+    expect(mark.sign, `${where} draws its sign in sight`).toBe(true)
     expect(mark.overReference, `${where} stands over the reference`).toBe(false)
     // The reference is cut only for a mark already as short as it goes.
     if (mark.referenceCut) expect(mark.shown, `${where} cut the reference`).toMatch(/^\d+$/u)
@@ -206,7 +213,7 @@ for (const { band, ceiling, height, width } of [
   })
 }
 
-test('close up the mark says its words beside its dots, and names no hover text', async ({
+test('close up the mark says its words beside its sign, and names no hover text', async ({
   page,
 }) => {
   await serve(page)
@@ -218,7 +225,7 @@ test('close up the mark says its words beside its dots, and names no hover text'
   ).toContain('none')
   for (const mark of seen) {
     expect(mark.shown).toMatch(/^\d+ working$/u)
-    expect(mark.shownWhole && mark.dots).toBe(true)
+    expect(mark.shownWhole && mark.sign).toBe(true)
     expect(mark.hint).toBe('')
     expect(mark.name).toContain(mark.shown)
   }
