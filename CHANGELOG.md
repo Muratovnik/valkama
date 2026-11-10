@@ -40,6 +40,16 @@ checkouts are therefore distinguishable even at the same version.
   session now carry `unpriced_tokens`, the tokens that cost leaves out because their
   model has no price, so a screen can say so rather than show the undercount as the cost.
 
+- **Usage read again from the transcripts.** `valkama usage rebuild --session <id>` (with
+  `--agent <id>` for a subagent's run) or `--all` reads runs again from their transcripts,
+  the way the background reader reads them, and replaces their segments in one transaction
+  each. A run the reader moved meanwhile is left to the reader. A run whose transcript is
+  gone or shorter than what was read is left untouched and named, and without the liveness
+  file nothing is rebuilt. `--all` first takes a verified `usagerebuild` snapshot and copies
+  the liveness file beside it. The report gives each run's time, tokens and cost before and
+  after and how many segments now name another item, which shows where writes, holds or
+  liveness arrived after the reader had passed; `--dry-run` writes nothing.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.

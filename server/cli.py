@@ -44,6 +44,7 @@ from . import (
     transcripts,
 )
 from .federation import federated_spaces
+from .hooks import ingest
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup, skills
@@ -57,7 +58,7 @@ from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
 from .store_identity import metadata as store_metadata
 from .store_identity.refs import planning_space_entity
-from .telemetry import journal
+from .telemetry import journal, usage_rebuild
 
 # --- session-probe summary and routa import ---------------------------------
 
@@ -547,6 +548,35 @@ def _projects_main(options: argparse.Namespace) -> None:
         raise SystemExit(f"projects: {error}") from error
 
 
+def _usage_rebuild_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
+    """Rebuild one run or every run and print the report; a refusal exits non-zero."""
+
+    if options.all and options.agent:
+        parser.error("--agent names a run of --session")
+    # The store is brought up as every command brings it up; then the rebuild takes the
+    # reader's kind of connection, since each run is a transaction it begins itself.
+    # A run that fails is in the report; what fails here, such as the snapshot, stops all.
+    try:
+        connect().close()
+        with contextlib.closing(ingest.open_light(db_path(), store.STORE_SCHEMA_VERSION)) as conn:
+            report = usage_rebuild.rebuild(
+                conn,
+                db_path(),
+                session=None if options.all else options.session,
+                agent=options.agent,
+                dry_run=options.dry_run,
+            )
+    except (OSError, RuntimeError, sqlite3.Error, ingest.UnwritableError) as error:
+        raise SystemExit(f"usage rebuild: {error}") from error
+    print(
+        json.dumps(report.as_dict(), ensure_ascii=False, indent=1)
+        if options.json
+        else usage_rebuild.render(report)
+    )
+    if report.failed:
+        raise SystemExit(1)
+
+
 def _released_main(options: argparse.Namespace) -> None:
     """Print the open items a release range took commits from; a refusal exits non-zero."""
 
@@ -754,6 +784,24 @@ def main(argv: list[str] | None = None) -> None:
     purge_cmd.add_argument("--session", action="append", default=[], metavar="ID")
     purge_cmd.add_argument("--before", type=transcripts.before_argument, metavar="DATE")
     purge_cmd.add_argument("--dry-run", action="store_true")
+    usage_cmd = commands.add_parser("usage", help="act on the usage read from transcripts")
+    usage_sub = usage_cmd.add_subparsers(dest="usage_command", required=True)
+    rebuild_cmd = usage_sub.add_parser(
+        "rebuild",
+        help="read runs again from their transcripts and replace their segments",
+    )
+    which = rebuild_cmd.add_mutually_exclusive_group(required=True)
+    which.add_argument("--session", metavar="ID", help="the session whose run to rebuild")
+    which.add_argument(
+        "--all", action="store_true", help="every run, after a verified snapshot of the store"
+    )
+    rebuild_cmd.add_argument(
+        "--agent", default="", metavar="ID", help="its subagent's or child thread's run instead"
+    )
+    rebuild_cmd.add_argument(
+        "--dry-run", action="store_true", help="report the differences and write nothing"
+    )
+    rebuild_cmd.add_argument("--json", action="store_true")
     options = parser.parse_args(argv)
     if options.command == "serve" and options.on_demand:
         # `valkama.py` answers the plain spelling before it imports this module.
@@ -853,6 +901,8 @@ def main(argv: list[str] | None = None) -> None:
             except ValueError as error:
                 raise SystemExit(f"transcripts purge: {error}") from error
         print(transcripts.render_purge(purged))
+    elif options.command == "usage":
+        _usage_rebuild_main(parser, options)
     else:
         mcp_main()
 

@@ -19,14 +19,18 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import cli, store
+from server import cli, store, store_backups
+from server.hooks import ingest
 from server.ops import configuration
 from server.planning import service
 from server.projects import scopes
+from server.telemetry import liveness, usage_collect
+from tests import usage_fixtures
 
 SPACE_NAME = "Command Line"
 SPACE_KEY = "COM"
@@ -252,6 +256,120 @@ class RoutingTests(CliTestCase):
         with mock.patch.object(cli, "serve_main") as served:
             self.invoke("serve")
         served.assert_called_once_with(configuration.DEFAULT_LISTENER_PORT, development_origin=None)
+
+
+class UsageRebuildTests(CliTestCase):
+    """`usage rebuild` over one session the reader has read: a prompt, a script, an answer."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        transcript = Path(self.home.name) / "projects" / "sess-cli.jsonl"
+        self.conn.execute(
+            "INSERT INTO sessions(id, client, transcript_path, status, started_at, last_seen)"
+            " VALUES ('sess-cli', 'claude', ?, 'active', ?, ?)",
+            (str(transcript), usage_fixtures.stamp(0), usage_fixtures.stamp(0)),
+        )
+        self.conn.commit()
+        for minute in range(61):
+            liveness.tick(self.database, usage_fixtures.epoch(minute * 60))
+        run = usage_fixtures.ClaudeRun(transcript, "sess-cli")
+        run.prompt(0)
+        run.reply(10, tools=(("t1", "Bash"),))
+        run.result(610, "t1")
+        run.end_turn(620)
+        reader = ingest.open_light(self.database, store.STORE_SCHEMA_VERSION)
+        self.addCleanup(reader.close)
+        usage_collect.Collector(reader, self.database).run_pass(print, 30.0)
+        self.backups = os.path.join(self.home.name, "backups")
+
+    def counted(self) -> list:
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT id, work_item_id, seconds, output_tokens FROM usage_segments ORDER BY id"
+            )
+        ]
+
+    def late_attention(self) -> None:
+        """A permission request the reader never saw, which takes the call's wait off the work."""
+
+        self.conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " session_id, received_at) VALUES ('a1', 'attention', 'confirmed', 'hook', ?, ?)",
+            ("sess-cli", usage_fixtures.stamp(20)),
+        )
+        self.conn.commit()
+
+    def test_one_run_with_nothing_changed_reports_its_totals_unchanged(self) -> None:
+        before = self.counted()
+        output = self.invoke("usage", "rebuild", "--session", "sess-cli")
+        self.assertIn("usage rebuild: rebuilt 1 run(s), refused 0", output)
+        self.assertIn("sess-cli: rebuilt, totals unchanged", output)
+        self.assertEqual([row[1:] for row in before], [row[1:] for row in self.counted()])
+        self.assertFalse(os.path.isdir(self.backups))
+
+    def test_a_dry_run_prints_the_differences_and_writes_nothing(self) -> None:
+        self.late_attention()
+        before = self.counted()
+        output = self.invoke("usage", "rebuild", "--session", "sess-cli", "--dry-run")
+        self.assertIn("would rebuild 1 run(s)", output)
+        self.assertIn("seconds 620.0 -> 30.0", output)
+        self.assertIn("human_seconds 0.0 -> 590.0", output)
+        self.assertIn("dry run: nothing was written", output)
+        self.assertEqual(before, self.counted())
+        payload = json.loads(
+            self.invoke("usage", "rebuild", "--session", "sess-cli", "--dry-run", "--json")
+        )
+        (run,) = payload["runs"]
+        self.assertEqual((620.0, 30.0), (run["before"]["seconds"], run["after"]["seconds"]))
+        self.assertEqual(before, self.counted())
+
+    def test_every_run_takes_a_snapshot_with_the_liveness_file_first(self) -> None:
+        self.late_attention()
+        output = self.invoke("usage", "rebuild", "--all")
+        self.assertIn("rebuilt 1 run(s), refused 0", output)
+        (snapshot,) = [name for name in os.listdir(self.backups) if name.endswith(".sqlite3")]
+        self.assertIn(f"snapshot: {os.path.join(self.backups, snapshot)}", output)
+        self.assertTrue(os.path.isfile(os.path.join(self.backups, f"{snapshot}.liveness")))
+        self.assertEqual(30.0, sum(row[2] for row in self.counted()))
+
+    def test_a_refusal_is_printed_and_exits_non_zero(self) -> None:
+        os.remove(liveness.path_for(self.database))
+        before = self.counted()
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream), self.assertRaises(SystemExit) as stopped:
+            cli.main(["usage", "rebuild", "--all"])
+        self.assertEqual(1, stopped.exception.code)
+        self.assertIn("refused (no-liveness)", stream.getvalue())
+        self.assertEqual(before, self.counted())
+        self.assertFalse(os.path.isdir(self.backups))
+
+    def test_a_snapshot_that_cannot_be_taken_stops_the_rebuild_before_any_run(self) -> None:
+        self.late_attention()
+        before = self.counted()
+        with (
+            mock.patch.object(
+                store_backups, "snapshot_identity", side_effect=RuntimeError("torn copy")
+            ),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            self.invoke("usage", "rebuild", "--all")
+        self.assertEqual("usage rebuild: torn copy", stopped.exception.code)
+        self.assertEqual(before, self.counted())
+
+    def test_one_run_or_all_and_an_agent_only_with_its_session(self) -> None:
+        for argv in (
+            ["usage", "rebuild"],
+            ["usage", "rebuild", "--all", "--session", "sess-cli"],
+            ["usage", "rebuild", "--all", "--agent", "worker"],
+        ):
+            with (
+                self.subTest(argv=argv),
+                mock.patch.object(sys, "stderr", io.StringIO()),
+                self.assertRaises(SystemExit) as stopped,
+            ):
+                cli.main(argv)
+            self.assertEqual(2, stopped.exception.code)
 
 
 if __name__ == "__main__":
