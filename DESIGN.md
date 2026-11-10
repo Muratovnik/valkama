@@ -1670,11 +1670,12 @@ its own and says so: not knowing what it answers is no reason to hide what it sa
 Where another item's comment, reply, report, outcome or description named this one, its
 discussion shows the record as a quiet line among the threads, by its time and in the order
 the threads take; it is not a thread, so it has no sheet, no Reply, no mark, is not counted
-and stands only in the whole view. Its head says where and from which item, «Упомянута в
-комментарии MAIN-12», then who wrote it as a comment's head does and the time; the number is
-the item's link, as a number in any text is, and opens that item, since no address opens a card
-at a comment. Under the head the words' first line stands in the tertiary ink after the rule a
-quote has, on one line with the whole of it in its hint. A record whose item is deleted reads
+and stands only in the whole view. It says where and from which item, «Упомянута в
+комментарии MAIN-12», the number the item's link, as a number in any text is, which opens that
+item, since no address opens a card at a comment; under that, who wrote it and when, as a
+comment's head says it; and under that the words' first line in the tertiary ink after the rule a
+quote has, on one line with the whole of it in its hint. Where and who on one line, a dot between,
+made one run too wide for a phone and broke the number at its hyphen. A record whose item is deleted reads
 «Упомянута в удалённой задаче», with no link and no words. When the item has more records than
 the read brings, one line under the list says how many older ones are not shown. The history's
 «Упомянуто в другой задаче» row names the same item, «В комментарии MAIN-12», while the record of

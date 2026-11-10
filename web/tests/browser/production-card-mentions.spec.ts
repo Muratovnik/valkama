@@ -146,13 +146,14 @@ for (const width of [1280, 390] as const)
       await expect(commentLine.locator('.meta-session')).toBeVisible()
       await expect(reportLine.locator('.meta-who')).toContainText(locale === 'en' ? 'you' : 'вы')
       await expect(reportLine.locator('.mention-quote')).toHaveText('Shipped the export.')
-      // Each head is who and when as one unit, and no line of it ends or starts with the dot.
+      // Who and when are one unit, as on a comment's head.
       const heads = await lines.locator('.mention-head').all()
-      for (const [index, head] of heads.entries()) {
+      for (const [index, head] of heads.entries())
         await expectUnitHeld(head, `Mention ${index} at ${width}px, ${locale}`)
-        for (const { text } of await drawnLines(head, '.meta-who'))
-          expect(text.trim(), `Mention ${index}: ${text}`).not.toMatch(/^·|·$/u)
-      }
+      // The item's number is drawn whole on one line: held to the author, it broke at its
+      // hyphen at 390px, «MAIN-» over «265».
+      for (const linked of [commentLine, reportLine])
+        expect(await drawnLines(linked, '.mention-where a')).toHaveLength(1)
       // A deleted item: no link and no words.
       await expect(deletedLine.locator('a')).toHaveCount(0)
       await expect(deletedLine.locator('.mention-quote')).toHaveCount(0)

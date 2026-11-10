@@ -3,11 +3,15 @@
  * One record of another item's text naming this one, as a quiet line among the threads.
  *
  * It is not a thread: nothing answers it here, nothing marks it, and it has no sheet, since
- * an answer goes in the thread of the comment it points at. Its head says where the words
- * stand and from which item, then who wrote them as a comment's head says it, and the time;
- * the item's number is the link to it, as a number in any text on the card is. Under the
- * head stand the words' first line in the quieter ink, cut at the line's end with the whole
- * of them in its hint. A record whose item is deleted says so and leads nowhere.
+ * an answer goes in the thread of the comment it points at. It says where the words stand and
+ * from which item, the item's number the link to it as a number in any text on the card is;
+ * under that who wrote them and when, as a comment's head says it; and under that the words'
+ * first line in the quieter ink, cut at the line's end with the whole of them in its hint. A
+ * record whose item is deleted says so and leads nowhere.
+ *
+ * Where and who stood on one line first, a dot between them. Held to the number by no-break
+ * spaces so that no line started or ended with it, the dot made the number and the author one
+ * run wider than a phone's column, which broke the number at its hyphen, «MAIN-» over «265».
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -33,25 +37,21 @@ const authorName = computed(() =>
     : actorName(props.line.author) || t('workItem.unknownAuthor'),
 )
 const authorSession = computed(() => (props.line.byPerson ? '' : actorSession(props.line.author)))
-/**
- * The author after the item's number, the dot held to both by no-break spaces, so a line of
- * the head neither ends nor starts with it. A space in the template is dropped there.
- */
-const byline = computed(() => `\u{A0}·\u{A0}${authorName.value}`)
 </script>
 
 <template>
   <div class="mention">
+    <p class="mention-where">
+      <RichText
+        :source="where"
+        inline
+      />
+    </p>
     <MetaLine
       class="mention-head"
       :when="when(line.at)"
       :session="authorSession"
-      phrase
-      ><RichText
-        class="mention-where"
-        :source="where"
-        inline
-      />{{ byline }}</MetaLine
+      >{{ authorName }}</MetaLine
     >
     <p
       v-if="line.quote"
@@ -74,7 +74,9 @@ const byline = computed(() => `\u{A0}·\u{A0}${authorName.value}`)
 }
 
 .mention-where {
+  margin: 0;
   color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .mention-quote {
