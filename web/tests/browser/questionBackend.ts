@@ -262,3 +262,10 @@ export async function openQuestion(
   return { ...opened, requests, stream, card: opened.drawer.locator('.request-card') }
 }
 export const send = (scope: Locator) => scope.getByRole('button', { name: 'Send', exact: true })
+
+/**
+ * The verb in the card's facts that goes to a waiting question: «Answer» with the question's
+ * sign, beside the state. It was the status «Waiting for an answer»; the state's dot says that.
+ */
+export const answerMark = (drawer: Locator) =>
+  drawer.locator('.card-facts-block').getByRole('button', { name: 'Answer', exact: true })

@@ -9,6 +9,7 @@ import { asRoot } from '../support/threads.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { now } from './planningFixtures.ts'
 import {
+  answerMark,
   asked,
   openQuestion,
   question,
@@ -53,7 +54,7 @@ test('a choice is only a choice until Send, then folds under the question and le
   expect(requests.writes[0]?.body.answers).toEqual({ route: 'move' })
   expect(requests.writes[0]?.body).not.toHaveProperty('note')
   // Nothing waits here any more, in the card's facts or in the rail.
-  await expect(drawer.getByRole('button', { name: 'Waiting for an answer' })).toHaveCount(0)
+  await expect(answerMark(drawer)).toHaveCount(0)
   await expect(navCount(page)).toHaveCount(0)
   // The old section is gone with its heading.
   await expect(page.getByRole('region', { name: 'Questions and decisions' })).toHaveCount(0)
@@ -257,7 +258,7 @@ for (const failure of [503, 'abort'] as const) {
     await expect(card.getByRole('textbox', { name: /^Comment: /u })).toHaveValue('And quickly')
     await expect(card.locator('.request-state')).toHaveCount(0)
     await expect(navCount(page)).toHaveText('1')
-    await expect(drawer.getByRole('button', { name: 'Waiting for an answer' })).toBeVisible()
+    await expect(answerMark(drawer)).toBeVisible()
   })
 }
 
@@ -318,7 +319,7 @@ for (const [width, height] of [
       (_, index) => `Paragraph ${index} of a description long enough to push the rest away.`,
     ).join('\n\n')
     await drawer.locator('.discussion-form').getByRole('textbox').fill('')
-    const mark = drawer.getByRole('button', { name: 'Waiting for an answer', exact: true })
+    const mark = answerMark(drawer)
     await expect(mark).toBeVisible()
     await mark.click()
     await expect(card.getByRole('radio').first()).toBeFocused()
@@ -343,7 +344,7 @@ test('the mark brings the question back from another section', async ({ page }) 
     .getByRole('tab', { name: 'Relations', exact: true })
     .click()
   await expect(card).toBeHidden()
-  await drawer.getByRole('button', { name: 'Waiting for an answer', exact: true }).click()
+  await answerMark(drawer).click()
   await expect(card.getByRole('radio').first()).toBeFocused()
   await expect(card).toBeInViewport()
 })
