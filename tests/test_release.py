@@ -513,6 +513,12 @@ class ReleasePriceTests(unittest.TestCase):
             ):
                 release.fetch_price_list()
 
+    def test_a_list_that_names_none_of_the_models_is_refused_not_passed(self) -> None:
+        for document in ({}, {"some-other-model": {"litellm_provider": "anthropic"}}):
+            with self.subTest(document=document):
+                message = self.refusal(price_table(), document)
+                self.assertIn("No price was compared", message)
+
     def test_the_stage_exits_with_the_refusal(self) -> None:
         refusal = release.PriceCheckError("release check: nothing was compared")
         with (

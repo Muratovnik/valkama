@@ -536,6 +536,13 @@ def check_prices(
     """The price stage: the lines to print when it passes, or a refusal naming each difference."""
 
     found = compare_prices(table or price_table(), fetch())
+    if not found.compared:
+        # An empty answer or a list in another shape would otherwise pass with every
+        # model "not listed there".
+        raise PriceCheckError(
+            f"release check: {LITELLM_PRICES} lists none of the table's models, so it is"
+            " not the price list this check reads. No price was compared."
+        )
     if found.differences:
         listed = "\n".join(f"  - {line}" for line in (*found.differences, *found.notes))
         raise PriceCheckError(
