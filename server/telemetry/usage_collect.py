@@ -113,6 +113,46 @@ class Reading:
     yielded: set[int] = field(default_factory=set)
 
 
+@dataclass
+class Rereading:
+    """A reading again in progress: where it stands, kept in memory between passes.
+
+    `end` is the `read_offset` it started from and reads to; `offset` how far it has got.
+    Nothing of it is in the store, so a process that stops loses it and starts over.
+    """
+
+    target: Target
+    path: str
+    end: int
+    run_id: int
+    work: _Pass
+    offset: int = 0
+    progress: Progress = field(default_factory=Progress)
+    rows: list[Row] = field(default_factory=list)
+    counted: dict[int, int | None] = field(default_factory=dict)
+    yielded: set[int] = field(default_factory=set)
+    last: Parsed | None = None
+
+    @classmethod
+    def start(
+        cls, target: Target, path: str, end: int, coverage: liveness.Coverage, run_id: int
+    ) -> Rereading:
+        """A reading of `path` from its start to `end`, not begun."""
+
+        return cls(target, path, end, run_id, _Pass(coverage, math.inf))
+
+    @property
+    def done(self) -> bool:
+        return self.offset >= self.end
+
+    def reading(self) -> Reading:
+        """What the whole reading gave, once `done`."""
+
+        return Reading(
+            [*self.rows, *self.progress.provisional], self.counted, self.last, self.yielded
+        )
+
+
 def source(target: Target) -> str | None:
     """The file a run is read from: its own path while it is there, else Valkama's archive."""
 
@@ -286,24 +326,36 @@ class Collector:
         None when the bytes no longer end a line at `end`.
         """
 
-        work = _Pass(coverage, math.inf)
-        progress = Progress()
-        rows: list[Row] = []
-        counted: dict[int, int | None] = {}
-        yielded: set[int] = set()
-        last: Parsed | None = None
-        offset = 0
-        while offset < end:
-            lines, reached, _more = _read_lines(path, offset, min(CHUNK_BYTES, end - offset))
+        again = Rereading.start(target, path, end, coverage, run_id)
+        return again.reading() if self.read_more(again, math.inf) else None
+
+    def read_more(self, again: Rereading, deadline: float) -> bool:
+        """Go on with a reading again, chunk by chunk, until it is done or `deadline` passed.
+
+        At least one chunk per call, so a reading always gets on. False when the bytes no
+        longer end a line where they should: the reading is then of no use.
+        """
+
+        while not again.done:
+            offset, end = again.offset, again.end
+            lines, reached, _more = _read_lines(again.path, offset, min(CHUNK_BYTES, end - offset))
             if reached == offset or reached > end:
-                return None
-            last = self.parse(target, progress, lines, work, counted.__contains__, run_id)
-            rows.extend(last.ledger.closed)
-            counted |= last.ledger.new_requests
-            yielded |= last.yielded
-            progress = last.progress
-            offset = reached
-        return Reading([*rows, *progress.provisional], counted, last, yielded)
+                return False
+            last = self.parse(
+                again.target,
+                again.progress,
+                lines,
+                again.work,
+                again.counted.__contains__,
+                again.run_id,
+            )
+            again.rows.extend(last.ledger.closed)
+            again.counted |= last.ledger.new_requests
+            again.yielded |= last.yielded
+            again.progress, again.last, again.offset = last.progress, last, reached
+            if time.monotonic() >= deadline:
+                break
+        return True
 
     def parse(
         self,

@@ -425,7 +425,7 @@ class AtomicityTests(RebuildCase):
     def overtaken(self, meanwhile: object) -> tuple[usage_rebuild.Report, tuple]:
         """A rebuild during whose parsing `meanwhile` runs; what it saw when that was done."""
 
-        real = usage_collect.Collector.read_again
+        real = usage_collect.Collector.read_more
         seen: list[tuple] = []
 
         def read_then_lose(collector: usage_collect.Collector, *arguments: object) -> object:
@@ -434,7 +434,7 @@ class AtomicityTests(RebuildCase):
             seen.append(self.exact())
             return reading
 
-        with mock.patch.object(usage_collect.Collector, "read_again", read_then_lose):
+        with mock.patch.object(usage_collect.Collector, "read_more", read_then_lose):
             report = self.rebuild(session="sess-1")
         return report, seen[0]
 

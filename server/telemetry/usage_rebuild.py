@@ -4,8 +4,9 @@ A later change to how segments are made (a new column, a new price) reaches the 
 only through this. So it never loses what is already counted:
 
 - It reads the same bytes the reader already read, from the start to the run's
-  `read_offset`, through the reader's own path (`Collector.read_again`, which feeds
-  `Collector.parse` the chunks the reader takes). The run's former claims in
+  `read_offset`, through the reader's own path (`Collector.read_more`, which feeds
+  `Collector.parse` the chunks the reader takes). The command reads a run in one go; the
+  background reader passes a deadline and resumes the reading on its next pass. The run's former claims in
   `usage_requests` are not taken as seen: only what this reading counted is, and a
   request another run counts goes as `usage_claims` says.
 - Parsing happens outside the write transaction. The transaction only deletes the run's
@@ -38,6 +39,7 @@ item (and no item) had before and after.
 
 from __future__ import annotations
 
+import math
 import os
 import sqlite3
 import time
@@ -48,7 +50,7 @@ from typing import Any
 from .. import store, store_backups
 from . import liveness, usage_claims, usage_collect
 from .usage_clock import EXTERNAL, GAP, HUMAN, SUBAGENT
-from .usage_collect import Collector, Reading
+from .usage_collect import Collector, Reading, Rereading
 from .usage_ledger import SEGMENT_COLUMNS, TOKEN_COLUMNS, segment_values, stamp, write_rows
 from .usage_prices import PRICE_BOOK
 from .usage_store import READING
@@ -60,6 +62,8 @@ SNAPSHOT_LABEL = "usagerebuild"
 REBUILT = "rebuilt"
 WOULD_REBUILD = "would-rebuild"
 REFUSED = "refused"
+#: Read in part before the caller's deadline: `RunReport.rereading` goes on from there.
+UNFINISHED = "unfinished"
 
 #: Why a run, or the whole operation, was refused, with what to tell a person. The first
 #: three are the statuses the reader gives a run it cannot read.
@@ -115,6 +119,8 @@ class RunReport:
     items: list[dict] = field(default_factory=list)
     #: The kind of error behind a `failed` refusal.
     error: str | None = None
+    #: An `unfinished` reading, to hand back to `rebuild_run` as `resume`.
+    rereading: Rereading | None = None
 
 
 @dataclass
@@ -137,7 +143,10 @@ class Report:
             "refused": self.refused,
             "snapshot": self.snapshot,
             "runs": [
-                {**vars(run), "segments": list(run.segments) if run.segments else None}
+                {
+                    **{key: value for key, value in vars(run).items() if key != "rereading"},
+                    "segments": list(run.segments) if run.segments else None,
+                }
                 for run in self.runs
             ],
         }
@@ -187,8 +196,26 @@ def rebuild(
     coverage = liveness.Coverage(liveness.intervals(store_path))
     for run in runs:
         target = targets.get((str(run["session_id"]), str(run["agent_id"])))
-        report.runs.append(rebuild_run(collector, run, target, coverage, dry_run=dry_run))
+        line = rebuild_run(collector, run, target, coverage, dry_run=dry_run)
+        if not dry_run:
+            record_refusal(conn, line)
+        report.runs.append(line)
     return report
+
+
+def record_refusal(conn: sqlite3.Connection, line: RunReport) -> None:
+    """Keep with a stale run why it cannot be read again, for the current reading.
+
+    So neither the background reader nor `valkama doctor` takes it for one still waiting.
+    A refusal in `RETRIED` says only that something moved meanwhile and is not kept.
+    """
+
+    if line.outcome == REFUSED and line.reason not in RETRIED:
+        conn.execute(
+            "UPDATE usage_runs SET reread_refused = ?, refused_reading = ?"
+            " WHERE id = ? AND reading < ?",
+            (line.reason, READING, line.run_id, READING),
+        )
 
 
 def rebuild_run(
@@ -198,12 +225,30 @@ def rebuild_run(
     coverage: liveness.Coverage,
     *,
     dry_run: bool = False,
+    deadline: float = math.inf,
+    resume: Rereading | None = None,
 ) -> RunReport:
-    """Rebuild one run, or say why not. Takes no snapshot: the caller owns the recovery point."""
+    """Rebuild one run, or say why not. Takes no snapshot: the caller owns the recovery point.
+
+    The reading stops between chunks once `deadline` has passed, and the run is then
+    `unfinished`: `resume` with its `rereading` goes on from there. The run must still
+    stand where the reading started, else it moved and the reading is dropped.
+    """
 
     line = RunReport(int(run["id"]), str(run["session_id"]), str(run["agent_id"]), run["client"])
     try:
-        target, reading = _read(collector, run, target, coverage)
+        if resume is None:
+            again = _start(run, target, coverage)
+        elif int(run["read_offset"]) != resume.end:
+            raise _RefusedError("moved")
+        else:
+            again = resume
+        if not collector.read_more(again, deadline):
+            raise _RefusedError("changed")
+        if not again.done:
+            line.outcome, line.rereading = UNFINISHED, again
+            return line
+        target, reading = again.target, again.reading()
         before = _segments(collector.conn, line.run_id)
         after = [
             dict(zip(SEGMENT_COLUMNS, segment_values(row), strict=True)) for row in reading.rows
@@ -229,10 +274,8 @@ def _refuse(line: RunReport, reason: str) -> None:
     line.items = []
 
 
-def _read(
-    collector: Collector, run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage
-) -> tuple[Target, Reading]:
-    """The run read again to its `read_offset`, or the reason it may not be."""
+def _start(run: sqlite3.Row, target: Target | None, coverage: liveness.Coverage) -> Rereading:
+    """A reading again of the run to its `read_offset`, not begun, or the reason it may not be."""
 
     if run["status"] != "reading":
         raise _RefusedError(str(run["status"]))
@@ -244,10 +287,7 @@ def _read(
     end = int(run["read_offset"])
     if os.path.getsize(path) < end:
         raise _RefusedError("shorter")
-    reading = collector.read_again(target, path, end, coverage, int(run["id"]))
-    if reading is None:
-        raise _RefusedError("changed")
-    return target, reading
+    return Rereading.start(target, path, end, coverage, int(run["id"]))
 
 
 def _replace(collector: Collector, run: sqlite3.Row, target: Target, reading: Reading) -> None:

@@ -18,6 +18,11 @@ next pass comes as soon as one after a backlog does.
   unknown, or the rebuild failed) is tried once per staleness: the refusal is kept with
   the run, for the reading it was refused for, and the run waits until it is stale anew.
   A run that something moved meanwhile is simply tried on a later pass.
+- A run too large for what is left of a pass is read in slices: the reading stops between
+  chunks at the deadline, is kept in memory, and the next pass goes on with it before
+  any other run. Its rows are written only once it is whole, and only while the run still
+  stands where the reading started; one the live reading moved meanwhile drops it, goes
+  after the other waiting runs and is read from its start. A restart loses it too.
 
 What the runs say is the summary `valkama doctor` prints: how many are current, how many
 wait, how many were read again, and how many were refused, by reason.
@@ -31,9 +36,10 @@ import time
 from collections.abc import Callable
 
 from . import liveness, usage_prices, usage_rebuild
-from .usage_collect import PASS_SECONDS, Collector
+from .usage_collect import PASS_SECONDS, Collector, Rereading
 from .usage_prices import PRICE_BOOK
 from .usage_store import READING, UNPRICED_RUNS
+from .usage_targets import Target
 
 #: The runs waiting to be read again, newest first: stale, and not refused for the current
 #: reading. Both take `READING` twice.
@@ -88,6 +94,10 @@ class Reader:
         self.conn = conn
         self.store_path = store_path
         self._priced = False
+        #: A run read in part, the collector reading it and how far it got: resumed first.
+        self._unfinished: tuple[int, Collector, Rereading] | None = None
+        #: Runs whose reading in part was dropped because they moved: they go last.
+        self._moving: set[int] = set()
 
     def run_pass(self, report: Callable[[str], None], seconds: float = PASS_SECONDS) -> bool:
         """Read what is new, then stale runs, for about `seconds`; whether anything is left."""
@@ -108,30 +118,61 @@ class Reader:
             return False
         waiting = self._waiting()
         if not waiting:
+            self._unfinished = None
             return False
         if time.monotonic() >= deadline:
             return True
         if liveness.recovery_point(self.store_path) is None:
             snapshot = usage_rebuild.take_snapshot(self.conn, self.store_path)
             report(f"usage reader: recovery point before reading runs again: {snapshot}")
+        unfinished, self._unfinished = self._unfinished, None
+        if unfinished is not None and unfinished[0] in waiting:
+            run_id, collector, again = unfinished
+            waiting.remove(run_id)
+            if self._one(collector, run_id, again.target, again.work.coverage, deadline, again):
+                return True
         # A collector of its own: the targets it finds settle nothing for the live one.
         history = Collector(self.conn, self.store_path)
         targets = {
             (target.session, target.agent): target for target in history.finder.targets(set())
         }
         coverage = liveness.Coverage(liveness.intervals(self.store_path))
+        waiting.sort(key=self._moving.__contains__)
         for run_id in waiting:
             if time.monotonic() >= deadline:
                 return True
-            run = self.conn.execute(_WAITING_RUN, (run_id, READING, READING)).fetchone()
-            if run is None:
-                continue
-            target = targets.get((str(run["session_id"]), str(run["agent_id"])))
-            line = usage_rebuild.rebuild_run(history, run, target, coverage)
-            if line.outcome == usage_rebuild.REFUSED and line.reason not in usage_rebuild.RETRIED:
-                self.conn.execute(
-                    "UPDATE usage_runs SET reread_refused = ?, refused_reading = ?"
-                    " WHERE id = ? AND reading < ?",
-                    (line.reason, READING, run_id, READING),
-                )
+            run = self._run(run_id)
+            target = None if run is None else targets.get((run["session_id"], run["agent_id"]))
+            if self._one(history, run_id, target, coverage, deadline, None):
+                return True
         return bool(self._waiting())
+
+    def _run(self, run_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(_WAITING_RUN, (run_id, READING, READING)).fetchone()
+
+    def _one(
+        self,
+        collector: Collector,
+        run_id: int,
+        target: Target | None,
+        coverage: liveness.Coverage,
+        deadline: float,
+        resume: Rereading | None,
+    ) -> bool:
+        """Read one waiting run again, or go on with it; whether it is left unfinished."""
+
+        run = self._run(run_id)
+        if run is None:
+            return False
+        line = usage_rebuild.rebuild_run(
+            collector, run, target, coverage, deadline=deadline, resume=resume
+        )
+        if line.rereading is not None:
+            self._unfinished = (run_id, collector, line.rereading)
+            return True
+        if resume is not None and line.reason == "moved":
+            self._moving.add(run_id)
+        elif line.outcome == usage_rebuild.REBUILT:
+            self._moving.discard(run_id)
+        usage_rebuild.record_refusal(self.conn, line)
+        return False

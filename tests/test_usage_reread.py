@@ -1,8 +1,9 @@
 """The background reader reads stale runs again, after what is new and inside its budget.
 
 Time inside a pass is a clock the test moves: one second per run read again, none for
-anything else, so a pass of 2.5 seconds starts exactly three. A run is made stale the
-way the schema-15 upgrade leaves every run, by its `reading` at 0.
+anything else, so a pass of 2.5 seconds starts exactly three. A large run is read in
+chunks the clock counts instead. A run is made stale the way the schema-15 upgrade
+leaves every run, by its `reading` at 0.
 """
 
 from __future__ import annotations
@@ -55,6 +56,9 @@ class Clock:
 
 
 class RereadCase(Case):
+    #: What the clock moves for each run read again or gone on with.
+    RUN_SECONDS = 1.0
+
     def setUp(self) -> None:
         super().setUp()
         self.ticks((0, 3 * HOUR))
@@ -68,7 +72,7 @@ class RereadCase(Case):
 
         def one_second(collector, run, *rest, **options):  # type: ignore[no-untyped-def]
             self.attempts.append(int(run["id"]))
-            self.clock.now += 1.0
+            self.clock.now += self.RUN_SECONDS
             return real(collector, run, *rest, **options)
 
         patch = mock.patch.object(usage_rebuild, "rebuild_run", one_second)
@@ -205,6 +209,121 @@ class RefusalTests(RereadCase):
             self.assertFalse(self.pass_())
         self.assertEqual(2, len(calls))
         self.assertEqual(set(), self.stale())
+
+    def test_the_command_keeps_a_refusal_too(self) -> None:
+        runs = self.sessions(2)
+        runs[0].path.unlink()
+        self.make_stale()
+        report = usage_rebuild.rebuild(self.reader, self.store_path)
+        self.assertEqual(
+            ["missing"],
+            [line.reason for line in report.runs if line.outcome == usage_rebuild.REFUSED],
+        )
+        self.assertEqual(
+            {"current": 1, "waiting": 0, "reread": 1, "refused": "missing 1"},
+            self.doctor_check()["presentation"]["parameters"],
+        )
+
+
+#: A chunk of a large run, as small as a test can make one, and what reading it costs.
+CHUNK = 1500
+CHUNK_SECONDS = 0.25
+#: A pass's budget for a large run: four chunks.
+SLICE_BUDGET = 1.0
+
+
+class SlicedTests(RereadCase):
+    """A stale run too large for one pass is read in slices across passes and resumed."""
+
+    RUN_SECONDS = 0.0
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.big = self.session("big")
+        for number in range(40):
+            self.big.prompt(number * 60)
+            self.big.end_turn(number * 60 + 20)
+        self.live = self.session("live")
+        self.live.prompt(0)
+        self.live.end_turn(10)
+        self.read()
+        self.reader.execute("UPDATE usage_runs SET reading = 0 WHERE session_id = 'big'")
+        #: Where each chunk of the large run's file was read from, in order.
+        self.chunks: list[int] = []
+        real = usage_collect._read_lines
+        big = os.path.normcase(os.path.abspath(self.big.path))
+
+        def timed(path: str, offset: int, limit: int) -> tuple[list[bytes], int, bool]:
+            if os.path.normcase(os.path.abspath(path)) == big:
+                self.chunks.append(offset)
+                self.clock.now += CHUNK_SECONDS
+            return real(path, offset, limit)
+
+        for patch in (
+            mock.patch.object(usage_collect, "CHUNK_BYTES", CHUNK),
+            mock.patch.object(usage_collect, "_read_lines", timed),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+        self.assertGreater(os.path.getsize(self.big.path), 12 * CHUNK)
+
+    def big_segments(self) -> list[tuple]:
+        rows = self.reader.execute("SELECT * FROM usage_segments WHERE session_id = 'big'")
+        return sorted(
+            (tuple(value for key, value in dict(row).items() if key != "id") for row in rows),
+            key=repr,
+        )
+
+    def assert_as_one_go(self) -> None:
+        """The run is current, and a rebuild of the same bytes in one go makes its rows."""
+
+        self.assertEqual(READING, self.run_row("big")["reading"])
+        sliced = self.big_segments()
+        self.reader.execute("UPDATE usage_runs SET reading = 0 WHERE session_id = 'big'")
+        report = usage_rebuild.rebuild(self.reader, self.store_path, session="big")
+        self.assertFalse(report.failed, usage_rebuild.render(report))
+        self.assertEqual(sliced, self.big_segments())
+
+    def test_each_pass_stops_at_its_deadline_and_the_next_goes_on(self) -> None:
+        per_pass = []
+        for number in range(MOST_PASSES):
+            at = HOUR + number * 60
+            self.live.prompt(at)
+            self.live.end_turn(at + 20)
+            before = len(self.chunks)
+            more = self.history.run_pass(self.said.append, SLICE_BUDGET)
+            per_pass.append(len(self.chunks) - before)
+            # The growing file was read in the same pass.
+            self.assertEqual(os.path.getsize(self.live.path), self.run_row("live")["read_offset"])
+            if not more:
+                break
+        else:
+            self.fail("the large run was never read to its end")
+        self.assertGreaterEqual(len(per_pass), 3)
+        self.assertEqual([4] * (len(per_pass) - 1), per_pass[:-1])
+        self.assertTrue(0 < per_pass[-1] <= 4, per_pass)
+        # Resumed, never begun again.
+        self.assertEqual(1, self.chunks.count(0))
+        self.assertEqual(sorted(self.chunks), self.chunks)
+        self.assert_as_one_go()
+
+    def test_a_run_that_moved_drops_its_reading_and_begins_again(self) -> None:
+        self.assertTrue(self.history.run_pass(self.said.append, SLICE_BUDGET))
+        self.assertEqual(4, len(self.chunks))
+        # The client writes to the large transcript: the live reading moves the run.
+        self.big.prompt(HOUR)
+        self.big.end_turn(HOUR + 20)
+        self.history.run_pass(self.said.append, SLICE_BUDGET)
+        row = self.run_row("big")
+        self.assertEqual(os.path.getsize(self.big.path), row["read_offset"])
+        self.assertEqual(
+            (0, None, None),
+            (row["reading"], row["reread_refused"], row["reread_at"]),
+            "nothing of the reading in part was written, and nothing was refused",
+        )
+        drain(self.history, SLICE_BUDGET)
+        self.assertEqual(2, self.chunks.count(0))
+        self.assert_as_one_go()
 
 
 class LivenessTests(RereadCase):

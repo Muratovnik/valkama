@@ -57,15 +57,18 @@ checkouts are therefore distinguishable even at the same version.
   request it counted moves to another run, or when this build's price table prices a model
   whose tokens it holds without a cost (checked once per price table, when the reader
   starts). Once nothing new is left to read, the background reader reads stale runs again
-  through the same path as `valkama usage rebuild`. It reads them one run per transaction,
-  newest first, and starts none after its pass's time is up, so live reading never waits
-  for history. Without the liveness file nothing is read again. Before the first run a
-  process reads again, there is a verified snapshot with the liveness file copied beside
-  it: the schema-15 upgrade's own, or else one `usagerebuild` snapshot.
-  A run that cannot be read again, because its transcript is gone, shorter or unreadable,
-  is tried once each time it goes stale, and the run keeps the reason. A run that something
-  moved meanwhile is tried on a later pass. `usage rebuild` marks the runs it rebuilds
-  current. The upgrade makes every run read before it stale, so the first passes after it
+  through the same path as `valkama usage rebuild`. It reads them newest first, writes each
+  run in one transaction once it has been read to the end, and stops reading when its
+  pass's time is up, so live reading never waits for history. A run too large for one pass
+  is read on across the next ones, kept in memory until it is whole, and read from its
+  start again if the client wrote to it meanwhile or the process restarted. Without the
+  liveness file nothing is read again. Before the first run a process reads again, there is
+  a verified snapshot with the liveness file copied beside it: the schema-15 upgrade's own,
+  or else one `usagerebuild` snapshot. A run that cannot be read again, because its
+  transcript is gone, shorter or unreadable, is tried once each time it goes stale, and the
+  run keeps the reason. A run that something moved meanwhile is tried on a later pass.
+  `usage rebuild` marks the runs it rebuilds current, and the runs it cannot rebuild keep
+  the reason the same way. The upgrade makes every run read before it stale, so the first passes after it
   read the whole history again, and a turn that started with no item can then move to
   another item, as the fix below now places it.
 - **`valkama doctor` on usage reading.** One line counts the usage runs that are current,
