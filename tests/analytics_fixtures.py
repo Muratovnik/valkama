@@ -10,7 +10,7 @@ import datetime as dt
 import os
 import tempfile
 import unittest
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from unittest import mock
 
@@ -18,7 +18,6 @@ from server import store
 from server.analytics import api, usage
 from server.planning import service as planning
 from server.projects import project_registry
-from server.telemetry import usage_ledger
 from tests.registry_fixtures import project_entry, registry_bytes
 
 START = dt.datetime(2030, 3, 4, 0, 0, 0, tzinfo=dt.UTC)
@@ -27,7 +26,10 @@ DAY = 24 * HOUR
 
 
 def stamp(seconds: float) -> str:
-    return usage_ledger.stamp((START + dt.timedelta(seconds=seconds)).timestamp())
+    """A moment as the usage rows store it, exact to the millisecond."""
+
+    moment = START + dt.timedelta(milliseconds=round(seconds * 1000))
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def day(offset_days: int) -> str:
@@ -174,7 +176,7 @@ class UsageStore(unittest.TestCase):
         return body["usage"]
 
 
-def tokens_sum(lines: list[Mapping]) -> dict[str, int | None]:
+def tokens_sum(lines: Sequence[Mapping]) -> dict[str, int | None]:
     """Each kind added up the way a reader would: absent where no line reported it."""
 
     kinds = lines[0]["tokens"].keys() if lines else ()

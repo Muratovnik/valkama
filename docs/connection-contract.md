@@ -924,7 +924,7 @@ MCP tool reads it, for the same reason as above.
 
 | Parameter | What it takes |
 | --- | --- |
-| `from`, `to` | required. A date, `2030-03-04`, meaning the start of that day at `utc_offset`, or a time with its own offset, `2030-03-04T09:00:00+03:00`. `to` is not included and must be later than `from` |
+| `from`, `to` | required. A date, `2030-03-04`, meaning the start of that day at `utc_offset`, or a time with its own offset, `2030-03-04T09:00:00Z` or `2030-03-04T09:00:00%2B03:00`: in a query string a `+` reads as a space, so it is sent as `%2B`. `to` is not included and must be later than `from`. Both, and with `compare` the period before too, lie between 1970 and the start of 9999 |
 | `step` | `day` (the default) or `hour` |
 | `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day or an hour of the series starts at the caller's midnight or full hour. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
 | `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `launch_class`, `model`, `effort`, `environment` |
@@ -933,8 +933,10 @@ MCP tool reads it, for the same reason as above.
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
 
 A filter admits a stretch of work when its value is among those named, and every filter
-must admit it. A period may hold at most 2,400 steps. Any other parameter, a repeated
-one, a value out of its range or a list with an empty entry is refused with `400` and
+must admit it. A parameter given with an empty value, `model=` or `none=`, is taken as
+not given, as on the reads above. A period may hold at most 2,400 steps. Any other
+parameter, a repeated one, a value out of its range or a list with an empty entry, such
+as `model=m-1,,m-2`, is refused with `400` and
 `{"error": {"code": "invalid_request", "message": …}}`, the shape the reads above refuse
 with.
 
@@ -988,14 +990,23 @@ Two agents working one hour side by side spent two hours, a subagent's time coun
 beside its coordinator's, and nothing is taken as a union. The union, `elapsed_seconds`
 above, is not given, because it does not add up across groups or steps. These do: the
 rows add up to `total`, the points of `series` add up to `total`, a point's `groups` add
-up to the point, and a period that holds the whole store adds up to the reads of each
-of its sessions. A figure is rounded where it is published, seconds to the millisecond
-and cost to the millionth of a dollar, so a sum may differ from its total by that much.
+up to the point, and the `rows` of `comparison` add up to its `total`, exactly: each
+stretch of work is counted in whole units, a millisecond, a millionth of a dollar and a
+token, and the figures are published at that precision.
 
 A stretch of work that crosses a step boundary or an edge of the period is split in
-proportion to its time, with its tokens and its cost. Tokens stay whole: each kind is
-shared out by largest remainder, so the parts add up to what the stretch reported. A
-stretch with no length, a model called on the side, counts in the step where it starts.
+proportion to its time. What it has spent of a figure by a moment is that figure times
+the share of its time before the moment, rounded half up to a whole unit; what it spends
+between two moments is the difference. So what falls between two moments depends on
+those moments alone: a period's total is the same by the hour and by the day, with
+`compare` and without, and two adjacent periods add up to the one they make. A stretch
+with no length, a model called on the side, counts whole in the step that holds its
+moment.
+
+A period that holds the whole store gives the same figures as the per-session reads
+above added up, and an item's row the same as that item's read, with tokens equal and
+seconds and cost to within the rounding of each stretch: half a millisecond and half a
+millionth of a dollar per stretch, and the rounding of each read's own sum.
 
 A value in `group` carries `id` and `unknown`, which is `true` when the store does not
 hold the value; such a value is its own group and no string stands in for it. Work on no
@@ -1004,9 +1015,9 @@ item is its own group too, with an `id` of `null` and `unknown` `false`.
 | Dimension | Value | Beside `id` |
 | --- | --- | --- |
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
-| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it | `name`, as the projects registry gives it, or `null` |
+| `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
 | `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
-| `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in`, `opened_host` and `state`, as a card's executor gives them |
+| `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them. Not its live `state`, which changes while the period's figures do not |
 | `launch_class` | how the run was launched, as the usage rows hold it | — |
 | `model`, `effort`, `environment` | as the usage rows hold them | — |
 

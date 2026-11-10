@@ -6,13 +6,18 @@ the time. Of those reads' two times this one gives `agent_seconds`, the sum of t
 stretches of work: two agents working one hour side by side spent two. Their union
 (`elapsed_seconds` there) is not given, because it does not add up across groups or
 steps, and every figure here does: the rows add up to the total, the steps of the series
-to the total, and the groups of a step to the step. The whole store read over a period
-that holds all of it is what the per-session reads add up to.
+to the total, and the groups of a step to the step, exactly. The whole store read over a
+period that holds all of it is what the per-session reads add up to, to within half a
+millisecond and half a millionth of a dollar for each stretch.
 
 A stretch of work that crosses a step boundary or an edge of the period is split in
-proportion to its time, and its tokens and cost with it. Tokens stay whole: each kind a
-stretch reported is shared out by largest remainder, so its parts add up to it. A stretch
-with no length lies where it starts.
+proportion to its time, with its tokens and its cost, in whole units: a token, a
+millisecond, a millionth of a dollar. What a stretch has spent by a moment is its total
+times the share of its time before that moment, rounded half up; what it spends between
+two moments is the difference. So the part that falls between two moments depends on
+those moments alone, never on the other cuts of the same read: a period's total is the
+same by the hour, by the day and beside a comparison, and two adjacent periods add up to
+the one they make. A stretch with no length counts whole at its moment.
 
 A day is the caller's: the request carries its offset from UTC in minutes, and the server
 reads no time-zone database. A period across a change of daylight saving time is cut at
@@ -46,7 +51,6 @@ from dataclasses import dataclass, field
 from ..planning import executors
 from ..planning import usage as item_usage
 from ..projects import project_registry
-from ..telemetry import usage_ledger
 
 ACCOUNT = "account"
 PROJECT = "project"
@@ -60,6 +64,8 @@ DIMENSIONS = (ACCOUNT, PROJECT, WORK_ITEM, EXECUTOR, LAUNCH_CLASS, MODEL, EFFORT
 
 #: The length of each step, in seconds. A day is always 24 hours at one offset.
 STEPS = {"hour": 3600, "day": 86400}
+_SECOND = 1_000_000
+_MILLISECOND = 1000
 MAX_GROUPS = 2
 #: A hundred days by the hour, or six and a half years by the day.
 MAX_STEPS = 2400
@@ -69,6 +75,12 @@ MAX_FILTER_VALUES = 100
 MAX_VALUE_LENGTH = 512
 
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
+_MICRO = dt.timedelta(microseconds=1)
+#: The moments a period and its comparison may lie between: nothing is stored before
+#: the first, and a date past the second could not be written at every offset.
+_EARLIEST = 0
+_LATEST = (dt.datetime(9999, 1, 1, tzinfo=dt.UTC) - _EPOCH) // _MICRO
 _TOKENS = len(item_usage.TOKEN_KINDS)
 #: Where each priced kind sits among the token columns.
 _PRICED = tuple(
@@ -116,10 +128,10 @@ class UsageQueryError(ValueError):
 
 @dataclass(frozen=True)
 class UsageQuery:
-    """One request, checked: the period as epoch seconds and what to cut it by."""
+    """One request, checked: the period in microseconds since the epoch, and its cuts."""
 
-    start: float
-    end: float
+    start: int
+    end: int
     step: str
     utc_offset: int
     group_by: tuple[str, ...] = ()
@@ -128,18 +140,28 @@ class UsageQuery:
     compare: bool = False
 
 
-def _moment(text: str, name: str, zone: dt.tzinfo) -> float:
+def _micro(moment: dt.datetime) -> int:
+    return (moment - _EPOCH) // _MICRO
+
+
+def _at(micro: int, zone: dt.tzinfo) -> str:
+    return (_EPOCH + micro * _MICRO).astimezone(zone).isoformat()
+
+
+def _moment(text: str, name: str, zone: dt.tzinfo) -> int:
     """A date as the start of that day in the caller's zone, or a time with its own offset."""
 
     try:
         if _DATE.fullmatch(text):
-            return dt.datetime.combine(dt.date.fromisoformat(text), dt.time(), zone).timestamp()
+            return _micro(dt.datetime.combine(dt.date.fromisoformat(text), dt.time(), zone))
         moment = dt.datetime.fromisoformat(text)
-    except ValueError as error:
+        if moment.tzinfo is None:
+            raise UsageQueryError(f"{name} must be a date or a time with its offset")
+        return _micro(moment)
+    except (ValueError, OverflowError) as error:
+        if isinstance(error, UsageQueryError):
+            raise
         raise UsageQueryError(f"{name} must be a date or a time with its offset") from error
-    if moment.tzinfo is None:
-        raise UsageQueryError(f"{name} must be a date or a time with its offset")
-    return moment.timestamp()
 
 
 def _dimensions(names: Iterable[str], parameter: str) -> list[str]:
@@ -184,8 +206,12 @@ def query(
     begins, ends = _moment(start, "from", zone), _moment(end, "to", zone)
     if ends <= begins:
         raise UsageQueryError("to must be later than from")
-    length, shift = STEPS[step], utc_offset * 60
-    steps = math.ceil((ends + shift) / length) - math.floor((begins + shift) / length)
+    if (2 * begins - ends if compare else begins) < _EARLIEST or ends > _LATEST:
+        raise UsageQueryError(
+            "from and to must lie between 1970 and 9999, and with compare the period before too"
+        )
+    length, shift = STEPS[step] * _SECOND, utc_offset * 60 * _SECOND
+    steps = -(-(ends + shift) // length) - (begins + shift) // length
     if steps > MAX_STEPS:
         raise UsageQueryError(f"the period holds more than {MAX_STEPS} steps of one {step}")
     grouped = _dimensions(group_by, "group_by")
@@ -213,60 +239,63 @@ def query(
 
 @dataclass
 class _Tally:
-    """What the parts of some stretches add up to."""
+    """What the parts of some stretches add up to, in whole units."""
 
-    seconds: float = 0.0
-    estimated: float = 0.0
+    milliseconds: int = 0
+    estimated: int = 0
     #: By kind, in `TOKEN_KINDS` order; `None` while no part reported that kind.
     tokens: list[int | None] = field(default_factory=lambda: [None] * _TOKENS)
-    cost: float | None = None
+    #: Millionths of a dollar; `None` while no part had a price.
+    micro_usd: int | None = None
     unpriced: int = 0
 
     def add(self, part: _Part) -> None:
-        self.seconds += part.seconds
+        self.milliseconds += part.milliseconds
         self.estimated += part.estimated
         for index, count in enumerate(part.tokens):
             if count is not None:
                 held = self.tokens[index]
                 self.tokens[index] = count if held is None else held + count
-        if part.cost is not None:
-            self.cost = part.cost if self.cost is None else self.cost + part.cost
+        if part.micro_usd is not None:
+            self.micro_usd = (self.micro_usd or 0) + part.micro_usd
         self.unpriced += part.unpriced
 
     def measures(self) -> dict:
         return {
-            "agent_seconds": round(self.seconds, 3),
-            "estimated_seconds": round(self.estimated, 3),
-            "quality": item_usage.quality(self.seconds - self.estimated, self.estimated),
+            "agent_seconds": self.milliseconds / _MILLISECOND,
+            "estimated_seconds": self.estimated / _MILLISECOND,
+            "quality": item_usage.quality(self.milliseconds - self.estimated, self.estimated),
             "tokens": {
                 kind: self.tokens[index] for index, (kind, _) in enumerate(item_usage.TOKEN_KINDS)
             },
-            "estimated_api_cost_usd": None if self.cost is None else round(self.cost, 6),
+            "estimated_api_cost_usd": (
+                None if self.micro_usd is None else self.micro_usd / _SECOND
+            ),
             "unpriced_tokens": self.unpriced,
         }
 
 
 @dataclass(frozen=True)
 class _Part:
-    """The share of one stretch that falls in one step."""
+    """What one stretch spends between two moments, in whole units."""
 
-    seconds: float
-    estimated: float
+    milliseconds: int
+    estimated: int
     tokens: Sequence[int | None]
-    cost: float | None
+    micro_usd: int | None
     unpriced: int
 
 
-def _bounds(request: UsageQuery) -> tuple[list[float], int]:
-    """Every edge the stretches are cut at, and which interval is the period's first step.
+def _bounds(request: UsageQuery) -> tuple[list[int], int]:
+    """Every moment the stretches are cut at, and which interval is the period's first step.
 
     With a comparison the interval before the period's first is the preceding period
     of equal length, read whole.
     """
 
-    length, shift = STEPS[request.step], request.utc_offset * 60
+    length, shift = STEPS[request.step] * _SECOND, request.utc_offset * 60 * _SECOND
     edges = [request.start]
-    edge = (math.floor((request.start + shift) / length) + 1) * length - shift
+    edge = ((request.start + shift) // length + 1) * length - shift
     while edge < request.end:
         edges.append(edge)
         edge += length
@@ -276,67 +305,94 @@ def _bounds(request: UsageQuery) -> tuple[list[float], int]:
     return [2 * request.start - request.end, *edges], 1
 
 
-def _shares(started: float, ended: float, bounds: Sequence[float]) -> list[tuple[int, float]]:
-    """Which intervals a stretch falls in, with the share of its length in each."""
+def _intervals(started: int, ended: int, bounds: Sequence[int]) -> range:
+    """The intervals a stretch spends time in; one with no length, the one holding it."""
 
     last = len(bounds) - 1
-    if ended <= started:
-        index = bisect.bisect_right(bounds, started) - 1
-        return [(index, 1.0)] if 0 <= index < last else []
-    span = ended - started
-    found = []
-    for index in range(
-        max(bisect.bisect_right(bounds, started) - 1, 0),
-        min(bisect.bisect_left(bounds, ended), last),
-    ):
-        inside = min(ended, bounds[index + 1]) - max(started, bounds[index])
-        if inside > 0:
-            found.append((index, inside / span))
-    return found
+    first = max(bisect.bisect_right(bounds, started) - 1, 0)
+    if ended == started:
+        return range(first, first + 1) if bounds[0] <= started < bounds[-1] else range(0)
+    return range(first, min(bisect.bisect_left(bounds, ended), last))
 
 
-def _apportion(total: int, shares: Sequence[float]) -> list[int]:
-    """A whole count shared out in these proportions by largest remainder.
+def _spent(total: int, moment: int, started: int, ended: int) -> int:
+    """How much of a stretch's whole count it has spent by this moment, rounded half up.
 
-    What the shares leave over lies outside the period and takes its part of the
-    count too, so the parts inside are what lies inside.
+    Exact: the share of its time is a ratio of whole microseconds, and the rounding is
+    done on integers. A stretch with no length has spent nothing up to its moment and
+    everything after it.
     """
 
-    exact = [total * share for share in shares]
-    exact.append(total * max(0.0, 1.0 - math.fsum(shares)))
-    whole = [math.floor(value) for value in exact]
-    left = total - sum(whole)
-    for index in sorted(range(len(exact)), key=lambda i: whole[i] - exact[i])[: max(left, 0)]:
-        whole[index] += 1
-    return whole[:-1]
+    if moment <= started:
+        return 0
+    if moment >= ended:
+        return total
+    length = ended - started
+    return (2 * total * (moment - started) + length) // (2 * length)
 
 
-def _parts(row: Sequence, shares: list[tuple[int, float]]) -> list[_Part]:
-    seconds = float(row[_SECONDS])
-    estimated = seconds if row[_QUALITY] == "estimated" else 0.0
+def _whole(value: float) -> int:
+    """A stored figure in whole units, rounded half up once per stretch."""
+
+    return math.floor(value + 0.5)
+
+
+def _parts(row: Sequence, bounds: Sequence[int]) -> list[tuple[int, _Part]]:
+    """What a stretch spends in each interval it falls in."""
+
+    started, ended = _stored(str(row[_STARTED])), _stored(str(row[_ENDED]))
+    milliseconds = _whole(float(row[_SECONDS]) * _MILLISECOND)
+    estimated = milliseconds if row[_QUALITY] == "estimated" else 0
     cost = row[_COST]
-    counts: list[int | None] = list(row[_FIRST_TOKEN:_ORGANIZATION])
-    if len(shares) == 1 and shares[0][1] == 1.0:
-        split: list[list[int | None]] = [counts]
-    else:
-        fractions = [share for _, share in shares]
-        by_kind = [
-            [None] * len(shares) if count is None else _apportion(int(count), fractions)
-            for count in counts
-        ]
-        split = [[kind[index] for kind in by_kind] for index in range(len(shares))]
+    micro_usd = None if cost is None else _whole(float(cost) * _SECOND)
+    tokens: list[int | None] = [
+        None if count is None else int(count) for count in row[_FIRST_TOKEN:_ORGANIZATION]
+    ]
+    totals = [milliseconds, estimated, micro_usd, *tokens]
     parts = []
-    for (_, share), tokens in zip(shares, split, strict=True):
+    for interval in _intervals(started, ended, bounds):
+        low, high = bounds[interval], bounds[interval + 1]
+        if low <= started and ended <= high:
+            share: list[int | None] = list(totals)
+        else:
+            share = [
+                None
+                if total is None
+                else _spent(total, high, started, ended) - _spent(total, low, started, ended)
+                for total in totals
+            ]
+        spent_tokens = share[3:]
         parts.append(
-            _Part(
-                seconds=seconds * share,
-                estimated=estimated * share,
-                tokens=tokens,
-                cost=None if cost is None else float(cost) * share,
-                unpriced=0 if cost is not None else sum(int(tokens[i] or 0) for i in _PRICED),
+            (
+                interval,
+                _Part(
+                    milliseconds=int(share[0] or 0),
+                    estimated=int(share[1] or 0),
+                    tokens=spent_tokens,
+                    micro_usd=share[2],
+                    unpriced=(
+                        0
+                        if micro_usd is not None
+                        else sum(int(spent_tokens[i] or 0) for i in _PRICED)
+                    ),
+                ),
             )
         )
     return parts
+
+
+def _stored(text: str) -> int:
+    """A moment as the usage rows store it, in microseconds since the epoch."""
+
+    return _micro(dt.datetime.fromisoformat(text))
+
+
+def _stamp(micro: int, *, up: bool) -> str:
+    """A moment in the stored form, to the millisecond, rounded the way that widens a range."""
+
+    milliseconds = -(-micro // _MILLISECOND) if up else micro // _MILLISECOND
+    moment = _EPOCH + dt.timedelta(milliseconds=milliseconds)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 @dataclass
@@ -393,7 +449,7 @@ def _readers(
 _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
     PROJECT: {"name": None},
-    EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "state": executors.NONE},
+    EXECUTOR: {"family": "", "opened_in": "", "opened_host": ""},
 }
 
 
@@ -401,7 +457,8 @@ def _labels(
     conn: sqlite3.Connection, dimension: str, ids: set[str], projects: Sequence[Mapping]
 ) -> dict[str, dict]:
     """What a person already sees for each of these values: an item's number and title,
-    a project's name, a session's place and state."""
+    a project's name, where a session was opened. Nothing that changes while it is read,
+    so two reads of the same rows give the same answer."""
 
     if dimension == WORK_ITEM:
         return item_usage.item_names(conn, ids)
@@ -459,8 +516,8 @@ def _order(entry: tuple[tuple[Value, ...], _Tally]) -> tuple:
 
     key, tally = entry
     return (
-        -round(tally.seconds, 3),
-        -(tally.cost or 0.0),
+        -tally.milliseconds,
+        -(tally.micro_usd or 0),
         tuple((value is None, value or "") for value in key),
     )
 
@@ -482,8 +539,10 @@ def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     bounds, first = _bounds(request)
     cursor = conn.cursor()
     cursor.row_factory = None
+    # Stored to the millisecond: rounded outward, the range holds every stretch that can
+    # spend time inside, and `_parts` decides exactly.
     rows = cursor.execute(
-        SEGMENTS, (usage_ledger.stamp(bounds[-1]), usage_ledger.stamp(bounds[0]))
+        SEGMENTS, (_stamp(bounds[-1], up=True), _stamp(bounds[0], up=False))
     ).fetchall()
     needed = {*request.group_by, *request.filters}
     projects = project_registry.read_registry()["projects"] if PROJECT in needed else []
@@ -496,10 +555,8 @@ def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     for row in rows:
         if not all(reader(row) in admitted for reader, admitted in filters):
             continue
-        shares = _shares(
-            usage_ledger.moment(str(row[_STARTED])), usage_ledger.moment(str(row[_ENDED])), bounds
-        )
-        if not shares:
+        parts = _parts(row, bounds)
+        if not parts:
             continue
         key = tuple(reader(row) for reader in grouping)
         unpriced_model = (
@@ -509,7 +566,7 @@ def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
             and any(row[_FIRST_TOKEN:_ORGANIZATION])
             else None
         )
-        for (interval, _), part in zip(shares, _parts(row, shares), strict=True):
+        for interval, part in parts:
             window = earlier if interval < first else main
             window.total.add(part)
             window.groups.setdefault(key, _Tally()).add(part)
@@ -522,8 +579,8 @@ def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     namer = _Namer(conn, request.group_by, [*main.groups, *earlier.groups], projects)
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
-    def at(moment: float) -> str:
-        return dt.datetime.fromtimestamp(moment, zone).isoformat()
+    def at(moment: int) -> str:
+        return _at(moment, zone)
 
     last = conn.execute("SELECT MAX(last_at) FROM usage_runs").fetchone()[0]
     return {

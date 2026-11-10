@@ -27,8 +27,9 @@ checkouts are therefore distinguishable even at the same version.
   It filters on the same dimensions and says how fresh it is. The measures are the item
   and session reads': seconds, tokens by kind, the API-price estimate with its basis and
   the tokens it leaves out. Seconds are the sum of each agent's work, so every cut adds
-  up to the total; work across a step or the period's edge is split in proportion to its
-  time, tokens kept whole. A value the store does not hold is its own group, named
+  up to the total exactly; work across a step or the period's edge is split in
+  proportion to its time, in whole tokens, milliseconds and millionths of a dollar, so a
+  period reads the same by the hour, by the day and beside a comparison. A value the store does not hold is its own group, named
   unknown. The Analytics module now names this read model; its page comes later, and no
   MCP tool reads it.
 
