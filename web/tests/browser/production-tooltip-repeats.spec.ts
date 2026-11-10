@@ -3,7 +3,8 @@
  * Every hint states its kind; a `clipped` one shows only while its words are cut, so it is the
  * one hint allowed to say them, and the sweep leaves it out. The rest are swept by pointing at
  * every anchor on the board, the navigation with its quiet work unfolded, an opened card, its
- * «…» menu, its Relations with the chain and its `@` list, in both languages.
+ * «…» menu, its Relations with the chain and its `@` list, and a card no fixture shows
+ * otherwise, which asks a question, has a parent and holds a pasted picture, in both languages.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -15,6 +16,7 @@ import { richUsage, usageAnswer } from '../fixtures/usage.ts'
 import { busyFrame } from '../support/liveFrame.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
+import { ASKING_HEAD, openHead, PICTURE } from './cardHeadPage.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
 import { openMentionList } from './editorPage.ts'
@@ -32,8 +34,8 @@ const CARD = serializePlatformRoute({
 type Locale = 'en' | 'ru'
 
 const WORDS = {
-  en: { action: 'Open in VS Code', state: 'running' },
-  ru: { action: 'Открыть в VS Code', state: 'идёт' },
+  en: { action: 'Open in VS Code', picture: 'Open the picture full size', state: 'running' },
+  ru: { action: 'Открыть в VS Code', picture: 'Открыть картинку целиком', state: 'идёт' },
 } as const
 
 async function prepare(page: Page, locale: Locale, width: number) {
@@ -234,6 +236,35 @@ async function pointAt(page: Page, target: Locator) {
   await page.clock.runFor(1000)
 }
 
+/** A word of a line that is cut rather than wrapped, with its hint while it is cut. */
+const ONE_LINE_WORD = ['trimmed-word', 'one-line']
+
+/**
+ * A control's word as drawn: the one-line classes it has, whether it is cut, the lines it takes,
+ * and its sign's box with the size the sign is drawn at.
+ */
+function drawnLine(node: Element) {
+  const word = node.querySelector('.card-question-word') ?? node
+  const sign = node.querySelector('svg.lucide')
+  const box = sign?.getBoundingClientRect()
+  // The lines of the words themselves: a reference's box reaches under its words, the room a
+  // pointer hits (`.rich-reference`), and its bottom is not a second line.
+  const range = document.createRange()
+  const lines = new Set<number>()
+  const walker = document.createTreeWalker(word, NodeFilter.SHOW_TEXT)
+  for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+    range.selectNodeContents(text)
+    for (const rect of range.getClientRects())
+      if (rect.width > 0) lines.add(Math.round(rect.bottom))
+  }
+  return {
+    classes: [...word.classList].filter((name) => name === 'trimmed-word' || name === 'one-line'),
+    cut: word.scrollWidth > word.clientWidth,
+    lines: lines.size,
+    sign: box ? [box.width, box.height, Number(sign?.getAttribute('width'))] : null,
+  }
+}
+
 for (const width of [1280, 390] as const)
   for (const locale of ['en', 'ru'] as const) {
     test(`a tile and its label chip show no hint at ${width}px, ${locale}`, async ({ page }) => {
@@ -300,5 +331,48 @@ for (const width of [1280, 390] as const)
 
       await pointAt(page, drawer.locator('.usage-line'))
       await expect(hint(page)).toHaveCount(0)
+    })
+
+    test(`«Answer», the parent's link and a picture hint by their kinds at ${width}px, ${locale}`, async ({
+      page,
+    }) => {
+      await prepare(page, locale, width)
+      const drawer = await openHead(page, ASKING_HEAD)
+      const answer = drawer.locator('.card-question')
+      const link = drawer.locator('.card-parent-link')
+      const picture = drawer.locator('button.rich-image')
+      const measured = {
+        answer: await answer.evaluate(drawnLine),
+        link: await link.evaluate(drawnLine),
+      }
+      console.log(`asking ${locale} ${width}px ${JSON.stringify(measured)}`)
+      // «Answer» on one line, its sign at the size it is drawn at; it says itself again only
+      // while its word is cut.
+      await expect(answer).toHaveAttribute('data-tooltip-kind', 'clipped')
+      expect(measured.answer).toMatchObject({ classes: ONE_LINE_WORD, lines: 1 })
+      const [across, down, size] = measured.answer.sign ?? []
+      expect(size).toBe(16)
+      for (const side of [across, down]) expect(Math.abs((side ?? 0) - 16)).toBeLessThanOrEqual(0.5)
+      await pointAt(page, answer)
+      await expect(hint(page)).toHaveText(measured.answer.cut ? [/Answer|Ответить/u] : [])
+      // The parent's link is a word of the line, on one line, cut with its hint if it must be.
+      await expect(link).toHaveText('MAIN-12')
+      expect(measured.link).toMatchObject({ classes: ONE_LINE_WORD, lines: 1 })
+      // The picture's button names what a press opens.
+      await expect(picture).toHaveAttribute('data-tooltip-kind', 'name')
+      await pointAt(page, picture)
+      await expect(hint(page)).toBeVisible()
+      const centre = await picture.evaluate((node) => {
+        const box = node.getBoundingClientRect()
+        return [box.x + box.width / 2, box.y + box.height / 2] as [number, number]
+      })
+      const shown = await page.evaluate(readShown, centre)
+      expect({ hint: shown?.hint.trim(), kind: shown?.kind }).toEqual({
+        hint: `${WORDS[locale].picture}: ${PICTURE}`,
+        kind: 'name',
+      })
+      const { pointed, said } = await sweep(page, drawer)
+      expect(pointed).toBeGreaterThan(2)
+      expect(said).toEqual([])
     })
   }

@@ -2,7 +2,8 @@
  * The card's head in the built app, opened with the facts a test gives it, and the measures its
  * alignment is read by: each text's baseline and the middle of its capitals, each mark's middle,
  * and how far apart they stand (`production-card-alignment.spec.ts`,
- * `production-card-signs.spec.ts`).
+ * `production-card-signs.spec.ts`). The icon and hint walks open it as the card no fixture
+ * shows otherwise (`ASKING_HEAD`).
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -94,12 +95,30 @@ export interface Head {
   kind?: string
   /** The parent's own kind, which its sign is drawn by; the fixture's is a plain task. */
   parentKind?: string
+  /** The description holds a pasted picture, which is a button that opens it. */
+  picture?: boolean
   priority?: string
   /** The name of the state the item stands in. */
   state?: string
 }
 
 export const FULL_HEAD: Head = { asking: true, epic: 'MAIN-12', kind: 'epic', priority: 'high' }
+
+/**
+ * What no fixture card shows: a question waiting, a parent and a pasted picture. A session
+ * holds it, as the hint walk's card is held: a plain holder's hint says its name again over
+ * the claim, which the walk would read as a repeat.
+ */
+export const ASKING_HEAD: Head = { asking: true, epic: 'MAIN-12', held: true, picture: true }
+
+/** The picture's name, which its button says. */
+export const PICTURE = 'screen.png'
+const PICTURE_SHA = '5f'.repeat(32)
+/** The picture as a paste writes it into a text. */
+const PICTURED = `![${PICTURE}](</api/images/${PICTURE_SHA}>)`
+/** A plain 160×60 PNG, wider and taller than a hint's anchor must be to be pointed at. */
+const PICTURE_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAKAAAAA8CAIAAABuCSZCAAAAdklEQVR42u3RAQ0AAAjDsOtEE8KQhQ9oMgVrqkeHiwWABViABViABViAAQuwAAuwAAuwAAMWYAEWYAEWYAEWYMACLMACLMACLMCABViABViABViAAQuwAAuwAAuwAAswYAEWYAEWYAEWYMACLMACLMACLMDfgRdOEwCyJDO//wAAAABJRU5ErkJggg=='
 
 /**
  * The item under its parent: the card's read says the id, the space's whose reference and kind
@@ -121,9 +140,14 @@ function inEpic(model: Record<string, unknown>, reference: string, kind?: string
 
 /** The head of a card in the built app, on a state that moves, with the facts it is given. */
 export async function openCard(page: Page, locale: 'ru' | 'en', width: number, head: Head = {}) {
-  const { asking, epic, held, kind, parentKind, priority, state = 'Review' } = head
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.setViewportSize({ width, height: 900 })
+  return openHead(page, head)
+}
+
+/** The same card, at the language and the width the page already has. */
+export async function openHead(page: Page, head: Head = {}) {
+  const { asking, epic, held, kind, parentKind, picture, priority, state = 'Review' } = head
   await installBackend(page, {
     openPlan: openPlanFor,
     card: (read) => ({
@@ -132,10 +156,15 @@ export async function openCard(page: Page, locale: 'ru' | 'en', width: number, h
       ...(kind ? { kind } : {}),
       ...(priority ? { priority } : {}),
       ...(epic ? { parent_id: blockedWorkItem.work_item_id } : {}),
+      ...(picture ? { description: `${String(read.description)}\n\n${PICTURED}` } : {}),
     }),
     ...(epic ? { space: (model) => inEpic(model, epic, parentKind) } : {}),
   })
   if (asking) await installQuestions(page, [asked()])
+  if (picture)
+    await page.route(`**/api/images/${PICTURE_SHA}`, (route) =>
+      route.fulfill({ contentType: 'image/png', body: Buffer.from(PICTURE_PNG, 'base64') }),
+    )
   await page.goto(CARD)
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
@@ -143,6 +172,8 @@ export async function openCard(page: Page, locale: 'ru' | 'en', width: number, h
   await expect(drawer).toHaveCSS('transform', 'none')
   if (asking) await expect(drawer.locator('.card-question')).toBeVisible()
   if (epic) await expect(drawer.getByText(epic, { exact: true }).first()).toBeVisible()
+  if (picture)
+    await expect(drawer.locator('button.rich-image img')).toHaveJSProperty('complete', true)
   return drawer
 }
 

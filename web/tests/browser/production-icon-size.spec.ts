@@ -2,8 +2,9 @@
  * Every icon is the size it is drawn at, and a one-line label stays on one line, in the built
  * application: on the board with the navigation's live work and its quiet work unfolded, on
  * the portfolio, on a card, its «…» menu, its Relations with the chain and its `@` list, and on
- * a question's review, at a desktop width, at a phone's and with the navigation at its
- * narrowest, in both languages.
+ * a question's review and on a card no fixture shows otherwise, which asks a question, has a
+ * parent and holds a pasted picture, at a desktop width, at a phone's and with the navigation at
+ * its narrowest, in both languages.
  *
  * An icon in a row short of room used to give way: a flex item shrinks, and the page's
  * `svg { max-width: 100% }` lets a drawing go narrower than its box. A label with no rule of its
@@ -19,6 +20,7 @@ import { busyFrame } from '../support/liveFrame.ts'
 import { wayReviewFields, WAYS_PROMPT } from '../support/reviewWays.ts'
 import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
+import { ASKING_HEAD, openHead } from './cardHeadPage.ts'
 import { serve as serveChain, smallChain } from './chainFixtures.ts'
 import { openMentionList } from './editorPage.ts'
 import { installLiveStreams } from './liveWorkPage.ts'
@@ -153,7 +155,19 @@ async function review(page: Page) {
   await expect(opened.drawer).toHaveCSS('transform', 'none')
 }
 
-const SCENES = { board, chain, portfolio, card, links, menu, mentions, review } as const
+/**
+ * A card asking a question, under a parent, with a picture in its text: «Answer» with its sign
+ * among the facts, the parent's link and the picture's button.
+ */
+async function asking(page: Page) {
+  const drawer = await openHead(page, ASKING_HEAD)
+  await expect(drawer.locator('.card-question .card-question-word')).toBeVisible()
+  await expect(drawer.locator('.card-question svg.lucide')).toBeVisible()
+  await expect(drawer.locator('.card-parent-link.trimmed-word.one-line')).toBeVisible()
+  await expect(drawer.locator('button.rich-image')).toBeAttached()
+}
+
+const SCENES = { board, chain, portfolio, card, links, menu, mentions, review, asking } as const
 
 /** Every icon on the page whose box differs from the size it is drawn at, and how many stand. */
 function measureIcons() {
@@ -182,6 +196,21 @@ function measureIcons() {
 
 /** Every one-line label that takes more than one line, and every cut one with no hint. */
 function measureLabels(labels: string) {
+  // The lines of the words themselves: a reference's box reaches under its words, the room a
+  // pointer hits (`.rich-reference`), and its bottom is not a second line. This body is
+  // serialized and evaluated in the page, so a module-scope helper is not there.
+  // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+  const linesOf = (label: HTMLElement) => {
+    const range = document.createRange()
+    const bottoms = new Set<number>()
+    const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT)
+    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+      range.selectNodeContents(text)
+      for (const rect of range.getClientRects())
+        if (rect.width > 0) bottoms.add(Math.round(rect.bottom))
+    }
+    return bottoms
+  }
   const wrapped: string[] = []
   const unhinted: string[] = []
   let shown = 0
@@ -189,9 +218,7 @@ function measureLabels(labels: string) {
     const words = label.textContent?.trim() ?? ''
     if (!label.checkVisibility({ visibilityProperty: true }) || !words) continue
     shown += 1
-    const range = document.createRange()
-    range.selectNodeContents(label)
-    const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.bottom)))
+    const lines = linesOf(label)
     if (lines.size > 1) wrapped.push(`«${words}»: ${lines.size} lines`)
     const cut = label.clientWidth > 1 && label.scrollWidth > label.clientWidth + 1
     if (cut && !label.closest('[data-tooltip]')) unhinted.push(`«${words}»`)
