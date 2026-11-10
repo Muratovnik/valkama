@@ -96,7 +96,9 @@ checkouts are therefore distinguishable even at the same version.
   held while their session works on another, «N more waiting for hours» past four hours,
   and «N more silent for over a day». Sessions bound to no space stand under «Sessions
   outside any space», and pinned items not at work in a group of their own. A row whose
-  session is known carries «Open session». An epic is no longer a row heading its items.
+  session is known carries «Open session», which comes up under the pointer or the
+  keyboard and takes room from the row's words only then. An epic is no longer a row
+  heading its items.
   A session's title is read from the end of its transcript when the list is built, and is
   neither stored nor logged.
 
