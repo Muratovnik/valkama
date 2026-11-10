@@ -1047,7 +1047,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   walk the rows straight across the groups. A task is written as its number, with no
   `@`, and a comment sent from the card's comment field tells that task in `mentions`,
   as long as the number still stands in the text: a number typed by hand stays a link
-  and tells nobody. A reply, an outcome and a description do not tell yet. A
+  and tells nobody. A reply, an outcome and a description tell the same way. A
   file is written as a Markdown link from the project's root named by its file name,
   `[plan.md](docs/plan.md)`, which opens through the same resolver as a link typed by
   hand. What else the list offers is one more source in `mentionSuggest`'s list, with
