@@ -409,7 +409,6 @@ class Collector:
 
     def _steps(self, lines: list[bytes], target: Target, state: dict) -> list[Step]:
         steps: list[Step] = []
-        own = target.session if not target.agent else None
         memo = state.setdefault("codex", {}) if target.client == CODEX else {}
         for line in lines:
             if not worth_parsing(line):
@@ -420,7 +419,11 @@ class Collector:
                 continue
             if not isinstance(row, dict):
                 continue
-            step = claude_step(row, own) if target.client == CLAUDE else codex_step(row, memo)
+            step = (
+                claude_step(row, target.session)
+                if target.client == CLAUDE
+                else codex_step(row, memo)
+            )
             if step is not None:
                 steps.append(step)
         return steps

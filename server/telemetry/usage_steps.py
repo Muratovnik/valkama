@@ -13,7 +13,11 @@ A Claude transcript, as measured:
   the like) are bookkeeping and say nothing about time.
 - A file a session was forked into starts with records of the session it came from,
   each naming that session in `sessionId`. They belong to that session and are skipped.
-  A subagent's records may name another session than its folder, and those are its own.
+  A fork's folder may also hold copies of that session's subagent files, every record
+  naming the session it came from, while its own folder still holds the originals: a
+  subagent file's records of another session are skipped the same way. A subagent's
+  own records name the session that ran it, which is the folder it is found in and the
+  session its hooks report, the one its archived copy is filed under.
 - `user` is a person's prompt, an input of another kind (`origin.kind`:
   `task-notification`, `peer`, `coordinator`), or the result of a tool call.
 - `queue-operation` with `enqueue` says a notice arrived, which is when a background
@@ -257,14 +261,14 @@ def _claude_user(at: float, row: Mapping[str, object], content: object) -> Step:
     return Step(at, PEER, packet=text)
 
 
-def claude_step(row: Mapping[str, object], own_session: str | None) -> Step | None:
+def claude_step(row: Mapping[str, object], own_session: str) -> Step | None:
     """One Claude record as a step, or None when the clock has no use for it.
 
-    `own_session` is the session a session's own transcript belongs to, and None for a
-    subagent's, whose records may name another.
+    `own_session` is the session the transcript belongs to, a subagent's included: a
+    record naming another one was copied from that session's files.
     """
 
-    if own_session is not None and row.get("sessionId", own_session) != own_session:
+    if row.get("sessionId", own_session) != own_session:
         return None
     kind = row.get("type")
     if kind not in ("user", "assistant", "system", "queue-operation"):

@@ -98,16 +98,6 @@ class TokenTests(Case):
         self.assertEqual(5, sum(r["output_tokens"] for r in rows if r["output_tokens"]))
         self.assertEqual(30.0, self.seconds("forked"))
 
-    def test_a_subagents_records_may_name_another_session_and_are_its_own(self) -> None:
-        self.session()
-        self.ticks((0, HOUR))
-        worker = self.subagent("sess-1", "worker")
-        worker.session = "an-earlier-id"
-        worker.prompt(0, "go", origin=None)
-        worker.end_turn(30)
-        self.read()
-        self.assertEqual(30.0, self.seconds("sess-1", "worker"))
-
     def test_an_unknown_model_has_tokens_and_no_cost(self) -> None:
         run = self.session()
         self.ticks((0, HOUR))
