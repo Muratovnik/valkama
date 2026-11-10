@@ -196,6 +196,21 @@ class RowTests(FrameCase):
             ],
         )
 
+    def test_a_row_an_attempt_moves_names_no_session_that_waits_behind_it(self) -> None:
+        reference = self.item()
+        waiting = _session()
+        self.claim(reference, waiting)
+        self.hook(waiting, "session-start", ago(minutes=30))
+        self.hook(waiting, "user-prompt-submit", ago(minutes=20))
+        self.hook(waiting, "stop", ago(minutes=10))
+        self.attempt(reference, "running")
+        row = self.rows()[reference]
+        self.assertEqual(
+            ("working", None, None),
+            (row["state"], row["executor"], row["since"]),
+            "the attempt is at work: the session that waits is not what the row shows",
+        )
+
     def test_an_open_item_with_no_live_work_and_no_pin_is_no_row(self) -> None:
         live, idle = self.item(), self.item()
         self.working(live)
