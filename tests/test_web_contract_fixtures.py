@@ -29,11 +29,13 @@ import tempfile
 import threading
 import unittest
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
 from server import http_surface, mcp_surface, session_open, sessions, store
+from server.hooks import ingest, normalize
 from server.ops import url_schemes
 from server.planning import calls, read_model, service, subscriptions
 from server.projects import project_registry
@@ -333,6 +335,24 @@ class _Scenario:
                 " WHERE id = ?",
                 (quiet,),
             )
+            # A session on no item, waiting since its turn ended, named by its transcript.
+            apart = "6f1c2a8e-0000-4000-8000-000000000005"
+            transcript = self.root / "apart.jsonl"
+            transcript.write_bytes(b'{"type":"ai-title","aiTitle":"Contract session"}\n')
+            for number, event in enumerate(("session-start", "user-prompt-submit", "stop")):
+                record = normalize.lifecycle_event(
+                    "claude",
+                    event,
+                    {
+                        "session_id": apart,
+                        "cwd": str(self.root / "checkout"),
+                        "transcript_path": str(transcript),
+                    },
+                    event_uid=f"6f1c2a8e-0000-4000-8000-00000000010{number}",
+                    occurred_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                )
+                assert record is not None
+                ingest.record(conn, record, delivery="direct")
             conn.commit()
         finally:
             conn.close()

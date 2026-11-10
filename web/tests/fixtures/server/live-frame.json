@@ -4,7 +4,6 @@
       "key": "MAIN",
       "name": "Contract",
       "project_id": "example-project",
-      "unplaced": 0,
       "rows": [
         {
           "reference": "MAIN-4",
@@ -13,7 +12,11 @@
           "parent": null,
           "state": null,
           "agents": 0,
+          "long": false,
+          "asks": false,
+          "since": null,
           "quiet_since": null,
+          "executor": null,
           "pinned": false,
           "state_name": "Backlog",
           "is_terminal": false,
@@ -26,7 +29,18 @@
           "parent": "MAIN-4",
           "state": "quiet",
           "agents": 0,
+          "long": false,
+          "asks": false,
+          "since": null,
           "quiet_since": "2026-01-02T03:04:05Z",
+          "executor": {
+            "session": "00000000-0000-4000-8000-000000000017",
+            "agent": null,
+            "opened_in": "terminal",
+            "opened_host": "",
+            "family": "claude",
+            "state": "live"
+          },
           "pinned": false,
           "state_name": "Backlog",
           "is_terminal": false,
@@ -39,7 +53,11 @@
           "parent": null,
           "state": null,
           "agents": 0,
+          "long": false,
+          "asks": false,
+          "since": null,
           "quiet_since": null,
+          "executor": null,
           "pinned": true,
           "state_name": "Backlog",
           "is_terminal": false,
@@ -52,14 +70,45 @@
           "parent": null,
           "state": "waiting",
           "agents": 0,
+          "long": false,
+          "asks": false,
+          "since": "2026-01-02T03:04:05Z",
           "quiet_since": null,
+          "executor": {
+            "session": "00000000-0000-4000-8000-000000000011",
+            "agent": null,
+            "opened_in": "ide",
+            "opened_host": "vscode",
+            "family": "claude",
+            "state": "live"
+          },
           "pinned": false,
           "state_name": "Backlog",
           "is_terminal": false,
           "updated_at": "2026-01-02T03:04:05Z"
         }
+      ],
+      "sessions": [
+        {
+          "session": "00000000-0000-4000-8000-000000000018",
+          "title": "Contract session",
+          "folder": "checkout",
+          "state": "waiting",
+          "long": false,
+          "asks": false,
+          "agents": 0,
+          "since": "2026-01-02T03:04:05Z",
+          "executor": {
+            "session": "00000000-0000-4000-8000-000000000018",
+            "agent": null,
+            "opened_in": "",
+            "opened_host": "",
+            "family": "claude",
+            "state": "live"
+          }
+        }
       ]
     }
   ],
-  "elsewhere": 0
+  "elsewhere": []
 }

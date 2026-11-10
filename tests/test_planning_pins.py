@@ -69,7 +69,7 @@ class WriteTests(PinCase):
             [(reference, True)], [(r["reference"], r["pinned"]) for r in space["rows"]]
         )
         status, answer = self.post({"id": self.identity(reference), "pinned": False})
-        self.assertEqual((200, {"spaces": [], "elsewhere": 0}), (status, answer))
+        self.assertEqual((200, {"spaces": [], "elsewhere": []}), (status, answer))
         self.assertEqual({}, self.pins())
 
     def test_a_pin_is_no_change_to_the_item_and_nothing_an_agent_is_told(self) -> None:

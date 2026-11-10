@@ -124,6 +124,16 @@ def _places(conn: sqlite3.Connection, holders: Iterable[_Holder | None]) -> dict
     return {str(row["id"]): _place_of(row) for row in conn.execute(_SESSIONS, (json.dumps(named),))}
 
 
+def session_executors(conn: sqlite3.Connection, session_ids: Iterable[str]) -> dict[str, dict]:
+    """The executor of each of these sessions that has a row, by session id, in one read.
+
+    Each is the session itself, with no agent in it, as a claim's holder reads.
+    """
+
+    known = _places(conn, [(session, None) for session in session_ids])
+    return {session: _executor((session, None), known) for session in known}
+
+
 def _claim_holder(claim: Mapping) -> _Holder | None:
     """The session that took a claim. A call nobody confirmed names one nobody verified."""
 

@@ -3,9 +3,9 @@
 Which rows: an open item with live work, `quiet` included; a pinned item, open or
 closed; every parent of those. Their order: groups first in the order of work, each
 followed by its own rows, then the rest, the rows that are not groups by number.
-`agents` counts the live subagents `ladder` places on a row, each on one item, and
-`unplaced` and `elsewhere` count agents at work on no row by the folder a session
-was opened in, which labels a counter and binds nothing.
+`agents` counts the live subagents `ladder` places on a row, each on one item. A
+session at work or waiting on no row is listed under the space of the folder it was
+opened in, or in `elsewhere`, which places a row and binds nothing.
 
 The cases build their sessions through the real hook ingest and their claims through
 the real write path, as `test_planning_live_work` does, with its clock.
@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
-from server.planning import live_frame, live_work, service
+from server.planning import executors, live_frame, live_work, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -78,14 +78,14 @@ class FrameCase(LiveWorkCase):
 class RowTests(FrameCase):
     def test_a_store_with_nothing_live_and_nothing_pinned_has_no_space(self) -> None:
         self.item()
-        self.assertEqual({"spaces": [], "elsewhere": 0}, self.frame())
+        self.assertEqual({"spaces": [], "elsewhere": []}, self.frame())
 
     def test_a_working_row_carries_every_field_the_contract_names(self) -> None:
         reference = self.item()
-        self.working(reference)
+        session = self.working(reference)
         space = self.space()
         self.assertEqual(
-            {"key": SPACE, "name": "Live", "project_id": None, "unplaced": 0},
+            {"key": SPACE, "name": "Live", "project_id": None, "sessions": []},
             {name: value for name, value in space.items() if name != "rows"},
         )
         self.assertEqual(
@@ -97,7 +97,11 @@ class RowTests(FrameCase):
                     "parent": None,
                     "state": "working",
                     "agents": 0,
+                    "long": False,
+                    "asks": False,
+                    "since": second(minutes=10),
                     "quiet_since": None,
+                    "executor": executors.session_executors(self.conn, [session])[session],
                     "pinned": False,
                     "state_name": "Backlog",
                     "is_terminal": False,
@@ -130,6 +134,67 @@ class RowTests(FrameCase):
         self.seen(session, second(days=2))
         row = self.rows()[reference]
         self.assertEqual(("quiet", second(days=2)), (row["state"], row["quiet_since"]))
+
+    def test_a_waiting_row_says_whether_its_wait_is_long(self) -> None:
+        fresh, stale = self.item(), self.item()
+        for reference, hours in ((fresh, 1), (stale, 5)):
+            session = _session()
+            self.claim(reference, session)
+            self.hook(session, "user-prompt-submit", ago(hours=hours, minutes=1))
+            self.hook(session, "stop", ago(hours=hours))
+        rows = self.rows()
+        self.assertEqual(
+            [("waiting", False, second(hours=1)), ("waiting", True, second(hours=5))],
+            [
+                (rows[reference]["state"], rows[reference]["long"], rows[reference]["since"])
+                for reference in (fresh, stale)
+            ],
+        )
+
+    def test_a_row_whose_session_asks_says_so_and_since_when(self) -> None:
+        reference = self.item()
+        session = _session()
+        self.claim(reference, session)
+        self.hook(session, "user-prompt-submit", ago(minutes=10))
+        self.hook(session, "notification", ago(minutes=4))
+        row = self.rows()[reference]
+        self.assertEqual(
+            ("waiting", True, second(minutes=4)), (row["state"], row["asks"], row["since"])
+        )
+
+    def test_a_row_names_the_session_its_state_comes_from(self) -> None:
+        reference = self.item(["step"])
+        quiet, waiting = _session(), _session()
+        self.claim(reference, quiet)
+        self.hook(quiet, "session-start", ago(days=3))
+        self.seen(quiet, second(days=2))
+        self.assertEqual(quiet, self.rows()[reference]["executor"]["session"])
+        self.hold_step(reference, waiting)
+        self.hook(waiting, "stop", ago(minutes=5))
+        row = self.rows()[reference]
+        self.assertEqual(("waiting", waiting), (row["state"], row["executor"]["session"]))
+        mover = _session()
+        self.hook(mover, "user-prompt-submit", ago(minutes=1))
+        self.comment(reference, mover)
+        row = self.rows()[reference]
+        self.assertEqual(
+            ("working", mover, second(minutes=1)),
+            (row["state"], row["executor"]["session"], row["since"]),
+            "the session that wrote to it, though it holds nothing",
+        )
+
+    def test_a_row_only_an_attempt_moves_and_a_pinned_one_name_no_session(self) -> None:
+        attempted, pinned = self.item(), self.item()
+        self.attempt(attempted, "running")
+        self.pin(pinned)
+        rows = self.rows()
+        self.assertEqual(
+            [("working", None, None), (None, None, None)],
+            [
+                (rows[reference]["state"], rows[reference]["executor"], rows[reference]["since"])
+                for reference in (attempted, pinned)
+            ],
+        )
 
     def test_an_open_item_with_no_live_work_and_no_pin_is_no_row(self) -> None:
         live, idle = self.item(), self.item()
@@ -291,7 +356,9 @@ class AgentTests(FrameCase):
         )
 
 
-class UnplacedTests(FrameCase):
+class SessionPlaceTests(FrameCase):
+    """Where a session on no row is listed. What its row says is `live_sessions`'s."""
+
     def setUp(self) -> None:
         super().setUp()
         self.root = Path(self.conn.execute("PRAGMA database_list").fetchone()[2]).parent
@@ -309,42 +376,47 @@ class UnplacedTests(FrameCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def at_work(self, folder: str, subagents: int = 0) -> str:
+    def at_work(self, folder: str, minutes: float = 10) -> str:
         """A session with a turn running on nothing, opened in `folder`."""
 
         session = _session()
-        self.hook(session, "session-start", ago(minutes=30), cwd=folder)
-        self.hook(session, "user-prompt-submit", ago(minutes=10))
-        for index in range(subagents):
-            self.hook(session, "subagent-start", ago(minutes=3), agent=f"a{index}")
+        self.hook(session, "session-start", ago(minutes=minutes + 20), cwd=folder)
+        self.hook(session, "user-prompt-submit", ago(minutes=minutes))
         return session
 
-    def test_a_session_at_work_on_no_row_counts_once_and_each_subagent_once_more(self) -> None:
-        self.at_work(str(self.bound / "src"), subagents=2)
+    def listed(self, sessions: list[dict]) -> list[str]:
+        return [row["session"] for row in sessions]
+
+    def test_a_session_on_no_row_is_listed_under_the_space_its_folder_is_bound_to(self) -> None:
+        session = self.at_work(str(self.bound / "src"))
         space = self.space()
-        self.assertEqual(
-            ("bound-project", 3, []), (space["project_id"], space["unplaced"], space["rows"])
-        )
-        self.assertEqual(0, self.frame()["elsewhere"])
+        self.assertEqual(("bound-project", []), (space["project_id"], space["rows"]))
+        self.assertEqual([session], self.listed(space["sessions"]))
+        self.assertEqual([], self.frame()["elsewhere"])
 
     def test_the_longest_root_decides_and_a_project_binding_no_space_is_elsewhere(self) -> None:
-        self.at_work(str(self.unbound))
-        self.at_work(os.path.join(os.path.dirname(self.root), "nowhere"))
-        self.assertEqual({"spaces": [], "elsewhere": 2}, self.frame())
+        inner = self.at_work(str(self.unbound), minutes=5)
+        nowhere = self.at_work(os.path.join(os.path.dirname(self.root), "nowhere"))
+        frame = self.frame()
+        self.assertEqual([], frame["spaces"])
+        self.assertEqual([inner, nowhere], self.listed(frame["elsewhere"]), "freshest first")
 
-    def test_a_session_whose_work_is_a_row_is_not_unplaced(self) -> None:
+    def test_a_session_whose_work_is_a_row_is_not_listed(self) -> None:
         reference = self.item()
         session = _session()
         self.hook(session, "session-start", ago(minutes=40), cwd=str(self.bound))
         self.working(reference, session)
-        self.assertEqual(0, self.space()["unplaced"])
+        self.assertEqual([], self.space()["sessions"])
+        self.hook(session, "stop", ago(minutes=1))
+        self.assertEqual([], self.space()["sessions"], "it waits on its row")
 
-    def test_a_session_that_is_not_at_work_counts_nowhere(self) -> None:
+    def test_a_session_waiting_on_no_row_stays_listed(self) -> None:
         session = self.at_work(str(self.bound))
         self.hook(session, "stop", ago(minutes=1))
-        self.assertEqual({"spaces": [], "elsewhere": 0}, self.frame())
+        (row,) = self.space()["sessions"]
+        self.assertEqual((session, "waiting", False), (row["session"], row["state"], row["long"]))
 
-    def test_the_count_writes_nothing_and_binds_nothing(self) -> None:
+    def test_listing_writes_nothing_and_binds_nothing(self) -> None:
         self.at_work(str(self.bound))
         before = self.conn.total_changes
         self.frame()

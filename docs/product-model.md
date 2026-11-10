@@ -197,34 +197,50 @@ and the ones its open steps' holders name; a subagent's claim or step names its 
 session. A session counts while its row says active and its last sign of life is no older
 than a claim's lease, fourteen days.
 
-A session is at work when its last lifecycle event of its own is a prompt, so a turn
-is running, or when it has a live subagent: active, started since the session last really
-started, and with a transcript written within two hours. Where no such file can be read,
-only a day since its start stops it. A compacted context is reported as a session start
-and is no such thing: the client runs on with its turn and its subagents. Then:
+A session is at work when a turn of its own runs, or when it has a live subagent: active,
+started since the session last really started, and with a transcript written within two
+hours. Where no such file can be read, only a day since its start stops it. A compacted
+context is reported as a session start and is no such thing: the client runs on with its
+turn and its subagents.
+
+A turn of its own runs when a prompt is the last of the session's events that open or end
+a turn (a start, a prompt, the end of a turn, the end of the session) and its client is
+seen alive: the later of its last event and the time its transcript was last written is
+within fifteen minutes. A notice that the client waits for a person stops the turn until
+the transcript is written again after it, which is the answer arriving. Where no
+transcript can be read, a turn runs while a prompt is its last event, and a notice stops
+it until the next prompt. Then:
 
 - `working`: a session at work is seen working on this item, whether or not it holds it.
-  Since its last prompt it wrote to the item through Planning, itself or through a subagent
-  (a claim, a step, a comment, a link, which names its source item); or a live subagent of
-  it wrote to the item since it last started, holds an open step of it, or was launched with
-  a description that names the item's number. What its parent holds places a subagent on
-  nothing, so a coordinator holding many items moves only these. An attempt Valkama runs on
-  the item, starting or running, is `working` with no session.
+  A session whose own turn runs stands on one item: among the items it holds, the one its
+  own Planning write named last (a claim, a step, a comment, a link, which names its source
+  item); holding none, the one it wrote to since its last prompt. A live subagent of a
+  session at work is on the item it wrote to since it last started, holds an open step of,
+  or was launched with a description or a packet that names its number; with no such sign
+  it is on the one item its session holds, and on none when the session holds several. An
+  attempt Valkama runs on the item, starting or running, is `working` with no session.
 - `held`: the session is at work, but not on this item as far as the record shows. A
-  session holding several items moves only the ones it is working on.
-- `waiting`: any other live session. Its turn ended, it waits for a person, or it was
-  opened or resumed with no prompt yet.
+  session holding several items moves only the one it stands on and those its subagents
+  are on.
+- `waiting`: any other live session. Its turn ended, it waits for a person, it fell silent
+  in the middle of a turn, or it was opened or resumed with no prompt yet. It carries
+  `long`, true once the session has been silent for more than four hours, which a view
+  may fold away, and `asks`, true while a notice stands in the session's open turn: it
+  stopped in the middle of its work for a permission or an answer, which is not the wait
+  of a session whose turn is over.
 - `quiet`: no sign of life for more than a day, with `quiet_since`, the last one. A
   silent session is not called ended: silence proves nothing.
 
 An item takes the strongest of its sessions and attempts, `working` before `held` before
-`waiting` before `quiet`. Only `quiet` carries a time, so the stream writes a frame when a
-state changes, not on every event. What the map cannot see: a client that died in the
-middle of a turn reads as at work for a day and `quiet` after it, because only a check of
-the process could tell more. A long turn that writes nothing leaves its items `held`
-until its first write, and a session whose turn has ended puts nothing in the map for an
-item it only wrote to. A store an earlier build wrote, without the columns the
-map is read from, gives an empty map.
+`waiting` before a long `waiting` before `quiet`, and a session that asks before one of
+the same wait that does not. Only `quiet` carries a time, and `long` turns once, so the
+stream writes a frame when a state changes, not on every event. What
+the map cannot see: a client that died in the middle of a turn reads as at work for
+fifteen minutes more, and one step of a turn that writes nothing for longer reads
+`waiting` until it writes. A session that went on to another item it holds stands on the
+one before until it writes to the new one, and a session whose turn has ended puts
+nothing in the map for an item it only wrote to. A store an earlier build wrote, without
+the columns the map is read from, gives an empty map.
 
 **Opening the executor** is the action a holder offers. A press asks the server for a
 plan (`GET /api/open-plan`, described in

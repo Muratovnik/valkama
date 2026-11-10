@@ -92,6 +92,15 @@ def _file_moment(path: str) -> str:
     return datetime.fromtimestamp(int(written), UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def session_transcript_moment(transcript: str) -> str:
+    """When a session's own transcript was last written, as `transcript_moment` reads a subagent's.
+
+    Empty when there is no such file to read, which says nothing about the session.
+    """
+
+    return _file_moment(transcript)
+
+
 def transcript_moment(parent_transcript: str, session_id: str, agent_id: str) -> str:
     """When a subagent's transcript was last written, as `_moment` reads a stored time.
 

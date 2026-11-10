@@ -889,56 +889,109 @@ One small read says where work is going on now, across every space of the primar
 store. The interface's side panel draws it, and the picker of
 [mentions](#mentions) offers its rows first. It reads every open item and every
 [pinned](#pins) one in one query and gives each the state a graph moves by
-(`working`, `held`, `waiting` or `quiet`). It carries no history and no time that
-moves, so a store in which nothing changed gives the same frame. Attached stores
-are not read.
+(`working`, `held`, `waiting` or `quiet`). Beside the items it lists the sessions
+that work or wait on none of them. It carries no history and no time that moves, so
+a store in which nothing changed gives the same frame. Attached stores are not read.
 
 ```json
-{"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project", "unplaced": 2,
+{"spaces": [{"key": "MAIN", "name": "Main", "project_id": "example-project",
    "rows": [
      {"reference": "MAIN-4", "title": "Structured answers", "kind": "epic", "parent": null,
-      "state": null, "agents": 0, "quiet_since": null, "pinned": false,
-      "state_name": "Dev", "is_terminal": false, "updated_at": "2026-10-28T08:00:00Z"},
+      "state": null, "agents": 0, "long": false, "asks": false, "since": null,
+      "quiet_since": null, "executor": null, "pinned": false, "state_name": "Dev",
+      "is_terminal": false, "updated_at": "2026-10-28T08:00:00Z"},
      {"reference": "MAIN-12", "title": "Answer a review in one form", "kind": "task",
-      "parent": "MAIN-4", "state": "working", "agents": 2, "quiet_since": null,
+      "parent": "MAIN-4", "state": "working", "agents": 2, "long": false, "asks": false,
+      "since": "2026-11-04T10:08:12Z", "quiet_since": null,
+      "executor": {"session": "6f1c2a8e-0000-4000-8000-000000000002", "agent": null,
+                   "opened_in": "vscode", "opened_host": "", "family": "claude",
+                   "state": "live"},
       "pinned": false, "state_name": "Dev", "is_terminal": false,
       "updated_at": "2026-11-04T10:15:00Z"},
+     {"reference": "MAIN-15", "title": "Read the answers back", "kind": "task",
+      "parent": "MAIN-4", "state": "waiting", "agents": 0, "long": false, "asks": true,
+      "since": "2026-11-04T10:11:30Z", "quiet_since": null,
+      "executor": {"session": "6f1c2a8e-0000-4000-8000-000000000003", "agent": null,
+                   "opened_in": "terminal", "opened_host": "", "family": "claude",
+                   "state": "live"},
+      "pinned": false, "state_name": "Dev", "is_terminal": false,
+      "updated_at": "2026-11-04T10:05:00Z"},
      {"reference": "MAIN-13", "title": "Tell other work", "kind": "task",
-      "parent": "MAIN-4", "state": "quiet", "agents": 0,
-      "quiet_since": "2026-11-03T18:02:11Z", "pinned": false,
-      "state_name": "Dev", "is_terminal": false, "updated_at": "2026-11-03T17:40:00Z"},
+      "parent": "MAIN-4", "state": "quiet", "agents": 0, "long": false, "asks": false,
+      "since": null, "quiet_since": "2026-11-03T18:02:11Z",
+      "executor": {"session": "6f1c2a8e-0000-4000-8000-000000000004", "agent": null,
+                   "opened_in": "", "opened_host": "", "family": "claude",
+                   "state": "live"},
+      "pinned": false, "state_name": "Dev", "is_terminal": false,
+      "updated_at": "2026-11-03T17:40:00Z"},
      {"reference": "MAIN-7", "title": "Old migration", "kind": "task", "parent": null,
-      "state": null, "agents": 0, "quiet_since": null, "pinned": true,
-      "state_name": "Done", "is_terminal": true, "updated_at": "2026-10-02T12:00:00Z"},
-     {"reference": "MAIN-20", "title": "Notes for the owner", "kind": "task",
-      "parent": null, "state": null, "agents": 0, "quiet_since": null, "pinned": true,
-      "state_name": "Backlog", "is_terminal": false,
-      "updated_at": "2026-10-30T09:30:00Z"}]}],
- "elsewhere": 0}
+      "state": null, "agents": 0, "long": false, "asks": false, "since": null,
+      "quiet_since": null, "executor": null, "pinned": true, "state_name": "Done",
+      "is_terminal": true, "updated_at": "2026-10-02T12:00:00Z"}],
+   "sessions": [
+     {"session": "6f1c2a8e-0000-4000-8000-000000000001", "title": "Compare two exports",
+      "folder": "example-project", "state": "working", "long": false, "asks": false,
+      "agents": 1, "since": "2026-11-04T10:02:40Z",
+      "executor": {"session": "6f1c2a8e-0000-4000-8000-000000000001", "agent": null,
+                   "opened_in": "vscode", "opened_host": "", "family": "claude",
+                   "state": "live"}}]}],
+ "elsewhere": []}
 ```
 
 | Field | What it holds |
 | --- | --- |
 | `key`, `name`, `project_id` | the space, and the project that binds it; `project_id` is `null` when none does |
-| `unplaced` | how many agents are at work in this space on no row: a session at work none of whose work is a row counts once, and each of its live subagents once more |
 | `rows` | the space's rows, in the order they are drawn |
-| `elsewhere` | the same count for sessions at work whose folder lies under no space |
+| `sessions` | the sessions under this space that work or wait on no row, freshest first |
+| `elsewhere` | the same list for sessions whose folder lies under no space |
 | `reference`, `title`, `kind` | the item |
 | `parent` | the reference of the item's parent, which is then a row of the same space, or `null` |
 | `state` | the live state: `working`, `held`, `waiting`, `quiet`, or `null` for a row with no live work |
 | `agents` | the live subagents placed on this item, by the order usage counts by (see [How much work an item took](#how-much-work-an-item-took)), each on one item; a session's own run is not counted, since `state` already says it |
+| `long` | for a `waiting` row, whether its session has been silent for more than 4 hours; `false` for any other row. It turns once and is no time |
+| `asks` | for a `waiting` row, whether its session stopped in the middle of a turn to ask a person, for a permission or an answer, rather than ended its turn; `false` for any other row |
+| `since` | for a `waiting` or a `working` row a session stands behind, when that session began what it is doing now: its last prompt while its turn runs, the notice it asks with, or the end of its last turn. Only the session's own lifecycle events move it. `null` for any other row |
 | `quiet_since` | for a `quiet` row, when its session last gave a sign of life; `null` otherwise. It does not move while the row stays quiet |
+| `executor` | the session the row's state comes from, as a holder is read (see [Who holds a claim or a step](#who-holds-a-claim-or-a-step)), so a client can open that session from the row; `null` for a row with no live work and for one only an attempt Valkama runs moves |
 | `pinned` | whether a person pinned the item |
 | `state_name`, `is_terminal` | the item's workflow state, as a link names the state of its other end |
 | `updated_at` | when the item last changed, as its card says it. Only a write to the item moves it, so a frame read again over an unchanged store keeps it |
+
+A session of `sessions` or `elsewhere`:
+
+| Field | What it holds |
+| --- | --- |
+| `session` | the session's id, which a click opens (see [What a click opens](#what-a-click-opens)) |
+| `title` | the name its client shows for it, or `null` when there is none to read |
+| `folder` | the last part of the folder it was opened in, or empty |
+| `state` | `working` while a turn of its own runs or it has a live subagent, else `waiting` |
+| `long` | for a `waiting` session, whether it has been silent for more than 4 hours |
+| `asks` | for a `waiting` session, whether it stopped in the middle of a turn to ask a person |
+| `agents` | how many live subagents it has |
+| `since` | when what it is doing now began: its last prompt or notice while its turn is open, else the end of its last turn. Only the session's own lifecycle events move it |
+| `executor` | where the session is open and whose settings cover it, as a holder has (see [Who holds a claim or a step](#who-holds-a-claim-or-a-step)) |
 
 **Which rows.** An open item whose state is `working`, `held`, `waiting` or
 `quiet`; a pinned item, open or closed, whatever its state; and every parent of
 those, so that `parent` always names a row. A `quiet` row is one whose session has
 been silent for more than a day; it is shown, muted, so a claim nobody works on is
 seen. Each item is one row, so an epic that is itself at work is its group's
-heading with its own state. A space with no rows and nothing unplaced is not in
-the frame.
+heading with its own state. A space with no rows and no sessions is not in the
+frame.
+
+**Which sessions.** A session that is active, was heard from within the last day,
+is at work or was ever given a prompt, and none of whose work is a row: neither an
+item it holds or stands on, nor one a live subagent of it is placed on. A session
+that works on an item is seen through that item's row and is not listed twice. One
+opened and left with no prompt waits for nobody and is not listed, and one that
+ended or fell silent for more than a day leaves the frame.
+
+**A session's title.** Claude Code writes the name it shows for a session into that
+session's transcript, and the frame reads it from the end of that file: the name a
+person gave, or else the one the client made. It may say what the person asked for,
+so it is computed for the frame and kept nowhere: it never enters the store, a log
+or a diagnostic. Nothing else of a transcript's content is read for the frame, and
+another client's transcript is not read at all, so its sessions have `title: null`.
 
 **Order.** Spaces by key. In a space, a row that is another row's parent is a
 group: the groups come first, in the [order of work](#the-order-of-work), each
@@ -949,10 +1002,10 @@ is already in order, and a client that lists it as it came does not sort it. The
 interface's side panel draws its own order from it: the rows at work, freshest
 `updated_at` first; the rest folded or apart (see `DESIGN.md`).
 
-**`unplaced` and `elsewhere`.** A session's space is the space bound to the
+**`sessions` and `elsewhere`.** A session's space is the space bound to the
 project whose root is the longest one that contains the session's
 `opened_folder`, or else its `cwd`. A session whose folder lies under no root, or
-under a project that binds no space, counts in `elsewhere`. This labels a counter
+under a project that binds no space, is listed in `elsewhere`. This places a row
 and nothing more: nothing is written, nothing is routed, and no binding is ever
 inferred from a folder.
 
@@ -963,7 +1016,7 @@ that carries only that event:
 
 ```text
 event: live
-data: {"spaces": [...], "elsewhere": 0}
+data: {"spaces": [...], "elsewhere": []}
 ```
 
 A stream sends the frame when it opens and again only when the frame differs from

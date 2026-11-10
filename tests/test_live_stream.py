@@ -178,7 +178,7 @@ class LiveStreamTests(unittest.TestCase):
             conn.commit()
         finally:
             conn.close()
-        self.assertEqual([("live", {"spaces": [], "elsewhere": 0})], self.events(response, 3.0))
+        self.assertEqual([("live", {"spaces": [], "elsewhere": []})], self.events(response, 3.0))
 
 
 if __name__ == "__main__":

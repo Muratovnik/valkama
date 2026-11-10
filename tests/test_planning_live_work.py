@@ -3,15 +3,18 @@
 The rule under test, from `live_work`: an item takes the strongest state of the
 sessions behind it (its claim, its open steps) and of the attempts running on
 it. A session that is not active, or silent past the lease period, stands for
-nothing; one silent past a day is `quiet`; one whose last lifecycle event is a
-prompt, or with a subagent running since it really last started, is at work; any
-other is `waiting`, and a compacted context is no such start or event. A session
-at work makes an item `working` only when it wrote there since its last prompt,
-itself or through a subagent, or when a live subagent of it wrote there since that
-subagent last started, holds an open step there, names it by number in its label or
-first in its packet, or has no such sign and the session holds that item and no other;
-its other items are `held`. A live subagent is an active row started since
-the session really started, not silent past `SUBAGENT_SILENT` by its transcript.
+nothing; one silent past a day is `quiet`; one with a turn of its own running, or
+with a subagent running since it really last started, is at work; any other is
+`waiting`, `long` once silent past `WAITING_LONG`, and a compacted context is no
+start or event. A turn runs when a prompt is the last of the session's events that
+open or end one and its transcript was written within `TURN_SILENT`; a notice stops
+it until the transcript is written again, and the session `asks` meanwhile. A session whose own turn runs makes one
+item `working`: of those it holds, the one its own write named last, and holding
+none, the one it wrote to since its last prompt. A live subagent makes `working` the
+item it wrote to since it last started, holds an open step of, names by number in
+its label or first in its packet, or, with no such sign, the one item its session
+holds. A session's other items are `held`. A live subagent is an active row started
+since the session really started, not silent past `SUBAGENT_SILENT` by its transcript.
 
 Every case reads `planning_payload`, so the key is checked where views take it.
 Hook events go through the real ingest path and claims through the real write
@@ -381,14 +384,16 @@ def _nothing(_case: LiveWorkCase, _reference: str) -> None:
 
 WORKING = {"state": "working"}
 HELD = {"state": "held"}
-WAITING = {"state": "waiting"}
+WAITING = {"state": "waiting", "long": False, "asks": False}
+WAITING_LONG = {"state": "waiting", "long": True, "asks": False}
+ASKS = {"state": "waiting", "long": False, "asks": True}
 
 CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     (
         "a claim taken before the prompt",
         None,
         _claimed_then("session-start", "user-prompt-submit"),
-        HELD,
+        WORKING,
     ),
     ("a comment after the prompt", None, _written_after_the_prompt(), WORKING),
     ("a subagent's comment after the prompt", None, _written_after_the_prompt("a1"), WORKING),
@@ -415,7 +420,7 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         "a claim after a notification",
         None,
         _claimed_then("user-prompt-submit", "notification"),
-        WAITING,
+        ASKS,
     ),
     (
         "a resumed session with a claim and no prompt",
@@ -431,7 +436,7 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
             "user-prompt-submit",
             agent_events=("subagent-start", "subagent-stop", "stop"),
         ),
-        HELD,
+        WORKING,
     ),
     ("a waiting session with a subagent started since", None, _subagent(True), WORKING),
     ("a waiting session with a subagent from before a restart", None, _subagent(False), WAITING),
@@ -441,7 +446,7 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     ("a subagent across a clear", None, _subagent_across("clear"), WAITING),
     ("a subagent across a fork", None, _subagent_across("fork"), WAITING),
     ("a subagent across a start with no source", None, _subagent_across(None), WAITING),
-    ("a turn across a compaction", None, _compacted_in_a_turn, HELD),
+    ("a turn across a compaction", None, _compacted_in_a_turn, WORKING),
     ("a turn over, then a compaction", None, _compacted_after_a_turn, WAITING),
     ("a subagent started again since a restart", None, _started_again_since_a_restart, WORKING),
     ("a step a subagent holds", ["step"], _step_held_by_a_subagent(stopped=False), WORKING),
@@ -453,9 +458,14 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         "silent exactly a day, after a prompt",
         None,
         _silent_for(timedelta(days=1), "user-prompt-submit"),
-        HELD,
+        WORKING,
     ),
-    ("silent exactly a day, after a stop", None, _silent_for(timedelta(days=1), "stop"), WAITING),
+    (
+        "silent exactly a day, after a stop",
+        None,
+        _silent_for(timedelta(days=1), "stop"),
+        WAITING_LONG,
+    ),
     (
         "silent a day and a second",
         None,
@@ -474,9 +484,9 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         _silent_for(leases.LEASE_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
         None,
     ),
-    ("held beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), HELD),
+    ("working beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), WORKING),
     ("waiting beside quiet", ["step"], _two_sessions(True, "stop"), WAITING),
-    ("waiting beside held", ["step"], _two_sessions(False, "user-prompt-submit"), HELD),
+    ("waiting beside working", ["step"], _two_sessions(False, "user-prompt-submit"), WORKING),
     ("held beside working", ["step"], _held_beside_written, WORKING),
     ("working beside waiting", ["step"], _written_beside_waiting, WORKING),
     (
@@ -511,7 +521,7 @@ class RuleTests(LiveWorkCase):
         session = _session()
         self.hold_step(reference, session)
         self.hook(session, "user-prompt-submit", ago(minutes=2))
-        self.assertEqual(HELD, self.state_of(reference))
+        self.assertEqual(WORKING, self.state_of(reference), "the one item its session holds")
         (step,) = service.get_work_item(self.conn, reference)["checklist"]
         with calls.bind(confirmed(session), "tick_work_item_checklist_item"):
             service.tick_checklist_item(self.conn, reference, step["id"])
@@ -532,9 +542,15 @@ class RuleTests(LiveWorkCase):
         self.assertEqual((WAITING, WAITING), (self.state_of(written), self.state_of(other)))
         self.hook(session, "user-prompt-submit", ago(minutes=1))
         self.assertEqual(
-            (HELD, HELD),
+            (WORKING, HELD),
             (self.state_of(written), self.state_of(other)),
-            "a new prompt starts the count again",
+            "a new prompt finds it where it last wrote",
+        )
+        self.comment(other, session)
+        self.assertEqual(
+            (HELD, WORKING),
+            (self.state_of(written), self.state_of(other)),
+            "it stands on one item, the one it wrote to last",
         )
 
     def test_the_map_follows_the_items_order(self) -> None:
@@ -855,8 +871,132 @@ class SilentSubagentTests(LiveWorkCase):
     def test_a_fallen_subagent_leaves_its_parents_running_turn_as_it_was(self) -> None:
         self.started(hours=5)
         self.transcript_written(timedelta(hours=3))
+        # The session went on to another item, so its own turn stands there.
+        other = self.item()
+        self.claim(other, self.session)
         self.hook(self.session, "user-prompt-submit", ago(seconds=10))
-        self.assertEqual(HELD, self.state_of(self.reference))
+        self.assertEqual((HELD, WORKING), (self.state_of(self.reference), self.state_of(other)))
+
+
+class TurnTests(LiveWorkCase):
+    """A turn left open by a client that fell, or stopped by a notice, by the transcript's time.
+
+    The session holds one item, so a turn of its own that runs makes that item `working`.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.transcript = os.path.join(directory.name, "session.jsonl")
+        self.reference = self.item()
+        self.session = _session()
+        self.claim(self.reference, self.session)
+        self.hook(
+            self.session,
+            "session-start",
+            ago(hours=6),
+            source="startup",
+            transcript_path=self.transcript,
+        )
+
+    def written(self, delta: timedelta) -> None:
+        with open(self.transcript, "a", encoding="utf-8"):
+            pass
+        moment = (NOW - delta).timestamp()
+        os.utime(self.transcript, (moment, moment))
+
+    def state(self) -> dict | None:
+        return self.state_of(self.reference)
+
+    def test_a_turn_runs_up_to_the_limit_of_silence_and_past_it_does_not(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(hours=1))
+        self.written(live_work.TURN_SILENT)
+        self.assertEqual(WORKING, self.state())
+        self.written(live_work.TURN_SILENT + timedelta(seconds=1))
+        self.assertEqual(WAITING, self.state(), "its client fell, or it is in one long step")
+        self.written(timedelta(seconds=5))
+        self.assertEqual(WORKING, self.state(), "it wrote again, so it runs again")
+
+    def test_a_prompt_within_the_limit_runs_whatever_the_transcript_says(self) -> None:
+        self.written(timedelta(hours=3))
+        self.hook(self.session, "user-prompt-submit", ago(minutes=15))
+        self.assertEqual(WORKING, self.state())
+
+    def test_a_turn_with_no_transcript_file_runs_while_its_prompt_is_last(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(hours=3))
+        self.assertEqual(WORKING, self.state())
+
+    def test_a_notice_stops_the_turn_until_the_transcript_is_written_after_it(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(minutes=10))
+        self.written(timedelta(minutes=5, seconds=6))
+        self.hook(self.session, "notification", ago(minutes=5))
+        self.assertEqual(ASKS, self.state(), "it asks a person, and nothing was written since")
+        self.written(timedelta(minutes=5))
+        self.assertEqual(ASKS, self.state(), "written in the notice's own second")
+        self.written(timedelta(minutes=4))
+        self.assertEqual(WORKING, self.state(), "the answer arrived and the turn went on")
+
+    def test_a_turn_that_went_on_after_a_notice_falls_silent_like_any_other(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(hours=2))
+        self.hook(self.session, "notification", ago(hours=1))
+        self.written(live_work.TURN_SILENT + timedelta(seconds=1))
+        self.assertEqual(WAITING, self.state(), "it went on, so it no longer asks")
+
+    def test_a_notice_with_no_transcript_file_asks_until_the_next_prompt(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(minutes=10))
+        self.hook(self.session, "notification", ago(minutes=5))
+        self.assertEqual(ASKS, self.state())
+        self.hook(self.session, "user-prompt-submit", ago(minutes=1))
+        self.assertEqual(WORKING, self.state())
+
+    def test_a_notice_after_the_turn_ended_opens_none(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(minutes=10))
+        self.hook(self.session, "stop", ago(minutes=5))
+        self.hook(self.session, "notification", ago(minutes=4))
+        self.written(timedelta(minutes=1))
+        self.assertEqual(WAITING, self.state(), "its turn is over: it asks nothing")
+
+    def test_a_session_that_asks_and_has_a_live_subagent_is_at_work(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(minutes=10))
+        self.hook(self.session, "subagent-start", ago(minutes=8), agent="a1")
+        self.hook(self.session, "notification", ago(minutes=5))
+        self.assertEqual(WORKING, self.state(), "its subagent is on the one item it holds")
+
+    def test_asking_outdoes_a_wait_of_the_same_length_and_no_shorter_one(self) -> None:
+        reference = self.item(["step"])
+        asking, done = _session(), _session()
+        self.claim(reference, done)
+        self.hook(done, "user-prompt-submit", ago(minutes=10))
+        self.hook(done, "stop", ago(minutes=5))
+        self.hold_step(reference, asking)
+        self.hook(asking, "user-prompt-submit", ago(minutes=10))
+        self.hook(asking, "notification", ago(minutes=5))
+        self.assertEqual(ASKS, self.state_of(reference))
+        self.seen(asking, second(hours=5))
+        self.assertEqual(WAITING, self.state_of(reference), "it has asked for too long")
+
+    def test_waiting_is_long_past_four_hours_of_silence_and_not_at_them(self) -> None:
+        self.hook(self.session, "user-prompt-submit", ago(hours=5))
+        self.hook(self.session, "stop", ago(hours=4, minutes=30))
+        self.seen(self.session, second(hours=4))
+        self.assertEqual(WAITING, self.state())
+        self.seen(self.session, second(hours=4, seconds=1))
+        self.assertEqual(WAITING_LONG, self.state())
+
+    def test_a_long_wait_is_weaker_than_a_short_one_and_stronger_than_quiet(self) -> None:
+        reference = self.item(["step"])
+        long, short, quiet = _session(), _session(), _session()
+        self.claim(reference, quiet)
+        self.seen(quiet, second(days=2))
+        self.hold_step(reference, long)
+        self.hook(long, "stop", ago(hours=5))
+        self.assertEqual(WAITING_LONG, self.state_of(reference))
+        other = self.item(["step"])
+        self.claim(other, long)
+        self.hold_step(other, short)
+        self.hook(short, "stop", ago(minutes=5))
+        self.assertEqual(WAITING, self.state_of(other))
 
 
 class StoreAgeTests(unittest.TestCase):
@@ -928,7 +1068,7 @@ class StreamTests(LiveWorkCase):
 
 
 class CostTests(LiveWorkCase):
-    def test_a_space_of_1400_items_costs_five_reads(self) -> None:
+    def test_a_space_of_1400_items_costs_seven_reads(self) -> None:
         bulk_items(self.conn, SPACE, 1400)
         claimed, stepped = self.item(), self.item(["step"])
         working, waiting = _session(), _session()
@@ -963,7 +1103,7 @@ class CostTests(LiveWorkCase):
             found = views.planning_payload(self.conn, space=SPACE)["live_work"]
 
         self.assertEqual({self.identity(claimed): WORKING, self.identity(stepped): WORKING}, found)
-        self.assertLessEqual(len(statements), 5, statements)
+        self.assertLessEqual(len(statements), 7, statements)
         self.assertTrue(any("'session_start'" in text for text in statements), statements)
 
 
