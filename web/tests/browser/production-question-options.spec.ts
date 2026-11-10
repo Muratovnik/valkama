@@ -9,7 +9,14 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
 import { box, settledBox } from './editorPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { answerMark, asked, crowdedField, mixedField, openQuestion, send } from './questionBackend.ts'
+import {
+  answerMark,
+  asked,
+  crowdedField,
+  mixedField,
+  openQuestion,
+  send,
+} from './questionBackend.ts'
 import { test } from './test.ts'
 
 const SIZES = [
