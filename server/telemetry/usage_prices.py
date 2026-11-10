@@ -219,10 +219,15 @@ def request_cost(
     if anthropic and geo == "us":
         factor *= _US_ONLY
     total = 0.0
-    for kind in PRICED_KINDS:
+    for kind, price in (
+        ("input", rates.input),
+        ("cached_read", rates.cached_read),
+        ("cache_write_5m", rates.cache_write_5m),
+        ("cache_write_1h", rates.cache_write_1h),
+        ("output", rates.output),
+    ):
         count = tokens.get(kind, 0)
         if count:
-            price = getattr(rates, kind)
             if price is None:
                 return None
             total += count * price
