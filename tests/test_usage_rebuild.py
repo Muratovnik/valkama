@@ -20,7 +20,7 @@ from server import store_backups
 from server.planning import ladder
 from server.telemetry import liveness, usage_collect, usage_rebuild
 from server.telemetry.usage_ledger import SEGMENT_COLUMNS, Ledger
-from tests.usage_fixtures import HOUR, Case, CodexRun, stamp, usage
+from tests.usage_fixtures import HOUR, ORG_A, ORG_B, Case, CodexRun, advised, stamp, usage
 
 
 class RebuildCase(Case):
@@ -173,9 +173,46 @@ class EquivalenceTests(RebuildCase):
         self.assert_rebuilds_to_the_same("sess-1", "worker")
         self.assert_rebuilds_to_the_same("sess-1", "")
 
+    def test_what_the_work_ran_under_reads_back_the_same(self) -> None:
+        run = self.session()
+        run.entrypoint = "claude-vscode"
+        self.ticks((0, 2 * HOUR))
+        self.small_chunks()
+        run.prompt(0)
+        run.credential(1, ORG_A)
+        run.reply(10, tools=(("t1", "Bash"),), effort="high", advisorModel=run.model)
+        run.reply(11, tools=(("t2", "Agent"),), spent=advised(run.model), advisorModel=run.model)
+        run.agent_launched(11, "t2", "worker")
+        run.result(20, "t1")
+        self.read()
+        run.credential(30, ORG_B)
+        run.end_turn(40, effort="high", perTurnEffort="low")
+        self.read()
+        run.entrypoint = "cli"
+        run.prompt(HOUR)
+        run.end_turn(HOUR + 20, effort="high")
+        worker = self.subagent("sess-1", "worker", "rex: review")
+        worker.path.with_name("agent-worker.meta.json").write_text(
+            '{"description": "ovi: build it"}', encoding="utf-8"
+        )
+        worker.prompt(12, "build it", origin=None)
+        worker.end_turn(18, effort="medium")
+        self.read()
+        rows = self.segments()
+        self.assertEqual(
+            ({None, ORG_A, ORG_B}, {None, "high", "low"}, {0, 1}, {"ide", "terminal"}),
+            tuple(
+                {row[column] for row in rows}
+                for column in ("organization", "effort", "advisor", "environment")
+            ),
+        )
+        self.assertEqual("ovi", self.run_row("sess-1", "worker")["launch_class"])
+        self.assert_rebuilds_to_the_same()
+        self.assert_rebuilds_to_the_same("sess-1", "worker")
+
     def test_a_codex_rollout_read_in_passes_and_chunks(self) -> None:
         path = self.root / "codex" / "2030/03/04" / "rollout-sess-1.jsonl"
-        rollout = CodexRun(path, "sess-1")
+        rollout = CodexRun(path, "sess-1", originator="codex-tui", creator_account_id="acct-0001")
         self.conn.execute(
             "INSERT INTO sessions(id, client, transcript_path, status, started_at, last_seen)"
             " VALUES ('sess-1', 'codex', ?, 'active', ?, ?)",
@@ -184,19 +221,24 @@ class EquivalenceTests(RebuildCase):
         self.conn.commit()
         self.ticks((0, 3 * HOUR))
         self.small_chunks()
-        rollout.settings(1)
+        rollout.settings(1, effort="high")
         rollout.started(1)
         rollout.call(10, "c1")
         rollout.output(40, "c1")
         rollout.usage_record(50, input_tokens=1000, cached=800, output=30, reasoning=10)
         self.read()
         rollout.complete(60)
+        rollout.settings(HOUR + 60, effort="low")
         rollout.started(HOUR + 60)
         rollout.usage_record(HOUR + 65, input_tokens=2000, cached=100, output=60)
         rollout.complete(HOUR + 70)
         self.read()
         self.assertEqual(90, self.tokens("output_tokens"))
         self.assertEqual(HOUR, round(self.run_row()["human_seconds"]))
+        self.assertEqual(
+            [("acct-0001", "terminal", "high"), ("acct-0001", "terminal", "low")],
+            [(row["organization"], row["environment"], row["effort"]) for row in self.segments()],
+        )
         self.assert_rebuilds_to_the_same()
 
 

@@ -17,6 +17,7 @@ from server.hooks import ingest
 from server.ops import doctor
 from server.telemetry import liveness, usage_collect, usage_rebuild, usage_targets
 from server.telemetry.usage_ledger import request_key
+from server.telemetry.usage_store import READING
 from tests.usage_fixtures import HOUR, Case, ClaudeRun, usage
 
 SHARED = "msg_shared"
@@ -215,7 +216,8 @@ class HolderThatCannotBeReadAgainTests(ClaimCase):
 
     def test_a_holder_refused_for_the_current_reading_keeps_its_claim(self) -> None:
         self.assert_keeps(
-            "UPDATE usage_runs SET reread_refused = 'shorter', refused_reading = 1 WHERE id = ?"
+            "UPDATE usage_runs SET reread_refused = 'shorter',"
+            f" refused_reading = {READING} WHERE id = ?"
         )
 
 

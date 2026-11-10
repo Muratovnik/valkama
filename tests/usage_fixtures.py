@@ -63,6 +63,26 @@ def usage(
     }
 
 
+#: Two organizations' made-up ids, as `credential_org` names one.
+ORG_A = "0a0a0a0a-0000-4000-8000-00000000000a"
+ORG_B = "0b0b0b0b-0000-4000-8000-00000000000b"
+
+
+def advised(adviser: str) -> dict:
+    """A request's usage with one advisor call, run by `adviser`."""
+
+    return usage(
+        input_tokens=4,
+        read=0,
+        write_5m=0,
+        output=6,
+        iterations=[
+            {"type": "message", "input_tokens": 4, "output_tokens": 6},
+            {"type": "advisor_message", "model": adviser, "input_tokens": 100, "output_tokens": 20},
+        ],
+    )
+
+
 class ClaudeRun:
     """One transcript being written, a session's or a subagent's."""
 

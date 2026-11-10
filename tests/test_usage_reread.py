@@ -29,7 +29,7 @@ from server.telemetry import (
 )
 from server.telemetry.usage_store import READING
 from tests import schema14
-from tests.usage_fixtures import HOUR, Case, ClaudeRun, epoch, stamp, usage
+from tests.usage_fixtures import HOUR, ORG_A, Case, ClaudeRun, advised, epoch, stamp, usage
 
 #: A pass's budget: at one second per run it starts three.
 BUDGET = 2.5
@@ -588,6 +588,92 @@ class DoctorTests(RereadCase):
             ("warn", "usage-reading-failed"), (check["status"], check["presentation"]["code"])
         )
         self.assertIn("failed 1", check["detail"])
+
+
+class SecondReadingTests(RereadCase):
+    """The runs reading 1 wrote: no setting on a segment, and an advisor of the executor's
+    model counted over with each record of its request."""
+
+    def test_the_runs_reading_one_wrote_are_read_again_and_filled(self) -> None:
+        run = self.session("advised")
+        run.entrypoint = "claude-vscode"
+        run.prompt(0)
+        run.credential(1, ORG_A)
+        for record in range(3):
+            run.reply(10 + record, request="m1", spent=advised(run.model), advisorModel=run.model)
+        run.end_turn(20, effort="high")
+        worker = self.subagent("advised", "w1", label="ovi: build it")
+        worker.prompt(12, "build it", origin=None)
+        worker.end_turn(18)
+        self.read()
+        # As reading 1 left them.
+        self.reader.execute(
+            "UPDATE usage_segments SET organization = NULL, environment = NULL, effort = NULL,"
+            " advisor = 0, advisor_model = NULL, input_tokens = -100 WHERE input_tokens = 100"
+        )
+        self.reader.execute("UPDATE usage_runs SET reading = 1, launch_class = NULL")
+        self.assertEqual(2, len(self.stale()))
+        drain(self.history)
+        self.assertEqual(set(), self.stale())
+        self.assertEqual(
+            [
+                (ORG_A, "ide", None, 0, run.model, 4),
+                (ORG_A, "ide", None, 1, run.model, 100),
+                (ORG_A, "ide", "high", 0, None, 10),
+            ],
+            [
+                (
+                    row["organization"],
+                    row["environment"],
+                    row["effort"],
+                    row["advisor"],
+                    row["advisor_model"],
+                    row["input_tokens"],
+                )
+                for row in self.segments("advised")
+                # The later records of the request add nothing to a row of their own.
+                if row["input_tokens"]
+            ],
+        )
+        self.assertEqual("ovi", self.run_row("advised", "w1")["launch_class"])
+
+
+class OrganizationShareTests(RereadCase):
+    def check(self) -> dict:
+        (found,) = [c for c in doctor._store_checks() if c["id"] == "usage-organization"]
+        return found
+
+    def test_the_doctor_says_what_share_names_its_organization(self) -> None:
+        named = self.session("named")
+        named.prompt(0)
+        named.credential(1, ORG_A)
+        named.end_turn(10)
+        unnamed = self.session("unnamed")
+        unnamed.prompt(100)
+        unnamed.end_turn(130)
+        self.read()
+        check = self.check()
+        # Three segments: the second before the attachment and nine after it, and thirty.
+        self.assertEqual(
+            ("ok", "usage-organization"), (check["status"], check["presentation"]["code"])
+        )
+        self.assertEqual(
+            {
+                "segments": 3,
+                "known": 1,
+                "seconds": 40.0,
+                "known_seconds": 9.0,
+                "share": 33.3,
+                "seconds_share": 22.5,
+            },
+            check["presentation"]["parameters"],
+        )
+        self.assertIn("1 of 3 usage segment(s) (33.3%) and 9 of 40 second(s)", check["detail"])
+        self.reader.execute("UPDATE usage_segments SET organization = NULL")
+        check = self.check()
+        self.assertEqual(
+            ("warn", "usage-organization-none"), (check["status"], check["presentation"]["code"])
+        )
 
 
 if __name__ == "__main__":

@@ -12,26 +12,9 @@ from unittest import mock
 
 from server.telemetry import usage_collect
 from server.telemetry.usage_steps import environment, launch_class
-from tests.usage_fixtures import HOUR, Case, ClaudeRun, stamp, usage
+from tests.usage_fixtures import HOUR, ORG_A, ORG_B, Case, ClaudeRun, advised, stamp
 
-ORG_A = "0a0a0a0a-0000-4000-8000-00000000000a"
-ORG_B = "0b0b0b0b-0000-4000-8000-00000000000b"
 SETTINGS = ("organization", "environment", "effort", "advisor", "advisor_model")
-
-
-def advised(adviser: str) -> dict:
-    """A request's usage with one advisor call run by `adviser`."""
-
-    return usage(
-        input_tokens=4,
-        read=0,
-        write_5m=0,
-        output=6,
-        iterations=[
-            {"type": "message", "input_tokens": 4, "output_tokens": 6},
-            {"type": "advisor_message", "model": adviser, "input_tokens": 100, "output_tokens": 20},
-        ],
-    )
 
 
 class OrganizationTests(Case):

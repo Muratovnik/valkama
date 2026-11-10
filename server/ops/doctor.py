@@ -321,6 +321,7 @@ def _store_checks() -> list[dict]:
     checks.append(_unpriced_usage_check(path))
     checks.append(_usage_copies_check(path))
     checks.append(_usage_reading_check(path))
+    checks.append(_usage_organization_check(path))
     return checks
 
 
@@ -617,6 +618,78 @@ def _usage_copies_check(path: str) -> dict:
         " the copies. The totals are right either way.",
         presentation_code="usage-copies-found",
         parameters={"requests": int(requests), "runs": int(runs)},
+    )
+
+
+#: The usage segments and their seconds, all and those that name their organization.
+_ORGANIZATION_SHARE = (
+    "SELECT COUNT(*), COALESCE(SUM(organization IS NOT NULL), 0), COALESCE(SUM(seconds), 0),"
+    " COALESCE(SUM(CASE WHEN organization IS NOT NULL THEN seconds ELSE 0 END), 0)"
+    " FROM usage_segments"
+)
+
+
+def _share(part: float, whole: float) -> float:
+    return round(100.0 * part / whole, 1) if whole else 0.0
+
+
+def _usage_organization_check(path: str) -> dict:
+    """What share of the usage segments, and of their seconds, names its organization.
+
+    The reader takes the organization from the transcript alone, so a transcript older
+    than the record a client writes leaves its rows unknown. None known at all, with
+    rows to know it for, says the reader finds no such record anywhere. One query.
+    """
+
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            segments, known, seconds, known_seconds = conn.execute(_ORGANIZATION_SHARE).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return _check(
+            "usage-organization",
+            "Usage by organization",
+            "unknown",
+            f"the usage segments could not be read: {failure}",
+            "Open the store once with the current build; it adds the columns.",
+            presentation_code="usage-organization-unreadable",
+        )
+    parameters = {
+        "segments": int(segments),
+        "known": int(known),
+        "seconds": round(float(seconds), 3),
+        "known_seconds": round(float(known_seconds), 3),
+        "share": _share(known, segments),
+        "seconds_share": _share(known_seconds, seconds),
+    }
+    detail = (
+        f"{parameters['known']} of {parameters['segments']} usage segment(s)"
+        f" ({parameters['share']}%) and {round(float(known_seconds))} of"
+        f" {round(float(seconds))} second(s) ({parameters['seconds_share']}%) name the"
+        " organization they ran for"
+    )
+    if segments and not known:
+        return _check(
+            "usage-organization",
+            "Usage by organization",
+            "warn",
+            detail,
+            "Claude Code names the organization before its requests and Codex in a rollout's"
+            " first record; a transcript older than that names none, and its rows stay"
+            " unknown. With none known at all, see whether the usage reading line still has"
+            " runs waiting to be read again, and whether recent sessions were read.",
+            presentation_code="usage-organization-none",
+            parameters=parameters,
+        )
+    return _check(
+        "usage-organization",
+        "Usage by organization",
+        "ok",
+        detail,
+        presentation_code="usage-organization",
+        parameters=parameters,
     )
 
 

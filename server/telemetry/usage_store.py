@@ -83,8 +83,12 @@ import sqlite3
 #: The reading the current reader gives. Raise it with any change that makes rows an
 #: earlier reader wrote incomplete or wrong: every run read before is then stale and is
 #: read again. 1 is the first reading counted: it skips a subagent file's records of
-#: another session, counts a request once in the whole store and fills `request_id`.
-READING = 1
+#: another session, counts a request once in the whole store and fills `request_id`. 2
+#: keeps an advisor's tokens apart from the executor's when both run one model, which 1
+#: counted over again with every record of the request, and fills what a segment ran
+#: under (`organization`, `environment`, `effort`, `advisor`, `advisor_model`) and a
+#: run's `launch_class`.
+READING = 2
 
 #: The usage rows with tokens and no cost, by model, the most tokens first. A row's
 #: tokens are its priced kinds; `reasoning_tokens` is part of `output_tokens`.
