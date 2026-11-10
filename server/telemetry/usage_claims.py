@@ -12,9 +12,9 @@ row of each request by the same order.
 - A reading that meets a request no run holds claims it. One that meets a request
   another run holds counts it only when the rule puts it first and the holder can still
   be read again: the claim then moves and the holder becomes stale, so reading it again
-  drops those tokens. A holder that cannot be read again (not `reading`, or refused for
-  the current reading) keeps the claim, and the reading yields: otherwise the tokens
-  would stay counted twice for good.
+  drops those tokens. A holder that cannot be read again (not `reading`, refused for the
+  current reading, or with the file it was read from gone or shorter) keeps the claim,
+  and the reading yields: otherwise the tokens would stay counted twice for good.
 - Whether a request is held elsewhere is asked while parsing, outside the write
   transaction, so the answer is advice. `write` asks again inside it, and a claim lost
   in between fails the whole chunk: it is read again on a later pass, never written
@@ -23,13 +23,27 @@ row of each request by the same order.
   longer holds a request it held releases the claim, and every run that yielded becomes
   stale once, so the one the request now belongs to can count it.
 
-This converges. The rule is an order of runs that a reading does not change, a moved
-claim goes only forward in it, and a run read again releases a claim only when its own
-transcript no longer yields the request, which reading it once more does not undo.
+What makes this settle is the record of yields and the release, not the order: a reading
+again can change a run's place in it, since a run whose records are all skipped as
+copies ends with no first record. A run that left a request to another says so in
+`yielded`; whenever a run read again no longer holds a request it held, every run that
+yielded is read again, and the one the rule now puts first takes the request. A reading
+again of the same bytes makes the same claims, so once each run has been read under the
+current reading nothing moves any more: reading every run again in either order then
+changes nothing, which is what the tests hold it to.
+
+Between those readings a request can for a while be counted in no run. A run yielded it,
+then the run holding it was read again and no longer holds it (a copy's run, for
+instance), and the request waits until the run that yielded is read again. The release
+makes that run stale in the same transaction, so the background reader, or the rest of
+a rebuild of every run, reads it again and the request is counted once more. Only a run
+that can be read again does so: when the one that yielded has lost its transcript, its
+reading again is refused and the request stays counted in no run.
 """
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
@@ -38,7 +52,8 @@ from .usage_store import READING
 
 _HOLDER = (
     "SELECT claim.run_id, run.id AS present, run.agent_id, run.first_at, run.status,"
-    " run.reread_refused, run.refused_reading FROM usage_requests AS claim"
+    " run.reread_refused, run.refused_reading, run.path, run.read_offset"
+    " FROM usage_requests AS claim"
     " LEFT JOIN usage_runs AS run ON run.id = claim.run_id WHERE claim.request = ?"
 )
 
@@ -59,19 +74,41 @@ class Claimant:
 @dataclass(frozen=True)
 class _Holder:
     claimant: Claimant
-    #: Whether the run still exists and can be read again.
+    #: Whether the run still exists.
     present: bool
-    rereadable: bool
+    #: Whether its row lets it be read again: being read and not refused for this reading.
+    readable: bool
+    #: The file it was read from, and how far.
+    path: str | None
+    read_offset: int
+
+    def rereadable(self) -> bool:
+        """Whether reading it again can give the claim up: its row allows it and the bytes
+        it was read from are still there. A run whose file is gone with no archive keeps
+        being read in name only, since no reader finds it again."""
+
+        return (
+            self.readable
+            and self.path is not None
+            and os.path.isfile(self.path)
+            and os.path.getsize(self.path) >= self.read_offset
+        )
 
 
 def _holder(conn: sqlite3.Connection, number: int) -> _Holder | None:
     row = conn.execute(_HOLDER, (number,)).fetchone()
     if row is None:
         return None
-    run_id, present, agent, first_at, status, refused, refused_reading = tuple(row)
+    run_id, present, agent, first_at, status, refused, refused_reading, path, offset = tuple(row)
     claimant = Claimant(int(run_id), bool(agent), first_at)
     refused_now = refused is not None and (refused_reading or 0) >= READING
-    return _Holder(claimant, present is not None, status == "reading" and not refused_now)
+    return _Holder(
+        claimant,
+        present is not None,
+        status == "reading" and not refused_now,
+        path,
+        int(offset or 0),
+    )
 
 
 def _takes(me: Claimant, holder: _Holder) -> bool:
@@ -79,7 +116,8 @@ def _takes(me: Claimant, holder: _Holder) -> bool:
 
     if not holder.present:
         return True
-    return holder.rereadable and me.key() < holder.claimant.key()
+    # The file is looked at only when the rule would move the claim: rarely.
+    return me.key() < holder.claimant.key() and holder.rereadable()
 
 
 def counts(conn: sqlite3.Connection, me: Claimant, number: int) -> bool:

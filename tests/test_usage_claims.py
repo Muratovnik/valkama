@@ -15,7 +15,7 @@ from unittest import mock
 from server import store
 from server.hooks import ingest
 from server.ops import doctor
-from server.telemetry import liveness, usage_collect, usage_rebuild
+from server.telemetry import liveness, usage_collect, usage_rebuild, usage_targets
 from server.telemetry.usage_ledger import request_key
 from tests.usage_fixtures import HOUR, Case, ClaudeRun, usage
 
@@ -189,6 +189,29 @@ class HolderThatCannotBeReadAgainTests(ClaimCase):
 
     def test_a_holder_not_being_read_keeps_its_claim(self) -> None:
         self.assert_keeps(None)
+
+    def test_a_holder_whose_file_is_gone_keeps_its_claim_though_still_reading(self) -> None:
+        late = self.session("late")
+        self.turn(late, 600)
+        self.read()
+        holder = self.run_of("late")
+        # The file is gone with no archive, and no reader finds the run again to mark it:
+        # its row still says it is being read.
+        late.path.unlink()
+        real = usage_targets.Finder.targets
+
+        def without_late(finder: usage_targets.Finder, moved: set[str]) -> list:
+            return [target for target in real(finder, moved) if target.session != "late"]
+
+        with mock.patch.object(usage_targets.Finder, "targets", without_late):
+            early = self.session("early")
+            self.turn(early, 0)
+            self.read()
+        self.assertEqual("reading", self.run_row("late")["status"])
+        self.assertEqual(holder, self.owner())
+        self.assertEqual(set(), self.stale())
+        self.assertEqual(SHARED_OUTPUT + 2 * OWN_OUTPUT, self.output())
+        self.assertEqual(1, self.run_row("early")["yielded"])
 
     def test_a_holder_refused_for_the_current_reading_keeps_its_claim(self) -> None:
         self.assert_keeps(
