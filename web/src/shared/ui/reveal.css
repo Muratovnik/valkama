@@ -6,17 +6,24 @@
  *
  * - `.reveal-row` — the row whose pointer and keyboard bring its actions up.
  * - `.reveal` — an action in that row, or the group of them, out of sight at rest.
+ * - `.reveal-room` — with `.reveal`, an action that gives its room up as well while it is out of
+ *   sight, so the row's words have that room until the action comes up.
  *
  * Out of sight it is see-through, not hidden: it keeps its place, so nothing in the row moves
  * when it comes up, and the keyboard reaches it from either side. A hidden action is no stop for
  * Tab, so Shift+Tab from the next row passed the rail's pin by. It comes up under the pointer
- * anywhere on the row, with the keyboard anywhere in it, and while a popup it opened is open. Only
- * the keyboard's focus counts: a press with the pointer leaves focus behind, and the actions
- * stayed up after the pointer had gone. Where nothing can hover they stand.
+ * anywhere on the row, with the keyboard anywhere in it, while a popup it opened is open, and
+ * while a press on it is being carried out (`aria-busy`). Only the keyboard's focus counts: a
+ * press with the pointer leaves focus behind, and the actions stayed up after the pointer had
+ * gone. Where nothing can hover they stand.
+ *
+ * An action with `.reveal-room` leaves the row's flow at rest and is as wide as nothing, so the
+ * row lays out as if it were not there. Tab still stops on it, and the stop brings it up with its
+ * room back before it is drawn.
  *
  * Its hosts: a checklist step's discussion (`InspectorOverview`), the pin of an unpinned rail row
- * (`NavWorkPin` in `NavWorkRow`), its «Open session» (`NavWorkOpen`) and a lane heading's card
- * and chain (`WorkItemLaneHead`).
+ * (`NavWorkPin` in `NavWorkRow`), its «Open session» (`NavWorkOpen`, with its room) and a lane
+ * heading's card and chain (`WorkItemLaneHead`).
  */
 @media (hover: hover) {
   .reveal {
@@ -24,8 +31,14 @@
     transition: opacity var(--duration-quick) var(--ease-out);
   }
 
+  .reveal-row:not(:hover, :has(:focus-visible)) .reveal-room:not([aria-busy='true']) {
+    position: absolute;
+    inline-size: 0;
+    overflow: hidden;
+  }
+
   .reveal-row:is(:hover, :has(:focus-visible)) .reveal,
-  .reveal:is([aria-expanded='true'], :has([aria-expanded='true'])) {
+  .reveal:is([aria-expanded='true'], [aria-busy='true'], :has([aria-expanded='true'])) {
     opacity: 1;
   }
 }

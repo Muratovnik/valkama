@@ -775,10 +775,12 @@ terminal glyph stands in the number's column where an item's number would. Press
 the session as a card's session button does; it has no card and no pin, and a session that
 leaves the frame leaves at once, where an item's row stays a while, muted, its second line
 saying «работа закончилась» as its hint does, with no state and no time. An item's row with
-a session behind it ends with «Открыть сессию» beside the pin, the same glyph, shown the way
-the pin is: in a column the rail keeps on every row, so the title neither moves nor narrows
-when it comes up, out of sight until the pointer or the keyboard is on the row, and standing
-where nothing can hover. Its name names the item whose session it opens.
+a session behind it ends with «Открыть сессию» beside the pin, the same glyph, out of sight
+until the pointer or the keyboard is on the row, and standing where nothing can hover. The
+rail keeps no column for it: it takes one only while it is up or its press is being carried
+out, and then that row's title and second line shorten for it, while the row's height, the
+sign, the number and the pin stay where they are. Its name names the item whose session it
+opens.
 
 A row's lead holds the sign of its session (`SessionSign`): one ring of one size and one
 stroke, 14px in the lead's column, whose inside says the state — a turning ring in the

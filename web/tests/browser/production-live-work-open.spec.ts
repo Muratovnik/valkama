@@ -2,9 +2,11 @@
  * «Open session» on a row of the list of work going on now whose item a session stands
  * behind: a target as big as the pin beside it, the row's line by the pin's width on the rail
  * at 1280 and a finger's square in the phone's panel at 390, in English and in Russian; named
- * after the item whose session it opens; and on no row with no session behind it, whose
- * columns stand where a row with one has them. A session's own row is a button that opens
- * the session, with neither a pin nor «Open session». How it comes up is
+ * after the item whose session it opens; and on no row with no session behind it. On the rail
+ * it has no column at rest: the row's words have the room the pin's column leaves them, as a
+ * row with no session does, and give it up only while the control is up, under the pointer or
+ * the keyboard, with nothing else in the row moving. A session's own row is a button that
+ * opens the session, with neither a pin nor «Open session». How it comes up is
  * `production-reveal-actions.spec.ts`.
  */
 import { expect } from '@playwright/test'
@@ -52,6 +54,36 @@ const size = (part: Locator) =>
     return { height, width }
   })
 
+/**
+ * A rail row's widths and what must stay put: the row's inner width, its lead and gap, the
+ * link, the words (title and second line), «Open session», and the row's height with the x
+ * of the sign's lead, the number and the pin.
+ */
+const rowLayout = (row: Locator) =>
+  row.evaluate((node) => {
+    const style = getComputedStyle(node)
+    const box = (selector: string) =>
+      node.querySelector(selector)?.getBoundingClientRect() ?? new DOMRect()
+    return {
+      inner:
+        node.clientWidth -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight),
+      gap: Number.parseFloat(style.columnGap),
+      lead: box('.nav-row-lead').width,
+      link: box('.nav-row-link').width,
+      linkHeight: box('.nav-row-link').height,
+      words: box('.nav-row-words').width,
+      open: box('.nav-row-open').width,
+      still: {
+        height: node.getBoundingClientRect().height,
+        lead: box('.nav-row-lead').x,
+        number: box('.nav-row-number').x,
+        pin: box('.nav-row-pin').x,
+      },
+    }
+  })
+
 const tokenOf = (page: Page, name: string) =>
   page.evaluate(
     (property) =>
@@ -78,6 +110,8 @@ for (const { locale, name } of [
         const row = liveRow(page, 'MAIN-12', within)
         const control = row.getByRole('button', { name, exact: true })
         await expect(control).toHaveCount(1)
+        // On the rail it has its size only while it is up; in the phone's panel it stands.
+        await row.hover()
         const pin = await size(row.locator('.nav-row-pin'))
         const opens = await size(control)
         test
@@ -91,12 +125,59 @@ for (const { locale, name } of [
       })
     }
 
-    test('a row with no session keeps the column «Open session» takes on the rail', async ({
+    test('on the rail it takes a column only while it is up, and only its row’s words shorten', async ({
       page,
     }) => {
       const within = await open(page, 1280)
-      const link = await size(liveRow(page, 'MAIN-12', within).locator('.nav-row-link'))
-      expect(await size(liveRow(page, 'MAIN-31', within).locator('.nav-row-link'))).toEqual(link)
+      const row = liveRow(page, 'MAIN-12', within)
+      await page.mouse.move(1, 1)
+      const rest = await rowLayout(row)
+      const column = await tokenOf(page, '--size-control-inline')
+      // At rest the row is laid out as before the control had a column: the lead, the link
+      // and the pin's one column, with a gap between each, across the row's inner width.
+      expect(rest.link).toBeCloseTo(rest.inner - rest.lead - 2 * rest.gap - column, 2)
+      expect(rest.open).toBe(0)
+      expect(await size(liveRow(page, 'MAIN-31', within).locator('.nav-row-link'))).toEqual({
+        width: rest.link,
+        height: rest.linkHeight,
+      })
+
+      // Up under the pointer, it takes its column and a gap from the words, nothing else.
+      await row.locator('.nav-row-title').hover()
+      const hovered = await rowLayout(row)
+      test.info().annotations.push({
+        type: 'measured',
+        description: JSON.stringify({ rest, hovered }),
+      })
+      expect(hovered.open).toBe(column)
+      expect(hovered.link).toBeCloseTo(rest.link - column - rest.gap, 2)
+      expect(hovered.words).toBeCloseTo(rest.words - column - rest.gap, 2)
+      expect(hovered.still).toEqual(rest.still)
+
+      // Reached from the keyboard: the row's link, then «Open session», then the pin.
+      await page.mouse.move(1, 1)
+      await expect.poll(() => rowLayout(row).then(({ open }) => open)).toBe(0)
+      // Into the link from the stop before it, so the keyboard, not a script, holds focus.
+      await row.locator('.nav-row-link').focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(row.locator('.nav-row-link')).toBeFocused()
+      expect(await rowLayout(row)).toEqual(hovered)
+      await page.keyboard.press('Tab')
+      await expect(row.getByRole('button', { name, exact: true })).toBeFocused()
+      expect(await rowLayout(row)).toEqual(hovered)
+      await page.keyboard.press('Tab')
+      await expect(row.locator('.nav-row-pin')).toBeFocused()
+      expect(await rowLayout(row)).toEqual(hovered)
+
+      // While its press is carried out it keeps its column, with the pointer gone.
+      await page.route('**/api/open-plan?*', () => null)
+      const control = row.getByRole('button', { name, exact: true })
+      await row.locator('.nav-row-title').hover()
+      await control.click()
+      await page.mouse.move(1, 1)
+      await expect(control).toHaveAttribute('aria-busy', 'true')
+      expect(await rowLayout(row)).toEqual(hovered)
     })
 
     test('a session’s own row opens the session and has neither pin nor «Open session»', async ({
