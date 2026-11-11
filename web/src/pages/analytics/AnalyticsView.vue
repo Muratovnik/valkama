@@ -27,6 +27,9 @@
  *
  * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
  * is its whole report.
+ *
+ * The live period «Now» reads itself again on an interval while the page is seen
+ * (`useLiveRefresh`); no other period does.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -35,6 +38,7 @@ import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
+import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
@@ -214,6 +218,17 @@ function refresh() {
   void refreshTiles()
 }
 
+/**
+ * «Now» reads itself again while the page is seen, an interval after the last read of the view,
+ * whatever asked it: a refresh, or a new period or filter.
+ */
+const live = computed(() => view.value.period === 'now')
+const liveRefresh = useLiveRefresh({ live: () => live.value, refresh })
+watch(
+  () => read.askedAt.value,
+  () => liveRefresh.restart(),
+)
+
 const emptyDescription = computed(() =>
   read.bounds.value ? t('analytics.empty.description') : t('analytics.period.incomplete'),
 )
@@ -232,6 +247,7 @@ const emptyDescription = computed(() =>
       :dimensions="filterDimensions"
       :filters-refused="filtersRefused"
       :last-event-at="lastEventAt"
+      :live="live"
       :today="today"
       :values="read.filterValues.value"
       :view="view"

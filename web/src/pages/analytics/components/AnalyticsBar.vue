@@ -10,7 +10,8 @@
  * document, as that disclosure's did. A chip names its value as its field does, from one list.
  *
  * How fresh the figures are is the newest record the store holds, of any session, as old as it
- * is now: a page left open says its figures grow old.
+ * is now: a page left open says its figures grow old. A live period says beside it that it reads
+ * itself again, and how often.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,6 +20,7 @@ import { useIntervalFn, useNow } from '@vueuse/core'
 
 import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
 import { useFilterOptions } from '@/pages/analytics/composables/useFilterOptions.ts'
+import { LIVE_INTERVAL } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -43,6 +45,8 @@ const props = defineProps<{
   filtersRefused: string
   /** The newest record the store holds, as the answer on show says; undefined with no answer. */
   lastEventAt: string | null | undefined
+  /** Whether the period reads itself again (`useLiveRefresh`). */
+  live: boolean
   /** The day the read was asked on, the last a custom period can name. */
   today: string
   /** What each filter offers, as the read gave it. */
@@ -108,6 +112,13 @@ function takeOut(index: number) {
 }
 
 const removeLabel = (label: string) => t('analytics.filters.remove', { label })
+
+/** That the period is live, and how often it reads itself again. */
+const liveWords = computed(() =>
+  t('analytics.time.live', {
+    interval: t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }),
+  }),
+)
 
 const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 60_000) })
 /** How fresh the figures are, as words and, where there is one, the moment they stand for. */
@@ -184,6 +195,15 @@ const fresh = computed(() => {
         </VButton>
       </div>
       <div class="analytics-bar-read">
+        <p
+          v-if="live"
+          class="analytics-bar-live"
+        >
+          <span
+            class="analytics-bar-live-mark"
+            aria-hidden="true"
+          />{{ liveWords }}
+        </p>
         <p
           v-if="fresh"
           class="analytics-bar-fresh"
@@ -308,6 +328,28 @@ const fresh = computed(() => {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* A live period says so in words; the mark before them is their sign, not their meaning. */
+.analytics-bar-live {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.analytics-bar-live-mark {
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
+  background: var(--color-success);
+  border-radius: 50%;
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 .analytics-filter-body {

@@ -6,6 +6,10 @@
  * page asks that hour or the hour before it, which is what the figures are compared with. The
  * period chart names its minutes by their clock times, and its minutes add up to the total the
  * period's figures say.
+ *
+ * It reads itself again every thirty seconds while the page is seen and asks nothing while it is
+ * hidden, which the test counts in reads against the page's own clock, moved by the test; no
+ * other period reads itself again.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -41,20 +45,28 @@ const HOUR_OF_WORK: TimedStretch[] = [
 /** The minutes of the live hour's work above, which the page's figures must say. */
 const LIVE_MINUTES = (300 + 600 + 120 + 60) / 60
 
-/** Answers every usage read from `world`, and keeps each read's query for the test to inspect. */
-async function serveLive(page: Page, world: readonly TimedStretch[]) {
-  const asked: URLSearchParams[] = []
+/** The browser double: the work it holds, which a test may change, and every query it was asked. */
+interface Double {
+  asked: URLSearchParams[]
+  world: readonly TimedStretch[]
+  /** The newest record the answers name; each period's end when unset. */
+  lastEventAt?: Date
+}
+
+/** Answers every usage read from the double's work as it stands when the read is asked. */
+async function serveLive(page: Page, world: readonly TimedStretch[]): Promise<Double> {
+  const double: Double = { asked: [], world }
   await page.clock.setSystemTime(NOW)
   await installBackend(page)
   await page.route('**/api/analytics/usage?*', async (route) => {
     const query = new URL(route.request().url()).searchParams
-    asked.push(query)
+    double.asked.push(query)
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify(serveUsage(world, query)),
+      body: JSON.stringify(serveUsage(double.world, query, double.lastEventAt)),
     })
   })
-  return asked
+  return double
 }
 
 /** «1 h 5 min», «18 min», «0» as minutes: how the page writes a whole number of minutes. */
@@ -86,7 +98,7 @@ const nowAddress = pageAt({ period: 'now' })
 test('«Now» is the last hour by the minute, held in the address and read whole by every part', async ({
   page,
 }, info) => {
-  const asked = await serveLive(page, HOUR_OF_WORK)
+  const { asked } = await serveLive(page, HOUR_OF_WORK)
   const analytics = await openReport(page, 1440, nowAddress)
   const period = analytics.locator('.analytics-period')
 
@@ -139,4 +151,130 @@ test('«Now» is the last hour by the minute, held in the address and read whole
   expect(`${url.pathname}${url.search}`).toBe(nowAddress)
 
   await record(info, 'live-hour', { ticks, totals, summary, periods: [...periods] })
+})
+
+/**
+ * Makes the document's visibility the test's to set, a switch of tabs as the page hears of it, and
+ * keeps every usage read the page asks, in the page, at the moment it asks it. Playwright keeps its
+ * page visible, so the state and its event are stood in for. A read the clock's timers ask is
+ * asked inside them, so the count after a move of the paused clock is exact without a wait.
+ */
+async function watchPage(page: Page) {
+  await page.addInitScript(() => {
+    let state: DocumentVisibilityState = 'visible'
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => state === 'hidden',
+    })
+    const reads: string[] = []
+    const fetchFirst = globalThis.fetch.bind(globalThis)
+    globalThis.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input)
+      if (url.includes('/api/analytics/usage')) reads.push(url)
+      return fetchFirst(input, init)
+    }
+    Object.assign(globalThis, {
+      usageReads: reads,
+      showPage: (next: DocumentVisibilityState) => {
+        state = next
+        document.dispatchEvent(new Event('visibilitychange'))
+      },
+    })
+  })
+  return {
+    show: (state: DocumentVisibilityState) =>
+      page.evaluate((next) => {
+        ;(globalThis as unknown as { showPage: (to: string) => void }).showPage(next)
+      }, state),
+    reads: async () => {
+      const urls = await page.evaluate(() =>
+        (globalThis as unknown as { usageReads: string[] }).usageReads.slice(),
+      )
+      return urls.map((url) => new URL(url, 'http://127.0.0.1').searchParams)
+    },
+    count: () =>
+      page.evaluate(() => (globalThis as unknown as { usageReads: string[] }).usageReads.length),
+  }
+}
+
+/**
+ * How many times the page was read as of a new moment: one read by account is asked each time,
+ * for the accounts that worked and the tile of the accounts together.
+ */
+const roundsOf = (asked: readonly URLSearchParams[]) =>
+  new Set(
+    asked.filter((query) => query.get('group_by') === 'account').map((query) => query.get('to')),
+  ).size
+
+/**
+ * Waits until every read the page asked was answered and the answers asked nothing more: the
+ * page's count and the double's agree, twice in a row.
+ */
+async function settled(count: () => Promise<number>, double: Double) {
+  let last = -1
+  await expect
+    .poll(
+      async () => {
+        const asked = await count()
+        const still = asked === last && asked === double.asked.length
+        last = asked
+        return still
+      },
+      { intervals: [250] },
+    )
+    .toBe(true)
+}
+
+test('«Now» reads itself again every 30 s while the page is seen, and never while hidden', async ({
+  page,
+}, info) => {
+  await page.clock.install({ time: NOW })
+  const { show, reads, count } = await watchPage(page)
+  const double = await serveLive(page, HOUR_OF_WORK)
+  const analytics = await openReport(page, 1440, nowAddress)
+  await expect(analytics.locator('.analytics-bar-live')).toHaveText('Live, every 30 s')
+  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
+  await settled(count, double)
+  expect(roundsOf(await reads())).toBe(1)
+
+  // Seen: each interval is one read, asked as the interval ends, and no more.
+  const INTERVALS = 3
+  for (let interval = 1; interval <= INTERVALS; interval += 1) {
+    await page.clock.runFor(30_000)
+    expect(roundsOf(await reads())).toBe(1 + interval)
+    await settled(count, double)
+  }
+  await page.clock.runFor(1000)
+  expect(roundsOf(await reads())).toBe(1 + INTERVALS)
+
+  // Hidden for several intervals: not one read of any kind.
+  const beforeHiding = await count()
+  await show('hidden')
+  await page.clock.runFor(4 * 30_000)
+  const whileHidden = (await count()) - beforeHiding
+  expect(whileHidden).toBe(0)
+
+  // Seen again after missed intervals: one read at once, without the clock moving, and no more.
+  await show('visible')
+  await expect.poll(async () => roundsOf(await reads())).toBe(2 + INTERVALS)
+  await settled(count, double)
+  await page.clock.runFor(1000)
+  expect(roundsOf(await reads())).toBe(2 + INTERVALS)
+
+  // Another period never reads itself again, and says nothing of being live.
+  await analytics.locator('.analytics-period').getByRole('radio', { name: 'This week' }).click()
+  await expect(analytics.locator('.spending-days .period-column')).toHaveCount(3)
+  await expect(analytics.locator('.analytics-bar-live')).toHaveCount(0)
+  await settled(count, double)
+  const weekReads = await count()
+  await page.clock.runFor(4 * 30_000)
+  const weekAfterIntervals = (await count()) - weekReads
+  expect(weekAfterIntervals).toBe(0)
+
+  await record(info, 'live-refresh', {
+    rounds: roundsOf(await reads()),
+    whileHidden,
+    weekAfterIntervals,
+  })
 })
