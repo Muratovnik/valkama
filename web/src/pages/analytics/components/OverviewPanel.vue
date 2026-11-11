@@ -4,9 +4,9 @@
  * taken in without scrolling on a desktop screen.
  *
  * - The period's three figures, which also choose the page's measure (`SpendingTiles`).
- * - The period's chart by day, or by hour for a single day, stacked by task, with the period
- *   before outlined behind it on the same scale (`usePeriodBefore`) and the marks of where the
- *   accounts changed.
+ * - The period's chart by day, or by hour for a single day, stacked by task, with the period the
+ *   figures are compared with outlined behind it on the same scale (`usePeriodBefore`) and the
+ *   marks of where the accounts changed.
  * - Beside it, what changed most from the period before, task by task.
  * - Under them, a card of the first five values of each dimension a person asks about most —
  *   tasks, models, roles and projects; no project at a project's scope, where every figure is
@@ -30,6 +30,7 @@ import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWord
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -39,6 +40,8 @@ import FieldError from '@/shared/ui/FieldError.vue'
 const props = defineProps<{
   /** The period by account behind the answer, for where the accounts that worked changed. */
   accounts: AccountsRead
+  /** The period the figures are compared with, which the chart outlines; null when not read. */
+  compared: PeriodBounds | null
   /** The filters the answer was read with, its scope's project among them. */
   filters: UsageFilters
   /** Whether the page is scoped to one project, which leaves the projects out. */
@@ -48,8 +51,6 @@ const props = defineProps<{
   /** Why the last press in a part of the overview did not narrow the view; null otherwise. */
   refused: { part: ReportPart; words: string } | null
   usage: Usage
-  /** Whether the period is this week, held against the same days of the week before. */
-  weekly: boolean
 }>()
 /**
  * Read the answer again; open a dimension's section; narrow the view to a value of a dimension,
@@ -79,7 +80,7 @@ const cards = computed<OverviewCard[]>(() =>
 const beforeSteps = usePeriodBefore({
   usage: () => props.usage,
   filters: () => props.filters,
-  weekly: () => props.weekly,
+  compared: () => props.compared,
 })
 const top = useTopValues({
   usage: () => props.usage,

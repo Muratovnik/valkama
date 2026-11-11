@@ -1,20 +1,16 @@
 /**
  * The figures the overview adds to the Analytics page. Each expectation is worked out by hand from
- * the data in the test: which rise is said from its base, which tasks moved most and by how much,
- * and which period the chart outlines behind the one it shows.
+ * the data in the test: which rise is said from its base, and which tasks moved most and by how
+ * much.
  */
 import assert from 'node:assert/strict'
 
 import { describe, test } from 'vitest'
 
-import {
-  mostMoved,
-  periodBefore,
-  risenFromLittle,
-} from '@/pages/analytics/utils/overviewFigures.ts'
+import { mostMoved, risenFromLittle } from '@/pages/analytics/utils/overviewFigures.ts'
 import type { ComparedLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
-import { task, usageAnswer } from './fixtures/analytics.ts'
+import { task } from './fixtures/analytics.ts'
 
 const spent = (seconds: number, tokens: number | null = null): Spent => ({
   seconds,
@@ -99,46 +95,6 @@ describe('what moved most', () => {
     assert.deepEqual(mostMoved([line(1, 7200, null), line(2, 0, null)], 'time'), {
       up: [],
       down: [],
-    })
-  })
-})
-
-describe('the period outlined behind the chart', () => {
-  const first = new Date('2030-03-25T00:00:00+03:00')
-
-  test('is as many days right before a period of days, on the same offset', () => {
-    const { usage } = usageAnswer({ days: 3, first, groupBy: [], stretches: [], offset: 180 })
-    assert.deepEqual(periodBefore(usage, false), {
-      from: '2030-03-22T00:00:00+03:00',
-      to: '2030-03-25T00:00:00+03:00',
-      utcOffset: 180,
-    })
-  })
-
-  test('is the same days of the week before this week, cut where this week is now', () => {
-    const { usage } = usageAnswer({
-      days: 3,
-      first,
-      end: new Date('2030-03-27T15:30:00+03:00'),
-      groupBy: [],
-      stretches: [],
-      offset: 180,
-    })
-    assert.deepEqual(periodBefore(usage, true), {
-      from: '2030-03-18T00:00:00+03:00',
-      to: '2030-03-20T15:30:00+03:00',
-      utcOffset: 180,
-    })
-  })
-
-  test('is the day before a single day read by the hour', () => {
-    const { usage } = usageAnswer({ days: 1, first, groupBy: [], stretches: [], offset: -300 })
-    const hourly = { ...usage, period: { ...usage.period, step: 'hour' as const } }
-    // 25 March at +03:00 is 24 March, 16:00 at −05:00; the day before is 23 March, 16:00.
-    assert.deepEqual(periodBefore(hourly, false), {
-      from: '2030-03-23T16:00:00-05:00',
-      to: '2030-03-24T16:00:00-05:00',
-      utcOffset: -300,
     })
   })
 })

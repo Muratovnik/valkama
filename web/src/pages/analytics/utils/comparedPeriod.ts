@@ -23,6 +23,7 @@
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
+import type { Usage } from '@/shared/api/analyticsApi.ts'
 
 const WEEK = 7
 const SECOND = 1000
@@ -44,4 +45,19 @@ export function comparedPeriod(view: AnalyticsView, now: Date): PeriodBounds | n
   const dayEnd = dayStart + DAY
   const to = Math.min(Math.max(sameMoment.getTime(), dayStart + SECOND), dayEnd)
   return { from: monday.toISOString(), to: new Date(to).toISOString(), utcOffset }
+}
+
+/**
+ * The period an answer's figures are compared with, as a read asks for it, so anything else on
+ * the page that stands for «the period before» reads that period and no other: the one
+ * `comparedPeriod` named (`named`), or else the period the read itself compared with, cut at the
+ * offset the answer was asked at (`asked`). None when the answer holds no comparison.
+ */
+export function comparedBounds(
+  usage: Usage,
+  asked: PeriodBounds,
+  named: PeriodBounds | null,
+): PeriodBounds | null {
+  const { comparison } = usage
+  return comparison ? (named ?? { ...comparison.period, utcOffset: asked.utcOffset }) : null
 }

@@ -1,16 +1,12 @@
 /**
  * The figures the overview of the Analytics page adds to the rest of the page, kept apart from
  * the words so a test can hold every number: when a rise is too steep for a share to mean
- * anything, which values moved most from the period before, and which period before the chart
- * outlines column by column.
+ * anything, and which values moved most from the period before.
  */
-import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import { named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { ComparedLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage } from '@/shared/api/analyticsApi.ts'
 
 /**
  * A rise to this many times its base or more is said from the base it rose from, «from 2 min»,
@@ -64,34 +60,5 @@ export function mostMoved(
       .filter((one) => one.by < 0)
       .sort(order)
       .slice(0, MOST_MOVED),
-  }
-}
-
-const DAY = 86_400_000
-const OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/u
-
-/** A moment of the read moved back by whole days on its own offset's calendar, as the read writes it. */
-function daysBack(moment: string, days: number) {
-  const offset = OFFSET.exec(moment)?.[0] ?? 'Z'
-  const wall = new Date(named(moment).getTime() - days * DAY).toISOString().slice(0, 19)
-  return `${wall}${offset}`
-}
-
-/**
- * The period the chart outlines behind an answer, step for step on the same offset, so each of its
- * steps stands behind the step it is compared with: the hours of the day before a single day, the
- * same days of the week before this week, and for any other period the as many days right before
- * it. Its end is the answer's end moved back as far, so a period still running is held against
- * the same part of its own, and its last step is no fall.
- */
-export function periodBefore(usage: Usage, weekly: boolean): PeriodBounds {
-  const { period } = usage
-  let days = usage.series.length
-  if (weekly) days = 7
-  else if (period.step === 'hour') days = 1
-  return {
-    from: daysBack(period.from, days),
-    to: daysBack(period.to, days),
-    utcOffset: period.utc_offset,
   }
 }

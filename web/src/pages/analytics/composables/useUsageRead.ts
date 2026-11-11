@@ -11,7 +11,7 @@ import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
+import { comparedBounds, comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
 import { breakdownOf } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
@@ -107,6 +107,11 @@ export function useUsageRead(options: {
   const accounts = shallowRef<AccountsRead>('loading')
   /** The filters the shown answer was read with, its scope's project among them. */
   const readWith = shallowRef<UsageFilters>({})
+  /**
+   * The period the shown answer's figures are compared with (`comparedBounds`), for whatever else
+   * stands for the period before; null when it was not read.
+   */
+  const comparedWith = shallowRef<PeriodBounds | null>(null)
 
   /** The scope's own filter: its project, or nothing at the top. */
   const scope = computed<UsageFilters>(() => {
@@ -183,6 +188,7 @@ export function useUsageRead(options: {
     if (signal.aborted) return
     accounts.value = askingAccounts ? 'loading' : usage
     readWith.value = askedWith
+    comparedWith.value = comparedBounds(usage, period, before)
     state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
     if (!askingAccounts) return
     const byAccount = await askingAccounts
@@ -236,5 +242,15 @@ export function useUsageRead(options: {
     offering?.abort()
   })
 
-  return { accounts, askedAt, bounds, filterValues, offer, readWith, retry: read, state }
+  return {
+    accounts,
+    askedAt,
+    bounds,
+    comparedWith,
+    filterValues,
+    offer,
+    readWith,
+    retry: read,
+    state,
+  }
 }

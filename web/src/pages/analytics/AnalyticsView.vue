@@ -135,8 +135,6 @@ const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
 ])
 
 const overview = computed(() => view.value.by === OVERVIEW)
-/** This week, which the read holds against the same days of the week before. */
-const weekly = computed(() => view.value.period === 'week')
 
 const sectionName = computed(
   () => sections.value.find((section) => section.value === view.value.by)?.label ?? '',
@@ -283,12 +281,12 @@ const emptyDescription = computed(() =>
               v-if="overview"
               :usage="payload"
               :accounts="read.accounts.value"
+              :compared="read.comparedWith.value"
               :filters="read.readWith.value"
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
               :refused="reportRefused"
-              :weekly="weekly"
               @update:measure="(measure) => change({ measure })"
               @narrow="narrow"
               @day="narrowToDay"

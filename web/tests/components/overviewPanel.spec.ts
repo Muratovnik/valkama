@@ -166,6 +166,61 @@ describe('the overview on the page', () => {
   })
 })
 
+describe('the period before on the overview', () => {
+  /**
+   * Half an hour on the evening before the past four weeks begin: inside the period of their
+   * length right before them, which their figures are compared with, and outside the same days
+   * four weeks back, which end at this afternoon's hour.
+   */
+  const EVENING: TimedStretch = {
+    at: new Date(2026, 9, 14, 18),
+    group: {
+      work_item: ONE,
+      model: value('model-a'),
+      project: value('alpha'),
+      role: value('main'),
+    },
+    spend: { seconds: 1800 },
+  }
+  const span = (period: { from: string; to: string }) => [
+    Date.parse(period.from),
+    Date.parse(period.to),
+  ]
+
+  for (const [name, routeState] of [
+    ['this week', {}],
+    ['the past four weeks', { period: 'weeks4' }],
+    ['a custom range', { period: 'custom', from: '2026-11-03', to: '2026-11-11' }],
+  ] as const)
+    it(`is one period for the figures and the outline: ${name}`, async () => {
+      const served: ReturnType<typeof serveUsage>['usage'][] = []
+      stubAnalyticsReads((query) => {
+        const answer = serveUsage([...WORLD, EVENING], query)
+        served.push(answer.usage)
+        return answer
+      })
+      const page = await mountAnalytics({ routeState })
+      // What the figures are compared with, as the tiles hold it.
+      const cells = page.findComponent(SpendingTiles).props('before')
+      expect(cells).not.toBeNull()
+      if (!cells) return
+      const shown = served[0]?.period
+      if (!shown) throw new Error('the page read nothing')
+      // Every read of a period before the one shown is of the period the figures compare with.
+      const earlier = served.filter(
+        (usage) => Date.parse(usage.period.to) <= Date.parse(shown.from),
+      )
+      expect(earlier.length).toBeGreaterThan(0)
+      for (const usage of earlier) expect(span(usage.period)).toEqual(span(cells))
+      // And the outline adds up to the figure the tiles compare with.
+      const outlined = page.findComponent(SpendingDays).props('before')
+      expect(Array.isArray(outlined), `the outline stands at ${String(outlined)}`).toBe(true)
+      const steps = Array.isArray(outlined) ? outlined : []
+      const seconds = steps.reduce((sum, step) => sum + step.agent_seconds, 0)
+      expect(seconds).toBe(cells.spent.seconds)
+    })
+})
+
 describe('the overview’s chart', () => {
   it('holds the period before in a column of the table, step by step', () => {
     const usage = usageAnswer({
