@@ -587,7 +587,11 @@ was last opened, and adds the owner's Windows notification settings
 `preschema9` (or `preproductmodel`) snapshot. Schema 14 records the pictures
 pasted into an item's text (`work_item_images`); the files themselves stand in
 an `images` folder beside the database, one per content hash. Its snapshot is
-labelled `preschema14`.
+labelled `preschema14`. Schema 15 admits the history event of a changed label
+set (`labels_changed`) and rebuilds the event table for it, keeping every event;
+its snapshot is labelled `preschema15`, and going back to a build at schema 14
+means restoring that snapshot, its pictures included, as the next paragraph
+describes.
 
 Every snapshot taken from schema 14 on carries the pictures as well: a folder
 with the snapshot's name and `.images` after it stands beside the snapshot file,

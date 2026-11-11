@@ -281,6 +281,29 @@ change of the set it replaces have no order that is the one the caller meant;
 so is a label named in both. The acknowledgement's `updated` names the fields
 sent, and the call row's `reason` names `labels` only when the set changed.
 
+A change of the label set is the one edit the history records. Whichever of the
+three fields made it, and through whichever write (`update_work_item`, the
+`update` group of `apply_work_item_changes`, `POST /api/planning/work-item/update`
+or `/apply`), the item gains one `labels_changed` event under the call that made
+the edit, its author the edit's `author`. Its `detail` is JSON with the set the
+item had and the set it has, each in the item's own order:
+
+```json
+{"action": "labels_changed", "detail": "{\"from\":[\"bug\",\"triage\"],\"to\":[\"bug\",\"triage\",\"ux\"]}",
+ "author": "codex", "at": "2026-11-11T12:00:00Z",
+ "identity": {"state": "confirmed", "source": "codex-meta", "session_id": "019a…", "agent_id": null}}
+```
+
+An edit that leaves the set as it was writes no event: adding a label the item
+has, removing one it lacks, or sending the same labels in another order. Every
+other field's edit still writes none. A detail of this event can exceed the 512
+characters a caller's detail is held to: a full set of 32 labels of 64
+characters before and after is written whole, up to 24,785 characters. A
+person's edit of the labels reaches an agent as the edit it is (`from_person`'s
+`edited`, naming `labels`), never also as this event. The event exists from
+store schema 15 on; see [A build that was already old when it
+started](#a-build-that-was-already-old-when-it-started).
+
 A placement writes no history event on purpose. Every build that opens the
 store reads the same history, and a build that predates placements checks each
 event's action against the closed list it knows: its card would refuse an item
@@ -2747,3 +2770,17 @@ that refusal as the build's failure to start, and keeps the release it had.
 Raise the number in the same commit that changes what an existing row *means*.
 Migrations here are forward-only and idempotent, so it is the change of meaning,
 not an added column, that this exists to stop.
+
+A new history action is such a change. The set of actions is closed three
+times over: by the `CHECK` of the store's event table, by the interface's strict
+reader of a card, and by this contract. A build that does not know an action
+refuses the whole card of an item whose history holds it. Schema 15 is the step
+that added `labels_changed`: a store at 14 is opened by taking a verified
+snapshot labelled `preschema15` and then rebuilding the event table under the
+wider `CHECK`, every event kept with its id (a store at 13 takes both steps in
+one open under `preschema14`). A store already at 15 opens without either. A
+build of the previous release, at schema 14, refuses a store at 15 with
+`StoreTooNew` and leaves it untouched rather than show cards it would refuse;
+going back to it means restoring the `preschema15` snapshot with its pictures
+(see [Migrating an older store](../README.md#migrating-an-older-store)), which
+loses everything written since.
