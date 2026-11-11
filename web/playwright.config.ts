@@ -1,7 +1,17 @@
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig, devices } from '@playwright/test'
 
 import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
 import { python, serverStore, storeEnvironment } from './tests/browser/serverStore.ts'
+
+// Every path below is absolute and every server starts in `web/`, because Playwright
+// resolves a relative one against the configuration that is loaded, and the probe's
+// (`tests/browser/probe.config.ts`) is this one loaded from elsewhere.
+const web = fileURLToPath(new URL('.', import.meta.url))
+const specs = join(web, 'tests/browser')
+const outputDir = join(web, runResults)
 
 // Two runs on one machine can go at once only on different ports, so
 // VALKAMA_BROWSER_PORT moves the harness there and the built app to the next port.
@@ -15,6 +25,7 @@ const appBundle = `${vite} build --outDir ${appBuild}`
 // The build writes its errors to standard output, which Playwright drops by default.
 const appServer = {
   url: `${app}/`,
+  cwd: web,
   stdout: 'pipe',
   reuseExistingServer: false,
   timeout: 180_000,
@@ -27,8 +38,8 @@ const store = serverStore()
 
 export default store
   ? defineConfig({
-      testDir: './tests/browser',
-      outputDir: runResults,
+      testDir: specs,
+      outputDir,
       fullyParallel: false,
       retries: 0,
       reporter: 'line',
@@ -49,10 +60,10 @@ export default store
       },
     })
   : defineConfig({
-      testDir: './tests/browser',
-      outputDir: runResults,
+      testDir: specs,
+      outputDir,
       // Before the first spec: the app port serves the bundle this run has just built.
-      globalSetup: './tests/browser/servedApp.setup.ts',
+      globalSetup: join(specs, 'servedApp.setup.ts'),
       fullyParallel: false,
       retries: 0,
       reporter: 'line',
@@ -93,6 +104,7 @@ export default store
         {
           command: `${vite} --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${harnessPort} --strictPort`,
           url: `${harness}/tests/browser/harness.html`,
+          cwd: web,
           reuseExistingServer: false,
           timeout: 120_000,
         },

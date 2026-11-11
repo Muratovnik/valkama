@@ -209,6 +209,13 @@ checkouts are therefore distinguishable even at the same version.
   `npm run build` still type-checks and writes `web/dist`, and the `server-` specs, which run
   against the real server, still use it.
 
+- For contributors: a one-off browser spec kept outside the suite, such as in a worktree's
+  ignored `tmp/<name>/`, runs through the tracked `web/tests/browser/probe.config.ts`: name
+  its directory in `VALKAMA_BROWSER_PROBES` and the ports in `VALKAMA_BROWSER_PORT`, and
+  name the file `ui-` or `production-` for the project it runs in. It needs no configuration
+  of its own, resolves `@playwright/test` and `@/` from `web/`, and builds and serves the app
+  as the suite does.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
