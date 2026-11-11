@@ -2030,6 +2030,50 @@ not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there. The card's Execution
 tab is off by default, and a switch in Settings turns it on.
 
+### Analytics
+
+Analytics is a monitor of what agent work spent, and it fills the window: a bar, a rail
+and a panel. Nothing in it moves under the pointer or when an answer arrives; a part that
+has nothing to say yet keeps the room it will need.
+
+The bar holds what every part reads by: the period, the filters, how old the newest
+record is and the refresh. A period is «Now», this week, the past four weeks or a span
+of days. «Now» is the last hour by the minute; it reads again every 30 seconds while the
+tab is visible and says so in the bar, a hidden tab asks nothing, and a refresh shows its
+answer whole or not at all, so the scroll, the section, the sort and the place under the
+pointer stay. Records reach the store in batches, so the bar says the newest record's
+age in seconds and the minutes after it are hatched as «no data yet» rather than drawn
+as a drop; the minute chart says under itself that its figures are an estimate.
+
+The rail holds a tile for the overview and one for each dimension of the read: account,
+project, task, executor, role, launch class, model, effort and environment. A tile is a
+summary of its own — the leading value, its share, how many values there are and one bar
+of the split — so every breakdown is in view before any is opened, and choosing a tile
+opens its section in the panel. The rail and the panel stand side by side only while the
+panel keeps 640 pixels; narrower, a section takes the rail's place and a way back stands
+over it. A plain address opens the overview.
+
+The overview answers «how much, and is that more than before»: three cells — agent time,
+tokens and the cost estimate at API prices — each with its change against the period
+before, and the chosen cell sets the measure of everything else on the page; the period
+chart with the period before as a dashed outline; the tasks that grew and fell the most;
+and the first five tasks, models, roles and projects, each card opening its section.
+
+A dimension's section answers «of what»: the same cells, then its values three ways. The
+ranked bars list the first twelve and say how many more the table holds; the small charts
+draw each leading value's days on one scale; the table lists every value with the figures
+of the period and of the period before. Work with no value in the dimension — on no task,
+of an unknown model — is ranked where its figure puts it, in the neutral colour. A value
+keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
+a day. Beside the rail the section is held to the window: the cells stay in view, the
+charts take what they hold up to a share of the rest and scroll inside it, and the table
+takes what is left and scrolls in its own frame, its heading, names and total held; a
+button gives the table the whole panel and gives it back. The table sorts by any column,
+crosses with a second dimension and downloads what it shows.
+
+A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
+are counted apart from the tokens processed anew and never summed into them.
+
 ### Settings
 
 Settings uses one section anatomy and one type scale, and its groups read as
