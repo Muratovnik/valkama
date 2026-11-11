@@ -98,6 +98,9 @@ EVENT_ACTIONS = (
     # Schema 12: a comment on another item named this one, the comment's id as the
     # detail.
     "mentioned",
+    # Schema 15: an edit changed the item's set of labels, the set before and the
+    # set after as the detail (`labels_change`).
+    "labels_changed",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 
