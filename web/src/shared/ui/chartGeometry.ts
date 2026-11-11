@@ -178,9 +178,23 @@ export interface PeriodChartProps {
   /** What a press opens, if anything: a whole period, or one series in it. */
   actionable?: 'column' | 'segment' | null
   marks?: readonly PeriodMark[]
+  /**
+   * The value axis, where its steps are other than round steps said as `formatValue` says a
+   * value: a span of time in one unit (`durationAxis`).
+   */
+  valueAxis?: ValueAxis
   /** A value as the reader reads it, for the scale, the readout, the names and the table. */
   formatValue: (value: number) => string
 }
+
+/** A step of a value axis: where it stands, in the chart's units, and what it says. */
+export interface AxisStep {
+  text: string
+  value: number
+}
+
+/** The steps of a value axis from zero up to the first one at or past `largest`. */
+export type ValueAxis = (largest: number) => AxisStep[]
 
 export interface PeriodSelection {
   column: string
@@ -213,24 +227,33 @@ export const hasSum = (stacked: StackedColumn) =>
 /**
  * Round steps from zero up to the first one at or past the largest value: 1, 2, 2.5 or 5 times
  * a power of ten, about four of them. The axis always starts at zero, because a column's height
- * is its amount.
+ * is its amount. Counting `whole` units, a step is a whole number of them, never less than one.
  */
-export function valueTicks(largest: number, target = 4): number[] {
+export function valueTicks(largest: number, target = 4, whole = false): number[] {
   if (largest <= 0 || !Number.isFinite(largest)) return [0]
-  const rough = largest / target
+  const rough = whole ? Math.max(1, largest / target) : largest / target
   const power = 10 ** Math.floor(Math.log10(rough))
-  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * power).find((size) => size >= rough)
+  const step = [1, 2, 2.5, 5, 10]
+    .map((factor) => factor * power)
+    .find((size) => size >= rough && (!whole || Number.isInteger(size)))
   const size = step ?? 10 * power
   const count = Math.ceil(largest / size - 1e-9)
   return Array.from({ length: count + 1 }, (_, index) => Number((index * size).toPrecision(12)))
 }
 
-/** Each period's stack, and the scale they stand on. */
+/** Round steps of a value axis, each said as `format` says a value. */
+export const roundAxis =
+  (format: (value: number) => string): ValueAxis =>
+  (largest) =>
+    valueTicks(largest).map((value) => ({ value, text: format(value) }))
+
+/** Each period's stack, and the scale they stand on: round steps unless an axis is given. */
 export function stackColumns(
   columns: readonly PeriodColumn[],
   series: readonly PeriodSeries[],
   marks: readonly PeriodMark[] = [],
-): { columns: StackedColumn[]; ticks: number[]; top: number } {
+  axis: ValueAxis = roundAxis(String),
+): { columns: StackedColumn[]; steps: AxisStep[]; ticks: number[]; top: number } {
   const stacked = columns.map((column) => {
     const segments: StackSegment[] = []
     let reached = 0
@@ -246,8 +269,9 @@ export function stackColumns(
   })
   // The period compared with stands on the same scale, so its outline is never cut off.
   const before = columns.map((column) => drawable(column.before ?? 0))
-  const ticks = valueTicks(Math.max(0, ...stacked.map((one) => one.total), ...before))
-  return { columns: stacked, ticks, top: ticks.at(-1) || 1 }
+  const steps = axis(Math.max(0, ...stacked.map((one) => one.total), ...before))
+  const ticks = steps.map((step) => step.value)
+  return { columns: stacked, steps, ticks, top: ticks.at(-1) || 1 }
 }
 
 /**

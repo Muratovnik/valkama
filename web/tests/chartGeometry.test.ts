@@ -168,7 +168,8 @@ describe('stacked columns', () => {
   })
 
   test('no periods, or periods of nothing, stand on a scale of zero alone', () => {
-    assert.deepEqual(stackColumns([], series), { columns: [], ticks: [0], top: 1 })
+    const none = stackColumns([], series)
+    assert.deepEqual(none, { columns: [], steps: [{ value: 0, text: '0' }], ticks: [0], top: 1 })
     const empty = stackColumns([column('d1', {})], series)
     assert.deepEqual(empty.ticks, [0])
     assert.equal(empty.top, 1)

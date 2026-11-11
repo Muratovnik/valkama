@@ -184,6 +184,13 @@ watch(
   },
 )
 
+/**
+ * Whether the table of a held section takes the whole panel under its figures. It belongs to the
+ * page view, not to a section or a read, so a change of section, measure or period or a refresh
+ * keeps it; it is no part of the address.
+ */
+const tableWhole = ref(false)
+
 /** Whether the field of each dimension is open under the bar, which asks what each offers. */
 const adding = ref(false)
 watch(
@@ -323,6 +330,7 @@ const emptyDescription = computed(() =>
             />
             <DimensionPanel
               v-else
+              v-model:table-whole="tableWhole"
               :usage="payload"
               :accounts="read.accounts.value"
               :across="view.across"

@@ -12,6 +12,8 @@
  * many rows it shows and how they are sorted, and downloads what it shows, in that order, as a CSV
  * file (`tableFile`); with no value to list it is disabled, and words say why.
  *
+ * Its panel may set a control of its own before the second dimension's (`actions`).
+ *
  * A row's name acts as its value does in the bars (`useLineActions`): a link to a task, or a
  * control that narrows the view to the value, sent out as `narrow`. Either is named by the value,
  * since it heads its row's cells; what pressing it does is its description. A value the page
@@ -164,6 +166,7 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
       :title="model.title"
     >
       <template #actions="{ size }">
+        <slot name="actions" />
         <ChoiceSelect
           class="spending-table-across"
           :size="size"

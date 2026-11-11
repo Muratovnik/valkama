@@ -7,7 +7,8 @@
  * reads, and the words as props.
  */
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
-import { valueTicks } from '@/shared/ui/chartGeometry.ts'
+import { roundAxis } from '@/shared/ui/chartGeometry.ts'
+import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 
 /**
  * What a multiple is. A category and the folded tail (`other`) share one scale; work with
@@ -65,10 +66,15 @@ const APART: readonly MultipleKind[] = ['none', 'unknown']
  * and the ones apart, in a fixed order. The scale's top is the first round step at or past the
  * largest period of any multiple on it, so every chart reads against the same height.
  */
-export function placeMultiples(multiples: readonly SmallMultiple[]): {
+export function placeMultiples(
+  multiples: readonly SmallMultiple[],
+  axis: ValueAxis = roundAxis(String),
+): {
   apart: PlacedMultiple[]
   shared: PlacedMultiple[]
   top: number
+  /** The top as the axis says it. */
+  topText: string
 } {
   const onScale = [
     ...multiples.filter((one) => kindOf(one) === 'category'),
@@ -78,7 +84,8 @@ export function placeMultiples(multiples: readonly SmallMultiple[]): {
     0,
     ...onScale.flatMap((one) => one.values.map((value) => drawable(value))),
   )
-  const top = largest > 0 ? (valueTicks(largest).at(-1) ?? largest) : 0
+  const topStep = axis(largest).at(-1)
+  const top = largest > 0 ? (topStep?.value ?? largest) : 0
   /** A period's height as a share of the top: none for no figure, nothing on a scale of zero. */
   const heightOf = (value: number | null) => {
     if (value === null) return null
@@ -92,5 +99,6 @@ export function placeMultiples(multiples: readonly SmallMultiple[]): {
   const apart = APART.flatMap((kind) =>
     multiples.filter((one) => kindOf(one) === kind).map((one) => ({ ...place(one), heights: [] })),
   )
-  return { shared: onScale.map((one) => place(one)), apart, top }
+  const topText = topStep?.text ?? ''
+  return { shared: onScale.map((one) => place(one)), apart, top, topText }
 }

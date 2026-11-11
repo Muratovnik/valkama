@@ -68,6 +68,7 @@ const chartWords = computed<MultiplesWords>(() => ({
 }))
 
 const formatValue = (amount: number) => words.scale(props.measure, amount)
+const valueAxis = computed(() => words.axis(props.measure))
 </script>
 
 <template>
@@ -82,6 +83,7 @@ const formatValue = (amount: number) => words.scale(props.measure, amount)
         :multiples="multiples"
         :words="chartWords"
         :format-value="formatValue"
+        :value-axis="valueAxis"
       />
     </template>
     <template #table>
