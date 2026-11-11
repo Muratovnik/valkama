@@ -476,6 +476,38 @@ class Case(unittest.TestCase):
             "SELECT * FROM usage_runs WHERE session_id = ? AND agent_id = ?", (session, agent)
         ).fetchone()
 
+    def left(self, session: str = "sess-1", agent: str = "") -> set[int]:
+        """The requests a run met and left to the run that counts each."""
+
+        return {
+            int(row[0])
+            for row in self.reader.execute(
+                "SELECT request FROM usage_yields WHERE run_id ="
+                " (SELECT id FROM usage_runs WHERE session_id = ? AND agent_id = ?)",
+                (session, agent),
+            )
+        }
+
+    def assert_yields_hold(self) -> None:
+        """No run left a request it counts, and every run that left one is still there."""
+
+        self.assertEqual(
+            [],
+            self.reader.execute(
+                "SELECT leaving.run_id, leaving.request FROM usage_yields AS leaving"
+                " JOIN usage_requests AS claim"
+                " ON claim.request = leaving.request AND claim.run_id = leaving.run_id"
+            ).fetchall(),
+            "a run both counts and leaves a request",
+        )
+        self.assertEqual(
+            [],
+            self.reader.execute(
+                "SELECT run_id FROM usage_yields WHERE run_id NOT IN (SELECT id FROM usage_runs)"
+            ).fetchall(),
+            "a request left by a run that is gone",
+        )
+
     def seconds(self, session: str = "sess-1", agent: str = "") -> float:
         return round(sum(float(row["seconds"]) for row in self.segments(session, agent)), 3)
 

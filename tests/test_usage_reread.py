@@ -515,9 +515,9 @@ class UpgradeRecoveryPointTests(unittest.TestCase):
         reader = usage_reread.Reader(conn, path)
         drain(reader, 30.0)
         self.assertEqual(
-            [(READING, 0)],
-            [tuple(row) for row in conn.execute("SELECT reading, yielded FROM usage_runs")],
+            [(READING,)], [tuple(row) for row in conn.execute("SELECT reading FROM usage_runs")]
         )
+        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM usage_yields").fetchone()[0])
         backups = root / "backups"
         self.assertEqual([], sorted(backups.glob(f"*{usage_rebuild.SNAPSHOT_LABEL}*")))
 

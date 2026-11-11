@@ -15,9 +15,9 @@ it still can is named below:
   the `read_offset` the rebuild started from, as the reader's does. A reader pass that
   moved the run meanwhile, or marked it, or a run that claimed one of its requests
   meanwhile, makes the rebuild of that run write nothing and say so. A claim the run no
-  longer makes is released (`usage_claims.release`), unless a run that left a request to
-  another can no longer be read: the request could then end up counted in no run, so the
-  rebuild of this run writes nothing and is refused as `stranded`. `usage_claims` says
+  longer makes is released (`usage_claims.release`), unless a run that left one of those
+  requests to it can no longer be read: the request could then end up counted in no run,
+  so the rebuild of this run writes nothing and is refused as `stranded`. `usage_claims` says
   what that refusal still leaves open.
 - A rebuilt run is current: its `reading` becomes `READING`, and a refusal it carried
   goes.
@@ -80,8 +80,8 @@ REASONS = {
     "moved": "a reader pass moved it meanwhile; nothing was written, run the rebuild again",
     "claimed": "another run claimed one of its requests meanwhile; nothing was written, run"
     " the rebuild again",
-    "stranded": "it no longer holds a request it counted, and a run that left a request to"
-    " another cannot be read now, so that request could end up counted in no run;"
+    "stranded": "it no longer holds a request it counted, and a run that left that request"
+    " to it cannot be read now, so that request could end up counted in no run;"
     " nothing was written, run the rebuild of this run again once that one can be read",
     "no-transcript": "no transcript is known for it",
     "failed": "the rebuild failed; nothing was written",
@@ -318,14 +318,14 @@ def _readable(run: sqlite3.Row, target: Target | None) -> tuple[Target, str, int
 
 
 def _strands(collector: Collector, yielders: Sequence[sqlite3.Row]) -> bool:
-    """Whether a run that left a request to another could not be read again now.
+    """Whether a run that left the holder a request it gives up could not be read again now.
 
-    Such a run cannot take a request back, so a holder that gives one up would strand it.
-    What a rebuild of that run would ask decides (`_readable`), and a refusal kept with it
-    only when it says its bytes changed, which reading alone finds: one kept for a
-    failure, or for this very reason, says nothing of whether it can be read. Asked
-    inside the holder's transaction, and only when the holder gives a claim up and some
-    run yielded: rarely.
+    Such a run cannot take the request back, so the holder would strand it. What a
+    rebuild of that run would ask decides (`_readable`), and a refusal kept with it only
+    when it says its bytes changed, which reading alone finds: one kept for a failure, or
+    for this very reason, says nothing of whether it can be read. Asked inside the
+    holder's transaction, and only when the holder gives a claim up that another run
+    left to it: rarely.
 
     The targets come from a finder of its own: the collector's has been walked already,
     and one walked before leaves out every session that ended.

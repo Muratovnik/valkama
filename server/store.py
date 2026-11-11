@@ -273,7 +273,8 @@ MIGRATIONS = {
 # its own run never counted, add its tokens again, and lose its own row to the key
 # without a word (`INSERT OR IGNORE`). 15 also gives a usage run the
 # reading its rows came from (every run stale after the upgrade, so the reader reads it
-# again), a segment the columns its later dimensions fill, and Analytics the counts of
+# again), the requests each run left to another (`usage_yields`, empty until the runs are
+# read again), a segment the columns its later dimensions fill, and Analytics the counts of
 # how often each of its surfaces was opened (`analytics_surface_uses`, empty).
 STORE_SCHEMA_VERSION = 15
 

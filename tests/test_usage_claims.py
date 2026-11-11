@@ -105,8 +105,9 @@ class OnceWhicheverFirstTests(ClaimCase):
                     self.assertEqual({self.run_of("late")}, self.stale())
                 self.settle()
                 self.assert_counted_once(self.run_of("early"), 2)
-                self.assertEqual(1, self.run_row("late")["yielded"])
-                self.assertEqual(0, self.run_row("early")["yielded"])
+                self.assertEqual({request_key(SHARED)}, self.left("late"))
+                self.assertEqual(set(), self.left("early"))
+                self.assert_yields_hold()
                 self.forget()
 
     def test_and_after_reading_both_again_in_either_order(self) -> None:
@@ -121,7 +122,7 @@ class OnceWhicheverFirstTests(ClaimCase):
                 self.forget()
 
     def forget(self) -> None:
-        for table in ("usage_requests", "usage_segments", "usage_runs", "sessions"):
+        for table in ("usage_yields", "usage_requests", "usage_segments", "usage_runs", "sessions"):
             self.conn.execute(f"DELETE FROM {table}")
         self.conn.commit()
         for name in ("early", "late"):
@@ -186,7 +187,7 @@ class HolderThatCannotBeReadAgainTests(ClaimCase):
         self.assertEqual(holder, self.owner())
         self.assertEqual(set(), self.stale())
         self.assertEqual(SHARED_OUTPUT + 2 * OWN_OUTPUT, self.output())
-        self.assertEqual(1, self.run_row("early")["yielded"])
+        self.assertEqual({request_key(SHARED)}, self.left("early"))
 
     def test_a_holder_not_being_read_keeps_its_claim(self) -> None:
         self.assert_keeps(None)
@@ -212,13 +213,39 @@ class HolderThatCannotBeReadAgainTests(ClaimCase):
         self.assertEqual(holder, self.owner())
         self.assertEqual(set(), self.stale())
         self.assertEqual(SHARED_OUTPUT + 2 * OWN_OUTPUT, self.output())
-        self.assertEqual(1, self.run_row("early")["yielded"])
+        self.assertEqual({request_key(SHARED)}, self.left("early"))
 
     def test_a_holder_refused_for_the_current_reading_keeps_its_claim(self) -> None:
         self.assert_keeps(
             "UPDATE usage_runs SET reread_refused = 'shorter',"
             f" refused_reading = {READING} WHERE id = ?"
         )
+
+
+class LeftInPartsTests(ClaimCase):
+    """What the reader leaves to another run, one pass at a time."""
+
+    def test_a_reading_in_part_adds_to_what_the_run_left_before(self) -> None:
+        early = self.session("early")
+        early.prompt(0)
+        early.reply(5, request="msg_a", spent=usage(output=SHARED_OUTPUT))
+        early.reply(6, request="msg_b", spent=usage(output=SHARED_OUTPUT))
+        early.end_turn(10, spent=usage(output=OWN_OUTPUT))
+        self.read()
+        late = self.session("late")
+        late.prompt(600)
+        late.reply(605, request="msg_a", spent=usage(output=SHARED_OUTPUT))
+        self.read()
+        self.assertEqual({request_key("msg_a")}, self.left("late"))
+        # A pass later: the same response's next record, then another the earlier run holds.
+        late.reply(606, request="msg_a", spent=usage(output=SHARED_OUTPUT))
+        late.reply(607, request="msg_b", spent=usage(output=SHARED_OUTPUT))
+        late.end_turn(610, spent=usage(output=OWN_OUTPUT))
+        self.read()
+        self.assertEqual({request_key("msg_a"), request_key("msg_b")}, self.left("late"))
+        self.assertEqual(set(), self.left("early"))
+        self.assertEqual(2 * SHARED_OUTPUT + 2 * OWN_OUTPUT, self.output())
+        self.assert_yields_hold()
 
 
 class ClaimLostMeanwhileTests(ClaimCase):
@@ -291,6 +318,16 @@ class CopiesCheckTests(Case):
         self.assertEqual("warn", check["status"])
         self.assertEqual({"requests": 1, "runs": 1}, check["presentation"]["parameters"])
         self.assertIn("1 request(s)", check["detail"])
+
+    def test_counts_a_request_once_however_many_runs_left_it(self) -> None:
+        self.ticks((0, HOUR))
+        for name, at in (("early", 0), ("late", 600), ("later", 1200)):
+            run = self.session(name)
+            run.prompt(at)
+            run.end_turn(at + 10, request="msg_thrice")
+            self.read()
+        check = self.check()
+        self.assertEqual({"requests": 1, "runs": 2}, check["presentation"]["parameters"])
 
 
 if __name__ == "__main__":

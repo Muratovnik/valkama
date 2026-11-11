@@ -93,6 +93,7 @@ SCHEMA10_TABLES = {
     "usage_segments",
     "usage_requests",
     # Schema 12's, 13's, 14's and 15's.
+    "usage_yields",
     "pinned_work_items",
     "work_item_subscriptions",
     "work_item_images",

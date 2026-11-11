@@ -49,6 +49,7 @@ ADDED_TABLES = {
     "usage_runs",
     "usage_segments",
     "usage_requests",
+    "usage_yields",
     "pinned_work_items",
     "work_item_subscriptions",
     "work_item_images",

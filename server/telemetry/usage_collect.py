@@ -53,9 +53,6 @@ PASS_SECONDS = 1.0
 CHUNK_BYTES = 8 * 1024 * 1024
 #: A longer line is skipped unread: every one measured is a request body nobody needs.
 _MOST_LINE_BYTES = 64 * 1024 * 1024
-#: How many requests a run left to others it remembers between chunks, so the records of
-#: one request on both sides of a chunk's end count as one yield.
-_RECENT_YIELDS = 16
 #: A subagent's metadata file beside its transcript, and how much of it is read.
 _TRANSCRIPT_SUFFIX = ".jsonl"
 _META_SUFFIX = ".meta.json"
@@ -397,7 +394,6 @@ class Collector:
 
         state = start.state
         packet = {"item": start.packet_item}
-        recent: list[int] = state.setdefault("yielded", [])
         yielded: set[int] = set()
 
         def claimant() -> Claimant:
@@ -409,10 +405,7 @@ class Collector:
                 return True
             if usage_claims.counts(self.conn, claimant(), number):
                 return False
-            if number not in recent:
-                recent.append(number)
-                del recent[:-_RECENT_YIELDS]
-                yielded.add(number)
+            yielded.add(number)
             return True
 
         ledger = Ledger(

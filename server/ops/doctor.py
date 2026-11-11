@@ -576,17 +576,17 @@ def _unpriced_usage_check(path: str) -> dict:
 def _usage_copies_check(path: str) -> dict:
     """Requests met in more than one usage run: what a copied transcript leaves.
 
-    Each is counted once, by the run `usage_claims`' rule picks, and the others record
-    that they left it (`yielded`). The reader skips the copies it knows of, so a number
-    here is a new source of copies to find rather than one to assume away. One
-    aggregate query over the runs.
+    Each is counted once, by the run `usage_claims`' rule picks, and each of the others
+    keeps a row for it in `usage_yields`. The reader skips the copies it knows of, so a
+    number here is a new source of copies to find rather than one to assume away. One
+    aggregate query over that table: each request once, however many runs left it.
     """
 
     try:
         conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
         try:
             requests, runs = conn.execute(
-                "SELECT COALESCE(SUM(yielded), 0), COALESCE(SUM(yielded > 0), 0) FROM usage_runs"
+                "SELECT COUNT(DISTINCT request), COUNT(DISTINCT run_id) FROM usage_yields"
             ).fetchone()
         finally:
             conn.close()
@@ -595,8 +595,8 @@ def _usage_copies_check(path: str) -> dict:
             "usage-copies",
             "Requests in more than one run",
             "unknown",
-            f"the usage runs could not be read: {failure}",
-            "Open the store once with the current build; it adds the columns.",
+            f"the requests left to another run could not be read: {failure}",
+            "Open the store once with the current build; it adds the table.",
             presentation_code="usage-copies-unreadable",
         )
     if not requests:
@@ -614,8 +614,8 @@ def _usage_copies_check(path: str) -> dict:
         f"{requests} request(s) were met in more than one usage run: {runs} run(s) left them"
         " to the run that counts each, so each is counted once",
         "Two transcripts holding one request means a client copied records between them."
-        " The runs whose `yielded` is above 0 in usage_runs name the files; find what wrote"
-        " the copies. The totals are right either way.",
+        " The runs named in usage_yields name the files; find what wrote the copies. The"
+        " totals are right either way.",
         presentation_code="usage-copies-found",
         parameters={"requests": int(requests), "runs": int(runs)},
     )

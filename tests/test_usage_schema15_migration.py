@@ -4,7 +4,8 @@ The source is a store built from the catalog the last schema-14 build created, h
 planning rows and usage rows as that build wrote them, several requests counted in more
 than one run among them, and a liveness file. What this suite holds the migration to:
 every former value of every former column stays byte for byte, the new columns arrive
-empty and every run is stale, the analytics counts arrive as an empty table, each
+empty and every run is stale, the analytics counts and the requests runs left to another
+arrive as empty tables, each
 request keeps exactly the row of the run the rule puts first, all of it under one
 recovery point `preschema15` with a verified copy of the liveness file beside it,
 which holds no counts; a second open writes nothing, the recovery point brings back
@@ -36,12 +37,14 @@ ADDED = {
         "refused_reading",
         "reread_at",
         "priced_with",
-        "yielded",
     ],
     "usage_segments": ["organization", "environment", "effort", "advisor", "advisor_model"],
 }
 #: The table schema 15 adds, as Analytics declares it: a day, a kind and a count.
 COUNTS = "analytics_surface_uses"
+#: The table schema 15 adds for the requests a run left to another: one row per run and
+#: request, read by the request when a holder gives one up.
+YIELDS = "usage_yields"
 LABEL = "preschema15"
 #: The item `schema9.populate` holds.
 HELD = "11111111-1111-4111-8111-111111111111"
@@ -89,8 +92,8 @@ def _requests(conn: sqlite3.Connection) -> list[tuple]:
     return sorted(tuple(row) for row in conn.execute("SELECT request, run_id FROM usage_requests"))
 
 
-def _key(conn: sqlite3.Connection) -> list[str]:
-    rows = conn.execute("PRAGMA table_info(usage_requests)").fetchall()
+def _key(conn: sqlite3.Connection, table: str = "usage_requests") -> list[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return [str(row[1]) for row in sorted(rows, key=lambda row: row[5]) if row[5]]
 
 
@@ -159,6 +162,14 @@ class SchemaFifteenTests(unittest.TestCase):
         )
         self.assertEqual(["day", "kind", "count"], columns[COUNTS])
         self.assertEqual(0, conn.execute(f"SELECT COUNT(*) FROM {COUNTS}").fetchone()[0])
+        self.assertEqual(["run_id", "request"], columns[YIELDS])
+        self.assertEqual(["run_id", "request"], _key(conn, YIELDS))
+        self.assertEqual(
+            ["request"],
+            [row[2] for row in conn.execute("PRAGMA index_info(usage_yields_request)")],
+            "the runs that left a request are read by the request",
+        )
+        self.assertEqual(0, conn.execute(f"SELECT COUNT(*) FROM {YIELDS}").fetchone()[0])
         self.assertEqual("ok", conn.execute("PRAGMA integrity_check").fetchone()[0])
 
     def test_a_store_at_14_reaches_15_keeping_every_former_value(self) -> None:
@@ -168,11 +179,11 @@ class SchemaFifteenTests(unittest.TestCase):
         self.assert_reached_15(conn)
         self.assertEqual(self.before, _former_rows(conn, self.shape))
         self.assertEqual(
-            {(0, None, None, None, None, None, 0)},
+            {(0, None, None, None, None, None)},
             set(
                 conn.execute(
                     "SELECT reading, launch_class, reread_refused, refused_reading, reread_at,"
-                    " priced_with, yielded FROM usage_runs"
+                    " priced_with FROM usage_runs"
                 ).fetchall()
             ),
             "every run is stale and nothing else is known of it",
@@ -213,6 +224,7 @@ class SchemaFifteenTests(unittest.TestCase):
         self.addCleanup(backup.close)
         self.assertEqual(14, backup.execute("PRAGMA user_version").fetchone()[0])
         self.assertNotIn(COUNTS, _columns(backup), "the store as it was, before the counts")
+        self.assertNotIn(YIELDS, _columns(backup), "the store as it was, before the yields")
         self.assertEqual(self.before, _former_rows(backup, self.shape))
         self.assertEqual(self.former_requests, _requests(backup))
 
@@ -229,6 +241,7 @@ class SchemaFifteenTests(unittest.TestCase):
         try:
             self.assertEqual(14, restored.execute("PRAGMA user_version").fetchone()[0])
             self.assertEqual(["run_id", "request"], _key(restored))
+            self.assertNotIn(YIELDS, _columns(restored))
             self.assertEqual(self.former_requests, _requests(restored))
             self.assertEqual(self.before, _former_rows(restored, self.shape))
         finally:

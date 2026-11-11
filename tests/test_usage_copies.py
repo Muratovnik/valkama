@@ -13,6 +13,7 @@ import shutil
 import unittest
 from unittest import mock
 
+from server.ops import doctor
 from server.telemetry import usage_collect, usage_rebuild, usage_steps
 from server.telemetry.usage_ledger import request_key
 from server.telemetry.usage_store import READING
@@ -24,6 +25,8 @@ WORKER = "worker"
 OUTPUT = 70
 #: The worker's time: from its prompt to its answer.
 WORKED = 40.0
+#: A response two main sessions of their own both hold, apart from the fork.
+OTHER = "msg_other"
 
 
 class ForkedCopyCase(Case):
@@ -103,7 +106,7 @@ class ReadAgainTests(ForkedCopyCase):
         # lower id, and the original left it there.
         self.assertEqual(OUTPUT, self.tokens("output_tokens", FORK, WORKER))
         self.assertIsNone(self.tokens("output_tokens", ORIGIN, WORKER))
-        self.assertEqual(1, self.run_row(ORIGIN, WORKER)["yielded"])
+        self.assertEqual({request_key("msg_worker_reply")}, self.left(ORIGIN, WORKER))
         # A new reading makes every run stale.
         self.reader.execute("UPDATE usage_runs SET reading = 0")
         # Both sessions are over, as history is: a reader that has looked at them once
@@ -131,19 +134,22 @@ class ReadAgainTests(ForkedCopyCase):
         self.read_again(*(runs if copy_first else reversed(runs)))
         passes = 1
         while self.stale():
-            # Released by the copy: the runs that yielded are read again, once.
+            # Released by the copy: the run that left the request is read again, once.
             self.assertEqual([(ORIGIN, WORKER)], self.stale())
             self.read_again(*self.stale())
             passes += 1
         self.assertLessEqual(passes, 2)
         self.assert_the_original_alone()
-        self.assertEqual(0, self.run_row(ORIGIN, WORKER)["yielded"])
+        # The original counts it, and the copy skips the original's records unread.
+        self.assertEqual(set(), self.left(ORIGIN, WORKER))
+        self.assertEqual(set(), self.left(FORK, WORKER))
         # Reading everything again in either order changes nothing: no ping-pong.
         every = [(ORIGIN, ""), (ORIGIN, WORKER), (FORK, ""), (FORK, WORKER)]
         for again in (every, list(reversed(every))):
             self.read_again(*again)
             self.assertEqual([], self.stale())
             self.assert_the_original_alone()
+            self.assert_yields_hold()
 
     def test_the_request_goes_back_to_the_original_read_again_after_the_copy(self) -> None:
         self.assert_goes_back(copy_first=True)
@@ -155,20 +161,20 @@ class ReadAgainTests(ForkedCopyCase):
         # The original left the request to the copy and has lost its transcript since: read
         # again, the copy would give the request up and no run could take it back.
         self.original.unlink()
+        rows = [tuple(row) for row in self.segments(FORK, WORKER)]
+        claims = self.claims(FORK, WORKER)
         report = usage_rebuild.rebuild(self.reader, self.store_path, session=FORK, agent=WORKER)
         self.assertEqual(
             [(usage_rebuild.REFUSED, "stranded")],
             [(line.outcome, line.reason) for line in report.runs],
         )
-        # Counted once, where it was.
+        # Counted once, where it was: the copy keeps its former rows and claims.
+        self.assertEqual(rows, [tuple(row) for row in self.segments(FORK, WORKER)])
+        self.assertEqual(claims, self.claims(FORK, WORKER))
         self.assertEqual(OUTPUT, self.tokens("output_tokens", FORK, WORKER))
         self.assertIsNone(self.tokens("output_tokens", ORIGIN, WORKER))
-        owner = self.reader.execute(
-            "SELECT run_id FROM usage_requests WHERE request = ?",
-            (request_key("msg_worker_reply"),),
-        ).fetchone()[0]
         copy = self.run_row(FORK, WORKER)
-        self.assertEqual(copy["id"], owner)
+        self.assertEqual(copy["id"], self.holder())
         # Kept with the run, so it is not tried again at every pass.
         self.assertEqual("stranded", copy["reread_refused"])
 
@@ -208,6 +214,93 @@ class ReadAgainTests(ForkedCopyCase):
             "SELECT run_id FROM usage_requests WHERE request = ?",
             (request_key("msg_worker_reply"),),
         ).fetchone()[0]
+
+    def claims(self, session: str, agent: str) -> list[tuple]:
+        return [
+            tuple(row)
+            for row in self.reader.execute(
+                "SELECT request, request_id FROM usage_requests WHERE run_id ="
+                " (SELECT id FROM usage_runs WHERE session_id = ? AND agent_id = ?)"
+                " ORDER BY request",
+                (session, agent),
+            )
+        ]
+
+    def owner_of(self, request: str) -> int:
+        return self.reader.execute(
+            "SELECT run_id FROM usage_requests WHERE request = ?", (request_key(request),)
+        ).fetchone()[0]
+
+    def other_pair(self) -> ClaudeRun:
+        """Two main sessions of their own that both hold `OTHER`, read by the reader: the
+        later one leaves it to the earlier, and is returned."""
+
+        runs = {}
+        for name, at in (("early", 0), ("late", 600)):
+            runs[name] = run = self.session(name)
+            run.prompt(at)
+            run.reply(at + 5, request=OTHER, spent=usage(output=3))
+            run.end_turn(at + 10, spent=usage(output=1))
+            self.read()
+        self.assertEqual(self.run_row("early")["id"], self.owner_of(OTHER))
+        self.assertEqual(READING, self.run_row("late")["reading"])
+        return runs["late"]
+
+    def test_a_run_that_left_another_request_strands_nothing(self) -> None:
+        # The later of the other pair left `OTHER` and has lost its transcript since. The
+        # copy gives up a request the original left, not that one: nothing is stranded.
+        late = self.other_pair()
+        late.path.unlink()
+        self.read()
+        self.assertEqual("missing", self.run_row("late")["status"])
+        report = usage_rebuild.rebuild(self.reader, self.store_path, session=FORK, agent=WORKER)
+        self.assertEqual(
+            [(usage_rebuild.REBUILT, None)], [(line.outcome, line.reason) for line in report.runs]
+        )
+        self.assertEqual([(ORIGIN, WORKER)], [run for run in self.stale() if run[1] == WORKER])
+        self.read_again((ORIGIN, WORKER))
+        self.assert_the_original_alone()
+        self.assertEqual(self.run_row("early")["id"], self.owner_of(OTHER))
+        self.assertEqual({request_key(OTHER)}, self.left("late"))
+        self.assert_yields_hold()
+
+    def test_giving_a_request_up_makes_stale_only_the_runs_that_left_it(self) -> None:
+        self.other_pair()
+        self.read_again((FORK, WORKER))
+        self.assertEqual(0, self.run_row(ORIGIN, WORKER)["reading"])
+        self.assertEqual(
+            READING, self.run_row("late")["reading"], "it left another request: it stays current"
+        )
+
+    def test_the_left_requests_hold_after_mixed_readings(self) -> None:
+        # Readings by the reader, a refusal, a release and every run read again in either
+        # order: no run leaves a request it counts, and the doctor says what is left.
+        self.other_pair()
+        self.reader.execute(
+            "UPDATE usage_runs SET status = 'unreadable' WHERE session_id = ? AND agent_id = ?",
+            (ORIGIN, WORKER),
+        )
+        report = usage_rebuild.rebuild(self.reader, self.store_path, session=FORK, agent=WORKER)
+        self.assertEqual(["stranded"], [line.reason for line in report.runs])
+        self.assert_yields_hold()
+        self.reader.execute(
+            "UPDATE usage_runs SET status = 'reading' WHERE session_id = ? AND agent_id = ?",
+            (ORIGIN, WORKER),
+        )
+        self.read_again((FORK, WORKER), (ORIGIN, WORKER))
+        self.assert_yields_hold()
+        every = [(ORIGIN, ""), (ORIGIN, WORKER), (FORK, ""), (FORK, WORKER)]
+        every += [("early", ""), ("late", "")]
+        for again in (every, list(reversed(every))):
+            self.read_again(*again)
+            self.assert_yields_hold()
+        self.assert_the_original_alone()
+        self.assertEqual({request_key(OTHER)}, self.left("late"))
+        for session, agent in every[:-1]:
+            with self.subTest(session=session, agent=agent):
+                self.assertEqual(set(), self.left(session, agent))
+        (check,) = [check for check in doctor._store_checks() if check["id"] == "usage-copies"]
+        self.assertEqual({"requests": 1, "runs": 1}, check["presentation"]["parameters"])
 
     def test_the_copy_keeps_the_request_while_the_reader_cannot_open_the_original(self) -> None:
         # A rebuild of the original would be refused for its status, so it could not take

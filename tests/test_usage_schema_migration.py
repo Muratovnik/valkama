@@ -23,8 +23,9 @@ from server import store, store_backups
 from tests import schema9, schema10
 
 ADDED_TABLES = {"usage_runs", "usage_segments", "usage_requests"}
-#: Schema 12's, 13's and 14's: the chain runs on to this build's own schema in the same open.
+#: Schema 12's to 15's: the chain runs on to this build's own schema in the same open.
 LATER_TABLES = {
+    "usage_yields",
     "pinned_work_items",
     "work_item_subscriptions",
     "work_item_images",

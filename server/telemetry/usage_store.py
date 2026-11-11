@@ -31,6 +31,10 @@ old records again, or a file copied into another session's folder, counts nothin
 `request_id` is the same hash of the client's own request id where a Claude record
 carries one. Which run a request met in two runs belongs to is `usage_claims`' rule.
 
+`usage_yields`, since schema 15: one row for each request a run met and left to whichever
+run holds it. No run both holds and leaves the same request, and a row names no holder,
+so nothing here changes when a claim moves.
+
 Schema 15 added, all empty or 0 in an upgraded store until its runs are read again:
 
 - to a segment, what its work ran under, read from the transcript alone and NULL where
@@ -74,9 +78,8 @@ Schema 15 added, all empty or 0 in an upgraded store until its runs are read aga
   were written by (`READING`), and 0 for rows from before readings were counted or that
   a later input outside the transcript (a price) made stale; `reread_refused` with
   `refused_reading`, why re-reading it was refused and for which reading;
-  `reread_at`, when its rows were last read again whole; `priced_with`, the price table
-  it was last read or checked against; and `yielded`, how many requests it met that
-  another run counts.
+  `reread_at`, when its rows were last read again whole; and `priced_with`, the price
+  table it was last read or checked against.
 
 A run is stale while `reading` is below `READING`, and the reader reads it again
 (`usage_reread`); one refused for the current reading waits until it is stale anew.
@@ -123,6 +126,13 @@ _REQUESTS_TABLE = """CREATE TABLE IF NOT EXISTS usage_requests(
     request_id INTEGER
 );"""
 _REQUESTS_INDEX = "CREATE INDEX IF NOT EXISTS usage_requests_run ON usage_requests(run_id);"
+#: The requests a run met and left to whichever run holds each.
+_YIELDS = """CREATE TABLE IF NOT EXISTS usage_yields(
+    run_id INTEGER NOT NULL REFERENCES usage_runs(id) ON DELETE CASCADE,
+    request INTEGER NOT NULL,
+    PRIMARY KEY (run_id, request)
+);
+CREATE INDEX IF NOT EXISTS usage_yields_request ON usage_yields(request);"""
 
 #: Columns schema 15 appends, in the order the tables above declare them last.
 _ADDED_COLUMNS = {
@@ -133,7 +143,6 @@ _ADDED_COLUMNS = {
         ("refused_reading", "INTEGER"),
         ("reread_at", "TEXT"),
         ("priced_with", "TEXT"),
-        ("yielded", "INTEGER NOT NULL DEFAULT 0"),
     ),
     "usage_segments": (
         ("organization", "TEXT"),
@@ -170,7 +179,6 @@ CREATE TABLE IF NOT EXISTS usage_runs(
     refused_reading INTEGER,
     reread_at TEXT,
     priced_with TEXT,
-    yielded INTEGER NOT NULL DEFAULT 0,
     UNIQUE(session_id, agent_id)
 );
 CREATE TABLE IF NOT EXISTS usage_segments(
@@ -207,9 +215,9 @@ CREATE INDEX IF NOT EXISTS usage_segments_session
 CREATE INDEX IF NOT EXISTS usage_segments_provisional
     ON usage_segments(run_id) WHERE provisional = 1;
 """
-SCHEMA += _REQUESTS_TABLE + "\n" + _REQUESTS_INDEX + "\n"
+SCHEMA += _REQUESTS_TABLE + "\n" + _REQUESTS_INDEX + "\n" + _YIELDS + "\n"
 
-SCHEMA_TABLES = ("usage_runs", "usage_segments", "usage_requests")
+SCHEMA_TABLES = ("usage_runs", "usage_segments", "usage_requests", "usage_yields")
 
 #: The requests one run counts, where several runs counted it before schema 15: the row
 #: of the run `usage_claims.Claimant.key` puts first. A main transcript's run before a

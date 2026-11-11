@@ -19,37 +19,38 @@ row of each request by the same order.
   transaction, so the answer is advice. `write` asks again inside it, and a claim lost
   in between fails the whole chunk: it is read again on a later pass, never written
   with tokens nobody may count.
-- A run remembers how many requests it yielded (`yielded`). A reading again that no
-  longer holds a request it held releases the claim, and every run that yielded becomes
-  stale once, so the one the request now belongs to can count it.
+- A run remembers each request it met and left to another (`usage_yields`, one row per
+  run and request, naming no holder). A reading again that no longer holds a request it
+  held releases the claim, and each run that left that request becomes stale once, so
+  the one the request now belongs to can count it.
 
 What makes this settle is the record of yields and the release, not the order: a reading
 again can change a run's place in it, since a run whose records are all skipped as
-copies ends with no first record. A run that left a request to another says so in
-`yielded`; whenever a run read again no longer holds a request it held, every run that
-yielded is read again, and the one the rule now puts first takes the request. A reading
+copies ends with no first record. A run that left a request to another keeps a row for
+it; whenever a run read again no longer holds a request it held, every run with a row
+for that request is read again, and the one the rule now puts first takes it. A reading
 again of the same bytes makes the same claims, so once each run has been read under the
 current reading nothing moves any more: reading every run again in either order then
 changes nothing, which is what the tests hold it to.
 
-Between those readings a request can for a while be counted in no run. A run yielded it,
+Between those readings a request can for a while be counted in no run. A run left it,
 then the run holding it was read again and no longer holds it (a copy's run, for
-instance), and the request waits until the run that yielded is read again. The release
+instance), and the request waits until the run that left it is read again. The release
 makes that run stale in the same transaction, so the background reader, or the rest of
 a rebuild of every run, reads it again and the request is counted once more.
 
 Only a run whose transcript is still there takes a request back, so the rebuild refuses
-a reading again that gives a claim up while the bytes of any run that yielded are gone
-(`usage_rebuild`, which knows the archives, asks `yielders` and looks): the holder keeps
-its former rows, and the request stays counted once, in the run that had it. Which run
-yielded which request is not kept, only how many, so the refusal is wider than it need
-be: it holds for any run that yielded, whichever request the holder gives up. What is
-left is a run that yielded and loses its transcript after the holder gave the claim up
-and before it is itself read again: that request is then counted in no run.
+a reading again that gives a claim up while the bytes of any run that left one of the
+requests given up are gone (`usage_rebuild`, which knows the archives, asks `yielders`
+and looks): the holder keeps its former rows, and the request stays counted once, in the
+run that had it. A run that left only other requests does not count. What is left is a
+run that left a request and loses its transcript after the holder gave the claim up and
+before it is itself read again: that request is then counted in no run.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from collections.abc import Collection, Mapping
@@ -62,6 +63,17 @@ _HOLDER = (
     " run.reread_refused, run.refused_reading, run.path, run.read_offset"
     " FROM usage_requests AS claim"
     " LEFT JOIN usage_runs AS run ON run.id = claim.run_id WHERE claim.request = ?"
+)
+#: The runs that left any request of the JSON array bound first, but the run bound second,
+#: and the same runs made stale.
+_YIELDERS = (
+    "SELECT * FROM usage_runs WHERE id IN (SELECT run_id FROM usage_yields"
+    " WHERE request IN (SELECT value FROM json_each(?)) AND run_id != ?)"
+)
+_RELEASE = (
+    "UPDATE usage_runs SET reading = 0, reread_refused = NULL, refused_reading = NULL"
+    " WHERE id IN (SELECT run_id FROM usage_yields"
+    " WHERE request IN (SELECT value FROM json_each(?)) AND run_id != ?)"
 )
 
 
@@ -145,10 +157,11 @@ def write(
     """Claim what a reading counted, inside the caller's transaction; False when one is lost.
 
     `counted` maps each request the reading counted to its `request_id`, `yielded` holds
-    the ones it left to another run. A request another run took meanwhile, or one left to
-    a run that no longer holds it, is a chunk read on stale advice: the caller rolls
-    back. `whole` says the reading began at the start of the file, so `yielded` is all
-    the run yields; otherwise it adds to what the run yielded before.
+    the ones it left to another run; one it counted as well is counted, not left. A
+    request another run took meanwhile, or one left to a run that no longer holds it, is
+    a chunk read on stale advice: the caller rolls back. `whole` says the reading began
+    at the start of the file, so `yielded` replaces what the run left before; otherwise
+    it adds to it, and the run no longer leaves what it now counts.
     """
 
     for number, request_id in counted.items():
@@ -169,14 +182,24 @@ def write(
                 )
         else:
             return False
-    for number in yielded:
+    left = sorted(number for number in yielded if number not in counted)
+    for number in left:
         holder = _holder(conn, number)
         if holder is None or holder.claimant.run_id == me.run_id:
             return False
-    conn.execute(
-        "UPDATE usage_runs SET yielded = ? + CASE WHEN ? THEN 0 ELSE yielded END WHERE id = ?",
-        (len(yielded), whole, me.run_id),
-    )
+    if whole:
+        conn.execute("DELETE FROM usage_yields WHERE run_id = ?", (me.run_id,))
+    elif counted:
+        conn.execute(
+            "DELETE FROM usage_yields WHERE run_id = ?"
+            " AND request IN (SELECT value FROM json_each(?))",
+            (me.run_id, json.dumps(list(counted))),
+        )
+    if left:
+        conn.execute(
+            "INSERT OR IGNORE INTO usage_yields(run_id, request) SELECT ?, value FROM json_each(?)",
+            (me.run_id, json.dumps(left)),
+        )
     return True
 
 
@@ -194,27 +217,34 @@ def yielders(
 ) -> list[sqlite3.Row]:
     """The runs that could take back a request a reading again of `run_id` gives up.
 
-    None when it gives none up; else every other run that left a request to another,
-    since which request each left is not kept.
+    Every other run that left a request of `former` not in `kept`; none when there is no
+    such request.
     """
 
-    if not former - set(kept):
+    given_up = _given_up(former, kept)
+    if given_up is None:
         return []
-    return conn.execute(
-        "SELECT * FROM usage_runs WHERE yielded > 0 AND id != ?", (run_id,)
-    ).fetchall()
+    return conn.execute(_YIELDERS, (given_up, run_id)).fetchall()
 
 
 def release(conn: sqlite3.Connection, run_id: int, former: set[int], kept: Collection[int]) -> None:
     """After a reading again: when the run no longer holds a request it held, the runs
-    that yielded become stale once, so the one each request now belongs to counts it.
+    that left one of those become stale once, so the one each request now belongs to
+    counts it.
 
     Inside the caller's transaction, after the run's claims were replaced.
     """
 
-    if former - set(kept):
-        conn.execute(
-            "UPDATE usage_runs SET reading = 0, reread_refused = NULL, refused_reading = NULL"
-            " WHERE yielded > 0 AND id != ?",
-            (run_id,),
-        )
+    given_up = _given_up(former, kept)
+    if given_up is not None:
+        conn.execute(_RELEASE, (given_up, run_id))
+
+
+def _given_up(former: set[int], kept: Collection[int]) -> str | None:
+    """The requests of `former` not in `kept`, as a JSON array; None when there are none.
+
+    A fork's copy can give up thousands at once, so they go to SQLite as one value.
+    """
+
+    given_up = former - set(kept)
+    return json.dumps(sorted(given_up)) if given_up else None
