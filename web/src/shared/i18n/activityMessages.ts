@@ -1,3 +1,10 @@
+import { mentionMessages } from '@/shared/i18n/mentionMessages.ts'
+
+/**
+ * The words of the card's history. `activity` names the history actions a locale takes
+ * from here in one spread: the label change, and the mention, whose words
+ * `mentionMessages` owns.
+ */
 export const activityMessages = {
   en: {
     history: {
@@ -26,6 +33,7 @@ export const activityMessages = {
       labelName: '“{label}”',
     },
     activity: {
+      ...mentionMessages.en.activity,
       labels_changed: 'Labels changed',
     },
   },
@@ -56,6 +64,7 @@ export const activityMessages = {
       labelName: '«{label}»',
     },
     activity: {
+      ...mentionMessages.ru.activity,
       labels_changed: 'Метки изменены',
     },
   },

@@ -1039,7 +1039,6 @@ export const ru = {
     url: 'URL',
   },
   activity: {
-    ...mentionMessages.ru.activity,
     ...activityMessages.ru.activity,
     request_created: 'Запрошен ответ или решение',
     request_answered: 'Ответ записан',

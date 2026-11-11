@@ -1039,7 +1039,6 @@ export const en = {
     url: 'URL',
   },
   activity: {
-    ...mentionMessages.en.activity,
     ...activityMessages.en.activity,
     request_created: 'Question or decision requested',
     request_answered: 'Answer recorded',
