@@ -2,7 +2,7 @@
 
 Time inside a pass is a clock the test moves: one second per run read again, none for
 anything else, so a pass of 2.5 seconds starts exactly three. A large run is read in
-chunks the clock counts instead. A run is made stale the way the schema-15 upgrade
+chunks the clock counts instead. A run is made stale the way the schema-16 upgrade
 leaves every run, by its `reading` at 0.
 """
 
@@ -476,7 +476,10 @@ class RecoveryPointTests(RereadCase):
 
 
 class UpgradeRecoveryPointTests(unittest.TestCase):
-    """The schema-15 upgrade's own recovery point, taken by this process, is the one."""
+    """The schema-16 upgrade's own recovery point, taken by this process, is the one.
+
+    From 14 that is the one `preschema15` point schema 15's step shares.
+    """
 
     def test_the_upgrade_snapshot_counts_and_no_other_is_taken(self) -> None:
         directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
