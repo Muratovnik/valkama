@@ -71,7 +71,7 @@ describe('the breakdown as a file', () => {
   it('downloads what the table shows, named by its period, with a byte order mark', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const { files, names } = catchDownloads()
-    const page = await mountAnalytics()
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
     expect(button(page).text()).toBe('Download CSV')
     await button(page).trigger('click')
 
@@ -99,7 +99,7 @@ describe('the breakdown as a file', () => {
     const { files } = catchDownloads()
     const page = await mountAnalytics({
       projectId: 'sample',
-      routeState: { filters: JSON.stringify({ work_item: [ITEM.id] }) },
+      routeState: { by: 'work_item', filters: JSON.stringify({ work_item: [ITEM.id] }) },
     })
     await button(page).trigger('click')
     const text = (await files[0]?.text()) ?? ''
@@ -116,7 +116,7 @@ describe('the breakdown as a file', () => {
       query.get('from')?.includes('T') ? { status: 500 } : serveUsage([], query),
     )
     const { names } = catchDownloads()
-    const page = await mountAnalytics()
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
     const download = button(page)
     expect(download.attributes('disabled')).toBeDefined()
     const note = page.get(`#${download.attributes('aria-describedby') ?? 'none'}`)

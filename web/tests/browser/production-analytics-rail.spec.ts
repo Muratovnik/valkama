@@ -147,12 +147,17 @@ test('one change of the view asks a read a dimension, and none for a measure or 
     opened_by: opened,
   })
   // Opening: the page's read of the week by task beside the same days before and by account,
-  // and a read for each of the nine dimensions of the rail.
+  // the overview's outline of the week before and its cards of models, roles and projects, and
+  // a read for each of the nine dimensions of the rail.
   expect(opened.toSorted()).toEqual(
     [
       'work_item',
       'work_item',
       'account',
+      '',
+      'model',
+      'role',
+      'project',
       'account',
       'project',
       'work_item',

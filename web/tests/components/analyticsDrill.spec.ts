@@ -122,7 +122,9 @@ describe('a value pressed on the Analytics page', () => {
     const host = await mountPage({ by: 'model' })
 
     await host.get('.spending-bars [aria-label="Show the tasks of model-02"]').trigger('click')
-    expect(written(host)).toEqual([[{ filters: '{"model":["model-02"]}' }, 'push']])
+    expect(written(host)).toEqual([
+      [{ by: 'work_item', filters: '{"model":["model-02"]}' }, 'push'],
+    ])
 
     await follow(host)
     const read = reads.grouped('work_item').at(-1)
@@ -145,7 +147,9 @@ describe('a value pressed on the Analytics page', () => {
     const row = host.get('.spending-table th button[aria-description="Show the tasks of model-03"]')
     expect(row.text()).toBe('model-03')
     await row.trigger('click')
-    expect(written(host)).toEqual([[{ filters: '{"model":["model-03"]}' }, 'push']])
+    expect(written(host)).toEqual([
+      [{ by: 'work_item', filters: '{"model":["model-03"]}' }, 'push'],
+    ])
   })
 
   it('narrows the view to a day pressed in the chart of days, then opens a task of it', async () => {
@@ -157,7 +161,7 @@ describe('a value pressed on the Analytics page', () => {
 
     await days[1]?.trigger('click')
     expect(written(host)).toEqual([
-      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10' }, 'push'],
+      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }, 'push'],
     ])
 
     await follow(host)
@@ -181,7 +185,7 @@ describe('a value pressed on the Analytics page', () => {
     vi.setSystemTime(Date.now() + 1000)
     await segment?.trigger('click')
     expect(written(host)).toEqual([
-      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10' }, 'push'],
+      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }, 'push'],
     ])
   })
 
@@ -198,7 +202,9 @@ describe('a value pressed on the Analytics page', () => {
     const own = host.findAll('.spending-bars button.ranked-line')
     expect(own).toHaveLength(1)
     await own[0]?.trigger('click')
-    expect(written(host)).toEqual([[{ filters: '{"launch_class":[null]}' }, 'push']])
+    expect(written(host)).toEqual([
+      [{ by: 'work_item', filters: '{"launch_class":[null]}' }, 'push'],
+    ])
     await follow(host)
     expect(reads.grouped('work_item').at(-1)?.get('none')).toBe('launch_class')
   })
@@ -225,7 +231,7 @@ describe('what is not a control', () => {
     expect(tableUnknown?.find('button, a').exists()).toBe(false)
     byModel.unmount()
 
-    const byTask = await mountPage({})
+    const byTask = await mountPage({ by: 'work_item' })
     const taskLines = byTask.findAll('.spending-bars .ranked-line')
     const notLinks = taskLines.filter((line) => line.element.tagName !== 'A')
     expect(notLinks.map((line) => line.element.tagName)).toEqual(['DIV', 'DIV', 'DIV'])
@@ -274,7 +280,7 @@ describe('the row headings of the page’s tables', () => {
     ])
     byModel.unmount()
 
-    const byTask = await mountPage({})
+    const byTask = await mountPage({ by: 'work_item' })
     await showTable(byTask, '.spending-bars')
     for (const section of ['.spending-table', '.spending-bars'])
       expect(headingsOf(byTask, section, ['MAIN-1 Task 1', 'No task', 'Unknown'])).toEqual([

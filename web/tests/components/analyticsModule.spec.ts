@@ -254,7 +254,8 @@ describe('the Analytics page', () => {
 
   it("offers each filter's values from the scope's project alone", async () => {
     const reads = serve()
-    const page = await mountAnalytics({ projectId: 'sample' })
+    // The task section, whose reads are by task alone: the overview's cards read by model too.
+    const page = await mountAnalytics({ projectId: 'sample', routeState: { by: 'work_item' } })
     await page.get('.analytics-filter-add').trigger('click')
     await flushPromises()
     const offers = reads.grouped('model')
@@ -296,7 +297,7 @@ describe('the Analytics page', () => {
 
   it('asks only what a view change changes, with the filters open', async () => {
     const reads = serve()
-    const page = await mountAnalytics({ routeState: { period: 'weeks4' } })
+    const page = await mountAnalytics({ routeState: { period: 'weeks4', by: 'work_item' } })
     const asks = async (routeState?: Record<string, string>) => {
       const before = reads.asked.length
       if (routeState) await page.setProps({ routeState })
@@ -365,7 +366,8 @@ describe('the Analytics page', () => {
     const reads = stubAnalyticsReads((query) =>
       failing && weekBefore(query) ? { status: 500 } : serveUsage(world, query),
     )
-    const page = await mountAnalytics()
+    // The report of a section, whose banner says what is missing.
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
     // Not the empty state: that would say both periods spent nothing, and one was not read.
     expect(page.text()).not.toContain('Nothing was spent in this period')
     expect(time(page)).toBe('0 min')
@@ -386,7 +388,7 @@ describe('the Analytics page', () => {
 
   it('shows the figures of a week whose week before was not read, beside the words that say so', async () => {
     stubAnalyticsReads((query) => (weekBefore(query) ? { status: 500 } : serveUsage(WORLD, query)))
-    const page = await mountAnalytics({}, 'ru')
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } }, 'ru')
     expect(time(page)).toBe('3 ч')
     expect(page.get('.spending-unread [role="status"]').text()).toBe(
       'Предыдущий период не удалось прочитать, поэтому изменение не показано.',

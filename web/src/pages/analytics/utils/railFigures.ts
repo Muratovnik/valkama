@@ -55,7 +55,7 @@ export function overviewFigures(usage: Usage, measure: Measure, readAt: Date): O
     trend: usage.series.map((day) => ({
       key: day.start,
       value: measureOf(measure, spentOf(day)),
-      incomplete: unfinished(day.start, readAt),
+      incomplete: unfinished(day.start, usage.period.step, readAt),
     })),
   }
 }

@@ -9,7 +9,7 @@
  */
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
-import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
@@ -141,7 +141,7 @@ export function useUsageRead(options: {
   let offered = ''
 
   function query(at: PeriodBounds, groupBy: UsageDimension[], compare: boolean): UsageQuery {
-    return { ...at, groupBy, filters: filters.value, compare }
+    return { ...at, groupBy, filters: filters.value, compare, step: stepOf(options.view()) }
   }
 
   /**

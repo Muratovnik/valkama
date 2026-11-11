@@ -883,7 +883,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   than the chart scrolls sideways inside the plot and never moves the page, opens on its
   last periods, keeps the value axis in view over the plot's start, and brings a period the
   keyboard reaches clear of that axis with its focus ring whole. Periods that only show
-  keep sharing the chart's width, however narrow that makes them.
+  keep sharing the chart's width, however narrow that makes them. A period compared with the
+  one shown stands on the same scale as an open dashed outline over each column, an edge and
+  not a hue: the legend names it beside a short dashed edge, the readout says its figure beside
+  the sum, and the table gives it a column after the sum. A single day stands by the hour, and
+  an hour only shows. Where a ranked chart shares a row with others, as a card of first values
+  does, it is `dense`: the name and the value on one line and a thin bar under them.
   Two small charts stand beside a figure rather than in a section of their own, as the
   Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
   scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,

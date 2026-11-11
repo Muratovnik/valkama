@@ -302,7 +302,8 @@ for (const width of WIDTHS)
     // By pointer: model-a, then its one task. A bar is named by its action, and a row of the
     // table a narrow page shows first by the value it heads.
     await bars.getByRole('button', { name: /^(Show the tasks of )?model-a$/u }).click()
-    const narrowed = at({ filters: '{"model":["model-a"]}' })
+    // A narrowing breaks the view down by task, which the address names.
+    const narrowed = at({ by: 'work_item', filters: '{"model":["model-a"]}' })
     await expect.poll(() => path(page)).toBe(narrowed)
     await page.goBack()
     await expect.poll(() => path(page)).toBe(byModel)
@@ -335,7 +336,12 @@ for (const width of WIDTHS)
     )
     expect(landsOn).toBe(true)
     await page.mouse.click(point.x, point.y)
-    const tuesdayAlone = at({ period: 'custom', from: '2026-11-10', to: '2026-11-10' })
+    const tuesdayAlone = at({
+      period: 'custom',
+      from: '2026-11-10',
+      to: '2026-11-10',
+      by: 'work_item',
+    })
     await expect.poll(() => path(page)).toBe(tuesdayAlone)
 
     // By keyboard: Tuesday, then its one task from the table. A day is named by its action in

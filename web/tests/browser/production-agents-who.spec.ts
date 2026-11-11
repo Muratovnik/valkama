@@ -123,13 +123,16 @@ test('the tab opens Analytics filtered to the item, over the days of its work', 
   await expect(page.locator('.route-recovery')).toHaveCount(0)
   // The page reads the view the link wrote, says a filter is set and asks for the item's work.
   const state = new URL(page.url()).searchParams.get('state') ?? ''
+  // The link names its section, so the page opens on the item's tasks and not on its overview.
   expect(readAddress(JSON.parse(Buffer.from(state, 'base64url').toString('utf8')))).toEqual({
     ...DEFAULT_VIEW,
+    by: 'work_item',
     period: 'custom',
     from: dayOf(first),
     to: dayOf(last),
     filters: { work_item: [usage.work_item_id] },
   })
+  await expect(analytics.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Task/u)
   await expect(analytics.locator('.analytics-bar-filters .combo-chip')).toHaveCount(1)
   // The page's own read, the period beside the one before, asks for the item's work alone.
   const own = () => asked.filter((query) => query.get('compare') === 'true')

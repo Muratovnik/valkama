@@ -22,11 +22,18 @@ import type { PeriodColumn, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 /** How many values a day's stack names; the rest of the period's values stack as «other». */
 const STACKED = 5
 
-const DAY = 86_400_000
+const HOUR = 3_600_000
+const DAY = 24 * HOUR
 
-/** A day whose end has not come at the moment it was read holds what it spent so far. */
-export const unfinished = (start: string, readAt: Date) =>
-  Date.parse(start) + DAY > readAt.getTime()
+/**
+ * A step running at the moment it was read holds what it spent so far: begun, and not over. One
+ * still to come holds nothing yet, and is no fall either.
+ */
+export function unfinished(start: string, step: Usage['period']['step'], readAt: Date) {
+  const begun = Date.parse(start)
+  const now = readAt.getTime()
+  return begun <= now && now < begun + (step === 'hour' ? HOUR : DAY)
+}
 
 /** A series of the stack: the line it draws, or «other» for the values it does not name. */
 export interface StackLine extends PeriodSeries {
@@ -96,7 +103,7 @@ export function dayColumns(
       key: point.start,
       values,
       absent: [...absent],
-      incomplete: unfinished(point.start, readAt),
+      incomplete: unfinished(point.start, usage.period.step, readAt),
     }
   })
 }

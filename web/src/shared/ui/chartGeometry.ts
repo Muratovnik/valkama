@@ -124,6 +124,11 @@ export interface PeriodColumn {
    * Monday, 9 November". What the period holds then describes it.
    */
   action?: string
+  /**
+   * What the period it is compared with held at this place, drawn as a dashed outline on the same
+   * scale; null where that period has no figure, and undefined where nothing is compared.
+   */
+  before?: number | null
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
@@ -149,6 +154,8 @@ export interface PeriodWords {
   total: string
   /** What a series with no figure in a period says before its names: "No price". */
   absent?: string
+  /** The words before the figure of the period compared with, and the heading over them. */
+  before?: string
   emptyDescription?: string
 }
 
@@ -230,7 +237,9 @@ export function stackColumns(
     const absent = series.filter((one) => column.absent?.includes(one.key))
     return { column, total: reached, segments, marks: notes, absent }
   })
-  const ticks = valueTicks(Math.max(0, ...stacked.map((one) => one.total)))
+  // The period compared with stands on the same scale, so its outline is never cut off.
+  const before = columns.map((column) => drawable(column.before ?? 0))
+  const ticks = valueTicks(Math.max(0, ...stacked.map((one) => one.total), ...before))
   return { columns: stacked, ticks, top: ticks.at(-1) || 1 }
 }
 
@@ -317,9 +326,13 @@ export function columnSummary(stacked: StackedColumn, words: PeriodWords, format
   const parts = stacked.segments.map(
     (segment) => `${segment.series.label} ${format(segment.value)}`,
   )
+  const before = stacked.column.before
+  // The period compared with is said beside the sum, ahead of the series that may be cut off.
+  const compared =
+    words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
   const head = hasSum(stacked)
-    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}`
-    : periodName(stacked)
+    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+    : `${periodName(stacked)}${compared}`
   return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
     .filter(Boolean)
     .join('. ')
