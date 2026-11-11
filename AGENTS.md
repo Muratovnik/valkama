@@ -79,7 +79,9 @@ split with it:
   of what the commit changed, `python tests/commit_subjects.py` and
   `python .github/relkit.pyz audit --history`;
   when the commit touches `web/`, also `npm run lint` and
-  `npm run check:ui-system` there. It does not run the whole browser suite.
+  `npm run check:ui-system` there. The audit refuses a tracked tree with
+  uncommitted changes, so it finishes before the next edit starts. The worker
+  does not run the whole browser suite.
 - The integrator runs the full list above and the whole browser suite once, on
   the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
   such run goes on a machine at a time: two at once fail tests that pass alone.
