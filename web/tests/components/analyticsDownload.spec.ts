@@ -80,7 +80,7 @@ describe('the breakdown as a file', () => {
     const [file] = files
     expect(file?.type).toBe('text/csv;charset=utf-8')
     const bytes = new Uint8Array((await file?.arrayBuffer()) ?? new ArrayBuffer(0))
-    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+    expect(Array.from(bytes.subarray(0, 3))).toEqual([0xef, 0xbb, 0xbf])
     const bounds = [
       momentAt(MONDAY, offsetAt(NOW)),
       momentAt(NOW, offsetAt(NOW)),
