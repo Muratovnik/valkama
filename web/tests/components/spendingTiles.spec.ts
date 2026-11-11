@@ -363,4 +363,22 @@ describe('the tiles on the page in the week after a change of time', () => {
     )
     expect(change).toBe('↑ 100% against Mar 23 – 25')
   })
+
+  // The Sunday a week after the autumn change: the same moment a week before falls on the day the
+  // clocks went back, whose last hour is past midnight at the offset of its Monday.
+  it.each(['22:30', '23:30'])(
+    'name the week before by its own days on the Sunday after the autumn change, at %s',
+    async (time) => {
+      const now = `2026-11-01T${time}:00+01:00`
+      expect(new Date(now).getTimezoneOffset()).toBe(-60)
+      expect(new Date(`2026-10-25T${time}:00+01:00`).getTimezoneOffset()).toBe(-60)
+      expect(new Date('2026-10-19T00:00:00+02:00').getTimezoneOffset()).toBe(-120)
+      const { change } = await tilesAt(
+        now,
+        '2026-10-26T10:00:00+01:00',
+        '2026-10-20T10:00:00+02:00',
+      )
+      expect(change).toBe('↑ 100% against Oct 19 – 25')
+    },
+  )
 })
