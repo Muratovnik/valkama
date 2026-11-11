@@ -216,6 +216,11 @@ checkouts are therefore distinguishable even at the same version.
   of its own, resolves `@playwright/test` and `@/` from `web/`, and builds and serves the app
   as the suite does.
 
+- For contributors: the browser specs that write the system clipboard or are granted it are
+  named once, in `web/tests/browser/clipboardSpecs.ts`. `npm test` fails when a spec that
+  grants or writes the clipboard, itself or through a suite module it imports, is missing
+  from that list, or when a name on it is no longer a spec.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
