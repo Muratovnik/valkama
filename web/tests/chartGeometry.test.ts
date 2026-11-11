@@ -173,6 +173,28 @@ describe('stacked columns', () => {
     assert.equal(empty.top, 1)
   })
 
+  test('the period compared with stands on the same scale and is said beside the sum', () => {
+    const { columns, top } = stackColumns(
+      [
+        { ...column('d1', { a: 2 }), before: 7 },
+        { ...column('d2', {}), before: 3 },
+        { ...column('d3', { a: 1 }), before: null },
+      ],
+      series,
+    )
+    // The tallest outline, 7, is past the tallest column, 2: the scale reaches past it.
+    assert.equal(top, 8)
+    const said = { ...words, before: 'period before' }
+    const [first, second, third] = columns
+    assert.ok(first && second && third)
+    assert.equal(columnSummary(first, said, String), 'd1: total 2, period before 7; Account A 2')
+    // Nothing spent and nothing absent is a real zero, said beside what the period before held.
+    assert.equal(columnSummary(second, said, String), 'd2: total 0, period before 3')
+    assert.equal(columnSummary(third, said, String), 'd3: total 1; Account A 1')
+    // With no words for it the readout stays as it was.
+    assert.equal(columnSummary(first, words, String), 'd1: total 2; Account A 2')
+  })
+
   test('a segment above the lowest leaves a gap of ground under it', () => {
     const { columns } = stackColumns([column('d1', { a: 1, b: 3 })], series)
     const [one] = columns

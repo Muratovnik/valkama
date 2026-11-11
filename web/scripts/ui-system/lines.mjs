@@ -67,6 +67,10 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
   ['shared/ui/SearchCombobox.vue', 2], // The field's edge, and the overlay edge of its list.
   ['shared/ui/SemanticState.vue', 1],
+  // A chart's outline of the period it is compared with, and its key in the legend: an open
+  // dashed edge told from the stack by its drawing, not a hue. The border is the drawing itself.
+  ['shared/ui/PeriodColumns.vue', 1],
+  ['shared/ui/ChartLegend.vue', 1],
   ['shared/ui/TooltipHost.vue', 1], // Overlay edge of the window's one hint.
   ['shared/ui/VMenu.vue', 1], // Overlay edge of a menu floating over what it acts on.
   // Markdown in free text: a quote's edge (the step quote's own), a thematic

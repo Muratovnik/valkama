@@ -5,9 +5,11 @@
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched and says so under its name, so a short last column does not read as a drop; a
  * change at the start of a period (the account switched) is a numbered line up the plot, and
- * the note under the chart says what changed. A series with no figure in a period (`absent`, such
- * as work with no price) draws nothing there, and the readout and the period's name say so
- * rather than a zero. `PeriodColumnsTable` is the same periods as a table.
+ * the note under the chart says what changed. A period compared with this one (`before`) stands
+ * on the same scale as a dashed outline over each column, an edge and not a hue, named in the
+ * legend, and the readout says its figure in words. A series with no figure in a period
+ * (`absent`, such as work with no price) draws nothing there, and the readout and the period's
+ * name say so rather than a zero. `PeriodColumnsTable` is the same periods as a table.
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
@@ -60,6 +62,10 @@ const props = withDefaults(defineProps<PeriodChartProps>(), {
 const emit = defineEmits<{ select: [selection: PeriodSelection] }>()
 
 const chart = computed(() => stackColumns(props.columns, props.series, props.marks))
+/** The name of the outline of a period compared with, where the chart draws one. */
+const outline = computed(() =>
+  props.columns.some((column) => column.before) ? props.words.before : undefined,
+)
 const empty = computed(() => !props.columns.length || !props.series.length)
 const bySegment = computed(() => props.actionable === 'segment')
 
@@ -148,6 +154,10 @@ function segmentAttrs(one: StackedColumn, index: number, at: number) {
 const stackStyle = (one: StackedColumn) => ({
   blockSize: `${(one.total / chart.value.top) * 100}%`,
 })
+/** The outline of the period compared with, at its own height on the same scale. */
+const beforeStyle = (one: StackedColumn) => ({
+  blockSize: `${((one.column.before ?? 0) / chart.value.top) * 100}%`,
+})
 const gridClass = (tick: number) => ({ 'period-baseline': tick === 0 })
 const gridStyle = (tick: number) => ({ insetBlockEnd: `${(tick / chart.value.top) * 100}%` })
 
@@ -183,8 +193,9 @@ function key(event: KeyboardEvent, at: number | null) {
     />
     <template v-else>
       <ChartLegend
-        v-if="series.length > 1"
+        v-if="series.length > 1 || outline"
         :series="series"
+        :outline="outline"
       />
       <p
         v-tooltip.clipped="readout"
@@ -278,6 +289,12 @@ function key(event: KeyboardEvent, at: number | null) {
                     />
                   </span>
                 </component>
+                <span
+                  v-if="one.column.before"
+                  class="period-before"
+                  aria-hidden="true"
+                  :style="beforeStyle(one)"
+                />
                 <span
                   v-if="one.marks.length"
                   class="period-mark"
@@ -428,6 +445,21 @@ function key(event: KeyboardEvent, at: number | null) {
       rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
     );
   }
+}
+
+/* The period compared with: an open dashed edge as wide as the stack, over it and never under,
+   so it reads where it is higher and where it is lower without a hue of its own. Drawn in the
+   text's colour, it takes the forced palette's ink with the text. */
+.period-before {
+  position: absolute;
+  inset: auto 0 0;
+  inline-size: min(100%, var(--space-6));
+  margin-inline: auto;
+  border: var(--space-hair) dashed currentcolor;
+  border-block-end: 0;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-status) var(--radius-status) 0 0;
+  pointer-events: none;
 }
 
 /* A change at the start of a period: a line up the plot in the gap before the period. */

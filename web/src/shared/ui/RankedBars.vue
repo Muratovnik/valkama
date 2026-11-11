@@ -13,7 +13,8 @@
  * is named by what it does (`action`) or by its label, and its value describes it. A row's name
  * takes one line, ends in an ellipsis where it is cut and is said whole in its hint, with what
  * the label leaves out (`detail`); the values stand in one column whatever the names do. In a
- * narrow container the name takes a line of its own over its bar.
+ * narrow container the name takes a line of its own over its bar. A `dense` chart, a few rows in
+ * a small card, keeps the name and the value on one line and draws a thin bar under both.
  */
 import { computed, useId } from 'vue'
 
@@ -27,6 +28,8 @@ const props = defineProps<{
   label: string
   rows: readonly RankedRow[]
   words: RankedWords
+  /** Each row a line of name and value over a thin bar, for a few rows in a small space. */
+  dense?: boolean
 }>()
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
@@ -83,6 +86,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 <template>
   <figure
     class="ranked-bars"
+    :class="{ 'ranked-dense': dense }"
     :aria-label="label"
   >
     <DataEmptyState
@@ -257,6 +261,37 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 
   .ranked-label {
     grid-column: 1 / -1;
+  }
+}
+
+/* Dense, at any width: the name and the value on one line, the bar a thin line under both. */
+.ranked-dense {
+  & .ranked-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 var(--space-3);
+  }
+
+  & .ranked-line {
+    row-gap: var(--space-half);
+  }
+
+  & .ranked-label {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  & .ranked-value {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  & .ranked-track {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
+  & .ranked-bar {
+    block-size: var(--space-1);
   }
 }
 </style>
