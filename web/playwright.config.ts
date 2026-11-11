@@ -49,6 +49,8 @@ export default store
     })
   : defineConfig({
       testDir: './tests/browser',
+      // Before the first spec: the app port serves the bundle this run has just built.
+      globalSetup: './tests/browser/servedApp.setup.ts',
       fullyParallel: false,
       retries: 0,
       reporter: 'line',

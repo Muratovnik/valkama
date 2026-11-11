@@ -202,7 +202,9 @@ checkouts are therefore distinguishable even at the same version.
   `web/test-results/<port>/app`, named by `VALKAMA_BROWSER_PORT`, and serves it from there,
   so a run no longer rewrites the committed `web/dist` and leaves nothing to restore. That
   build skips the type check, so a type error in a spec is reported by `npm run typecheck`
-  instead of as a server that would not start. `npm run build` still type-checks and writes
+  instead of as a server that would not start. Before the first spec the run checks that the
+  app's port serves the page it has just built, and stops on a page that differs or one an
+  earlier run left behind. `npm run build` still type-checks and writes
   `web/dist`, and the `server-` specs, which run against the real server, still use it.
 
 ### Fixed
