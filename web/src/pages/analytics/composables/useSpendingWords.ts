@@ -62,15 +62,19 @@ export function useSpendingWords() {
     return name === 'tokens' ? compact(amount) : usage.cost(amount)
   }
 
+  /** So many tokens with no price, said in words; nothing for none. */
+  const unpricedTokens = (count: number) =>
+    count ? t('analytics.figures.unpriced', { count: compact(count) }, Math.min(count, 1000)) : ''
+
   /** The tokens a cost leaves out, said in words; nothing when it leaves none out. */
-  const unpriced = (spent: Spent) =>
-    spent.unpriced
-      ? t(
-          'analytics.figures.unpriced',
-          { count: compact(spent.unpriced) },
-          Math.min(spent.unpriced, 1000),
-        )
-      : ''
+  const unpriced = (spent: Spent) => unpricedTokens(spent.unpriced)
+
+  /**
+   * What is said of a measure with the tokens a cost leaves out beside it — `count` of them —
+   * so a cost that misses some never reads as whole; a figure of any other measure as it is.
+   */
+  const leavingOut = (name: Measure, said: string, count: number) =>
+    [said, name === 'cost' ? unpricedTokens(count) : ''].filter(Boolean).join(', ')
 
   /**
    * What the tokens figure counts, by kind — input, output, cache writes, what was processed
@@ -172,10 +176,21 @@ export function useSpendingWords() {
    * with no price reads as that and never as a zero.
    */
   function lineFigure(name: Measure, spent: Spent) {
-    const left = name === 'cost' ? unpriced(spent) : ''
-    return left && spent.cost === null
-      ? left
-      : [figure(name, spent), left].filter(Boolean).join(', ')
+    return name === 'cost' && spent.cost === null && spent.unpriced
+      ? unpriced(spent)
+      : leavingOut(name, figure(name, spent), spent.unpriced)
+  }
+
+  /**
+   * How a line's measure moved, as a table cell says it (`changeCell`); a change of a cost that
+   * compares two figures says beside it the tokens they leave out, by the rule `lineFigure`
+   * says them for one figure, so a change of incomplete costs never reads as whole.
+   */
+  function lineChange(name: Measure, moved: Change, now: Spent, before: Spent) {
+    const said = changeCell(name, moved)
+    return moved.direction === 'absent' || moved.direction === 'none'
+      ? said
+      : leavingOut(name, said, now.unpriced + before.unpriced)
   }
 
   /** What a chart of a measure by a dimension is called: «Agent time by task». */
@@ -211,7 +226,6 @@ export function useSpendingWords() {
   return {
     accounts,
     change,
-    changeCell,
     chartTitle,
     day,
     dayChartTitle,
@@ -220,6 +234,7 @@ export function useSpendingWords() {
     days,
     dimension,
     figure,
+    lineChange,
     lineFigure,
     lineLabel,
     measure,

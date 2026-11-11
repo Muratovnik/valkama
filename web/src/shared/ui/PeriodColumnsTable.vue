@@ -6,7 +6,8 @@
  * a series with nothing in a period included; a figure nobody has reads as a dash and never as a
  * zero. It is the chart's accessible equivalent and may stand beside it or instead of it: what a
  * press opens in the chart, a period or one series in it, opens here from the period's name or
- * from the series' figure.
+ * from the series' figure. A period's name that acts heads its row, so it is named by the period,
+ * and what pressing it does is its description.
  */
 import { computed } from 'vue'
 
@@ -108,7 +109,7 @@ const empty = computed(() => !props.columns.length || !props.series.length)
             v-if="actionable === 'column'"
             type="button"
             class="chart-press"
-            :aria-label="row.one.column.action"
+            :aria-description="row.one.column.action"
             @click="emit('select', { column: row.one.column.key, series: null })"
           >
             {{ row.name }}

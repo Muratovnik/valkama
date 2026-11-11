@@ -3,8 +3,10 @@
  * The breakdown as one table beside the period before: every value the period or the period
  * before holds, none folded into «other», with its time, tokens and estimated cost in this period,
  * the chosen measure in the period it is compared with, and how that measure moved by the tiles'
- * own rule (`comparedLines`). A figure the read does not hold says so in words and gives no
- * change; a value that worked only before stands with what it spent now, which is nothing.
+ * own rule (`comparedLines`). Each figure reads as the bars read it (`lineFigure`): one the read
+ * does not hold says so in words and gives no change, and a cost says the tokens it leaves out,
+ * as its change does (`lineChange`); a value that worked only before stands with what it spent
+ * now, which is nothing.
  *
  * Largest first in the chosen measure, ties by name. A period before that was not read is said
  * once, over the table, and the table then holds this period alone. Wider than its column, it
@@ -14,7 +16,8 @@
  * value to list it is disabled, and the words beside it say why.
  *
  * A row's name acts as its value does in the bars (`useLineActions`): a link to a task, or a
- * control that narrows the view to the value, sent out as `narrow`.
+ * control that narrows the view to the value, sent out as `narrow`. Either is named by the value,
+ * since it heads its row's cells; what pressing it does is its description.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -113,10 +116,16 @@ const lines = computed(() =>
     narrowsTo: actions.narrowsTo(props.by, line.value),
     cells: columns.value.map((column) => {
       if (column.key === 'before')
-        return { ...column, text: line.before ? words.figure(props.measure, line.before) : '' }
+        return { ...column, text: line.before ? words.lineFigure(props.measure, line.before) : '' }
       if (column.key === 'change')
-        return { ...column, text: line.change ? words.changeCell(props.measure, line.change) : '' }
-      return { ...column, text: words.figure(column.key, line.now) }
+        return {
+          ...column,
+          text:
+            line.change && line.before
+              ? words.lineChange(props.measure, line.change, line.now, line.before)
+              : '',
+        }
+      return { ...column, text: words.lineFigure(column.key, line.now) }
     }),
   })),
 )
@@ -243,7 +252,7 @@ function download() {
               v-else-if="narrows(line)"
               type="button"
               class="chart-press"
-              :aria-label="narrowName(line)"
+              :aria-description="narrowName(line)"
               @click="narrowTo(line)"
             >
               {{ line.name }}

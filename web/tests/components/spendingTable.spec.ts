@@ -3,15 +3,19 @@
  * out by hand row by row: every value either period holds, none folded; this period's time,
  * tokens and estimated cost; the chosen measure before; its change by the tiles' rule — a figure
  * the read does not hold is said absent and gives no change, a period before that spent nothing
- * gives no percentage; largest first in the chosen measure, a tie by name; and a period before
- * that was not read said once, with this period alone.
+ * gives no percentage; a cost that leaves tokens out, and its change, say so in the bars' words;
+ * largest first in the chosen measure, a tie by name; and a period before that was not read said
+ * once, with this period alone.
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingTable from '@/pages/analytics/components/SpendingTable.vue'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
+import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
+import RankedBars from '@/shared/ui/RankedBars.vue'
 
 import { noTask, task, unknownTask, usageAnswer } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
@@ -84,7 +88,7 @@ describe('the breakdown beside the period before', () => {
       // In both periods: twice the time.
       ['MAIN-1 Alpha', '2 h', '2K', '≈ $1.50', '1 h', '↑ 100%'],
       // Only now, tied with work on no task at an hour and named first.
-      ['MAIN-2 Beta', '1 h', '500', 'No price', '0 min', 'Nothing before'],
+      ['MAIN-2 Beta', '1 h', '500', '500 tokens without a price', '0 min', 'Nothing before'],
       ['No task', '1 h', '100', '≈ $0.10', '1 h', 'The same'],
       // Spent with no token and no price: both said absent, never zero.
       ['Unknown', '15 min', 'No tokens', 'No price', '0 min', 'Nothing before'],
@@ -105,7 +109,7 @@ describe('the breakdown beside the period before', () => {
   it('sorts by tokens and holds the tokens before, an absent figure last and with no change', () => {
     expect(rows(table('tokens'))).toEqual([
       ['MAIN-1 Alpha', '2 h', '2K', '≈ $1.50', '1K', '↑ 100%'],
-      ['MAIN-2 Beta', '1 h', '500', 'No price', '0', 'Nothing before'],
+      ['MAIN-2 Beta', '1 h', '500', '500 tokens without a price', '0', 'Nothing before'],
       ['No task', '1 h', '100', '≈ $0.10', '100', 'The same'],
       ['MAIN-3 Gamma', '0 min', '0', '≈ $0.00', '300', '↓ 100%'],
       ['Unknown', '15 min', 'No tokens', 'No price', '0', 'No tokens now'],
@@ -118,9 +122,84 @@ describe('the breakdown beside the period before', () => {
       ['MAIN-1 Alpha', '2 h', '2K', '≈ $1.50', '≈ $1.00', '↑ 50%'],
       ['No task', '1 h', '100', '≈ $0.10', '≈ $0.10', 'The same'],
       ['MAIN-3 Gamma', '0 min', '0', '≈ $0.00', '≈ $0.20', '↓ 100%'],
-      ['MAIN-2 Beta', '1 h', '500', 'No price', '≈ $0.00', 'No price now'],
+      ['MAIN-2 Beta', '1 h', '500', '500 tokens without a price', '≈ $0.00', 'No price now'],
       ['Unknown', '15 min', 'No tokens', 'No price', '≈ $0.00', 'No price now'],
     ])
+  })
+
+  it('says a cost that leaves tokens out, and its change, in the words the bars use', () => {
+    // Delta: a dollar of priced work and 500 tokens with no price now, half a dollar before.
+    const DELTA = task(4, 'Delta')
+    const usage = usageAnswer({
+      first: new Date(2026, 10, 9),
+      days: 3,
+      groupBy: ['work_item'],
+      stretches: [
+        { day: 0, group: { work_item: DELTA }, spend: { seconds: 3600, tokens: 1000, cost: 1 } },
+        {
+          day: 1,
+          group: { work_item: DELTA },
+          spend: { seconds: 600, tokens: 500, unpriced: 500 },
+        },
+      ],
+      before: [
+        { day: 0, group: { work_item: DELTA }, spend: { seconds: 1800, tokens: 500, cost: 0.5 } },
+      ],
+    }).usage
+    const props = { by: 'work_item' as const, measure: 'cost' as const }
+    const global = { plugins: [analyticsI18n()] }
+    const shown = mount(SpendingTable, { props: { ...props, filters: {}, usage }, global })
+    const bars = mount(SpendingBars, {
+      props: { ...props, rows: usage.rows, narrow: false },
+      global,
+    })
+    const bar = (bars.getComponent(RankedBars).props('rows') as RankedRow[])[0]
+
+    // The bars' words, with any space in them read as one, as the table's cells are read.
+    const barWords = words(bar?.valueText ?? '')
+    expect(barWords).toBe('≈ $1.00, 500 tokens without a price')
+    expect(rows(shown)).toEqual([
+      [
+        'MAIN-4 Delta',
+        '1 h 10 min',
+        '1.5K',
+        '≈ $1.00, 500 tokens without a price',
+        '≈ $0.50',
+        '↑ 100%, 500 tokens without a price',
+      ],
+    ])
+    expect(rows(shown)[0]?.[3]).toBe(barWords)
+    expect(rows(shown)[0]?.[5]?.endsWith(barWords.slice(barWords.indexOf(', ')))).toBe(true)
+  })
+
+  it('says beside a change of cost the tokens both periods leave out', () => {
+    const DELTA = task(4, 'Delta')
+    const usage = usageAnswer({
+      first: new Date(2026, 10, 9),
+      days: 3,
+      groupBy: ['work_item'],
+      stretches: [
+        { day: 0, group: { work_item: DELTA }, spend: { seconds: 3600, cost: 1, unpriced: 500 } },
+      ],
+      before: [
+        { day: 0, group: { work_item: DELTA }, spend: { seconds: 1800, cost: 2, unpriced: 200 } },
+      ],
+    }).usage
+    const shown = mount(SpendingTable, {
+      props: { by: 'work_item', filters: {}, measure: 'cost', usage },
+      global: { plugins: [analyticsI18n()] },
+    })
+    expect(rows(shown)[0]?.slice(3)).toEqual([
+      '≈ $1.00, 500 tokens without a price',
+      '≈ $2.00, 200 tokens without a price',
+      '↓ 50%, 700 tokens without a price',
+    ])
+    // Time and tokens are whole whatever a price leaves out: their change says nothing of it.
+    const byTime = mount(SpendingTable, {
+      props: { by: 'work_item', filters: {}, measure: 'time', usage },
+      global: { plugins: [analyticsI18n()] },
+    })
+    expect(rows(byTime)[0]?.slice(4)).toEqual(['30 min', '↑ 100%'])
   })
 
   it('says once that the period before was not read, and shows this period alone', () => {
@@ -139,7 +218,7 @@ describe('the breakdown beside the period before', () => {
     // Gamma worked only before, which was not read: it is not here.
     expect(rows(wrapper)).toEqual([
       ['MAIN-1 Alpha', '2 h', '2K', '≈ $1.50'],
-      ['MAIN-2 Beta', '1 h', '500', 'No price'],
+      ['MAIN-2 Beta', '1 h', '500', '500 tokens without a price'],
       ['No task', '1 h', '100', '≈ $0.10'],
       ['Unknown', '15 min', 'No tokens', 'No price'],
     ])

@@ -3,7 +3,8 @@
  * `RankedBars` as a table: the same rows in the same order, each name with the value it reads
  * as. It is the chart's accessible equivalent and may stand beside it or instead of it; a row
  * that opens something in the chart opens it from its name here, as `select` with its key, and
- * a row that leads somewhere is a link from its name, pressed as `follow`.
+ * a row that leads somewhere is a link from its name, pressed as `follow`. A name that acts heads
+ * its row, so it is named by the row's name, and what pressing it does is its description.
  */
 import { computed } from 'vue'
 
@@ -82,7 +83,7 @@ const empty = computed(() => !props.rows.length)
             v-else-if="row.actionable"
             type="button"
             class="chart-press"
-            :aria-label="row.action"
+            :aria-description="row.action"
             :data-key="row.key"
             @click="emit('select', row.key)"
           >

@@ -21,6 +21,7 @@ import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { noTask, serveUsage, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { rowHeadings } from '../support/rowHeadings.ts'
 
 vi.mock('@/shared/api/analyticsUses.ts', () => ({ reportAnalyticsUse: vi.fn() }))
 
@@ -141,7 +142,7 @@ describe('a value pressed on the Analytics page', () => {
   it('narrows the view to a model from its row of the table beside the period before', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const host = await mountPage({ by: 'model' })
-    const row = host.get('.spending-table th button[aria-label="Show the tasks of model-03"]')
+    const row = host.get('.spending-table th button[aria-description="Show the tasks of model-03"]')
     expect(row.text()).toBe('model-03')
     await row.trigger('click')
     expect(written(host)).toEqual([[{ filters: '{"model":["model-03"]}' }, 'push']])
@@ -218,6 +219,53 @@ describe('what is not a control', () => {
       'Unknown',
     ])
     expect(byTask.findAll('.spending-bars button.ranked-line')).toHaveLength(0)
+  })
+})
+
+/** Shows a chart of the page as its table, by its own control. */
+async function showTable(host: VueWrapper, section: string) {
+  const option = host.findAll(`${section} .segmented-option`).find((one) => one.text() === 'Table')
+  await option?.trigger('click')
+}
+
+/** The row headings of a table whose names are the given ones, in that order. */
+const headingsOf = (host: VueWrapper, section: string, names: string[]) =>
+  names.map((name) => rowHeadings(host.get(section)).find((heading) => heading.name === name))
+
+/** A row heading that narrows the view, one that links to a task, and one that does neither. */
+const narrows = (name: string) => ({
+  name,
+  control: { role: 'button', name, description: `Show the tasks of ${name}` },
+})
+const links = (name: string) => ({ name, control: { role: 'link', name, description: '' } })
+const plain = (name: string) => ({ name, control: null })
+
+describe('the row headings of the page’s tables', () => {
+  it('are named by their value, and say what pressing one does as its description', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const byModel = await mountPage({ by: 'model' })
+    await showTable(byModel, '.spending-bars')
+    await showTable(byModel, '.spending-days')
+    expect(headingsOf(byModel, '.spending-table', ['model-02', 'Unknown'])).toEqual([
+      narrows('model-02'),
+      plain('Unknown'),
+    ])
+    expect(headingsOf(byModel, '.spending-bars', ['model-02', 'Other, 2 more', 'Unknown'])).toEqual(
+      [narrows('model-02'), plain('Other, 2 more'), plain('Unknown')],
+    )
+    expect(headingsOf(byModel, '.spending-days', ['Tuesday, November 10'])).toEqual([
+      narrows('Tuesday, November 10'),
+    ])
+    byModel.unmount()
+
+    const byTask = await mountPage({})
+    await showTable(byTask, '.spending-bars')
+    for (const section of ['.spending-table', '.spending-bars'])
+      expect(headingsOf(byTask, section, ['MAIN-1 Task 1', 'No task', 'Unknown'])).toEqual([
+        links('MAIN-1 Task 1'),
+        plain('No task'),
+        plain('Unknown'),
+      ])
   })
 })
 
