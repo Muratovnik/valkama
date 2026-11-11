@@ -873,7 +873,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   adds no colour) and says «so far» under its name, so it does not read as a drop; a change
   at a period's start, such as the account the work ran under, is a numbered line up the
   plot with its words under the chart. The periods are one Tab stop and the arrows walk
-  them; nothing in a chart moves on its own.
+  them; nothing in a chart moves on its own. A period that acts when pressed is never
+  narrower than an inline action (`--size-control-inline`, 28px): a span that takes more room
+  than the chart scrolls sideways inside the plot and never moves the page, opens on its
+  last periods, keeps the value axis in view over the plot's start, and brings a period the
+  keyboard reaches clear of that axis with its focus ring whole. Periods that only show
+  keep sharing the chart's width, however narrow that makes them.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole

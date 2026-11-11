@@ -50,9 +50,46 @@ checkouts are therefore distinguishable even at the same version.
 - **An Analytics module for the usage of agent work.** The module list now declares
   `analytics` beside Planning, Memory and Settings, and the navigation shows it under
   «Understand». Its page is where time, tokens and an API-price estimate of agent work
-  will be read; nothing collects them yet, so it says that usage will appear once it is
-  collected, with no figures or charts. `GET /api/modules` and `list_platform_modules`
+  are read, as the next entry describes. `GET /api/modules` and `list_platform_modules`
   name it. The flow-metrics Analytics dashboards an earlier build retired stay retired.
+
+- **The Analytics page says what agent work was spent on.** For a period — this week,
+  the past four weeks, or the first and last day you choose — three figures head the
+  page: agent time, tokens, and the cost estimated at API list prices, which says under
+  itself that it is an estimate and not a bill. Each says how it moved from the period
+  before; this week is held against the same days of the week before, so a Wednesday is
+  not compared with a weekend. Tokens count what was processed anew and name the cache
+  reads apart, and tokens with no price are said in words rather than priced at zero.
+  Pressing a figure chooses what the charts under it draw. The first chart ranks the
+  period by one dimension — account, project, task, executor, role, launch class,
+  model, effort or environment — largest first, with the tail folded into «Other» and
+  work with no task or of unknown origin in rows of their own. The second stands a
+  column per day, stacked by the same dimension: a day still running is hatched and
+  says «so far», and a day the work moved to another account carries a numbered note.
+  Either chart can be read as a table instead, and a narrow window shows the table
+  first. A day's column is never narrower than a pointer can hit: a period too long for
+  the chart scrolls inside it, opened on its last days, with the scale kept in place.
+  A table under the charts lists every value with its time, tokens and cost beside the
+  chosen figure in the period before and its change, and «Download CSV» saves that
+  table with the bounds of both periods, the dimension and the filters on every row; a
+  cell a spreadsheet would run as a formula is written so that it is shown instead.
+  Filters narrow the page by any of the nine dimensions. A task opens in two presses
+  from any bar, row or day: the first narrows the page to that value or day, broken
+  down by task, and the second opens the task; the browser's Back returns to the view
+  before. The period, the breakdown, the filters and the chosen figure live in the
+  address, so a link reopens the view it was copied from; a view whose address has no
+  room for one more filter value says so and stays as it is.
+
+- **A card's «Agents» tab says which organization the work ran under, and in what role.**
+  «By organization» draws the item's work in time order as one strip, a part for each
+  run of work under one organization, with each organization's share of the time; work
+  that names no organization reads «Unknown organization». Where the work moved from
+  one known organization to another, the tab lists the moment and both sides. «By role,
+  launch class and effort» breaks the same work down into the main agent, subagents by
+  the class and effort they were launched with, and advisers. «Open in Analytics» opens
+  the Analytics page on the tasks the tab's figures cover, over the days the work
+  spans. The item usage read carries these as `account_stretches`, `accounts` and
+  `roles`.
 
 - **Prices for Claude Fable 5.2 and Claude Mythos 5.2, and a missing price no longer
   passes unseen.** Usage of either model is now estimated at the published API prices
