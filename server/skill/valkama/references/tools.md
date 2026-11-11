@@ -76,6 +76,13 @@ matters, not when to do it:
 - `medium`: noticeably affects work, with a workaround
 - `low`: minor
 
+`labels` on `update_work_item` replaces the whole set: `["observation"]` leaves
+the item with that one label and nothing else. To add or remove labels without
+knowing the rest, send `labels_add` or `labels_remove` (both may go in one
+call). A label already there is kept once, one the item lacks is ignored, and
+the set stays within 32 labels. `labels` beside either of them is refused, as is
+one label named in both.
+
 ## Steps
 
 A step is text, or `{"text": "…", "done": true}` for one already done, which is
@@ -92,7 +99,7 @@ and any of these groups, applied in this order:
 | Group | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item` |
-| `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3"}` | `update_work_item` |
+| `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | `update_work_item` |
 | `checklist` | `{"items": [...], "force": false}` | `set_work_item_checklist` |
 | `checklist_ticks` | `[{"item_id": "…", "done": true}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |

@@ -12,6 +12,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **Add or remove a label without sending the rest.** `update_work_item` and the `update`
+  group of `apply_work_item_changes` take `labels_add` and `labels_remove`, which change
+  the labels the item has: a label already there is kept once, one the item lacks is
+  ignored. `labels` still replaces the whole set, so `labels: ["observation"]` on an item
+  with two labels leaves it with one; `labels` beside either new field is refused, as is
+  one label named in both. The same fields work on `POST /api/planning/work-item/update`
+  and `/apply`.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.

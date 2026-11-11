@@ -39,6 +39,24 @@ _STR = {"type": "string"}
 _INT = {"type": "integer"}
 _BOOL = {"type": "boolean"}
 _LABELS = {"type": "array", "items": {"type": "string"}}
+#: The three ways an edit names labels: the whole set, or a change of the set the item has.
+_EDITED_LABELS = {
+    "labels": _LABELS
+    | {
+        "description": "The whole set: replaces every label the item has. To add or"
+        " remove some without knowing the rest, send labels_add or labels_remove instead.",
+    },
+    "labels_add": _LABELS
+    | {
+        "description": "Labels to add to the ones the item has; one already there"
+        " stays once. Not with labels.",
+    },
+    "labels_remove": _LABELS
+    | {
+        "description": "Labels to take off the item; one it does not have is"
+        " ignored. Not with labels.",
+    },
+}
 _REFERENCE = {
     "type": "string",
     "description": "A work item, by its reference (MAIN-142) or its work_item_id.",
@@ -504,7 +522,7 @@ TOOLS = [
                 "enum": list(model.PRIORITIES),
                 "description": _PRIORITY_MEANING,
             },
-            "labels": _LABELS,
+            **_EDITED_LABELS,
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "parent": _REFERENCE,
             "rank": _RANK,
@@ -851,8 +869,11 @@ TOOLS = [
                 "type": "object",
                 "description": "Edit the item's fields as update_work_item does;"
                 " applied.update names the fields sent.",
-                "properties": {name: _STR for name in model.UPDATABLE_FIELDS if name != "labels"}
-                | {"labels": _LABELS, "mentions": _TEXT_MENTIONS},
+                "properties": {
+                    name: _STR for name in model.UPDATABLE_FIELDS if name not in _EDITED_LABELS
+                }
+                | _EDITED_LABELS
+                | {"mentions": _TEXT_MENTIONS},
             },
             "checklist": {
                 "type": "object",

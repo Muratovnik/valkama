@@ -271,6 +271,16 @@ recorded with its identity, as every write is. Placing an item moves no other
 item, except when two neighbours leave no room between them: then the items of
 that state are renumbered in the order they already have, with no revision bump.
 
+`labels` in the same edit replaces the item's whole set of labels. `labels_add`
+and `labels_remove` change the set the item has instead, read under the write
+lock, so a caller adds or removes a label without knowing the others. A label
+already there is kept once in its place, one the item lacks is ignored, and the
+resulting set is held to the same 32 labels as a whole one. `labels` beside
+either of them is refused with `invalid_request`, because a replacement and a
+change of the set it replaces have no order that is the one the caller meant;
+so is a label named in both. The acknowledgement's `updated` names the fields
+sent, and the call row's `reason` names `labels` only when the set changed.
+
 A placement writes no history event on purpose. Every build that opens the
 store reads the same history, and a build that predates placements checks each
 event's action against the closed list it knows: its card would refuse an item
@@ -1112,7 +1122,7 @@ these groups, and applies them in this order:
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
-| `update` | `{title?, description?, labels?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
+| `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
 | `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |

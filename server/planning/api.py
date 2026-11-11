@@ -467,6 +467,8 @@ def _edited(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         source=_optional_text(payload, "source"),
         priority=(_optional_text(payload, "priority")),
         labels=payload.get("labels"),
+        labels_add=payload.get("labels_add"),
+        labels_remove=payload.get("labels_remove"),
         kind=_optional_text(payload, "kind"),
         parent=_optional_text(payload, "parent"),
         rank=_optional_text(payload, "rank"),

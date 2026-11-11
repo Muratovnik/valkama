@@ -492,6 +492,8 @@ def update_work_item(
     source: str | None = None,
     priority: str | None = None,
     labels: object = None,
+    labels_add: object = None,
+    labels_remove: object = None,
     kind: str | None = None,
     parent: str | None = None,
     rank: str | None = None,
@@ -502,9 +504,14 @@ def update_work_item(
 
     `rank` is a placement in the item's own state (`ranking.placement`). It is an
     edit like the others: one guarded write, one revision, no history event.
+    `labels` replaces the set; `labels_add` and `labels_remove` change the set the
+    item has, read under the write lock (`model.edited_labels`).
     """
 
     row = _row_for_write(conn, reference, expected_revision)
+    labels = model.edited_labels(
+        model.labels(json.loads(str(row["labels"]))), labels, labels_add, labels_remove
+    )
     placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
@@ -522,7 +529,7 @@ def update_work_item(
         parameters.append(model.priority(priority))
     if labels is not None:
         updates.append("labels = ?")
-        parameters.append(model.dumps(model.labels(labels)))
+        parameters.append(model.dumps(labels))
     if kind is not None:
         updates.append("kind = ?")
         parameters.append(model.work_item_kind(kind))

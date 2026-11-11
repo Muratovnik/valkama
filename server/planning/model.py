@@ -46,6 +46,8 @@ UPDATABLE_FIELDS = (
     "source",
     "priority",
     "labels",
+    "labels_add",
+    "labels_remove",
     "kind",
     "parent",
     "rank",
@@ -306,19 +308,50 @@ def actor(value: object, field: str = "author") -> str:
     return text_field(value, field, limit=128)
 
 
-def labels(value: object) -> list[str]:
+def labels(value: object, field: str = "work_item.labels") -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list):
-        raise PlanningError("work_item.labels must be a list of strings")
+        raise PlanningError(f"{field} must be a list of strings")
     if len(value) > MAX_LABELS:
-        raise PlanningError(f"work_item.labels must hold at most {MAX_LABELS} entries")
+        raise PlanningError(f"{field} must hold at most {MAX_LABELS} entries")
     seen: list[str] = []
     for index, item in enumerate(value):
-        label = text_field(item, f"work_item.labels[{index}]", limit=64)
+        label = text_field(item, f"{field}[{index}]", limit=64)
         if label not in seen:
             seen.append(label)
     return seen
+
+
+def edited_labels(
+    current: list[str], replaced: object, added: object, removed: object
+) -> list[str] | None:
+    """The labels an edit leaves, or None when it names none of the three fields.
+
+    `labels` replaces the whole set; `labels_add` and `labels_remove` change the
+    set the item has, so a caller that means to add one label need not know the
+    rest. A label already there is not added twice and one that is absent is not
+    removed; the result is held to the same limits as a whole set. `labels` beside
+    either of the other two is refused, because a replacement and a change of the
+    set it replaces say two different things and no order between them is the one
+    the caller meant. A label named both to add and to remove is refused for the
+    same reason.
+    """
+
+    if added is None and removed is None:
+        return None if replaced is None else labels(replaced)
+    if replaced is not None:
+        raise PlanningError(
+            "labels replaces the whole set and labels_add or labels_remove changes it;"
+            " send one or the other"
+        )
+    adding = labels(added, "labels_add")
+    removing = labels(removed, "labels_remove")
+    both = [label for label in adding if label in removing]
+    if both:
+        raise PlanningError(f"{both[0]!r} is named in both labels_add and labels_remove")
+    kept = [label for label in current if label not in removing]
+    return labels(kept + [label for label in adding if label not in kept])
 
 
 def human_id(key: str, number: int) -> str:
