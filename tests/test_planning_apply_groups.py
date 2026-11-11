@@ -109,8 +109,9 @@ class UpdateGroupTests(BatchCase):
             self.assertEqual(twin[name], batch[name], name)
         self.assertEqual(twin["revision"], batch["revision"])
         self.assertEqual(batch["revision"], answer["revision"])
-        # An edit logs no event, in a batch as well: its call row is its record.
-        self.assertEqual(["created"], self.actions())
+        # An edit logs no event, in a batch as well: its call row is its record. A
+        # changed label set is the one exception, and the batch records it as the tool does.
+        self.assertEqual(["created", "labels_changed"], self.actions())
         self.assertEqual(self.actions(self.twin), self.actions())
         self.assertEqual(single["updated"], answer["applied"]["update"])
         [row] = self.call_rows()
