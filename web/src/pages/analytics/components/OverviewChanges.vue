@@ -41,7 +41,7 @@ const actions = useLineActions()
 
 const comparison = computed(() => props.usage.comparison)
 const period = computed(() =>
-  comparison.value ? words.days(comparison.value.period.from, comparison.value.period.to) : '',
+  comparison.value ? words.period(comparison.value.period.from, comparison.value.period.to) : '',
 )
 const label = computed(() =>
   period.value ? t('analytics.overview.changes.label', { period: period.value }) : undefined,

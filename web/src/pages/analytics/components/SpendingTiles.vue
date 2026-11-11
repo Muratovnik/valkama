@@ -48,7 +48,7 @@ function moved(value: Measure) {
   const { before } = props
   if (!before) return { direction: 'unread', words: t('analytics.change.unread') }
   const change = changeOf(value, props.total, before.spent)
-  const period = words.days(before.from, before.to)
+  const period = words.period(before.from, before.to)
   const steep = change.direction === 'up' && risenFromLittle(value, props.total, before.spent)
   return {
     direction: change.direction,

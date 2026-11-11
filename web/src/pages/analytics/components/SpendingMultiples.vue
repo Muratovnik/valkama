@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The period day by day for each of the dimension's largest values, a small chart each on one
+ * The period step by step for each of the dimension's largest values, a small chart each on one
  * scale, then one for the rest of its values together; work with no value there and work nobody
  * can place stand apart by their figures (`dayMultiples`, `SmallMultiples`). Each chart is in its
  * value's hue on the page (`slots`) and says its name, so the hue never speaks alone. Drawn, or as
@@ -35,6 +35,7 @@ const words = useSpendingWords()
 const title = computed(() =>
   t('analytics.panel.multiples.title', {
     measure: words.measure(props.measure),
+    per: words.per(props.usage.period.step),
     by: t(`analytics.byDimension.${props.by}`),
   }),
 )
@@ -51,7 +52,10 @@ const multiples = computed<SmallMultiple[]>(() =>
 )
 
 const periods = computed(() =>
-  props.usage.series.map((point) => ({ key: point.start, label: words.day(point.start) })),
+  props.usage.series.map((point) => ({
+    key: point.start,
+    label: words.stepName(point.start, props.usage.period.step).label,
+  })),
 )
 
 const chartWords = computed<MultiplesWords>(() => ({

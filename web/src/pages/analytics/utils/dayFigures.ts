@@ -15,24 +15,34 @@ import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
  * Words come in from the caller; this holds the numbers and which day is which.
  */
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
+import type {
+  Usage,
+  UsageDimension,
+  UsageGroupValue,
+  UsageStep,
+} from '@/shared/api/analyticsApi.ts'
 import { SERIES_SLOT_COUNT, seriesSlots } from '@/shared/lib/seriesColors.ts'
 import type { PeriodColumn, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 
 /** How many values a day's stack names; the rest of the period's values stack as «other». */
 const STACKED = 5
 
-const HOUR = 3_600_000
-const DAY = 24 * HOUR
+const MINUTE = 60_000
+/** How long each step of a series is, in ms. */
+const STEP_LENGTH: Record<UsageStep, number> = {
+  minute: MINUTE,
+  hour: 60 * MINUTE,
+  day: 24 * 60 * MINUTE,
+}
 
 /**
  * A step running at the moment it was read holds what it spent so far: begun, and not over. One
  * still to come holds nothing yet, and is no fall either.
  */
-export function unfinished(start: string, step: Usage['period']['step'], readAt: Date) {
+export function unfinished(start: string, step: UsageStep, readAt: Date) {
   const begun = Date.parse(start)
   const now = readAt.getTime()
-  return begun <= now && now < begun + (step === 'hour' ? HOUR : DAY)
+  return begun <= now && now < begun + STEP_LENGTH[step]
 }
 
 /** A series of the stack: the line it draws, or «other» for the values it does not name. */

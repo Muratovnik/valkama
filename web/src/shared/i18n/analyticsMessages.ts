@@ -5,6 +5,7 @@
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
+import { analyticsTimeMessages } from '@/shared/i18n/analyticsTimeMessages.ts'
 
 export const analyticsMessages = {
   en: {
@@ -20,6 +21,7 @@ export const analyticsMessages = {
       },
       period: {
         label: 'Period',
+        now: 'Now',
         week: 'This week',
         weeks4: 'Past 4 weeks',
         custom: 'Custom',
@@ -71,10 +73,9 @@ export const analyticsMessages = {
         empty: 'This period spent nothing to break down.',
       },
       days: {
-        title: '{measure} per day, {by}',
+        title: '{measure} {per}, {by}',
         soFar: 'so far',
         note: 'Note',
-        day: 'Day',
         total: 'total',
         empty: 'No day in this period spent anything.',
         other: 'Other',
@@ -179,6 +180,7 @@ export const analyticsMessages = {
       },
       overview: analyticsOverviewMessages.en,
       panel: analyticsPanelMessages.en,
+      time: analyticsTimeMessages.en,
     },
   },
   ru: {
@@ -194,6 +196,7 @@ export const analyticsMessages = {
       },
       period: {
         label: 'Период',
+        now: 'Сейчас',
         week: 'Эта неделя',
         weeks4: 'Последние 4 недели',
         custom: 'Свой',
@@ -245,10 +248,9 @@ export const analyticsMessages = {
         empty: 'В этом периоде нечего разбивать: ничего не потрачено.',
       },
       days: {
-        title: '{measure} по дням, {by}',
+        title: '{measure} {per}, {by}',
         soFar: 'пока',
         note: 'Примечание',
-        day: 'День',
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
@@ -354,6 +356,7 @@ export const analyticsMessages = {
       },
       overview: analyticsOverviewMessages.ru,
       panel: analyticsPanelMessages.ru,
+      time: analyticsTimeMessages.ru,
     },
   },
 } as const

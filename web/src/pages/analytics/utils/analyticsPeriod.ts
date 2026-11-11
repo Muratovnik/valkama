@@ -4,6 +4,12 @@
  */
 import { localDay } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
+import type { UsageStep } from '@/shared/api/analyticsApi.ts'
+
+const MINUTE = 60_000
+
+/** How many minutes «now» shows: the hour up to the moment of the view, the last one running. */
+const LIVE_MINUTES = 60
 
 const dayFrom = (text: string) => {
   const [year, month, date] = text.split('-').map(Number)
@@ -21,14 +27,23 @@ export interface PeriodBounds {
 }
 
 /**
- * The period a view names at a moment, in the browser's own time: this week from Monday's
- * midnight to now, the past four weeks from the midnight 27 days ago to now, or the custom days
- * whole. Null for a custom period with a day missing or its end before its start.
+ * The period a view names at a moment, in the browser's own time: the last hour as sixty minutes
+ * to now, the minute now running the last of them; this week from Monday's midnight to now, the
+ * past four weeks from the midnight 27 days ago to now, or the custom days whole. Null for a
+ * custom period with a day missing or its end before its start.
  */
 export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | null {
   const utcOffset = -now.getTimezoneOffset()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const untilNow = now.toISOString()
+  // A whole minute of the clock is one of UTC too: every offset is whole minutes.
+  const running = Math.ceil(now.getTime() / MINUTE) * MINUTE
+  if (view.period === 'now')
+    return {
+      from: new Date(running - LIVE_MINUTES * MINUTE).toISOString(),
+      to: untilNow,
+      utcOffset,
+    }
   if (view.period === 'week')
     return {
       from: localDay(shiftDays(today, -((today.getDay() + 6) % 7))),
@@ -41,9 +56,14 @@ export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | nul
   return { from: view.from, to: localDay(shiftDays(dayFrom(view.to), 1)), utcOffset }
 }
 
-/** How a view's period is cut into columns: a single day by its hours, any longer one by days. */
-export const stepOf = (view: AnalyticsView): 'day' | 'hour' =>
-  view.period === 'custom' && Boolean(view.from) && view.from === view.to ? 'hour' : 'day'
+/**
+ * How a view's period is cut into columns: the live hour by its minutes, a single day by its
+ * hours, any longer one by days.
+ */
+export function stepOf(view: AnalyticsView): UsageStep {
+  if (view.period === 'now') return 'minute'
+  return view.period === 'custom' && Boolean(view.from) && view.from === view.to ? 'hour' : 'day'
+}
 
 /** A custom period's start and end, as they first stand when it is chosen: this week's days. */
 export function customDays(now: Date): { from: string; to: string } {

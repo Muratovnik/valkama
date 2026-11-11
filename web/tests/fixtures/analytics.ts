@@ -138,8 +138,11 @@ export interface TimedStretch {
   spend: Spend
 }
 
-const HOUR = 3_600_000
+const MINUTE = 60_000
+const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
+/** How long each step the read may be asked for is. */
+const STEP: Record<Usage['period']['step'], number> = { minute: MINUTE, hour: HOUR, day: DAY }
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/u
 
 /** A moment of the query: a date is the start of that day at the query's offset. */
@@ -171,7 +174,7 @@ function admits(query: URLSearchParams, group: Stretch['group']) {
  * Where the read cuts a period into days: at its start, at every midnight of the asked offset
  * inside it and at its end. The days are fixed steps of 24 hours at that one offset, whatever
  * the browser's zone does in between: the read has no zone, only the offset it was asked at.
- * Asked by the hour, it cuts at every hour instead.
+ * Asked by the hour or the minute, it cuts at every hour or minute instead.
  */
 function dayEdges(from: number, to: number, offset: number, size = DAY) {
   const shift = offset * 60_000
@@ -187,14 +190,19 @@ function dayEdges(from: number, to: number, offset: number, size = DAY) {
  * period, its filters and its project admit, by what it groups by, beside the period of the same
  * length before it when it compares. Its moments are written and its days cut at the query's
  * `utc_offset`. A query that asks for the wrong period, filter, scope or offset gets other figures
- * or other days.
+ * or other days. The newest record is the period's end unless `lastEventAt` names another.
  */
-export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchParams) {
+export function serveUsage(
+  stretches: readonly TimedStretch[],
+  query: URLSearchParams,
+  lastEventAt?: Date,
+) {
   const offset = Number(query.get('utc_offset') ?? 0)
   const from = instant(query.get('from') ?? '', offset)
   const to = instant(query.get('to') ?? '', offset)
-  const hourly = query.get('step') === 'hour'
-  const edges = dayEdges(from, to, offset, hourly ? HOUR : DAY)
+  const asked = query.get('step')
+  const step = asked === 'hour' || asked === 'minute' ? asked : 'day'
+  const edges = dayEdges(from, to, offset, STEP[step])
   const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isUsageDimension)
   const within = (start: number, end: number) =>
     stretches
@@ -211,7 +219,8 @@ export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchP
     groupBy,
     stretches: within(from, to),
     before: query.get('compare') === 'true' ? within(from - (to - from), from) : null,
-    step: hourly ? 'hour' : 'day',
+    step,
+    lastEventAt,
   })
 }
 
@@ -239,9 +248,10 @@ function answerOf(options: {
   offset: number
   stretches: readonly Stretch[]
   before?: readonly Stretch[] | null
+  lastEventAt?: Date
   step?: Usage['period']['step']
 }): Answer {
-  const { edges, offset, groupBy, stretches, before, step = 'day' } = options
+  const { edges, offset, groupBy, stretches, before, lastEventAt, step = 'day' } = options
   const at = (moment: number) => momentAt(moment, offset)
   const first = edges[0] ?? 0
   const end = edges.at(-1) ?? first
@@ -261,7 +271,7 @@ function answerOf(options: {
       period: { from: at(first), to: at(end), step, utc_offset: offset },
       group_by: groupBy,
       cost_basis: COST_BASIS,
-      last_event_at: at(end),
+      last_event_at: at(lastEventAt?.getTime() ?? end),
       total: totalOf(stretches),
       rows: rowsOf(stretches, groupBy),
       series,

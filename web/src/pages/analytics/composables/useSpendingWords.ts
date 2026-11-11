@@ -17,11 +17,17 @@ import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
+import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
+
+/** A period shorter than this is named by its clock times, a longer one by its days. */
+const DAY = 24 * 3_600_000
+
+/** A time of the clock, «09:05», «21:25»: the clock the minutes of a chart read on. */
+const CLOCK: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
 
 /**
  * The dimensions where work with no value is a value of its own (`id` null, not unknown): work
@@ -108,9 +114,14 @@ export function useSpendingWords() {
     return [t('analytics.figures.anew', { kinds: counted.join(', ') }), ...apart]
   }
 
-  /** A period by its first and last day, as its moments name them: «2 – 8 Nov». */
-  function days(from: string, to: string) {
-    return dayFormat({ day: 'numeric', month: 'short' }).formatRange(named(from), named(to, -1))
+  /**
+   * A period as its moments name it: by its first and last day, «2 – 8 Nov», or, shorter than a
+   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds.
+   */
+  function period(from: string, to: string) {
+    const short = Date.parse(to) - Date.parse(from) < DAY
+    const options: Intl.DateTimeFormatOptions = short ? CLOCK : { day: 'numeric', month: 'short' }
+    return dayFormat(options).formatRange(named(from), named(to, -1))
   }
 
   /**
@@ -215,6 +226,20 @@ export function useSpendingWords() {
   const fullDay = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(named(start))
 
+  /** An hour or a minute as the time axis names it, «14:05», and in full with its day. */
+  const clock = (start: string) => dayFormat(CLOCK).format(named(start))
+  const fullClock = (start: string) =>
+    dayFormat({ weekday: 'long', day: 'numeric', month: 'long', ...CLOCK }).format(named(start))
+
+  /** A step of a period by its start, short and in full: a day by its date, else its time. */
+  const stepName = (start: string, step: UsageStep) =>
+    step === 'day'
+      ? { label: day(start), fullLabel: fullDay(start) }
+      : { label: clock(start), fullLabel: fullClock(start) }
+
+  /** How a chart is cut by its steps: «per day», «per minute». */
+  const per = (step: UsageStep) => t(`analytics.time.steps.${step}.per`)
+
   /** A step of the value axis in the measure's units: hours as a span, tokens, dollars. */
   function scale(name: Measure, amount: number) {
     if (amount <= 0) return '0'
@@ -232,18 +257,25 @@ export function useSpendingWords() {
       after: after.map((value) => valueLabel('account', value)).join(', '),
     })
 
-  const dayChartTitle = (name: Measure, by: UsageDimension) =>
-    t('analytics.days.title', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
+  /** The chart of a period step by step: «Agent time per minute, by task». */
+  const stepChartTitle = (name: Measure, by: UsageDimension, step: UsageStep) =>
+    t('analytics.days.title', {
+      measure: measure(name),
+      per: per(step),
+      by: t(`analytics.byDimension.${by}`),
+    })
 
   return {
     accounts,
     change,
     chartTitle,
     day,
-    dayChartTitle,
     fullDay,
     scale,
-    days,
+    period,
+    per,
+    stepChartTitle,
+    stepName,
     dimension,
     figure,
     lineChange,

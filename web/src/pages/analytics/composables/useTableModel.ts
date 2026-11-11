@@ -114,7 +114,7 @@ export function useTableModel(source: () => TableSource) {
   function besideBefore() {
     const { by, measure, usage } = source()
     const { comparison } = usage
-    const period = comparison ? words.days(comparison.period.from, comparison.period.to) : ''
+    const period = comparison ? words.period(comparison.period.from, comparison.period.to) : ''
     const kinds = kindsByValue(usage.rows, by)
     const columns = [
       ...MEASURES.map((key) => ({ key, text: words.measure(key), chosen: key === measure })),

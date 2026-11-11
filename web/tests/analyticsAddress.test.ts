@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
 import {
   breakdownOf,
@@ -70,6 +71,7 @@ describe('the Analytics address', () => {
   })
 
   it.each([
+    ['the live hour', { period: 'now' }],
     ['this week', { period: 'week' }],
     [
       'the past four weeks by executor in tokens',
@@ -220,6 +222,42 @@ describe('the period a view names', () => {
     const custom = { ...DEFAULT_VIEW, period: 'custom' } as const
     expect(periodBounds({ ...custom, from: '2026-10-30', to: '' }, now)).toBeNull()
     expect(periodBounds({ ...custom, from: '2026-10-30', to: '2026-10-29' }, now)).toBeNull()
+  })
+})
+
+describe('the live hour «now»', () => {
+  const live = { ...DEFAULT_VIEW, period: 'now' } as const
+  const MINUTE = 60_000
+  /** How many minutes the read cuts a period into: every minute it touches, part or whole. */
+  const minutesOf = (from: string, to: string) =>
+    Math.ceil(Date.parse(to) / MINUTE) - Math.floor(Date.parse(from) / MINUTE)
+
+  it('is sixty minutes by the minute, the last the one running at the moment of the view', () => {
+    const now = new Date(2026, 10, 11, 14, 30, 20, 500)
+    const bounds = periodBounds(live, now)
+    expect(bounds).toEqual({
+      from: new Date(2026, 10, 11, 13, 31).toISOString(),
+      to: now.toISOString(),
+      utcOffset: -now.getTimezoneOffset(),
+    })
+    expect(minutesOf(bounds?.from ?? '', bounds?.to ?? '')).toBe(60)
+    expect(stepOf(live)).toBe('minute')
+  })
+
+  it('is sixty whole minutes at a moment on the minute itself', () => {
+    const now = new Date(2026, 10, 11, 14, 30)
+    const bounds = periodBounds(live, now)
+    expect(bounds?.from).toBe(new Date(2026, 10, 11, 13, 30).toISOString())
+    expect(minutesOf(bounds?.from ?? '', bounds?.to ?? '')).toBe(60)
+  })
+
+  it('is compared with the hour before it, minute for minute', () => {
+    const now = new Date(2026, 10, 11, 14, 30, 20)
+    expect(comparedPeriod(live, now)).toEqual({
+      from: new Date(2026, 10, 11, 12, 31).toISOString(),
+      to: new Date(2026, 10, 11, 13, 30, 20).toISOString(),
+      utcOffset: -now.getTimezoneOffset(),
+    })
   })
 })
 

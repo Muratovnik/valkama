@@ -5,8 +5,10 @@
  * «This week» runs from Monday to now, so the period of its length right before it is the end of
  * the week before: Wednesday afternoon would be held against Friday to Sunday. It is compared
  * with the same days of the week before instead, from that Monday's midnight to the same weekday
- * and time, each in the browser's own time. The past four weeks and a custom period keep the
- * read's own comparison, which is like for like.
+ * and time, each in the browser's own time. «Now» is compared with the hour before it, an hour
+ * earlier minute for minute, so each minute is outlined by the minute an hour before it; the read's
+ * own period of the same length right before would start a few seconds into a minute. The past
+ * four weeks and a custom period keep the read's own comparison, which is like for like.
  *
  * The read writes a period's bounds at the offset it is asked at, and the page names the period
  * by them. That week is asked at the offset its own Monday had, not today's: in the week after a
@@ -20,6 +22,7 @@
  * by the day before; it ends a second into the day instead. Either way the period moves by no
  * more than the hour the clocks did, and that second.
  */
+import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
@@ -28,10 +31,21 @@ import type { Usage } from '@/shared/api/analyticsApi.ts'
 const WEEK = 7
 const SECOND = 1000
 const MINUTE = 60 * SECOND
-const DAY = 24 * 60 * MINUTE
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
 
-/** The same days of the week before for «this week» at `now`; null for any other period. */
+/** A moment of a period an hour earlier. */
+const hourBefore = (moment: string) => new Date(Date.parse(moment) - HOUR).toISOString()
+
+/**
+ * The same days of the week before for «this week» at `now`, and the hour before for «now»; null
+ * for any other period.
+ */
 export function comparedPeriod(view: AnalyticsView, now: Date): PeriodBounds | null {
+  if (view.period === 'now') {
+    const hour = periodBounds(view, now)
+    return hour && { ...hour, from: hourBefore(hour.from), to: hourBefore(hour.to) }
+  }
   if (view.period !== 'week') return null
   const intoWeek = (now.getDay() + 6) % 7
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - intoWeek - WEEK)

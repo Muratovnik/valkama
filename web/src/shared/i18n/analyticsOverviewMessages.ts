@@ -6,9 +6,6 @@
 export const analyticsOverviewMessages = {
   en: {
     risenFrom: '↑ from {before} in {period}',
-    hours: {
-      title: '{measure} per hour, {by}',
-    },
     before: {
       word: 'period before',
       failed: 'The period before could not be read, so it is not outlined.',
@@ -37,9 +34,6 @@ export const analyticsOverviewMessages = {
   },
   ru: {
     risenFrom: '↑ с {before} за период {period}',
-    hours: {
-      title: '{measure} по часам, {by}',
-    },
     before: {
       word: 'прошлый период',
       failed: 'Прошлый период не удалось прочитать, поэтому он не обведён.',

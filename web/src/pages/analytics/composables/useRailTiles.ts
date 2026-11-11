@@ -23,7 +23,7 @@ import { spentAnything, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { OVERVIEW } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView, Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageDimension, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { seriesSlots } from '@/shared/lib/seriesColors.ts'
 import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
@@ -93,8 +93,12 @@ export function useRailTiles(options: {
       : words.scale(measure, value)
   }
 
-  /** The days in words: the first and the last, the highest, and the last day's figure. */
-  function trendLabel(measure: Measure, figures: OverviewFigures) {
+  /**
+   * The steps in words — days, or the minutes of the live hour: the first and the last, the
+   * highest, and the last one's figure.
+   */
+  function trendLabel(measure: Measure, figures: OverviewFigures, step: UsageStep) {
+    const name = (key: string) => words.stepName(key, step).label
     const days = figures.trend
     let top = days.at(0)
     for (const day of days) if ((day.value ?? 0) > (top?.value ?? 0)) top = day
@@ -103,14 +107,16 @@ export function useRailTiles(options: {
     if (!first || !last || !top?.value)
       return t('analytics.rail.trendNone', {
         measure: words.measure(measure),
+        per: words.per(step),
         figure: words.figure(measure, figures.total),
       })
     return t('analytics.rail.trend', {
       measure: words.measure(measure),
-      from: words.day(first.key),
-      to: words.day(last.key),
+      per: words.per(step),
+      from: name(first.key),
+      to: name(last.key),
       top: amount(measure, top.value),
-      day: words.day(top.key),
+      day: name(top.key),
       last: [amount(measure, last.value), last.incomplete ? t('analytics.days.soFar') : '']
         .filter(Boolean)
         .join(' '),
@@ -138,7 +144,10 @@ export function useRailTiles(options: {
       quiet: !spent,
       aside: moved(measure, figures, shown.payload),
       busy: shown.status === 'degraded',
-      trend: { label: trendLabel(measure, figures), points: figures.trend },
+      trend: {
+        label: trendLabel(measure, figures, shown.payload.period.step),
+        points: figures.trend,
+      },
     }
   }
 

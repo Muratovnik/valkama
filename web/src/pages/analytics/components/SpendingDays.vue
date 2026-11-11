@@ -12,7 +12,8 @@
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
  * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
  *
- * A single day stands as its hours, which narrow nothing further. Given the steps of the period
+ * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
+ * each named by its clock time. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
  * dashed outline on the same scale, named in the legend and said in the readout and the table;
  * while those steps are read there is no outline, and when they could not be read a note under
@@ -23,7 +24,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
-import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -59,16 +59,12 @@ const emit = defineEmits<{ day: [day: string, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
-const overviewWords = useOverviewWords()
 
-/** A single day, read by the hour. */
-const hourly = computed(() => props.usage.period.step === 'hour')
+/** How the period is cut: by days, which narrow the view, or by hours or minutes, which do not. */
+const step = computed(() => props.usage.period.step)
+const byDay = computed(() => step.value === 'day')
 
-const title = computed(() =>
-  hourly.value
-    ? overviewWords.hourChartTitle(props.measure, props.by)
-    : words.dayChartTitle(props.measure, props.by),
-)
+const title = computed(() => words.stepChartTitle(props.measure, props.by, step.value))
 
 /** The steps of the period before, when they were read. */
 const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
@@ -78,12 +74,6 @@ function beforeOf(index: number) {
   const step = beforeSteps.value?.[index]
   return step ? { before: figureOf(props.measure, spentOf(step)) } : {}
 }
-
-/** A column's name, short and in full: a day, or an hour of a single day. */
-const nameOf = (key: string) =>
-  hourly.value
-    ? { label: overviewWords.hour(key), fullLabel: overviewWords.fullHour(key) }
-    : { label: words.day(key), fullLabel: words.fullDay(key) }
 
 /** A series' name: its value's, or by its task's number alone where the chart is `brief`. */
 function seriesName(line: StackLine['line']) {
@@ -101,14 +91,14 @@ const chart = computed<PeriodChartProps>(() => ({
   series: series.value,
   columns: dayColumns(props, series.value, props.readAt).map((column, index) => ({
     ...column,
-    ...nameOf(column.key),
+    ...words.stepName(column.key, step.value),
     ...beforeOf(index),
-    ...(hourly.value
-      ? {}
-      : { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }),
+    ...(byDay.value
+      ? { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }
+      : {}),
   })),
-  // An hour narrows to the day it is already of, so only a day acts.
-  actionable: hourly.value ? null : 'column',
+  // An hour or a minute narrows to the day it is already of, so only a day acts.
+  actionable: byDay.value ? 'column' : null,
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts).map((change) => ({
@@ -123,7 +113,7 @@ const chart = computed<PeriodChartProps>(() => ({
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
     note: t('analytics.days.note'),
-    period: t('analytics.days.day'),
+    period: t(`analytics.time.steps.${step.value}.name`),
     total: t('analytics.days.total'),
   },
   formatValue: (amount: number) => words.scale(props.measure, amount),
