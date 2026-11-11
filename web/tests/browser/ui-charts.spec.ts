@@ -114,6 +114,11 @@ function measure(page: Page) {
         frame: box(hours),
         axis: all('[data-harness="hours"] .period-axis .chart-tick').map((element) => box(element)),
       },
+      // How wide each thing a pointer presses in the two charts of periods is: a day's segments
+      // where segments act, an hour's column where columns do.
+      pressed: all(
+        '[data-harness="days"] .period-segment, [data-harness="hours"] .period-column',
+      ).map((element) => element.getBoundingClientRect().width),
       tables: all('[data-harness$="-table"] table').map((table) => ({
         frame: box(table.parentElement ?? table),
         table: box(table),
@@ -190,6 +195,8 @@ for (const width of WIDTHS) {
 
     // A table wider than its column scrolls inside its own frame instead of the page.
     for (const table of seen.tables) expect(table.frame.right).toBeLessThanOrEqual(seen.viewport)
+    // A period that acts keeps a width a pointer can hit, however many the chart holds.
+    expect(Math.min(...seen.pressed), 'the narrowest pressed period').toBeGreaterThanOrEqual(24)
   })
 }
 
