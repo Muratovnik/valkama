@@ -5,7 +5,7 @@
  * work with no value and work nobody can place are no answer to «which ones», and the
  * dimension's own section lists them.
  *
- * The heading opens that section. A row acts as a bar of the breakdown does (`useLineActions`):
+ * The heading opens that section. A row acts as a bar of the breakdown does (`useRankedLines`):
  * a task is a link to its card, a value the read can filter by narrows the view to it, sent out
  * as `narrow`. A card whose values are being read for the first time, or could not be, says so in
  * one quiet line; one being read again keeps what it showed.
@@ -13,16 +13,14 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
+import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TopRead } from '@/pages/analytics/composables/useTopValues.ts'
-import { measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
-import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
+import { spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -38,7 +36,6 @@ const emit = defineEmits<{ narrow: [value: string | null, label: string]; open: 
 const { t } = useI18n()
 const words = useSpendingWords()
 const overviewWords = useOverviewWords()
-const actions = useLineActions()
 
 /** How many values a card names. */
 const FIRST = 5
@@ -61,39 +58,12 @@ const lines = computed(() =>
         .slice(0, FIRST)
     : [],
 )
-const byKey = computed(() => new Map(lines.value.map((line) => [line.key, line])))
-
-function acting(line: SpendingLine, label: string): Partial<RankedRow> {
-  const href = actions.taskLink(props.dimension, line.value)?.href
-  if (href) return { href }
-  if (actions.narrowsTo(props.dimension, line.value) === undefined) return {}
-  return { actionable: true, action: actions.narrowName(label) }
-}
-
-const rows = computed<RankedRow[]>(() =>
-  lines.value.map((line) => {
-    const label = words.lineLabel(props.dimension, line)
-    return {
-      key: line.key,
-      label,
-      detail: words.valueDetail(props.dimension, line.value),
-      value: measureOf(props.measure, line.spent) ?? 0,
-      valueText: words.lineFigure(props.measure, line.spent),
-      ...acting(line, label),
-    }
-  }),
-)
-
-function follow(key: string, event: MouseEvent) {
-  const link = actions.taskLink(props.dimension, byKey.value.get(key)?.value ?? null)
-  if (link) actions.follow(link, event)
-}
-
-function select(key: string) {
-  const line = byKey.value.get(key)
-  const value = actions.narrowsTo(props.dimension, line?.value ?? null)
-  if (line && value !== undefined) emit('narrow', value, words.lineLabel(props.dimension, line))
-}
+const { rows, follow, select } = useRankedLines({
+  by: () => props.dimension,
+  lines: () => lines.value,
+  measure: () => props.measure,
+  narrow: (value, label) => emit('narrow', value, label),
+})
 
 const barWords = computed(() => ({
   category: words.dimension(props.dimension),

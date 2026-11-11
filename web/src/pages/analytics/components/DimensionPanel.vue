@@ -18,8 +18,6 @@
  */
 import { computed, ref } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
-
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingMultiples from '@/pages/analytics/components/SpendingMultiples.vue'
@@ -27,10 +25,11 @@ import SpendingTable from '@/pages/analytics/components/SpendingTable.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
+import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
-import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
-import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
+import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
@@ -49,7 +48,7 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   /** Why the last press in a part of the panel did not narrow the view; null otherwise. */
-  refused: { part: ReportPart; words: string } | null
+  refused: Refusal | null
   usage: Usage
 }>()
 /**
@@ -69,11 +68,8 @@ const measure = defineModel<Measure>('measure', { required: true })
  * breakdown is read the last one stays on screen, and its rows name only their own dimension.
  */
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
-const total = computed(() => spentOf(props.usage.total))
-const before = computed(() => {
-  const { comparison } = props.usage
-  return comparison ? { ...comparison.period, spent: spentOf(comparison.total) } : null
-})
+const figures = computed(() => tileFigures(props.usage))
+const before = computed(() => figures.value.before)
 
 /** The second dimension, where it is another than the section's own. */
 const across = computed(() => (props.across && props.across !== by.value ? props.across : null))
@@ -87,17 +83,10 @@ const slots = computed(() =>
   valueSlots({ usage: props.usage, by: by.value, measure: measure.value }),
 )
 
-/** Under this width, in pixels, a row of a day's columns and a bar's name crowd each other. */
-const NARROW = 560
 const root = ref<HTMLElement | null>(null)
-const width = ref<number | null>(null)
-useResizeObserver(root, ([entry]) => {
-  if (entry) width.value = entry.contentRect.width
-})
-const narrow = computed(() => width.value !== null && width.value < NARROW)
+const narrow = useNarrowCharts(root)
 
-/** The words of a refusal, in the part of the panel it came from. */
-const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.refused.words : '')
+const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 </script>
 
 <template>
@@ -114,7 +103,7 @@ const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.ref
       <SpendingTiles
         v-model:measure="measure"
         :split="usage.total.tokens"
-        :total="total"
+        :total="figures.total"
         :before="before"
       />
       <div class="dimension-pair">
@@ -163,43 +152,13 @@ const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.ref
 </template>
 
 <style scoped>
-/* Unheld, as on a phone, the charts and the table stand each as tall as it is and the panel
-   scrolls; a part that may shrink to nothing would otherwise share out whatever height the panel
-   stretches this to. */
-.dimension-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: max-content;
-  gap: var(--space-section);
-  align-content: start;
-  min-width: 0;
-  min-block-size: 0;
-
-  /* Held to the panel's height: the charts take what they need up to what the table leaves, and
-     the table the rest, never less than about half. */
-  &[data-fills='true'] {
-    grid-template-rows: minmax(0, auto) minmax(min(22rem, 50%), 1fr);
-    gap: var(--space-4);
-
-    /* Positioned, so what its parts place out of the flow (words for a screen reader alone)
-       scrolls and is clipped with them instead of stretching the panel's own scroll. Its air at
-       the sides holds what a chart reaches past its column (the days' frame, a focus ring), so
-       the charts never scroll sideways. */
-    & .dimension-charts {
-      position: relative;
-      padding: var(--space-1) var(--space-2);
-      margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
-      overflow-y: auto;
-      overscroll-behavior: contain;
-    }
-  }
-}
-
-/* The charts, top to bottom; the ranked list and the small charts side by side where both read
-   well, the list first. The air around them is the panel's, kept inside its scroll so a focus
-   ring at their edge is drawn whole. Each part is as tall as what it holds: held to a height, a
-   row sized as auto starts at a part's declared least height (the tiles' control height) and
-   finds no room to grow, so the part would spill onto the next. */
+/* The panel and its charts each stand their parts one under the next, each part as tall as what
+   it holds. Unheld, as on a phone, the charts and the table stand each as tall as it is and the
+   panel scrolls; a part that may shrink to nothing would otherwise share out whatever height the
+   panel stretches this to. Held to a height, a row sized as auto starts at a part's declared least
+   height (the tiles' control height) and finds no room to grow, so the part would spill onto the
+   next. */
+.dimension-panel,
 .dimension-charts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -208,7 +167,32 @@ const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.ref
   align-content: start;
   min-width: 0;
   min-block-size: 0;
+}
+
+/* The charts, top to bottom; the ranked list and the small charts side by side where both read
+   well, the list first. The air around them is the panel's, kept inside its scroll so a focus
+   ring at their edge is drawn whole. */
+.dimension-charts {
   container-type: inline-size;
+}
+
+/* Held to the panel's height: the charts take what they need up to what the table leaves, and
+   the table the rest, never less than about half. */
+.dimension-panel[data-fills='true'] {
+  grid-template-rows: minmax(0, auto) minmax(min(22rem, 50%), 1fr);
+  gap: var(--space-4);
+
+  /* Positioned, so what its parts place out of the flow (words for a screen reader alone)
+     scrolls and is clipped with them instead of stretching the panel's own scroll. Its air at
+     the sides holds what a chart reaches past its column (the days' frame, a focus ring), so
+     the charts never scroll sideways. */
+  & .dimension-charts {
+    position: relative;
+    padding: var(--space-1) var(--space-2);
+    margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 .dimension-pair {

@@ -18,20 +18,19 @@
  */
 import { computed, ref } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
-
 import OverviewChanges from '@/pages/analytics/components/OverviewChanges.vue'
 import OverviewTop from '@/pages/analytics/components/OverviewTop.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
+import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { OVERVIEW_CARDS } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
-import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
+import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
@@ -51,7 +50,7 @@ const props = defineProps<{
   /** When the answer was asked for, which says which step is not over yet. */
   readAt: Date
   /** Why the last press in a part of the overview did not narrow the view; null otherwise. */
-  refused: { part: ReportPart; words: string } | null
+  refused: Refusal | null
   usage: Usage
 }>()
 /**
@@ -66,11 +65,7 @@ const emit = defineEmits<{
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
 
-const total = computed(() => spentOf(props.usage.total))
-const before = computed(() => {
-  const { comparison } = props.usage
-  return comparison ? { ...comparison.period, spent: spentOf(comparison.total) } : null
-})
+const figures = computed(() => tileFigures(props.usage))
 
 /** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
@@ -91,16 +86,11 @@ const top = useTopValues({
   dimensions: () => cards.value,
 })
 
-/** Under this width, in pixels, a row of columns crowds itself and the chart opens as a table. */
-const NARROW = 560
+/** The chart's own column decides whether it opens as its table. */
 const chartColumn = ref<HTMLElement | null>(null)
-const width = ref<number | null>(null)
-useResizeObserver(chartColumn, ([entry]) => {
-  if (entry) width.value = entry.contentRect.width
-})
-const narrow = computed(() => width.value !== null && width.value < NARROW)
+const narrow = useNarrowCharts(chartColumn)
 
-const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.refused.words : '')
+const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 </script>
 
 <template>
@@ -108,8 +98,8 @@ const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.ref
     <SpendingTiles
       v-model:measure="measure"
       :split="usage.total.tokens"
-      :total="total"
-      :before="before"
+      :total="figures.total"
+      :before="figures.before"
     />
     <div class="overview-middle">
       <div

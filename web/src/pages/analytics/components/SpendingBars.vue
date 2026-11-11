@@ -7,7 +7,7 @@
  * value the day chart folds away. A value named by the start of its id, an account, carries the
  * whole id as its detail.
  *
- * A bar acts as its value does (`useLineActions`): by task, a task's bar is a link to it; by any
+ * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; by any
  * other dimension, a value the read can filter by is a control that narrows the view to it, sent
  * out as `narrow`. The rows that are neither stay lines of the chart.
  */
@@ -15,15 +15,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
-import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
+import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
-import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
+import { spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
-import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
 
@@ -42,49 +40,23 @@ const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
-const actions = useLineActions()
 
 const title = computed(() => words.chartTitle(props.measure, props.by))
 
 const lines = computed(() =>
   spendingLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
 )
-const byKey = computed(() => new Map(lines.value.map((line) => [line.key, line])))
-
-/** What pressing a line does, as a bar carries it: where it leads, or what it narrows to. */
-function acting(line: SpendingLine, label: string): Partial<RankedRow> {
-  const href = actions.taskLink(props.by, line.value)?.href
-  if (href) return { href }
-  if (actions.narrowsTo(props.by, line.value) === undefined) return {}
-  return { actionable: true, action: actions.narrowName(label) }
-}
-
-const bars = computed<RankedRow[]>(() =>
-  lines.value.map((line) => {
-    const label = words.lineLabel(props.by, line)
-    return {
-      key: line.key,
-      kind: line.kind,
-      label,
-      detail: words.valueDetail(props.by, line.value),
-      value: measureOf(props.measure, line.spent) ?? 0,
-      valueText: words.lineFigure(props.measure, line.spent),
-      slot: props.slots.get(line.key) ?? 'other',
-      ...acting(line, label),
-    }
-  }),
-)
-
-function follow(key: string, event: MouseEvent) {
-  const link = actions.taskLink(props.by, byKey.value.get(key)?.value ?? null)
-  if (link) actions.follow(link, event)
-}
-
-function select(key: string) {
-  const line = byKey.value.get(key)
-  const value = actions.narrowsTo(props.by, line?.value ?? null)
-  if (line && value !== undefined) emit('narrow', value, words.lineLabel(props.by, line))
-}
+const {
+  rows: bars,
+  follow,
+  select,
+} = useRankedLines({
+  by: () => props.by,
+  lines: () => lines.value,
+  measure: () => props.measure,
+  narrow: (value, label) => emit('narrow', value, label),
+  more: (line) => ({ kind: line.kind, slot: props.slots.get(line.key) ?? 'other' }),
+})
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
