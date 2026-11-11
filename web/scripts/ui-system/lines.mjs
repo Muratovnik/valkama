@@ -91,6 +91,8 @@ export const LINE_BUDGET = new Map([
   ['pages/settings/components/SettingsGeneral.vue', 2],
   ['pages/settings/components/SettingsRow.vue', 1],
   ['pages/settings/components/installation-health.css', 5],
+  // The status edge of the note that the period before could not be read, as the degraded banner's.
+  ['pages/analytics/components/SpendingReport.vue', 1],
   // Planning's own surfaces. Overview divides the facts from the record; the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 1], // Frozen step quote.

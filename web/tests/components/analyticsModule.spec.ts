@@ -173,6 +173,8 @@ const time = (page: VueWrapper) =>
   page.get('.tile-figure[data-measure="time"]').text().replaceAll(/\s/gu, ' ')
 const change = (page: VueWrapper) =>
   (page.findAll('.spending-tiles .tile-change')[0]?.text() ?? '').replaceAll(/\s/gu, ' ')
+/** The read of this week's week before: the one asked from a moment rather than a day. */
+const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') ?? false
 
 describe('the Analytics page', () => {
   beforeEach(() => {
@@ -346,6 +348,44 @@ describe('the Analytics page', () => {
     await page.get('.platform-state-retry').trigger('click')
     await flushPromises()
     expect(reads.grouped('work_item')).toHaveLength(asked * 2)
+  })
+
+  it('shows an empty week whose week before was not read, says so, and reads it again', async () => {
+    // This week spent nothing; the same days of the week before spent an hour.
+    const world: TimedStretch[] = [
+      { at: on(10, 3), group: { ...sample, work_item: ITEM }, spend: { seconds: 3600, cost: 1 } },
+    ]
+    let failing = true
+    const reads = stubAnalyticsReads((query) =>
+      failing && weekBefore(query) ? { status: 500 } : serveUsage(world, query),
+    )
+    const page = await mountAnalytics()
+    // Not the empty state: that would say both periods spent nothing, and one was not read.
+    expect(page.text()).not.toContain('Nothing was spent in this period')
+    expect(time(page)).toBe('0 min')
+    const unread = page.get('.spending-unread')
+    expect(unread.get('[role="status"]').text()).toBe(
+      'The period before could not be read, so no change is shown.',
+    )
+    expect(change(page)).toBe('The period before was not read, nothing to compare with')
+
+    failing = false
+    const asked = reads.asked.filter((query) => weekBefore(query)).length
+    await unread.get('button').trigger('click')
+    await flushPromises()
+    expect(reads.asked.filter((query) => weekBefore(query))).toHaveLength(asked + 1)
+    expect(page.find('.spending-unread').exists()).toBe(false)
+    expect(change(page)).toBe('↓ 100% against Nov 2 – 4')
+  })
+
+  it('shows the figures of a week whose week before was not read, beside the words that say so', async () => {
+    stubAnalyticsReads((query) => (weekBefore(query) ? { status: 500 } : serveUsage(WORLD, query)))
+    const page = await mountAnalytics({}, 'ru')
+    expect(time(page)).toBe('3 ч')
+    expect(page.get('.spending-unread [role="status"]').text()).toBe(
+      'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
+    )
+    expect(page.get('.spending-unread button').text()).toBe('Повторить')
   })
 
   it('says a period that spent nothing spent nothing, and keeps its controls', async () => {

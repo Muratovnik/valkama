@@ -7,6 +7,7 @@ export const analyticsMessages = {
     analytics: {
       title: 'Usage of agent work',
       failed: 'The usage of agent work could not be read.',
+      unread: 'The period before could not be read, so no change is shown.',
       empty: {
         title: 'Nothing was spent in this period',
         description:
@@ -134,6 +135,7 @@ export const analyticsMessages = {
     analytics: {
       title: 'Расход работы агентов',
       failed: 'Не удалось прочитать расход работы агентов.',
+      unread: 'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
       empty: {
         title: 'За этот период ничего не потрачено',
         description:

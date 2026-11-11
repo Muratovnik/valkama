@@ -3,8 +3,13 @@
  * What one answer of the usage read says: the period's figures, which also choose the measure,
  * and the charts that break that measure down by the chosen dimension. A report narrower than a
  * chart reads well (`NARROW`) opens each chart as its table.
+ *
+ * An answer whose period before could not be read says so above the figures, as a status a
+ * screen reader hears too, with the page's own way to read it again; the figures stand, with no
+ * change beside them.
  */
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useResizeObserver } from '@vueuse/core'
 
@@ -16,6 +21,7 @@ import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
+import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   /** The period by account behind the answer, for where the accounts that worked changed. */
@@ -24,7 +30,11 @@ const props = defineProps<{
   readAt: Date
   usage: Usage
 }>()
+/** Read the answer again, for a period before that could not be read. */
+const emit = defineEmits<{ retry: [] }>()
 const measure = defineModel<Measure>('measure', { required: true })
+
+const { t } = useI18n()
 
 /**
  * The dimension the answer was read by, not the one the page now asks for: while a new
@@ -52,6 +62,23 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
     ref="root"
     class="spending-report"
   >
+    <div
+      v-if="!before"
+      class="spending-unread"
+    >
+      <p
+        class="spending-unread-words"
+        role="status"
+      >
+        {{ t('analytics.unread') }}
+      </p>
+      <VButton
+        size="compact"
+        @click="emit('retry')"
+      >
+        {{ t('platform.actions.retry') }}
+      </VButton>
+    </div>
     <SpendingTiles
       v-model:measure="measure"
       :split="usage.total.tokens"
@@ -81,5 +108,27 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-section);
   min-width: 0;
+}
+
+/* What is missing from the answer, and the way to read it again: the words and the button on one
+   line while they fit, the button under the words when they do not. A status edge on a muted
+   ground, as the product marks a read that came back short. */
+.spending-unread {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: 3px solid var(--color-warning);
+  background: var(--color-surface-muted);
+}
+
+.spending-unread-words {
+  flex: 1 1 16rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
 }
 </style>

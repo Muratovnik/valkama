@@ -208,6 +208,7 @@ const emptyDescription = computed(() =>
           :read-at="read.askedAt.value"
           :measure="view.measure"
           @update:measure="(measure) => change({ measure })"
+          @retry="read.retry"
         />
       </template>
     </PlatformStatePanel>

@@ -36,11 +36,13 @@ function spentNothing(total: Usage['total']) {
 }
 
 /**
- * Whether there is nothing to show: this period spent nothing, and neither did the one it is
- * compared with. A period before that did spend is a fall to nothing, which the figures say.
+ * Whether there is nothing to show: this period and the one it is compared with were both read,
+ * and neither spent anything. A period before that did spend is a fall to nothing, which the
+ * figures say; one that was not read leaves this period's figures to show, with words that say
+ * the comparison is missing.
  */
 const nothingToShow = (usage: Usage) =>
-  spentNothing(usage.total) && (!usage.comparison || spentNothing(usage.comparison.total))
+  spentNothing(usage.total) && usage.comparison !== null && spentNothing(usage.comparison.total)
 
 const ready = (payload: Usage): PlatformUiState<Usage> => ({
   interface_version: 'valkama-ui-state',
@@ -73,7 +75,8 @@ const orNull = <T>(reading: Promise<T>) => reading.catch(() => null)
 /**
  * The answer beside the period it is compared with when that was read on its own
  * (`comparedPeriod`): that read's period, total and rows, or none when it could not be read.
- * Undefined `before` leaves the answer as the read compared it.
+ * Undefined `before` leaves the answer as the read compared it. Every read the page shows asks
+ * for a comparison, so an answer here with no comparison is one whose period before was not read.
  */
 function compared(usage: Usage, before: Usage | null | undefined): Usage {
   if (before === undefined) return usage
