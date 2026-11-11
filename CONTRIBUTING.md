@@ -86,7 +86,8 @@ nothing: an npm step on a `node_modules` that is missing or differs from its
 `package-lock.json` is refused rather than run, the refusal says where `npm ci` is
 needed, and the exit code is non-zero then too. The commit subject step is refused
 the same way in a directory with no Git history of its own. The server
-writes to `logs/serve.log`. A store copy holds your real data, so it goes with
+writes to `logs/serve.log`. `serve` warns before it starts when `web/dist` may be
+older than `web/src`; rebuild before you look at the interface it serves. A store copy holds your real data, so it goes with
 the profile when the server stops or dies. It stays on disk while the server is
 running, however long that is: run `stop` when you are done.
 

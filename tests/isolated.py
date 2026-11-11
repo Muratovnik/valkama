@@ -29,6 +29,8 @@ Each rule here is a way a hand-written wrapper went wrong:
   where `npm ci` is needed, and a comparison that could not be made is a refusal.
 - The result directory has no default, so a script cannot keep writing into the
   directory of the task it was first written for.
+- `serve` says when the committed `web/dist` it serves is behind `web/src`. A
+  browser check once took screenshots of a bundle ten commits behind its sources.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -80,6 +82,10 @@ STOP_SECONDS = 30.0
 #: A killed process's file handles outlast it for a moment on Windows.
 REMOVE_SECONDS = 10.0
 POLL_SECONDS = 0.1
+
+#: The committed bundle `serve` serves, and what a build of it reads.
+BUNDLE = "web/dist"
+BUNDLE_SOURCES = ("web/src", "web/index.html", "web/public")
 
 #: What a lockfile entry pins. The rest of an entry is npm's bookkeeping about the
 #: tree, and the top of the file carries the package's own version, which a release
@@ -498,6 +504,80 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     return run_gates(runs, out, environment)
 
 
+# --- the bundle --------------------------------------------------------------
+
+
+def _newest_write(paths: Sequence[Path]) -> tuple[float, Path] | None:
+    """The latest modification under `paths`, directories included, so a removal counts."""
+
+    found = []
+    for path in paths:
+        if path.is_dir():
+            for parent, _, names in os.walk(path):
+                found += [Path(parent), *(Path(parent) / name for name in names)]
+        elif path.exists():
+            found.append(path)
+    return max(((item.stat().st_mtime, item) for item in found), default=None)
+
+
+def bundle_lag(root: Path) -> str | None:
+    """Why `root`'s `web/dist` may be older than what it is built from, or None when it is not.
+
+    Settled by content in Git and never by file times alone, because a checkout
+    stamps every file it writes with the time of the checkout. The committed
+    bundle is behind when the sources in the working tree, committed or not,
+    differ from those of the last commit that changed `web/dist`. A bundle built
+    here and not committed was written by the build, not by a checkout, so its
+    own time is the time of the build: it is behind when a source was written
+    after it.
+    """
+
+    def paths(*arguments: str) -> list[str]:
+        # Paths are only shown, so bytes Git cannot render as UTF-8 are replaced.
+        found = processes.run_text(["git", "-C", str(root), *arguments], errors="replace")
+        return [path for path in found.stdout.split("\0") if path]
+
+    page = f"{BUNDLE}/index.html"
+    try:
+        built = processes.run_text(
+            ["git", "-C", str(root), "log", "-1", "--format=%h", "--", BUNDLE]
+        )
+        commit = built.stdout.strip()
+        if built.returncode != 0 or not commit:
+            return f"no commit of {BUNDLE} was found to compare its sources with"
+        if paths("diff", "-z", "--name-only", "HEAD", "--", page) and (root / page).is_file():
+            newest = _newest_write([root / source for source in BUNDLE_SOURCES])
+            if newest is None or newest[0] <= (root / page).stat().st_mtime:
+                return None
+            written = newest[1].relative_to(root).as_posix()
+            return f"{written} was written after the build in {BUNDLE} that is not committed"
+        changed = paths("diff", "-z", "--name-only", commit, "--", *BUNDLE_SOURCES)
+        changed += paths("ls-files", "-z", "--others", "--exclude-standard", "--", *BUNDLE_SOURCES)
+    except OSError as error:
+        return f"git could not be started to compare {BUNDLE} with its sources: {error}"
+    if not changed:
+        return None
+    shown = ", ".join(changed[:_SHOWN_DIFFERENCES])
+    more = len(changed) - _SHOWN_DIFFERENCES
+    return (
+        f"{len(changed)} source file(s) differ from those {BUNDLE} was last committed with"
+        f" in {commit}: {shown}" + (f" and {more} more" if more > 0 else "")
+    )
+
+
+def bundle_warning(root: Path) -> str | None:
+    """What `serve` says before it starts when the bundle may be behind, or None."""
+
+    lag = bundle_lag(root)
+    if lag is None:
+        return None
+    return (
+        f"warning: the server will serve {BUNDLE}, which may be older than its sources: {lag}."
+        " Run `npm run build` in web before a browser check against it; a build that"
+        f" leaves {BUNDLE} as committed means those changes do not reach the bundle."
+    )
+
+
 # --- serve -------------------------------------------------------------------
 
 
@@ -846,6 +926,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if options.command == SUPERVISE:
         supervise(out, source)
         return 0
+    warning = bundle_warning(ROOT)
+    if warning is not None:
+        _say(warning)
     return start(out, source)
 
 

@@ -43,6 +43,11 @@ checkouts are therefore distinguishable even at the same version.
   default `Merge branch …`. `tests/isolated.py gates` runs it as the step `subjects`. In a
   directory with no Git history of its own, such as a source snapshot, it reads nothing
   and says it was skipped and why instead of passing, and `gates` refuses the step there.
+- **`tests/isolated.py serve` says when the bundle is behind.** Before it starts, `serve`
+  warns, naming the files and `npm run build`, when the sources of the web app differ from
+  those `web/dist` was last committed with, uncommitted changes included, or were written
+  after a build that is not committed yet. It compares content through Git rather than file
+  times, so a fresh clone whose bundle matches stays silent.
 
 ### Changed
 
