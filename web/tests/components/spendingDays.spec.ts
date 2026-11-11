@@ -8,6 +8,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
+import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -73,7 +74,7 @@ const fiveDays = () =>
 
 function mountDays(
   usage: Usage,
-  options: { accounts?: Usage | null; measure?: Measure; narrow?: boolean; readAt?: Date } = {},
+  options: { accounts?: AccountsRead; measure?: Measure; narrow?: boolean; readAt?: Date } = {},
   locale: 'en' | 'ru' = 'en',
 ) {
   return mount(SpendingDays, {
@@ -83,7 +84,7 @@ function mountDays(
       measure: options.measure ?? 'time',
       narrow: options.narrow ?? false,
       readAt: options.readAt ?? WEDNESDAY,
-      accounts: options.accounts ?? null,
+      accounts: options.accounts ?? 'loading',
     },
     global: { plugins: [analyticsI18n(locale)] },
   })
@@ -238,9 +239,16 @@ describe('the days on the page', () => {
     expect(accounts[0]?.get('from')).toBe(reads.grouped('work_item')[0]?.get('from'))
     expect(page.findComponent(PeriodColumns).exists()).toBe(true)
 
+    // By account, the page's own answer is the accounts: its read and the same days of the week
+    // before, and no third read.
+    const asked = reads.asked.length
     const byAccountPage = await mountAnalytics({ routeState: { by: 'account' } })
     await flushPromises()
     expect(byAccountPage.findComponent(PeriodColumns).exists()).toBe(true)
-    expect(reads.grouped('account')).toHaveLength(2)
+    expect(reads.asked.slice(asked).map((query) => query.get('group_by'))).toEqual([
+      'account',
+      'account',
+    ])
+    expect(byAccountPage.findAll('.period-mark').length).toBeGreaterThan(0)
   })
 })

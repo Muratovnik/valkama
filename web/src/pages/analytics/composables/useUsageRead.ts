@@ -1,6 +1,7 @@
 /**
- * The reads behind the Analytics page: the period by the chosen dimension beside the period
- * before it, and the values each filter can offer.
+ * The reads behind the Analytics page: the period by the chosen dimension beside the period it
+ * is compared with, the period by account, and the values each filter can offer, every one of
+ * them within the scope's project.
  *
  * A new view asks again and drops the answer to the one it replaced, so a slow read never
  * draws over a later one. While it asks, the last answer stays on screen as a refresh in flight
@@ -10,6 +11,7 @@ import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { fetchUsage, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
@@ -58,6 +60,33 @@ const refreshing = (payload: Usage): PlatformUiState<Usage> => ({
 /** What a filter offers for one dimension: the values that spent anything in the period. */
 export type FilterValues = UsageRow[] | 'loading' | 'failed'
 
+/**
+ * The period by account behind the answer on screen, for where the accounts that worked changed:
+ * the answer itself when that is by account, `loading` until its own read lands, `failed` when it
+ * could not be read. It belongs to the answer it was read with and goes when that answer does.
+ */
+export type AccountsRead = Usage | 'failed' | 'loading'
+
+/** A read that may fail without failing the page: its answer, or null. */
+const orNull = <T>(reading: Promise<T>) => reading.catch(() => null)
+
+/**
+ * The answer beside the period it is compared with when that was read on its own
+ * (`comparedPeriod`): that read's period, total and rows, or none when it could not be read.
+ * Undefined `before` leaves the answer as the read compared it.
+ */
+function compared(usage: Usage, before: Usage | null | undefined): Usage {
+  if (before === undefined) return usage
+  const comparison = before
+    ? {
+        period: { from: before.period.from, to: before.period.to },
+        total: before.total,
+        rows: before.rows,
+      }
+    : null
+  return { ...usage, comparison }
+}
+
 export function useUsageRead(options: {
   now?: () => Date
   /** The project the page is scoped to, which every read is filtered to; null at the top. */
@@ -71,18 +100,16 @@ export function useUsageRead(options: {
   /** The moment the shown answer was asked at, which says which day is not over yet. */
   const askedAt = shallowRef<Date>(now())
   const filterValues = ref<Partial<Record<UsageDimension, FilterValues>>>({})
-  /**
-   * The period by account, for where the accounts that worked changed; the page's own answer
-   * when that is already by account. Null until read, or when it could not be.
-   */
-  const accounts = shallowRef<Usage | null>(null)
+  const accounts = shallowRef<AccountsRead>('loading')
+
+  /** The scope's own filter: its project, or nothing at the top. */
+  const scope = computed<UsageFilters>(() => {
+    const project = options.projectId()
+    return project ? { project: [project] } : {}
+  })
 
   /** The filters the reads carry: the page's, and the scope's project over its own. */
-  const filters = computed<UsageFilters>(() => {
-    const project = options.projectId()
-    const chosen = options.view().filters
-    return project ? { ...chosen, project: [project] } : chosen
-  })
+  const filters = computed<UsageFilters>(() => ({ ...options.view().filters, ...scope.value }))
 
   /** What a view asks; the moment of a preset is taken when it is asked, not here. */
   const asked = computed(() => {
@@ -90,60 +117,83 @@ export function useUsageRead(options: {
     return JSON.stringify({ period, from, to, by, filters: filters.value })
   })
 
+  /**
+   * What the values a filter offers depend on: the period as the view names it and the scope.
+   * Not the breakdown and not the filters, so changing those asks for no value again.
+   */
+  const offeredFor = computed(() => {
+    const { period, from, to } = options.view()
+    return JSON.stringify({ period, from, to, scope: scope.value })
+  })
+
   let reading: AbortController | null = null
   let offering: AbortController | null = null
+  let offered = ''
 
   function query(at: PeriodBounds, groupBy: UsageDimension[], compare: boolean): UsageQuery {
     return { ...at, groupBy, filters: filters.value, compare }
   }
 
+  /**
+   * The view's reads, asked together: the period by its dimension beside the period it is
+   * compared with — the server's own preceding period, or the one `comparedPeriod` names, read on
+   * its own — and the period by account. The answer is shown when the first two land; the
+   * accounts follow it, and the last answer's accounts go with the last answer.
+   */
   async function read() {
     reading?.abort()
-    offering?.abort()
-    offering = null
-    filterValues.value = {}
+    const controller = new AbortController()
+    reading = controller
+    const { signal } = controller
     const at = now()
-    const period = periodBounds(options.view(), at)
+    const view = options.view()
+    const period = periodBounds(view, at)
     bounds.value = period
     askedAt.value = at
     if (!period) {
       state.value = uiEmpty('analytics.period.choose')
       return
     }
-    const controller = new AbortController()
-    reading = controller
     const shown = state.value
     state.value = 'payload' in shown ? refreshing(shown.payload) : uiLoading()
-    const { by } = options.view()
-    const asking = fetchUsage(query(period, [by], true), controller.signal)
-    if (by !== 'account') void readAccounts(period, controller.signal)
+    const { by } = view
+    const before = comparedPeriod(view, at)
+    const asking = fetchUsage(query(period, [by], !before), signal)
+    const askingBefore = before ? orNull(fetchUsage(query(before, [by], false), signal)) : null
+    const askingAccounts =
+      by === 'account' ? null : orNull(fetchUsage(query(period, ['account'], false), signal))
+    let usage: Usage
     try {
-      const usage = await asking
-      if (controller.signal.aborted) return
-      if (by === 'account') accounts.value = usage
-      state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
+      usage = compared(await asking, askingBefore ? await askingBefore : undefined)
     } catch {
-      if (!controller.signal.aborted) state.value = uiError('analytics.failed')
+      if (!signal.aborted) state.value = uiError('analytics.failed')
+      return
     }
-  }
-
-  /** The accounts behind each day; without them the days are drawn with no account marks. */
-  async function readAccounts(period: PeriodBounds, signal: AbortSignal) {
-    try {
-      const usage = await fetchUsage(query(period, ['account'], false), signal)
-      if (!signal.aborted) accounts.value = usage
-    } catch {
-      if (!signal.aborted) accounts.value = null
-    }
+    if (signal.aborted) return
+    accounts.value = askingAccounts ? 'loading' : usage
+    state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
+    if (!askingAccounts) return
+    const byAccount = await askingAccounts
+    if (!signal.aborted) accounts.value = byAccount ?? 'failed'
   }
 
   /**
-   * What each filter can offer, read for the dimensions asked and not yet read: the whole
-   * period, without the page's filters, so a value chosen does not take its neighbours away.
+   * What each filter can offer, read for the dimensions asked and not yet read, or whose read
+   * failed: the whole period within the scope, without the page's filters, so a value chosen does
+   * not take its neighbours away. A new period or scope drops what was offered for the last one.
    */
   async function offer(dimensions: readonly UsageDimension[]) {
+    if (offered !== offeredFor.value) {
+      offering?.abort()
+      offering = null
+      filterValues.value = {}
+      offered = offeredFor.value
+    }
     const period = bounds.value
-    const missing = dimensions.filter((dimension) => !filterValues.value[dimension])
+    const missing = dimensions.filter((dimension) => {
+      const held = filterValues.value[dimension]
+      return !held || held === 'failed'
+    })
     if (!period || !missing.length) return
     offering ??= new AbortController()
     const { signal } = offering
@@ -152,7 +202,7 @@ export function useUsageRead(options: {
       missing.map(async (dimension) => {
         try {
           const usage = await fetchUsage(
-            { ...period, groupBy: [dimension], filters: {}, compare: false },
+            { ...period, groupBy: [dimension], filters: scope.value, compare: false },
             signal,
           )
           if (!signal.aborted) filterValues.value[dimension] = usage.rows

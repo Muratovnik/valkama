@@ -11,14 +11,15 @@ import { useResizeObserver } from '@vueuse/core'
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
+import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 
 const props = defineProps<{
-  /** The period by account, for where the accounts that worked changed. */
-  accounts: Usage | null
+  /** The period by account behind the answer, for where the accounts that worked changed. */
+  accounts: AccountsRead
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage

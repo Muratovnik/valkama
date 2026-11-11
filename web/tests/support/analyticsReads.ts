@@ -11,30 +11,37 @@ import AnalyticsView from '@/pages/analytics/AnalyticsView.vue'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
+/** A read kept waiting: what it asked, and how the test answers it — a body, or a status. */
+interface HeldRead {
+  query: URLSearchParams
+  release: (answer: unknown) => void
+}
+
+const respond = (given: unknown) =>
+  given && typeof given === 'object' && 'status' in given && typeof given.status === 'number'
+    ? new Response('{}', { status: given.status })
+    : new Response(JSON.stringify(given), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+
 /** `answer` gives a body, `{ status }` for a refusal, or `'hold'` to keep the read waiting. */
 export function stubAnalyticsReads(answer: (query: URLSearchParams) => unknown) {
   const asked: URLSearchParams[] = []
-  const held: (() => void)[] = []
+  const held: HeldRead[] = []
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>(async (input) => {
       const url = new URL(input as string, 'http://127.0.0.1')
       if (url.pathname !== '/api/analytics/usage') return new Response('{}', { status: 404 })
-      asked.push(url.searchParams)
-      const given = answer(url.searchParams)
-      if (given === 'hold')
-        return new Promise<Response>((resolve) => held.push(() => resolve(new Response('{}'))))
-      if (
-        given &&
-        typeof given === 'object' &&
-        'status' in given &&
-        typeof given.status === 'number'
-      )
-        return new Response('{}', { status: given.status })
-      return new Response(JSON.stringify(given), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const query = url.searchParams
+      asked.push(query)
+      const given = answer(query)
+      return given === 'hold'
+        ? new Promise<Response>((resolve) =>
+            held.push({ query, release: (later) => resolve(respond(later)) }),
+          )
+        : respond(given)
     }),
   )
   /** The reads by what they were grouped by: the page's own, and each filter's values. */

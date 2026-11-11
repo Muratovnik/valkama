@@ -71,6 +71,8 @@ export const analyticsMessages = {
         empty: 'No day in this period spent anything.',
         other: 'Other',
         accounts: 'Accounts: {before} → {after}',
+        accountsFailed:
+          'The accounts that worked could not be read, so their changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
       shown: {
@@ -190,6 +192,8 @@ export const analyticsMessages = {
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
         accounts: 'Аккаунты: {before} → {after}',
+        accountsFailed:
+          'Не удалось прочитать, какие аккаунты работали, поэтому их смены не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
       shown: {

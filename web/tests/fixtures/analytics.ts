@@ -5,6 +5,7 @@
  *
  * `role` is a dimension the read is gaining; until the server answers by it, it is here.
  */
+import { isUsageDimension, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type {
   Usage,
   UsageDimension,
@@ -102,6 +103,70 @@ function sumOf(stretches: readonly Stretch[]): UsageMeasures {
 function totalOf(stretches: readonly Stretch[]) {
   const total = sumOf(stretches)
   return { ...total, unpriced_models: total.unpriced_tokens ? ['model-unpriced'] : [] }
+}
+
+/** One stretch of work at its moment, for a stand-in that answers each query by what it asks. */
+export interface TimedStretch {
+  at: Date
+  group: Stretch['group']
+  spend: Spend
+}
+
+const DAY = 86_400_000
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/u
+
+/** A moment of the query: a date is the start of that day at the query's offset. */
+function instant(text: string, offset: number) {
+  const date = DATE.exec(text)
+  if (!date) return Date.parse(text)
+  const [, year = 1970, month = 1, day = 1] = date.map(Number)
+  return Date.UTC(year, month - 1, day) - offset * 60_000
+}
+
+/** The dimensions whose «none» is work with no value there; elsewhere it is an unknown value. */
+const NONE_IS_NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
+
+/** Whether every filter of the query admits a stretch, `none` as the contract reads it. */
+function admits(query: URLSearchParams, group: Stretch['group']) {
+  const none = new Set(query.get('none')?.split(',') ?? [])
+  return USAGE_DIMENSIONS.every((dimension) => {
+    const named = query.get(dimension)?.split(',') ?? []
+    if (!named.length && !none.has(dimension)) return true
+    const value = group[dimension] ?? unknownValue
+    const isNone = NONE_IS_NO_VALUE.has(dimension)
+      ? value.id === null && !value.unknown
+      : dimension !== 'role' && value.unknown
+    return (value.id !== null && named.includes(value.id)) || (none.has(dimension) && isNone)
+  })
+}
+
+/**
+ * What the read answers to `query` over `stretches`: only the work its period, its filters and
+ * its project admit, by what it groups by, beside the period of the same length before it when
+ * it compares. A query that asks for the wrong period, filter or scope gets other figures.
+ */
+export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchParams) {
+  const offset = Number(query.get('utc_offset') ?? 0)
+  const from = instant(query.get('from') ?? '', offset)
+  const to = instant(query.get('to') ?? '', offset)
+  const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isUsageDimension)
+  const within = (start: number, end: number) =>
+    stretches
+      .filter((one) => one.at.getTime() >= start && one.at.getTime() < end)
+      .filter((one) => admits(query, one.group))
+      .map((one) => ({
+        day: Math.floor((one.at.getTime() - start) / DAY),
+        group: one.group,
+        spend: one.spend,
+      }))
+  return usageAnswer({
+    first: new Date(from),
+    days: Math.max(1, Math.ceil((to - from) / DAY)),
+    end: new Date(to),
+    groupBy,
+    stretches: within(from, to),
+    before: query.get('compare') === 'true' ? within(from - (to - from), from) : null,
+  })
 }
 
 const at = (day: Date) => day.toISOString()

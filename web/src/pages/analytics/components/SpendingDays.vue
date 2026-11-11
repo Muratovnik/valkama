@@ -2,15 +2,18 @@
 /**
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
  * of the dimension and «other» for the rest; work with no value there and unknown work stack
- * apart, as in the bars, and never inside «other». The day not over yet is hatched and says «so far»,
- * so its short column does not read as a fall; a numbered line stands where the accounts that
- * worked changed from the day before anyone last worked, with what changed under the chart.
+ * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
+ * «so far», so its short column does not read as a fall; a numbered line stands where the
+ * accounts that worked changed from the day before anyone last worked, with what changed under
+ * the chart. The marks are the ones read with the answer shown, and a read of the accounts that
+ * failed says the marks are not there rather than leaving them out without a word.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -20,8 +23,8 @@ import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
 const props = defineProps<{
-  /** The period by account, for the account marks; none are drawn without it. */
-  accounts: Usage | null
+  /** The period by account behind the answer, for the account marks; none until it lands. */
+  accounts: AccountsRead
   by: UsageDimension
   measure: Measure
   narrow: boolean
@@ -50,12 +53,13 @@ const chart = computed<PeriodChartProps>(() => ({
     label: words.day(column.key),
     fullLabel: words.fullDay(column.key),
   })),
-  marks: props.accounts
-    ? accountChanges(props.accounts).map((change) => ({
-        at: change.at,
-        label: words.accounts(change.before, change.after),
-      }))
-    : [],
+  marks:
+    typeof props.accounts === 'object'
+      ? accountChanges(props.accounts).map((change) => ({
+          at: change.at,
+          label: words.accounts(change.before, change.after),
+        }))
+      : [],
   words: {
     // Time is always counted; tokens and a price can be absent from a day that spent.
     absent: props.measure === 'time' ? undefined : t(`analytics.days.absent.${props.measure}`),
@@ -77,9 +81,29 @@ const chart = computed<PeriodChartProps>(() => ({
   >
     <template #chart>
       <PeriodColumns v-bind="chart" />
+      <p
+        v-if="accounts === 'failed'"
+        class="spending-days-note"
+      >
+        {{ t('analytics.days.accountsFailed') }}
+      </p>
     </template>
     <template #table>
       <PeriodColumnsTable v-bind="chart" />
+      <p
+        v-if="accounts === 'failed'"
+        class="spending-days-note"
+      >
+        {{ t('analytics.days.accountsFailed') }}
+      </p>
     </template>
   </ChartSection>
 </template>
+
+<style scoped>
+.spending-days-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+</style>

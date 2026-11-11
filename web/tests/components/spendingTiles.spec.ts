@@ -4,15 +4,16 @@
  * change up, down, or nothing to compare with; tokens without a price said in words and never
  * drawn as a zero cost; and the tile pressed is the measure the charts below show.
  */
-import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 
-import { task, usageAnswer } from '../fixtures/analytics.ts'
+import { serveUsage, task } from '../fixtures/analytics.ts'
+import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
 const NOW: Spent = { seconds: 5400, tokens: 1_200_000, cost: 12.5, unpriced: 0 }
@@ -166,60 +167,54 @@ describe('the tiles', () => {
   })
 })
 
+const serve = (stretches: TimedStretch[]) =>
+  stubAnalyticsReads((query) => serveUsage(stretches, query))
+
 describe('the tiles on the page', () => {
+  /** Wednesday afternoon: this week is Monday to now, held against the same days a week before. */
+  const NOW = new Date(2026, 10, 11, 14, 30)
+  const on = (day: number) => new Date(2026, 10, day, 10)
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('read their figures from the total and the period before, and write the measure chosen', async () => {
-    const monday = new Date(2026, 10, 9)
-    stubAnalyticsReads(() =>
-      usageAnswer({
-        first: monday,
-        days: 7,
-        groupBy: ['work_item'],
-        stretches: [
-          {
-            day: 0,
-            group: { work_item: task(1, 'One') },
-            spend: { seconds: 3600, tokens: 500, cost: 1 },
-          },
-          {
-            day: 2,
-            group: { work_item: task(2, 'Two') },
-            spend: { seconds: 1800, tokens: 500, cost: 1 },
-          },
-        ],
-        before: [
-          { day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600, tokens: 2000 } },
-        ],
-      }),
-    )
+    serve([
+      {
+        at: on(9),
+        group: { work_item: task(1, 'One') },
+        spend: { seconds: 3600, tokens: 500, cost: 1 },
+      },
+      {
+        at: on(11),
+        group: { work_item: task(2, 'Two') },
+        spend: { seconds: 1800, tokens: 500, cost: 1 },
+      },
+      // The same days a week before: time and tokens, no price.
+      { at: on(2), group: { work_item: task(1, 'One') }, spend: { seconds: 3600, tokens: 2000 } },
+      // Later that week: not the same days, so not compared.
+      { at: on(6), group: { work_item: task(1, 'One') }, spend: { seconds: 36_000, cost: 50 } },
+    ])
     const page = await mountAnalytics()
-    await flushPromises()
     expect(page.get('.tile-figure[data-measure="time"]').text()).toBe('1\u{A0}h\u{A0}30\u{A0}min')
     expect(page.get('.tile-figure[data-measure="tokens"]').text()).toBe('1K')
     const radios = page.findAll('.spending-tiles [role="radio"]')
-    expect(radios.map((radio) => radio.text())).toEqual([
-      expect.stringContaining('↑ 50%'),
-      expect.stringContaining('↓ 50%'),
+    expect(radios.map((radio) => radio.text().replaceAll(/\s/gu, ' '))).toEqual([
+      expect.stringContaining('↑ 50% against Nov 2 – 4'),
+      expect.stringContaining('↓ 50% against Nov 2 – 4'),
       // The week before had time and tokens but no price: no cost to compare, not nothing spent.
-      expect.stringContaining('No price for'),
+      expect.stringContaining('No price for Nov 2 – 4 to compare with'),
     ])
     await page.get('.tile-figure[data-measure="tokens"]').trigger('click')
     expect(page.emitted('state')?.at(-1)).toEqual([{ measure: 'tokens' }])
   })
 
   it('say what the period before spent when this one spent nothing, instead of standing empty', async () => {
-    stubAnalyticsReads(() =>
-      usageAnswer({
-        first: new Date(2026, 10, 9),
-        days: 7,
-        groupBy: ['work_item'],
-        stretches: [],
-        before: [
-          { day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600, cost: 2 } },
-        ],
-      }),
-    )
+    serve([{ at: on(2), group: { work_item: task(1, 'One') }, spend: { seconds: 3600, cost: 2 } }])
     const page = await mountAnalytics()
-    await flushPromises()
     expect(page.text()).not.toContain('Nothing was spent in this period')
     expect(page.get('.tile-figure[data-measure="time"]').text()).toBe('No time counted')
     const radios = page.findAll('.spending-tiles [role="radio"]').map((radio) => radio.text())
