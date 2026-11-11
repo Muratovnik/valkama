@@ -12,11 +12,13 @@
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
  * or the keyboard, each series by name. Presentational: data and words come in, a press on a
- * period (`actionable: 'column'`) or on one series in it (`'segment'`) goes out as `select`.
+ * period (`actionable: 'column'`) or on one series in it (`'segment'`) goes out as `select`. A
+ * period that acts is named by what it does where the caller says (`action`), and what it holds
+ * then describes it.
  * The periods are one stop for Tab (`useChartCursor`); the arrows move between them, and up
  * and down between the segments of one where segments act.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
@@ -88,13 +90,20 @@ const { move, standOn, tabStop } = useChartCursor(
 const columnTag = computed(() => (props.actionable === 'column' ? 'button' : 'div'))
 const segmentTag = computed(() => (bySegment.value ? 'button' : 'span'))
 
+const ids = useId()
+/** What a period holds, as words; the id of those words where they describe a named action. */
+const summaryOf = (one: StackedColumn) => columnSummary(one, props.words, props.formatValue)
+const summaryId = (one: StackedColumn, index: number) =>
+  props.actionable === 'column' && one.column.action ? `${ids}-${index}` : undefined
+
 /** A period's own element: a button where periods act, a named image where nothing does. */
 function columnAttrs(one: StackedColumn, index: number) {
-  const name = columnSummary(one, props.words, props.formatValue)
+  const name = summaryOf(one)
   if (props.actionable === 'column')
     return {
       'type': 'button',
-      'aria-label': name,
+      'aria-label': one.column.action ?? name,
+      'aria-describedby': summaryId(one, index),
       'tabindex': tabStop(index, null),
       'data-cell': cellId(index, null),
     }
@@ -127,33 +136,22 @@ const stackStyle = (one: StackedColumn) => ({
 const gridClass = (tick: number) => ({ 'period-baseline': tick === 0 })
 const gridStyle = (tick: number) => ({ insetBlockEnd: `${(tick / chart.value.top) * 100}%` })
 
-function pressColumn(one: StackedColumn) {
-  if (props.actionable === 'column') emit('select', { column: one.column.key, series: null })
+/** Whether a press acts on what it lands on: a period (`at` null), or a segment of one. */
+const acts = (at: number | null) => (at === null ? props.actionable === 'column' : bySegment.value)
+
+function press(one: StackedColumn, at: number | null) {
+  const series = at === null ? null : (one.segments[at]?.series.key ?? null)
+  if (acts(at) && (at === null || series)) emit('select', { column: one.column.key, series })
 }
 
-function pressSegment(one: StackedColumn, at: number) {
-  const series = one.segments[at]?.series.key
-  if (bySegment.value && series) emit('select', { column: one.column.key, series })
-}
-
-function focusColumn(index: number) {
-  if (props.actionable !== 'column') return
-  standOn(index, null)
-  focused.value = index
-}
-
-function focusSegment(index: number, at: number) {
-  if (!bySegment.value) return
+function focus(index: number, at: number | null) {
+  if (!acts(at)) return
   standOn(index, at)
   focused.value = index
 }
 
-function keyColumn(event: KeyboardEvent) {
-  if (props.actionable === 'column') void move(event)
-}
-
-function keySegment(event: KeyboardEvent) {
-  if (bySegment.value) void move(event)
+function key(event: KeyboardEvent, at: number | null) {
+  if (acts(at)) void move(event)
 }
 </script>
 
@@ -220,11 +218,17 @@ function keySegment(event: KeyboardEvent) {
                 :is="columnTag"
                 class="period-column"
                 v-bind="columnAttrs(one, index)"
-                @click="pressColumn(one)"
-                @focus="focusColumn(index)"
+                @click="press(one, null)"
+                @focus="focus(index, null)"
                 @blur="focused = null"
-                @keydown="keyColumn"
+                @keydown="(event: KeyboardEvent) => key(event, null)"
               >
+                <span
+                  v-if="summaryId(one, index)"
+                  :id="summaryId(one, index)"
+                  class="visually-hidden"
+                  >{{ summaryOf(one) }}</span
+                >
                 <span
                   class="period-stack"
                   :class="{ 'period-incomplete': one.column.incomplete }"
@@ -239,10 +243,10 @@ function keySegment(event: KeyboardEvent) {
                     :data-series="segment.series.key"
                     :style="segmentStyle(one, at)"
                     v-bind="segmentAttrs(one, index, at)"
-                    @click="pressSegment(one, at)"
-                    @focus="focusSegment(index, at)"
+                    @click="press(one, at)"
+                    @focus="focus(index, at)"
                     @blur="focused = null"
-                    @keydown="keySegment"
+                    @keydown="(event: KeyboardEvent) => key(event, at)"
                   />
                 </span>
               </component>

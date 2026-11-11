@@ -108,6 +108,7 @@ const empty = computed(() => !props.columns.length || !props.series.length)
             v-if="actionable === 'column'"
             type="button"
             class="chart-press"
+            :aria-label="row.one.column.action"
             @click="emit('select', { column: row.one.column.key, series: null })"
           >
             {{ row.name }}

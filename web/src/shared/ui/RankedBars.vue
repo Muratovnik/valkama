@@ -7,11 +7,13 @@
  * among the categories. `RankedBarsTable` is the same rows as a table.
  *
  * Presentational: rows and words come in, a press on a row that opens something goes out as
- * `select` with the row's key. A row's name wraps rather than being cut, and the values stand
- * in one column whatever the names do; in a narrow container the name takes a line of its own
- * over its bar.
+ * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
+ * with the press, for the host to open it in place or leave it to the browser. A row that acts
+ * is named by what it does (`action`) or by its label, and its value describes it. A row's name
+ * wraps rather than being cut, and the values stand in one column whatever the names do; in a
+ * narrow container the name takes a line of its own over its bar.
  */
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 
 import type { PlacedRow, RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
 import { rankRows } from '@/shared/ui/chartGeometry.ts'
@@ -24,7 +26,7 @@ const props = defineProps<{
   words: RankedWords
 }>()
 
-const emit = defineEmits<{ select: [key: string] }>()
+const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
 const placed = computed(() => rankRows(props.rows))
 
@@ -36,16 +38,37 @@ const groups = computed(() =>
   ].filter((group) => group.rows.length),
 )
 
-/** A row that opens something is a button; one that does not is a line of the chart. */
-const lineTag = (row: PlacedRow) => (row.actionable ? 'button' : 'div')
-const lineAttrs = (row: PlacedRow) => (row.actionable ? { type: 'button' } : {})
+const ids = useId()
+/** The id of a row's value, which describes the row where the row is a control. */
+const valueId = (row: PlacedRow) => `${ids}-${row.key}`
+
+/**
+ * A row that leads somewhere is a link, one that opens something a button, and one that does
+ * neither a line of the chart.
+ */
+function lineTag(row: PlacedRow) {
+  if (row.href) return 'a'
+  return row.actionable ? 'button' : 'div'
+}
+
+function lineAttrs(row: PlacedRow) {
+  const named = { 'aria-label': row.action ?? row.label, 'aria-describedby': valueId(row) }
+  if (row.href) return { href: row.href, ...named }
+  return row.actionable ? { type: 'button', ...named } : {}
+}
 
 /** A category in its series' hue, slot 1 by default; a row that is not one in the neutral. */
 const barSlot = (row: PlacedRow) => (row.kind === 'category' ? (row.slot ?? 1) : 'other')
 const barStyle = (row: PlacedRow) => ({ inlineSize: `${row.length * 100}%` })
 
-function press(row: PlacedRow) {
-  if (row.actionable) emit('select', row.key)
+function press(row: PlacedRow, event: MouseEvent) {
+  if (row.href) emit('follow', row.key, event)
+  else if (row.actionable) emit('select', row.key)
+}
+
+/** A middle press on a link opens it elsewhere, and is a press on it all the same. */
+function pressAside(row: PlacedRow, event: MouseEvent) {
+  if (row.href && event.button === 1) emit('follow', row.key, event)
 }
 </script>
 
@@ -82,7 +105,8 @@ function press(row: PlacedRow) {
             class="ranked-line"
             :data-key="row.key"
             v-bind="lineAttrs(row)"
-            @click="press(row)"
+            @click="(event: MouseEvent) => press(row, event)"
+            @auxclick="(event: MouseEvent) => pressAside(row, event)"
           >
             <span class="ranked-label">{{ row.label }}</span>
             <span
@@ -95,7 +119,11 @@ function press(row: PlacedRow) {
                 :style="barStyle(row)"
               />
             </span>
-            <span class="ranked-value">{{ row.valueText }}</span>
+            <span
+              :id="valueId(row)"
+              class="ranked-value"
+              >{{ row.valueText }}</span
+            >
           </component>
         </li>
       </component>
@@ -151,11 +179,26 @@ function press(row: PlacedRow) {
   background: none;
   border-radius: var(--radius-control);
 
-  &[type='button'] {
+  &:is([type='button'], [href]) {
     cursor: pointer;
 
     &:hover {
       background: var(--color-surface-hover);
+    }
+  }
+
+  /* A link reads as one by its name, underlined as a name that opens something in a table is. */
+  &[href] {
+    text-decoration: none;
+
+    & .ranked-label {
+      text-decoration: underline;
+      text-decoration-color: var(--color-rule-strong);
+      text-underline-offset: var(--space-half);
+    }
+
+    &:hover .ranked-label {
+      text-decoration-color: currentcolor;
     }
   }
 }

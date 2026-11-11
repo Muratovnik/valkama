@@ -30,8 +30,18 @@ export interface RankedRow {
   value: number
   /** The value as the reader reads it: formatted by the caller, units and all. */
   valueText: string
+  /**
+   * What pressing the row does, as its accessible name in place of its label: "Show the tasks
+   * of opus". The label and the value stay what is drawn; the value describes the control.
+   */
+  action?: string
   /** Whether pressing the row opens what it names. */
   actionable?: boolean
+  /**
+   * Where the row leads, on this origin: the row is then a link, which a press hands out as
+   * `follow` and a modified or middle press takes elsewhere as any link is taken.
+   */
+  href?: string
   kind?: RankedRowKind
   /** The hue of a row that names a series drawn elsewhere on the page; slot 1 otherwise. */
   slot?: SeriesSlot
@@ -100,6 +110,11 @@ export interface PeriodColumn {
    * stands, and is said in words beside the period.
    */
   absent?: readonly string[]
+  /**
+   * What pressing the period does, as its accessible name where periods act: "Show the tasks of
+   * Monday, 9 November". What the period holds then describes it.
+   */
+  action?: string
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */

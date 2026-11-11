@@ -73,8 +73,11 @@
   font-style: italic;
 }
 
-/* A name that opens what it names: a line of the table, not a control standing in it. */
+/* A name that opens what it names: a line of the table, not a control standing in it. The whole
+   cell around it answers a press, so a finger has the row's height to hit and not the words'. */
 .chart-press {
+  position: relative;
+  display: inline-block;
   min-block-size: 0;
   padding: 0;
   border: 0;
@@ -89,5 +92,11 @@
 
   &:hover {
     text-decoration-color: currentcolor;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-3));
   }
 }
