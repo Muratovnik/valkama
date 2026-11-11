@@ -3,9 +3,10 @@
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
  * of the dimension and «other» for the rest; work with no value there and unknown work stack
  * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
- * «so far», so its short column does not read as a fall; a numbered line stands where the
- * accounts that worked changed from the day before anyone last worked, with what changed under
- * the chart. The marks are the ones read with the answer shown, and a read of the accounts that
+ * «so far», so its short column does not read as a fall; a numbered line stands where the known
+ * accounts that worked changed from the last day a known account worked, with what changed under
+ * the chart (`accountChanges`): work whose organization nobody recorded is no account and marks
+ * nothing. The marks are the ones read with the answer shown, and a read of the accounts that
  * failed says the marks are not there rather than leaving them out without a word.
  */
 import { computed } from 'vue'

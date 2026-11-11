@@ -6,11 +6,12 @@ import {
   spentOf,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
-import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
+import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 /**
  * The period day by day: each day's measure stacked by the largest values of the dimension and
- * «other» for the rest, which day is not over yet, and where the accounts that worked changed.
+ * «other» for the rest, which day is not over yet, and where the known accounts that worked
+ * changed.
  * Words come in from the caller; this holds the numbers and which day is which.
  */
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -99,17 +100,24 @@ export function dayColumns(
   })
 }
 
-/** A change of the accounts that worked: on which day, which worked before and which then. */
+/** A change of the known accounts that worked: on which day, which worked before and which then. */
 export interface AccountChange {
   after: UsageGroupValue[]
   at: string
   before: UsageGroupValue[]
 }
 
+/**
+ * The known accounts that spent anything in a day. Work whose organization nobody recorded is
+ * not an account, so it is not one of them.
+ */
 const accountsOf = (point: Usage['series'][number]) =>
   point.groups
     .filter((group) => spentAnything(spentOf(group)))
-    .flatMap((group) => (group.group.account ? [group.group.account] : []))
+    .flatMap((group) => {
+      const account = group.group.account
+      return account && valueKind(account) === 'category' ? [account] : []
+    })
 
 const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupValue[]) => {
   const keys = new Set(left.map((value) => valueKey(value)))
@@ -117,9 +125,11 @@ const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupVa
 }
 
 /**
- * Where the set of accounts that worked differs from the last day anyone worked, read from an
- * answer by account. A day nobody worked changes nothing: the next day is compared with the last
- * one that had work, so a quiet weekend is not two changes.
+ * Where the set of known accounts that worked differs from that of the last day a known account
+ * worked, read from an answer by account. A day with no known account changes nothing, whether
+ * nobody worked or only work nobody recorded the organization of: the next day is compared with
+ * the last one that had a known account, so a quiet weekend is not two changes, and unrecorded
+ * work beside the same accounts, or between them, is no change at all.
  */
 export function accountChanges(byAccount: Usage): AccountChange[] {
   const changes: AccountChange[] = []

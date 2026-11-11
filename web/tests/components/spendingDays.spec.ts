@@ -224,6 +224,89 @@ describe('the days', () => {
   })
 })
 
+/** Work whose organization nobody recorded: no account, only work. */
+const UNRECORDED = 'unrecorded'
+
+/** An answer by account over a day per entry, each day worked by the accounts it names. */
+function daysOf(...days: readonly (readonly string[])[]): Usage {
+  return usageAnswer({
+    first: MONDAY,
+    days: days.length,
+    groupBy: ['account'],
+    stretches: days.flatMap((accounts, day) =>
+      accounts.map((account) =>
+        account === UNRECORDED
+          ? { day, group: {}, spend: { seconds: 3600 } }
+          : worked(day, account, 1),
+      ),
+    ),
+  }).usage
+}
+
+/** The days a change stands on, by their index, with the known accounts before and after. */
+const changesOf = (byAccount: Usage) =>
+  accountChanges(byAccount).map((change) => ({
+    day: byAccount.series.findIndex((point) => point.start === change.at),
+    before: change.before.map((account) => account.id),
+    after: change.after.map((account) => account.id),
+  }))
+
+/** One task worked every one of `count` days, for a chart the account marks stand on. */
+const everyDay = (count: number) =>
+  usageAnswer({
+    first: MONDAY,
+    days: count,
+    groupBy: ['work_item'],
+    stretches: Array.from({ length: count }, (_, day) => ({
+      day,
+      group: { work_item: task(1, 'One') },
+      spend: { seconds: 3600 },
+    })),
+  }).usage
+
+// Work whose organization nobody recorded is not an account: it is neither a change nor hides one.
+describe('the account marks', () => {
+  it('mark no change where unrecorded work joins the same accounts', () => {
+    expect(changesOf(daysOf(['acc-a'], ['acc-a', UNRECORDED]))).toEqual([])
+  })
+
+  it('mark no change across a day of unrecorded work alone between the same account', () => {
+    expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-a']))).toEqual([])
+  })
+
+  it('mark the change hidden behind a day of unrecorded work on the day the new account works', () => {
+    expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-b']))).toEqual([
+      { day: 2, before: ['acc-a'], after: ['acc-b'] },
+    ])
+  })
+
+  it('mark a change where a known account joins', () => {
+    expect(changesOf(daysOf(['acc-a'], ['acc-a', 'acc-b']))).toEqual([
+      { day: 1, before: ['acc-a'], after: ['acc-a', 'acc-b'] },
+    ])
+  })
+
+  it('say the change under the chart and to a screen reader by the known accounts alone', () => {
+    const accounts = daysOf(['acc-a'], [UNRECORDED], ['acc-b', UNRECORDED], ['acc-b'])
+    const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
+    expect(days.findAll('.period-mark')).toHaveLength(1)
+    expect(
+      days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
+    ).toEqual([expect.stringContaining('Accounts: acc-a → acc-b')])
+    const named = days.findAll('[role="img"]').map((day) => day.attributes('aria-label') ?? '')
+    expect(named.map((name) => name.includes('Accounts:'))).toEqual([false, false, true, false])
+    expect(named[2]).toContain('Accounts: acc-a → acc-b')
+    expect(named.join(' ')).not.toContain('Unknown')
+
+    const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
+    const notes = table
+      .getComponent(PeriodColumnsTable)
+      .findAll('tbody tr')
+      .map((row) => row.findAll('td').at(-1)?.text() ?? '')
+    expect(notes).toEqual(['', '', 'Accounts: acc-a → acc-b', ''])
+  })
+})
+
 describe('the days on the page', () => {
   it('ask for the period by account beside the page read, and not again when it is by account', async () => {
     const reads = stubAnalyticsReads((query) =>
