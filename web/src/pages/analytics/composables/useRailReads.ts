@@ -8,13 +8,16 @@
  * slow read never draws over a later one. While it asks, a tile keeps the answer it shows; one
  * with nothing yet waits. Each read stands alone: one that fails is that tile's, and the others
  * are read and shown as they land.
+ *
+ * They go through the page's shared reads (`useSharedUsage`) as of the moment the page's own read
+ * takes, so a tile that asks what the page or a card asks already takes that answer.
  */
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
-import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
+import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
-import { fetchUsage } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 
 /**
@@ -28,14 +31,14 @@ export type RailRead =
   | { refreshing: boolean; status: 'ready'; usage: Usage }
 
 export function useRailReads(options: {
+  shared: SharedUsage
   /** The dimensions of the rail, a read each. */
   dimensions: () => readonly UsageDimension[]
-  now?: () => Date
   /** The project the page is scoped to, which every read is filtered to; null at the top. */
   projectId: () => string | null
   view: () => AnalyticsView
 }) {
-  const now = options.now ?? (() => new Date())
+  const { now } = options.shared
   const reads = shallowRef<Partial<Record<UsageDimension, RailRead>>>({})
   /** The moment the reads on show were asked at, which says which day is not over yet. */
   const askedAt = shallowRef<Date>(now())
@@ -70,6 +73,7 @@ export function useRailReads(options: {
     const at = now()
     const dimensions = options.dimensions()
     const period = periodBounds(options.view(), at)
+    const step = stepOf(options.view())
     askedAt.value = at
     if (!period) {
       reads.value = Object.fromEntries(dimensions.map((one) => [one, { status: 'unasked' }]))
@@ -81,8 +85,8 @@ export function useRailReads(options: {
     await Promise.all(
       dimensions.map(async (dimension) => {
         try {
-          const usage = await fetchUsage(
-            { ...period, groupBy: [dimension], filters: asking, compare: false },
+          const usage = await options.shared.read(
+            { ...period, groupBy: [dimension], filters: asking, compare: false, step },
             signal,
           )
           if (!signal.aborted) settle(dimension, { status: 'ready', usage, refreshing: false })

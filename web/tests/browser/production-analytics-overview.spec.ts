@@ -154,9 +154,11 @@ test('opens a plain address on the overview, every part in sight at 1440×900', 
     'Projects',
   ])
   // The page's read and the same days of the week before, the accounts, the steps of the week
-  // before for the outline, and one read for each card the page's own read is not by; and the
-  // rail's nine, one a dimension.
-  expect(asked).toHaveLength(16)
+  // before for the outline, and the rail's nine, one a dimension; the rail's tiles of tasks and
+  // accounts are the page's own reads, and each card the page's own read is not by is the rail's
+  // tile of that dimension, so neither asks again.
+  expect(new Set(asked).size).toBe(asked.length)
+  expect(asked).toHaveLength(11)
 })
 
 test('a figure chooses the measure, pressed by a check, from the keyboard, into the address', async ({

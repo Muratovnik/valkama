@@ -38,6 +38,7 @@ import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
 import type { ReportPart } from '@/pages/analytics/components/SpendingReport.vue'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
+import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
 
@@ -113,7 +114,9 @@ function narrowToDay(day: string, label: string) {
   refused.value = { part: 'days', words: t('analytics.drill.full', { value: label }) }
 }
 
-const read = useUsageRead({ view: () => view.value, projectId: () => props.projectId })
+/** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
+const shared = provideSharedUsage({ view: () => view.value, projectId: () => props.projectId })
+const read = useUsageRead({ shared, view: () => view.value, projectId: () => props.projectId })
 
 const today = computed(() => localDay(read.askedAt.value))
 
@@ -195,11 +198,13 @@ const { tiles, refresh: refreshTiles } = useRailTiles({
   overview: () => read.state.value,
   overviewAt: () => read.askedAt.value,
   projectId: () => props.projectId,
+  shared,
   view: () => view.value,
 })
 
-/** The bar's refresh reads the page and every tile of the rail again. */
+/** The bar's refresh reads the page and every tile of the rail again, as of now. */
 function refresh() {
+  shared.renew()
   void read.retry()
   void refreshTiles()
 }
@@ -282,6 +287,7 @@ const emptyDescription = computed(() =>
               :usage="payload"
               :accounts="read.accounts.value"
               :compared="read.comparedWith.value"
+              :period="read.bounds.value"
               :filters="read.readWith.value"
               :read-at="read.askedAt.value"
               :measure="view.measure"

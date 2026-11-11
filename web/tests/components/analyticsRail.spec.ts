@@ -132,27 +132,26 @@ describe('the reads', () => {
         railReads(reads.asked).filter((query) => query.get('group_by') === dimension).length,
       ]),
     )
-    // The page's own read of the week by task, and its read by account, ask what two tiles do.
-    expect(byDimension).toEqual(
-      Object.fromEntries(
-        USAGE_DIMENSIONS.map((one) => [one, one === 'work_item' || one === 'account' ? 2 : 1]),
-      ),
-    )
+    // The page's own read of the week by task, and its read by account, ask what two tiles do,
+    // and each is asked once for both.
+    expect(byDimension).toEqual(Object.fromEntries(USAGE_DIMENSIONS.map((one) => [one, 1])))
 
-    // Another section: the page reads it, by model, beside the week before, and by account.
+    // Another section: the page reads it, by model, beside the week before; its read of the week
+    // by model is the rail's tile of models, and its read by account the one the view has.
     const opened = reads.asked.length
     await page.setProps({ routeState: { by: 'model' } })
     await flushPromises()
     const groups = (from: number) =>
       reads.asked.slice(from).map((query) => query.get('group_by') ?? '')
-    expect(groups(opened).toSorted()).toEqual(['account', 'model', 'model'])
+    expect(groups(opened)).toEqual(['model'])
 
     const before = reads.asked.length
     await page.setProps({ routeState: { by: 'model', period: 'weeks4' } })
     await flushPromises()
+    // A new period: a read a dimension, the page's own by account among them.
     const fresh = reads.asked.slice(before).filter((query) => !query.get('compare'))
     expect(fresh.map((query) => query.get('group_by') ?? '').toSorted()).toEqual(
-      [...USAGE_DIMENSIONS, 'account'].toSorted(),
+      [...USAGE_DIMENSIONS].toSorted(),
     )
 
     const filtered = reads.asked.length
@@ -161,7 +160,7 @@ describe('the reads', () => {
     await flushPromises()
     const narrowed = reads.asked.slice(filtered).filter((query) => !query.get('compare'))
     expect(narrowed.filter((query) => query.get('model') === 'model-a')).toHaveLength(
-      USAGE_DIMENSIONS.length + 1,
+      USAGE_DIMENSIONS.length,
     )
   })
 

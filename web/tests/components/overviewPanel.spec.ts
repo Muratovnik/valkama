@@ -86,12 +86,12 @@ describe('the overview on the page', () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics()
     expect(cards(page)).toEqual(['work_item', 'model', 'role', 'project'])
-    // This week and the same days of the week before, by task, and the rail's tile of tasks;
-    // nothing more for the tasks' card.
-    expect(reads.grouped('work_item')).toHaveLength(3)
-    // Each card's read, and the rail's tile of the same dimension.
+    // This week and the same days of the week before, by task, the first shared with the rail's
+    // tile of tasks; nothing more for the tasks' card.
+    expect(reads.grouped('work_item')).toHaveLength(2)
+    // Each card's read, the same as the rail's tile of that dimension and read once for both.
     for (const dimension of ['model', 'role', 'project'])
-      expect(reads.grouped(dimension), dimension).toHaveLength(2)
+      expect(reads.grouped(dimension), dimension).toHaveLength(1)
     expect(reads.asked.filter((query) => outline(query))).toHaveLength(1)
     expect(words(card(page, 'model').text())).toContain('model-b')
   })

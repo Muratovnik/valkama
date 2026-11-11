@@ -6,16 +6,20 @@
  * A new view asks again and drops the answer to the one it replaced, so a slow read never
  * draws over a later one. While it asks, the last answer stays on screen as a refresh in flight
  * rather than blanking into a wait; only the first read waits with nothing to show.
+ *
+ * Every read goes through the page's shared reads (`useSharedUsage`), as of the moment they keep
+ * for the view: another section asks only what no other part of the page has asked already.
  */
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
+import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { comparedBounds, comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
 import { breakdownOf } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
-import { fetchUsage, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type {
   Usage,
   UsageDimension,
@@ -92,12 +96,12 @@ function compared(usage: Usage, before: Usage | null | undefined): Usage {
 }
 
 export function useUsageRead(options: {
-  now?: () => Date
+  shared: SharedUsage
   /** The project the page is scoped to, which every read is filtered to; null at the top. */
   projectId: () => string | null
   view: () => AnalyticsView
 }) {
-  const now = options.now ?? (() => new Date())
+  const { now, read: ask } = options.shared
   const state = shallowRef<PlatformUiState<Usage>>(uiLoading())
   /** The period the shown answer was read for; null while a custom period is unfinished. */
   const bounds = shallowRef<PeriodBounds | null>(null)
@@ -174,10 +178,10 @@ export function useUsageRead(options: {
     const by = breakdownOf(view)
     const askedWith = filters.value
     const before = comparedPeriod(view, at)
-    const asking = fetchUsage(query(period, [by], !before), signal)
-    const askingBefore = before ? orNull(fetchUsage(query(before, [by], false), signal)) : null
+    const asking = ask(query(period, [by], !before), signal)
+    const askingBefore = before ? orNull(ask(query(before, [by], false), signal)) : null
     const askingAccounts =
-      by === 'account' ? null : orNull(fetchUsage(query(period, ['account'], false), signal))
+      by === 'account' ? null : orNull(ask(query(period, ['account'], false), signal))
     let usage: Usage
     try {
       usage = compared(await asking, askingBefore ? await askingBefore : undefined)
@@ -219,7 +223,7 @@ export function useUsageRead(options: {
     await Promise.all(
       missing.map(async (dimension) => {
         try {
-          const usage = await fetchUsage(
+          const usage = await ask(
             { ...period, groupBy: [dimension], filters: scope.value, compare: false },
             signal,
           )

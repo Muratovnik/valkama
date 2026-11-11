@@ -8,13 +8,14 @@
  *
  * Asked again for each new answer, and the read of the one before dropped. While it reads, and
  * when it fails or the answer holds no period before, there is no outline: the chart says which,
- * and never draws the last answer's outline behind a new answer's steps.
+ * and never draws the last answer's outline behind a new answer's steps. It goes through the
+ * page's shared reads (`useSharedUsage`), as every read of the page does.
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
 
+import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
-import { fetchUsage } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageFilters } from '@/shared/api/analyticsApi.ts'
 
 /** The steps of the period before, or that they are being read or could not be. */
@@ -27,6 +28,7 @@ export function usePeriodBefore(options: {
   filters: () => UsageFilters
   usage: () => Usage
 }) {
+  const shared = useSharedUsage()
   const steps = shallowRef<BeforeSteps>('loading')
   let reading: AbortController | null = null
 
@@ -42,7 +44,7 @@ export function usePeriodBefore(options: {
     }
     steps.value = 'loading'
     try {
-      const before = await fetchUsage(
+      const before = await shared.read(
         {
           ...compared,
           groupBy: [],

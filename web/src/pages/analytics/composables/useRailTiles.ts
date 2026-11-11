@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useRailReads } from '@/pages/analytics/composables/useRailReads.ts'
 import type { RailRead } from '@/pages/analytics/composables/useRailReads.ts'
+import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { dimensionFigures, overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
@@ -60,6 +61,8 @@ const standing = (state: RailTileModel['state'], lead: string): RailTileModel =>
 })
 
 export function useRailTiles(options: {
+  /** The page's shared reads, which the dimensions' reads go through. */
+  shared: SharedUsage
   /** The dimensions of the rail, each a tile after the overview's. */
   dimensions: () => readonly UsageDimension[]
   /** The page's own answer, which the overview's tile reads. */

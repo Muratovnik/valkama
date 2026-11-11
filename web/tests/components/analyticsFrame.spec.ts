@@ -141,8 +141,8 @@ describe('the panel', () => {
     expect(page.find('.spending-bars').exists()).toBe(false)
     expect(page.find('.spending-table').exists()).toBe(false)
     // The overview's own read is by task, so moving to the task section asks nothing again: the
-    // page's read, the same days of the week before, and the rail's tile of tasks.
-    expect(reads.grouped('work_item')).toHaveLength(3)
+    // page's read, which the rail's tile of tasks shares, and the same days of the week before.
+    expect(reads.grouped('work_item')).toHaveLength(2)
     const asked = reads.asked.length
 
     await page.setProps({ routeState: { by: 'work_item' } })
@@ -254,8 +254,8 @@ describe('the bar', () => {
     expect(add.attributes('aria-expanded')).toBe('true')
     expect((fields.element as HTMLElement).style.display).toBe('')
     expect(fields.findAll('[data-dimension]')).toHaveLength(USAGE_DIMENSIONS.length)
-    // The rail's tile of models, and what the model's field offers.
-    expect(reads.grouped('model')).toHaveLength(2)
+    // The rail's tile of models, which is what the model's field offers, read once for both.
+    expect(reads.grouped('model')).toHaveLength(1)
   })
 
   it('says how old the newest record is, and reads the figures again', async () => {

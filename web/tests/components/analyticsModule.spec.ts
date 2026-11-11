@@ -272,9 +272,12 @@ describe('the Analytics page', () => {
     const page = await mountAnalytics()
     expect(page.findAll('.period-mark')).toHaveLength(1)
 
-    // The new view's answer lands before its accounts: no mark until they do.
+    // The new view's answer lands before its accounts: no mark until they do. A filter that keeps
+    // both accounts makes it a new view, whose accounts are read anew; another section of the same
+    // view would take the accounts it has.
+    const main = JSON.stringify({ role: ['main'] })
     holding = true
-    await page.setProps({ routeState: { by: 'model' } })
+    await page.setProps({ routeState: { by: 'model', filters: main } })
     await flushPromises()
     expect(page.get('.spending-days h2').text()).toContain('by model')
     expect(page.findAll('.period-mark')).toHaveLength(0)
@@ -285,7 +288,7 @@ describe('the Analytics page', () => {
     expect(page.find('.spending-days-note').exists()).toBe(false)
 
     // An account read that fails says the marks are not there.
-    await page.setProps({ routeState: { by: 'role' } })
+    await page.setProps({ routeState: { by: 'role', period: 'weeks4', filters: main } })
     await flushPromises()
     reads.held[1]?.release({ status: 500 })
     await flushPromises()
@@ -319,14 +322,17 @@ describe('the Analytics page', () => {
       week: await asks({ by: 'model', measure: 'cost' }),
     }
     // A view: its answer and its accounts, and for this week the same days of the week before;
-    // the values offered only when the period changes; nothing for the measure alone.
+    // the values offered only when the period changes; nothing for the measure alone. A read the
+    // view already asked is not asked again: the values offered for accounts are the page's own
+    // read of them, which another section takes as well, and with no filter set this week's read
+    // by model and by account are the values offered for those two.
     expect(counts).toEqual({
       opened: 2,
-      filtersOpened: 9,
-      by: 2,
+      filtersOpened: 8,
+      by: 1,
       measure: 0,
       filter: 2,
-      week: 3 + 9,
+      week: 3 + 9 - 2,
     })
   })
 

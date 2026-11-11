@@ -44,6 +44,8 @@ const props = defineProps<{
   compared: PeriodBounds | null
   /** The filters the answer was read with, its scope's project among them. */
   filters: UsageFilters
+  /** The period the answer was asked for, as it was asked, which each card reads too. */
+  period: PeriodBounds | null
   /** Whether the page is scoped to one project, which leaves the projects out. */
   projectScoped: boolean
   /** When the answer was asked for, which says which step is not over yet. */
@@ -85,6 +87,7 @@ const beforeSteps = usePeriodBefore({
 const top = useTopValues({
   usage: () => props.usage,
   filters: () => props.filters,
+  period: () => props.period,
   dimensions: () => cards.value,
 })
 
