@@ -130,7 +130,6 @@ export const analyticsMessages = {
       table: {
         title: 'Spending {by}',
         beside: 'Spending {by}, beside {period}',
-        before: '{measure}, {period}',
         change: 'Change',
         unread: 'The period before was not read, so this table shows this period alone.',
         download: 'Download CSV',
@@ -306,7 +305,6 @@ export const analyticsMessages = {
       table: {
         title: 'Расход {by}',
         beside: 'Расход {by} в сравнении с периодом {period}',
-        before: '{measure}, {period}',
         change: 'Изменение',
         unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
         download: 'Скачать CSV',

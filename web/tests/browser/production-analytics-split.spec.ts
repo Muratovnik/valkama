@@ -1,10 +1,12 @@
 /**
  * How a dimension's panel held beside the rail shares its height, in the real app, over thirty
  * tasks. The figures that choose the measure stand whole at the top, outside any scroll; the
- * charts under them take up to 55% of the rest and scroll inside past that, and the table takes
- * the remainder, never less than 14rem. At 1440×900 that leaves five ranked rows and a whole row of
- * small charts in view, and a wheel over the table scrolls it alone while the document and the
- * panel stand still. Each run prints what it measured.
+ * charts under them take up to 45% of the rest and scroll inside past that, and the table takes
+ * the remainder, never less than 14rem. At 1440×900 that leaves a few ranked rows, a whole row of
+ * small charts and at least four whole rows of the table in view, seven at 1920×1080; each row of
+ * the table and its heading row is one line. A wheel over the table scrolls it alone while the
+ * document and the panel stand still, and its heading row, names and total stay in view. Each run
+ * prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -54,6 +56,31 @@ function split(page: Page) {
       inner.top >= outer.top - 0.5 &&
       inner.bottom <= outer.bottom + 0.5 &&
       inner.bottom <= window.innerHeight + 0.5
+    // The body rows standing whole between the frame's sticky heading row and its total: the
+    // cells stick, not the row groups, so the cells say where they stand.
+    const tableRowsWhole = () => {
+      const frame = document.querySelector('.spending-table-frame')
+      const head = frame?.querySelector('thead th')?.getBoundingClientRect()
+      const foot = frame?.querySelector('tfoot th')?.getBoundingClientRect()
+      if (!frame || !head || !foot) return 0
+      return [...frame.querySelectorAll('tbody tr')].filter((row) => {
+        const box = row.getBoundingClientRect()
+        return box.top >= head.bottom - 0.5 && box.bottom <= foot.top + 0.5
+      }).length
+    }
+    // How many lines each cell of the heading row and of the body rows holds: its height less
+    // its padding, by its own line height.
+    const linesOf = () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '.spending-table-frame thead .chart-cell, .spending-table-frame tbody .chart-cell',
+        ),
+      ].map((one) => {
+        const style = getComputedStyle(one)
+        const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2
+        const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
+        return Math.floor((one.getBoundingClientRect().height - padding) / line + 0.4)
+      })
     const wholeIn = (selector: string) =>
       [...document.querySelectorAll(selector)].filter((one) =>
         within(one.getBoundingClientRect(), charts),
@@ -75,6 +102,11 @@ function split(page: Page) {
       charts: Math.round(charts.height + reach('marginTop') + reach('marginBottom')),
       table: Math.round(table.height),
       rankedRows: wholeIn('.spending-bars .ranked-row'),
+      tableRows: tableRowsWhole(),
+      // The heading row over the frame, and the controls in it: one row is as tall as they are.
+      headRow: Math.round(boxOf('.spending-table-head')?.height ?? 0),
+      controls: Math.round(boxOf('.spending-table-controls')?.height ?? 0),
+      lines: linesOf(),
       multiples: wholeIn('.spending-multiples .multiple'),
       scrollers: scrollers.map((one) => one.className),
       documentScrolls: root.scrollHeight - root.clientHeight,
@@ -123,15 +155,22 @@ for (const [width, height] of [
     expect(measured.tilesWhole, 'figures cut or under a scroll').toBe(true)
     expect(measured.documentScrolls).toBe(0)
     expect(measured.panelScrolls).toBe(0)
-    // The charts hold more than 55% of the rest, so they stop there; the table keeps the remainder.
-    expect(measured.charts).toBeLessThanOrEqual(Math.ceil(measured.rest * 0.55) + 1)
-    expect(measured.charts).toBeGreaterThanOrEqual(Math.floor(measured.rest * 0.55) - 1)
+    // The charts hold more than 45% of the rest, so they stop there; the table keeps the remainder.
+    expect(measured.charts).toBeLessThanOrEqual(Math.ceil(measured.rest * 0.45) + 1)
+    expect(measured.charts).toBeGreaterThanOrEqual(Math.floor(measured.rest * 0.45) - 1)
     expect(measured.table).toBeGreaterThanOrEqual(14 * 16)
     // Two scrollers and no third: the charts, and the table's frame.
     expect(measured.scrollers.toSorted()).toEqual(
       ['dimension-charts', 'chart-table-frame spending-table-frame'].toSorted(),
     )
     expect(measured.rankedRows, 'ranked rows in view').toBeGreaterThanOrEqual(5)
+    expect(measured.tableRows, 'whole table rows in view').toBeGreaterThanOrEqual(
+      width === 1440 ? 4 : 7,
+    )
+    expect(new Set(measured.lines), 'lines in a cell').toEqual(new Set([1]))
+    expect(measured.headRow, 'the heading row on one line').toBeLessThanOrEqual(
+      measured.controls + 2,
+    )
     expect(measured.multiples, 'small charts in view, title and plot').toBeGreaterThanOrEqual(1)
 
     // The day chart's value axis and the small charts' scale count agent time in one unit each.
@@ -145,6 +184,25 @@ for (const [width, height] of [
     await wheelOverTable(page)
     await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
     expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })
+    // Scrolled, the heading row still stands at the frame's top, the total at its bottom, and the
+    // names stay pinned at its start.
+    const held = await page.evaluate(() => {
+      const frame = document.querySelector('.spending-table-frame')
+      const box = frame?.getBoundingClientRect()
+      const head = frame?.querySelector('thead th')?.getBoundingClientRect()
+      const foot = frame?.querySelector('tfoot th')?.getBoundingClientRect()
+      const name = frame?.querySelector('tbody th')
+      if (!frame || !box || !head || !foot || !name) throw new Error('the table lost a part')
+      return {
+        head: Math.round(head.top - box.top),
+        foot: Math.round(box.top + frame.clientHeight - foot.bottom),
+        name: getComputedStyle(name).position,
+      }
+    })
+    await record(info, `analytics split sticky ${width}x${height}`, held)
+    expect(held.head).toBeLessThanOrEqual(1)
+    expect(Math.abs(held.foot)).toBeLessThanOrEqual(1)
+    expect(held.name).toBe('sticky')
   })
 
 /** The button at the table that gives it the whole panel, by what it says in either state. */
@@ -196,11 +254,23 @@ test('the table takes the whole panel and gives it back, and the page keeps the 
   await expect(page.locator('.dimension-charts')).toBeVisible()
 })
 
-test('a section that is not held has no button for the whole panel', async ({ page }) => {
+test('a section that is not held has no button for the whole panel', async ({ page }, info) => {
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })
   await page.goto(pageAt({ by: 'work_item', open: 'section' }))
   await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
   await expect(page.locator('.dimension-panel')).toHaveAttribute('data-fills', 'false')
   await expect(wholeButton(page)).toHaveCount(0)
+  // At this width a column's heading takes two lines at most, and a row's name still one.
+  const lines = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.spending-table-frame thead .table-sort')].map(
+      (one) => {
+        const style = getComputedStyle(one)
+        const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2
+        return Math.round(one.getBoundingClientRect().height / line)
+      },
+    ),
+  )
+  await record(info, 'analytics table heading lines 1024x768', lines)
+  expect(Math.max(...lines)).toBeLessThanOrEqual(2)
 })

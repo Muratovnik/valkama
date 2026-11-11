@@ -117,12 +117,16 @@ export function useTableModel(source: () => TableSource) {
     const period = comparison ? words.period(comparison.period.from, comparison.period.to) : ''
     const kinds = kindsByValue(usage.rows, by)
     const columns = [
-      ...MEASURES.map((key) => ({ key, text: words.measure(key), chosen: key === measure })),
+      ...MEASURES.map((key) => ({
+        key,
+        text: t(`analytics.panel.table.heads.${key}`),
+        chosen: key === measure,
+      })),
       ...(comparison
         ? [
             {
               key: 'before',
-              text: t('analytics.table.before', { measure: words.measure(measure), period }),
+              text: t('analytics.panel.table.heads.before', { period }),
               chosen: true,
             },
             { key: 'change', text: t('analytics.table.change'), chosen: false },

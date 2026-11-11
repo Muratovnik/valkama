@@ -8,7 +8,7 @@
  * one hue in the bars, the small charts and the day chart (`valueSlots`), and its name beside it.
  *
  * Where the page holds it to the panel's height (`fills`), the figures stay in view at the top and
- * the charts and the table share the rest: the charts up to a little over half of it, scrolling on
+ * the charts and the table share the rest: the charts up to a little under half of it, scrolling on
  * their own past that, the table the remainder and never less than 14rem. A wheel moves the part
  * it is over and never the panel or the page. Elsewhere, as on a phone, the panel scrolls and the
  * table keeps a frame of its own.
@@ -210,7 +210,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
 /* Held to the panel's height: the figures stand whole at the top, outside any scroll, since they
    choose what everything under them shows. The charts and the table share the rest: the charts
-   take what they hold up to 55% of it and scroll inside past that, the table the remainder and
+   take what they hold up to 45% of it and scroll inside past that, the table the remainder and
    never less than 14rem, so a few of its rows are always in view. */
 .dimension-panel[data-fills='true'] {
   display: flex;
@@ -224,7 +224,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
   & .dimension-body {
     flex: 1 1 0;
     grid-template-rows:
-      fit-content(min(55%, 100% - 14rem - var(--space-4)))
+      fit-content(min(45%, 100% - 14rem - var(--space-4)))
       minmax(14rem, 1fr);
     gap: var(--space-4);
   }
