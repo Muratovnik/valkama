@@ -13,6 +13,11 @@ import { test } from './test.ts'
 
 const WIDTHS = [1440, 1024, 390] as const
 
+/** `--size-control-inline`: the least width of a period's column that acts, in pixels. */
+const ACTING_COLUMN = 28
+/** The smallest target a pointer is asked to hit, in pixels. */
+const SMALLEST_TARGET = 24
+
 interface Box {
   bottom: number
   left: number
@@ -116,9 +121,14 @@ function measure(page: Page) {
       },
       // How wide each thing a pointer presses in the two charts of periods is: a day's segments
       // where segments act, an hour's column where columns do.
-      pressed: all(
-        '[data-harness="days"] .period-segment, [data-harness="hours"] .period-column',
-      ).map((element) => element.getBoundingClientRect().width),
+      pressed: {
+        segments: all('[data-harness="days"] .period-segment').map(
+          (element) => element.getBoundingClientRect().width,
+        ),
+        columns: all('[data-harness="hours"] .period-column').map(
+          (element) => element.getBoundingClientRect().width,
+        ),
+      },
       tables: all('[data-harness$="-table"] table').map((table) => ({
         frame: box(table.parentElement ?? table),
         table: box(table),
@@ -195,8 +205,17 @@ for (const width of WIDTHS) {
 
     // A table wider than its column scrolls inside its own frame instead of the page.
     for (const table of seen.tables) expect(table.frame.right).toBeLessThanOrEqual(seen.viewport)
-    // A period that acts keeps a width a pointer can hit, however many the chart holds.
-    expect(Math.min(...seen.pressed), 'the narrowest pressed period').toBeGreaterThanOrEqual(24)
+    // A period that acts keeps a width a pointer can hit, however many the chart holds: its
+    // column the width of an inline action, and a segment the stack drawn inside that column,
+    // which is the smallest target the product allows.
+    const narrowest = (widths: number[]) => Math.round(Math.min(...widths) * 10) / 10
+    expect(narrowest(seen.pressed.columns), 'the narrowest pressed column').toBeGreaterThanOrEqual(
+      ACTING_COLUMN,
+    )
+    expect(
+      narrowest(seen.pressed.segments),
+      'the narrowest pressed segment',
+    ).toBeGreaterThanOrEqual(SMALLEST_TARGET)
   })
 }
 
@@ -220,6 +239,8 @@ test('the time axis names no more periods as the chart narrows', async ({ page }
   })
   expect(counts[390]).toBeLessThanOrEqual(counts[1440] ?? 0)
   expect(counts[390]).toBeGreaterThanOrEqual(2)
+  // An axis that read no width would name the two ends alone, at any width.
+  expect(counts[1440]).toBeGreaterThan(2)
 })
 
 /** Where the ring of the focused element is drawn, and whether something cuts it. */
