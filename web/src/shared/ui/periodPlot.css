@@ -1,0 +1,82 @@
+/*
+ * The plot of a chart of periods, read by `PeriodColumns` as its own scoped style: the frame it
+ * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
+ * beside them, the change numbers over them and the periods' names under — and what keeps the
+ * scale in view while the periods scroll.
+ */
+
+/* A plot wider than the chart scrolls here, and the page never does. A period scrolled to
+   stands clear of the scale, which stays over the plot's start. */
+.period-frame {
+  --period-gutter: 0px;
+
+  min-width: 0;
+  scroll-padding-inline-start: var(--period-gutter);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.period-plot {
+  --period-count: 1;
+
+  display: grid;
+  grid-template-areas:
+    '. markers'
+    'scale field'
+    '. axis';
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+  padding-block-start: var(--space-2);
+
+  /* Periods that act: each at least the smallest control a pointer hits, with the gap the
+     periods keep between them, so the plot is as wide as that takes and no narrower than its
+     chart. The plot's own box grows with its tracks: the scale can stay in view only inside
+     the box that holds it, and keeps its width only in a track that does not give it up. */
+  &.period-acting {
+    grid-template-columns:
+      max-content
+      minmax(
+        calc(
+          var(--period-count) * var(--size-control-inline) + (var(--period-count) - 1) *
+            var(--space-half)
+        ),
+        1fr
+      );
+    inline-size: max-content;
+    min-inline-size: 100%;
+  }
+}
+
+/* Under a scrolled plot the scale stays at the chart's start. This ground stands behind it,
+   the height of the plot and as wide as the scale and the gap after it, and covers the
+   periods, their names and the change numbers that pass under. */
+.period-gutter {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  grid-row: 1 / -1;
+  grid-column: 1;
+  margin-inline-end: calc(-1 * var(--space-2));
+  background: var(--color-canvas);
+  pointer-events: none;
+}
+
+.period-markers {
+  grid-area: markers;
+  padding-block-end: var(--space-1);
+}
+
+.period-scale {
+  grid-area: scale;
+
+  .period-acting > & {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 2;
+  }
+}
+
+.period-axis {
+  grid-area: axis;
+  padding-block-start: var(--space-2);
+}

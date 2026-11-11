@@ -17,10 +17,12 @@
  * then describes it.
  * The periods are one stop for Tab (`useChartCursor`); the arrows move between them, and up
  * and down between the segments of one where segments act.
+ *
+ * A period that acts is never narrower than a pointer can hit. A span of such periods wider
+ * than the chart scrolls sideways inside it, the scale staying in view, and opens on its last
+ * periods, the ones nearest now; where nothing acts the periods share the width they are given.
  */
 import { computed, ref, useId } from 'vue'
-
-import { useResizeObserver } from '@vueuse/core'
 
 import type {
   PeriodChartProps,
@@ -41,6 +43,7 @@ import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
+import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
 const props = withDefaults(defineProps<PeriodChartProps>(), {
   actionable: null,
@@ -53,11 +56,16 @@ const chart = computed(() => stackColumns(props.columns, props.series, props.mar
 const empty = computed(() => !props.columns.length || !props.series.length)
 const bySegment = computed(() => props.actionable === 'segment')
 
+const acting = computed(() => props.actionable !== null)
+const frame = ref<HTMLElement | null>(null)
+const plot = ref<HTMLElement | null>(null)
 const field = ref<HTMLElement | null>(null)
-const width = ref(0)
-useResizeObserver(field, ([entry]) => {
-  if (entry) width.value = entry.contentRect.width
-})
+const { gutter, width } = usePlotFrame(
+  frame,
+  plot,
+  field,
+  () => `${props.columns.length}:${props.columns[0]?.key ?? ''}:${props.columns.at(-1)?.key ?? ''}`,
+)
 
 const scale = computed<PlacedTick[]>(() =>
   chart.value.ticks.map((tick) => ({
@@ -178,91 +186,104 @@ function key(event: KeyboardEvent, at: number | null) {
         {{ readout }}
       </p>
       <div
-        class="period-plot"
-        :style="{ '--period-count': columns.length }"
+        ref="frame"
+        class="period-frame"
+        :style="{ '--period-gutter': gutter }"
       >
-        <ChartTicks
-          v-if="markers.length"
-          class="period-markers"
-          along="inline"
-          :ticks="markers"
-        />
-        <ChartTicks
-          class="period-scale"
-          along="block"
-          :ticks="scale"
-        />
         <div
-          ref="field"
-          class="period-field"
+          ref="plot"
+          class="period-plot"
+          :class="{ 'period-acting': acting }"
+          :style="{ '--period-count': columns.length }"
         >
           <span
-            v-for="tick in chart.ticks"
-            :key="tick"
-            class="period-grid"
+            v-if="acting"
+            class="period-gutter"
             aria-hidden="true"
-            :class="gridClass(tick)"
-            :style="gridStyle(tick)"
           />
-          <div class="period-bars">
-            <div
-              v-for="(one, index) in chart.columns"
-              :key="one.column.key"
-              class="period-slot"
-              :data-key="one.column.key"
-              :data-shown="isShown(index)"
-              @pointerenter="hovered = index"
-              @pointerleave="hovered = null"
-            >
-              <component
-                :is="columnTag"
-                class="period-column"
-                v-bind="columnAttrs(one, index)"
-                @click="press(one, null)"
-                @focus="focus(index, null)"
-                @blur="focused = null"
-                @keydown="(event: KeyboardEvent) => key(event, null)"
+          <ChartTicks
+            v-if="markers.length"
+            class="period-markers"
+            along="inline"
+            :ticks="markers"
+          />
+          <ChartTicks
+            class="period-scale"
+            along="block"
+            :ticks="scale"
+          />
+          <div
+            ref="field"
+            class="period-field"
+          >
+            <span
+              v-for="tick in chart.ticks"
+              :key="tick"
+              class="period-grid"
+              aria-hidden="true"
+              :class="gridClass(tick)"
+              :style="gridStyle(tick)"
+            />
+            <div class="period-bars">
+              <div
+                v-for="(one, index) in chart.columns"
+                :key="one.column.key"
+                class="period-slot"
+                :data-key="one.column.key"
+                :data-shown="isShown(index)"
+                @pointerenter="hovered = index"
+                @pointerleave="hovered = null"
               >
-                <span
-                  v-if="summaryId(one, index)"
-                  :id="summaryId(one, index)"
-                  class="visually-hidden"
-                  >{{ summaryOf(one) }}</span
+                <component
+                  :is="columnTag"
+                  class="period-column"
+                  v-bind="columnAttrs(one, index)"
+                  @click="press(one, null)"
+                  @focus="focus(index, null)"
+                  @blur="focused = null"
+                  @keydown="(event: KeyboardEvent) => key(event, null)"
                 >
+                  <span
+                    v-if="summaryId(one, index)"
+                    :id="summaryId(one, index)"
+                    class="visually-hidden"
+                    >{{ summaryOf(one) }}</span
+                  >
+                  <span
+                    class="period-stack"
+                    :class="{ 'period-incomplete': one.column.incomplete }"
+                    :style="stackStyle(one)"
+                  >
+                    <component
+                      :is="segmentTag"
+                      v-for="(segment, at) in one.segments"
+                      :key="segment.series.key"
+                      class="period-segment series-fill"
+                      :data-slot="segment.series.slot"
+                      :data-series="segment.series.key"
+                      :style="segmentStyle(one, at)"
+                      v-bind="segmentAttrs(one, index, at)"
+                      @click="press(one, at)"
+                      @focus="focus(index, at)"
+                      @blur="focused = null"
+                      @keydown="(event: KeyboardEvent) => key(event, at)"
+                    />
+                  </span>
+                </component>
                 <span
-                  class="period-stack"
-                  :class="{ 'period-incomplete': one.column.incomplete }"
-                  :style="stackStyle(one)"
-                >
-                  <component
-                    :is="segmentTag"
-                    v-for="(segment, at) in one.segments"
-                    :key="segment.series.key"
-                    class="period-segment series-fill"
-                    :data-slot="segment.series.slot"
-                    :data-series="segment.series.key"
-                    :style="segmentStyle(one, at)"
-                    v-bind="segmentAttrs(one, index, at)"
-                    @click="press(one, at)"
-                    @focus="focus(index, at)"
-                    @blur="focused = null"
-                    @keydown="(event: KeyboardEvent) => key(event, at)"
-                  />
-                </span>
-              </component>
-              <span
-                v-if="one.marks.length"
-                class="period-mark"
-                aria-hidden="true"
-              />
+                  v-if="one.marks.length"
+                  class="period-mark"
+                  aria-hidden="true"
+                />
+              </div>
             </div>
           </div>
+          <ChartTicks
+            class="period-axis"
+            along="inline"
+            :ticks="days"
+          />
         </div>
-        <ChartTicks
-          class="period-axis"
-          along="inline"
-          :ticks="days"
-        />
       </div>
       <ol
         v-if="notes.length"
@@ -284,6 +305,8 @@ function key(event: KeyboardEvent, at: number | null) {
 
 <style scoped src="@/shared/ui/seriesFill.css"></style>
 
+<style scoped src="@/shared/ui/periodPlot.css"></style>
+
 <style scoped>
 .period-columns {
   display: grid;
@@ -300,35 +323,6 @@ function key(event: KeyboardEvent, at: number | null) {
   color: var(--color-text-muted);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
-}
-
-/* The scale's figures in a column as wide as the widest, the plot beside them, the change
-   numbers over it and the periods' names under it. */
-.period-plot {
-  --period-count: 1;
-
-  display: grid;
-  grid-template-areas:
-    '. markers'
-    'scale field'
-    '. axis';
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: var(--space-2);
-  padding-block-start: var(--space-2);
-}
-
-.period-markers {
-  grid-area: markers;
-  padding-block-end: var(--space-1);
-}
-
-.period-scale {
-  grid-area: scale;
-}
-
-.period-axis {
-  grid-area: axis;
-  padding-block-start: var(--space-2);
 }
 
 .period-field {
@@ -373,6 +367,11 @@ function key(event: KeyboardEvent, at: number | null) {
   position: relative;
   display: flex;
   min-width: 0;
+
+  /* The period the keyboard stands on keeps its whole focus ring over the scale's ground. */
+  &:focus-within {
+    z-index: 3;
+  }
 }
 
 /* The whole height of its period is what a pointer presses, never only the painted part. A
