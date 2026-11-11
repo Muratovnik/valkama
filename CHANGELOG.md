@@ -198,6 +198,13 @@ checkouts are therefore distinguishable even at the same version.
   the one a session was last open in, and the notifications switch says that a notification
   comes even with the window closed and that a click on it opens the work item.
 
+- For contributors: the browser suite builds the app into
+  `web/test-results/<port>/app`, named by `VALKAMA_BROWSER_PORT`, and serves it from there,
+  so a run no longer rewrites the committed `web/dist` and leaves nothing to restore. That
+  build skips the type check, so a type error in a spec is reported by `npm run typecheck`
+  instead of as a server that would not start. `npm run build` still type-checks and writes
+  `web/dist`, and the `server-` specs, which run against the real server, still use it.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
