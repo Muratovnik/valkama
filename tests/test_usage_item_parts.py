@@ -12,7 +12,7 @@ import unittest
 from collections.abc import Mapping, Sequence
 
 from server.planning import api
-from tests.analytics_fixtures import UsageStore, stamp, tokens_sum
+from tests.analytics_fixtures import DAY, HOUR, UsageStore, stamp, tokens_sum
 
 ITEM = "/api/planning/work-item/usage"
 # A thousandth of a second over, four times out of five: each part rounded alone loses one.
@@ -204,6 +204,29 @@ class ItemPartsTests(UsageStore):
         # The adviser's own call took no time and cost what it cost.
         self.assertEqual(0.02, roles[-1]["estimated_api_cost_usd"])
         self.assertIsNone(roles[3]["estimated_api_cost_usd"])
+
+
+class StretchEndTests(UsageStore):
+    def test_a_stretch_ends_with_the_latest_end_among_its_rows(self) -> None:
+        reference, item = self.item()
+        self.session("s1")
+        # A subagent starts first and works into the next day; the session's own agent starts
+        # after it under the same account and is done within minutes. Then another account.
+        # The first stretch ends when the subagent does, on the next day, which is the last day
+        # a reader of the stretches takes the work to span.
+        self.segment("s1", 0, DAY + HOUR, agent="w1", item=item, organization="org-a")
+        self.segment("s1", 100, 200, item=item, organization="org-a")
+        self.segment("s1", DAY + 2 * HOUR, DAY + 3 * HOUR, item=item, organization="org-b")
+        status, body = api.handle_get(self.conn, ITEM, {"id": [reference]})
+        self.assertEqual(200, status)
+        stretches = body["usage"]["account_stretches"]
+        self.assertEqual(
+            [
+                ("org-a", stamp(0), stamp(DAY + HOUR)),
+                ("org-b", stamp(DAY + 2 * HOUR), stamp(DAY + 3 * HOUR)),
+            ],
+            [(s["account"]["id"], s["started_at"], s["ended_at"]) for s in stretches],
+        )
 
 
 if __name__ == "__main__":
