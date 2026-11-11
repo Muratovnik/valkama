@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-import { appBuild, appPort, harnessPort } from './tests/browser/browserRun.ts'
+import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
 import { python, serverStore, storeEnvironment } from './tests/browser/serverStore.ts'
 
 // Two runs on one machine can go at once only on different ports, so
@@ -28,6 +28,7 @@ const store = serverStore()
 export default store
   ? defineConfig({
       testDir: './tests/browser',
+      outputDir: runResults,
       fullyParallel: false,
       retries: 0,
       reporter: 'line',
@@ -49,6 +50,7 @@ export default store
     })
   : defineConfig({
       testDir: './tests/browser',
+      outputDir: runResults,
       // Before the first spec: the app port serves the bundle this run has just built.
       globalSetup: './tests/browser/servedApp.setup.ts',
       fullyParallel: false,

@@ -13,6 +13,12 @@ export const appPort = harnessPort + 1
 /** The app's bundle as this run builds and serves it, relative to `web/`. */
 export const appBuild = `test-results/${harnessPort}/app`
 
+/**
+ * The traces, screenshots and attachments of this run. Playwright empties this directory
+ * when a run starts; a shared one let a run delete the traces of another still going.
+ */
+export const runResults = `test-results/${harnessPort}/results`
+
 /** The `index.html` this run built, as read from disk, and when it was written. */
 export interface BuiltIndex {
   html: string

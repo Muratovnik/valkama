@@ -204,8 +204,10 @@ checkouts are therefore distinguishable even at the same version.
   build skips the type check, so a type error in a spec is reported by `npm run typecheck`
   instead of as a server that would not start. Before the first spec the run checks that the
   app's port serves the page it has just built, and stops on a page that differs or one an
-  earlier run left behind. `npm run build` still type-checks and writes
-  `web/dist`, and the `server-` specs, which run against the real server, still use it.
+  earlier run left behind. Traces and screenshots go to `web/test-results/<port>/results`,
+  so two runs on different ports in one checkout no longer delete each other's.
+  `npm run build` still type-checks and writes `web/dist`, and the `server-` specs, which run
+  against the real server, still use it.
 
 ### Fixed
 
