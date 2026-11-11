@@ -11,10 +11,15 @@
  *
  * How fresh the figures are is the newest record the store holds, of any session: its time and
  * how old it is now, in seconds under a minute, counted on each second without a read, so a page
- * left open says its figures grow old. A live period says beside it that it reads itself again,
- * and how often.
+ * left open says its figures grow old. Its clock time is the browser's own, as the time axis
+ * under it reads. The freshness stands in a box of its own width with figures of one width, so
+ * its count going up moves nothing beside it. A live period says beside it, by a mark and how
+ * often, that it reads itself again; its hint says it in full.
+ *
+ * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
+ * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
  */
-import { computed, useId } from 'vue'
+import { computed, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useIntervalFn, useNow } from '@vueuse/core'
@@ -25,6 +30,7 @@ import { LIVE_INTERVAL } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
 import { filterKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import { PERIODS } from '@/shared/api/analyticsAddress.ts'
@@ -76,6 +82,16 @@ function choosePeriod(period: PeriodPreset) {
   emit('amend', period === 'custom' ? { period, ...customDays(new Date()) } : { period })
 }
 
+/** The periods' row, which scrolls sideways on a phone, and keeps the chosen one in view. */
+const periods = ref<{ $el: HTMLElement } | null>(null)
+function showChosen() {
+  periods.value?.$el
+    .querySelector<HTMLElement>('.active')
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+onMounted(showChosen)
+watch(() => props.view.period, showChosen, { flush: 'post' })
+
 const rangeError = computed(() =>
   props.view.period === 'custom' &&
   props.view.from &&
@@ -114,12 +130,10 @@ function takeOut(index: number) {
 
 const removeLabel = (label: string) => t('analytics.filters.remove', { label })
 
-/** That the period is live, and how often it reads itself again. */
-const liveWords = computed(() =>
-  t('analytics.time.live', {
-    interval: t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }),
-  }),
-)
+/** That the period is live and how often it reads itself again: in full, and as the bar says it. */
+const liveInterval = computed(() => t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }))
+const liveWords = computed(() => t('analytics.time.live', { interval: liveInterval.value }))
+const liveShort = computed(() => t('analytics.time.liveShort', { interval: liveInterval.value }))
 
 const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 1000) })
 /** How fresh the figures are, as words and, where there is one, the moment they stand for. */
@@ -132,7 +146,7 @@ const fresh = computed(() => {
   const ago = agoWords(at, shownAt, { ...spanWordsOf(t), seconds })
   // The clock time alone on the day it is seen, with its day before that.
   const today = new Date(at).toDateString() === new Date(shownAt).toDateString()
-  const named = words.stepName(props.lastEventAt, 'minute')
+  const named = words.stepName(momentAtOffset(at), 'minute')
   return {
     at: props.lastEventAt,
     words: t('analytics.frame.fresh', { at: today ? named.label : named.fullLabel, ago }),
@@ -147,6 +161,7 @@ const fresh = computed(() => {
   <div class="analytics-bar">
     <div class="analytics-bar-line">
       <SegmentedControl
+        ref="periods"
         class="analytics-period"
         size="compact"
         :label="t('analytics.period.label')"
@@ -203,18 +218,20 @@ const fresh = computed(() => {
       <div class="analytics-bar-read">
         <p
           v-if="live"
+          v-tooltip.detail="liveWords"
           class="analytics-bar-live"
         >
           <span
             class="analytics-bar-live-mark"
             aria-hidden="true"
-          />{{ liveWords }}
+          />{{ liveShort }}
         </p>
         <p class="analytics-bar-fresh">
           <template v-if="fresh">
             <time
               v-if="fresh.at"
-              v-tooltip.detail="fresh.full"
+              v-tooltip.detail="{ text: fresh.full, words: fresh.words }"
+              class="one-line"
               :datetime="fresh.at"
               >{{ fresh.words }}</time
             >
@@ -232,7 +249,7 @@ const fresh = computed(() => {
             name="refresh"
             :size="16"
           />
-          {{ t('analytics.frame.refresh') }}
+          <span class="analytics-refresh-words">{{ t('analytics.frame.refresh') }}</span>
         </VButton>
       </div>
     </div>
@@ -337,10 +354,61 @@ const fresh = computed(() => {
   }
 }
 
+/* The freshness keeps one box whatever its count says, «9 s» or «12 min», and its figures one
+   width, so a tick of its count moves and resizes nothing beside it; a longer age ends in an
+   ellipsis and its hint says it whole. */
 .analytics-bar-fresh {
+  display: grid;
+  inline-size: 21em;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* A phone: the periods one row that scrolls sideways, and the filter, the freshness and the
+   read again, by its icon alone, the row under it. */
+@container (width <= 30rem) {
+  .analytics-bar-line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .analytics-period {
+    flex-wrap: nowrap;
+    grid-column: 1 / -1;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .analytics-bar-days {
+    grid-column: 1 / -1;
+  }
+
+  .analytics-bar-read {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .analytics-bar-fresh {
+    flex: 1 1 auto;
+    order: 0;
+    min-width: 0;
+    inline-size: auto;
+  }
+
+  .analytics-refresh-words {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 
 /* A live period says so in words; the mark before them is their sign, not their meaning. */

@@ -187,8 +187,12 @@ export const DETAIL_TOOLTIPS = new Map([
     'each change of a chart with too many for a line each, where the line under it only counts them',
   ],
   [
-    'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="fresh.full"',
-    'the day and the time of the newest record, where the bar says only how long ago it was',
+    'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="{ text: fresh.full, words: fresh.words }"',
+    'the day and the time of the newest record, where the bar says only how long ago it was; while its own words are cut, they come first, whole',
+  ],
+  [
+    'pages/analytics/components/AnalyticsBar.vue <p> v-tooltip.detail="liveWords"',
+    'that the period is live, where the bar shows only its mark and how often it reads itself again',
   ],
   [
     'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: tile.leadDetail, words: tile.lead }"',
