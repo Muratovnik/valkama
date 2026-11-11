@@ -20,7 +20,9 @@ import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageF
  * A dimension's tile is how many values worked in the period, the first of them in the measure
  * with its share of the whole, and the shares of the first few, what they leave out folded into
  * one rest. Work with no value there and work nobody can place are never a first value while a
- * real one worked; they are part of the whole, and of the rest.
+ * real one worked; they are part of the whole, and of the rest, except work with no value there
+ * that holds a share a reader should not miss (`APART_PART`): that is a part of its own, after
+ * the values and before the rest, so the largest bucket is never hidden inside the rest.
  */
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -75,10 +77,16 @@ const NAMED_PARTS = 4
 /** A share under this is no part a reader can see; it goes to the rest. */
 const SMALLEST_PART = 0.02
 
+/** Work with no value there holding this share or more is a part of its own, not in the rest. */
+const APART_PART = 0.05
+
 /** What is left of the whole under half a percent is rounding, not a rest. */
 const ROUNDING = 0.005
 
-/** A part of the share bar: a value with its share, or the rest (`line` null). */
+/**
+ * A part of the share bar: a value with its share, work with no value there (`line.kind` is
+ * `none`), or the rest (`line` null).
+ */
 interface SharePortion {
   key: string
   line: SpendingLine | null
@@ -116,6 +124,9 @@ export function dimensionFigures(
     .slice(0, NAMED_PARTS)
     .filter((line) => shareOf(line) >= SMALLEST_PART)
     .map((line) => ({ key: line.key, line, share: shareOf(line) }))
+  const none = lines.find((line) => line.kind === 'none')
+  if (none && whole > 0 && shareOf(none) >= APART_PART)
+    named.push({ key: none.key, line: none, share: shareOf(none) })
   const rest = whole > 0 ? 1 - named.reduce((sum, part) => sum + part.share, 0) : 0
   return {
     count: categories.length,

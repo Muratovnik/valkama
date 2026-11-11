@@ -5,9 +5,11 @@
  * It reads as one image whose words (`label`) name every part with its share, so no part is told
  * by its hue alone: the parts are apart by a gap of ground and in the order the words say them.
  *
- * A part takes the hue `seriesSlots()` pinned to its name (`slot`), and the rest `other`, the
- * neutral a folded tail is drawn in everywhere. A forced palette draws the parts in its ink and
- * the rest in its quiet ink, with the gaps between them. With no part to draw — nothing spent —
+ * A part takes the hue its host gave its name (`slot`), and the rest `other`, the neutral a
+ * folded tail is drawn in everywhere. A part that is no value (`apart`), such as work on no task,
+ * is the neutral hatched, so it is told from the rest without a hue. A forced palette draws the
+ * parts in its ink, the rest in its quiet ink and a part apart in that ink hatched, with the gaps
+ * between them. With no part to draw — nothing spent —
  * the bar is its empty track, the same size, so a host never moves when its figures arrive.
  *
  * Presentational: nothing in it acts, and nothing in it moves under the pointer.
@@ -20,6 +22,8 @@ export interface SharePart {
   share: number
   /** The part's hue; `other` for what the named parts leave out. */
   slot: SeriesSlot
+  /** A part that is no value: the neutral, hatched. */
+  apart?: boolean
 }
 
 defineProps<{
@@ -43,6 +47,7 @@ const partStyle = (part: SharePart) => ({ flexGrow: part.share })
       v-for="part in parts"
       :key="part.key"
       class="mini-share-part series-fill"
+      :class="{ 'mini-share-apart': part.apart }"
       :data-key="part.key"
       :data-slot="part.slot"
       :style="partStyle(part)"
@@ -78,5 +83,14 @@ const partStyle = (part: SharePart) => ({ flexGrow: part.share })
   display: block;
   flex: 0 1 0;
   min-inline-size: var(--space-hair);
+}
+
+/* No value: the neutral hatched, in a forced palette too, where the mask is kept. */
+.mini-share-apart {
+  mask-image: repeating-linear-gradient(
+    135deg,
+    black 0 var(--space-half),
+    rgb(0 0 0 / 35%) var(--space-half) var(--space-1)
+  );
 }
 </style>

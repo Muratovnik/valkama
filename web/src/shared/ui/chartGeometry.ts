@@ -48,6 +48,11 @@ export interface RankedRow {
    */
   href?: string
   kind?: RankedRowKind
+  /**
+   * Whether a row ranked among the categories names no value, such as work on no task in a list
+   * that ranks it by its figure: its name is then in the quiet ink, slanted, as a note is.
+   */
+  quiet?: boolean
   /** The hue of a row that names a series drawn elsewhere on the page; slot 1 otherwise. */
   slot?: SeriesSlot
 }

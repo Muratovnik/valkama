@@ -59,6 +59,7 @@ const busy = computed(() =>
       />
       <MiniShareBar
         v-else-if="tile.shares"
+        v-tooltip.detail="tile.shares.label"
         :label="tile.shares.label"
         :parts="tile.shares.parts"
       />

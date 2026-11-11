@@ -248,4 +248,19 @@ describe('a value', () => {
     // Work on no task is the neutral wherever it is drawn, never a hue.
     expect(new Set(huesOf(page, 'none'))).toEqual(new Set(['other']))
   })
+
+  it('is named in its tile when it is work on no task holding a twentieth or more', async () => {
+    stubAnalyticsReads((query) => serveUsage(RANKED, query))
+    const page = await mountAnalytics()
+    // Eleven hours on tasks, six on no task: 6 / 17 of the whole.
+    const bar = tile(page, 'work_item').get('.mini-share-bar')
+    expect(bar.attributes('aria-label')).toBe(
+      'Shares of Agent time: MAIN-3 Task 3 29%, MAIN-1 Task 1 18%, MAIN-2 Task 2 12%, MAIN-4 Task 4 6%, No task 35%',
+    )
+    const none = bar.get('[data-key="none"]')
+    expect(none.classes()).toContain('mini-share-apart')
+    expect(none.attributes('data-slot')).toBe('other')
+    // The lead stays the first real value.
+    expect(lead(page, 'work_item')).toBe('MAIN-3 Task 3')
+  })
 })

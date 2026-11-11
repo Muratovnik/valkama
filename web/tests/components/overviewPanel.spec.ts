@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 
-import { momentAt, serveUsage, task, usageAnswer, value } from '../fixtures/analytics.ts'
+import { momentAt, noTask, serveUsage, task, usageAnswer, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -94,6 +94,30 @@ describe('the overview on the page', () => {
       expect(reads.grouped(dimension), dimension).toHaveLength(1)
     expect(reads.asked.filter((query) => outline(query))).toHaveLength(1)
     expect(words(card(page, 'model').text())).toContain('model-b')
+  })
+
+  it('ranks work on no task in the tasks’ card by its figure, neutral, quiet and leading nowhere', async () => {
+    const onNoTask: TimedStretch = {
+      at: new Date(2026, 10, 10, 12),
+      group: { work_item: noTask },
+      spend: { seconds: 3 * 3600 },
+    }
+    stubAnalyticsReads((query) => serveUsage([...WORLD, onNoTask], query))
+    const page = await mountAnalytics()
+    const rows = card(page, 'work_item').findAll('.ranked-line')
+    // Three hours on no task, two on Two, one on One: no task first, by its figure.
+    expect(rows.map((row) => row.attributes('data-key'))).toEqual([
+      'none',
+      `v:${TWO.id}`,
+      `v:${ONE.id}`,
+    ])
+    const [none, two, one] = rows
+    expect(none?.attributes('href')).toBeUndefined()
+    expect(none?.get('.ranked-label').classes()).toContain('ranked-quiet')
+    expect(none?.get('.ranked-bar').attributes('data-slot')).toBe('other')
+    // The tasks in their hues of the page, by their rank among the tasks.
+    expect(two?.get('.ranked-bar').attributes('data-slot')).toBe('1')
+    expect(one?.get('.ranked-bar').attributes('data-slot')).toBe('2')
   })
 
   it('leaves the projects out at a project’s scope, where every figure is that project’s', async () => {
