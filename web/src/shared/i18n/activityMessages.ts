@@ -21,6 +21,12 @@ export const activityMessages = {
       threadDecided: 'Thread “{thread}” · decision: {decision}',
       threadGone: 'A thread no longer on this task',
       question: 'Question “{question}”',
+      labelsAdded: 'Added: {labels}',
+      labelsRemoved: 'Removed: {labels}',
+      labelName: '“{label}”',
+    },
+    activity: {
+      labels_changed: 'Labels changed',
     },
   },
   ru: {
@@ -45,6 +51,12 @@ export const activityMessages = {
       threadDecided: 'Ветка «{thread}» · решение: {decision}',
       threadGone: 'Ветка, которой больше нет в этой задаче',
       question: 'Вопрос «{question}»',
+      labelsAdded: 'Добавлено: {labels}',
+      labelsRemoved: 'Снято: {labels}',
+      labelName: '«{label}»',
+    },
+    activity: {
+      labels_changed: 'Метки изменены',
     },
   },
 }

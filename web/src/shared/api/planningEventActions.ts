@@ -27,5 +27,14 @@ export const EVENT_ACTIONS = [
   'comment_resolved',
   'comment_reopened',
   'mentioned',
+  'labels_changed',
   'overridden',
 ] as const
+
+/** The longest detail any event but `labels_changed` carries. */
+export const EVENT_DETAIL_MAX = 512
+/**
+ * The server's bound on a `labels_changed` detail (`model.LABELS_DETAIL_LIMIT`): both sets of
+ * 32 labels of 64 characters, every character written as a six-character JSON escape.
+ */
+export const LABELS_DETAIL_MAX = 24_785

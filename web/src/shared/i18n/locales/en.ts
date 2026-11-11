@@ -1040,6 +1040,7 @@ export const en = {
   },
   activity: {
     ...mentionMessages.en.activity,
+    ...activityMessages.en.activity,
     request_created: 'Question or decision requested',
     request_answered: 'Answer recorded',
     request_declined: 'Request declined',

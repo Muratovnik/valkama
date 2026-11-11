@@ -588,15 +588,20 @@ was last opened, and adds the owner's Windows notification settings
 `preschema9` (or `preproductmodel`) snapshot. Schema 14 records the pictures
 pasted into an item's text (`work_item_images`); the files themselves stand in
 an `images` folder beside the database, one per content hash. Its snapshot is
-labelled `preschema14`. Schema 15 counts each usage request once in the whole
+labelled `preschema14`. Schema 15 admits the history event of a changed label
+set (`labels_changed`) and rebuilds the event table for it, keeping every event;
+its snapshot is labelled `preschema15`, and going back to a build at schema 14
+means restoring that snapshot, its pictures included, as the next paragraph
+describes. Schema 16 counts each usage request once in the whole
 store and records which reading wrote each usage run, so that the background
 reader reads every older run again, and it adds the counts of how often each
 Analytics surface was opened (`analytics_surface_uses`, empty until one is). Its
-snapshot is labelled `preschema15`, and
+snapshot is labelled `preschema16`, and
 beside it stands `<snapshot>.liveness`, a verified copy of the liveness file
-the store had then. Going back to a build at schema 14 is the restore described
-below with the `preschema15` snapshot, plus that copy put beside the store as
-`<store>.liveness`.
+the store had then. Going back to a build at schema 15 is the restore described
+below with the `preschema16` snapshot, plus that copy put beside the store as
+`<store>.liveness`. A store at 14 takes both steps in one open, under the one
+`preschema15` snapshot, and that copy then stands beside it instead.
 
 Every snapshot taken from schema 14 on carries the pictures as well: a folder
 with the snapshot's name and `.images` after it stands beside the snapshot file,

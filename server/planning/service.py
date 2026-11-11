@@ -505,13 +505,14 @@ def update_work_item(
     `rank` is a placement in the item's own state (`ranking.placement`). It is an
     edit like the others: one guarded write, one revision, no history event.
     `labels` replaces the set; `labels_add` and `labels_remove` change the set the
-    item has, read under the write lock (`model.edited_labels`).
+    item has, read under the write lock (`model.edited_labels`). An edit that
+    changes the set is the one edit the history records: a `labels_changed` event
+    with the set before and after (`model.labels_change`), under `author`.
     """
 
     row = _row_for_write(conn, reference, expected_revision)
-    labels = model.edited_labels(
-        model.labels(json.loads(str(row["labels"]))), labels, labels_add, labels_remove
-    )
+    current = model.labels(json.loads(str(row["labels"])))
+    labels = model.edited_labels(current, labels, labels_add, labels_remove)
     placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
@@ -555,7 +556,17 @@ def update_work_item(
     if not updates:
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
-    del author  # an edit is not an audited action; the revision carries it
+    # Any other field's edit is no audited action; the revision and the call row carry it.
+    change = model.labels_change(current, labels)
+    if change is not None:
+        _log(
+            conn,
+            str(row["work_item_id"]),
+            "labels_changed",
+            change,
+            author,
+            limit=model.LABELS_DETAIL_LIMIT,
+        )
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
@@ -2100,13 +2111,17 @@ def _log(
     action: str,
     detail: str,
     author: str | None,
+    *,
+    limit: int = EVENT_DETAIL_LIMIT,
 ) -> None:
+    """Write one history event; `limit` is raised only for a detail this module composes."""
+
     conn.execute(
         "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
         (
             work_item_id,
             model.event_action(action),
-            model.text_field(detail, "event.detail", limit=EVENT_DETAIL_LIMIT, required=False),
+            model.text_field(detail, "event.detail", limit=limit, required=False),
             model.actor(author),
             calls.call_id(conn, work_item_id),
         ),

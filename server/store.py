@@ -267,16 +267,21 @@ MIGRATIONS = {
 # description named it, where every earlier one was a comment's id, which a build
 # at 13 reads as a number and refuses the whole card over.
 #
-# 15 counts a request once in the whole store: `usage_requests` is keyed by the request
+# 15 added the `labels_changed` event, the label set before and after an edit that
+# changed it. The event table is rebuilt for its CHECK, so the upgrade takes a
+# recovery point of its own, and a build at 14 would refuse a whole card over the
+# event it does not know; the ratchet makes it refuse a store at 15 instead.
+#
+# 16 counts a request once in the whole store: `usage_requests` is keyed by the request
 # alone, where every run kept its own rows, and the upgrade keeps one row of each request
-# several runs counted. A build at 14 would take a request another run counts for one
+# several runs counted. A build at 15 would take a request another run counts for one
 # its own run never counted, add its tokens again, and lose its own row to the key
-# without a word (`INSERT OR IGNORE`). 15 also gives a usage run the
+# without a word (`INSERT OR IGNORE`). 16 also gives a usage run the
 # reading its rows came from (every run stale after the upgrade, so the reader reads it
 # again), the requests each run left to another (`usage_yields`, empty until the runs are
 # read again), a segment the columns its later dimensions fill, and Analytics the counts of
 # how often each of its surfaces was opened (`analytics_surface_uses`, empty).
-STORE_SCHEMA_VERSION = 15
+STORE_SCHEMA_VERSION = 16
 
 
 class StoreTooNewError(RuntimeError):
@@ -763,9 +768,9 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 15's, one at 11 only schema 12's to 15's, one
-            # at 12 only schema 13's to 15's, one at 13 only schema 14's and 15's, and
-            # one at 14 only schema 15's.
+            # 10 only schema 11's to 16's, one at 11 only schema 12's to 16's, one
+            # at 12 only schema 13's to 16's, one at 13 only schema 14's to 16's, one
+            # at 14 only schema 15's and 16's, and one at 15 only schema 16's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a

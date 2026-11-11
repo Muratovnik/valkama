@@ -79,11 +79,17 @@ split with it:
   of what the commit changed, `python tests/commit_subjects.py` and
   `python .github/relkit.pyz audit --history`;
   when the commit touches `web/`, also `npm run lint` and
-  `npm run check:ui-system` there. It does not run the whole browser suite.
+  `npm run check:ui-system` there. The audit refuses a tracked tree with
+  uncommitted changes, so it finishes before the next edit starts. The worker
+  does not run the whole browser suite.
 - The integrator runs the full list above and the whole browser suite once, on
-  the integrated head. Only one such run goes on a machine at a time: two at
-  once fail tests that pass alone. A defect that depends on a neighbouring
-  worktree shows up only at this run.
+  the integrated head, through `npm run test:browser:allowed` in `web/`. Only one
+  such run goes on a machine at a time: two at once fail tests that pass alone.
+  A defect that depends on a neighbouring worktree shows up only at this run.
+
+How to run one browser spec, a probe spec kept outside the suite, or the whole
+suite, and which specs that runner leaves out, is in
+`.agents/rules/quality-gates.md`: read it before the first browser run.
 
 `npm run build` is mandatory, and it is not the last step. The server serves the
 snapshot of `web/dist` it read when it started, so a browser check against a

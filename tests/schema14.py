@@ -17,7 +17,7 @@ from pathlib import Path
 from tests import schema8
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "store-schema-14.sql"
-CREATED_AT = "2026-11-10T00:00:00Z"
+CREATED_AT = "2026-11-11T00:00:00Z"
 
 
 def build(path: str, *, data_scope_id: str = "00000000-0000-4000-8000-000000000014") -> None:

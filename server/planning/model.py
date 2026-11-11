@@ -98,6 +98,9 @@ EVENT_ACTIONS = (
     # Schema 12: a comment on another item named this one, the comment's id as the
     # detail.
     "mentioned",
+    # Schema 15: an edit changed the item's set of labels, the set before and the
+    # set after as the detail (`labels_change`).
+    "labels_changed",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 
@@ -114,6 +117,7 @@ _ITEM_NUMBER = re.compile(r"^[1-9][0-9]{0,8}$")
 MAX_TITLE = 200
 MAX_DESCRIPTION = 20_000
 MAX_LABELS = 32
+MAX_LABEL_LENGTH = 64
 MAX_CHECKLIST = 100
 # A step is a sentence, not a title. The store this migrates from holds one
 # of 213 characters, so borrowing the title's limit refused real work.
@@ -317,7 +321,7 @@ def labels(value: object, field: str = "work_item.labels") -> list[str]:
         raise PlanningError(f"{field} must hold at most {MAX_LABELS} entries")
     seen: list[str] = []
     for index, item in enumerate(value):
-        label = text_field(item, f"{field}[{index}]", limit=64)
+        label = text_field(item, f"{field}[{index}]", limit=MAX_LABEL_LENGTH)
         if label not in seen:
             seen.append(label)
     return seen
@@ -504,6 +508,27 @@ def summary(value: object, *, required: bool = True) -> dict | None:
 
 def dumps(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def labels_change(before: list[str], after: list[str] | None) -> str | None:
+    """A `labels_changed` event's detail, or None when an edit leaves the set as it was.
+
+    The detail is `{"from":[...],"to":[...]}`: the labels the item had and the
+    labels it has, each in the order the item holds them. JSON rather than a line,
+    because a label may hold a comma, a space or a colon. A set only reordered is
+    the same set and records nothing, as does an edit that names no labels.
+    """
+
+    if after is None or set(before) == set(after):
+        return None
+    return dumps({"from": before, "to": after})
+
+
+#: The longest detail `labels_change` writes: both sets full, each label at its length
+#: and every character one JSON writes as a six-character escape (`\u0001`). Over the
+#: limit of a detail a caller writes, which a full set of long labels would break.
+_LONGEST_SET = ["\x01" * MAX_LABEL_LENGTH] * MAX_LABELS
+LABELS_DETAIL_LIMIT = len(dumps({"from": _LONGEST_SET, "to": _LONGEST_SET}))
 
 
 # The workflow a new PlanningSpace gets. The first six are what this

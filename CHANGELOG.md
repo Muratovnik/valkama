@@ -158,6 +158,16 @@ checkouts are therefore distinguishable even at the same version.
   `valkama doctor` says what share of the segments, and of their seconds, names its
   organization, warning when none does.
 
+- **A change of labels is in the history.** An edit that changes an item's label set, by
+  `labels`, `labels_add` or `labels_remove` and through any of those writes, adds one
+  `labels_changed` event whose `detail` is `{"from":[…],"to":[…]}`, the set before and
+  after. An edit that leaves the set as it was, a reorder included, adds none. The card's
+  history says which labels were added and which taken off, in English and Russian. Store
+  schema 15 admits the event: the first open of a schema-14 store takes a `preschema15`
+  snapshot and then rebuilds the event table, keeping every event. A build of the previous
+  release refuses the upgraded store instead of refusing every card whose history holds
+  the new event; going back means restoring the `preschema15` snapshot.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.
@@ -369,6 +379,44 @@ checkouts are therefore distinguishable even at the same version.
   on this device, «If the place is unknown or cannot be opened» says that the place is
   the one a session was last open in, and the notifications switch says that a notification
   comes even with the window closed and that a click on it opens the work item.
+
+- For contributors: the browser suite builds the app into
+  `web/test-results/<port>/app`, named by `VALKAMA_BROWSER_PORT`, and serves it from there,
+  so a run no longer rewrites the committed `web/dist` and leaves nothing to restore. That
+  build skips the type check, so a type error in a spec is reported by `npm run typecheck`
+  instead of as a server that would not start. Before the first spec the run checks that the
+  app's port serves the page it has just built, and stops on a page that differs or one an
+  earlier run left behind. Traces and screenshots go to `web/test-results/<port>/results`,
+  so two runs on different ports in one checkout no longer delete each other's.
+  `npm run build` still type-checks and writes `web/dist`, and the `server-` specs, which run
+  against the real server, still use it.
+
+- For contributors: a one-off browser spec kept outside the suite, such as in a worktree's
+  ignored `tmp/<name>/`, runs through the tracked `web/tests/browser/probe.config.ts`: name
+  its directory in `VALKAMA_BROWSER_PROBES` and the ports in `VALKAMA_BROWSER_PORT`, and
+  name the file `ui-` or `production-` for the project it runs in. It needs no configuration
+  of its own, resolves `@playwright/test` and `@/` from `web/`, and builds and serves the app
+  as the suite does.
+
+- For contributors: the browser specs that write the system clipboard or are granted it are
+  named once, in `web/tests/browser/clipboardSpecs.ts`. `npm test` fails when a spec that
+  grants or writes the clipboard, itself or through a suite module it imports, is missing
+  from that list, or when a name on it is no longer a spec.
+
+- For contributors: `npm run test:browser:allowed` in `web/` runs every browser spec but the
+  clipboard ones in one Playwright run. It writes the list to a file Playwright reads with
+  `--test-list`, so no list reaches a command line, and ends with each project's count of
+  tests and how they ended, and the total. `--list` shows what would run; `--specs=<file>`
+  runs the specs a file names, one a line; `--with-clipboard=<file>` lets a named clipboard
+  spec in. It refuses, with exit code 2 and before Playwright starts, an empty list, a
+  missing list file, a name that is no spec and a clipboard spec not named that way.
+
+- For contributors: a bare `npx playwright test` or `npm run test:browser` in `web/` no
+  longer selects the clipboard specs. `web/playwright.config.ts` reads the list in
+  `web/tests/browser/clipboardSpecs.ts` and leaves those specs out of every run, including
+  one that names a spec and `--list`, unless `VALKAMA_BROWSER_CLIPBOARD=1` is set;
+  `npm run test:browser:allowed` sets it only when `--with-clipboard=<file>` names a spec.
+  The suite still runs through `npm run test:browser:allowed`.
 
 ### Fixed
 

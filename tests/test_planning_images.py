@@ -495,7 +495,6 @@ class SchemaFourteenTests(unittest.TestCase):
         restored.close()
         conn = store.connect()
         self.addCleanup(conn.close)
-        # The chain runs on to this build's own schema in the same open.
         self.assertEqual(
             store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
         )

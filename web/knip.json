@@ -4,6 +4,9 @@
     "tests/**/*.test.ts",
     "tests/browser/**/*.spec.ts",
     "tests/browser/harness.ts",
+    "tests/browser/probe.config.ts",
+    "tests/browser/allowedRun.ts",
+    "tests/browser/runSummary.ts",
     "tests/browser/vite.config.ts",
     "scripts/*.mjs"
   ],
