@@ -513,6 +513,11 @@ def update_work_item(
     row = _row_for_write(conn, reference, expected_revision)
     current = model.labels(json.loads(str(row["labels"])))
     labels = model.edited_labels(current, labels, labels_add, labels_remove)
+    change = model.labels_change(current, labels)
+    if change is not None:
+        # The event is written after the edit, under this author: an author the history
+        # cannot hold is refused here, while the store is still untouched.
+        model.actor(author)
     placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
@@ -557,7 +562,6 @@ def update_work_item(
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
     # Any other field's edit is no audited action; the revision and the call row carry it.
-    change = model.labels_change(current, labels)
     if change is not None:
         _log(
             conn,

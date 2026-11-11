@@ -285,8 +285,11 @@ A change of the label set is the one edit the history records. Whichever of the
 three fields made it, and through whichever write (`update_work_item`, the
 `update` group of `apply_work_item_changes`, `POST /api/planning/work-item/update`
 or `/apply`), the item gains one `labels_changed` event under the call that made
-the edit, its author the edit's `author`. Its `detail` is JSON with the set the
-item had and the set it has, each in the item's own order:
+the edit, its author the edit's `author`. An edit that changes the set therefore
+answers for its `author` as a comment or a claim does: one over 128 characters,
+or holding a carriage return or a NUL, is refused before anything is written,
+where an edit of another field still ignores it. Its `detail` is JSON with the
+set the item had and the set it has, each in the item's own order:
 
 ```json
 {"action": "labels_changed", "detail": "{\"from\":[\"bug\",\"triage\"],\"to\":[\"bug\",\"triage\",\"ux\"]}",

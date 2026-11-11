@@ -23,7 +23,10 @@ checkouts are therefore distinguishable even at the same version.
 - **A change of labels is in the history.** An edit that changes an item's label set, by
   `labels`, `labels_add` or `labels_remove` and through any of those writes, adds one
   `labels_changed` event whose `detail` is `{"from":[…],"to":[…]}`, the set before and
-  after. An edit that leaves the set as it was, a reorder included, adds none. The card's
+  after. An edit that leaves the set as it was, a reorder included, adds none. The event
+  carries the edit's `author`, so an edit that changes the set is refused, before it
+  writes anything, for an `author` over 128 characters or one holding a carriage return or
+  a NUL; an edit of another field still ignores `author`. The card's
   history says which labels were added and which taken off, in English and Russian. Store
   schema 15 admits the event: the first open of a schema-14 store takes a `preschema15`
   snapshot and then rebuilds the event table, keeping every event. A build of the previous
