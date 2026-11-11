@@ -229,3 +229,43 @@ describe('the bars on the page', () => {
     expect(page.get('.tile-figure[data-measure="tokens"]').text()).toBe('78.5K')
   })
 })
+
+/**
+ * An account is an organization's id, which no store names: the page names it by the start of
+ * the id, as an item's card does, so the same account reads the same everywhere, and keeps the
+ * whole id for its hint and its table. Work no organization was recorded for stays unknown.
+ */
+describe('the bars by account', () => {
+  const FIRST = '3f9a1b2c-5d6e-4f70-8a9b-0c1d2e3f4a5b'
+  const SECOND = '77de0a1c-1111-4222-8333-444455556666'
+  const accounts = answer(
+    ['account'],
+    [
+      { day: 0, group: { account: value(FIRST) }, spend: { seconds: 3 * 3600 } },
+      { day: 1, group: { account: value(SECOND) }, spend: { seconds: 2 * 3600 } },
+      { day: 2, group: { account: { id: null, unknown: true } }, spend: { seconds: 3600 } },
+    ],
+  )
+
+  it('name each by the start of its id and keep the whole id for its hint and its table', () => {
+    const bars = mountBars(accounts.usage.rows, 'account')
+
+    expect(barsOf(bars).map((row) => [row.label, row.detail])).toEqual([
+      ['3f9a1b2c', FIRST],
+      ['77de0a1c', SECOND],
+      ['Unknown', undefined],
+    ])
+    expect(bars.text()).not.toContain(FIRST)
+  })
+
+  it('say the whole id under the name in the table', () => {
+    const table = mountBars(accounts.usage.rows, 'account', { narrow: true })
+
+    expect(
+      table
+        .getComponent(RankedBarsTable)
+        .findAll('th[scope="row"]')
+        .map((name) => name.text()),
+    ).toEqual([`3f9a1b2c${FIRST}`, `77de0a1c${SECOND}`, 'Unknown'])
+  })
+})

@@ -56,7 +56,7 @@ for (const width of [1440, 1024, 390]) {
     // The day not over yet says so; the change of accounts is marked and said.
     await expect(analytics.locator('.spending-days')).toContainText('so far')
     await expect(analytics.locator('.spending-days')).toContainText(
-      'Accounts: work@example.test → work@example.test, night@example.test',
+      'Accounts: 5b0c7e21 → 5b0c7e21, d4e8a1f0',
     )
 
     const measured = await measure(page)
@@ -163,7 +163,7 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       await expect(analytics.locator('.spending-days')).toContainText(
-        `${ru ? 'Аккаунты' : 'Accounts'}: work@example.test → night@example.test`,
+        `${ru ? 'Аккаунты' : 'Accounts'}: 5b0c7e21 → d4e8a1f0`,
       )
       const notes = analytics.locator('.spending-days :is(.period-note, td)', {
         hasText: ru ? 'Аккаунты:' : 'Accounts:',

@@ -1,16 +1,18 @@
 <script setup lang="ts">
 /**
  * One measure broken down by one dimension, largest first: a row is a name, its value as the
- * reader reads it, and a bar as long as its share of the longest. The rows that are not
+ * reader reads it, and a bar as long as its share of the longest category. The rows that are not
  * categories — the folded tail, work with no task, work nobody can place — close the chart in a
- * list of their own, in the neutral, under names that say what they are, and are never ranked
- * among the categories. `RankedBarsTable` is the same rows as a table.
+ * list of their own under a rule, under names that say what they are, with their figures and no
+ * bar: they are never ranked among the categories and never set their scale.
+ * `RankedBarsTable` is the same rows as a table.
  *
  * Presentational: rows and words come in, a press on a row that opens something goes out as
  * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
  * with the press, for the host to open it in place or leave it to the browser. A row that acts
  * is named by what it does (`action`) or by its label, and its value describes it. A row's name
- * wraps rather than being cut, and the values stand in one column whatever the names do; in a
+ * takes one line, ends in an ellipsis where it is cut and is said whole in its hint, with what
+ * the label leaves out (`detail`); the values stand in one column whatever the names do. In a
  * narrow container the name takes a line of its own over its bar.
  */
 import { computed, useId } from 'vue'
@@ -18,6 +20,7 @@ import { computed, useId } from 'vue'
 import type { PlacedRow, RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
 import { rankRows } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
   /** What the chart shows, as its accessible name: "Time by project". */
@@ -62,9 +65,9 @@ function lineAttrs(row: PlacedRow) {
   }
 }
 
-/** A category in its series' hue, slot 1 by default; a row that is not one in the neutral. */
-const barSlot = (row: PlacedRow) => (row.kind === 'category' ? (row.slot ?? 1) : 'other')
-const barStyle = (row: PlacedRow) => ({ inlineSize: `${row.length * 100}%` })
+/** A category in its series' hue, slot 1 by default. */
+const barSlot = (row: PlacedRow) => row.slot ?? 1
+const barStyle = (length: number) => ({ inlineSize: `${length * 100}%` })
 
 function press(row: PlacedRow, event: MouseEvent) {
   if (row.href) emit('follow', row.key, event)
@@ -113,15 +116,20 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
             @click="(event: MouseEvent) => press(row, event)"
             @auxclick="(event: MouseEvent) => pressAside(row, event)"
           >
-            <span class="ranked-label">{{ row.label }}</span>
+            <span
+              v-tooltip.detail="{ text: row.detail, words: row.label }"
+              class="ranked-label one-line"
+              >{{ row.label }}</span
+            >
             <span
               class="ranked-track"
               aria-hidden="true"
             >
               <span
+                v-if="row.length !== null"
                 class="ranked-bar series-fill"
                 :data-slot="barSlot(row)"
-                :style="barStyle(row)"
+                :style="barStyle(row.length)"
               />
             </span>
             <span
@@ -208,15 +216,15 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
   }
 }
 
-.ranked-label {
-  overflow-wrap: anywhere;
-}
-
 /* The rows that are not categories read as a note on the breakdown rather than a part of it:
-   their names in the quiet ink, slanted, and their bars in the neutral. */
-.ranked-rest .ranked-label {
-  color: var(--color-text-tertiary);
-  font-style: italic;
+   apart by air, their names in the quiet ink, slanted, their figures with no bar. */
+.ranked-rest {
+  margin-block-start: var(--space-3);
+
+  & .ranked-label {
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
 }
 
 .ranked-track {

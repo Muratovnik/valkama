@@ -73,6 +73,15 @@
   font-style: italic;
 }
 
+/* What a name leaves out, such as the whole id of a value named by its start: under the name, in
+   the quiet ink, broken anywhere rather than widening the column by a long id. */
+.chart-detail {
+  display: block;
+  color: var(--color-text-tertiary);
+  font: var(--font-detail);
+  overflow-wrap: anywhere;
+}
+
 /* A name that opens what it names: a line of the table, not a control standing in it. The whole
    cell around it answers a press, so a finger has the row's height to hit and not the words'. */
 .chart-press {

@@ -38,6 +38,11 @@ export interface RankedRow {
   /** Whether pressing the row opens what it names. */
   actionable?: boolean
   /**
+   * What the label leaves out, said in its hint: the whole id of a value the label names by
+   * the start of it.
+   */
+  detail?: string
+  /**
    * Where the row leads, on this origin: the row is then a link, which a press hands out as
    * `follow` and a modified or middle press takes elsewhere as any link is taken.
    */
@@ -49,8 +54,11 @@ export interface RankedRow {
 
 export interface PlacedRow extends RankedRow {
   kind: RankedRowKind
-  /** The bar's length as a share of the longest bar, from 0 to 1. */
-  length: number
+  /**
+   * The bar's length as a share of the longest category's, from 0 to 1; null for a row that is
+   * not a category, which is not drawn on the categories' scale.
+   */
+  length: number | null
 }
 
 export interface RankedWords {
@@ -67,19 +75,20 @@ const REST_ORDER: readonly RankedRowKind[] = ['other', 'none', 'unknown']
 
 /**
  * The categories largest first, then the rows that are not categories in a fixed order. A tie
- * keeps one order whatever order the rows came in. Every bar is measured against the longest of
- * all of them, the folded tail included, so a tail larger than any one category is not cut.
+ * keeps one order whatever order the rows came in. A bar is measured against the longest
+ * category: the folded tail, work with no task and unknown work sum many values or none, so one
+ * of them would set a scale that leaves every category short. They draw no bar (`length` null)
+ * and are read by their figures.
  */
 export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; rest: PlacedRow[] } {
-  const longest = Math.max(0, ...rows.map((row) => drawable(row.value)))
-  const place = (row: RankedRow): PlacedRow => ({
-    ...row,
-    kind: row.kind ?? 'category',
-    length: longest ? drawable(row.value) / longest : 0,
-  })
-  const ranked = rows
-    .filter((row) => (row.kind ?? 'category') === 'category')
-    .map((row) => place(row))
+  const categories = rows.filter((row) => (row.kind ?? 'category') === 'category')
+  const longest = Math.max(0, ...categories.map((row) => drawable(row.value)))
+  const ranked = categories
+    .map((row) => ({
+      ...row,
+      kind: 'category' as const,
+      length: longest ? drawable(row.value) / longest : 0,
+    }))
     .sort(
       (left, right) =>
         drawable(right.value) - drawable(left.value) ||
@@ -87,7 +96,7 @@ export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; res
         byCodePoint(left.key, right.key),
     )
   const rest = REST_ORDER.flatMap((kind) =>
-    rows.filter((row) => row.kind === kind).map((row) => place(row)),
+    rows.filter((row) => row.kind === kind).map((row) => ({ ...row, kind, length: null })),
   )
   return { ranked, rest }
 }

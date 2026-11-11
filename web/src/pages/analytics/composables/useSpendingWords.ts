@@ -1,7 +1,8 @@
 /**
  * How the Analytics page names what it shows: a dimension, and a value of one as a card or the
  * rail already names it — a task by its number and title, a project by its name, a session by
- * its client and the start of its id. Work with no value — no task, a session's own run — and a
+ * its client and the start of its id, an account by the start of its id as an item's card does
+ * (`valueDetail` is the whole id). Work with no value — no task, a session's own run — and a
  * value nobody can place say so in words of their own, per dimension: «unknown» is said only of
  * what nobody can place.
  */
@@ -12,6 +13,7 @@ import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
+import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -27,6 +29,15 @@ const SESSION_PREFIX = 8
  * value, and a filter's «none» admits an unknown one instead.
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
+
+/**
+ * What a value's name leaves out, for its hint and its table: the whole id of an account, which
+ * the page names by the start of it; nothing where the name is the whole of what it says.
+ */
+function valueDetail(name: UsageDimension, value: UsageGroupValue | null) {
+  const id = value?.id
+  return name === 'account' && id && agentIdStart(id) !== id ? id : undefined
+}
 
 export function useSpendingWords() {
   const i18n = useI18n()
@@ -155,6 +166,7 @@ export function useSpendingWords() {
       return [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
+    if (name === 'account') return agentIdStart(value.id)
     return value.id
   }
 
@@ -241,6 +253,7 @@ export function useSpendingWords() {
     noneLabel,
     tokenKinds,
     unpriced,
+    valueDetail,
     valueLabel,
   }
 }

@@ -3,7 +3,8 @@
  * The period's measure broken down by the chosen dimension, largest first: the categories, the
  * rest folded into «other», then work with no task and work nobody can place — three rows that
  * are never one. Each bar is passed its amount in the measure's own units, hours and not a share,
- * and the rows add up to the figure on the tile above.
+ * and the rows add up to the figure on the tile above. A value named by the start of its id, an
+ * account, carries the whole id as its detail.
  *
  * A bar acts as its value does (`useLineActions`): by task, a task's bar is a link to it; by any
  * other dimension, a value the read can filter by is a control that narrows the view to it, sent
@@ -59,6 +60,7 @@ const bars = computed<RankedRow[]>(() =>
       key: line.key,
       kind: line.kind,
       label,
+      detail: words.valueDetail(props.by, line.value),
       value: measureOf(props.measure, line.spent) ?? 0,
       valueText: words.lineFigure(props.measure, line.spent),
       ...acting(line, label),

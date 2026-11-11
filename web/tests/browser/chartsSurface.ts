@@ -80,10 +80,19 @@ const days: PeriodColumn[] = Array.from({ length: 30 }, (_, index) => {
   }
 })
 
+/** The hours stack work nobody can place too, in the neutral a ranked chart no longer draws. */
+const hourSeries: PeriodSeries[] = [
+  ...series.slice(1),
+  { key: 'unknown', label: 'Unknown', slot: 'other' },
+]
+
 const hours: PeriodColumn[] = Array.from({ length: 24 }, (_, hour) => ({
   key: `h${hour}`,
   label: `${String(hour).padStart(2, '0')}:00`,
-  values: hour < 8 || hour > 21 ? {} : { work: (hour * 7) % 45, ci: (hour * 11) % 15 },
+  values:
+    hour < 8 || hour > 21
+      ? {}
+      : { work: (hour * 7) % 45, ci: (hour * 11) % 15, unknown: hour % 3 ? 0 : 6 },
   ...(hour === 23 ? { incomplete: true } : {}),
 }))
 
@@ -139,7 +148,7 @@ export function chartsSurface() {
           ...periodProps,
           label: 'Time per hour',
           columns: hours,
-          series: series.slice(1),
+          series: hourSeries,
           actionable: 'column',
           onSelect: onPeriod,
         }),
