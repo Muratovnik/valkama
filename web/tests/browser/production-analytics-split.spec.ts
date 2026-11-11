@@ -134,6 +134,14 @@ for (const [width, height] of [
     expect(measured.rankedRows, 'ranked rows in view').toBeGreaterThanOrEqual(5)
     expect(measured.multiples, 'small charts in view, title and plot').toBeGreaterThanOrEqual(1)
 
+    // The day chart's value axis and the small charts' scale count agent time in one unit each.
+    const steps = await page.locator('.spending-days .period-scale .chart-tick').allTextContents()
+    const top = (await page.locator('.spending-multiples .multiples-scale').textContent()) ?? ''
+    await record(info, `analytics time axis ${width}x${height}`, { steps, top })
+    expect(steps.length).toBeGreaterThan(1)
+    for (const step of steps) expect(step.trim()).toMatch(/^(0|\d+\s(min|h|d))$/u)
+    expect(top).toMatch(/ 0 to \d+\s(min|h|d)$/u)
+
     await wheelOverTable(page)
     await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
     expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })

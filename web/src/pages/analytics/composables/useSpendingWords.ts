@@ -19,9 +19,14 @@ import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/u
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { durationAxis } from '@/shared/ui/durationAxis.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
+
+/** The charts count time in hours (`scale`). */
+const HOUR_SECONDS = 3600
 
 /**
  * The dimensions where work with no value is a value of its own (`id` null, not unknown): work
@@ -218,12 +223,19 @@ export function useSpendingWords() {
   /** A step of the value axis in the measure's units: hours as a span, tokens, dollars. */
   function scale(name: Measure, amount: number) {
     if (amount <= 0) return '0'
-    if (name === 'time') return usage.time(amount * 3600)
+    if (name === 'time') return usage.time(amount * HOUR_SECONDS)
     if (name === 'tokens') return compact(amount)
     return new Intl.NumberFormat(i18n.locale.value, { style: 'currency', currency: 'USD' }).format(
       amount,
     )
   }
+
+  /**
+   * The value axis of a measure that needs its own: time in one unit chosen by the largest
+   * value, minutes, hours or days, where a figure says «3 d 23 h»; none for the others.
+   */
+  const axis = (name: Measure) =>
+    name === 'time' ? durationAxis(spanWordsOf(t), HOUR_SECONDS) : undefined
 
   /** What changed in the accounts that worked: «Accounts: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
@@ -237,6 +249,7 @@ export function useSpendingWords() {
 
   return {
     accounts,
+    axis,
     change,
     chartTitle,
     day,

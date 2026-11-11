@@ -43,6 +43,7 @@ import {
   changeNotes,
   columnSummary,
   dayTicks,
+  roundAxis,
   segmentPlace,
   segmentSummary,
   stackColumns,
@@ -62,7 +63,8 @@ const props = withDefaults(defineProps<PeriodChartProps>(), {
 
 const emit = defineEmits<{ select: [selection: PeriodSelection] }>()
 
-const chart = computed(() => stackColumns(props.columns, props.series, props.marks))
+const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
+const chart = computed(() => stackColumns(props.columns, props.series, props.marks, axis.value))
 /** The name of the outline of a period compared with, where the chart draws one. */
 const outline = computed(() =>
   props.columns.some((column) => column.before) ? props.words.before : undefined,
@@ -82,10 +84,10 @@ const { gutter, reveal, width } = usePlotFrame(
 )
 
 const scale = computed<PlacedTick[]>(() =>
-  chart.value.ticks.map((tick) => ({
-    key: tick,
-    text: props.formatValue(tick),
-    offset: tick / chart.value.top,
+  chart.value.steps.map((step) => ({
+    key: step.value,
+    text: step.text,
+    offset: step.value / chart.value.top,
     edge: 'middle',
   })),
 )

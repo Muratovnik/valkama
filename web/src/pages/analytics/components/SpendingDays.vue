@@ -127,6 +127,7 @@ const chart = computed<PeriodChartProps>(() => ({
     total: t('analytics.days.total'),
   },
   formatValue: (amount: number) => words.scale(props.measure, amount),
+  valueAxis: words.axis(props.measure),
 }))
 
 function select({ column }: PeriodSelection) {

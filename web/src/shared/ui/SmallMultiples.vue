@@ -14,6 +14,8 @@
  */
 import { computed } from 'vue'
 
+import { roundAxis } from '@/shared/ui/chartGeometry.ts'
+import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
 import type { MultiplesWords, SmallMultiple } from '@/shared/ui/multiplesGeometry.ts'
@@ -24,12 +26,16 @@ const props = defineProps<{
   label: string
   multiples: readonly SmallMultiple[]
   words: MultiplesWords
+  /** The scale, where its top is other than a round step said as `formatValue` says it. */
+  valueAxis?: ValueAxis
   /** A value as the reader reads it, for the scale's top. */
   formatValue: (value: number) => string
 }>()
 
-const placed = computed(() => placeMultiples(props.multiples))
-const top = computed(() => props.formatValue(placed.value.top))
+const placed = computed(() =>
+  placeMultiples(props.multiples, props.valueAxis ?? roundAxis(props.formatValue)),
+)
+const top = computed(() => placed.value.topText)
 
 const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
 </script>
