@@ -81,7 +81,10 @@ the item with that one label and nothing else. To add or remove labels without
 knowing the rest, send `labels_add` or `labels_remove` (both may go in one
 call). A label already there is kept once, one the item lacks is ignored, and
 the set stays within 32 labels. `labels` beside either of them is refused, as is
-one label named in both.
+one label named in both. An edit that changes the set, by any of the three,
+writes one history event `labels_changed` whose `detail` is
+`{"from":[…],"to":[…]}`, the set before and after; one that leaves the set as it
+was, a reorder included, writes none. No other field's edit writes an event.
 
 ## Steps
 

@@ -20,6 +20,16 @@ checkouts are therefore distinguishable even at the same version.
   one label named in both. The same fields work on `POST /api/planning/work-item/update`
   and `/apply`.
 
+- **A change of labels is in the history.** An edit that changes an item's label set, by
+  `labels`, `labels_add` or `labels_remove` and through any of those writes, adds one
+  `labels_changed` event whose `detail` is `{"from":[…],"to":[…]}`, the set before and
+  after. An edit that leaves the set as it was, a reorder included, adds none. The card's
+  history says which labels were added and which taken off, in English and Russian. Store
+  schema 15 admits the event: the first open of a schema-14 store takes a `preschema15`
+  snapshot and then rebuilds the event table, keeping every event. A build of the previous
+  release refuses the upgraded store instead of refusing every card whose history holds
+  the new event; going back means restoring the `preschema15` snapshot.
+
 - **Screenshots in a card's text.** Paste or drop a PNG, JPEG, WebP or GIF picture of up to
   10 MB into a card's description, a comment, a reply, an outcome or a text answer, and it
   is attached to the item and written into the text as `![name](</api/images/<sha256>>)`.

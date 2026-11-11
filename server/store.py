@@ -262,7 +262,12 @@ MIGRATIONS = {
 # `mentioned` event's detail is then `description:` and the id of the item whose
 # description named it, where every earlier one was a comment's id, which a build
 # at 13 reads as a number and refuses the whole card over.
-STORE_SCHEMA_VERSION = 14
+#
+# 15 added the `labels_changed` event, the label set before and after an edit that
+# changed it. The event table is rebuilt for its CHECK, so the upgrade takes a
+# recovery point of its own, and a build at 14 would refuse a whole card over the
+# event it does not know; the ratchet makes it refuse a store at 15 instead.
+STORE_SCHEMA_VERSION = 15
 
 
 class StoreTooNewError(RuntimeError):
@@ -747,8 +752,9 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 14's, one at 11 only schema 12's to 14's, one
-            # at 12 only schema 13's and 14's, and one at 13 only schema 14's.
+            # 10 only schema 11's to 15's, one at 11 only schema 12's to 15's, one
+            # at 12 only schema 13's to 15's, one at 13 only schema 14's and 15's,
+            # and one at 14 only schema 15's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a

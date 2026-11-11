@@ -86,6 +86,26 @@ describe('eventWords', () => {
     expect(say(locale, action, detail)).toBe(words)
   })
 
+  it.each([
+    ['en', { from: ['bug', 'triage'], to: ['bug', 'triage', 'ux'] }, 'Added: “ux”'],
+    ['ru', { from: ['bug', 'triage'], to: ['triage'] }, 'Снято: «bug»'],
+    // A label may hold a comma: each is quoted, so the list still reads one label at a time.
+    [
+      'en',
+      { from: ['bug', 'a, b'], to: ['bug', 'next', 'later'] },
+      'Added: “next”, “later” · Removed: “a, b”',
+    ],
+    ['ru', { from: ['старое'], to: ['новое'] }, 'Добавлено: «новое» · Снято: «старое»'],
+  ] as const)('a change of labels in %s says which came and which went', (locale, sets, words) => {
+    expect(say(locale, 'labels_changed', JSON.stringify(sets))).toBe(words)
+  })
+
+  it('keeps a change of labels it cannot read as recorded', () => {
+    for (const detail of ['not json', '{"from":["a"]}', '{"from":[1],"to":[]}', 'null']) {
+      expect(say('en', 'labels_changed', detail)).toBe(detail)
+    }
+  })
+
   it('leaves a line of an unknown shape, and every other event, as it was recorded', () => {
     expect(say('en', 'linked', 'parent of MAIN-7')).toBe('parent of MAIN-7')
     expect(say('en', 'comment_resolved', 'not a number')).toBe('not a number')

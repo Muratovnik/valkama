@@ -227,7 +227,9 @@ the owner how it maps before writing it to many items.
 
 **Labels.** `labels` in an edit replaces the whole set. To add one, send
 `labels_add`; to take one off, `labels_remove`. Neither needs the labels the item
-already has.
+already has. An edit that changes the set leaves a `labels_changed` event in the
+history with the set before and after, so who changed the labels and from what
+can be read back.
 
 **Reading.** `get_work_item` returns the item with the 5 threads that saw the
 newest activity, its newest events and the sessions that wrote to it. Each root

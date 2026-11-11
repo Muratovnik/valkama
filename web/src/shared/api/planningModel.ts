@@ -18,7 +18,11 @@ import {
 } from '@/shared/api/contract.ts'
 import { executorSchema } from '@/shared/api/executorModel.ts'
 import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
-import { EVENT_ACTIONS } from '@/shared/api/planningEventActions.ts'
+import {
+  EVENT_ACTIONS,
+  EVENT_DETAIL_MAX,
+  LABELS_DETAIL_MAX,
+} from '@/shared/api/planningEventActions.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 export const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
@@ -296,12 +300,16 @@ const eventIdentitySchema = strictObject({
   agent_id: callField(),
 })
 
+/** A detail is a short line, but for the label sets a `labels_changed` event carries. */
 const eventSchema = strictObject({
   action: enumField(EVENT_ACTIONS),
-  detail: blankable(512),
+  detail: blankable(LABELS_DETAIL_MAX),
   author: actor(),
   at: boundedText(ISO, 96),
   identity: eventIdentitySchema,
+}).refine((event) => event.action === 'labels_changed' || event.detail.length <= EVENT_DETAIL_MAX, {
+  message: 'expected a detail of at most 512 characters',
+  path: ['detail'],
 })
 
 /**
