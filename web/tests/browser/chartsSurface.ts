@@ -1,13 +1,15 @@
 /**
- * The harness page for the two chart primitives and their tables, drawn with the product
+ * The harness page for the chart primitives and their tables, drawn with the product
  * stylesheet at whatever width the test sets: names long enough to wrap, a month of days with a
- * change and a day still running, a day of hours that opens by the hour, and an empty chart.
+ * change and a day still running, a day of hours that opens by the hour, and an empty chart; and
+ * the two small charts a tile draws, a trend and a share bar, at a tile's width on its ground.
  * What a press sent is written into one line, so a test reads the event the way a page would
  * receive it.
  */
 import { h, ref } from 'vue'
 
 import { seriesSlots } from '@/shared/lib/seriesColors.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type {
   PeriodColumn,
   PeriodSelection,
@@ -16,6 +18,8 @@ import type {
   RankedRow,
   RankedWords,
 } from '@/shared/ui/chartGeometry.ts'
+import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
+import MiniTrend from '@/shared/ui/MiniTrend.vue'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
@@ -106,6 +110,22 @@ const periodWords: PeriodWords = {
 
 const marks = [{ at: '2026-10-12', label: 'Switched to the work account' }]
 
+/** The month's days as a trend: what each day's stack adds up to, a day with no figure among them. */
+const trend = days.map((day, index) => ({
+  key: day.key,
+  value:
+    index === 3 ? null : Object.values(day.values).reduce<number>((sum, one = 0) => sum + one, 0),
+  ...(day.incomplete ? { incomplete: true } : {}),
+}))
+
+/** Three projects' shares of a whole and what they leave out, which the neutral draws. */
+const shares = [
+  { key: 'core', share: 0.5 },
+  { key: 'web', share: 0.26 },
+  { key: 'docs', share: 0.04 },
+].map((part) => ({ ...part, slot: slots.get(part.key) ?? ('other' as SeriesSlot) }))
+const parts = [...shares, { key: 'rest', share: 0.2, slot: 'other' as const }]
+
 const section = (name: string, children: ReturnType<typeof h>[]) =>
   h('section', { 'class': 'charts-harness-section', 'data-harness': name }, children)
 
@@ -156,6 +176,19 @@ export function chartsSurface() {
       section('empty', [
         h(PeriodColumns, { ...periodProps, label: 'Nothing yet', columns: [] }),
         h(RankedBars, { label: 'Nothing ranked', rows: [], words: rankedWords }),
+      ]),
+      section('mini', [
+        h('div', { class: 'charts-harness-mini' }, [
+          h(MiniTrend, {
+            label: 'Time per day in October, the last day so far',
+            points: trend,
+          }),
+          h(MiniShareBar, {
+            label: 'Shares of time: core 50%, web 26%, docs 4%, the rest 20%',
+            parts,
+          }),
+          h(MiniShareBar, { label: 'Shares of time: no data', parts: [] }),
+        ]),
       ]),
       section('ranked-table', [
         h(RankedBarsTable, {

@@ -208,6 +208,13 @@
   border-radius: var(--radius-card);
 }
 
+/* The small charts at the width a tile of the rail gives them. */
+.charts-harness-mini {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: min(100%, 13rem);
+}
+
 .charts-harness-selected {
   min-block-size: var(--space-4);
   color: var(--color-text-muted);

@@ -884,6 +884,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   last periods, keeps the value axis in view over the plot's start, and brings a period the
   keyboard reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them.
+  Two small charts stand beside a figure rather than in a section of their own, as the
+  Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
+  scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,
+  largest first, with what they leave out last in the neutral. Each is one image whose words say
+  what it draws — the highest and the last period, every part with its share — so neither is read
+  by its shape or its hue alone: columns and parts stand apart by a gap of ground, a period still
+  running is hatched, and a forced palette draws the marks in its ink and the floor, the rest and
+  an empty track in its quiet ink. Neither acts or moves under the pointer, and each keeps its
+  height with nothing to draw, so the tile around it never moves when its figures arrive.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
