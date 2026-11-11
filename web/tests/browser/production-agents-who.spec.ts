@@ -206,4 +206,43 @@ for (const width of [1440, 1024, 390]) {
     await expectNoSilentClipping(page, `who did the work at ${width}px`)
     await page.screenshot(shot(info, `agents-roles-${width}.png`))
   })
+
+  test(`the way to an epic's own work stands whole at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    // Six items do not fit in the page's address, so the link opens the epic's own work.
+    const usage = whoUsage()
+    const [own] = usage.by_item
+    await serve(page, {
+      ...usage,
+      by_item: [
+        own,
+        ...Array.from({ length: 5 }, (_, index) => ({
+          ...own,
+          work_item_id: `7d3e9a10-0000-4000-8000-00000000000${index + 1}`,
+        })),
+      ],
+    })
+    await page.goto(CARD)
+    const section = await openAgents(page)
+    const link = section.getByRole('link', { name: 'Open the epic’s own work in Analytics' })
+    await link.scrollIntoViewIfNeeded()
+    const { box, list, size } = await link.evaluate((element) => {
+      const lists = element.closest('.work-usage')?.querySelector('.work-usage-grid')
+      if (!lists) throw new Error('the tab has no list')
+      return {
+        box: element.getBoundingClientRect().toJSON() as Box,
+        list: lists.getBoundingClientRect().toJSON() as Box,
+        size: Number.parseFloat(getComputedStyle(element).fontSize),
+      }
+    })
+    expect(Math.abs(box.left - list.left)).toBeLessThanOrEqual(1)
+    expect(box.right).toBeLessThanOrEqual(list.right + 0.5)
+    const lines = Math.round((box.bottom - box.top) / (size * 1.25))
+    info.annotations.push({
+      type: 'layout',
+      description: `R4 own ${width}px: list ${brief(list)}, link ${brief(box)} h ${tenth(box.bottom - box.top)} (${lines} line)`,
+    })
+    console.log(info.annotations.at(-1)?.description)
+    await expectNoSilentClipping(page, `the way to the epic's own work at ${width}px`)
+  })
 }
