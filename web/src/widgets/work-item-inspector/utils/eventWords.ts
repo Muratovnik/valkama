@@ -5,7 +5,8 @@
  * it stood: «5436: postponed» for a mark, «discovered-from from MAIN-7» for a link seen
  * from its far end, a request's UUID for a question. Those lines stay in the record, and
  * the search still reads them; what is shown are words for the events whose line has a
- * known shape, and the line itself for every other event.
+ * known shape, and the line itself for every other event. A change of labels names the
+ * labels added and those taken off, not the two whole sets its detail records.
  *
  * A question is named by its title when the card has it: the card reads its questions for
  * the discussion anyway, so this costs no read. One the card has not read — older than the
@@ -64,6 +65,36 @@ function linkWords(detail: string, t: Translate) {
   return `${t(['workItem.relation', kind, side].join('.'))} ${reference}`
 }
 
+const isLabelSet = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((label) => typeof label === 'string')
+
+/** The labels of one set that the other lacks, each named in the reader's quotes. */
+function labelList(labels: readonly string[], lacking: readonly string[], t: Translate) {
+  return labels
+    .filter((label) => !lacking.includes(label))
+    .map((label) => t('history.labelName', { label }))
+    .join(', ')
+}
+
+/** `{"from":[…],"to":[…]}`, as an edit that changed the labels writes it: which went, which came. */
+function labelWords(detail: string, t: Translate) {
+  let sets: unknown
+  try {
+    sets = JSON.parse(detail)
+  } catch {
+    return detail
+  }
+  const { from, to } = (sets ?? {}) as { from?: unknown; to?: unknown }
+  if (!isLabelSet(from) || !isLabelSet(to)) return detail
+  const added = labelList(to, from, t)
+  const removed = labelList(from, to, t)
+  const words = [
+    added && t('history.labelsAdded', { labels: added }),
+    removed && t('history.labelsRemoved', { labels: removed }),
+  ].filter(Boolean)
+  return words.length ? words.join(' · ') : detail
+}
+
 /** The name the reader sees for a state of the card's workflow by its key; null for none. */
 type StateNamer = (key: string) => string | null
 
@@ -117,6 +148,10 @@ export function eventWords(event: RecordedEvent, context: EventContext) {
     // item, where the card's read brought it.
     case 'mentioned': {
       return mentionHistoryWords(event.detail, mentions, t)
+    }
+    // Both sets as JSON, which says nothing at a glance: the labels added and those taken off.
+    case 'labels_changed': {
+      return labelWords(event.detail, t)
     }
     default: {
       return event.detail

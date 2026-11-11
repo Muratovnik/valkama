@@ -12,13 +12,24 @@ one that leaves the set as it was leaves none.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
+from pathlib import Path
 
 from server.planning import api, model, service, tools
 from tests.test_planning_apply_groups import BatchCase
 
 #: The item's labels before every case.
 BEFORE = ["bug", "triage"]
+#: Where the web lists the actions its strict reader accepts.
+WEB_ACTIONS = (
+    Path(__file__).resolve().parents[1]
+    / "web"
+    / "src"
+    / "shared"
+    / "api"
+    / "planningEventActions.ts"
+)
 
 
 class LabelEditTests(BatchCase):
@@ -184,6 +195,16 @@ class LabelEditTests(BatchCase):
         self.assertEqual({"from": old, "to": new}, detail)
         self.assertGreater(len(model.dumps(detail)), service.EVENT_DETAIL_LIMIT)
         self.assertLessEqual(len(model.dumps(detail)), model.LABELS_DETAIL_LIMIT)
+
+    def test_the_web_reads_every_action_and_the_longest_detail_the_server_writes(self) -> None:
+        # The card's strict reader refuses an item over an action or a detail it does not
+        # expect, so the two lists and the two bounds move together.
+        source = WEB_ACTIONS.read_text(encoding="utf-8")
+        listed = source.split("export const EVENT_ACTIONS = [", 1)[1].split("]", 1)[0]
+        self.assertEqual(set(model.EVENT_ACTIONS), set(re.findall(r"'([a-z_]+)'", listed)))
+        bound = re.search(r"LABELS_DETAIL_MAX = ([\d_]+)", source)
+        assert bound is not None
+        self.assertEqual(model.LABELS_DETAIL_LIMIT, int(bound.group(1).replace("_", "")))
 
     def test_the_tool_schemas_declare_the_new_fields_beside_labels(self) -> None:
         declared = {tool["name"]: tool["inputSchema"] for tool in tools.TOOLS}
