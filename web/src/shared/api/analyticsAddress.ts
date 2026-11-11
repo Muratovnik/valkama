@@ -92,7 +92,7 @@ export function orderFilters(filters: UsageFilters): UsageFilters {
   const ordered: UsageFilters = {}
   for (const dimension of USAGE_DIMENSIONS) {
     const values = filters[dimension]
-    if (values?.length) ordered[dimension] = values.toSorted(byValue)
+    if (values?.length) ordered[dimension] = [...values].sort(byValue)
   }
   return ordered
 }

@@ -102,7 +102,9 @@ describe('the address of a view', () => {
       'The link to this view cannot hold more values of the Task filter, so this one was not added.',
     )
     // The five chosen before still apply: in the field, in the last read and on the tiles.
-    expect(field(page, 'work_item').props('modelValue')).toEqual(ids(5).map((id) => `v:${id}`))
+    expect((field(page, 'work_item').props() as { modelValue: string[] }).modelValue).toEqual(
+      ids(5).map((id) => `v:${id}`),
+    )
     expect(reads.grouped('work_item').at(-1)?.get('work_item')).toBe(ids(5).join(','))
     expect(page.get('.tile-figure[data-measure="time"]').text()).toMatch(/^5\sh$/u)
 
