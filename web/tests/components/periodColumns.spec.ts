@@ -118,18 +118,31 @@ describe('period columns that open nothing', () => {
   it('reads out the latest period until the pointer stands on another', async () => {
     const chart = mountColumns()
 
-    expect(chart.get('.period-readout').text()).toBe('May 4: total 1 h; ci 1 h. so far')
+    const lines = () => chart.findAll('.period-readout > span').map((line) => line.text())
+    expect(lines()).toEqual(['May 4: total 1 h. so far', 'ci 1 h'])
     await chart.get('[data-key="d1"]').trigger('pointerenter')
-    expect(chart.get('.period-readout').text()).toBe('May 1: total 3 h; ci 2 h, work 1 h')
+    expect(lines()).toEqual(['May 1: total 3 h', 'ci 2 h, work 1 h'])
   })
 
-  // The browser spec measures that nothing moves; this holds the means: one line, cut with an
-  // ellipsis, and the whole words in a hint that follows the period shown.
-  it('keeps the readout and each note to one line, whole in a hint that shows only while cut', async () => {
+  it('keeps saying the period the pointer left for the readout, so its hint can be read', async () => {
     const chart = mountColumns()
     const readout = chart.get('.period-readout')
 
-    expect(readout.classes()).toContain('one-line')
+    await chart.get('[data-key="d1"]').trigger('pointerenter')
+    await chart.get('[data-key="d1"]').trigger('pointerleave')
+    await readout.trigger('pointerenter')
+    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
+    await readout.trigger('pointerleave')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+  })
+
+  // The browser spec measures that nothing moves; this holds the means: lines cut with an
+  // ellipsis, and the whole words in a hint that follows the period shown.
+  it('keeps each readout line and each note to one line, whole in a hint shown while cut', async () => {
+    const chart = mountColumns()
+    const readout = chart.get('.period-readout')
+
+    for (const line of readout.findAll('span')) expect(line.classes()).toContain('one-line')
     expect(readout.attributes('data-tooltip-kind')).toBe('clipped')
     expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
     await chart.get('[data-key="d1"]').trigger('pointerenter')

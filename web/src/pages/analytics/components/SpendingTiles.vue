@@ -4,8 +4,10 @@
  * with how it moved from the period it is compared with, named by its days. They are also the
  * choice of what the charts below draw: one radio group, each tile a segment, the chosen one
  * pressed, and marked by a check beside its name as well as by its ground. The tokens say what
- * they count — what was processed anew, by kind — and the cache reads they leave apart. Each
- * note keeps one line, whole in its hint and in the tile's name.
+ * they count — what was processed anew, by kind — and the cache reads they leave apart. The
+ * change and each note keep one line, so the three tiles stand one height at every width; a
+ * tile's hint says it whole — its name, figure, change and notes — while any of them is cut,
+ * and the tile's name says it all too.
  *
  * The cost says it is an estimate and not a bill, and tokens with no price are said in words
  * under it, never folded into a zero: a cost of nothing and a cost nobody knows are different.
@@ -66,13 +68,16 @@ const tiles = computed(() =>
       tokens: words.tokenKinds(props.split),
       cost: [t('analytics.figures.costNote'), words.unpriced(props.total)].filter(Boolean),
     }[value]
+    const label = words.measure(value)
+    const figure = words.figure(value, props.total)
     return {
       value,
-      label: words.measure(value),
-      figure: words.figure(value, props.total),
+      label,
+      figure,
       change: change.words,
       direction: change.direction,
       notes,
+      whole: [label, figure, change.words, ...notes].join('. '),
     }
   }),
 )
@@ -90,32 +95,36 @@ const tileOf = (value: Measure) => byValue.value.get(value)
     :options="tiles"
   >
     <template #option="{ option, chosen }">
-      <span class="tile-name">
-        {{ option.label }}
-        <VIcon
-          v-if="chosen"
-          class="tile-chosen"
-          name="check"
-          :size="14"
-        />
+      <span
+        v-tooltip.clipped="tileOf(option.value)?.whole"
+        class="tile-body"
+      >
+        <span class="tile-name">
+          {{ option.label }}
+          <VIcon
+            v-if="chosen"
+            class="tile-chosen"
+            name="check"
+            :size="14"
+          />
+        </span>
+        <span
+          class="tile-figure"
+          :data-measure="option.value"
+          >{{ tileOf(option.value)?.figure }}</span
+        >
+        <span
+          class="tile-change one-line"
+          :data-direction="tileOf(option.value)?.direction"
+          >{{ tileOf(option.value)?.change }}</span
+        >
+        <span
+          v-for="note in tileOf(option.value)?.notes"
+          :key="note"
+          class="tile-note one-line"
+          >{{ note }}</span
+        >
       </span>
-      <span
-        class="tile-figure"
-        :data-measure="option.value"
-        >{{ tileOf(option.value)?.figure }}</span
-      >
-      <span
-        class="tile-change"
-        :data-direction="tileOf(option.value)?.direction"
-        >{{ tileOf(option.value)?.change }}</span
-      >
-      <span
-        v-for="note in tileOf(option.value)?.notes"
-        :key="note"
-        v-tooltip.clipped="note"
-        class="tile-note one-line"
-        >{{ note }}</span
-      >
     </template>
   </SegmentedControl>
 </template>
@@ -123,6 +132,14 @@ const tileOf = (value: Measure) => byValue.value.get(value)
 <style scoped>
 .spending-tiles {
   inline-size: 100%;
+}
+
+/* What a tile says, its whole box: the hint stands on all of it, whichever line is cut. */
+.tile-body {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  min-width: 0;
 }
 
 .tile-name {
@@ -150,7 +167,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
   font: var(--font-detail);
 }
 
-/* A note keeps one line, so the tiles stand one height whatever they say; its hint says it whole. */
+/* The change and each note keep one line, so the tiles stand one height at every width. */
 .tile-note {
   min-width: 0;
   color: var(--color-text-tertiary);

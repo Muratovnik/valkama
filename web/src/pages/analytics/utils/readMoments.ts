@@ -24,3 +24,16 @@ export const dayOf = (moment: string) => named(moment).toISOString().slice(0, 10
 
 /** The last day a period ending at `moment` holds: the day of the instant before it ends. */
 export const lastDayBefore = (moment: string) => named(moment, -1).toISOString().slice(0, 10)
+
+const pad = (number: number) => String(number).padStart(2, '0')
+
+/**
+ * An instant as a moment at an offset, by default the browser's own at that instant: a record
+ * the store wrote in UTC, said at the offset the read and its time axis are at, so its clock
+ * time is the one the axis reads. `offset` is in minutes east of UTC.
+ */
+export function momentAtOffset(at: number, offset = -new Date(at).getTimezoneOffset()) {
+  const wall = new Date(at + offset * 60_000).toISOString().slice(0, 19)
+  const size = Math.abs(offset)
+  return `${wall}${offset < 0 ? '-' : '+'}${pad(Math.floor(size / 60))}:${pad(size % 60)}`
+}

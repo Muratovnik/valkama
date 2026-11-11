@@ -143,7 +143,7 @@ test('«Now» reads itself again every 30 s while the page is seen, and never wh
   const { show, reads, count } = await watchPage(page)
   const double = await serveLive(page, HOUR_OF_WORK)
   const analytics = await openReport(page, 1440, nowAddress)
-  await expect(analytics.locator('.analytics-bar-live')).toHaveText('Live, every 30 s')
+  await expect(analytics.locator('.analytics-bar-live')).toHaveText('every 30 s')
   await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   await settled(count, double)
   expect(roundsOf(await reads())).toBe(1)

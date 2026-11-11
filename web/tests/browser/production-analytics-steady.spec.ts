@@ -146,10 +146,27 @@ for (const width of WIDTHS)
       await bars.nth(index).hover()
       await hold(`bar ${index + 1}`)
     }
+    // The longest day, cut to its two lines, is whole in the readout's hint: the pointer goes
+    // from that day up to the readout, which keeps saying that day.
+    const readout = page.locator('.spending-days .period-readout')
+    const lengths = readouts.map((text) => text.trim().length)
+    await columns.nth(lengths.indexOf(Math.max(...lengths))).hover()
+    const whole = (await readout.getAttribute('data-tooltip')) ?? ''
+    await readout.hover()
+    await expect(page.getByRole('tooltip')).toHaveText(whole)
+    const series = (await readout.locator('span').nth(1).textContent()) ?? ''
+    for (const part of series.split(', ')) expect(whole).toContain(part)
+    expect(series.split(', ').length).toBeGreaterThan(2)
+    await hold('readout')
+    // Two lines of the detail type, reserved whatever the day says.
+    const lines = await readout.evaluate((element) => {
+      const [first] = element.children
+      return element.getBoundingClientRect().height / (first?.getBoundingClientRect().height ?? 1)
+    })
+    expect(lines).toBeCloseTo(2, 1)
     await page.mouse.move(0, 0)
     await hold('after')
 
-    const lengths = readouts.map((text) => text.trim().length)
     await record(info, `steady-${width}`, { lengths, bars: barCount, moved })
     // The fixture does what it is for: the days read out at very different lengths.
     expect(Math.max(...lengths)).toBeGreaterThan(4 * Math.min(...lengths))
