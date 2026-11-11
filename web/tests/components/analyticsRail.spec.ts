@@ -1,0 +1,208 @@
+/**
+ * The tiles of the Analytics page's rail, against a stand-in for the usage read. The oracle is
+ * the requirement: the overview's tile says the period's total in the chosen measure, how it
+ * moved from the period before and its days; a dimension's tile its count of values, its first
+ * real value with that value's share and the shares of its first few. A dimension is one read of
+ * its own; a change of period or filter reads every one again, a change of measure or section
+ * none. A tile whose read holds nothing says there is no data, never a zero, and one whose read
+ * failed says so while the others show their figures. The figures below are worked out by hand
+ * from the stretches.
+ */
+import { flushPromises } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
+
+import { serveUsage, task, value } from '../fixtures/analytics.ts'
+import type { TimedStretch } from '../fixtures/analytics.ts'
+import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+
+/** Wednesday afternoon, the moment the page's reads are asked at. */
+const NOW = new Date(2026, 10, 11, 14, 30)
+const HOUR = 3600
+
+/**
+ * This week: three hours on one task and one on another, under one model; the Monday of the week
+ * before: two hours, so the week rose by half as much again.
+ */
+const WORLD: TimedStretch[] = [
+  {
+    at: new Date(2026, 10, 9, 10),
+    group: { work_item: task(1, 'One'), model: value('model-a') },
+    spend: { seconds: 3 * HOUR, tokens: 3000, cost: 3 },
+  },
+  {
+    at: new Date(2026, 10, 10, 10),
+    group: { work_item: task(2, 'Two'), model: value('model-a') },
+    spend: { seconds: HOUR, tokens: 1000, cost: 1 },
+  },
+  {
+    at: new Date(2026, 10, 2, 10),
+    group: { work_item: task(1, 'One'), model: value('model-a') },
+    spend: { seconds: 2 * HOUR, tokens: 8000, cost: 2 },
+  },
+]
+
+const tile = (page: VueWrapper, section: string) => page.get(`[data-section="${section}"]`)
+const lead = (page: VueWrapper, section: string) =>
+  tile(page, section).get('.rail-tile-lead').text()
+const aside = (page: VueWrapper, section: string) =>
+  tile(page, section).find('.rail-tile-aside').text()
+const count = (page: VueWrapper, section: string) =>
+  tile(page, section).find('.analytics-rail-count')
+
+/** The reads the rail asks: one by each dimension, none comparing, none of the week before. */
+/** The element an id reference names, or null. */
+const byId = (id = '') => document.querySelector(`[id="${id}"]`)
+
+const railReads = (asked: readonly URLSearchParams[]) =>
+  asked.filter((query) => !query.get('compare') && !query.get('from')?.includes('T'))
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+})
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  document.body.innerHTML = ''
+})
+
+describe('the tiles', () => {
+  it('say the overview’s total, its change and its days', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const page = await mountAnalytics()
+    expect(lead(page, 'overview')).toBe('4\u{A0}h')
+    expect(aside(page, 'overview')).toBe('↑ 100%')
+    const trend = tile(page, 'overview').get('.mini-trend')
+    expect(trend.attributes('role')).toBe('img')
+    // The days are named as the days chart names them; the figures are what this test holds.
+    const said = trend.attributes('aria-label') ?? ''
+    expect(said).toMatch(/^Agent time per day from .+ to .+: highest 3\u{A0}h \(.+\), last /u)
+    // Wednesday, still running, has nothing yet: a zero in the measure's unit, so far.
+    expect(said).toMatch(/last 0\u{A0}min so far$/u)
+    expect(trend.findAll('.mini-trend-period')).toHaveLength(3)
+  })
+
+  it('say a dimension’s count of values, its first value with its share and its first shares', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const page = await mountAnalytics()
+    expect(count(page, 'work_item').text()).toBe('2 values')
+    expect(lead(page, 'work_item')).toBe('MAIN-1 One')
+    expect(aside(page, 'work_item')).toBe('75%')
+    expect(tile(page, 'work_item').get('.mini-share-bar').attributes('aria-label')).toBe(
+      'Shares of Agent time: MAIN-1 One 75%, MAIN-2 Two 25%',
+    )
+    expect(count(page, 'model').text()).toBe('1 value')
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(aside(page, 'model')).toBe('100%')
+  })
+
+  it('go by the section’s name alone, and are described by their figures', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const page = await mountAnalytics()
+    const entry = tile(page, 'model')
+    const name = byId(entry.attributes('aria-labelledby'))
+    const figures = byId(entry.attributes('aria-describedby'))
+    expect(name?.textContent).toBe('Model')
+    expect(figures?.textContent).toContain('model-a')
+  })
+
+  it('say the figures of the measure the page shows, asking nothing for it', async () => {
+    const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const page = await mountAnalytics()
+    const asked = reads.asked.length
+    await page.setProps({ routeState: { measure: 'tokens' } })
+    await flushPromises()
+    expect(reads.asked).toHaveLength(asked)
+    // Four thousand tokens against eight thousand: half as many.
+    expect(lead(page, 'overview')).toBe('4K')
+    expect(aside(page, 'overview')).toBe('↓ 50%')
+    expect(aside(page, 'work_item')).toBe('75%')
+  })
+})
+
+describe('the reads', () => {
+  it('ask one read a dimension, and again for a new period or filter, never for a section', async () => {
+    const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const page = await mountAnalytics()
+    const byDimension = Object.fromEntries(
+      USAGE_DIMENSIONS.map((dimension) => [
+        dimension,
+        railReads(reads.asked).filter((query) => query.get('group_by') === dimension).length,
+      ]),
+    )
+    // The page's own read of the week by task, and its read by account, ask what two tiles do.
+    expect(byDimension).toEqual(
+      Object.fromEntries(
+        USAGE_DIMENSIONS.map((one) => [one, one === 'work_item' || one === 'account' ? 2 : 1]),
+      ),
+    )
+
+    // Another section: the page reads it, by model, beside the week before, and by account.
+    const opened = reads.asked.length
+    await page.setProps({ routeState: { by: 'model' } })
+    await flushPromises()
+    const groups = (from: number) =>
+      reads.asked.slice(from).map((query) => query.get('group_by') ?? '')
+    expect(groups(opened).toSorted()).toEqual(['account', 'model', 'model'])
+
+    const before = reads.asked.length
+    await page.setProps({ routeState: { by: 'model', period: 'weeks4' } })
+    await flushPromises()
+    const fresh = reads.asked.slice(before).filter((query) => !query.get('compare'))
+    expect(fresh.map((query) => query.get('group_by') ?? '').toSorted()).toEqual(
+      [...USAGE_DIMENSIONS, 'account'].toSorted(),
+    )
+
+    const filtered = reads.asked.length
+    const filters = JSON.stringify({ model: ['model-a'] })
+    await page.setProps({ routeState: { by: 'model', period: 'weeks4', filters } })
+    await flushPromises()
+    const narrowed = reads.asked.slice(filtered).filter((query) => !query.get('compare'))
+    expect(narrowed.filter((query) => query.get('model') === 'model-a')).toHaveLength(
+      USAGE_DIMENSIONS.length + 1,
+    )
+  })
+
+  it('say there is no data, never a zero, when a period spent nothing', async () => {
+    stubAnalyticsReads((query) => serveUsage([], query))
+    const page = await mountAnalytics()
+    for (const section of ['overview', ...USAGE_DIMENSIONS]) {
+      expect(lead(page, section), section).toBe('No data')
+      expect(tile(page, section).text(), section).not.toMatch(/\b0\b/u)
+    }
+    expect(count(page, 'model').exists()).toBe(false)
+  })
+
+  it('say a read failed in its own tile, and the others still show their figures', async () => {
+    stubAnalyticsReads((query) =>
+      query.get('group_by') === 'model' ? { status: 500 } : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'model')).toBe('Could not be read')
+    expect(tile(page, 'model').get('.rail-tile').attributes('data-state')).toBe('failed')
+    expect(lead(page, 'work_item')).toBe('MAIN-1 One')
+    expect(lead(page, 'overview')).toBe('4\u{A0}h')
+  })
+
+  it('say they are reading until their answer lands, then keep it while the next is read', async () => {
+    let holding = true
+    const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
+    const page = await mountAnalytics()
+    expect(lead(page, 'model')).toBe('Reading…')
+    expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBeUndefined()
+
+    holding = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    // The figures on show stay while they are read again, said busy.
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
+    holding = false
+  })
+})

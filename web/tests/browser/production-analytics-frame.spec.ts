@@ -2,13 +2,18 @@
  * The frame of the Analytics page in the real app: a bar over a rail of sections and the panel of
  * the one on show, the whole of the module's frame.
  *
- * At a window 1024 pixels wide or wider and 700 or more high the document never scrolls: the bar
- * stays where it is, and the rail and the panel each scroll on their own. Lower than that, the
- * panel takes the scroll and the document still does not. Every other module keeps the frame's
- * own scroll. The section on show is in the address, so a reload keeps it, and an address the
- * page wrote before it had sections opens the same period, measure and filters in the section of
- * its breakdown. Under 1024 pixels the rail is the screen, a list; a section chosen there takes
- * its place, and the browser's Back returns to the list. Each run prints what it measured.
+ * The rail and the panel stand side by side only where the panel then has 640 pixels or more,
+ * and the page decides that on its own box, not on the window: at 1440 pixels they do, at 1024
+ * and 390 they take turns, and a page narrowed inside a wide window takes turns too. Taking
+ * turns, the rail is the screen, a list; a section chosen there takes its place, and the
+ * browser's Back returns to the list.
+ *
+ * At any of those widths the document never scrolls: the bar stays where it is, and the rail and
+ * the panel each scroll on their own, as does the list or the section where they take turns. A
+ * window too low for the report leaves the scroll to the panel, never to the document. Every
+ * other module keeps the frame's own scroll. The section on show is in the address, so a reload
+ * keeps it, and an address the page wrote before it had sections opens the same period, measure
+ * and filters in the section of its breakdown. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -77,15 +82,17 @@ async function openAt(page: Page, width: number, height: number, address = pageA
   await expect(page.locator('.analytics-panel .spending-days')).toBeVisible()
 }
 
-for (const [width, height] of [
-  [1440, 900],
-  [1024, 768],
-  [1024, 600],
+for (const [width, height, side] of [
+  [1440, 900, true],
+  [1440, 600, true],
+  [1024, 768, false],
+  [1024, 600, false],
 ] as const)
   test(`the document stands still while the rail and the panel scroll at ${width}×${height}`, async ({
     page,
   }, info) => {
-    await openAt(page, width, height)
+    // Where the two take turns, the section is opened in place of the list.
+    await openAt(page, width, height, pageAt(side ? {} : { open: 'section' }))
     const before = await scrolling(page)
     await record(info, `analytics frame ${width}x${height}`, before)
     expect(before.document.scrollHeight).toBe(before.document.clientHeight)
@@ -94,7 +101,8 @@ for (const [width, height] of [
     expect(before.frame?.scrollHeight).toBe(before.frame?.clientHeight)
     expect(before.rail?.overflowY).toBe('auto')
     expect(before.panel?.overflowY).toBe('auto')
-    expect(before.rail?.shown && before.panel?.shown).toBe(true)
+    expect(before.rail?.shown, 'the rail beside the section').toBe(side)
+    expect(before.panel?.shown).toBe(true)
     // The report is taller than its panel, which holds the rest under its own scroll.
     expect(before.panel?.scrollHeight).toBeGreaterThan(before.panel?.clientHeight ?? 0)
 
@@ -108,15 +116,83 @@ for (const [width, height] of [
     await page.screenshot(shot(info, `analytics-frame-${width}x${height}.png`))
   })
 
+/** How wide the page, the rail and the panel stand; nothing for one that is not shown. */
+const widths = (page: Page) =>
+  page.evaluate(() => {
+    // This body runs in the page, so a helper at the module's own scope would not be there.
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+    const width = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector)
+      return element?.checkVisibility() ? element.getBoundingClientRect().width : 0
+    }
+    return {
+      page: width('.analytics-page'),
+      rail: width('.analytics-page-rail'),
+      panel: width('.analytics-panel'),
+    }
+  })
+
+/** The least width of the panel beside the rail. */
+const PANEL_LEAST = 640
+/** The rail's width beside the panel: 15 of the root's 16-pixel ems. */
+const RAIL = 240
+
+test('at 1440px the rail and the panel stand side by side, the panel 640 pixels or more', async ({
+  page,
+}, info) => {
+  await openAt(page, 1440, 900)
+  const shown = await widths(page)
+  await record(info, 'analytics frame widths 1440', shown)
+  expect(shown.rail, 'the rail').toBeCloseTo(RAIL, 1)
+  expect(shown.panel, 'the panel beside the rail').toBeGreaterThanOrEqual(PANEL_LEAST)
+  expect(shown.rail + shown.panel).toBeCloseTo(shown.page, 1)
+})
+
+for (const width of [1024, 390])
+  test(`at ${width}px the rail and the panel take turns, the section having the page`, async ({
+    page,
+  }, info) => {
+    await openAt(page, width, 900, pageAt({ open: 'section' }))
+    const shown = await widths(page)
+    await record(info, `analytics frame widths ${width}`, shown)
+    // Beside the rail, the section would have had under 640 pixels.
+    expect(shown.page - RAIL).toBeLessThan(PANEL_LEAST)
+    expect(shown.rail, 'the rail beside the section').toBe(0)
+    expect(shown.panel).toBeCloseTo(shown.page, 1)
+  })
+
+test('the page’s own box decides, whatever the window: narrowed in a wide one, it takes turns', async ({
+  page,
+}) => {
+  await openAt(page, 1440, 900)
+  const rail = page.locator('.analytics-rail')
+  const panel = page.locator('.analytics-panel')
+  const narrowTo = (inlineSize: string) =>
+    page.locator('.analytics-page').evaluate((element, size) => {
+      element.style.inlineSize = size
+    }, inlineSize)
+  await expect(panel).toBeVisible()
+  // The page given 879 pixels of a window of 1440: the rail would leave the panel 639.
+  await narrowTo('879px')
+  await expect(panel).toBeHidden()
+  await expect(rail).toBeVisible()
+  // One pixel more, and the panel has its 640 beside the rail.
+  await narrowTo('880px')
+  await expect(panel).toBeVisible()
+  await expect(rail).toBeVisible()
+  const beside = await widths(page)
+  expect(beside.panel).toBeCloseTo(PANEL_LEAST, 1)
+})
+
 test('the rail scrolls on its own when the window is too low for its sections', async ({
   page,
 }, info) => {
-  await openAt(page, 1024, 480)
+  await openAt(page, 1440, 480)
   const before = await scrolling(page)
-  await record(info, 'analytics frame rail 1024x480', before)
+  await record(info, 'analytics frame rail 1440x480', before)
   expect(before.document.scrollHeight).toBe(before.document.clientHeight)
   expect(before.rail?.scrollHeight).toBeGreaterThan(before.rail?.clientHeight ?? 0)
-  await wheelOver(page, '.analytics-page-rail', 400)
+  await wheelOver(page, '.analytics-page-rail', 2000)
   await expect.poll(async () => scrolledBy(await scrolling(page), 'rail')).toBeGreaterThan(0)
   const after = await scrolling(page)
   expect(after.panel?.scrollTop).toBe(0)
@@ -141,12 +217,13 @@ test('another module keeps the frame scrolling it', async ({ page }, info) => {
 test('a section chosen on the rail is the address, and a reload keeps it', async ({ page }) => {
   await openAt(page, 1440, 900)
   const rail = page.getByRole('navigation', { name: 'Sections of the usage' })
-  await expect(rail.locator('[aria-current="page"]')).toHaveText('Task')
+  const current = rail.locator('[aria-current="page"] .analytics-rail-name')
+  await expect(current).toHaveText('Task')
   await rail.getByRole('button', { name: 'Model' }).click()
   await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
   await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
   await page.reload()
-  await expect(rail.locator('[aria-current="page"]')).toHaveText('Model')
+  await expect(current).toHaveText('Model')
   await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
 
   // From the keyboard: the overview, which shows the figures and the days alone.
@@ -174,7 +251,9 @@ test('an address the page wrote before it had sections opens the same view', asy
     'aria-checked',
     'true',
   )
-  await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveText('Model')
+  await expect(
+    page.locator('.analytics-rail [aria-current="page"] .analytics-rail-name'),
+  ).toHaveText('Model')
   await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveText(['Model: model-a'])
   await expect(page.locator('.spending-bars h2')).toHaveText('Tokens by model')
   expect(path(page)).toBe(released)

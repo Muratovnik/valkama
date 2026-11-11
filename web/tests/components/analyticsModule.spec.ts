@@ -28,6 +28,9 @@ import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
+// What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
+vi.mock('@/pages/analytics/composables/useRailReads.ts', () => import('../support/quietRail.ts'))
+
 function i18n(locale: 'en' | 'ru' = 'en') {
   return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages, pluralRules })
 }
