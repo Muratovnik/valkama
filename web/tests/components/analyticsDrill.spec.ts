@@ -32,15 +32,15 @@ const MONDAY = new Date(2026, 10, 9, 10)
 const model = (number: number) => `model-${String(number).padStart(2, '0')}`
 
 /**
- * Twelve tasks on Monday, each under its own model and each an hour shorter than the one
- * before, so by model ten values stand and two fold into «Other». Work with no task and work no
- * one can place go under the first model, and Tuesday has work of no known model.
+ * Ten tasks on Monday, each under its own model and each an hour shorter than the one before,
+ * so a ranked list names every value by task and by model. Work with no task and work no one can
+ * place go under the first model, and Tuesday has work of no known model.
  */
 const WORLD: TimedStretch[] = [
-  ...Array.from({ length: 12 }, (_, index) => ({
+  ...Array.from({ length: 10 }, (_, index) => ({
     at: MONDAY,
     group: { work_item: task(index + 1, `Task ${index + 1}`), model: value(model(index + 1)) },
-    spend: { seconds: (13 - index) * 3600 },
+    spend: { seconds: (11 - index) * 3600 },
   })),
   { at: MONDAY, group: { work_item: noTask, model: value(model(1)) }, spend: { seconds: 1800 } },
   {
@@ -221,7 +221,7 @@ describe('what is not a control', () => {
       expect(line.attributes('tabindex')).toBeUndefined()
       expect(line.attributes('role')).toBeUndefined()
     }
-    expect(lines.filter((line) => line.element.tagName === 'BUTTON')).toHaveLength(12)
+    expect(lines.filter((line) => line.element.tagName === 'BUTTON')).toHaveLength(10)
     const tableUnknown = byModel
       .findAll('.spending-table tbody th')
       .find((cell) => cell.text() === 'Unknown')

@@ -8,19 +8,21 @@
  * one hue in the bars, the small charts and the day chart (`valueSlots`), and its name beside it.
  *
  * Where the page holds it to the panel's height (`fills`), the figures stay in view at the top and
- * the charts and the table share the rest: the charts up to a little over half of it, scrolling on
+ * the charts and the table share the rest: the charts up to a little under half of it, scrolling on
  * their own past that, the table the remainder and never less than 14rem. A wheel moves the part
  * it is over and never the panel or the page. Elsewhere, as on a phone, the panel scrolls and the
  * table keeps a frame of its own.
  *
  * Held, a button at the table gives it the whole panel under the figures and back (`tableWhole`),
- * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway.
+ * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway. The
+ * line under the ranked list that counts the values it leaves out gives the table the same, and the
+ * focus with it.
  *
  * A value or a day pressed to narrow the view goes out with the dimension the answer was read by
  * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`).
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
@@ -100,6 +102,20 @@ const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
+
+/**
+ * The values the ranked list leaves out asked for: the table takes the whole panel, as its own
+ * button gives it, and the focus moves to it — to its frame where that scrolls, else its first
+ * control.
+ */
+async function showTable() {
+  tableWhole.value = true
+  await nextTick()
+  const table = root.value?.querySelector<HTMLElement>('.spending-table')
+  const frame = table?.querySelector<HTMLElement>('.spending-table-frame[tabindex]')
+  const target = frame ?? table?.querySelector<HTMLElement>('.spending-table-frame button')
+  target?.focus()
+}
 </script>
 
 <template>
@@ -133,6 +149,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
             :rows="usage.rows"
             :slots="slots"
             @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
+            @more="showTable"
           />
           <SpendingMultiples
             :by="by"
@@ -210,7 +227,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
 /* Held to the panel's height: the figures stand whole at the top, outside any scroll, since they
    choose what everything under them shows. The charts and the table share the rest: the charts
-   take what they hold up to 55% of it and scroll inside past that, the table the remainder and
+   take what they hold up to 45% of it and scroll inside past that, the table the remainder and
    never less than 14rem, so a few of its rows are always in view. */
 .dimension-panel[data-fills='true'] {
   display: flex;
@@ -224,7 +241,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
   & .dimension-body {
     flex: 1 1 0;
     grid-template-rows:
-      fit-content(min(55%, 100% - 14rem - var(--space-4)))
+      fit-content(min(45%, 100% - 14rem - var(--space-4)))
       minmax(14rem, 1fr);
     gap: var(--space-4);
   }

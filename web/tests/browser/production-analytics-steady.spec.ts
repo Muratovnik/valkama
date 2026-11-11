@@ -125,7 +125,13 @@ for (const width of WIDTHS)
     const bars = page.locator('.spending-bars .ranked-line')
     await expect(columns).toHaveCount(3)
     await expect(page.locator('.spending-days .period-note')).not.toHaveCount(0)
-    await expect(page.locator('.spending-bars .ranked-rest .ranked-row')).toHaveCount(2)
+    // Work on no task and unknown work are ranked among the values, each with its bar.
+    await expect(page.locator('.spending-bars .ranked-rest .ranked-row')).toHaveCount(0)
+    await expect(
+      page.locator(
+        '.spending-bars .ranked-row:is([data-kind="none"], [data-kind="unknown"]) .ranked-bar',
+      ),
+    ).toHaveCount(2)
 
     await page.mouse.move(0, 0)
     const before = await layout(page)

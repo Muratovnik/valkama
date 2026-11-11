@@ -107,12 +107,11 @@ describe('the panel of a dimension', () => {
     expect(hues).not.toContain('other')
     expect(hues).not.toContain(undefined)
 
-    // Work under no known model is no value of the dimension: it stands apart, by name and
-    // figure, in no small chart and with no bar.
-    expect(text(page, '.spending-multiples .multiples-apart .multiple-name')).toEqual(['Unknown'])
-    expect(page.find('.spending-multiples .multiples-apart .multiple-plot').exists()).toBe(false)
-    expect(bars.has('Unknown')).toBe(true)
-    expect(bars.get('Unknown')).toBeUndefined()
+    // Work under no known model is no value of the dimension: it is ranked by its figure, with a
+    // small chart and a bar of its own on the values' scale, in the neutral hue.
+    expect(text(page, '.spending-multiples .multiples-apart .multiple-name')).toEqual([])
+    expect(multiples.get('Unknown')).toBe('other')
+    expect(bars.get('Unknown')).toBe('other')
   })
 
   it('writes the top of the small charts’ one scale once', async () => {

@@ -24,17 +24,18 @@ import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/an
 const MONDAY = new Date(2026, 10, 9)
 
 /**
- * Twelve tasks, from 12 hours down to 1, then an hour of work on no task and half an hour no one
- * can place; two of the tasks have no price, one with tokens left out.
+ * Ten tasks, from 10 hours down to 1, then an hour of work on no task and half an hour no one
+ * can place: twelve values, as many as the list names. Two of the tasks have no price, one with
+ * tokens left out.
  */
 const STRETCHES: Stretch[] = [
-  ...Array.from({ length: 12 }, (_, index) => ({
+  ...Array.from({ length: 10 }, (_, index) => ({
     day: index % 5,
     group: { work_item: task(index + 1, `Task ${index + 1}`) },
     spend: {
-      seconds: (12 - index) * 3600,
-      tokens: (12 - index) * 1000,
-      cost: index === 0 ? null : (12 - index) * 0.5,
+      seconds: (10 - index) * 3600,
+      tokens: (10 - index) * 1000,
+      cost: index === 0 ? null : (10 - index) * 0.5,
       unpriced: index === 0 ? 57 : 0,
     },
   })),
@@ -87,10 +88,10 @@ describe('the bars', () => {
       kind: row.attributes('data-kind'),
       label: row.get('.ranked-label').text(),
     }))
-    expect(shown.slice(0, 12).map((row) => row.label)).toEqual(
-      Array.from({ length: 12 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+    expect(shown.slice(0, 10).map((row) => row.label)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
     )
-    expect(shown.slice(12)).toEqual([
+    expect(shown.slice(10)).toEqual([
       { kind: 'none', label: 'No task' },
       { kind: 'unknown', label: 'Unknown' },
     ])
@@ -98,8 +99,8 @@ describe('the bars', () => {
 
   it('hand each bar its hours, not a share', () => {
     const rows = barsOf(mountBars(answer(['work_item']).usage.rows, 'work_item'))
-    expect(rows.find((row) => row.label === 'MAIN-1 Task 1')?.value).toBe(12)
-    expect(rows.find((row) => row.label === 'MAIN-12 Task 12')?.value).toBe(1)
+    expect(rows.find((row) => row.label === 'MAIN-1 Task 1')?.value).toBe(10)
+    expect(rows.find((row) => row.label === 'MAIN-10 Task 10')?.value).toBe(1)
     expect(rows.find((row) => row.kind === 'none')?.value).toBe(1)
     expect(rows.find((row) => row.kind === 'unknown')?.value).toBe(0.5)
   })
@@ -153,15 +154,42 @@ describe('the bars', () => {
     ])
     const classes = answer(
       ['launch_class'],
-      Array.from({ length: 13 }, (_, index) => ({
+      Array.from({ length: 12 }, (_, index) => ({
         day: 0,
         group: { launch_class: value(`class-${String(index).padStart(2, '0')}`) },
         spend: { seconds: (index + 1) * 60 },
       })),
     )
     const byClass = mountBars(classes.usage.rows, 'launch_class')
-    expect(byClass.findAll('.ranked-row')).toHaveLength(13)
+    expect(byClass.findAll('.ranked-row')).toHaveLength(12)
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
+  })
+
+  it('name the first twelve values and leave the rest to the table, in one line that asks for it', async () => {
+    const many = (count: number) =>
+      answer(
+        ['work_item'],
+        Array.from({ length: count }, (_, index) => ({
+          day: 0,
+          group: { work_item: task(index + 1, `Task ${index + 1}`) },
+          spend: { seconds: (count - index) * 600 },
+        })),
+      ).usage.rows
+    const twelve = mountBars(many(12), 'work_item')
+    expect(twelve.findAll('.ranked-row')).toHaveLength(12)
+    expect(twelve.find('.spending-bars-more').exists()).toBe(false)
+
+    const thirty = mountBars(many(30), 'work_item')
+    expect(thirty.findAll('.ranked-row .ranked-label').map((label) => label.text())).toEqual(
+      Array.from({ length: 12 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+    )
+    const more = thirty.get('.spending-bars-more')
+    expect(more.text()).toBe('18 more — in the table')
+    await more.trigger('click')
+    expect(thirty.emitted('more')).toHaveLength(1)
+    expect(
+      mountBars(many(30), 'work_item', { locale: 'ru' }).get('.spending-bars-more').text(),
+    ).toBe('ещё 18 — в таблице')
   })
 
   const CATEGORY = { work_item: task(1, 'One'), launch_class: value('general') }
@@ -244,7 +272,7 @@ describe('the bars on the page', () => {
     const rows = page.getComponent(RankedBars).props('rows') as RankedRow[]
     expect(page.get('.spending-bars h2').text()).toBe('Tokens by task')
     expect(sum(rows)).toBe(tokensOf(STRETCHES))
-    expect(page.get('.tile-figure[data-measure="tokens"]').text()).toBe('78.5K')
+    expect(page.get('.tile-figure[data-measure="tokens"]').text()).toBe('55.5K')
   })
 })
 

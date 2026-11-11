@@ -342,14 +342,15 @@ for (const width of [1440, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-one-${width}.png`))
   })
 
-  test(`a chart of many values, every one a bar and the rest a small «other», stands whole at ${width}px`, async ({
+  test(`a chart of many values, the first twelve a bar and the rest a small «other», stands whole at ${width}px`, async ({
     page,
   }, info) => {
     await serve(page, LONG_TAIL)
     const analytics = await openReport(page, width)
     for (const part of ['.spending-bars', '.spending-multiples'])
       await analytics.locator(part).getByRole('radio', { name: 'Chart' }).click()
-    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(25)
+    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(12)
+    await expect(analytics.locator('.spending-bars-more')).toHaveText('13 more — in the table')
     const measured = await bars(page)
     await record(info, `analytics large other ${width}`, measured)
     expect(measured.rest).toEqual([])

@@ -5,6 +5,9 @@
  */
 export const analyticsPanelMessages = {
   en: {
+    bars: {
+      more: '{count} more — in the table | {count} more — in the table',
+    },
     multiples: {
       title: '{measure} {per} of each, {by}',
       scale: 'Every chart from 0 to',
@@ -17,6 +20,12 @@ export const analyticsPanelMessages = {
       collapse: 'Collapse table',
       crossTitle: '{measure} {by} and {across}',
       total: 'Total',
+      heads: {
+        time: 'Agent time',
+        tokens: 'Tokens',
+        cost: 'Est. cost, API prices',
+        before: 'Before, {period}',
+      },
       rows: 'Rows: {shown} of {all}',
       sorted: 'sorted by «{column}», {direction}',
       sortBy: 'Sort by «{column}»',
@@ -40,6 +49,9 @@ export const analyticsPanelMessages = {
     },
   },
   ru: {
+    bars: {
+      more: 'ещё {count} — в таблице | ещё {count} — в таблице | ещё {count} — в таблице',
+    },
     multiples: {
       title: '{measure} {per} у каждого, {by}',
       scale: 'Шкала всех графиков: от 0 до',
@@ -52,6 +64,12 @@ export const analyticsPanelMessages = {
       collapse: 'Свернуть таблицу',
       crossTitle: '{measure} {by} и {across}',
       total: 'Итого',
+      heads: {
+        time: 'Время агентов',
+        tokens: 'Токены',
+        cost: 'Оценка по ценам API',
+        before: 'Ранее, {period}',
+      },
       rows: 'Строк: {shown} из {all}',
       sorted: 'по столбцу «{column}», {direction}',
       sortBy: 'Упорядочить по столбцу «{column}»',

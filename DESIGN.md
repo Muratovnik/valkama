@@ -870,10 +870,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   order, never by rank, so a filter repaints nothing — out of six `--color-series-*` hues
   ordered so that neighbours in a stack stay apart under protanopia and deuteranopia. A
   seventh series folds into `--color-series-other`, the neutral that also draws, in a stack,
-  the rows that are not categories — the folded tail, «no task», «unknown». In a ranked chart
-  they close it in a list of their own, set apart by air, unranked, their names in the quiet
-  ink; they sum many values or none, so they set no scale, draw no bar and are read by their
-  figures. A hue
+  the rows that are not categories — the folded tail, «no task», «unknown». In a section's
+  ranked chart and small charts «no task» and «unknown» stand where their figures put them,
+  drawn on the same scale in that neutral with their names in the quiet ink, since the largest
+  share of a period can be work on no task; only the folded tail closes the chart, apart and
+  unranked, and sets no scale. Elsewhere, as in a card of first values, all three close the
+  chart in a list of their own, set apart by air, draw no bar and are read by their figures.
+  A hue
   never speaks alone: a chart of two series or more carries a legend, and the readout over the
   plot and every accessible name say each series by name. The readout says the period under the
   pointer or the keyboard, the last one when neither stands on one, and keeps one line whatever

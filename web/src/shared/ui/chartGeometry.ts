@@ -78,15 +78,23 @@ const REST_ORDER: readonly RankedRowKind[] = ['other', 'none', 'unknown']
  * keeps one order whatever order the rows came in. A bar is measured against the longest
  * category: the folded tail, work with no task and unknown work sum many values or none, so one
  * of them would set a scale that leaves every category short. They draw no bar (`length` null)
- * and are read by their figures.
+ * and are read by their figures. With `rankAll`, as a section of the Analytics page asks, work
+ * with no value and unknown work are ranked and drawn on the categories' scale, and only the
+ * folded tail closes the chart.
  */
-export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; rest: PlacedRow[] } {
-  const categories = rows.filter((row) => (row.kind ?? 'category') === 'category')
+export function rankRows(
+  rows: readonly RankedRow[],
+  /** Rank work with no value and unknown work among the categories, by their figures. */
+  rankAll = false,
+): { ranked: PlacedRow[]; rest: PlacedRow[] } {
+  const ranks = (row: RankedRow) =>
+    (row.kind ?? 'category') === 'category' || (rankAll && row.kind !== 'other')
+  const categories = rows.filter((row) => ranks(row))
   const longest = Math.max(0, ...categories.map((row) => drawable(row.value)))
   const ranked = categories
     .map((row) => ({
       ...row,
-      kind: 'category' as const,
+      kind: row.kind ?? 'category',
       length: longest ? drawable(row.value) / longest : 0,
     }))
     .sort(
@@ -96,7 +104,9 @@ export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; res
         byCodePoint(left.key, right.key),
     )
   const rest = REST_ORDER.flatMap((kind) =>
-    rows.filter((row) => row.kind === kind).map((row) => ({ ...row, kind, length: null })),
+    rows
+      .filter((row) => row.kind === kind && !ranks(row))
+      .map((row) => ({ ...row, kind, length: null })),
   )
   return { ranked, rest }
 }

@@ -30,11 +30,13 @@ const props = defineProps<{
   words: RankedWords
   /** Each row a line of name and value over a thin bar, for a few rows in a small space. */
   dense?: boolean
+  /** Rank work with no value and unknown work by their figures, with a bar (`rankRows`). */
+  rankAll?: boolean
 }>()
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
-const placed = computed(() => rankRows(props.rows))
+const placed = computed(() => rankRows(props.rows, props.rankAll))
 
 /** The ranked categories as an ordered list, and the rows that are not ranked after them. */
 const groups = computed(() =>
@@ -218,6 +220,11 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
       text-decoration-color: currentcolor;
     }
   }
+}
+
+/* Work with no value or unknown work ranked among the categories keeps their quiet ink. */
+.ranked-row:is([data-kind='none'], [data-kind='unknown']) .ranked-label {
+  color: var(--color-text-tertiary);
 }
 
 /* The rows that are not categories read as a note on the breakdown rather than a part of it:

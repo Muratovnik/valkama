@@ -88,8 +88,8 @@ describe('the breakdown beside the period before', () => {
       'Task',
       'Agent time',
       'Tokens',
-      'Estimated cost at API prices',
-      'Agent time, Nov 6 – 8',
+      'Est. cost, API prices',
+      'Before, Nov 6 – 8',
       'Change',
     ])
     expect(rows(wrapper)).toEqual([
@@ -165,7 +165,7 @@ describe('the breakdown beside the period before', () => {
       ],
     ])
     expect(headings(table('tokens')).slice(4)).toEqual([
-      'Tokens, Nov 6 – 8',
+      'Before, Nov 6 – 8',
       'Change',
       'Input',
       'Cache read',
@@ -210,7 +210,7 @@ describe('the breakdown beside the period before', () => {
     // order the table had them.
     await wrapper.get('thead th:nth-child(5) button').trigger('click')
     expect(names()).toEqual(['MAIN-1 Alpha', 'No task', 'MAIN-3 Gamma', 'MAIN-2 Beta', 'Unknown'])
-    expect(summary()).toBe('Rows: 5 of 5, sorted by «Agent time, Nov 6 – 8», largest first')
+    expect(summary()).toBe('Rows: 5 of 5, sorted by «Before, Nov 6 – 8», largest first')
     await wrapper.get('thead th:nth-child(5) button').trigger('click')
     expect(names()).toEqual(['MAIN-2 Beta', 'Unknown', 'MAIN-3 Gamma', 'MAIN-1 Alpha', 'No task'])
     expect(wrapper.get('thead th:nth-child(5)').attributes('aria-sort')).toBe('ascending')
@@ -323,12 +323,7 @@ describe('the breakdown beside the period before', () => {
     expect(wrapper.get('.spending-table-note').text()).toBe(
       'The period before was not read, so this table shows this period alone.',
     )
-    expect(headings(wrapper)).toEqual([
-      'Task',
-      'Agent time',
-      'Tokens',
-      'Estimated cost at API prices',
-    ])
+    expect(headings(wrapper)).toEqual(['Task', 'Agent time', 'Tokens', 'Est. cost, API prices'])
     // Gamma worked only before, which was not read: it is not here.
     expect(rows(wrapper)).toEqual([
       ['MAIN-1 Alpha', '2 h', '2K', '≈ $1.50'],
