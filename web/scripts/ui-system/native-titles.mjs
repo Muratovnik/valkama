@@ -183,6 +183,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
+    'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="fresh.full"',
+    'the day and the time of the newest record, where the bar says only how long ago it was',
+  ],
+  [
     `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
     'that a notification comes with the window closed too, and that a click on it opens the card; it stood as a paragraph over the group',
   ],

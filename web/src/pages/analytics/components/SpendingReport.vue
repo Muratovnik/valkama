@@ -11,6 +11,9 @@
  *
  * A value or a day pressed to narrow the view goes out with the dimension the answer was read
  * by and the part of the report it was pressed in, which says why when it was refused.
+ *
+ * The overview is the period's figures and its days alone: the breakdown's bars and its table
+ * belong to the section of a dimension.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -36,6 +39,8 @@ const props = defineProps<{
   accounts: AccountsRead
   /** The filters the answer was read with. */
   filters: UsageFilters
+  /** Whether this is the overview, which shows the figures and the days without the breakdown. */
+  overview: boolean
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   /** Why the last press in a part of the report did not narrow the view; null otherwise. */
@@ -113,6 +118,7 @@ const notices = computed(() => ({
       :before="before"
     />
     <SpendingBars
+      v-if="!overview"
       :by="by"
       :measure="measure"
       :narrow="narrow"
@@ -131,6 +137,7 @@ const notices = computed(() => ({
       @day="(day, label) => emit('day', day, label)"
     />
     <SpendingTable
+      v-if="!overview"
       :by="by"
       :filters="filters"
       :measure="measure"

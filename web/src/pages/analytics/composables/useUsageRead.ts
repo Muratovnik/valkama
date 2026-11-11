@@ -13,6 +13,7 @@ import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
+import { breakdownOf } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { fetchUsage, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type {
@@ -116,10 +117,14 @@ export function useUsageRead(options: {
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => ({ ...options.view().filters, ...scope.value }))
 
-  /** What a view asks; the moment of a preset is taken when it is asked, not here. */
+  /**
+   * What a view asks; the moment of a preset is taken when it is asked, not here. The overview is
+   * read as the breakdown it borrows, so moving between the two asks nothing again.
+   */
   const asked = computed(() => {
-    const { period, from, to, by } = options.view()
-    return JSON.stringify({ period, from, to, by, filters: filters.value })
+    const view = options.view()
+    const { period, from, to } = view
+    return JSON.stringify({ period, from, to, by: breakdownOf(view), filters: filters.value })
   })
 
   /**
@@ -161,7 +166,7 @@ export function useUsageRead(options: {
     }
     const shown = state.value
     state.value = 'payload' in shown ? refreshing(shown.payload) : uiLoading()
-    const { by } = view
+    const by = breakdownOf(view)
     const askedWith = filters.value
     const before = comparedPeriod(view, at)
     const asking = fetchUsage(query(period, [by], !before), signal)

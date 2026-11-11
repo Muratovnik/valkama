@@ -216,12 +216,15 @@ describe('the Analytics page', () => {
     const link = writeAddress({ ...DEFAULT_VIEW, filters: { work_item: [ITEM.id ?? ''] } })
     const page = await mountAnalytics({ routeState: link })
     expect(reads.grouped('work_item')[0]?.get('work_item')).toBe(ITEM.id)
-    expect(page.get('.disclosure-toggle').text()).toBe('Filters · 1')
     // Only the task's own hour: the other project's two hours are not admitted.
     expect(time(page)).toBe('1 h')
-    // The chosen task is named, from the values its filter offers.
-    const chip = page.get('[data-dimension="work_item"]')
-    expect(chip.text()).toContain('MAIN-12 Answer a review in one form')
+    // The chosen task is named, from the values its filter offers: on the bar as a chip with
+    // its dimension, and in its field.
+    expect(page.findAll('.analytics-bar-filters .combo-chip').map((chip) => chip.text())).toEqual([
+      'Task: MAIN-12 Answer a review in one form',
+    ])
+    const field = page.get('[data-dimension="work_item"]')
+    expect(field.text()).toContain('MAIN-12 Answer a review in one form')
   })
 
   it('writes a change of the period into its address and reads it again from there', async () => {
@@ -249,7 +252,7 @@ describe('the Analytics page', () => {
   it("offers each filter's values from the scope's project alone", async () => {
     const reads = serve()
     const page = await mountAnalytics({ projectId: 'sample' })
-    await page.get('.disclosure-toggle').trigger('click')
+    await page.get('.analytics-filter-add').trigger('click')
     await flushPromises()
     const offers = reads.grouped('model')
     expect(offers).toHaveLength(1)
@@ -294,7 +297,7 @@ describe('the Analytics page', () => {
     const asks = async (routeState?: Record<string, string>) => {
       const before = reads.asked.length
       if (routeState) await page.setProps({ routeState })
-      else await page.get('.disclosure-toggle').trigger('click')
+      else await page.get('.analytics-filter-add').trigger('click')
       await flushPromises()
       return reads.asked.length - before
     }

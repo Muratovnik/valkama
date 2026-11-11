@@ -199,7 +199,9 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
   await expect.poll(offEnd, { message: 'opened off its end' }).toBeLessThanOrEqual(1)
 
   // The window made narrower: the plot is as wide as it was, and the last days stay in view.
-  await page.setViewportSize({ width: 1024, height: 900 })
+  // Narrower, not narrow: beside the rail, a window of 1200px leaves the report wide enough to
+  // keep its charts, where 1024px would open each as its table.
+  await page.setViewportSize({ width: 1200, height: 900 })
   await expect(days).toHaveAttribute('data-shown', 'chart')
   await expect
     .poll(offEnd, { message: 'left its end as the window narrowed' })
@@ -214,7 +216,7 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
   await days.locator('.period-frame').evaluate((frame) => {
     frame.scrollLeft = 200
   })
-  await page.setViewportSize({ width: 1100, height: 900 })
+  await page.setViewportSize({ width: 1300, height: 900 })
   await expect.poll(frameEnd).toBeGreaterThan(narrowed.frame.right)
   const widened = await chartPlace(page)
   expect(widened.scrolled, 'the reader’s place').toBe(200)

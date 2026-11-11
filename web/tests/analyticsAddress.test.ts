@@ -7,7 +7,12 @@ import { describe, expect, it } from 'vitest'
 
 import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
-import { DEFAULT_VIEW, readAddress, writeAddress } from '@/shared/api/analyticsAddress.ts'
+import {
+  breakdownOf,
+  DEFAULT_VIEW,
+  readAddress,
+  writeAddress,
+} from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { usageParameters } from '@/shared/api/analyticsApi.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
@@ -34,6 +39,7 @@ const EVERY_PART: AnalyticsView = {
     role: ['advisor'],
     environment: [null],
   },
+  open: true,
 }
 
 const analytics = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'analytics')
@@ -69,6 +75,8 @@ describe('the Analytics address', () => {
       { period: 'weeks4', by: 'executor', measure: 'tokens' },
     ],
     ['a filter on work with no task alone', { filters: { work_item: [null] } }],
+    ['the overview', { by: 'overview' }],
+    ['a section a narrow screen shows in place of the list', { by: 'model', open: true }],
   ] as const)('gives back %s', (_name, part) => {
     const view = { ...DEFAULT_VIEW, ...part } as AnalyticsView
     expect(throughTheAddress(view)).toEqual(view)
@@ -100,12 +108,58 @@ describe('the Analytics address', () => {
     expect(writeAddress(pasted)).toEqual(one)
   })
 
+  /**
+   * Addresses as the page wrote them before it had sections, when `by` named the breakdown and the
+   * plain address was the breakdown by task: each opens the same period, measure and filters, in
+   * the section of its breakdown, and a narrow screen opens on the list of sections.
+   */
+  it.each([
+    ['the plain page', {}, {}],
+    [
+      'a custom period by model in cost, filtered',
+      {
+        period: 'custom',
+        from: '2026-10-05',
+        to: '2026-10-18',
+        by: 'model',
+        measure: 'cost',
+        filters: `{"work_item":["${ITEM}",null]}`,
+      },
+      {
+        period: 'custom',
+        from: '2026-10-05',
+        to: '2026-10-18',
+        by: 'model',
+        measure: 'cost',
+        filters: { work_item: [ITEM, null] },
+      },
+    ],
+    [
+      'four weeks by role in tokens',
+      { period: 'weeks4', by: 'role', measure: 'tokens' },
+      {
+        period: 'weeks4',
+        by: 'role',
+        measure: 'tokens',
+      },
+    ],
+  ] as const)('opens %s as the page before sections wrote it', (_name, state, view) => {
+    expect(readAddress(state)).toEqual({ ...DEFAULT_VIEW, ...view })
+    expect(writeAddress(readAddress(state))).toEqual(state)
+  })
+
+  it('reads the overview by the breakdown of the plain page, and a section by its own', () => {
+    expect(breakdownOf({ ...DEFAULT_VIEW, by: 'overview' })).toBe('work_item')
+    expect(breakdownOf({ ...DEFAULT_VIEW, by: 'model' })).toBe('model')
+  })
+
   it('drops what this build cannot read and keeps the rest of the link', () => {
     expect(
       readAddress({
         period: 'fortnight',
         by: 'colour',
         measure: 'joy',
+        open: 'yes',
         from: '2026-10-05',
         filters: JSON.stringify({ shade: ['x'], model: ['m-1', 3, ''], effort: 'high' }),
       }),

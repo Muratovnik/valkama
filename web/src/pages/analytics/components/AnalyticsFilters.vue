@@ -11,12 +11,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useFilterOptions } from '@/pages/analytics/composables/useFilterOptions.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
-import { filterKey, filterValue, valueKey } from '@/pages/analytics/utils/usageValues.ts'
+import { filterKey, filterValue } from '@/pages/analytics/utils/usageValues.ts'
 
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
-import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 const props = defineProps<{
@@ -28,30 +28,12 @@ const emit = defineEmits<{ filter: [dimension: UsageDimension, values: (string |
 
 const { t } = useI18n()
 const words = useSpendingWords()
+const { options } = useFilterOptions()
 
 const chosen = (dimension: UsageDimension) =>
   (props.filters[dimension] ?? []).map((value) => filterKey(value))
 
 const removeLabel = (label: string) => t('analytics.filters.remove', { label })
-
-function options(dimension: UsageDimension): ChoiceOption[] {
-  const read = props.values[dimension]
-  const found = Array.isArray(read)
-    ? read.flatMap((row) => {
-        const value = row.group[dimension]
-        return !value || value.id === null
-          ? []
-          : [{ value: valueKey(value), label: words.valueLabel(dimension, value) }]
-      })
-    : []
-  const none = words.noneLabel(dimension)
-  const offered = [...(none === null ? [] : [{ value: filterKey(null), label: none }]), ...found]
-  const known = new Set(offered.map((option) => option.value))
-  const kept = chosen(dimension)
-    .filter((key) => !known.has(key))
-    .map((key) => ({ value: key, label: filterValue(key) ?? key }))
-  return [...offered, ...kept]
-}
 
 function emptyLabel(dimension: UsageDimension) {
   const read = props.values[dimension]
@@ -66,7 +48,7 @@ const fields = computed(() =>
     dimension,
     label: words.dimension(dimension),
     chosen: chosen(dimension),
-    options: options(dimension),
+    options: options(dimension, props.values[dimension], chosen(dimension)),
     emptyLabel: emptyLabel(dimension),
   })),
 )

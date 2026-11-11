@@ -130,7 +130,7 @@ test('the tab opens Analytics filtered to the item, over the days of its work', 
     to: dayOf(last),
     filters: { work_item: [usage.work_item_id] },
   })
-  await expect(analytics.locator('.disclosure-toggle')).toHaveText('Filters · 1')
+  await expect(analytics.locator('.analytics-bar-filters .combo-chip')).toHaveCount(1)
   // The page's own read, the period beside the one before, asks for the item's work alone.
   const own = () => asked.filter((query) => query.get('compare') === 'true')
   await expect.poll(() => own().length).toBeGreaterThan(0)

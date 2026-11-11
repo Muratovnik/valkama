@@ -23,6 +23,7 @@ import {
   expectWhole,
   LONG_TAIL,
   measure,
+  NARROW_FRAME,
   ONE_VALUE,
   ONLY_WEEK_BEFORE,
   openReport,
@@ -49,7 +50,9 @@ for (const width of [1440, 1024, 390]) {
       /^5\sd\s17\sh$/u,
     )
 
-    const narrow = width < 600
+    // A report narrower than a chart reads well opens each chart as its table: on a phone, and
+    // in the panel beside the rail at 1024px, which leaves the report under 560px.
+    const narrow = width < 1440
     for (const section of await analytics.locator('.chart-section').all())
       await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : 'chart')
 
@@ -67,10 +70,10 @@ for (const width of [1440, 1024, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-bars-${width}.png`))
     await analytics.locator('.spending-days').screenshot(shot(info, `analytics-days-${width}.png`))
 
-    // Every control, the filters' own once their disclosure is open.
+    // Every control, the filters' own once «add a filter» has opened them.
     const closed = await tabWalk(page)
     expect(closed.missed).toEqual([])
-    await analytics.locator('.disclosure-toggle').focus()
+    await analytics.locator('.analytics-filter-add').focus()
     await page.keyboard.press('Enter')
     await expect(analytics.locator('[data-dimension]').first()).toBeVisible()
     const open = await tabWalk(page)
@@ -82,7 +85,9 @@ for (const width of [1440, 1024, 390]) {
     await analytics.locator('.spending-tiles .segmented-option.active').focus()
     await page.keyboard.press('ArrowRight')
     await expect(analytics.locator('.spending-tiles .segmented-option.active')).toBeFocused()
-    const chosen = pageAt({ measure: 'tokens' })
+    const chosen = pageAt(
+      width < NARROW_FRAME ? { measure: 'tokens', open: 'section' } : { measure: 'tokens' },
+    )
     await expect.poll(() => page.url().slice(new URL(page.url()).origin.length)).toBe(chosen)
     await expect(analytics.locator('.spending-bars h2')).toHaveText('Tokens by task')
   })
@@ -254,7 +259,7 @@ for (const width of [1440, 390])
     test(`the page ${name} stands whole at ${width}px`, async ({ page }, info) => {
       await serve(page, answer)
       await page.setViewportSize({ width, height: 1000 })
-      await page.goto(pageAt())
+      await page.goto(pageAt(width < NARROW_FRAME ? { open: 'section' } : {}))
       const shown = await standIn(page)
       await record(info, `analytics ${name} ${width}`, shown)
       expect(shown.title?.trim()).toBe(title)
@@ -269,12 +274,12 @@ for (const width of [1440, 390])
 test('a custom period shows its two date fields whole at 390px', async ({ page }, info) => {
   await serve(page)
   await openReport(page, 390, pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-11' }))
-  const fields = page.locator('.analytics-controls input[type="date"]')
+  const fields = page.locator('.analytics-bar input[type="date"]')
   await expect(fields).toHaveCount(2)
   await expect(fields.first()).toHaveValue('2026-11-02')
   const measured = {
-    controls: await boxes(page, '.analytics-controls > *'),
-    dateInputs: await boxes(page, '.analytics-controls input[type="date"]'),
+    controls: await boxes(page, '.analytics-bar-line > *'),
+    dateInputs: await boxes(page, '.analytics-bar input[type="date"]'),
     pageScroll: await pageScroll(page),
     days: await page.locator('.spending-days tbody tr').count(),
   }
@@ -288,7 +293,7 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
   }
   expect(measured.days).toBe(10)
   await expectNoSilentClipping(page, 'analytics custom period at 390px', '.analytics-page')
-  await page.locator('.analytics-controls').screenshot(shot(info, 'analytics-custom-390.png'))
+  await page.locator('.analytics-bar').screenshot(shot(info, 'analytics-custom-390.png'))
 })
 
 for (const width of [1440, 390])
@@ -296,13 +301,21 @@ for (const width of [1440, 390])
     await serve(page)
     const filters = { model: ['model-a'], work_item: [task(1, '').id, task(2, '').id] }
     const analytics = await openReport(page, width, pageAt({ filters: JSON.stringify(filters) }))
-    await analytics.locator('.disclosure-toggle').click()
-    const chips = analytics.locator('.combo-chip')
+    await analytics.locator('.analytics-filter-add').click()
+    // Each value chosen is a chip twice: on the bar with its dimension, and in its field.
+    const named = analytics.locator('.analytics-bar-filters .combo-chip')
+    await expect(named).toHaveText([
+      /^Task: MAIN-1 Rework /u,
+      /^Task: MAIN-2 Rework /u,
+      'Model: model-a',
+    ])
+    const chips = analytics.locator('.analytics-filter-body .combo-chip')
     await expect(chips).toHaveCount(3)
     await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)
     const measured = {
       fields: await boxes(page, '[data-dimension]'),
       chips: await boxes(page, '.combo-chip'),
+      named: await named.allTextContents(),
       chipWords: await chips.allTextContents(),
       clear: await boxes(page, '.analytics-filter-clear'),
       pageScroll: await pageScroll(page),
@@ -346,6 +359,11 @@ for (const width of [1440, 1024])
   test(`each chart beside its table at ${width}px`, async ({ page }, info) => {
     await serve(page)
     const analytics = await openReport(page, width)
+    // Each section drawn as its chart first, whichever the width of the panel opened it as.
+    for (const section of await analytics.locator('.chart-section').all()) {
+      await section.getByRole('radio', { name: 'Chart' }).click()
+      await expect(section).toHaveAttribute('data-shown', 'chart')
+    }
     const chart = await measure(page)
     const charted = await bars(page)
     for (const section of await analytics.locator('.chart-section').all()) {
