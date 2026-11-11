@@ -51,6 +51,12 @@ function throughTheAddress(view: AnalyticsView): AnalyticsView {
   return readAddress(validateManifestRouteState(analytics, back.state ?? {}))
 }
 
+/** The default view with a filter of models chosen in the order given. */
+const chosen = (model: (string | null)[]): AnalyticsView => ({
+  ...DEFAULT_VIEW,
+  filters: { model },
+})
+
 describe('the Analytics address', () => {
   it('gives back every part of a view through the URL the shell writes', () => {
     expect(throughTheAddress(EVERY_PART)).toEqual(EVERY_PART)
@@ -77,6 +83,21 @@ describe('the Analytics address', () => {
     const one = writeAddress({ ...DEFAULT_VIEW, filters: { role: ['main'], account: ['a'] } })
     const other = writeAddress({ ...DEFAULT_VIEW, filters: { account: ['a'], role: ['main'] } })
     expect(one).toEqual(other)
+  })
+
+  it('writes the values of one filter in one order, and reads them back in it', () => {
+    const [a, b, c] = ['00000000-0000-4000-8000-00000000000a', 'model-b', 'model-c']
+    // Chosen in two orders, each with «none» among them: ids by their characters, «none» last.
+    const one = writeAddress(chosen([c, null, a, b]))
+    const other = writeAddress(chosen([b, a, null, c]))
+    expect(one).toEqual(other)
+    expect(one.filters).toBe(`{"model":["${a}","${b}","${c}",null]}`)
+    expect(readAddress(one)).toEqual(chosen([a, b, c, null]))
+    expect(throughTheAddress(chosen([c, null, a, b]))).toEqual(chosen([a, b, c, null]))
+    // A link written in another order reads as the same view, and writes back as that one.
+    const pasted = readAddress({ filters: JSON.stringify({ model: [null, c, b, a] }) })
+    expect(pasted).toEqual(chosen([a, b, c, null]))
+    expect(writeAddress(pasted)).toEqual(one)
   })
 
   it('drops what this build cannot read and keeps the rest of the link', () => {

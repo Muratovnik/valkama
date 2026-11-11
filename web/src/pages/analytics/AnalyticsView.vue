@@ -8,6 +8,10 @@
  * day starts at the reader's midnight. While it is read the page waits, fails and stands empty
  * through the product's shared state panel; the controls stay above it in every state, since
  * changing the period is how an empty one is left.
+ *
+ * A change the address cannot hold — a filter of more values than its link has room for — is
+ * not made: the view stays as its address says, and the words under the filters say why, so the
+ * page never shows a view its link would not give back.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,6 +23,7 @@ import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import {
+  addressFits,
   localDay,
   orderFilters,
   PERIODS,
@@ -30,6 +35,7 @@ import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import FieldError from '@/shared/ui/FieldError.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -55,8 +61,18 @@ const words = useSpendingWords()
 
 const view = computed(() => readAddress(props.routeState))
 
-function change(next: Partial<AnalyticsView>) {
-  emit('state', writeAddress({ ...view.value, ...next }))
+/** Why the last change asked for was not made, in words; empty once the view moves on. */
+const refused = ref('')
+watch(view, () => {
+  refused.value = ''
+})
+
+/** Writes a change of the view into its address; false, with nothing written, if it does not fit. */
+function change(next: Partial<AnalyticsView>): boolean {
+  const changed = { ...view.value, ...next }
+  if (!addressFits(changed)) return false
+  emit('state', writeAddress(changed))
+  return true
 }
 
 const read = useUsageRead({ view: () => view.value, projectId: () => props.projectId })
@@ -111,7 +127,8 @@ watch(
 )
 
 function filter(dimension: UsageDimension, values: (string | null)[]) {
-  change({ filters: orderFilters({ ...view.value.filters, [dimension]: values }) })
+  if (change({ filters: orderFilters({ ...view.value.filters, [dimension]: values }) })) return
+  refused.value = t('analytics.filters.full', { dimension: words.dimension(dimension) })
 }
 
 const emptyDescription = computed(() =>
@@ -184,6 +201,12 @@ const emptyDescription = computed(() =>
           :values="read.filterValues.value"
           @filter="filter"
         />
+        <FieldError
+          v-if="refused"
+          role="alert"
+        >
+          {{ refused }}
+        </FieldError>
         <VButton
           v-if="filterCount"
           class="analytics-filter-clear"

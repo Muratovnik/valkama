@@ -76,12 +76,23 @@ function readFilters(text: unknown): UsageFilters {
   return orderFilters(filters)
 }
 
-/** The filters in the dimensions' order, so one view has one address. */
+/** The ids by their code points, then «none»: an order that does not depend on the locale. */
+function byValue(left: string | null, right: string | null) {
+  if (left === right) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return left < right ? -1 : 1
+}
+
+/**
+ * The filters in the dimensions' order and each filter's values in one order, whatever order
+ * they were chosen in, so one view has one address.
+ */
 export function orderFilters(filters: UsageFilters): UsageFilters {
   const ordered: UsageFilters = {}
   for (const dimension of USAGE_DIMENSIONS) {
     const values = filters[dimension]
-    if (values?.length) ordered[dimension] = values
+    if (values?.length) ordered[dimension] = values.toSorted(byValue)
   }
   return ordered
 }
