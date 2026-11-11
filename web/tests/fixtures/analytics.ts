@@ -167,28 +167,44 @@ function admits(query: URLSearchParams, group: Stretch['group']) {
 }
 
 /**
- * What the read answers to `query` over `stretches`: only the work its period, its filters and
- * its project admit, by what it groups by, beside the period of the same length before it when
- * it compares. A query that asks for the wrong period, filter or scope gets other figures.
+ * Where the read cuts a period into days: at its start, at every midnight of the asked offset
+ * inside it and at its end. The days are fixed steps of 24 hours at that one offset, whatever
+ * the browser's zone does in between: the read has no zone, only the offset it was asked at.
+ */
+function dayEdges(from: number, to: number, offset: number) {
+  const shift = offset * 60_000
+  const edges = [from]
+  for (let edge = (Math.floor((from + shift) / DAY) + 1) * DAY - shift; edge < to; edge += DAY)
+    edges.push(edge)
+  edges.push(to)
+  return edges
+}
+
+/**
+ * What the read answers to `query` over `stretches`, from the query alone: only the work its
+ * period, its filters and its project admit, by what it groups by, beside the period of the same
+ * length before it when it compares. Its moments are written and its days cut at the query's
+ * `utc_offset`. A query that asks for the wrong period, filter, scope or offset gets other figures
+ * or other days.
  */
 export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchParams) {
   const offset = Number(query.get('utc_offset') ?? 0)
   const from = instant(query.get('from') ?? '', offset)
   const to = instant(query.get('to') ?? '', offset)
+  const edges = dayEdges(from, to, offset)
   const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isUsageDimension)
   const within = (start: number, end: number) =>
     stretches
       .filter((one) => one.at.getTime() >= start && one.at.getTime() < end)
       .filter((one) => admits(query, one.group))
       .map((one) => ({
-        day: Math.floor((one.at.getTime() - start) / DAY),
+        day: edges.findLastIndex((edge) => edge <= one.at.getTime()),
         group: one.group,
         spend: one.spend,
       }))
-  return usageAnswer({
-    first: new Date(from),
-    days: Math.max(1, Math.ceil((to - from) / DAY)),
-    end: new Date(to),
+  return answerOf({
+    edges,
+    offset,
     groupBy,
     stretches: within(from, to),
     before: query.get('compare') === 'true' ? within(from - (to - from), from) : null,
@@ -201,44 +217,39 @@ const pad = (value: number) => String(value).padStart(2, '0')
  * A moment as the read writes it, at the offset the period was asked at:
  * `2030-03-04T00:00:00+03:00`. The browser's own offset at that moment by default.
  */
-export function momentAt(moment: Date, offset = -moment.getTimezoneOffset()) {
-  const wall = new Date(moment.getTime() + offset * 60_000).toISOString().slice(0, 19)
+export function momentAt(moment: Date | number, offset = -new Date(moment).getTimezoneOffset()) {
+  const wall = new Date(new Date(moment).getTime() + offset * 60_000).toISOString().slice(0, 19)
   const size = Math.abs(offset)
   return `${wall}${offset < 0 ? '-' : '+'}${pad(Math.floor(size / 60))}:${pad(size % 60)}`
 }
 
+type Answer = { interface_version: 'valkama-analytics-api'; usage: Usage }
+
 /**
- * The answer for `days` local days from `first`, the last one ending at `end` (now, for a
- * period still running), broken down by `groupBy` and beside `before` when given.
+ * The answer for the days between `edges`, each moment written at `offset`, broken down by
+ * `groupBy` and beside `before`, the period of the same length right before, when given.
  */
-export function usageAnswer(options: {
-  days: number
-  first: Date
+function answerOf(options: {
+  edges: readonly number[]
   groupBy: UsageDimension[]
+  offset: number
   stretches: readonly Stretch[]
   before?: readonly Stretch[] | null
-  end?: Date
-}): { interface_version: 'valkama-analytics-api'; usage: Usage } {
-  const { first, days, groupBy, stretches } = options
-  const offset = -first.getTimezoneOffset()
-  const at = (moment: Date) => momentAt(moment, offset)
-  const dayStart = (index: number) =>
-    new Date(first.getFullYear(), first.getMonth(), first.getDate() + index)
-  const end = options.end ?? dayStart(days)
-  const series = Array.from({ length: days }, (_, index) => {
+}): Answer {
+  const { edges, offset, groupBy, stretches, before } = options
+  const at = (moment: number) => momentAt(moment, offset)
+  const first = edges[0] ?? 0
+  const end = edges.at(-1) ?? first
+  const series = edges.slice(1).map((next, index) => {
     const own = stretches.filter((stretch) => stretch.day === index)
-    const point = sumOf(own)
-    const last = index === days - 1
     const firstOnly = groupBy[0]
     return {
-      start: at(dayStart(index)),
-      end: at(last ? end : dayStart(index + 1)),
-      ...point,
+      start: at(edges[index] ?? first),
+      end: at(next),
+      ...sumOf(own),
       groups: firstOnly ? rowsOf(own, [firstOnly]) : [],
     }
   })
-  const before = options.before
-  const length = end.getTime() - first.getTime()
   return {
     interface_version: 'valkama-analytics-api',
     usage: {
@@ -251,11 +262,31 @@ export function usageAnswer(options: {
       series,
       comparison: before
         ? {
-            period: { from: at(new Date(first.getTime() - length)), to: at(first) },
+            period: { from: at(2 * first - end), to: at(first) },
             total: totalOf(before),
             rows: rowsOf(before, groupBy),
           }
         : null,
     },
   }
+}
+
+/**
+ * The answer for `days` days from `first`, the last one ending at `end` (now, for a period still
+ * running), broken down by `groupBy` and beside `before` when given. The days are steps of 24
+ * hours at `offset`, the browser's own offset at `first` unless the test names another.
+ */
+export function usageAnswer(options: {
+  days: number
+  first: Date
+  groupBy: UsageDimension[]
+  stretches: readonly Stretch[]
+  before?: readonly Stretch[] | null
+  end?: Date
+  offset?: number
+}): Answer {
+  const { first, days } = options
+  const edges = Array.from({ length: days + 1 }, (_, index) => first.getTime() + index * DAY)
+  if (options.end) edges[days] = options.end.getTime()
+  return answerOf({ ...options, edges, offset: options.offset ?? -first.getTimezoneOffset() })
 }

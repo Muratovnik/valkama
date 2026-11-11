@@ -7,6 +7,11 @@
  * with the same days of the week before instead, from that Monday's midnight to the same weekday
  * and time, each in the browser's own time. The past four weeks and a custom period keep the
  * read's own comparison, which is like for like.
+ *
+ * The read writes a period's bounds at the offset it is asked at, and the page names the period
+ * by them. That week is asked at the offset its own Monday had, not today's: in the week after a
+ * change of time, today's offset would write that Monday's midnight as eleven the evening before
+ * or one in the morning, and the words would name a day early or late.
  */
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
@@ -24,6 +29,6 @@ export function comparedPeriod(view: AnalyticsView, now: Date): PeriodBounds | n
   return {
     from: monday.toISOString(),
     to: sameMoment.toISOString(),
-    utcOffset: -now.getTimezoneOffset(),
+    utcOffset: -monday.getTimezoneOffset(),
   }
 }

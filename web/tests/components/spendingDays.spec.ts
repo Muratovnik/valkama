@@ -258,14 +258,12 @@ describe('the days on the page', () => {
  * the period at +02:00, so the days before the change start at 23:00 of the evening before in the
  * browser's own time: a day is still the date its start names, as the read gave it.
  */
-/** A day of March 2026 as a read asked at +02:00 writes its start. */
-const march = (day: number) => `2026-03-${day}T00:00:00+02:00`
-
-/** Friday 27 to Monday 30 March, an hour each day, as the read writes them at +02:00. */
-function acrossTheChange(): Usage {
-  const usage = usageAnswer({
-    first: new Date(2026, 2, 27),
+/** Friday 27 to Monday 30 March, an hour each day, as a read asked at +02:00 cuts them. */
+const acrossTheChange = (): Usage =>
+  usageAnswer({
+    first: new Date('2026-03-27T00:00:00+02:00'),
     days: 4,
+    offset: 120,
     groupBy: ['work_item'],
     stretches: [0, 1, 2, 3].map((day) => ({
       day,
@@ -273,16 +271,6 @@ function acrossTheChange(): Usage {
       spend: { seconds: 3600 },
     })),
   }).usage
-  return {
-    ...usage,
-    period: { ...usage.period, from: march(27), to: march(31), utc_offset: 120 },
-    series: usage.series.map((point, index) => ({
-      ...point,
-      start: march(27 + index),
-      end: march(28 + index),
-    })),
-  }
-}
 
 describe('the days across the spring change of time', () => {
   beforeEach(() => {

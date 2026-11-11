@@ -272,3 +272,56 @@ describe('the tiles across the spring change of time', () => {
     expect(tile(tiles, 'time').text).toContain('The same as Mar 23 – 29')
   })
 })
+
+/**
+ * The page at `now` over an hour this week and half an hour on the Tuesday of the week before:
+ * the words of the first tile's change.
+ */
+async function tilesAt(now: string, thisWeek: string, weekBefore: string) {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(now) })
+  serve([
+    { at: new Date(thisWeek), group: { work_item: task(1, 'One') }, spend: { seconds: 3600 } },
+    { at: new Date(weekBefore), group: { work_item: task(1, 'One') }, spend: { seconds: 1800 } },
+  ])
+  const page = await mountAnalytics()
+  return { change: page.get('.spending-tiles .tile-change').text().replaceAll(/\s/gu, ' ') }
+}
+
+/**
+ * This week against the same days of the week before, in a zone whose clock moves between the
+ * two: Berlin leaves +02:00 for +01:00 on 25 October 2026 and goes back on 29 March. The zone is
+ * pinned here, whatever the machine's, and each test first checks the offsets on either side.
+ */
+describe('the tiles on the page in the week after a change of time', () => {
+  beforeEach(() => {
+    vi.stubEnv('TZ', 'Europe/Berlin')
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
+  })
+
+  it('name the week before by its own days after the autumn change', async () => {
+    expect(new Date('2026-10-28T14:30:00+01:00').getTimezoneOffset()).toBe(-60)
+    expect(new Date('2026-10-19T00:00:00+02:00').getTimezoneOffset()).toBe(-120)
+    const { change } = await tilesAt(
+      '2026-10-28T14:30:00+01:00',
+      '2026-10-26T10:00:00+01:00',
+      '2026-10-20T10:00:00+02:00',
+    )
+    expect(change).toBe('↑ 100% against Oct 19 – 21')
+  })
+
+  it('name the week before by its own days after the spring change, late in the evening', async () => {
+    expect(new Date('2026-04-01T23:30:00+02:00').getTimezoneOffset()).toBe(-120)
+    expect(new Date('2026-03-25T23:30:00+01:00').getTimezoneOffset()).toBe(-60)
+    // Half past eleven: the same moment a week before is still Wednesday, an hour short of
+    // Thursday at the offset of this week.
+    const { change } = await tilesAt(
+      '2026-04-01T23:30:00+02:00',
+      '2026-03-30T10:00:00+02:00',
+      '2026-03-24T10:00:00+01:00',
+    )
+    expect(change).toBe('↑ 100% against Mar 23 – 25')
+  })
+})
