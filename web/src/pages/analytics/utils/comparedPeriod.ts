@@ -17,8 +17,8 @@
  * ending in it would be named by the Monday after. Nor does it end before that day has begun
  * there: where the clocks went forward in the middle of that week, the first hour of each day
  * after is still the day before at the Monday's offset, and a period ending in it would be named
- * by the day before; it ends a second into the day instead. Either way the period moves by less
- * than the hour the clocks did.
+ * by the day before; it ends a second into the day instead. Either way the period moves by no
+ * more than the hour the clocks did, and that second.
  */
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
