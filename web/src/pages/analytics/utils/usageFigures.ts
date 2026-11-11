@@ -40,7 +40,8 @@ export const spentOf = (line: UsageMeasures): Spent => ({
 const plus = (left: number | null, right: number | null) =>
   left === null && right === null ? null : (left ?? 0) + (right ?? 0)
 
-const addSpent = (left: Spent, right: Spent): Spent => ({
+/** What two lines spent together; a figure neither holds stays absent. */
+export const addSpent = (left: Spent, right: Spent): Spent => ({
   seconds: left.seconds + right.seconds,
   tokens: plus(left.tokens, right.tokens),
   cost: plus(left.cost, right.cost),

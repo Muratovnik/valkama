@@ -853,10 +853,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   card wins over it. A hint is words; anything with a control in it is `InfoTip`.
   `check:ui-system` refuses a `title` an element or a component's root would get, a hint
   that states no kind and a `detail` its register does not hold.
-- **Charts:** two primitives answer "how much, and of what". `RankedBars` breaks one
+- **Charts:** three primitives answer "how much, and of what". `RankedBars` breaks one
   measure down by one dimension, largest first: a name on one line (cut with an ellipsis, whole
   in its hint), the value as it reads and a bar as long as its share of the longest category.
-  `PeriodColumns` stands a column per day or hour, stacked by a few series. Each has a table twin (`RankedBarsTable`, `PeriodColumnsTable`) that holds
+  `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
+  draws one small chart of the span per leading value, all on one scale whose top is written
+  once over them, each with its name on one line and its figure; the folded tail shares the
+  scale, while «no task» and «unknown» close the charts by name and figure and set nothing. Each
+  has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls in its own frame
   (`ChartTable`, `keyScroll`) rather than widening the page. They are boxes of HTML on the tokens, not a chart library, which the
@@ -883,7 +887,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   than the chart scrolls sideways inside the plot and never moves the page, opens on its
   last periods, keeps the value axis in view over the plot's start, and brings a period the
   keyboard reaches clear of that axis with its focus ring whole. Periods that only show
-  keep sharing the chart's width, however narrow that makes them.
+  keep sharing the chart's width, however narrow that makes them. A value keeps one hue in every
+  chart of a panel — its bar, its small chart and its share of a day — and its name beside it.
+  A table that is the subject of its panel, as a dimension's breakdown, takes the height the
+  charts above it leave and scrolls in its own frame, which keeps the wheel to itself: its
+  heading row, its names and its total row stay in view however far it scrolls. Each heading
+  sorts by its column, and a line under the frame that never scrolls away says how many rows
+  it shows of how many, how they are sorted, and downloads what it shows in that order.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole

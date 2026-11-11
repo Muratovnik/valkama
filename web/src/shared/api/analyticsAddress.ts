@@ -1,8 +1,8 @@
 /**
  * What the Analytics page shows, as its address holds it: the period, the section of the page on
  * show — the overview or the dimension the charts break work down by — the measure they draw, a
- * filter per dimension, and whether a narrow screen shows that section in place of the list of
- * sections. A reload or a pasted link reads the same view back; a part the address does not hold
+ * filter per dimension, whether a narrow screen shows that section in place of the list of
+ * sections, and the second dimension a section's table is crossed with. A reload or a pasted link reads the same view back; a part the address does not hold
  * is the default, and a part it holds that this build cannot read is dropped rather than refusing
  * the whole link.
  *
@@ -34,6 +34,8 @@ export const OVERVIEW = 'overview'
 export type AnalyticsSection = UsageDimension | typeof OVERVIEW
 
 export interface AnalyticsView {
+  /** The second dimension a section's table crosses its own with; null for none. */
+  across: UsageDimension | null
   /** The section on show: the overview, or the dimension the bars and the stacks break work down by. */
   by: AnalyticsSection
   filters: UsageFilters
@@ -60,6 +62,7 @@ export const DEFAULT_VIEW: AnalyticsView = {
   measure: 'time',
   filters: {},
   open: false,
+  across: null,
 }
 
 const isSection = (value: unknown): value is AnalyticsSection =>
@@ -142,6 +145,7 @@ export function readAddress(state: RouteState | undefined): AnalyticsView {
     measure: oneOf(MEASURES, state?.measure, DEFAULT_VIEW.measure),
     filters: readFilters(state?.filters),
     open: state?.open === OPEN,
+    across: isUsageDimension(state?.across) ? state.across : null,
   }
 }
 
@@ -158,6 +162,7 @@ export function writeAddress(view: AnalyticsView): Record<string, string> {
   const filters = orderFilters(view.filters)
   if (Object.keys(filters).length) state.filters = JSON.stringify(filters)
   if (view.open) state.open = OPEN
+  if (view.across) state.across = view.across
   return state
 }
 

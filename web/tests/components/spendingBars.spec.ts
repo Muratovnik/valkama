@@ -1,9 +1,9 @@
 /**
  * The breakdown of the chosen measure by the chosen dimension. The oracle is the requirement:
- * what lies beyond the rows shown («other»), work on no task and unknown work are three rows,
- * each with its own words, never merged; the adviser and each launch class are rows of their
- * own; each bar is handed its amount in the measure's units; and the bars shown add up to the
- * tile's total.
+ * every value is a row, none folded, and work on no task and unknown work are rows of their own
+ * after them, each with its own words, never merged; the adviser and each launch class are rows
+ * of their own; each bar is handed its amount in the measure's units and the hue its value has on
+ * the page, the neutral when it has none; and the bars shown add up to the tile's total.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -12,6 +12,7 @@ import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
@@ -55,15 +56,21 @@ interface MountOptions {
   locale: 'en' | 'ru'
   measure: Measure
   narrow: boolean
+  slots: ReadonlyMap<string, SeriesSlot>
 }
 
 function mountBars(
   rows: readonly UsageRow[],
   by: UsageDimension,
-  { measure = 'time', narrow = false, locale = 'en' }: Partial<MountOptions> = {},
+  {
+    measure = 'time',
+    narrow = false,
+    locale = 'en',
+    slots = new Map<string, SeriesSlot>(),
+  }: Partial<MountOptions> = {},
 ) {
   return mount(SpendingBars, {
-    props: { rows, by, measure, narrow },
+    props: { rows, by, measure, narrow, slots },
     global: { plugins: [analyticsI18n(locale)] },
   })
 }
@@ -74,28 +81,39 @@ const barsOf = (wrapper: ReturnType<typeof mountBars>) =>
 const sum = (rows: readonly RankedRow[]) => rows.reduce((total, row) => total + row.value, 0)
 
 describe('the bars', () => {
-  it('rank ten tasks, then fold the rest, then work on no task and unknown work, apart', () => {
+  it('rank every task, none folded, then work on no task and unknown work, apart', () => {
     const bars = mountBars(answer(['work_item']).usage.rows, 'work_item')
     const shown = bars.findAll('.ranked-row').map((row) => ({
       kind: row.attributes('data-kind'),
       label: row.get('.ranked-label').text(),
     }))
-    expect(shown.slice(0, 10).map((row) => row.label)).toEqual(
-      Array.from({ length: 10 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
+    expect(shown.slice(0, 12).map((row) => row.label)).toEqual(
+      Array.from({ length: 12 }, (_, index) => `MAIN-${index + 1} Task ${index + 1}`),
     )
-    expect(shown.slice(10)).toEqual([
-      { kind: 'other', label: 'Other, 2 more' },
+    expect(shown.slice(12)).toEqual([
       { kind: 'none', label: 'No task' },
       { kind: 'unknown', label: 'Unknown' },
     ])
   })
 
-  it('hand each bar its hours, not a share, and the other row the sum of what it folds', () => {
+  it('hand each bar its hours, not a share', () => {
     const rows = barsOf(mountBars(answer(['work_item']).usage.rows, 'work_item'))
     expect(rows.find((row) => row.label === 'MAIN-1 Task 1')?.value).toBe(12)
-    expect(rows.find((row) => row.kind === 'other')?.value).toBe(2 + 1)
+    expect(rows.find((row) => row.label === 'MAIN-12 Task 12')?.value).toBe(1)
     expect(rows.find((row) => row.kind === 'none')?.value).toBe(1)
     expect(rows.find((row) => row.kind === 'unknown')?.value).toBe(0.5)
+  })
+
+  it('draw each bar in the hue its value has on the page, and the neutral without one', () => {
+    // A value's key is its id behind `v:`, as the page keys a value's line.
+    const slots = new Map<string, SeriesSlot>([
+      [`v:${task(1, 'Task 1').id}`, 4],
+      [`v:${task(2, 'Task 2').id}`, 1],
+    ])
+    const rows = barsOf(mountBars(answer(['work_item']).usage.rows, 'work_item', { slots }))
+    expect(rows.find((row) => row.label === 'MAIN-1 Task 1')?.slot).toBe(4)
+    expect(rows.find((row) => row.label === 'MAIN-2 Task 2')?.slot).toBe(1)
+    expect(rows.find((row) => row.label === 'MAIN-3 Task 3')?.slot).toBe('other')
   })
 
   it.each(['time', 'tokens', 'cost'] as const)('add up to the period total in %s', (measure) => {

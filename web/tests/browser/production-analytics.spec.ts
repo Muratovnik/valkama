@@ -341,14 +341,22 @@ for (const width of [1440, 390]) {
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-one-${width}.png`))
   })
 
-  test(`a chart with a large other stands whole at ${width}px`, async ({ page }, info) => {
+  test(`a chart of many values, every one a bar and the rest a small «other», stands whole at ${width}px`, async ({
+    page,
+  }, info) => {
     await serve(page, LONG_TAIL)
     const analytics = await openReport(page, width)
-    await analytics.locator('.spending-bars').getByRole('radio', { name: 'Chart' }).click()
-    await expect(analytics.locator('.spending-bars .ranked-rest')).toBeVisible()
+    for (const part of ['.spending-bars', '.spending-multiples'])
+      await analytics.locator(part).getByRole('radio', { name: 'Chart' }).click()
+    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(25)
     const measured = await bars(page)
     await record(info, `analytics large other ${width}`, measured)
-    expect(measured.rest).toEqual([expect.stringMatching(/^Other, \d+ more$/u)])
+    expect(measured.rest).toEqual([])
+    // The small charts name the eight largest and fold the other seventeen into one.
+    await expect(analytics.locator('.spending-multiples .multiple')).toHaveCount(9)
+    await expect(
+      analytics.locator('.spending-multiples .multiple[data-kind="other"] .multiple-name'),
+    ).toHaveText('Other, 17 more')
     expectBarsInTracks(measured)
     await expectNoSilentClipping(page, `analytics large other at ${width}px`, '.analytics-page')
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-other-${width}.png`))

@@ -2,6 +2,8 @@
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
+import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
+
 export const analyticsMessages = {
   en: {
     analytics: {
@@ -172,6 +174,7 @@ export const analyticsMessages = {
         freshNone: 'Nothing recorded yet',
         refresh: 'Refresh',
       },
+      panel: analyticsPanelMessages.en,
     },
   },
   ru: {
@@ -344,6 +347,7 @@ export const analyticsMessages = {
         freshNone: 'Записей ещё нет',
         refresh: 'Обновить',
       },
+      panel: analyticsPanelMessages.ru,
     },
   },
 } as const

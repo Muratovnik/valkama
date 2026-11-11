@@ -205,20 +205,17 @@ describe('a value pressed on the Analytics page', () => {
 })
 
 describe('what is not a control', () => {
-  it('leaves unknown work and the folded tail as lines, by model and by task', async () => {
+  it('leaves unknown work and work on no task as lines, by model and by task', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const byModel = await mountPage({ by: 'model' })
     const lines = byModel.findAll('.spending-bars .ranked-line')
     const plain = lines.filter((line) => line.element.tagName === 'DIV')
-    expect(plain.map((line) => line.get('.ranked-label').text())).toEqual([
-      'Other, 2 more',
-      'Unknown',
-    ])
+    expect(plain.map((line) => line.get('.ranked-label').text())).toEqual(['Unknown'])
     for (const line of plain) {
       expect(line.attributes('tabindex')).toBeUndefined()
       expect(line.attributes('role')).toBeUndefined()
     }
-    expect(lines.filter((line) => line.element.tagName === 'BUTTON')).toHaveLength(10)
+    expect(lines.filter((line) => line.element.tagName === 'BUTTON')).toHaveLength(12)
     const tableUnknown = byModel
       .findAll('.spending-table tbody th')
       .find((cell) => cell.text() === 'Unknown')
@@ -228,12 +225,8 @@ describe('what is not a control', () => {
     const byTask = await mountPage({})
     const taskLines = byTask.findAll('.spending-bars .ranked-line')
     const notLinks = taskLines.filter((line) => line.element.tagName !== 'A')
-    expect(notLinks.map((line) => line.element.tagName)).toEqual(['DIV', 'DIV', 'DIV'])
-    expect(notLinks.map((line) => line.get('.ranked-label').text())).toEqual([
-      'Other, 2 more',
-      'No task',
-      'Unknown',
-    ])
+    expect(notLinks.map((line) => line.element.tagName)).toEqual(['DIV', 'DIV'])
+    expect(notLinks.map((line) => line.get('.ranked-label').text())).toEqual(['No task', 'Unknown'])
     expect(byTask.findAll('.spending-bars button.ranked-line')).toHaveLength(0)
   })
 })
@@ -266,9 +259,10 @@ describe('the row headings of the page’s tables', () => {
       narrows('model-02'),
       plain('Unknown'),
     ])
-    expect(headingsOf(byModel, '.spending-bars', ['model-02', 'Other, 2 more', 'Unknown'])).toEqual(
-      [narrows('model-02'), plain('Other, 2 more'), plain('Unknown')],
-    )
+    expect(headingsOf(byModel, '.spending-bars', ['model-02', 'Unknown'])).toEqual([
+      narrows('model-02'),
+      plain('Unknown'),
+    ])
     expect(headingsOf(byModel, '.spending-days', ['Tuesday, November 10'])).toEqual([
       narrows('Tuesday, November 10'),
     ])
@@ -316,7 +310,7 @@ describe('a narrowing the address cannot hold', () => {
     // The same press in the table says it there, in Russian.
     host.unmount()
     const ru = await mountPage({ by: 'model', filters }, 'ru')
-    await ru.get(`.spending-table th button`).trigger('click')
+    await ru.get(`.spending-table tbody th button`).trigger('click')
     expect(written(ru)).toEqual([])
     expect(ru.get('.spending-table [role="alert"]').text()).toBe(
       `Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «${LONG}» не показаны. Снимите фильтр, чтобы освободить место.`,

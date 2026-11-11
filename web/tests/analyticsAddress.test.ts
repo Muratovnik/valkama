@@ -40,6 +40,7 @@ const EVERY_PART: AnalyticsView = {
     environment: [null],
   },
   open: true,
+  across: 'role',
 }
 
 const analytics = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'analytics')
@@ -77,6 +78,7 @@ describe('the Analytics address', () => {
     ['a filter on work with no task alone', { filters: { work_item: [null] } }],
     ['the overview', { by: 'overview' }],
     ['a section a narrow screen shows in place of the list', { by: 'model', open: true }],
+    ['a section whose table is crossed with a second dimension', { by: 'model', across: 'role' }],
   ] as const)('gives back %s', (_name, part) => {
     const view = { ...DEFAULT_VIEW, ...part } as AnalyticsView
     expect(throughTheAddress(view)).toEqual(view)
@@ -160,6 +162,7 @@ describe('the Analytics address', () => {
         by: 'colour',
         measure: 'joy',
         open: 'yes',
+        across: 'colour',
         from: '2026-10-05',
         filters: JSON.stringify({ shade: ['x'], model: ['m-1', 3, ''], effort: 'high' }),
       }),
