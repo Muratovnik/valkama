@@ -146,3 +146,39 @@
     forced-color-adjust: none;
   }
 }
+
+/* Two lines whatever the period under the pointer holds, reserved from the start, so nothing
+   under it moves as the pointer passes: each line ends in an ellipsis and the readout's hint
+   says it whole (`usePeriodReadout`). */
+.period-readout {
+  display: grid;
+  block-size: 2lh;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hairlines at the scale's steps, recessive; the line at zero is the baseline the columns
+   stand on, one step stronger. */
+.period-grid {
+  position: absolute;
+  inset-inline: 0;
+  block-size: var(--space-hair);
+  background: var(--color-rule);
+  transform: translateY(50%);
+  pointer-events: none;
+
+  &.period-baseline {
+    background: var(--color-rule-strong);
+  }
+
+  /* A forced palette drops a painted background; the scale keeps its lines in the quiet ink. */
+  @media (forced-colors: active) {
+    &,
+    &.period-baseline {
+      background: GrayText;
+      forced-color-adjust: none;
+    }
+  }
+}

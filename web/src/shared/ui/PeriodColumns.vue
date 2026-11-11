@@ -16,9 +16,10 @@
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
  * or the keyboard, each series by name, and the last period when neither stands on one. That
- * line is one line high whatever it says, as each note under the chart is (`PeriodNotes`): a
- * longer text ends in an ellipsis and is whole in its hint, in the period's name and in the
- * table, so pointing at a period, leaving it or a new answer moves nothing on the page.
+ * readout is two lines high whatever it says (`usePeriodReadout`), and each note under the
+ * chart one (`PeriodNotes`): a longer line ends in an ellipsis and is whole in its hint, in the
+ * period's name and in the table, so pointing at a period, leaving it or a new answer moves
+ * nothing on the page.
  *
  * Presentational: data and words come in, a press on a period (`actionable: 'column'`) or on
  * one series in it (`'segment'`) goes out as `select`. A
@@ -56,6 +57,7 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import PeriodNotes from '@/shared/ui/PeriodNotes.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
+import { usePeriodReadout } from '@/shared/ui/usePeriodReadout.ts'
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
 const props = withDefaults(defineProps<PeriodChartProps>(), {
@@ -98,14 +100,11 @@ const days = computed(() => dayTicks(props.columns, width.value, props.words.inc
 const notes = computed(() => changeNotes(chart.value.columns))
 const markers = computed(() => changeMarkers(notes.value, props.columns.length))
 
-const hovered = ref<number | null>(null)
-const focused = ref<number | null>(null)
-const shownIndex = computed(() => hovered.value ?? focused.value ?? chart.value.columns.length - 1)
-const readout = computed(() => {
-  const shown = chart.value.columns[shownIndex.value]
-  return shown ? columnSummary(shown, props.words, props.formatValue) : ''
-})
-const isShown = (index: number) => index === shownIndex.value
+const { focused, readout, isShown, point, hold } = usePeriodReadout(
+  () => chart.value.columns,
+  () => props.words,
+  () => props.formatValue,
+)
 
 const { move, standOn, tabStop } = useChartCursor(
   () => chart.value.columns,
@@ -203,11 +202,14 @@ function key(event: KeyboardEvent, at: number | null) {
         :outline="outline"
       />
       <p
-        v-tooltip.clipped="readout"
-        class="period-readout one-line"
+        v-tooltip.clipped="readout.whole"
+        class="period-readout"
         aria-hidden="true"
+        @pointerenter="hold(true)"
+        @pointerleave="hold(false)"
       >
-        {{ readout }}
+        <span class="one-line">{{ readout.head }}</span>
+        <span class="one-line">{{ readout.series }}</span>
       </p>
       <div
         ref="frame"
@@ -255,8 +257,8 @@ function key(event: KeyboardEvent, at: number | null) {
                 class="period-slot"
                 :data-key="one.column.key"
                 :data-shown="isShown(index)"
-                @pointerenter="hovered = index"
-                @pointerleave="hovered = null"
+                @pointerenter="point(index)"
+                @pointerleave="point(null)"
               >
                 <span
                   v-if="one.column.pending"
@@ -340,44 +342,10 @@ function key(event: KeyboardEvent, at: number | null) {
   margin: 0;
 }
 
-/* One line whatever the period under the pointer holds, so nothing under it moves as the
-   pointer passes: a longer readout ends in an ellipsis and its hint says it whole. */
-.period-readout {
-  block-size: 1lh;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  font-variant-numeric: tabular-nums;
-}
-
 .period-field {
   position: relative;
   grid-area: field;
   block-size: 160px;
-}
-
-/* Hairlines at the scale's steps, recessive; the line at zero is the baseline the columns
-   stand on, one step stronger. */
-.period-grid {
-  position: absolute;
-  inset-inline: 0;
-  block-size: var(--space-hair);
-  background: var(--color-rule);
-  transform: translateY(50%);
-  pointer-events: none;
-
-  &.period-baseline {
-    background: var(--color-rule-strong);
-  }
-
-  /* A forced palette drops a painted background; the scale keeps its lines in the quiet ink. */
-  @media (forced-colors: active) {
-    &,
-    &.period-baseline {
-      background: GrayText;
-      forced-color-adjust: none;
-    }
-  }
 }
 
 .period-bars {

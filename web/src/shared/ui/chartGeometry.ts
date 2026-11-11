@@ -354,20 +354,36 @@ const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stack
 
 /** What a period holds, in words: its sum, each series in it, and what is said of it. */
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
-  const parts = stacked.segments.map(
-    (segment) => `${segment.series.label} ${format(segment.value)}`,
-  )
-  const before = stacked.column.before
-  // The period compared with is said beside the sum, ahead of the series that may be cut off.
-  const compared =
-    words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
-  const head =
-    hasSum(stacked) && !stacked.column.pending
-      ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
-      : `${periodName(stacked)}${compared}`
+  const parts = seriesParts(stacked.segments, format)
+  const head = columnHead(stacked, words, format)
   return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
     .filter(Boolean)
     .join('. ')
+}
+
+/** A period's name and sum, and the period compared with beside the sum. */
+function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const before = stacked.column.before
+  const compared =
+    words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
+  return hasSum(stacked) && !stacked.column.pending
+    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+    : `${periodName(stacked)}${compared}`
+}
+
+const seriesParts = (segments: readonly StackSegment[], format: Format) =>
+  segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
+
+/**
+ * A period as the two lines of the readout over its chart: its name, sum, the period compared
+ * with and what is said of it; then each series in it, the largest first.
+ */
+export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
+  return {
+    head: [columnHead(stacked, words, format), ...columnNotes(stacked, words)].join('. '),
+    series: seriesParts(largest, format).join(', '),
+  }
 }
 
 /** One segment in words, with the sum of the period it stands in. */
@@ -418,7 +434,8 @@ export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
   const pending = stacked.column.pending && words.pending ? [words.pending] : []
-  const running = stacked.column.incomplete ? [words.incomplete] : []
+  // A period with no data yet holds nothing «so far»: it says only that it has none.
+  const running = stacked.column.incomplete && !pending.length ? [words.incomplete] : []
   return [...running, ...pending, ...absent, ...stacked.marks]
 }
 
