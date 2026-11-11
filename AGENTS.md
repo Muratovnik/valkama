@@ -50,6 +50,7 @@ is complete on its own.
 ```powershell
 python -m ruff check .
 python -m ruff format --check .
+python tests/commit_subjects.py
 python .github/relkit.pyz audit --history
 typos
 vulture server tests valkama.py vulture_whitelist.py --min-confidence 60
@@ -75,7 +76,8 @@ When the work is split across parallel worktrees of this repository, the checks
 split with it:
 
 - The worker of one worktree runs, right after each commit, the targeted tests
-  of what the commit changed and `python .github/relkit.pyz audit --history`;
+  of what the commit changed, `python tests/commit_subjects.py` and
+  `python .github/relkit.pyz audit --history`;
   when the commit touches `web/`, also `npm run lint` and
   `npm run check:ui-system` there. It does not run the whole browser suite.
 - The integrator runs the full list above and the whole browser suite once, on
@@ -284,7 +286,8 @@ force, and the gates hold each:
   commit after a coherent task-owned green boundary.
 - Commit subjects are Conventional Commits with the Angular type set: `build`,
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
-  `test`, an optional lowercase scope, and `!` for a break.
+  `test`, an optional lowercase scope, and `!` for a break. A merge commit's
+  subject is held to this too: `tests/commit_subjects.py` refuses Git's default.
 - After each coherent task-owned green boundary, create an incremental local
   commit by default. Staging is transient and only inside one uninterrupted
   stage → inspect → commit step; never hand off task-owned staged changes, and

@@ -41,6 +41,7 @@ exercised.
 ```powershell
 python -m ruff check .
 python -m ruff format --check .
+python tests/commit_subjects.py
 typos
 vulture server tests valkama.py vulture_whitelist.py --min-confidence 60
 mypy
@@ -83,8 +84,10 @@ The gates write one log per step under `logs/` and `gates.txt` in the result
 directory; the exit code is non-zero if any step failed or none ran. They install
 nothing: an npm step on a `node_modules` that is missing or differs from its
 `package-lock.json` is refused rather than run, the refusal says where `npm ci` is
-needed, and the exit code is non-zero then too. The server
-writes to `logs/serve.log`. A store copy holds your real data, so it goes with
+needed, and the exit code is non-zero then too. The commit subject step is refused
+the same way in a directory with no Git history of its own. The server
+writes to `logs/serve.log`. `serve` warns before it starts when `web/dist` may be
+older than `web/src`; rebuild before you look at the interface it serves. A store copy holds your real data, so it goes with
 the profile when the server stops or dies. It stays on disk while the server is
 running, however long that is: run `stop` when you are done.
 
@@ -146,6 +149,9 @@ An optional lowercase scope, and `!` for a breaking change:
 fix(web): stop the drawer from swallowing the escape key
 refactor(server)!: name the module platform and publish the contract as valkama
 ```
+
+`python tests/commit_subjects.py` holds every commit reachable from `HEAD` to
+this, a merge commit included, so Git's default `Merge branch …` subject fails it.
 
 Write the subject as what the commit does, not what you did. The body is where
 the reasoning goes, and reasoning is welcome — the history here is meant to be

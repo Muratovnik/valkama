@@ -41,6 +41,13 @@ Use it instead of a wrapper of your own, and `serve --out DIR` with
 It does not move `TEMP`, which is what keeps the suite's renames from failing
 with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
 
+`tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,
+merges included. Twice an integration branch reached the merge into `main`
+carrying `merge: …` and Git's default merge subject, the release audit passed
+both times, and the history had to be rewritten. A directory with no history of
+its own, such as a source snapshot, is skipped with its reason and exit code 3,
+and `gates` refuses the step there, so neither reads as a pass.
+
 An npm gate on modules its lockfile does not pin fails in a way that reads as a
 defect in the code, so neither runner lets that happen, each in its own way.
 `windows/release.py check` runs `npm ci` in `web` and `desktop` ahead of every

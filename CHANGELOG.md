@@ -45,6 +45,17 @@ checkouts are therefore distinguishable even at the same version.
   comes from the new `GET /api/documents/search?space=<id>&q=<text>`, the existing
   document search over that one project. Neither it nor `GET /api/search` offers or
   reads a file the project's Git ignores.
+- **A gate for commit subjects.** `python tests/commit_subjects.py` reads the subject of
+  every commit reachable from `HEAD`, merge commits included, and fails naming each one
+  that is not a Conventional Commit of the closed type set, such as `merge: …` or Git's
+  default `Merge branch …`. `tests/isolated.py gates` runs it as the step `subjects`. In a
+  directory with no Git history of its own, such as a source snapshot, it reads nothing
+  and says it was skipped and why instead of passing, and `gates` refuses the step there.
+- **`tests/isolated.py serve` says when the bundle is behind.** Before it starts, `serve`
+  warns, naming the files and `npm run build`, when the sources of the web app differ from
+  those `web/dist` was last committed with, uncommitted changes included, or were written
+  after a build that is not committed yet. It compares content through Git rather than file
+  times, so a fresh clone whose bundle matches stays silent.
 
 ### Changed
 

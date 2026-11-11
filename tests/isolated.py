@@ -29,6 +29,8 @@ Each rule here is a way a hand-written wrapper went wrong:
   where `npm ci` is needed, and a comparison that could not be made is a refusal.
 - The result directory has no default, so a script cannot keep writing into the
   directory of the task it was first written for.
+- `serve` says when the committed `web/dist` it serves is behind `web/src`. A
+  browser check once took screenshots of a bundle ten commits behind its sources.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -64,6 +66,7 @@ sys.path.insert(0, str(ROOT))
 
 from server import processes, store
 from server.projects import project_registry, registry_owner
+from tests import commit_subjects
 from windows import release
 
 HOME = "home"
@@ -79,6 +82,10 @@ STOP_SECONDS = 30.0
 #: A killed process's file handles outlast it for a moment on Windows.
 REMOVE_SECONDS = 10.0
 POLL_SECONDS = 0.1
+
+#: The committed bundle `serve` serves, and what a build of it reads.
+BUNDLE = "web/dist"
+BUNDLE_SOURCES = ("web/src", "web/index.html", "web/public")
 
 #: What a lockfile entry pins. The rest of an entry is npm's bookkeeping about the
 #: tree, and the top of the file carries the package's own version, which a release
@@ -110,6 +117,8 @@ class Step:
     group: str
     command: str
     directory: str = "."
+    #: It reads the commits of the checkout, so a directory without them refuses it.
+    needs_history: bool = False
 
     @property
     def needs_modules(self) -> bool:
@@ -120,6 +129,7 @@ class Step:
 GATE_STEPS = (
     Step("ruff", "python", "python -m ruff check ."),
     Step("format", "python", "python -m ruff format --check ."),
+    Step("subjects", "python", "python tests/commit_subjects.py", needs_history=True),
     Step("relkit", "python", "python .github/relkit.pyz audit --history"),
     Step("typos", "python", "typos"),
     Step(
@@ -155,6 +165,7 @@ class Run(NamedTuple):
     argv: list[str]
     cwd: Path
     needs_modules: bool = False
+    needs_history: bool = False
 
 
 def _say(line: str) -> None:
@@ -376,6 +387,18 @@ def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
             return 127
 
 
+def _refusal(run: Run) -> tuple[str, str] | None:
+    """Why `run` may not start, as the cause the summary groups by and the detail."""
+
+    if run.needs_modules:
+        refusal = modules_refusal(run.cwd)
+        return None if refusal is None else ("npm ci is needed first", refusal)
+    if run.needs_history:
+        refusal = commit_subjects.history_refusal(run.cwd)
+        return None if refusal is None else ("there is no Git history to read", refusal)
+    return None
+
+
 def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) -> int:
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
@@ -385,7 +408,8 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
 
     logs = out / LOGS
     logs.mkdir(parents=True, exist_ok=True)
-    failed, refused = [], []
+    failed: list[str] = []
+    refused: dict[str, list[str]] = {}
     with (out / SUMMARY).open("w", encoding="utf-8", newline="\n") as summary:
 
         def report(line: str) -> None:
@@ -395,11 +419,12 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
 
         for run in runs:
             log = logs / f"{run.name}.log"
-            refusal = modules_refusal(run.cwd) if run.needs_modules else None
+            refusal = _refusal(run)
             if refusal is not None:
-                refused.append(run.name)
-                log.write_text(f"{refusal}\n", encoding="utf-8", newline="\n")
-                report(f"{run.name:<14} refused  {refusal}")
+                cause, detail = refusal
+                refused.setdefault(cause, []).append(run.name)
+                log.write_text(f"{detail}\n", encoding="utf-8", newline="\n")
+                report(f"{run.name:<14} refused  {detail}")
                 continue
             code = _run_step(run, log, environment)
             if code != 0:
@@ -410,8 +435,8 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
             return 1
         if failed:
             report(f"failed: {', '.join(failed)}")
-        if refused:
-            report(f"not run, because npm ci is needed first: {', '.join(refused)}")
+        for cause, names in refused.items():
+            report(f"not run, because {cause}: {', '.join(names)}")
         if failed or refused:
             return 1
         report(f"all {len(runs)} steps passed")
@@ -462,7 +487,13 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     head = processes.run_text(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"])
     _say(f"root: {ROOT}  head: {head.stdout.strip()}")
     runs = [
-        Run(step.name, _argv(step.command, tools), ROOT / step.directory, step.needs_modules)
+        Run(
+            step.name,
+            _argv(step.command, tools),
+            ROOT / step.directory,
+            step.needs_modules,
+            step.needs_history,
+        )
         for step in steps
     ]
     # Said before the first step, because the Python half takes minutes to reach them.
@@ -471,6 +502,80 @@ def gates(steps: Sequence[Step], out: Path) -> int:
         if refusal is not None:
             _say(f"the npm steps here will be refused. {refusal}")
     return run_gates(runs, out, environment)
+
+
+# --- the bundle --------------------------------------------------------------
+
+
+def _newest_write(paths: Sequence[Path]) -> tuple[float, Path] | None:
+    """The latest modification under `paths`, directories included, so a removal counts."""
+
+    found = []
+    for path in paths:
+        if path.is_dir():
+            for parent, _, names in os.walk(path):
+                found += [Path(parent), *(Path(parent) / name for name in names)]
+        elif path.exists():
+            found.append(path)
+    return max(((item.stat().st_mtime, item) for item in found), default=None)
+
+
+def bundle_lag(root: Path) -> str | None:
+    """Why `root`'s `web/dist` may be older than what it is built from, or None when it is not.
+
+    Settled by content in Git and never by file times alone, because a checkout
+    stamps every file it writes with the time of the checkout. The committed
+    bundle is behind when the sources in the working tree, committed or not,
+    differ from those of the last commit that changed `web/dist`. A bundle built
+    here and not committed was written by the build, not by a checkout, so its
+    own time is the time of the build: it is behind when a source was written
+    after it.
+    """
+
+    def paths(*arguments: str) -> list[str]:
+        # Paths are only shown, so bytes Git cannot render as UTF-8 are replaced.
+        found = processes.run_text(["git", "-C", str(root), *arguments], errors="replace")
+        return [path for path in found.stdout.split("\0") if path]
+
+    page = f"{BUNDLE}/index.html"
+    try:
+        built = processes.run_text(
+            ["git", "-C", str(root), "log", "-1", "--format=%h", "--", BUNDLE]
+        )
+        commit = built.stdout.strip()
+        if built.returncode != 0 or not commit:
+            return f"no commit of {BUNDLE} was found to compare its sources with"
+        if paths("diff", "-z", "--name-only", "HEAD", "--", page) and (root / page).is_file():
+            newest = _newest_write([root / source for source in BUNDLE_SOURCES])
+            if newest is None or newest[0] <= (root / page).stat().st_mtime:
+                return None
+            written = newest[1].relative_to(root).as_posix()
+            return f"{written} was written after the build in {BUNDLE} that is not committed"
+        changed = paths("diff", "-z", "--name-only", commit, "--", *BUNDLE_SOURCES)
+        changed += paths("ls-files", "-z", "--others", "--exclude-standard", "--", *BUNDLE_SOURCES)
+    except OSError as error:
+        return f"git could not be started to compare {BUNDLE} with its sources: {error}"
+    if not changed:
+        return None
+    shown = ", ".join(changed[:_SHOWN_DIFFERENCES])
+    more = len(changed) - _SHOWN_DIFFERENCES
+    return (
+        f"{len(changed)} source file(s) differ from those {BUNDLE} was last committed with"
+        f" in {commit}: {shown}" + (f" and {more} more" if more > 0 else "")
+    )
+
+
+def bundle_warning(root: Path) -> str | None:
+    """What `serve` says before it starts when the bundle may be behind, or None."""
+
+    lag = bundle_lag(root)
+    if lag is None:
+        return None
+    return (
+        f"warning: the server will serve {BUNDLE}, which may be older than its sources: {lag}."
+        " Run `npm run build` in web before a browser check against it; a build that"
+        f" leaves {BUNDLE} as committed means those changes do not reach the bundle."
+    )
 
 
 # --- serve -------------------------------------------------------------------
@@ -821,6 +926,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if options.command == SUPERVISE:
         supervise(out, source)
         return 0
+    warning = bundle_warning(ROOT)
+    if warning is not None:
+        _say(warning)
     return start(out, source)
 
 
