@@ -26,8 +26,10 @@ a second and millionths of a dollar, as the analytics read's figures do: a part 
 parts up to it add up to, rounded, less what those before it do. A value the store does not
 hold is unknown; the launch class of a session's own run is none, which is not unknown.
 Who spent a stretch and how its run was launched follow one rule here, `role` and
-`launch_class`, which the analytics read groups by too, so the two say the same of the
-same rows.
+`launch_class`, which the analytics read groups by too, so the two put the same rows in
+the same groups. Their seconds and costs for a group differ only by where each rounds: this
+read adds a line's rows and then rounds, the analytics read rounds each row and then adds.
+`docs/connection-contract.md` states the bound.
 """
 
 from __future__ import annotations

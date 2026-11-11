@@ -7,10 +7,16 @@ class its run was launched with and the effort it ran at, and the whole an epic'
 shows against the page filtered to the epic and its children. Every time is a whole
 thousandth of a second and every cost a whole millionth of a dollar, so a figure the two
 reads round differently is a difference and not noise.
+
+On fractional figures the two round differently: the item read adds a line's segments and
+then rounds, the analytics read rounds each segment and then adds. The last two cases read
+such figures and hold the difference to the bound the connection contract states.
 """
 
 from __future__ import annotations
 
+import random
+from collections import Counter
 from collections.abc import Iterable, Mapping
 
 from server.planning import api, service
@@ -144,3 +150,94 @@ class ItemAndAnalyticsTests(UsageStore):
         # The epic's own work and its children's, and not the work outside it.
         self.assertEqual((530_000, 13_000), figures(tab)[:2])
         self.assertEqual(figures(tab), figures(page))
+
+    def test_the_item_read_rounds_a_sum_and_the_analytics_read_each_segment(self) -> None:
+        reference, item = self.item()
+        self.session("s1")
+        for start in (0, 20, 40):
+            self.segment(
+                "s1", start, start + 10, seconds=10.0004, item=item, effort="high", cost=0.0000304
+            )
+        roles = self.item_usage(reference)["roles"]
+        # 30.0012 s and $0.0000912, rounded once.
+        self.assertEqual(
+            [(30.001, 0.000091)], [(r["seconds"], r["estimated_api_cost_usd"]) for r in roles]
+        )
+        rows = self.read(**PERIOD, group_by="role,effort", work_item=item)["rows"]
+        # 10.000 s and $0.000030 three times.
+        self.assertEqual(
+            [(30.0, 0.00009)], [(r["agent_seconds"], r["estimated_api_cost_usd"]) for r in rows]
+        )
+
+    def test_on_fractional_figures_the_reads_differ_within_the_stated_bound(self) -> None:
+        """A group of the analytics read made of `m` lines of `roles` over `n` segments differs
+        from those lines added up by no more than `m + n / 2` units, a thousandth of a second
+        and a millionth of a dollar; the tokens are equal."""
+
+        self.session("s1")
+        # Each kind of segment with the group it falls in by role and launch class, and by role
+        # and effort.
+        kinds = [
+            ("", None, False, "high", ("main", (None, False)), ("main", ("high", False))),
+            ("", None, False, "low", ("main", (None, False)), ("main", ("low", False))),
+            ("", None, True, "high", ("advisor", (None, False)), ("advisor", ("high", False))),
+            (
+                "w1",
+                "bero",
+                False,
+                "high",
+                ("subagent", ("bero", False)),
+                ("subagent", ("high", False)),
+            ),
+            (
+                "w1",
+                "bero",
+                False,
+                "low",
+                ("subagent", ("bero", False)),
+                ("subagent", ("low", False)),
+            ),
+            ("w1", "bero", True, "low", ("advisor", ("bero", False)), ("advisor", ("low", False))),
+            ("w2", None, False, None, ("subagent", (None, True)), ("subagent", (None, True))),
+        ]
+        differed = 0
+        for seed in range(6):
+            reference, item = self.item(f"Work {seed}")
+            draw = random.Random(seed)  # noqa: S311 - made-up rows, not a secret
+            segments: dict[str, Counter] = {"launch_class": Counter(), "effort": Counter()}
+            for index in range(30):
+                agent, launched, advisor, effort, by_class, by_effort = draw.choice(kinds)
+                self.segment(
+                    "s1",
+                    index * 60,
+                    index * 60 + 30,
+                    agent=agent,
+                    launch_class=launched,
+                    advisor=advisor,
+                    effort=effort,
+                    seconds=draw.uniform(0, 30),
+                    cost=draw.uniform(0, 0.001),
+                    item=item,
+                )
+                segments["launch_class"][by_class] += 1
+                segments["effort"][by_effort] += 1
+            roles = self.item_usage(reference)["roles"]
+            for second, counted in segments.items():
+                with self.subTest(seed=seed, second=second):
+                    lines = Counter((r["role"], held(r[second])) for r in roles)
+                    tab = added(((r["role"], held(r[second])), figures(r)) for r in roles)
+                    rows = self.read(**PERIOD, group_by=f"role,{second}", work_item=item)["rows"]
+                    page = {
+                        (row["group"]["role"]["id"], held(row["group"][second])): figures(row)
+                        for row in rows
+                    }
+                    self.assertEqual(set(counted), set(page))
+                    self.assertEqual(set(counted), set(tab))
+                    for group, (milliseconds, micro_usd, tokens, unpriced) in page.items():
+                        bound = lines[group] + counted[group] / 2
+                        self.assertLessEqual(abs(tab[group][0] - milliseconds), bound, group)
+                        self.assertLessEqual(abs(tab[group][1] - micro_usd), bound, group)
+                        self.assertEqual((tokens, unpriced), tab[group][2:], group)
+                        differed += tab[group][:2] != (milliseconds, micro_usd)
+        # The figures do differ, so it is the bound that holds them and not equality.
+        self.assertGreater(differed, 0)

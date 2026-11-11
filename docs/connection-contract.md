@@ -921,8 +921,9 @@ account or an effort the transcript did not say, a subagent's class nobody recor
 value that is none by its nature has an `id` of `null` and `unknown` `false`: the launch
 class of the session's own agent. An adviser keeps the class of the run it advised in and
 the effort its segment holds, as the period read's `role` does, so `roles` added up by
-`role` and `launch_class`, or by `role` and `effort`, is that read's answer for the item
-grouped the same way over a period that holds all its work.
+`role` and `launch_class`, or by `role` and `effort`, gives the groups of that read's answer
+for the item grouped the same way over a period that holds all its work, with the same
+tokens, and seconds and costs within the bound below.
 
 The `seconds` of each of these lists add up to `agent_seconds` and their costs to
 `estimated_api_cost_usd` exactly, in thousandths of a second and millionths of a dollar,
@@ -930,6 +931,16 @@ and their tokens and `unpriced_tokens` to the item's. A line's figure is what th
 to it add up to, rounded, less what those before it do, so it is within one unit of its
 own and the last line ends on the item's total. A line whose stretches had no price has a
 cost of `null`.
+
+This read and the period read round in different places. This one adds up a line's
+segments and then rounds, as above; the period read rounds each segment to a whole millisecond and a whole
+millionth of a dollar, half up, and then adds. So where `m` lines of `roles` add up to a
+group of the period read that holds `n` segments, the two figures differ by at most
+`m + n / 2` units, a thousandth of a second or a millionth of a dollar: each line is within
+one unit of what its segments add up to, and each segment the period read adds is within
+half a unit of its own figure. Three segments of 10.0004 s at $0.0000304 each make one line
+of 30.001 s and $0.000091 here, and 30.0 s and $0.00009 in the period read. Where every
+segment's seconds and cost are whole units, the two are equal.
 
 A session's adds
 `session_id`, `first_at`, `last_at`, `excluded` (`human`, `subagent`, `external` and
