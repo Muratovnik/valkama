@@ -83,8 +83,21 @@ function columnSpread(rows: ReturnType<typeof measureRoles>) {
   return { inColumns: 'columns', spread: Math.max(...spreads) }
 }
 
-test('the tab opens Analytics filtered to the item', async ({ page }) => {
+const two = (value: number) => String(value).padStart(2, '0')
+
+/** The day a moment falls on in this machine's calendar, which is the browser's: `2026-08-13`. */
+function dayOf(moment: string, daysLater = 0): string {
+  const at = new Date(moment)
+  const day = new Date(at.getFullYear(), at.getMonth(), at.getDate() + daysLater)
+  return `${day.getFullYear()}-${two(day.getMonth() + 1)}-${two(day.getDate())}`
+}
+
+test('the tab opens Analytics filtered to the item, over the days of its work', async ({
+  page,
+}) => {
   const usage = whoUsage()
+  // The fixture's work: four stretches of one day, the first begun at 08:00 UTC, the last at 18:00.
+  const [first, last] = ['2026-08-13T08:00:00Z', '2026-08-13T18:00:00Z']
   await page.clock.setFixedTime(new Date(2026, 10, 11, 14, 30))
   await serve(page, usage)
   const asked: URLSearchParams[] = []
@@ -112,6 +125,9 @@ test('the tab opens Analytics filtered to the item', async ({ page }) => {
   const state = new URL(page.url()).searchParams.get('state') ?? ''
   expect(readAddress(JSON.parse(Buffer.from(state, 'base64url').toString('utf8')))).toEqual({
     ...DEFAULT_VIEW,
+    period: 'custom',
+    from: dayOf(first),
+    to: dayOf(last),
     filters: { work_item: [usage.work_item_id] },
   })
   await expect(analytics.locator('.disclosure-toggle')).toHaveText('Filters · 1')
@@ -119,6 +135,10 @@ test('the tab opens Analytics filtered to the item', async ({ page }) => {
   const own = () => asked.filter((query) => query.get('compare') === 'true')
   await expect.poll(() => own().length).toBeGreaterThan(0)
   expect(own().map((query) => query.get('work_item'))).toEqual(own().map(() => usage.work_item_id))
+  // And for those days whole, not for this week: the tab's figures are of all the item's work.
+  expect(own().map((query) => [query.get('from'), query.get('to')])).toEqual(
+    own().map(() => [dayOf(first), dayOf(last, 1)]),
+  )
 })
 
 for (const width of [1440, 1024, 390]) {
