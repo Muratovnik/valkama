@@ -159,3 +159,68 @@ export function spendingLines(
   const apart = (kind: ValueKind) => lines.filter((line) => line.kind === kind)
   return [...categories.slice(0, keep), ...other, ...apart('none'), ...apart('unknown')]
 }
+
+/** A value of a breakdown in this period beside the period it is compared with. */
+export interface ComparedLine {
+  /** What the value spent in the period before; null when that period was not read. */
+  before: Spent | null
+  /** How the chosen measure moved; null when the period before was not read. */
+  change: Change | null
+  key: string
+  kind: ValueKind
+  now: Spent
+  value: UsageGroupValue
+}
+
+const byCodePoint = (left: string, right: string) => {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
+/**
+ * Every value of `dimension` that this period or the period before holds, none folded, with what
+ * it spent in each and how `measure` moved, by the tiles' own rule (`changeOf`). A value that
+ * worked in one period alone spent nothing in the other. `before` is null for a period before
+ * that was not read, and then no line has a figure or a change there.
+ *
+ * Largest first in `measure` this period, a value with no figure there after every figure, and
+ * a tie in the order of the names `name` gives, then of the keys.
+ */
+export function comparedLines(options: {
+  before: readonly UsageRow[] | null
+  dimension: UsageDimension
+  measure: Measure
+  rows: readonly UsageRow[]
+  name: (value: UsageGroupValue) => string
+}): ComparedLine[] {
+  const { before, dimension, measure, name } = options
+  const all = (rows: readonly UsageRow[]) =>
+    new Map(
+      spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).map((line) => [
+        line.key,
+        line,
+      ]),
+    )
+  const now = all(options.rows)
+  const was = before ? all(before) : new Map<string, SpendingLine>()
+  const lines = [...new Set([...now.keys(), ...was.keys()])].map((key): ComparedLine => {
+    const value = (now.get(key) ?? was.get(key))?.value ?? UNPLACED
+    const spent = now.get(key)?.spent ?? NOTHING
+    const spentBefore = before ? (was.get(key)?.spent ?? NOTHING) : null
+    return {
+      key,
+      kind: valueKind(value),
+      value,
+      now: spent,
+      before: spentBefore,
+      change: spentBefore ? changeOf(measure, spent, spentBefore) : null,
+    }
+  })
+  const rank = (line: ComparedLine) => figureOf(measure, line.now) ?? -1
+  return lines.sort(
+    (left, right) =>
+      rank(right) - rank(left) ||
+      byCodePoint(name(left.value), name(right.value)) ||
+      byCodePoint(left.key, right.key),
+  )
+}

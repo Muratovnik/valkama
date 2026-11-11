@@ -127,6 +127,18 @@ export function useSpendingWords() {
     })
   }
 
+  /**
+   * How a measure moved, as a table says it under a heading that names the period it is
+   * compared with: the arrow and the share, or which period has no figure.
+   */
+  function changeCell(name: Measure, moved: Change) {
+    if (moved.direction === 'absent')
+      return t(`analytics.table.moved.absent.${name}.${moved.missing}`)
+    if (moved.direction === 'none' || moved.direction === 'same')
+      return t(`analytics.table.moved.${moved.direction}`)
+    return t(`analytics.table.moved.${moved.direction}`, { change: percent(moved.ratio) })
+  }
+
   const dimension = (name: UsageDimension) => t(`analytics.dimensions.${name}`)
 
   /** Work with no value in a dimension, where it has one of its own: no task, the session itself. */
@@ -213,6 +225,7 @@ export function useSpendingWords() {
   return {
     accounts,
     change,
+    changeCell,
     chartTitle,
     day,
     dayChartTitle,

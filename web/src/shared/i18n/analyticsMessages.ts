@@ -122,6 +122,31 @@ export const analyticsMessages = {
           },
         },
       },
+      table: {
+        title: 'Spending {by}',
+        beside: 'Spending {by}, beside {period}',
+        before: '{measure}, {period}',
+        change: 'Change',
+        unread: 'The period before was not read, so this table shows this period alone.',
+        moved: {
+          up: '↑ {change}',
+          down: '↓ {change}',
+          same: 'The same',
+          none: 'Nothing before',
+          absent: {
+            tokens: {
+              before: 'No tokens before',
+              now: 'No tokens now',
+              both: 'No tokens in either',
+            },
+            cost: {
+              before: 'No price before',
+              now: 'No price now',
+              both: 'No price in either',
+            },
+          },
+        },
+      },
       filters: {
         title: 'Filters',
         titleCount: 'Filters · {count}',
@@ -252,6 +277,31 @@ export const analyticsMessages = {
             before: 'Для периода {period} нет цены, сравнивать не с чем',
             now: 'Для этого периода нет цены, сравнить с периодом {period} нельзя',
             both: 'Нет цены ни для этого периода, ни для периода {period}',
+          },
+        },
+      },
+      table: {
+        title: 'Расход {by}',
+        beside: 'Расход {by} в сравнении с периодом {period}',
+        before: '{measure}, {period}',
+        change: 'Изменение',
+        unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
+        moved: {
+          up: '↑ {change}',
+          down: '↓ {change}',
+          same: 'Столько же',
+          none: 'Раньше ничего',
+          absent: {
+            tokens: {
+              before: 'Раньше токены не учтены',
+              now: 'Сейчас токены не учтены',
+              both: 'Токены не учтены ни там, ни там',
+            },
+            cost: {
+              before: 'Раньше нет цены',
+              now: 'Сейчас нет цены',
+              both: 'Нет цены ни там, ни там',
+            },
           },
         },
       },

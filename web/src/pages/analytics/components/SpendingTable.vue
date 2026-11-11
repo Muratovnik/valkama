@@ -1,0 +1,187 @@
+<script setup lang="ts">
+/**
+ * The breakdown as one table beside the period before: every value the period or the period
+ * before holds, none folded into «other», with its time, tokens and estimated cost in this period,
+ * the chosen measure in the period it is compared with, and how that measure moved by the tiles'
+ * own rule (`comparedLines`). A figure the read does not hold says so in words and gives no
+ * change; a value that worked only before stands with what it spent now, which is nothing.
+ *
+ * Largest first in the chosen measure, ties by name. A period before that was not read is said
+ * once, over the table, and the table then holds this period alone. Wider than its column, it
+ * scrolls in its own frame with each row's name kept in view (`ChartTable`).
+ */
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { comparedLines } from '@/pages/analytics/utils/usageFigures.ts'
+
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
+import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
+import ChartTable from '@/shared/ui/ChartTable.vue'
+import SectionHeader from '@/shared/ui/SectionHeader.vue'
+
+const props = defineProps<{
+  by: UsageDimension
+  measure: Measure
+  usage: Usage
+}>()
+
+const { t } = useI18n()
+const words = useSpendingWords()
+
+const comparison = computed(() => props.usage.comparison)
+const heading = computed(() => words.dimension(props.by))
+const before = computed(() =>
+  comparison.value ? words.days(comparison.value.period.from, comparison.value.period.to) : '',
+)
+
+const title = computed(() => {
+  const by = t(`analytics.byDimension.${props.by}`)
+  return before.value
+    ? t('analytics.table.beside', { by, period: before.value })
+    : t('analytics.table.title', { by })
+})
+
+/** A column of figures: its heading, and whether it holds the chosen measure. */
+interface Column {
+  chosen: boolean
+  key: Measure | 'before' | 'change'
+  text: string
+}
+
+/** This period's three measures, then the chosen one before and its change where it was read. */
+const columns = computed<Column[]>(() => [
+  ...MEASURES.map((name) => ({
+    key: name,
+    text: words.measure(name),
+    chosen: name === props.measure,
+  })),
+  ...(before.value
+    ? [
+        {
+          key: 'before' as const,
+          text: t('analytics.table.before', {
+            measure: words.measure(props.measure),
+            period: before.value,
+          }),
+          chosen: true,
+        },
+        { key: 'change' as const, text: t('analytics.table.change'), chosen: false },
+      ]
+    : []),
+])
+
+const lines = computed(() =>
+  comparedLines({
+    rows: props.usage.rows,
+    before: comparison.value?.rows ?? null,
+    dimension: props.by,
+    measure: props.measure,
+    name: (value) => words.valueLabel(props.by, value),
+  }).map((line) => ({
+    key: line.key,
+    rest: line.kind !== 'category',
+    name: words.valueLabel(props.by, line.value),
+    cells: columns.value.map((column) => {
+      if (column.key === 'before')
+        return { ...column, text: line.before ? words.figure(props.measure, line.before) : '' }
+      if (column.key === 'change')
+        return { ...column, text: line.change ? words.changeCell(props.measure, line.change) : '' }
+      return { ...column, text: words.figure(column.key, line.now) }
+    }),
+  })),
+)
+
+const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
+</script>
+
+<template>
+  <section class="spending-table">
+    <SectionHeader
+      as="h2"
+      level="page"
+      :title="title"
+    />
+    <p
+      v-if="!comparison"
+      class="spending-table-note"
+    >
+      {{ t('analytics.table.unread') }}
+    </p>
+    <ChartTable
+      :label="title"
+      :empty="!lines.length"
+      :words="emptyWords"
+    >
+      <thead>
+        <tr>
+          <th
+            scope="col"
+            class="chart-cell chart-heading"
+          >
+            {{ heading }}
+          </th>
+          <th
+            v-for="column in columns"
+            :key="column.key"
+            scope="col"
+            class="chart-cell chart-heading"
+            data-numeric="true"
+            :data-chosen="column.chosen"
+          >
+            {{ column.text }}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="line in lines"
+          :key="line.key"
+          :class="{ 'chart-rest': line.rest }"
+          :data-key="line.key"
+        >
+          <th
+            scope="row"
+            class="chart-cell chart-name"
+          >
+            {{ line.name }}
+          </th>
+          <td
+            v-for="cell in line.cells"
+            :key="cell.key"
+            class="chart-cell"
+            data-numeric="true"
+            :data-measure="cell.key"
+            :data-chosen="cell.chosen"
+          >
+            {{ cell.text }}
+          </td>
+        </tr>
+      </tbody>
+    </ChartTable>
+  </section>
+</template>
+
+<style scoped src="@/shared/ui/chartTable.css"></style>
+
+<style scoped>
+.spending-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.spending-table-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+/* The chosen measure, now and before, in the ink the figures of a chart are read in. */
+.chart-cell[data-chosen='true'] {
+  color: var(--color-text);
+}
+</style>

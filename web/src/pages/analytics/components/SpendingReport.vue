@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * What one answer of the usage read says: the period's figures, which also choose the measure,
- * and the charts that break that measure down by the chosen dimension. A report narrower than a
- * chart reads well (`NARROW`) opens each chart as its table.
+ * the charts that break that measure down by the chosen dimension, and under them every value of
+ * that dimension in a table beside the period before. A report narrower than a chart reads well
+ * (`NARROW`) opens each chart as its table.
  *
  * An answer whose period before could not be read says so above the figures, as a status a
  * screen reader hears too, with the page's own way to read it again; the figures stand, with no
@@ -15,6 +16,7 @@ import { useResizeObserver } from '@vueuse/core'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
+import SpendingTable from '@/pages/analytics/components/SpendingTable.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
@@ -97,6 +99,11 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
       :measure="measure"
       :narrow="narrow"
       :read-at="readAt"
+      :usage="usage"
+    />
+    <SpendingTable
+      :by="by"
+      :measure="measure"
       :usage="usage"
     />
   </div>
