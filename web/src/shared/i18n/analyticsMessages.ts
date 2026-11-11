@@ -3,6 +3,7 @@
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
+import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
 
 export const analyticsMessages = {
@@ -177,6 +178,7 @@ export const analyticsMessages = {
         refresh: 'Refresh',
       },
       overview: analyticsOverviewMessages.en,
+      panel: analyticsPanelMessages.en,
     },
   },
   ru: {
@@ -351,6 +353,7 @@ export const analyticsMessages = {
         refresh: 'Обновить',
       },
       overview: analyticsOverviewMessages.ru,
+      panel: analyticsPanelMessages.ru,
     },
   },
 } as const

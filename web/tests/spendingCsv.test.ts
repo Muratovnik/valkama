@@ -62,7 +62,7 @@ const csv = (before: Stretch[] | null) =>
   spendingCsv({ by: 'work_item', filters: FILTERS, measure: 'time', usage: answer(before), name })
 
 const HEADER =
-  'breakdown,value_id,value_reference,value_name,value_kind,time_seconds,tokens,cost_usd,unpriced_tokens,before_time_seconds,before_tokens,before_cost_usd,before_unpriced_tokens,period_from,period_to,before_from,before_to,filters'
+  'breakdown,value_id,value_reference,value_name,value_kind,time_seconds,tokens,cost_usd,unpriced_tokens,before_time_seconds,before_tokens,before_cost_usd,before_unpriced_tokens,period_from,period_to,before_from,before_to,filters,input_tokens,cached_read_tokens,cache_write_5m_tokens,cache_write_1h_tokens,output_tokens,reasoning_tokens'
 
 /** The row a task of this title is written in, alone in a period with nothing before it. */
 const titledRow = (title: string) => {
@@ -79,17 +79,17 @@ const titledRow = (title: string) => {
   )[1]
 }
 const rowNamed = (cell: string) =>
-  `work_item,00000000-0000-4000-8000-000000000007,MAIN-7,${cell},category,60,,,0,,,,,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,,,`
+  `work_item,00000000-0000-4000-8000-000000000007,MAIN-7,${cell},category,60,,,0,,,,,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,,,,,,,,,`
 
 describe('the breakdown as a CSV file', () => {
   it('holds every value of both periods, its text safe for a spreadsheet', () => {
     const expected =
       '\u{FEFF}' +
       `${HEADER}\r\n` +
-      'work_item,00000000-0000-4000-8000-000000000001,MAIN-1,"Fix, the ""quote""\nand the line",category,5400.25,1234567,12.345678,0,3600,1000,1,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}"\r\n' +
-      'work_item,00000000-0000-4000-8000-000000000002,MAIN-2,"\'=HYPERLINK(""http://example.test"")",category,3600,1000,,40,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}"\r\n' +
-      'work_item,,,No task,none,600,10,0.01,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}"\r\n' +
-      'work_item,00000000-0000-4000-8000-000000000003,MAIN-3,"\'@ the start",category,0,0,0,0,1800,300,0.2,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}"\r\n'
+      'work_item,00000000-0000-4000-8000-000000000001,MAIN-1,"Fix, the ""quote""\nand the line",category,5400.25,1234567,12.345678,0,3600,1000,1,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}",617284,12345670,246913,,370370,123456\r\n' +
+      'work_item,00000000-0000-4000-8000-000000000002,MAIN-2,"\'=HYPERLINK(""http://example.test"")",category,3600,1000,,40,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}",500,10000,200,,300,100\r\n' +
+      'work_item,,,No task,none,600,10,0.01,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}",5,100,2,,3,1\r\n' +
+      'work_item,00000000-0000-4000-8000-000000000003,MAIN-3,"\'@ the start",category,0,0,0,0,1800,300,0.2,0,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,2026-11-06T00:00:00+03:00,2026-11-09T00:00:00+03:00,"{""project"":[""=sum""],""work_item"":[null]}",,,,,,\r\n'
     expect(csv(BEFORE)).toBe(expected)
   })
 
@@ -97,9 +97,9 @@ describe('the breakdown as a CSV file', () => {
     const expected =
       '\u{FEFF}' +
       `${HEADER}\r\n` +
-      'work_item,00000000-0000-4000-8000-000000000001,MAIN-1,"Fix, the ""quote""\nand the line",category,5400.25,1234567,12.345678,0,,,,,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,,,"{""project"":[""=sum""],""work_item"":[null]}"\r\n' +
-      'work_item,00000000-0000-4000-8000-000000000002,MAIN-2,"\'=HYPERLINK(""http://example.test"")",category,3600,1000,,40,,,,,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,,,"{""project"":[""=sum""],""work_item"":[null]}"\r\n' +
-      'work_item,,,No task,none,600,10,0.01,0,,,,,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,,,"{""project"":[""=sum""],""work_item"":[null]}"\r\n'
+      'work_item,00000000-0000-4000-8000-000000000001,MAIN-1,"Fix, the ""quote""\nand the line",category,5400.25,1234567,12.345678,0,,,,,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,,,"{""project"":[""=sum""],""work_item"":[null]}",617284,12345670,246913,,370370,123456\r\n' +
+      'work_item,00000000-0000-4000-8000-000000000002,MAIN-2,"\'=HYPERLINK(""http://example.test"")",category,3600,1000,,40,,,,,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,,,"{""project"":[""=sum""],""work_item"":[null]}",500,10000,200,,300,100\r\n' +
+      'work_item,,,No task,none,600,10,0.01,0,,,,,2026-11-09T00:00:00+03:00,2026-11-12T00:00:00+03:00,,,"{""project"":[""=sum""],""work_item"":[null]}",5,100,2,,3,1\r\n'
     expect(csv(null)).toBe(expected)
   })
 
@@ -121,7 +121,7 @@ describe('the breakdown as a CSV file', () => {
       name: (value) => value.id ?? 'Unknown',
     })
     expect(text.split('\r\n')[1]).toBe(
-      `model,"'-model",,,category,60,,,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,2026-11-08T00:00:00+03:00,2026-11-09T00:00:00+03:00,`,
+      `model,"'-model",,,category,60,,,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,2026-11-08T00:00:00+03:00,2026-11-09T00:00:00+03:00,,,,,,,`,
     )
   })
 

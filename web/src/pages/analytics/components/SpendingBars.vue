@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * The period's measure broken down by the chosen dimension, largest first: the categories, the
- * rest folded into «other», then work with no task and work nobody can place — three rows that
- * are never one. Each bar is passed its amount in the measure's own units, hours and not a share,
- * and the rows add up to the figure on the tile above. A value named by the start of its id, an
- * account, carries the whole id as its detail.
+ * The period's measure broken down by the chosen dimension, largest first: every category, none
+ * folded, then work with no task and work nobody can place — rows that are never one. Each bar is
+ * passed its amount in the measure's own units, hours and not a share, and the rows add up to the
+ * figure on the tile above. A bar takes its value's hue on the page (`slots`), the neutral for a
+ * value the day chart folds away. A value named by the start of its id, an account, carries the
+ * whole id as its detail.
  *
  * A bar acts as its value does (`useLineActions`): by task, a task's bar is a link to it; by any
  * other dimension, a value the read can filter by is a control that narrows the view to it, sent
@@ -21,6 +22,7 @@ import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
@@ -30,6 +32,8 @@ const props = defineProps<{
   measure: Measure
   narrow: boolean
   rows: readonly UsageRow[]
+  /** The hue of each value on the page, by its key. */
+  slots: ReadonlyMap<string, SeriesSlot>
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
@@ -42,7 +46,9 @@ const actions = useLineActions()
 
 const title = computed(() => words.chartTitle(props.measure, props.by))
 
-const lines = computed(() => spendingLines(props.rows, props.by, props.measure))
+const lines = computed(() =>
+  spendingLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
+)
 const byKey = computed(() => new Map(lines.value.map((line) => [line.key, line])))
 
 /** What pressing a line does, as a bar carries it: where it leads, or what it narrows to. */
@@ -63,6 +69,7 @@ const bars = computed<RankedRow[]>(() =>
       detail: words.valueDetail(props.by, line.value),
       value: measureOf(props.measure, line.spent) ?? 0,
       valueText: words.lineFigure(props.measure, line.spent),
+      slot: props.slots.get(line.key) ?? 'other',
       ...acting(line, label),
     }
   }),

@@ -7,7 +7,8 @@
  * The days read out at very different lengths — one short task, a day of six tasks with long
  * titles, a day of two — which is what made the readout take one line on one day and three on
  * the next and pushed everything under it. Accounts change from day to day, so the notes under
- * the chart are there too, and the breakdown has «other», work on no task and unknown work.
+ * the chart are there too, and the breakdown has work on no task and unknown work after every
+ * task, and its small charts a chart of «other».
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -112,14 +113,19 @@ for (const width of WIDTHS)
     page,
   }, info) => {
     await serve(page, STEADY)
-    await openReport(page, width)
+    const analytics = await openReport(page, width)
     // Tall enough that nothing scrolls: a move is a move, not the window following the pointer.
     await page.setViewportSize({ width, height: 3200 })
+    // Each section drawn as its chart, whichever the width of the panel opened it as.
+    for (const section of await analytics.locator('.chart-section').all()) {
+      await section.getByRole('radio', { name: 'Chart' }).click()
+      await expect(section).toHaveAttribute('data-shown', 'chart')
+    }
     const columns = page.locator('.spending-days .period-column')
     const bars = page.locator('.spending-bars .ranked-line')
     await expect(columns).toHaveCount(3)
     await expect(page.locator('.spending-days .period-note')).not.toHaveCount(0)
-    await expect(page.locator('.spending-bars .ranked-rest .ranked-row')).toHaveCount(3)
+    await expect(page.locator('.spending-bars .ranked-rest .ranked-row')).toHaveCount(2)
 
     await page.mouse.move(0, 0)
     const before = await layout(page)

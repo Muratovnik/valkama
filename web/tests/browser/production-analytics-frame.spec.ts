@@ -9,12 +9,15 @@
  * browser's Back returns to the list.
  *
  * At any of those widths the document never scrolls: the bar stays where it is, and the rail and
- * the panel each scroll on their own, as does the list or the section where they take turns. A
- * window too low for the report leaves the scroll to the panel, never to the document. Every
- * other module keeps the frame's own scroll. The section on show is in the address, so a reload
- * keeps it; the plain address is the overview, and an address the page wrote before it had
- * sections that names its breakdown opens the same period, measure and filters in the section of
- * that breakdown. Each run prints what it measured.
+ * the panel each scroll on their own, as does the list or the section where they take turns.
+ * Beside the rail, a dimension's panel is held to its height and scrolls its parts instead, the
+ * charts on their own and the table on its own; in place of the list, and for the overview
+ * taller than its panel, the panel scrolls. A window too low for the report leaves the scroll to
+ * the panel or its parts, never to the document. Every other module keeps the frame's own scroll.
+ * The section on show is in the address, so a reload keeps it; the plain address is the
+ * overview, and an address the page wrote before it had sections that names its breakdown opens
+ * the same period, measure and filters in the section of that breakdown. Each run prints what it
+ * measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -58,6 +61,7 @@ async function scrolling(page: Page) {
       bar: area('.analytics-page-bar'),
       rail: area('.analytics-page-rail'),
       panel: area('.analytics-panel'),
+      charts: area('.dimension-charts'),
     }
   })
 }
@@ -65,7 +69,7 @@ async function scrolling(page: Page) {
 /** How far an area of the page is scrolled down, as measured. */
 const scrolledBy = (
   measured: Awaited<ReturnType<typeof scrolling>>,
-  area: 'frame' | 'panel' | 'rail',
+  area: 'charts' | 'frame' | 'panel' | 'rail',
 ) => measured[area]?.scrollTop ?? 0
 
 /** Turns the wheel over the middle of an element. */
@@ -84,22 +88,14 @@ async function openAt(page: Page, width: number, height: number, address = TASK_
   await expect(page.locator('.analytics-panel .spending-days')).toBeVisible()
 }
 
-for (const [width, height, side] of [
-  [1440, 900, true],
-  [1440, 600, true],
-  [1024, 768, false],
-  [1024, 600, false],
+for (const [width, height] of [
+  [1440, 900],
+  [1440, 600],
 ] as const)
-  test(`the document stands still while the rail and the panel scroll at ${width}×${height}`, async ({
+  test(`the document stands still while the rail and the panel's parts scroll at ${width}×${height}`, async ({
     page,
   }, info) => {
-    // Where the two take turns, the section is opened in place of the list.
-    await openAt(
-      page,
-      width,
-      height,
-      pageAt({ by: 'work_item', ...(side ? {} : { open: 'section' }) }),
-    )
+    await openAt(page, width, height)
     const before = await scrolling(page)
     await record(info, `analytics frame ${width}x${height}`, before)
     expect(before.document.scrollHeight).toBe(before.document.clientHeight)
@@ -108,9 +104,42 @@ for (const [width, height, side] of [
     expect(before.frame?.scrollHeight).toBe(before.frame?.clientHeight)
     expect(before.rail?.overflowY).toBe('auto')
     expect(before.panel?.overflowY).toBe('auto')
-    expect(before.rail?.shown, 'the rail beside the section').toBe(side)
+    expect(before.rail?.shown && before.panel?.shown).toBe(true)
+    // The section of a dimension is held to its panel, which has nothing to scroll; its charts,
+    // taller than the part they are given, hold the rest under their own scroll.
+    expect(before.panel?.scrollHeight).toBe(before.panel?.clientHeight)
+    expect(before.charts?.overflowY).toBe('auto')
+    expect(before.charts?.scrollHeight).toBeGreaterThan(before.charts?.clientHeight ?? 0)
+
+    await wheelOver(page, '.dimension-charts', 600)
+    await expect.poll(async () => scrolledBy(await scrolling(page), 'charts')).toBeGreaterThan(0)
+    const after = await scrolling(page)
+    expect(after.document.scrollTop).toBe(0)
+    expect(after.panel?.scrollTop).toBe(0)
+    expect(after.bar?.y).toBe(before.bar?.y)
+    expect(after.rail?.y).toBe(before.rail?.y)
+    expect(after.rail?.scrollTop).toBe(0)
+    await page.screenshot(shot(info, `analytics-frame-${width}x${height}.png`))
+  })
+
+for (const [width, height] of [
+  [1024, 768],
+  [1024, 600],
+] as const)
+  test(`the document stands still while the section in place of the list scrolls at ${width}×${height}`, async ({
+    page,
+  }, info) => {
+    await openAt(page, width, height, pageAt({ by: 'work_item', open: 'section' }))
+    const before = await scrolling(page)
+    await record(info, `analytics frame ${width}x${height}`, before)
+    expect(before.document.scrollHeight).toBe(before.document.clientHeight)
+    expect(before.document.scrollWidth).toBe(before.document.clientWidth)
+    expect(before.frame?.scrollHeight).toBe(before.frame?.clientHeight)
+    expect(before.panel?.overflowY).toBe('auto')
+    expect(before.rail?.shown, 'the rail beside the section').toBe(false)
     expect(before.panel?.shown).toBe(true)
-    // The report is taller than its panel, which holds the rest under its own scroll.
+    // In place of the list the section is not held: its report is taller than the panel, which
+    // holds the rest under its own scroll.
     expect(before.panel?.scrollHeight).toBeGreaterThan(before.panel?.clientHeight ?? 0)
 
     await wheelOver(page, '.analytics-panel', 600)
@@ -118,8 +147,6 @@ for (const [width, height, side] of [
     const after = await scrolling(page)
     expect(after.document.scrollTop).toBe(0)
     expect(after.bar?.y).toBe(before.bar?.y)
-    expect(after.rail?.y).toBe(before.rail?.y)
-    expect(after.rail?.scrollTop).toBe(0)
     await page.screenshot(shot(info, `analytics-frame-${width}x${height}.png`))
   })
 
@@ -189,6 +216,25 @@ test('the page’s own box decides, whatever the window: narrowed in a wide one,
   await expect(rail).toBeVisible()
   const beside = await widths(page)
   expect(beside.panel).toBeCloseTo(PANEL_LEAST, 1)
+})
+
+test('the overview, taller than its panel, scrolls the panel while the document stands still', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await page.setViewportSize({ width: 1024, height: 600 })
+  await page.goto(pageAt({ open: 'section' }))
+  await expect(page.locator('.analytics-panel .spending-days')).toBeVisible()
+  const before = await scrolling(page)
+  await record(info, 'analytics frame overview 1024x600', before)
+  expect(before.panel?.scrollHeight).toBeGreaterThan(before.panel?.clientHeight ?? 0)
+
+  await wheelOver(page, '.analytics-panel', 600)
+  await expect.poll(async () => scrolledBy(await scrolling(page), 'panel')).toBeGreaterThan(0)
+  const after = await scrolling(page)
+  expect(after.document.scrollTop).toBe(0)
+  expect(after.bar?.y).toBe(before.bar?.y)
+  expect(after.rail?.scrollTop).toBe(0)
 })
 
 test('the rail scrolls on its own when the window is too low for its sections', async ({

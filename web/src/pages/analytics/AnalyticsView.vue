@@ -33,14 +33,14 @@ import { useI18n } from 'vue-i18n'
 
 import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
+import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
-import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
-import type { ReportPart } from '@/pages/analytics/components/SpendingReport.vue'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import {
   addressFits,
@@ -153,6 +153,11 @@ const bodyColumns = computed(() =>
 const showsRail = computed(() => !narrowScreen.value || !view.value.open)
 const showsPanel = computed(() => !narrowScreen.value || view.value.open)
 
+/** A dimension's answer beside the rail is held to the panel's height, and scrolls its own parts. */
+const holdsSection = computed(
+  () => !overview.value && !narrowScreen.value && 'payload' in read.state.value,
+)
+
 /** A section chosen on the rail: in place beside it, or in place of the list as a new place. */
 function chooseSection(by: AnalyticsSection) {
   if (narrowScreen.value) change({ by, open: true }, 'push')
@@ -253,6 +258,7 @@ const emptyDescription = computed(() =>
       <section
         v-show="showsPanel"
         class="analytics-panel"
+        :class="{ 'analytics-panel-held': holdsSection }"
         :aria-label="sectionName"
       >
         <div
@@ -299,16 +305,19 @@ const emptyDescription = computed(() =>
               @open="chooseSection"
               @retry="read.retry"
             />
-            <SpendingReport
+            <DimensionPanel
               v-else
               :usage="payload"
               :accounts="read.accounts.value"
+              :across="view.across"
+              :dimensions="filterDimensions"
+              :fills="holdsSection"
               :filters="read.readWith.value"
               :read-at="read.askedAt.value"
               :measure="view.measure"
-              :overview="overview"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure })"
+              @update:across="(across) => change({ across })"
               @narrow="narrow"
               @day="narrowToDay"
               @retry="read.retry"
@@ -370,6 +379,12 @@ const emptyDescription = computed(() =>
   padding: var(--space-3) var(--size-page-gutter) var(--space-12);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* A dimension's section stands in the panel's whole height and scrolls its own parts, so the
+   panel itself holds still. */
+.analytics-panel-held {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* One at a time: the list of sections on its ground across the screen, or the section in its

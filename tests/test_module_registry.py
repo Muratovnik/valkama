@@ -217,7 +217,9 @@ class ModuleRegistryTests(unittest.TestCase):
         writer = re.search(r"export function writeAddress\(.*?\n\}", source, flags=re.DOTALL)
         self.assertIsNotNone(writer)
         written = re.findall(r"\bstate\.(\w+) =", writer.group(0))
-        self.assertEqual(["period", "from", "to", "by", "measure", "filters", "open"], written)
+        self.assertEqual(
+            ["period", "from", "to", "by", "measure", "filters", "open", "across"], written
+        )
         analytics = next(
             item for item in platform_modules.module_manifests() if item["module_id"] == "analytics"
         )

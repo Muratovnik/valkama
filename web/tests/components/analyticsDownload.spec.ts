@@ -89,8 +89,9 @@ describe('the breakdown as a file', () => {
     ].join(',')
     expect(new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)).toBe(
       '\u{FEFF}' +
-        'breakdown,value_id,value_reference,value_name,value_kind,time_seconds,tokens,cost_usd,unpriced_tokens,before_time_seconds,before_tokens,before_cost_usd,before_unpriced_tokens,period_from,period_to,before_from,before_to,filters\r\n' +
-        `work_item,${ITEM.id},MAIN-12,"Answer, ""quoted""",category,3600,1200,0.4,0,1800,,,0,${bounds},\r\n`,
+        'breakdown,value_id,value_reference,value_name,value_kind,time_seconds,tokens,cost_usd,unpriced_tokens,before_time_seconds,before_tokens,before_cost_usd,before_unpriced_tokens,period_from,period_to,before_from,before_to,filters,input_tokens,cached_read_tokens,cache_write_5m_tokens,cache_write_1h_tokens,output_tokens,reasoning_tokens\r\n' +
+        // The 1,200 tokens by kind as the fixture splits them; no write for an hour is read.
+        `work_item,${ITEM.id},MAIN-12,"Answer, ""quoted""",category,3600,1200,0.4,0,1800,,,0,${bounds},,600,12000,240,,360,120\r\n`,
     )
   })
 
@@ -103,10 +104,13 @@ describe('the breakdown as a file', () => {
     })
     await button(page).trigger('click')
     const text = (await files[0]?.text()) ?? ''
+    // The filters cell stands before the six counts of tokens by kind.
     expect(
       text
         .split('\r\n')[1]
-        ?.endsWith(`,"{""project"":[""sample""],""work_item"":[""${ITEM.id}""]}"`),
+        ?.endsWith(
+          `,"{""project"":[""sample""],""work_item"":[""${ITEM.id}""]}",600,12000,240,,360,120`,
+        ),
     ).toBe(true)
   })
 
@@ -123,5 +127,37 @@ describe('the breakdown as a file', () => {
     expect(note.text()).toBe('Nothing to download: this view holds no value.')
     await download.trigger('click')
     expect(names).toEqual([])
+  })
+
+  it('downloads the table crossed with a second dimension as it shows it, tokens by kind and all', async () => {
+    // The task's 1,200 tokens on Monday under model-a, and 400 on Tuesday under no known model.
+    const world: TimedStretch[] = [
+      {
+        at: new Date(2026, 10, 9, 10),
+        group: { work_item: ITEM, model: value('model-a') },
+        spend: { seconds: 3600, tokens: 1200 },
+      },
+      {
+        at: new Date(2026, 10, 10, 10),
+        group: { work_item: ITEM },
+        spend: { seconds: 1800, tokens: 400 },
+      },
+    ]
+    stubAnalyticsReads((query) => serveUsage(world, query))
+    const { files, names } = catchDownloads()
+    const page = await mountAnalytics({
+      routeState: { by: 'work_item', across: 'model', measure: 'tokens' },
+    })
+    await button(page).trigger('click')
+
+    expect(names).toEqual(['agent-usage-2026-11-09-to-2026-11-11-by-work_item-and-model.csv'])
+    const period = [momentAt(MONDAY, offsetAt(NOW)), momentAt(NOW, offsetAt(NOW))].join(',')
+    expect(await files[0]?.text()).toBe(
+      '\u{FEFF}breakdown,across,measure,value_id,value_reference,value_name,value_kind,model-a,Unknown,total,input_tokens,cached_read_tokens,cache_write_5m_tokens,cache_write_1h_tokens,output_tokens,reasoning_tokens,period_from,period_to,filters\r\n' +
+        // Each stretch split as the fixture splits it, then added: 600 + 200 input, 12,000 +
+        // 4,000 read from the cache, 240 + 80 written to it for five minutes, none for an hour,
+        // 360 + 120 output with 120 + 40 of it reasoning.
+        `work_item,model,tokens,${ITEM.id},MAIN-12,"Answer, ""quoted""",category,1200,400,1600,800,16000,320,,480,160,${period},\r\n`,
+    )
   })
 })
