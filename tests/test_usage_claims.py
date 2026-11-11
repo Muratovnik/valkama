@@ -9,16 +9,19 @@ subagent's, then the earlier first record, then the lower run id.
 from __future__ import annotations
 
 import math
+import sqlite3
 import unittest
+from collections.abc import Collection
 from unittest import mock
 
 from server import store
 from server.hooks import ingest
 from server.ops import doctor
-from server.telemetry import liveness, usage_collect, usage_rebuild, usage_targets
+from server.telemetry import liveness, usage_claims, usage_collect, usage_rebuild, usage_targets
+from server.telemetry.usage_claims import Claimant
 from server.telemetry.usage_ledger import request_key
 from server.telemetry.usage_store import READING
-from tests.usage_fixtures import HOUR, Case, ClaudeRun, usage
+from tests.usage_fixtures import HOUR, Case, ClaudeRun, stamp, usage
 
 SHARED = "msg_shared"
 #: What the shared response spent, and what each file spends of its own.
@@ -237,8 +240,8 @@ class LeftInPartsTests(ClaimCase):
         late.reply(605, request="msg_a", spent=usage(output=SHARED_OUTPUT))
         self.read()
         self.assertEqual({request_key("msg_a")}, self.left("late"))
-        # A pass later: the same response's next record, then another the earlier run holds.
-        late.reply(606, request="msg_a", spent=usage(output=SHARED_OUTPUT))
+        # A pass later meets only another response the earlier run holds, so the row for
+        # the first one is still there only if this part added to what the run left.
         late.reply(607, request="msg_b", spent=usage(output=SHARED_OUTPUT))
         late.end_turn(610, spent=usage(output=OWN_OUTPUT))
         self.read()
@@ -246,6 +249,152 @@ class LeftInPartsTests(ClaimCase):
         self.assertEqual(set(), self.left("early"))
         self.assertEqual(2 * SHARED_OUTPUT + 2 * OWN_OUTPUT, self.output())
         self.assert_yields_hold()
+
+
+#: Requests by their numbers, as `usage_requests` and `usage_yields` key them.
+FIRST, SECOND = 1, 2
+
+
+class WriteTests(Case):
+    """What one chunk's write leaves in `usage_requests` and `usage_yields`.
+
+    The runs are rows of their own, each with a file that is there, so the rule alone
+    decides between them: the run whose first record is earlier comes first.
+    """
+
+    def add_run(self, session: str, first_at: str) -> Claimant:
+        transcript = self.root / f"{session}.jsonl"
+        transcript.write_bytes(b"{}\n")
+        cursor = self.reader.execute(
+            "INSERT INTO usage_runs(session_id, client, path, first_at, reading)"
+            " VALUES (?, 'claude', ?, ?, ?)",
+            (session, str(transcript), first_at, READING),
+        )
+        return Claimant(int(cursor.lastrowid or 0), False, first_at)
+
+    def hold(self, run: Claimant, *requests: int) -> None:
+        self.reader.executemany(
+            "INSERT INTO usage_requests(request, run_id) VALUES (?, ?)",
+            [(request, run.run_id) for request in requests],
+        )
+
+    def refuse(self, run: Claimant, refused: bool) -> None:
+        """Refuse the run for the current reading, or take the refusal back."""
+
+        self.reader.execute(
+            "UPDATE usage_runs SET reread_refused = ?, refused_reading = ? WHERE id = ?",
+            ("shorter", READING, run.run_id) if refused else (None, None, run.run_id),
+        )
+
+    def chunk(
+        self, me: Claimant, counted: Collection[int], yielded: Collection[int], *, whole: bool
+    ) -> bool:
+        """Write a chunk as the reader does: all of it, or nothing when the write refuses."""
+
+        self.reader.execute("BEGIN IMMEDIATE")
+        if usage_claims.write(self.reader, me, dict.fromkeys(counted), yielded, whole=whole):
+            self.reader.execute("COMMIT")
+            return True
+        self.reader.execute("ROLLBACK")
+        return False
+
+    def holder(self, request: int) -> int:
+        return int(
+            self.reader.execute(
+                "SELECT run_id FROM usage_requests WHERE request = ?", (request,)
+            ).fetchone()[0]
+        )
+
+    def stale(self, run: Claimant) -> bool:
+        row = self.reader.execute("SELECT reading FROM usage_runs WHERE id = ?", (run.run_id,))
+        return int(row.fetchone()[0]) == 0
+
+    def test_a_whole_reading_replaces_what_the_run_left_before(self) -> None:
+        holder = self.add_run("holder", stamp(0))
+        me = self.add_run("me", stamp(HOUR))
+        self.hold(holder, FIRST, SECOND)
+        self.assertTrue(self.chunk(me, (), {FIRST}, whole=True))
+        self.assertEqual({FIRST}, self.left("me"))
+        # The file read from its start again meets only the second request now.
+        self.assertTrue(self.chunk(me, (), {SECOND}, whole=True))
+        self.assertEqual({SECOND}, self.left("me"))
+        self.assert_yields_hold()
+
+    def test_a_reading_in_part_drops_the_row_for_a_request_it_now_counts(self) -> None:
+        holder = self.add_run("holder", stamp(HOUR))
+        me = self.add_run("me", stamp(0))
+        self.hold(holder, FIRST, SECOND)
+        # Refused for the current reading, the holder keeps both though it comes later.
+        self.refuse(holder, True)
+        self.assertTrue(self.chunk(me, (), {FIRST, SECOND}, whole=False))
+        self.assertEqual({FIRST, SECOND}, self.left("me"))
+        # It can be read again now, so the next part counts the first request again met.
+        self.refuse(holder, False)
+        self.assertTrue(self.chunk(me, {FIRST}, (), whole=False))
+        self.assertEqual(me.run_id, self.holder(FIRST))
+        self.assertEqual({SECOND}, self.left("me"))
+        self.assert_yields_hold()
+
+    def test_a_request_counted_and_left_by_one_reading_is_counted_when_the_run_comes_first(
+        self,
+    ) -> None:
+        for whole in (False, True):
+            with self.subTest(whole=whole):
+                holder = self.add_run(f"holder-{whole}", stamp(HOUR))
+                me = self.add_run(f"me-{whole}", stamp(0))
+                request = FIRST + 10 * whole
+                self.hold(holder, request)
+                self.assertTrue(self.chunk(me, {request}, {request}, whole=whole))
+                self.assertEqual(me.run_id, self.holder(request))
+                self.assertEqual(set(), self.left(f"me-{whole}"))
+                # The run it moved from becomes stale, so reading it again drops the tokens.
+                self.assertTrue(self.stale(holder))
+                self.assert_yields_hold()
+
+    def test_a_request_counted_and_left_by_one_reading_fails_the_chunk_when_the_holder_wins(
+        self,
+    ) -> None:
+        for whole in (False, True):
+            with self.subTest(whole=whole):
+                holder = self.add_run(f"holder-{whole}", stamp(0))
+                me = self.add_run(f"me-{whole}", stamp(HOUR))
+                request = FIRST + 10 * whole
+                self.hold(holder, request)
+                self.assertFalse(self.chunk(me, {request}, {request}, whole=whole))
+                self.assertEqual(holder.run_id, self.holder(request))
+                self.assertEqual(set(), self.left(f"me-{whole}"))
+                self.assertFalse(self.stale(holder))
+
+
+class YieldsFollowTheirRunTests(Case):
+    """A row of `usage_yields` lives only as long as the run it names.
+
+    The table's key references `usage_runs` with `ON DELETE CASCADE`, which SQLite
+    enforces only on a connection that turned foreign keys on: both connections the store
+    is written through do.
+    """
+
+    def test_deleting_a_run_deletes_its_rows_and_a_row_needs_a_run(self) -> None:
+        for name, conn in (("store", self.conn), ("reader", self.reader)):
+            with self.subTest(connection=name):
+                run_id = conn.execute(
+                    "INSERT INTO usage_runs(session_id, client, path) VALUES (?, 'claude', '')",
+                    (name,),
+                ).lastrowid
+                conn.execute("INSERT INTO usage_yields(run_id, request) VALUES (?, 1)", (run_id,))
+                conn.execute("DELETE FROM usage_runs WHERE id = ?", (run_id,))
+                conn.commit()
+                self.assertEqual(
+                    [],
+                    conn.execute(
+                        "SELECT request FROM usage_yields WHERE run_id = ?", (run_id,)
+                    ).fetchall(),
+                )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    conn.execute(
+                        "INSERT INTO usage_yields(run_id, request) VALUES (?, 1)", (run_id,)
+                    )
+                conn.rollback()
 
 
 class ClaimLostMeanwhileTests(ClaimCase):

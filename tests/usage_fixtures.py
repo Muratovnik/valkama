@@ -489,7 +489,13 @@ class Case(unittest.TestCase):
         }
 
     def assert_yields_hold(self) -> None:
-        """No run left a request it counts, and every run that left one is still there."""
+        """No run left a request it counts.
+
+        That every run that left a request is still there is the schema's to hold, not
+        this check's: `usage_yields` references `usage_runs` with `ON DELETE CASCADE` and
+        the store's connections enforce it, as `test_usage_claims.YieldsFollowTheirRunTests`
+        shows.
+        """
 
         self.assertEqual(
             [],
@@ -499,13 +505,6 @@ class Case(unittest.TestCase):
                 " ON claim.request = leaving.request AND claim.run_id = leaving.run_id"
             ).fetchall(),
             "a run both counts and leaves a request",
-        )
-        self.assertEqual(
-            [],
-            self.reader.execute(
-                "SELECT run_id FROM usage_yields WHERE run_id NOT IN (SELECT id FROM usage_runs)"
-            ).fetchall(),
-            "a request left by a run that is gone",
         )
 
     def seconds(self, session: str = "sess-1", agent: str = "") -> float:
