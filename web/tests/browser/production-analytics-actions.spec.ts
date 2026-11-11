@@ -40,18 +40,18 @@ const WIDTHS = [1440, 1024, 390]
 const on = (day: number) => new Date(2026, 10, day, 10)
 
 /**
- * Three days of work: the task the backend holds under model-a on Monday, another task under
- * model-b on Tuesday, and work nobody can place on Wednesday; the task again a week before.
+ * Three days of work: another task under model-b on Monday, the task the backend holds under
+ * model-a on Tuesday, and work nobody can place on Wednesday; the task again a week before.
  */
 const IMPORT = task(264, 'Import the planning documents')
 const WORLD: TimedStretch[] = [
   {
-    at: on(9),
+    at: on(10),
     group: { work_item: IMPORT, model: value('model-a') },
     spend: { seconds: 7200, tokens: 2_000_000, cost: 20 },
   },
   {
-    at: on(10),
+    at: on(9),
     group: { work_item: task(2, 'Write the release notes'), model: value('model-b') },
     spend: { seconds: 3600, tokens: 1_000_000, cost: 10 },
   },
@@ -85,7 +85,12 @@ async function serveTask(page: Page) {
         has_more: false,
         items: [
           {
-            target: { project_id: projectId, space_ref: spaceRef, reference: 'MAIN-264' },
+            target: {
+              project_id: projectId,
+              space_ref: spaceRef,
+              reference: 'MAIN-264',
+              writable: true,
+            },
             item: {
               work_item_id: workItem.work_item_id,
               planning_space_id: workItem.planning_space_id,
@@ -112,13 +117,28 @@ async function serveTask(page: Page) {
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
-/** Tab until `target` holds the focus, as a keyboard reaches it; how many presses it took. */
+/**
+ * The keys that bring the focus to `target`, as a keyboard reaches it: Tab from control to
+ * control, and inside a chart of columns, one stop for Tab, Home to its first column and the
+ * right arrow along it.
+ */
 async function tabTo(page: Page, target: Locator) {
+  const keys: string[] = []
+  const chart = await target.evaluate((element) => element.closest('.period-columns') !== null)
+  let homed = false
   for (let press = 1; press <= 120; press += 1) {
-    await page.keyboard.press('Tab')
-    if (await target.evaluate((element) => element === document.activeElement)) return press
+    const inChart =
+      chart &&
+      (await page.evaluate(() => Boolean(document.activeElement?.closest('.period-columns'))))
+    const along = homed ? 'ArrowRight' : 'Home'
+    const key = inChart ? along : 'Tab'
+    homed ||= inChart
+    keys.push(key)
+    await page.keyboard.press(key)
+    if (await target.evaluate((element) => element === document.activeElement))
+      return `${keys.filter((one) => one === 'Tab').length} Tab, then ${keys.filter((one) => one !== 'Tab').join(', ') || 'nothing else'}`
   }
-  throw new Error('Tab never reached the control')
+  throw new Error(`the keys never reached the control: ${keys.join(' ')}`)
 }
 
 /** The focused control: whether its ring shows, and where it and the ring stand. */
@@ -302,10 +322,12 @@ for (const width of WIDTHS)
       .toBe(pageAt({ period: 'custom', from: '2026-11-10', to: '2026-11-10' }))
     const row = analytics
       .locator('.spending-table')
-      .getByRole('link', { name: 'MAIN-2 Write the release notes' })
+      .getByRole('link', { name: 'MAIN-264 Import the planning documents' })
     const rowPresses = await tabTo(page, row)
     const rowRing = await focusRing(row)
     await page.keyboard.press('Enter')
+    await expect.poll(() => path(page)).toBe(TASK_ADDRESS)
+    await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(2)
 
     await record(info, `analytics two presses ${width}`, {
