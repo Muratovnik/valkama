@@ -64,6 +64,7 @@ sys.path.insert(0, str(ROOT))
 
 from server import processes, store
 from server.projects import project_registry, registry_owner
+from tests import commit_subjects
 from windows import release
 
 HOME = "home"
@@ -110,6 +111,8 @@ class Step:
     group: str
     command: str
     directory: str = "."
+    #: It reads the commits of the checkout, so a directory without them refuses it.
+    needs_history: bool = False
 
     @property
     def needs_modules(self) -> bool:
@@ -120,7 +123,7 @@ class Step:
 GATE_STEPS = (
     Step("ruff", "python", "python -m ruff check ."),
     Step("format", "python", "python -m ruff format --check ."),
-    Step("subjects", "python", "python tests/commit_subjects.py"),
+    Step("subjects", "python", "python tests/commit_subjects.py", needs_history=True),
     Step("relkit", "python", "python .github/relkit.pyz audit --history"),
     Step("typos", "python", "typos"),
     Step(
@@ -156,6 +159,7 @@ class Run(NamedTuple):
     argv: list[str]
     cwd: Path
     needs_modules: bool = False
+    needs_history: bool = False
 
 
 def _say(line: str) -> None:
@@ -377,6 +381,18 @@ def _run_step(run: Run, log: Path, environment: Mapping[str, str]) -> int:
             return 127
 
 
+def _refusal(run: Run) -> tuple[str, str] | None:
+    """Why `run` may not start, as the cause the summary groups by and the detail."""
+
+    if run.needs_modules:
+        refusal = modules_refusal(run.cwd)
+        return None if refusal is None else ("npm ci is needed first", refusal)
+    if run.needs_history:
+        refusal = commit_subjects.history_refusal(run.cwd)
+        return None if refusal is None else ("there is no Git history to read", refusal)
+    return None
+
+
 def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) -> int:
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
@@ -386,7 +402,8 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
 
     logs = out / LOGS
     logs.mkdir(parents=True, exist_ok=True)
-    failed, refused = [], []
+    failed: list[str] = []
+    refused: dict[str, list[str]] = {}
     with (out / SUMMARY).open("w", encoding="utf-8", newline="\n") as summary:
 
         def report(line: str) -> None:
@@ -396,11 +413,12 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
 
         for run in runs:
             log = logs / f"{run.name}.log"
-            refusal = modules_refusal(run.cwd) if run.needs_modules else None
+            refusal = _refusal(run)
             if refusal is not None:
-                refused.append(run.name)
-                log.write_text(f"{refusal}\n", encoding="utf-8", newline="\n")
-                report(f"{run.name:<14} refused  {refusal}")
+                cause, detail = refusal
+                refused.setdefault(cause, []).append(run.name)
+                log.write_text(f"{detail}\n", encoding="utf-8", newline="\n")
+                report(f"{run.name:<14} refused  {detail}")
                 continue
             code = _run_step(run, log, environment)
             if code != 0:
@@ -411,8 +429,8 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
             return 1
         if failed:
             report(f"failed: {', '.join(failed)}")
-        if refused:
-            report(f"not run, because npm ci is needed first: {', '.join(refused)}")
+        for cause, names in refused.items():
+            report(f"not run, because {cause}: {', '.join(names)}")
         if failed or refused:
             return 1
         report(f"all {len(runs)} steps passed")
@@ -463,7 +481,13 @@ def gates(steps: Sequence[Step], out: Path) -> int:
     head = processes.run_text(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"])
     _say(f"root: {ROOT}  head: {head.stdout.strip()}")
     runs = [
-        Run(step.name, _argv(step.command, tools), ROOT / step.directory, step.needs_modules)
+        Run(
+            step.name,
+            _argv(step.command, tools),
+            ROOT / step.directory,
+            step.needs_modules,
+            step.needs_history,
+        )
         for step in steps
     ]
     # Said before the first step, because the Python half takes minutes to reach them.

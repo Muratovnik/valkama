@@ -40,7 +40,9 @@ checkouts are therefore distinguishable even at the same version.
 - **A gate for commit subjects.** `python tests/commit_subjects.py` reads the subject of
   every commit reachable from `HEAD`, merge commits included, and fails naming each one
   that is not a Conventional Commit of the closed type set, such as `merge: …` or Git's
-  default `Merge branch …`. `tests/isolated.py gates` runs it as the step `subjects`.
+  default `Merge branch …`. `tests/isolated.py gates` runs it as the step `subjects`. In a
+  directory with no Git history of its own, such as a source snapshot, it reads nothing
+  and says it was skipped and why instead of passing, and `gates` refuses the step there.
 
 ### Changed
 

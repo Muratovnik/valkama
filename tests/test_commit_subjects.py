@@ -1,4 +1,4 @@
-"""What `tests/commit_subjects.py` owes: every subject read, merges too."""
+"""What `tests/commit_subjects.py` owes: every subject read, merges too, and no pass without history."""
 
 from __future__ import annotations
 
@@ -156,6 +156,41 @@ class HistoryTests(unittest.TestCase):
         self.assertIn("2 of 4 commits", said)
         self.assertIn(f"  {first} WIP\n", said)
         self.assertIn(f"  {last} Update README.md\n", said)
+
+    def test_a_directory_without_a_repository_is_skipped_and_never_passes(self) -> None:
+        snapshot = self.root / "snapshot"
+        snapshot.mkdir()
+
+        code, said = checked(snapshot)
+
+        self.assertEqual(commit_subjects.SKIPPED, code)
+        self.assertNotEqual(0, code)
+        self.assertIn("commit subjects skipped, none was read", said)
+        self.assertIn("is not a Git repository", said)
+        self.assertNotIn("conform", said)
+
+    def test_a_directory_inside_another_repository_is_skipped_rather_than_read_as_its(
+        self,
+    ) -> None:
+        self.commit("Not checked, because it is not this directory's history")
+        unpacked = self.repo / "unpacked-snapshot"
+        unpacked.mkdir()
+
+        code, said = checked(unpacked)
+
+        self.assertEqual(commit_subjects.SKIPPED, code)
+        self.assertIn("has no repository of its own", said)
+        self.assertNotIn("Not checked", said)
+
+    def test_a_repository_with_no_commit_yet_is_skipped(self) -> None:
+        empty = self.root / "empty"
+        empty.mkdir()
+        processes.run_text(["git", "-C", str(empty), "init"])
+
+        code, said = checked(empty)
+
+        self.assertEqual(commit_subjects.SKIPPED, code)
+        self.assertIn("has no commit yet", said)
 
 
 if __name__ == "__main__":

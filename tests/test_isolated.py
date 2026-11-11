@@ -289,6 +289,34 @@ class GateTests(Workspace):
 
         self.assertEqual(listed, [(s.command, s.directory) for s in isolated.GATE_STEPS])
 
+    def test_the_subject_step_is_refused_where_there_is_no_history_and_never_passes(self) -> None:
+        snapshot = self.root / "snapshot"
+        snapshot.mkdir()
+        subjects = isolated.Run(
+            "subjects",
+            [sys.executable, "-c", "open('ran', 'w').close()"],
+            snapshot,
+            needs_history=True,
+        )
+        # Whatever holds the temporary directory is not searched for a repository.
+        with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": str(self.root)}):
+            code, said = quietly(
+                isolated.run_gates,
+                [self.run_python("first", "print(1)"), subjects],
+                self.out,
+                os.environ,
+            )
+
+        self.assertEqual(1, code)
+        self.assertFalse((snapshot / "ran").exists())
+        self.assertRegex(said, r"subjects +refused +.*snapshot is not a Git repository")
+        self.assertIn("not run, because there is no Git history to read: subjects\n", said)
+        self.assertNotIn("failed:", said)
+        self.assertNotIn("steps passed", said)
+        self.assertEqual(
+            ["subjects"], [step.name for step in isolated.GATE_STEPS if step.needs_history]
+        )
+
     def test_every_step_resolves_to_a_program(self) -> None:
         tools = {name: (name,) for name in ("typos", "vulture", "mypy", "lint-imports", "semgrep")}
         for step in isolated.GATE_STEPS:
