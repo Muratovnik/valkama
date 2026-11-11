@@ -201,6 +201,21 @@ describe('the bars', () => {
       barsOf(mountBars(rows, 'work_item')),
     )
   })
+
+  // With no row, nothing was spent: neither a figure («0 min») nor an absent one («No price»).
+  it('say a period that spent nothing spent nothing, in every measure and as a table', () => {
+    for (const measure of ['time', 'tokens', 'cost'] as const) {
+      expect(mountBars([], 'work_item', { measure }).text()).toContain(
+        'This period spent nothing to break down.',
+      )
+      expect(mountBars([], 'work_item', { measure, narrow: true }).text()).toContain(
+        'This period spent nothing to break down.',
+      )
+    }
+    expect(mountBars([], 'work_item', { locale: 'ru' }).text()).toContain(
+      'В этом периоде нечего разбивать: ничего не потрачено.',
+    )
+  })
 })
 
 describe('the bars on the page', () => {

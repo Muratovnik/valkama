@@ -6,6 +6,7 @@
  * and the rows add up to the figure on the tile above.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -24,6 +25,7 @@ const props = defineProps<{
   rows: readonly UsageRow[]
 }>()
 
+const { t } = useI18n()
 const words = useSpendingWords()
 
 const title = computed(() => words.chartTitle(props.measure, props.by))
@@ -38,10 +40,11 @@ const bars = computed<RankedRow[]>(() =>
   })),
 )
 
+/** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
   category: words.dimension(props.by),
   value: words.measure(props.measure),
-  empty: words.figure(props.measure, { seconds: 0, tokens: null, cost: null, unpriced: 0 }),
+  empty: t('analytics.bars.empty'),
 }))
 </script>
 

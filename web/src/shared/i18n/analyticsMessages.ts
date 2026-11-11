@@ -63,6 +63,9 @@ export const analyticsMessages = {
         effort: 'by effort',
         environment: 'by environment',
       },
+      bars: {
+        empty: 'This period spent nothing to break down.',
+      },
       days: {
         title: '{measure} per day, {by}',
         soFar: 'so far',
@@ -190,6 +193,9 @@ export const analyticsMessages = {
         model: 'по моделям',
         effort: 'по усилию',
         environment: 'по средам',
+      },
+      bars: {
+        empty: 'В этом периоде нечего разбивать: ничего не потрачено.',
       },
       days: {
         title: '{measure} по дням, {by}',

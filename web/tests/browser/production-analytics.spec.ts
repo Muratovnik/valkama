@@ -139,6 +139,9 @@ const READ_STATES: {
       await expect(time).toHaveText(ru ? /^0\sмин$/u : /^0\smin$/u)
       await expect(analytics.locator('.tile-figure[data-measure="tokens"]')).toHaveText('0')
       await expect(analytics.locator('.spending-tiles .tile-change').first()).toContainText('↓ 100')
+      await expect(analytics.locator('.spending-bars')).toContainText(
+        ru ? 'нечего разбивать' : 'spent nothing to break down',
+      )
     },
   },
   {
