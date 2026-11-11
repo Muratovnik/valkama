@@ -61,7 +61,8 @@
 
 /* Under a scrolled plot the scale stays at the chart's start. This ground stands behind it,
    the height of the plot and as wide as the scale and the gap after it, and covers the
-   periods, their names and the change numbers that pass under. */
+   periods, their names and the change numbers that pass under. It takes the pointer too: a
+   press on it must not reach a period nobody can see. */
 .period-gutter {
   position: sticky;
   inset-inline-start: 0;
@@ -70,7 +71,6 @@
   grid-column: 1;
   margin-inline-end: calc(-1 * var(--space-2));
   background: var(--color-canvas);
-  pointer-events: none;
 }
 
 .period-markers {
