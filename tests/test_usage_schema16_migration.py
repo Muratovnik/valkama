@@ -76,6 +76,8 @@ COUNTED = {
     105: ((9, 12), 12),
     # Counted once already.
     106: ((15,), 15),
+    # Counted only by a run that is gone: the row stays, so the request is not counted again.
+    107: ((9,), 9),
 }
 
 
