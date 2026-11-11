@@ -115,10 +115,10 @@ test('the tab opens Analytics filtered to the item', async ({ page }) => {
     filters: { work_item: [usage.work_item_id] },
   })
   await expect(analytics.locator('.disclosure-toggle')).toHaveText('Filters · 1')
-  await expect.poll(() => asked.length).toBeGreaterThan(0)
-  expect(new Set(asked.map((query) => query.get('work_item')))).toEqual(
-    new Set([usage.work_item_id]),
-  )
+  // The page's own read, the period beside the one before, asks for the item's work alone.
+  const own = () => asked.filter((query) => query.get('compare') === 'true')
+  await expect.poll(() => own().length).toBeGreaterThan(0)
+  expect(own().map((query) => query.get('work_item'))).toEqual(own().map(() => usage.work_item_id))
 })
 
 for (const width of [1440, 1024, 390]) {
