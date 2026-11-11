@@ -14,14 +14,20 @@
  * or one in the morning, and the words would name a day early or late. For the same reason the
  * period never runs past the end of the day it ends on at that offset: on the Sunday the clocks
  * went back, the last hour of the day lies past midnight at the summer offset, and a period
- * ending in it would be named by the Monday after.
+ * ending in it would be named by the Monday after. Nor does it end before that day has begun
+ * there: where the clocks went forward in the middle of that week, the first hour of each day
+ * after is still the day before at the Monday's offset, and a period ending in it would be named
+ * by the day before; it ends a second into the day instead. Either way the period moves by less
+ * than the hour the clocks did.
  */
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 
 const WEEK = 7
-const MINUTE = 60_000
+const SECOND = 1000
+const MINUTE = 60 * SECOND
+const DAY = 24 * 60 * MINUTE
 
 /** The same days of the week before for «this week» at `now`; null for any other period. */
 export function comparedPeriod(view: AnalyticsView, now: Date): PeriodBounds | null {
@@ -31,13 +37,11 @@ export function comparedPeriod(view: AnalyticsView, now: Date): PeriodBounds | n
   const utcOffset = -monday.getTimezoneOffset()
   const sameMoment = new Date(now)
   sameMoment.setDate(now.getDate() - WEEK)
-  /** The midnight after that day, at the offset the period is asked at. */
-  const dayEnd =
-    Date.UTC(sameMoment.getFullYear(), sameMoment.getMonth(), sameMoment.getDate() + 1) -
+  /** That day's own midnight at the offset the period is asked at, and the midnight after it. */
+  const dayStart =
+    Date.UTC(sameMoment.getFullYear(), sameMoment.getMonth(), sameMoment.getDate()) -
     utcOffset * MINUTE
-  return {
-    from: monday.toISOString(),
-    to: new Date(Math.min(sameMoment.getTime(), dayEnd)).toISOString(),
-    utcOffset,
-  }
+  const dayEnd = dayStart + DAY
+  const to = Math.min(Math.max(sameMoment.getTime(), dayStart + SECOND), dayEnd)
+  return { from: monday.toISOString(), to: new Date(to).toISOString(), utcOffset }
 }

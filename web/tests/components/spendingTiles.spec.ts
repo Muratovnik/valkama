@@ -381,4 +381,27 @@ describe('the tiles on the page in the week after a change of time', () => {
       expect(change).toBe('↑ 100% against Oct 19 – 25')
     },
   )
+
+  // A zone whose clocks go forward on a Friday: Jerusalem leaves +02:00 for +03:00 on 27 March
+  // 2026. In the first hour of a day after that, the same moment a week before is still the day
+  // before at the offset of that week's Monday.
+  it.each([
+    ['Saturday', '2026-04-04', 'Mar 23 – 28'],
+    ['Sunday', '2026-04-05', 'Mar 23 – 29'],
+  ])(
+    'name the week before by its own days just after midnight on the %s after a Friday change',
+    async (_day, date, days) => {
+      vi.stubEnv('TZ', 'Asia/Jerusalem')
+      const now = `${date}T00:30:00+03:00`
+      expect(new Date(now).getTimezoneOffset()).toBe(-180)
+      expect(new Date('2026-03-23T00:00:00+02:00').getTimezoneOffset()).toBe(-120)
+      expect(new Date('2026-03-28T00:30:00+03:00').getTimezoneOffset()).toBe(-180)
+      const { change } = await tilesAt(
+        now,
+        '2026-03-30T10:00:00+03:00',
+        '2026-03-24T10:00:00+02:00',
+      )
+      expect(change).toBe(`↑ 100% against ${days}`)
+    },
+  )
 })
