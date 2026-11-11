@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
+
 ### Added
 
 - **Add or remove a label without sending the rest.** `update_work_item` and the `update`
