@@ -15,7 +15,7 @@ import type { Usage } from '@/shared/api/analyticsApi.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
-import { task, usageAnswer, value } from '../fixtures/analytics.ts'
+import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -107,6 +107,37 @@ describe('the days', () => {
     // Task 6 (2 h, on day 2) and task 7 (1 h, on day 0) are what «other» holds.
     expect(columns[0]?.values.other).toBe(1)
     expect(columns[2]?.values.other).toBe(2)
+  })
+
+  it('stack work on no task and unknown work apart, never inside other, however small', () => {
+    // Six tasks of 10 h down to 5 h on Monday; a minute on no task and two unknown on Tuesday.
+    const usage = week([
+      ...Array.from({ length: 6 }, (_, index) => ({
+        day: 0,
+        group: { work_item: task(index + 1, `Task ${index + 1}`) },
+        spend: { seconds: (10 - index) * 3600 },
+      })),
+      { day: 1, group: { work_item: noTask }, spend: { seconds: 60 } },
+      { day: 1, group: { work_item: unknownTask }, spend: { seconds: 120 } },
+    ])
+    const source = { usage, by: 'work_item' as const, measure: 'time' as const }
+    const series = stackLines(source)
+    // Six hues: the two that are not tasks, and the four largest tasks; the rest is «other».
+    expect(series.map((one) => one.key).toSorted()).toEqual(
+      [
+        'none',
+        'unknown',
+        ...[1, 2, 3, 4].map((number) => `v:${task(number, '').id}`),
+        'other',
+      ].toSorted(),
+    )
+    expect(series.filter((one) => one.slot !== 'other')).toHaveLength(6)
+    const columns = dayColumns(source, series, WEDNESDAY)
+    expect(columns[0]?.values.other).toBe(5 + 6)
+    expect(columns[1]?.values).toEqual({ none: 60 / 3600, unknown: 120 / 3600 })
+    const legend = mountDays(usage).get('.chart-legend').text()
+    expect(legend).toContain('No task')
+    expect(legend).toContain('Unknown')
   })
 
   it('mark the day not over yet as so far, and only that day', () => {

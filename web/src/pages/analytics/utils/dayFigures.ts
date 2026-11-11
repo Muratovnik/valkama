@@ -9,7 +9,7 @@ import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
  */
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
-import { seriesSlots } from '@/shared/lib/seriesColors.ts'
+import { SERIES_SLOT_COUNT, seriesSlots } from '@/shared/lib/seriesColors.ts'
 import type { PeriodColumn, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 
 /** How many values a day's stack names; the rest of the period's values stack as «other». */
@@ -26,18 +26,23 @@ export interface StackLine extends PeriodSeries {
 }
 
 /**
- * The values a stack names: the period's largest in the measure, with anything to draw. Their
- * hues come from `seriesSlots` over that set, so a value keeps its hue whatever its rank; the
- * rest of the period is one «other» series in the neutral, on top.
+ * The values a stack names: work with no value there and unknown work, each its own series as
+ * in the bars and never folded, and the period's largest categories in the measure, as many as
+ * the palette has hues left for, up to `STACKED`; only values with anything to draw. Their hues
+ * come from `seriesSlots` over that set, so a value keeps its hue whatever its rank; the rest of
+ * the period is one «other» series in the neutral, on top.
  */
 export function stackLines({ usage, by: dimension, measure }: StackSource) {
-  const lines = spendingLines(usage.rows, dimension, measure, Number.POSITIVE_INFINITY)
-    .filter((line) => (measureOf(measure, line.spent) ?? 0) > 0)
-    .sort(
-      (left, right) =>
-        (measureOf(measure, right.spent) ?? 0) - (measureOf(measure, left.spent) ?? 0),
-    )
-  const named = lines.slice(0, STACKED)
+  const amount = (line: SpendingLine) => measureOf(measure, line.spent) ?? 0
+  const lines = spendingLines(usage.rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
+    (line) => amount(line) > 0,
+  )
+  const apart = lines.filter((line) => line.kind !== 'category')
+  const categories = lines
+    .filter((line) => line.kind === 'category')
+    .sort((left, right) => amount(right) - amount(left))
+  const room = Math.min(STACKED, SERIES_SLOT_COUNT - apart.length)
+  const named = [...apart, ...categories.slice(0, room)]
   const slots = seriesSlots(named.map((line) => line.key))
   const series: StackLine[] = [...slots].map(([key, slot]) => ({
     key,

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
- * of the dimension and «other» for the rest. The day not over yet is hatched and says «so far»,
+ * of the dimension and «other» for the rest; work with no value there and unknown work stack
+ * apart, as in the bars, and never inside «other». The day not over yet is hatched and says «so far»,
  * so its short column does not read as a fall; a numbered line stands where the accounts that
  * worked changed from the day before anyone last worked, with what changed under the chart.
  */

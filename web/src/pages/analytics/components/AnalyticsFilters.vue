@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * A filter per dimension: the values that spent anything in the period, and «none» — work on
- * no task, or a value nobody can place. Choosing several admits any of them; the filters of
- * different dimensions all apply. Each is a field of chips, typed into to find a value.
+ * A filter per dimension: the values that spent anything in the period, and «none» as the read
+ * admits it — work on no task, a session's own run, a value nobody can place — except for the
+ * role, which every stretch has. Choosing several admits any of them; the filters of different
+ * dimensions all apply. Each is a field of chips, typed into to find a value.
  *
  * A value the period did not spend, as one a pasted link names, stays chosen under its id: the
  * filter still applies, and taking it out is one press.
@@ -43,7 +44,8 @@ function options(dimension: UsageDimension): ChoiceOption[] {
           : [{ value: valueKey(value), label: words.valueLabel(dimension, value) }]
       })
     : []
-  const offered = [{ value: filterKey(null), label: words.noneLabel(dimension) }, ...found]
+  const none = words.noneLabel(dimension)
+  const offered = [...(none === null ? [] : [{ value: filterKey(null), label: none }]), ...found]
   const known = new Set(offered.map((option) => option.value))
   const kept = chosen(dimension)
     .filter((key) => !known.has(key))

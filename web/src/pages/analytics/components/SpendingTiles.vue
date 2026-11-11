@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { changeOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { Change, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -30,9 +30,13 @@ const measure = defineModel<Measure>('measure', { required: true })
 const { t } = useI18n()
 const words = useSpendingWords()
 
-const beforeDays = computed(() =>
-  props.before ? words.days(props.before.from, props.before.to) : t('analytics.change.before'),
-)
+/** The period compared with by its days; a period before that was not read says that instead. */
+function changeWords(moved: Change) {
+  const { before } = props
+  return before
+    ? words.change(moved, words.days(before.from, before.to))
+    : t('analytics.change.unread')
+}
 
 const tiles = computed(() =>
   MEASURES.map((value) => {
@@ -48,7 +52,7 @@ const tiles = computed(() =>
       value,
       label: words.measure(value),
       figure: words.figure(value, props.total),
-      change: words.change(moved, beforeDays.value),
+      change: changeWords(moved),
       direction: moved.direction,
       notes,
     }

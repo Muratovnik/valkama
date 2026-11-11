@@ -41,7 +41,11 @@ export const analyticsMessages = {
         advisor: 'Adviser',
       },
       values: {
-        none: 'No task',
+        none: {
+          work_item: 'No task',
+          launch_class: 'The session itself',
+          other: 'No value',
+        },
         unknown: 'Unknown',
         deleted: 'Deleted task',
         other: 'Other, {count} more | Other, {count} more',
@@ -91,7 +95,7 @@ export const analyticsMessages = {
         down: '↓ {change} against {period}',
         same: 'The same as {period}',
         none: 'Nothing spent in {period} to compare with',
-        before: 'the period before',
+        unread: 'The period before was not read, nothing to compare with',
       },
       filters: {
         title: 'Filters',
@@ -143,7 +147,11 @@ export const analyticsMessages = {
         advisor: 'Советник',
       },
       values: {
-        none: 'Без задачи',
+        none: {
+          work_item: 'Без задачи',
+          launch_class: 'Сама сессия',
+          other: 'Без значения',
+        },
         unknown: 'Неизвестно',
         deleted: 'Удалённая задача',
         other: 'Остальное, ещё {count} | Остальное, ещё {count} | Остальное, ещё {count}',
@@ -190,11 +198,11 @@ export const analyticsMessages = {
           '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
       },
       change: {
-        up: '↑ {change} к {period}',
-        down: '↓ {change} к {period}',
-        same: 'Столько же, сколько {period}',
-        none: 'За {period} не потрачено ничего, сравнивать не с чем',
-        before: 'предыдущий период',
+        up: '↑ {change} к периоду {period}',
+        down: '↓ {change} к периоду {period}',
+        same: 'Столько же, сколько за период {period}',
+        none: 'За период {period} ничего не потрачено, сравнивать не с чем',
+        unread: 'Предыдущий период не прочитан, сравнивать не с чем',
       },
       filters: {
         title: 'Фильтры',

@@ -67,8 +67,36 @@ describe('the tiles', () => {
       )
       expect(tile(nothingBefore, measure).text).not.toMatch(/%/)
     }
+    // Not read is not nothing spent: the words say which.
     const notRead = mountTiles(NOW, null)
-    expect(tile(notRead, 'time').text).toContain('Nothing spent in the period before')
+    expect(tile(notRead, 'time').text).toContain('The period before was not read')
+    expect(tile(notRead, 'time').text).not.toContain('Nothing spent')
+  })
+
+  // Each change names the period it is compared with in the case its preposition takes.
+  it('say each change in Russian in the case its words take', () => {
+    const moved = mountTiles(
+      NOW,
+      { seconds: 3600, tokens: 2_400_000, cost: 12.5, unpriced: 0 },
+      'time',
+      'ru',
+    )
+    expect(tile(moved, 'time').text).toContain('↑ 50 % к периоду 2–8 нояб.')
+    expect(tile(moved, 'tokens').text).toContain('↓ 50 % к периоду 2–8 нояб.')
+    expect(tile(moved, 'cost').text).toContain('Столько же, сколько за период 2–8 нояб.')
+    const nothing = mountTiles(
+      NOW,
+      { seconds: 0, tokens: null, cost: null, unpriced: 0 },
+      'time',
+      'ru',
+    )
+    expect(tile(nothing, 'time').text).toContain(
+      'За период 2–8 нояб. ничего не потрачено, сравнивать не с чем',
+    )
+    const notRead = mountTiles(NOW, null, 'time', 'ru')
+    expect(tile(notRead, 'time').text).toContain(
+      'Предыдущий период не прочитан, сравнивать не с чем',
+    )
   })
 
   it('say tokens without a price in words, and never a zero cost', () => {

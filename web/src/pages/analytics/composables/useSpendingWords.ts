@@ -1,8 +1,9 @@
 /**
  * How the Analytics page names what it shows: a dimension, and a value of one as a card or the
  * rail already names it — a task by its number and title, a project by its name, a session by
- * its client and the start of its id. Work with no task and a value nobody can place say so in
- * words of their own.
+ * its client and the start of its id. Work with no value — no task, a session's own run — and a
+ * value nobody can place say so in words of their own, per dimension: «unknown» is said only of
+ * what nobody can place.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -16,6 +17,13 @@ import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
+
+/**
+ * The dimensions where work with no value is a value of its own (`id` null, not unknown): work
+ * on no task, and a session's own run, which no one launched. Elsewhere the read has no such
+ * value, and a filter's «none» admits an unknown one instead.
+ */
+const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
 
 export function useSpendingWords() {
   const i18n = useI18n()
@@ -73,9 +81,19 @@ export function useSpendingWords() {
 
   const dimension = (name: UsageDimension) => t(`analytics.dimensions.${name}`)
 
-  /** What a filter's «none» admits: work on no task, or a value the store does not hold. */
-  const noneLabel = (name: UsageDimension) =>
-    name === 'work_item' ? t('analytics.values.none') : t('analytics.values.unknown')
+  /** Work with no value in a dimension, where it has one of its own: no task, the session itself. */
+  const noValue = (name: UsageDimension) =>
+    t(`analytics.values.none.${NO_VALUE.has(name) ? name : 'other'}`)
+
+  /**
+   * What a filter's «none» admits, as the read takes it: work on no task, a session's own run, an
+   * unknown value for the rest. Null where it admits nothing — every stretch has a role — so the
+   * filter offers no such choice.
+   */
+  function noneLabel(name: UsageDimension) {
+    if (name === 'role') return null
+    return NO_VALUE.has(name) ? noValue(name) : t('analytics.values.unknown')
+  }
 
   function categoryLabel(name: UsageDimension, value: UsageGroupValue & { id: string }) {
     if (name === 'work_item')
@@ -92,7 +110,7 @@ export function useSpendingWords() {
 
   function valueLabel(name: UsageDimension, value: UsageGroupValue) {
     const kind = valueKind(value)
-    if (kind === 'none') return t('analytics.values.none')
+    if (kind === 'none') return noValue(name)
     if (kind === 'unknown') return t('analytics.values.unknown')
     return categoryLabel(name, value as UsageGroupValue & { id: string })
   }

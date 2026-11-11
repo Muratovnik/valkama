@@ -44,15 +44,20 @@ const STRETCHES: Stretch[] = [
 const answer = (groupBy: UsageDimension[], stretches: readonly Stretch[] = STRETCHES) =>
   usageAnswer({ first: MONDAY, days: 7, groupBy, stretches })
 
+interface MountOptions {
+  locale: 'en' | 'ru'
+  measure: Measure
+  narrow: boolean
+}
+
 function mountBars(
   rows: readonly UsageRow[],
   by: UsageDimension,
-  measure: Measure = 'time',
-  narrow = false,
+  { measure = 'time', narrow = false, locale = 'en' }: Partial<MountOptions> = {},
 ) {
   return mount(SpendingBars, {
     props: { rows, by, measure, narrow },
-    global: { plugins: [analyticsI18n()] },
+    global: { plugins: [analyticsI18n(locale)] },
   })
 }
 
@@ -88,7 +93,7 @@ describe('the bars', () => {
 
   it.each(['time', 'tokens', 'cost'] as const)('add up to the period total in %s', (measure) => {
     const { usage } = answer(['work_item'])
-    const rows = barsOf(mountBars(usage.rows, 'work_item', measure))
+    const rows = barsOf(mountBars(usage.rows, 'work_item', { measure }))
     const total = {
       time: usage.total.agent_seconds / 3600,
       tokens: usage.total.tokens.input ?? 0,
@@ -100,7 +105,7 @@ describe('the bars', () => {
   it('say a cost with no price as the tokens it leaves out, never a zero', () => {
     // Three tasks, so the one with no price, last by cost, is still named rather than folded.
     const few = answer(['work_item'], STRETCHES.slice(0, 3))
-    const rows = barsOf(mountBars(few.usage.rows, 'work_item', 'cost'))
+    const rows = barsOf(mountBars(few.usage.rows, 'work_item', { measure: 'cost' }))
     const unpriced = rows.find((row) => row.label === 'MAIN-1 Task 1')
     expect(unpriced?.valueText).toBe('57 tokens without a price')
     expect(unpriced?.value).toBe(0)
@@ -134,9 +139,56 @@ describe('the bars', () => {
     expect(byClass.find('[data-kind="other"]').exists()).toBe(false)
   })
 
+  const CATEGORY = { work_item: task(1, 'One'), launch_class: value('general') }
+
+  // The words come from the contract: work with no value is no task for a task and a session's
+  // own run for a launch class; «unknown» is what the store cannot place, and a role is never
+  // either.
+  it.each([
+    { by: 'work_item', locale: 'en', none: 'No task', unknown: 'Unknown' },
+    { by: 'work_item', locale: 'ru', none: 'Без задачи', unknown: 'Неизвестно' },
+    { by: 'launch_class', locale: 'en', none: 'The session itself', unknown: 'Unknown' },
+    { by: 'launch_class', locale: 'ru', none: 'Сама сессия', unknown: 'Неизвестно' },
+  ] as const)('name no value and unknown by $by in $locale', ({ by, locale, none, unknown }) => {
+    const rows = answer(
+      [by],
+      [
+        { day: 0, group: { [by]: CATEGORY[by] }, spend: { seconds: 7200 } },
+        { day: 0, group: { [by]: noTask }, spend: { seconds: 3600 } },
+        { day: 0, group: { [by]: unknownTask }, spend: { seconds: 1800 } },
+      ],
+    ).usage.rows
+    const shown = mountBars(rows, by, { locale })
+      .findAll('.ranked-row')
+      .map((row) => [row.attributes('data-kind'), row.get('.ranked-label').text()])
+    expect(shown).toEqual([
+      ['category', by === 'work_item' ? 'MAIN-1 One' : 'general'],
+      ['none', none],
+      ['unknown', unknown],
+    ])
+  })
+
+  it.each(['en', 'ru'] as const)('name every role by its name in %s, none unknown', (locale) => {
+    const rows = answer(
+      ['role'],
+      ['main', 'subagent', 'advisor'].map((role) => ({
+        day: 0,
+        group: { role: value(role) },
+        spend: { seconds: 60 },
+      })),
+    ).usage.rows
+    const bars = mountBars(rows, 'role', { locale })
+    expect(bars.findAll('.ranked-row').map((row) => row.attributes('data-kind'))).toEqual([
+      'category',
+      'category',
+      'category',
+    ])
+    expect(bars.text()).not.toMatch(/Unknown|Неизвестно|No task|Без задачи/u)
+  })
+
   it('read as a table on a narrow page, with the same rows', () => {
     const rows = answer(['work_item']).usage.rows
-    const table = mountBars(rows, 'work_item', 'time', true)
+    const table = mountBars(rows, 'work_item', { narrow: true })
     expect(table.findComponent(RankedBars).exists()).toBe(false)
     expect(table.getComponent(RankedBarsTable).props('rows')).toEqual(
       barsOf(mountBars(rows, 'work_item')),
