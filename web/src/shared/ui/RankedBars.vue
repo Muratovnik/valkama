@@ -51,10 +51,15 @@ function lineTag(row: PlacedRow) {
   return row.actionable ? 'button' : 'div'
 }
 
+/** A row that acts is named by what it does, or by its name, and described by its value. */
 function lineAttrs(row: PlacedRow) {
-  const named = { 'aria-label': row.action ?? row.label, 'aria-describedby': valueId(row) }
-  if (row.href) return { href: row.href, ...named }
-  return row.actionable ? { type: 'button', ...named } : {}
+  if (!row.href && !row.actionable) return {}
+  return {
+    'href': row.href,
+    'type': row.href ? undefined : 'button',
+    'aria-label': row.action ?? row.label,
+    'aria-describedby': valueId(row),
+  }
 }
 
 /** A category in its series' hue, slot 1 by default; a row that is not one in the neutral. */
