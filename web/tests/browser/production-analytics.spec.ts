@@ -6,11 +6,12 @@
  * `/api/analytics/usage`, by the period, the filters and the grouping each read asks for.
  *
  * Each state the page has is opened and measured, and the run prints what it measured: the page
- * in Russian, waiting, failed and empty, a custom period with its two date fields, the filters
+ * in Russian, waiting, failed and empty, fallen to zeros, beside a period before not read, with a
+ * change of accounts past unrecorded work, a custom period with its two date fields, the filters
  * open with chips, a chart of one value and one with a large «other», each chart beside its table.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { task } from '../fixtures/analytics.ts'
 import {
@@ -22,6 +23,7 @@ import {
   LONG_TAIL,
   measure,
   ONE_VALUE,
+  ONLY_WEEK_BEFORE,
   openReport,
   pageAt,
   pageScroll,
@@ -29,6 +31,7 @@ import {
   scrolledNames,
   serve,
   tabWalk,
+  UNRECORDED_BETWEEN,
 } from './analyticsPage.ts'
 import type { Answer } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
@@ -116,6 +119,89 @@ test.describe('in Russian', () => {
       await page.screenshot(shot(info, `analytics-ru-${width}.png`))
     })
 })
+
+/**
+ * The report beside what it is missing or what is zero, in each language: this week fallen to
+ * zeros from the week before, a week before that could not be read, and a change of accounts
+ * past a day of work whose organization nobody recorded.
+ */
+const READ_STATES: {
+  name: string
+  answer?: Answer
+  failWeekBefore?: boolean
+  says: (analytics: Locator, ru: boolean) => Promise<void>
+}[] = [
+  {
+    name: 'fallen to zero',
+    answer: ONLY_WEEK_BEFORE,
+    says: async (analytics, ru) => {
+      const time = analytics.locator('.tile-figure[data-measure="time"]')
+      await expect(time).toHaveText(ru ? /^0\sмин$/u : /^0\smin$/u)
+      await expect(analytics.locator('.tile-figure[data-measure="tokens"]')).toHaveText('0')
+      await expect(analytics.locator('.spending-tiles .tile-change').first()).toContainText('↓ 100')
+    },
+  },
+  {
+    name: 'period before not read',
+    failWeekBefore: true,
+    says: async (analytics, ru) => {
+      const unread = analytics.locator('.spending-unread')
+      await expect(unread.getByRole('status')).toHaveText(
+        ru
+          ? 'Предыдущий период не удалось прочитать, поэтому изменение не показано.'
+          : 'The period before could not be read, so no change is shown.',
+      )
+      await expect(unread.getByRole('button')).toHaveText(ru ? 'Повторить' : 'Retry')
+    },
+  },
+  {
+    name: 'accounts changed past unrecorded work',
+    answer: UNRECORDED_BETWEEN,
+    says: async (analytics, ru) => {
+      await expect(analytics.locator('.spending-days')).toContainText(
+        `${ru ? 'Аккаунты' : 'Accounts'}: work@example.test → night@example.test`,
+      )
+      const notes = analytics.locator('.spending-days :is(.period-note, td)', {
+        hasText: ru ? 'Аккаунты:' : 'Accounts:',
+      })
+      await expect(notes).toHaveCount(1)
+    },
+  },
+]
+
+for (const ru of [false, true])
+  test.describe(`the report beside what is missing${ru ? ', in Russian' : ''}`, () => {
+    test.use({ locale: ru ? 'ru-RU' : 'en-US' })
+    for (const width of [1440, 1024, 390])
+      for (const { name, answer, failWeekBefore, says } of READ_STATES)
+        test(`${name} stands whole at ${width}px`, async ({ page }, info) => {
+          await serve(page, answer, failWeekBefore)
+          const analytics = await openReport(page, width)
+          await says(analytics, ru)
+          const measured = await measure(page)
+          const unread = await boxes(page, '.spending-unread')
+          await record(info, `analytics ${ru ? 'ru ' : ''}${name} ${width}`, {
+            ...measured,
+            unread,
+            tileWords: await analytics
+              .locator('.spending-tiles .segmented-option')
+              .allTextContents(),
+          })
+          expectWhole(measured)
+          for (const box of unread) {
+            expect(Math.abs(box.x - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
+            expect(box.x + box.width).toBeLessThanOrEqual(width)
+          }
+          await expectNoSilentClipping(
+            page,
+            `analytics ${ru ? 'ru ' : ''}${name} at ${width}px`,
+            '.analytics-page',
+          )
+          await page.screenshot(
+            shot(info, `analytics-${ru ? 'ru-' : ''}${name.replaceAll(' ', '-')}-${width}.png`),
+          )
+        })
+  })
 
 /** What stands for the report while it has none to show: a state's panel, or the empty one. */
 const STAND_IN = '.analytics-page :is(.platform-state-panel, .data-empty)'

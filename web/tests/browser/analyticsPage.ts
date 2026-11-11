@@ -79,19 +79,42 @@ export const LONG_TAIL: TimedStretch[] = Array.from({ length: 25 }, (_, index) =
   spend: { seconds: 3600, tokens: 1000, cost: 1 },
 }))
 
+/** Nothing this week, and a day's work on the Monday of the week before: a fall to zero. */
+export const ONLY_WEEK_BEFORE: TimedStretch[] = WORLD.filter(
+  ({ at }) => at.getTime() < on(9).getTime(),
+)
+
+/**
+ * One account on Monday, work whose organization nobody recorded alone on Tuesday, and the other
+ * account beside more such work on Wednesday: one change of accounts, on Wednesday.
+ */
+export const UNRECORDED_BETWEEN: TimedStretch[] = [
+  { at: on(9), group: { work_item: task(1, 'One'), account: WORK }, spend: { seconds: 3600 } },
+  { at: on(10), group: { work_item: task(1, 'One') }, spend: { seconds: 5400 } },
+  { at: on(11), group: { work_item: task(2, 'Two'), account: NIGHT }, spend: { seconds: 1800 } },
+  { at: on(11), group: { work_item: task(2, 'Two') }, spend: { seconds: 900 } },
+]
+
 /** What the double answers: the work it holds, or a read that never answers, or one that fails. */
 export type Answer = 'failed' | 'hold' | readonly TimedStretch[]
 
-export async function serve(page: Page, answer: Answer = WORLD) {
+/** The read of this week's week before: the one asked from a moment rather than a day. */
+const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') ?? false
+
+/**
+ * Answers the page's reads from `answer`; with `failWeekBefore`, the read of the same days of the
+ * week before fails while the others answer.
+ */
+export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore = false) {
   await page.clock.setFixedTime(NOW)
   await installBackend(page)
   await page.route('**/api/analytics/usage?*', async (route) => {
     if (answer === 'hold') return
-    if (answer === 'failed') {
+    const query = new URL(route.request().url()).searchParams
+    if (answer === 'failed' || (failWeekBefore && weekBefore(query))) {
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
       return
     }
-    const query = new URL(route.request().url()).searchParams
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify(serveUsage(answer, query)),
