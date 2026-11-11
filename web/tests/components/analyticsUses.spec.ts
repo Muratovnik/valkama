@@ -66,11 +66,13 @@ enableAutoUnmount(afterEach)
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
 describe('an opening of the Analytics page', () => {
   it('is reported once per navigation, not per render or refetch', async () => {
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-180)
     const reports = serve()
     const stage = mount(AppModuleStage, {
       props: {
@@ -89,7 +91,8 @@ describe('an opening of the Analytics page', () => {
     await vi.dynamicImportSettled()
     await flushPromises()
     expect(stage.find('.analytics-page').exists()).toBe(true)
-    expect(reports).toEqual([{ kind: 'page_open', utc_offset: -new Date().getTimezoneOffset() }])
+    // Three hours ahead of UTC, whatever zone the test runs in: the sign is the caller's.
+    expect(reports).toEqual([{ kind: 'page_open', utc_offset: 180 }])
 
     // Moving between scopes of the page redraws it and is no new opening.
     await stage.setProps({ route: { module_id: 'analytics', scope: PROJECT }, scope: PROJECT })

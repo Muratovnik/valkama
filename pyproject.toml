@@ -252,6 +252,27 @@ forbidden_modules = [
 # it that way, and reads nothing of Analytics through it.
 ignore_imports = ["server.store -> server.analytics.store"]
 
+# What keeps that exception harmless: the one module the store reaches reads nothing of
+# the product, so nothing below Analytics comes to depend on it through the store.
+[[tool.importlinter.contracts]]
+name = "The module that declares Analytics' table imports nothing of the product"
+type = "forbidden"
+source_modules = [
+  "server.analytics.store",
+]
+forbidden_modules = [
+  "server.analytics.api",
+  "server.analytics.usage",
+  "server.analytics.uses",
+  "server.app_shell",
+  "server.executions",
+  "server.planning",
+  "server.platform",
+  "server.projects",
+  "server.store",
+  "server.telemetry",
+]
+
 [tool.mypy]
 python_version = "3.11"
 cache_dir = ".cache/mypy"
