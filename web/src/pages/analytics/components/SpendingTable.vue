@@ -17,7 +17,8 @@
  *
  * A row's name acts as its value does in the bars (`useLineActions`): a link to a task, or a
  * control that narrows the view to the value, sent out as `narrow`. Either is named by the value,
- * since it heads its row's cells; what pressing it does is its description.
+ * since it heads its row's cells; what pressing it does is its description. A value the page
+ * names by the start of its id, an account, has the whole id under its name.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -112,6 +113,7 @@ const lines = computed(() =>
     key: line.key,
     rest: line.kind !== 'category',
     name: nameOf(line.value),
+    detail: words.valueDetail(props.by, line.value),
     link: actions.taskLink(props.by, line.value),
     narrowsTo: actions.narrowsTo(props.by, line.value),
     cells: columns.value.map((column) => {
@@ -258,6 +260,11 @@ function download() {
               {{ line.name }}
             </button>
             <template v-else>{{ line.name }}</template>
+            <span
+              v-if="line.detail"
+              class="chart-detail"
+              >{{ line.detail }}</span
+            >
           </th>
           <td
             v-for="cell in line.cells"

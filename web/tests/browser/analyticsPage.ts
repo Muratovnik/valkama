@@ -19,8 +19,9 @@ export const pageAt = (state: Record<string, string> = {}) =>
 const NOW = new Date(2026, 10, 11, 14, 30)
 const on = (day: number) => new Date(2026, 10, day, 10)
 
-const WORK = value('work@example.test')
-const NIGHT = value('night@example.test')
+/** Two accounts, each an organization's id as the store holds it; the page names it by its start. */
+const WORK = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
+const NIGHT = value('d4e8a1f0-7c2b-4e5d-8f36-a1b2c3d4e5f6')
 
 /** Twelve tasks with long titles, work on no task and work nobody can place, over three days. */
 const STRETCHES: Stretch[] = [

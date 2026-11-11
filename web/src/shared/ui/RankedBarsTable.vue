@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * `RankedBars` as a table: the same rows in the same order, each name with the value it reads
- * as. It is the chart's accessible equivalent and may stand beside it or instead of it; a row
+ * as, and under the name what it leaves out (`detail`), which the chart says only in a hint. It is the chart's accessible equivalent and may stand beside it or instead of it; a row
  * that opens something in the chart opens it from its name here, as `select` with its key, and
  * a row that leads somewhere is a link from its name, pressed as `follow`. A name that acts heads
  * its row, so it is named by the row's name, and what pressing it does is its description.
@@ -90,6 +90,11 @@ const empty = computed(() => !props.rows.length)
             {{ row.label }}
           </button>
           <template v-else>{{ row.label }}</template>
+          <span
+            v-if="row.detail"
+            class="chart-detail"
+            >{{ row.detail }}</span
+          >
         </th>
         <td
           class="chart-cell"

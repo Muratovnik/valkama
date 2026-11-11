@@ -11,8 +11,13 @@
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
- * or the keyboard, each series by name. Presentational: data and words come in, a press on a
- * period (`actionable: 'column'`) or on one series in it (`'segment'`) goes out as `select`. A
+ * or the keyboard, each series by name, and the last period when neither stands on one. That
+ * line is one line high whatever it says, as each note under the chart is (`PeriodNotes`): a
+ * longer text ends in an ellipsis and is whole in its hint, in the period's name and in the
+ * table, so pointing at a period, leaving it or a new answer moves nothing on the page.
+ *
+ * Presentational: data and words come in, a press on a period (`actionable: 'column'`) or on
+ * one series in it (`'segment'`) goes out as `select`. A
  * period that acts is named by what it does where the caller says (`action`), and what it holds
  * then describes it.
  * The periods are one stop for Tab (`useChartCursor`); the arrows move between them, and up
@@ -42,6 +47,8 @@ import {
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import PeriodNotes from '@/shared/ui/PeriodNotes.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
@@ -180,7 +187,8 @@ function key(event: KeyboardEvent, at: number | null) {
         :series="series"
       />
       <p
-        class="period-readout"
+        v-tooltip.clipped="readout"
+        class="period-readout one-line"
         aria-hidden="true"
       >
         {{ readout }}
@@ -285,20 +293,10 @@ function key(event: KeyboardEvent, at: number | null) {
           />
         </div>
       </div>
-      <ol
+      <PeriodNotes
         v-if="notes.length"
-        class="period-notes"
-      >
-        <li
-          v-for="note in notes"
-          :key="note.number"
-          class="period-note"
-        >
-          <span class="period-note-number">{{ note.number }}</span>
-          <span>{{ note.period }}</span>
-          <span>{{ note.text }}</span>
-        </li>
-      </ol>
+        :notes="notes"
+      />
     </template>
   </figure>
 </template>
@@ -315,10 +313,10 @@ function key(event: KeyboardEvent, at: number | null) {
   margin: 0;
 }
 
-/* Two lines held for it, so a period that reads out longer than the last does not move the
-   plot under the pointer. */
+/* One line whatever the period under the pointer holds, so nothing under it moves as the
+   pointer passes: a longer readout ends in an ellipsis and its hint says it whole. */
 .period-readout {
-  min-block-size: 2lh;
+  block-size: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
@@ -446,26 +444,5 @@ function key(event: KeyboardEvent, at: number | null) {
     background: CanvasText;
     forced-color-adjust: none;
   }
-}
-
-.period-notes {
-  display: grid;
-  gap: var(--space-1);
-  padding: 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  list-style: none;
-}
-
-.period-note {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-}
-
-.period-note-number {
-  color: var(--color-text-tertiary);
-  font-variant-numeric: tabular-nums;
 }
 </style>

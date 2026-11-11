@@ -215,6 +215,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'that a folded edge holds a pane and how to bring it back; the edge is a line; while the pane’s name on it is cut, the name comes first, whole',
   ],
   [
+    'shared/ui/RankedBars.vue <span> v-tooltip.detail="{ text: row.detail, words: row.label }"',
+    'the whole id of a value its row names by the start of it, an account; while the name is cut, it comes first, whole',
+  ],
+  [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',
     'what a press on a link does, and the whole value a link shows the start of',
   ],

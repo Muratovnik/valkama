@@ -123,6 +123,26 @@ describe('period columns that open nothing', () => {
     expect(chart.get('.period-readout').text()).toBe('May 1: total 3 h; ci 2 h, work 1 h')
   })
 
+  // The browser spec measures that nothing moves; this holds the means: one line, cut with an
+  // ellipsis, and the whole words in a hint that follows the period shown.
+  it('keeps the readout and each note to one line, whole in a hint that shows only while cut', async () => {
+    const chart = mountColumns()
+    const readout = chart.get('.period-readout')
+
+    expect(readout.classes()).toContain('one-line')
+    expect(readout.attributes('data-tooltip-kind')).toBe('clipped')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+    await chart.get('[data-key="d1"]').trigger('pointerenter')
+    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
+    await chart.get('[data-key="d1"]').trigger('pointerleave')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+
+    const note = chart.get('.period-note-text')
+    expect(note.classes()).toContain('one-line')
+    expect(note.attributes('data-tooltip-kind')).toBe('clipped')
+    expect(note.attributes('data-tooltip')).toBe('Switched to work')
+  })
+
   it('starts its scale at zero', () => {
     const scale = mountColumns().findAll('.period-scale .chart-tick')
     expect(scale[0]?.text()).toBe('0 h')

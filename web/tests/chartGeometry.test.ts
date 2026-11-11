@@ -64,9 +64,28 @@ describe('ranked rows', () => {
       rest.map((one) => one.key),
       ['other', 'none', 'unknown'],
     )
-    // A tail larger than any category is measured with the rest, and is the longest bar.
-    assert.equal(rest[0]?.length, 1)
-    assert.equal(ranked[0]?.length, 20 / 400)
+    // A tail larger than any category sets no scale: the longest category is the whole bar,
+    // and the rows that are not categories draw none.
+    assert.deepEqual(
+      ranked.map((one) => one.length),
+      [1, 0.5],
+    )
+    assert.deepEqual(
+      rest.map((one) => one.length),
+      [null, null, null],
+    )
+  })
+
+  test('rows that are not categories alone draw nothing and scale nothing', () => {
+    const { ranked, rest } = rankRows([row('none', 7, 'none'), row('other', 3, 'other')])
+    assert.deepEqual(ranked, [])
+    assert.deepEqual(
+      rest.map((one) => [one.key, one.length]),
+      [
+        ['other', null],
+        ['none', null],
+      ],
+    )
   })
 
   test('a tie keeps one order whatever order the rows came in', () => {
