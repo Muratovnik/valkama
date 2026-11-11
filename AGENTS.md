@@ -71,6 +71,18 @@ explicitly authorizes that hook mutation and its rollback:
 `python .github/relkit.pyz protect install`. Before the first push, verify with
 `python .github/relkit.pyz audit --history --owner`.
 
+When the work is split across parallel worktrees of this repository, the checks
+split with it:
+
+- The worker of one worktree runs, right after each commit, the targeted tests
+  of what the commit changed and `python .github/relkit.pyz audit --history`;
+  when the commit touches `web/`, also `npm run lint` and
+  `npm run check:ui-system` there. It does not run the whole browser suite.
+- The integrator runs the full list above and the whole browser suite once, on
+  the integrated head. Only one such run goes on a machine at a time: two at
+  once fail tests that pass alone. A defect that depends on a neighbouring
+  worktree shows up only at this run.
+
 `npm run build` is mandatory, and it is not the last step. The server serves the
 snapshot of `web/dist` it read when it started, so a browser check against a
 listener that predates the build inspects the bundle that build replaced, and a
