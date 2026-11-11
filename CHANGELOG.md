@@ -165,9 +165,9 @@ checkouts are therefore distinguishable even at the same version.
   transcript's run before a subagent's, then the run whose first record is earlier, then
   the lower run id. A request found in two transcripts is counted by that run. A run reading
   the request later counts it only when it comes first by the rule and the run holding it
-  can still be read again, and every run that left a request to another records how many.
+  can still be read again, and every run that left a request to another records which.
   A run that, read again, would give up a request it counted is refused as `stranded`
-  while any run that left a request to another can no longer be read: the request stays
+  while a run that left that request to it can no longer be read: the request stays
   counted once, where it was, instead of ending up in no run. A run that left a request
   and loses its transcript after the holder gave it up, before being read again itself,
   can still leave that request uncounted. Schema 15 also records the client's request id
