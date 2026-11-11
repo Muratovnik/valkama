@@ -130,8 +130,10 @@ describe('the breakdown as a CSV file', () => {
     ['after a semicolon', 'x;=1+1;y', `"x;'=1+1;y"`],
     ['after leading spaces', ' =1+1', `"' =1+1"`],
     ['after a line break', 'first line\n=SUM(A1:A9)', `"first line\n'=SUM(A1:A9)"`],
-    ['after a comma', 'a,@b', `"a,'@b"`],
     ['after a tab', 'a\t+b', `"a\t'+b"`],
+    ['after a semicolon and a quotation mark', 'a;"=1+1"', `"a;'""=1+1"""`],
+    ['after a tab that starts the cell', '\tnote', `"'\tnote"`],
+    ['after a carriage return that starts the cell', '\rnote', `"'\rnote"`],
   ])('shows a formula that starts a field %s', (_where, title, cell) => {
     expect(titledRow(title)).toBe(rowNamed(cell))
   })
@@ -140,6 +142,15 @@ describe('the breakdown as a CSV file', () => {
     expect(titledRow('Re-read the well-known log; then report')).toBe(
       rowNamed('Re-read the well-known log; then report'),
     )
+  })
+
+  // A cell with a comma is quoted, and a spreadsheet that splits on commas keeps it whole.
+  it.each([
+    ['Fix login, -1 offset', '"Fix login, -1 offset"'],
+    ['ping @bob, @alice', '"ping @bob, @alice"'],
+    ['a,=b', '"a,=b"'],
+  ])('leaves what follows a comma as it is: %s', (title, cell) => {
+    expect(titledRow(title)).toBe(rowNamed(cell))
   })
 
   it('is named by the first and the last day of its period, and its breakdown', () => {

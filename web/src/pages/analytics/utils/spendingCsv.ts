@@ -13,11 +13,14 @@
  * - a formula in a text cell is shown rather than run, whichever separator the spreadsheet
  *   splits the file on: task titles are other people's text, and a spreadsheet set to split on
  *   `;` or a tab makes a field of every stretch between them, quoted or not. Wherever a field can
- *   start — the cell's start, and after a `;`, a `,`, a tab, a carriage return or a line feed —
- *   a formula character (`=`, `+`, `-`, `@`), spaces before it or not, gets a single quote at
- *   that field's start, and a cell that starts with a tab or a carriage return gets one at its
- *   own start; such a cell is then quoted. The quote is part of the text written, so the id
- *   column of such a value is not the id the read gives it;
+ *   start — the cell's start, and after a `;`, a tab, a carriage return or a line feed — a
+ *   formula character (`=`, `+`, `-`, `@`), spaces before it or not, gets a single quote at that
+ *   field's start, and a cell that starts with a tab or a carriage return gets one at its own
+ *   start; such a cell is then quoted. Inside a cell a quotation mark may stand before the
+ *   formula character as well: there it would open the field and be dropped. A comma starts no
+ *   field: a cell that holds one is quoted, and a spreadsheet that splits on commas keeps a
+ *   quoted cell whole, so «a, -b» stays as written. The quote is part of the text written, so
+ *   the id column of such a value is not the id the read gives it;
  * - it starts with a byte order mark, so a spreadsheet reads it as UTF-8 and Cyrillic stands.
  */
 import { dayOf, lastDayBefore } from '@/pages/analytics/utils/readMoments.ts'
@@ -58,11 +61,14 @@ const HEADER = [
 const BYTE_ORDER_MARK = '\u{FEFF}'
 const LINE_END = '\r\n'
 
+/** A cell that a spreadsheet would read as a formula: spaces, then a formula character. */
+const FORMULA_CELL = /^ *[=+\-@]/u
 /**
- * A field that a spreadsheet would read as a formula: where a field can start under any common
- * separator, spaces, then a formula character. The first group is the field's start.
+ * A field inside a cell that a spreadsheet splitting on another separator would read as a
+ * formula: the separator, then spaces or the quotation marks that would only open the field,
+ * then a formula character. The first group is the separator.
  */
-const FORMULA_FIELD = /(^|[;,\t\r\n])( *[=+\-@])/gu
+const FORMULA_FIELD = /([;\t\r\n])([ "]*[=+\-@])/gu
 /** A cell that starts with what a spreadsheet may drop before reading a formula. */
 const CONTROL_START = /^[\t\r]/u
 const NEEDS_QUOTES = /[",\r\n]/u
@@ -70,7 +76,7 @@ const NEEDS_QUOTES = /[",\r\n]/u
 /** A text cell as a spreadsheet can only read it as text. */
 function text(value: string): string {
   const fields = value.replaceAll(FORMULA_FIELD, "$1'$2")
-  const shown = CONTROL_START.test(fields) ? `'${fields}` : fields
+  const shown = FORMULA_CELL.test(fields) || CONTROL_START.test(fields) ? `'${fields}` : fields
   return shown !== value || NEEDS_QUOTES.test(shown) ? `"${shown.replaceAll('"', '""')}"` : shown
 }
 
