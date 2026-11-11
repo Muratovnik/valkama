@@ -5,7 +5,8 @@
  * heading row, its names and its total row are still in view. On a phone the names stay in view
  * while the table scrolls sideways. A second dimension chosen over the table crosses it, is the
  * address and outlives a reload, and the file downloaded is the table crossed; with the measure
- * tokens, the table and the file split the tokens by kind. Each run prints what it measured.
+ * tokens, the table and the file split the tokens by kind. At 1440 pixels the ranked list and the
+ * small charts beside it are titled in one line each. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -132,6 +133,35 @@ for (const [width, height] of [
       total: { inside: true, onTop: true },
     })
   })
+
+test('at 1440 pixels the ranked list and the small charts beside it are titled in one line each', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  await expect(page.locator('.spending-multiples h2')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+
+  const headings = await page.evaluate(() =>
+    ['.spending-bars', '.spending-multiples'].map((part) => {
+      const heading = document.querySelector(`${part} h2`)
+      if (!heading) throw new Error(`${part} has no heading`)
+      const { height } = heading.getBoundingClientRect()
+      const line = Number.parseFloat(getComputedStyle(heading).lineHeight)
+      return {
+        part,
+        text: heading.textContent.trim(),
+        lines: Math.round(height / line),
+        header: Math.round(heading.parentElement?.getBoundingClientRect().height ?? 0),
+      }
+    }),
+  )
+  await record(info, 'analytics panel headings 1440x900', headings)
+  expect(headings.map(({ lines }) => lines)).toEqual([1, 1])
+  // Side by side, the two charts start at one height.
+  expect(headings[0]?.header).toBe(headings[1]?.header)
+})
 
 test('on a phone the names stay in view while the table scrolls sideways', async ({
   page,

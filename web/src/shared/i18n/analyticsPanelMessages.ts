@@ -6,7 +6,7 @@
 export const analyticsPanelMessages = {
   en: {
     multiples: {
-      title: '{measure} per day of each value, {by}',
+      title: '{measure} per day of each, {by}',
       scale: 'Every chart from 0 to',
       period: 'Whole period',
     },
@@ -39,7 +39,7 @@ export const analyticsPanelMessages = {
   },
   ru: {
     multiples: {
-      title: '{measure} по дням у каждого значения, {by}',
+      title: '{measure} по дням у каждого, {by}',
       scale: 'Шкала всех графиков: от 0 до',
       period: 'Весь период',
     },

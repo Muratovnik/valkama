@@ -20,7 +20,7 @@ import type { MultiplesWords, SmallMultiple } from '@/shared/ui/multiplesGeometr
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
-  /** What the charts show, as their accessible name: "Agent time per day of each value". */
+  /** What the charts show, as their accessible name: "Agent time per day of each, by task". */
   label: string
   multiples: readonly SmallMultiple[]
   words: MultiplesWords
