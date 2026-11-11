@@ -120,6 +120,7 @@ class Step:
 GATE_STEPS = (
     Step("ruff", "python", "python -m ruff check ."),
     Step("format", "python", "python -m ruff format --check ."),
+    Step("subjects", "python", "python tests/commit_subjects.py"),
     Step("relkit", "python", "python .github/relkit.pyz audit --history"),
     Step("typos", "python", "typos"),
     Step(

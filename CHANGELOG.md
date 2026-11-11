@@ -37,6 +37,10 @@ checkouts are therefore distinguishable even at the same version.
   comes from the new `GET /api/documents/search?space=<id>&q=<text>`, the existing
   document search over that one project. Neither it nor `GET /api/search` offers or
   reads a file the project's Git ignores.
+- **A gate for commit subjects.** `python tests/commit_subjects.py` reads the subject of
+  every commit reachable from `HEAD`, merge commits included, and fails naming each one
+  that is not a Conventional Commit of the closed type set, such as `merge: …` or Git's
+  default `Merge branch …`. `tests/isolated.py gates` runs it as the step `subjects`.
 
 ### Changed
 

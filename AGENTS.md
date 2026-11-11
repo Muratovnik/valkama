@@ -50,6 +50,7 @@ is complete on its own.
 ```powershell
 python -m ruff check .
 python -m ruff format --check .
+python tests/commit_subjects.py
 python .github/relkit.pyz audit --history
 typos
 vulture server tests valkama.py vulture_whitelist.py --min-confidence 60

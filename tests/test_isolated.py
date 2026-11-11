@@ -303,7 +303,7 @@ class GateTests(Workspace):
 
     def test_selection_is_by_step_or_group_and_owner_reaches_only_the_audit(self) -> None:
         python = isolated.select_steps(["python"], owner=False)
-        self.assertEqual(10, len(python))
+        self.assertEqual(11, len(python))
         self.assertEqual({"python"}, {step.group for step in python})
         self.assertEqual(
             ["ruff", "mypy"], [s.name for s in isolated.select_steps(["mypy", "ruff"], owner=False)]
