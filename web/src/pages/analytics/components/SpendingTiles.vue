@@ -13,11 +13,11 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { MEASURES } from '@/pages/analytics/utils/analyticsAddress.ts'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import { changeOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
+import { MEASURES } from '@/shared/api/analyticsAddress.ts'
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 
 const props = defineProps<{

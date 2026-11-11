@@ -5,14 +5,10 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import {
-  DEFAULT_VIEW,
-  periodBounds,
-  readAddress,
-  writeAddress,
-} from '@/pages/analytics/utils/analyticsAddress.ts'
-import type { AnalyticsView } from '@/pages/analytics/utils/analyticsAddress.ts'
+import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
+import { DEFAULT_VIEW, readAddress, writeAddress } from '@/shared/api/analyticsAddress.ts'
+import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { usageParameters } from '@/shared/api/analyticsApi.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import {

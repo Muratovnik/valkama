@@ -1,13 +1,13 @@
+import { measureOf, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
+import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
+
 /**
  * The period day by day: each day's measure stacked by the largest values of the dimension and
  * «other» for the rest, which day is not over yet, and where the accounts that worked changed.
  * Words come in from the caller; this holds the numbers and which day is which.
  */
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
-import { measureOf, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
-import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
-
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import { seriesSlots } from '@/shared/lib/seriesColors.ts'
 import type { PeriodColumn, PeriodSeries } from '@/shared/ui/chartGeometry.ts'

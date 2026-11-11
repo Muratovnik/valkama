@@ -15,7 +15,7 @@ import { useI18n } from 'vue-i18n'
 
 import UsageAccounts from '@/widgets/work-item-inspector/components/UsageAccounts.vue'
 import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
-import { itemAnalyticsAddress } from '@/widgets/work-item-inspector/utils/analyticsAddress.ts'
+import { itemAnalyticsLink } from '@/widgets/work-item-inspector/utils/analyticsLink.ts'
 import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import {
   isEstimated,
@@ -46,6 +46,16 @@ const retry = () => {
   read?.read()
   runs?.read()
 }
+
+/** The way to the same work on the Analytics page, and words that say how much of it opens. */
+const analytics = computed(() => {
+  if (!usage.value) return null
+  const link = itemAnalyticsLink(usage.value)
+  return {
+    href: link.href,
+    words: link.ownOnly ? t('workItem.usage.inAnalyticsOwn') : t('workItem.usage.inAnalytics'),
+  }
+})
 
 const noData = computed(() => t('workItem.usage.noData'))
 const explained = computed(() => (usage.value ? notes(usage.value) : []))
@@ -248,9 +258,10 @@ const breakdowns = computed(() =>
       />
     </div>
     <ScreenLink
+      v-if="analytics"
       class="work-usage-analytics"
-      :href="itemAnalyticsAddress(usage.work_item_id)"
-      >{{ t('workItem.usage.inAnalytics') }}</ScreenLink
+      :href="analytics.href"
+      >{{ analytics.words }}</ScreenLink
     >
   </section>
   <p

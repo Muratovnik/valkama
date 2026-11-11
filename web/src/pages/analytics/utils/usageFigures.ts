@@ -1,3 +1,8 @@
+import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
+import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
+
+import { tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+
 /**
  * The figures the Analytics page draws from a usage answer, kept apart from the words so a test
  * can hold every number: what a line spent in each measure, how a period changed from the one
@@ -7,12 +12,7 @@
  * dwarf the rest, and reasoning is already part of output. A cost the read has no price for is
  * no data and never a zero; its tokens are counted apart, as `unpriced`.
  */
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
-import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
-import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
-
-import { tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
-
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type {
   UsageDimension,
   UsageGroupValue,

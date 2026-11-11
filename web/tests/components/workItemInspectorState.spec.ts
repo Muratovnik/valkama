@@ -25,7 +25,11 @@ vi.mock('@/shared/api/executionApi.ts', async (load) => ({
 }))
 
 // The usage read holds the head for a moment; these cases are about the record alone.
-vi.mock('@/shared/api/planningUsageApi.ts', () => ({ fetchItemUsage: vi.fn() }))
+// Only the read is a double: the analytics contract the card's link reaches builds on its schemas.
+vi.mock('@/shared/api/planningUsageApi.ts', async (load) => ({
+  ...(await load<typeof import('@/shared/api/planningUsageApi.ts')>()),
+  fetchItemUsage: vi.fn(),
+}))
 
 // The card looks up its project's memory on every open; no project here has any.
 vi.mock('@/shared/api/memoryApi.ts', async (load) => ({

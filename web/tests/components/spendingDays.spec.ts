@@ -8,9 +8,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'

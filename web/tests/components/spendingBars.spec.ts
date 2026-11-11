@@ -9,8 +9,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'

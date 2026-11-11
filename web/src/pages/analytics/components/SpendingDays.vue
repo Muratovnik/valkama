@@ -10,9 +10,9 @@ import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'

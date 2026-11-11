@@ -11,9 +11,9 @@ import { useResizeObserver } from '@vueuse/core'
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 
 const props = defineProps<{

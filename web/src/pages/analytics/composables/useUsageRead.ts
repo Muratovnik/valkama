@@ -8,9 +8,10 @@
  */
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
-import { periodBounds } from '@/pages/analytics/utils/analyticsAddress.ts'
-import type { AnalyticsView, PeriodBounds } from '@/pages/analytics/utils/analyticsAddress.ts'
+import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
+import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { fetchUsage, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type {
   Usage,

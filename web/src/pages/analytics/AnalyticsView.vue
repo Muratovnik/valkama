@@ -16,16 +16,10 @@ import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
 import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
-import {
-  customDays,
-  localDay,
-  orderFilters,
-  PERIODS,
-  readAddress,
-  writeAddress,
-} from '@/pages/analytics/utils/analyticsAddress.ts'
-import type { AnalyticsView, PeriodPreset } from '@/pages/analytics/utils/analyticsAddress.ts'
+import { customDays, localDay } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
+import { orderFilters, PERIODS, readAddress, writeAddress } from '@/shared/api/analyticsAddress.ts'
+import type { AnalyticsView, PeriodPreset } from '@/shared/api/analyticsAddress.ts'
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'

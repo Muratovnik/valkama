@@ -8,8 +8,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
+
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 
 import { task, usageAnswer } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'

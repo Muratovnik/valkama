@@ -8,6 +8,10 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 
+import { DEFAULT_VIEW, readAddress } from '@/shared/api/analyticsAddress.ts'
+import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
+
+import { usageAnswer } from '../fixtures/analytics.ts'
 import { ORG_A, whoUsage } from '../fixtures/usage.ts'
 import { CARD, openAgents, serve } from './agentsUsagePage.ts'
 import { shot } from './boardPage.ts'
@@ -81,18 +85,40 @@ function columnSpread(rows: ReturnType<typeof measureRoles>) {
 
 test('the tab opens Analytics filtered to the item', async ({ page }) => {
   const usage = whoUsage()
+  await page.clock.setFixedTime(new Date(2026, 10, 11, 14, 30))
   await serve(page, usage)
+  const asked: URLSearchParams[] = []
+  await page.route('**/api/analytics/usage?*', (route) => {
+    const query = new URL(route.request().url()).searchParams
+    asked.push(query)
+    const answer = usageAnswer({
+      first: new Date(2026, 10, 9),
+      days: 3,
+      end: new Date(2026, 10, 11, 14, 30),
+      groupBy: [query.get('group_by') as UsageDimension],
+      stretches: [],
+    })
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(answer) })
+  })
   await page.goto(CARD)
   const section = await openAgents(page)
   await section.getByRole('link', { name: 'Open in Analytics' }).click()
   await expect(page).toHaveURL(/\/modules\/analytics\/global\?state=/u)
-  const state = new URL(page.url()).searchParams.get('state') ?? ''
-  expect(JSON.parse(Buffer.from(state, 'base64url').toString('utf8'))).toEqual({
-    work_item: usage.work_item_id,
-  })
   // The app takes the address as the page's own: it opens the page, not the route's recovery.
-  await expect(page.locator('.analytics-page')).toBeVisible()
+  const analytics = page.locator('.analytics-page')
+  await expect(analytics).toBeVisible()
   await expect(page.locator('.route-recovery')).toHaveCount(0)
+  // The page reads the view the link wrote, says a filter is set and asks for the item's work.
+  const state = new URL(page.url()).searchParams.get('state') ?? ''
+  expect(readAddress(JSON.parse(Buffer.from(state, 'base64url').toString('utf8')))).toEqual({
+    ...DEFAULT_VIEW,
+    filters: { work_item: [usage.work_item_id] },
+  })
+  await expect(analytics.locator('.disclosure-toggle')).toHaveText('Filters · 1')
+  await expect.poll(() => asked.length).toBeGreaterThan(0)
+  expect(new Set(asked.map((query) => query.get('work_item')))).toEqual(
+    new Set([usage.work_item_id]),
+  )
 })
 
 for (const width of [1440, 1024, 390]) {

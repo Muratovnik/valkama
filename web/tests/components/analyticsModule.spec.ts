@@ -13,10 +13,9 @@ import { describe, expect, it, vi } from 'vitest'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 
-import { DEFAULT_VIEW, writeAddress } from '@/pages/analytics/utils/analyticsAddress.ts'
-
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
+import { DEFAULT_VIEW, writeAddress } from '@/shared/api/analyticsAddress.ts'
 import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'

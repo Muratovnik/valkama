@@ -6,12 +6,12 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */

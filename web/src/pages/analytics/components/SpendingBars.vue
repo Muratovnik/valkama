@@ -9,9 +9,9 @@ import { computed } from 'vue'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import type { Measure } from '@/pages/analytics/utils/analyticsAddress.ts'
 import { measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { RankedRow } from '@/shared/ui/chartGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'

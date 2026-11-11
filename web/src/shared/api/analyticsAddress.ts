@@ -6,9 +6,14 @@
  *
  * A preset is kept as its name, not as its dates: «this week» in a link opened next week is
  * next week's week, as the words say.
+ *
+ * The one reader and the one writer of that address. The page reads its view here and writes
+ * every change here; a way to the page from elsewhere, such as an item's Agents tab, writes its
+ * link here too, so a link says what the page will read.
  */
 import { isUsageDimension, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 export const PERIODS = ['week', 'weeks4', 'custom'] as const
 export type PeriodPreset = (typeof PERIODS)[number]
@@ -106,50 +111,29 @@ export function writeAddress(view: AnalyticsView): Record<string, string> {
   return state
 }
 
-const pad = (value: number) => String(value).padStart(2, '0')
-
-/** A day as the browser's calendar names it: `2030-03-04`. */
-export const localDay = (day: Date) =>
-  `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
-
-const dayFrom = (text: string) => {
-  const [year, month, date] = text.split('-').map(Number)
-  return new Date(year, month - 1, date)
-}
-
-const shiftDays = (day: Date, days: number) =>
-  new Date(day.getFullYear(), day.getMonth(), day.getDate() + days)
-
-/** What the read is asked for: `from` and `to` as the contract takes them, at this offset. */
-export interface PeriodBounds {
-  from: string
-  to: string
-  utcOffset: number
+/**
+ * The Analytics page showing a view, as a link: global, since work is counted to an item
+ * whichever project the page would otherwise be scoped to. It throws for a view whose address
+ * the route refuses; `addressFits` says which those are.
+ */
+export function analyticsPageAddress(view: AnalyticsView): string {
+  return serializePlatformRoute({
+    module_id: 'analytics',
+    scope: { kind: 'global' },
+    state: writeAddress(view),
+  })
 }
 
 /**
- * The period a view names at a moment, in the browser's own time: this week from Monday's
- * midnight to now, the past four weeks from the midnight 27 days ago to now, or the custom days
- * whole. Null for a custom period with a day missing or its end before its start.
+ * Whether a view's address can be written: every part within what the route holds, as the
+ * route's own check decides. A filter of many values is one string, and past that check a
+ * navigation to it would fail.
  */
-export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | null {
-  const utcOffset = -now.getTimezoneOffset()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const untilNow = now.toISOString()
-  if (view.period === 'week')
-    return {
-      from: localDay(shiftDays(today, -((today.getDay() + 6) % 7))),
-      to: untilNow,
-      utcOffset,
-    }
-  if (view.period === 'weeks4')
-    return { from: localDay(shiftDays(today, -27)), to: untilNow, utcOffset }
-  if (!view.from || !view.to || view.to < view.from) return null
-  return { from: view.from, to: localDay(shiftDays(dayFrom(view.to), 1)), utcOffset }
-}
-
-/** A custom period's start and end, as they first stand when it is chosen: this week's days. */
-export function customDays(now: Date): { from: string; to: string } {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  return { from: localDay(shiftDays(today, -((today.getDay() + 6) % 7))), to: localDay(today) }
+export function addressFits(view: AnalyticsView): boolean {
+  try {
+    analyticsPageAddress(view)
+    return true
+  } catch {
+    return false
+  }
 }
