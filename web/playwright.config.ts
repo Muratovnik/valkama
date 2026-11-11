@@ -1,17 +1,31 @@
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig, devices } from '@playwright/test'
 
+import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
 import { python, serverStore, storeEnvironment } from './tests/browser/serverStore.ts'
 
-// Two checkouts on one machine can run this suite at once only on different ports, so
+// Every path below is absolute and every server starts in `web/`, because Playwright
+// resolves a relative one against the configuration that is loaded, and the probe's
+// (`tests/browser/probe.config.ts`) is this one loaded from elsewhere.
+const web = fileURLToPath(new URL('.', import.meta.url))
+const specs = join(web, 'tests/browser')
+const outputDir = join(web, runResults)
+
+// Two runs on one machine can go at once only on different ports, so
 // VALKAMA_BROWSER_PORT moves the harness there and the built app to the next port.
-const harnessPort = Number(process.env.VALKAMA_BROWSER_PORT ?? 4174)
-const appPort = harnessPort + 1
 const harness = `http://127.0.0.1:${harnessPort}`
 const app = `http://127.0.0.1:${appPort}`
-const build = 'npm run build'
-// `vue-tsc` writes a type error to standard output, which Playwright drops by default.
+const vite = 'node node_modules/vite/bin/vite.js'
+// The mocked app is built into this run's own ignored directory rather than the tracked
+// `dist/`, and without the type check: `npm run typecheck` is the gate for types, and a
+// spec's type error here only read as a server that would not start.
+const appBundle = `${vite} build --outDir ${appBuild}`
+// The build writes its errors to standard output, which Playwright drops by default.
 const appServer = {
   url: `${app}/`,
+  cwd: web,
   stdout: 'pipe',
   reuseExistingServer: false,
   timeout: 180_000,
@@ -24,7 +38,8 @@ const store = serverStore()
 
 export default store
   ? defineConfig({
-      testDir: './tests/browser',
+      testDir: specs,
+      outputDir,
       fullyParallel: false,
       retries: 0,
       reporter: 'line',
@@ -38,12 +53,17 @@ export default store
       ],
       webServer: {
         ...appServer,
-        command: `${build} && "${python}" ../valkama.py serve --port ${appPort}`,
+        // The real server serves the tracked `dist/` and no other directory, so this
+        // branch still runs the release build there.
+        command: `npm run build && "${python}" ../valkama.py serve --port ${appPort}`,
         env: storeEnvironment(store),
       },
     })
   : defineConfig({
-      testDir: './tests/browser',
+      testDir: specs,
+      outputDir,
+      // Before the first spec: the app port serves the bundle this run has just built.
+      globalSetup: join(specs, 'servedApp.setup.ts'),
       fullyParallel: false,
       retries: 0,
       reporter: 'line',
@@ -82,14 +102,15 @@ export default store
       ],
       webServer: [
         {
-          command: `node node_modules/vite/bin/vite.js --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${harnessPort} --strictPort`,
+          command: `${vite} --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${harnessPort} --strictPort`,
           url: `${harness}/tests/browser/harness.html`,
+          cwd: web,
           reuseExistingServer: false,
           timeout: 120_000,
         },
         {
           ...appServer,
-          command: `${build} && node node_modules/vite/bin/vite.js preview --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${appPort} --strictPort`,
+          command: `${appBundle} && ${vite} preview --config tests/browser/vite.config.ts --outDir ${appBuild} --host 127.0.0.1 --port ${appPort} --strictPort`,
         },
       ],
     })

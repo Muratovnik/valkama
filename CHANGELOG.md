@@ -217,6 +217,37 @@ checkouts are therefore distinguishable even at the same version.
   the one a session was last open in, and the notifications switch says that a notification
   comes even with the window closed and that a click on it opens the work item.
 
+- For contributors: the browser suite builds the app into
+  `web/test-results/<port>/app`, named by `VALKAMA_BROWSER_PORT`, and serves it from there,
+  so a run no longer rewrites the committed `web/dist` and leaves nothing to restore. That
+  build skips the type check, so a type error in a spec is reported by `npm run typecheck`
+  instead of as a server that would not start. Before the first spec the run checks that the
+  app's port serves the page it has just built, and stops on a page that differs or one an
+  earlier run left behind. Traces and screenshots go to `web/test-results/<port>/results`,
+  so two runs on different ports in one checkout no longer delete each other's.
+  `npm run build` still type-checks and writes `web/dist`, and the `server-` specs, which run
+  against the real server, still use it.
+
+- For contributors: a one-off browser spec kept outside the suite, such as in a worktree's
+  ignored `tmp/<name>/`, runs through the tracked `web/tests/browser/probe.config.ts`: name
+  its directory in `VALKAMA_BROWSER_PROBES` and the ports in `VALKAMA_BROWSER_PORT`, and
+  name the file `ui-` or `production-` for the project it runs in. It needs no configuration
+  of its own, resolves `@playwright/test` and `@/` from `web/`, and builds and serves the app
+  as the suite does.
+
+- For contributors: the browser specs that write the system clipboard or are granted it are
+  named once, in `web/tests/browser/clipboardSpecs.ts`. `npm test` fails when a spec that
+  grants or writes the clipboard, itself or through a suite module it imports, is missing
+  from that list, or when a name on it is no longer a spec.
+
+- For contributors: `npm run test:browser:allowed` in `web/` runs every browser spec but the
+  clipboard ones in one Playwright run. It writes the list to a file Playwright reads with
+  `--test-list`, so no list reaches a command line, and ends with each project's count of
+  tests and how they ended, and the total. `--list` shows what would run; `--specs=<file>`
+  runs the specs a file names, one a line; `--with-clipboard=<file>` lets a named clipboard
+  spec in. It refuses, with exit code 2 and before Playwright starts, an empty list, a
+  missing list file, a name that is no spec and a clipboard spec not named that way.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
