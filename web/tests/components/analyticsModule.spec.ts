@@ -298,6 +298,32 @@ describe('the Analytics page', () => {
     )
   })
 
+  it('swaps a refreshed answer in whole: its figures and account marks land together', async () => {
+    let world = WORLD
+    let holding = false
+    const reads = stubAnalyticsReads((query) =>
+      holding && query.get('group_by') === 'account' ? 'hold' : serveUsage(world, query),
+    )
+    const page = await mountAnalytics()
+    expect(time(page)).toBe('3 h')
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+
+    // The refresh's answer lands before its accounts: the last answer stays whole, marks and all.
+    const more = { at: on(10, 10), group: { ...sample, work_item: ITEM }, spend: { seconds: 3600 } }
+    world = [...WORLD, more]
+    holding = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(reads.held.length).toBeGreaterThan(0)
+    expect(time(page)).toBe('3 h')
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+
+    for (const held of reads.held) held.release(serveUsage(world, held.query))
+    await flushPromises()
+    expect(time(page)).toBe('4 h')
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+  })
+
   it('asks only what a view change changes, with the filters open', async () => {
     const reads = serve()
     const page = await mountAnalytics({ routeState: { period: 'weeks4', by: 'work_item' } })

@@ -9,17 +9,26 @@
  * Asked again for each new answer, and the read of the one before dropped. While it reads, and
  * when it fails or the answer holds no period before, there is no outline: the chart says which,
  * and never draws the last answer's outline behind a new answer's steps. It goes through the
- * page's shared reads (`useSharedUsage`), as every read of the page does.
+ * page's shared reads (`useSharedUsage`), as every read of the page does; an answer that replaces
+ * another asks it there before it is shown (`useUsageRead`), and steps already in hand are drawn
+ * with the answer they belong to, so the outline never leaves the chart between the two.
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
 
 import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
-import type { Usage, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageFilters, UsageQuery, UsageStep } from '@/shared/api/analyticsApi.ts'
 
 /** The steps of the period before, or that they are being read or could not be. */
 export type BeforeSteps = Usage['series'] | 'failed' | 'loading'
+
+/** The read of the period before, step by step, with the filters the answer was read with. */
+export const beforeStepsQuery = (
+  compared: PeriodBounds,
+  filters: UsageFilters,
+  step: UsageStep,
+): UsageQuery => ({ ...compared, groupBy: [], filters, compare: false, step })
 
 export function usePeriodBefore(options: {
   /** The period the answer's figures are compared with; null when it was not read. */
@@ -42,18 +51,15 @@ export function usePeriodBefore(options: {
       steps.value = 'failed'
       return
     }
+    const query = beforeStepsQuery(compared, options.filters(), usage.period.step)
+    const held = shared.peek(query)
+    if (held) {
+      steps.value = held.series
+      return
+    }
     steps.value = 'loading'
     try {
-      const before = await shared.read(
-        {
-          ...compared,
-          groupBy: [],
-          filters: options.filters(),
-          compare: false,
-          step: usage.period.step,
-        },
-        controller.signal,
-      )
+      const before = await shared.read(query, controller.signal)
       if (!controller.signal.aborted) steps.value = before.series
     } catch {
       if (!controller.signal.aborted) steps.value = 'failed'

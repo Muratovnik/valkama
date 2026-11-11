@@ -14,6 +14,8 @@
  *
  * A reader that stops waiting stops only itself; the request goes on while anyone else waits for
  * it, and is dropped once nobody does. A read that fails is forgotten, so asking again asks again.
+ * An answer already in hand can be taken at once (`peek`), so a part that finds its read answered
+ * draws it in the same update as the answer it belongs to, with no wait between.
  */
 import { inject, provide } from 'vue'
 import type { InjectionKey } from 'vue'
@@ -25,6 +27,8 @@ import type { Usage, UsageQuery } from '@/shared/api/analyticsApi.ts'
 export interface SharedUsage {
   /** The moment the view on show is read as of: the one its first read took. */
   now: () => Date
+  /** The answer to `query` already in hand for the view on show; undefined while it is not. */
+  peek: (query: UsageQuery) => Usage | undefined
   read: (query: UsageQuery, signal?: AbortSignal) => Promise<Usage>
   /** Forget every answer and the moment, as a refresh does: what is asked next is asked anew. */
   renew: () => void
@@ -36,6 +40,8 @@ interface Request {
   controller: AbortController
   settled: boolean
   waiting: number
+  /** The answer, once it came. */
+  usage?: Usage
 }
 
 /** The answer of `request` for one reader, who may stop waiting without stopping the others. */
@@ -117,8 +123,9 @@ export function createSharedUsage(viewKey: () => string, clock = () => new Date(
     }
     requests.set(key, request)
     request.answer.then(
-      () => {
+      (usage) => {
         request.settled = true
+        request.usage = usage
       },
       () => {
         request.settled = true
@@ -128,7 +135,12 @@ export function createSharedUsage(viewKey: () => string, clock = () => new Date(
     return follow(request, forget(request), signal)
   }
 
-  return { now, read, renew }
+  function peek(query: UsageQuery) {
+    sync()
+    return requests.get(usageParameters(query).toString())?.usage
+  }
+
+  return { now, peek, read, renew }
 }
 
 const SHARED: InjectionKey<SharedUsage> = Symbol('analytics-shared-usage')
@@ -136,6 +148,7 @@ const SHARED: InjectionKey<SharedUsage> = Symbol('analytics-shared-usage')
 /** Every read asked on its own, as of the moment it is asked: for a part shown outside the page. */
 const unshared: SharedUsage = {
   now: () => new Date(),
+  peek: () => {},
   read: (query, signal) => fetchUsage(query, signal),
   renew: () => {},
 }
