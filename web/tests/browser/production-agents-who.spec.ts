@@ -1,7 +1,7 @@
 /**
  * Who spent an item's work and under which organization, on its Agents tab in the real app, at
- * the three widths the card is used at: the strip of organizations with its marks where the
- * organization changed, and each organization with its share. Every box is measured after the
+ * the three widths the card is used at: the strip of organizations with its marks where work under
+ * one known organization is followed by work under another, and each organization with its share. Every box is measured after the
  * last write, and nothing on the tab may clip what it holds. The tab's link opens the Analytics
  * page filtered to the item, and the app takes that address as the page's own.
  */
@@ -150,10 +150,13 @@ for (const width of [1440, 1024, 390]) {
     const section = await openAgents(page)
     const accounts = section.locator('.usage-accounts')
     await expect(accounts.locator('.account-part')).toHaveCount(4)
-    await expect(accounts.locator('.account-mark')).toHaveCount(3)
+    // The work ran under `a`, `b`, one nobody recorded, then `a`: the unknown stretch is drawn and
+    // listed but is not a change, so the marks are where `b` and where `a` again start.
+    const changedAt = [1, 3]
+    await expect(accounts.locator('.account-mark')).toHaveCount(changedAt.length)
     await expect(accounts.locator('.account-row')).toHaveCount(3)
     await expect(accounts.locator('.account-row').first()).toContainText(ORG_A.slice(0, 8))
-    await expect(accounts.locator('.account-change')).toHaveCount(4)
+    await expect(accounts.locator('.account-change')).toHaveCount(changedAt.length + 1)
     await accounts.scrollIntoViewIfNeeded()
     const measured = await accounts.evaluate(measureAccounts)
     const { strip, parts, marks, numbers } = measured
@@ -166,7 +169,8 @@ for (const width of [1440, 1024, 390]) {
     }
     // Each mark stands on the boundary its change begins at, its number over the strip.
     for (const [index, mark] of marks.entries()) {
-      expect(Math.abs(mark.left + mark.width / 2 - parts[index + 1].left)).toBeLessThanOrEqual(1)
+      const begins = parts[changedAt[index]]
+      expect(Math.abs(mark.left + mark.width / 2 - begins.left)).toBeLessThanOrEqual(1)
       expect(numbers[index].bottom).toBeLessThanOrEqual(strip.top + 0.5)
       expect(numbers[index].left).toBeGreaterThanOrEqual(measured.drawer.left)
       expect(numbers[index].right).toBeLessThanOrEqual(measured.drawer.right)

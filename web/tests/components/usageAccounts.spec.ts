@@ -1,10 +1,12 @@
 /**
  * Under which organization an item's work ran, on its Agents tab: a strip in time order with a
- * numbered mark at each change, each organization with its share, and the changes in words.
+ * numbered mark at each change, each organization with its share, and the changes in words. A
+ * change is work under a known organization after work under a different known one; a stretch
+ * whose organization nobody recorded is drawn and listed but is neither a change nor hides one.
  *
  * The strip is drawn for the eye, so these cases read what is said without a hue: every
- * organization is named in the list, and the start and the numbered changes name each stretch
- * in the order the strip draws them. Every id and figure is made up.
+ * organization is named in the list, and the start and the numbered changes name each known
+ * organization the work changed to, in the strip's order. Every id and figure is made up.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -168,9 +170,54 @@ describe('the organizations an item ran under', () => {
       expect.stringMatching(/^3fa1b2c4 75% of the time /u),
       expect.stringMatching(/^Unknown organization 25% of the time /u),
     ])
-    expect(changes(wrapper)).toEqual([
-      'From the start Unknown organization',
-      '1 Mar 04, 10:00 3fa1b2c4',
+    // Work under one known organization after work nobody recorded the organization of is not
+    // a change: nothing says the organization was another.
+    expect(wrapper.findAll('.account-mark')).toHaveLength(0)
+    expect(wrapper.findAll('.chart-tick')).toHaveLength(0)
+    expect(wrapper.find('.account-changes').exists()).toBe(false)
+  })
+
+  it('one organization around work nobody recorded the organization of has no change', () => {
+    const wrapper = mountAccounts(
+      usageOf([
+        stretch(known(ORG_A), '2030-03-04T09:00:00Z', 600),
+        stretch(UNKNOWN, '2030-03-04T09:10:00Z', 600),
+        stretch(known(ORG_A), '2030-03-04T09:20:00Z', 600),
+        stretch(UNKNOWN, '2030-03-04T09:30:00Z', 600),
+        stretch(known(ORG_A), '2030-03-04T09:40:00Z', 600),
+      ]),
+    )
+    // Every stretch is still drawn, the unknown ones in the neutral, and both are listed.
+    const parts = wrapper.findAll('.account-part')
+    expect(parts.map((part) => part.classes().includes('is-unknown'))).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
     ])
+    expect(listed(wrapper)).toEqual([
+      expect.stringMatching(/^3fa1b2c4 60% of the time /u),
+      expect.stringMatching(/^Unknown organization 40% of the time /u),
+    ])
+    expect(wrapper.findAll('.account-mark')).toHaveLength(0)
+    expect(wrapper.findAll('.chart-tick')).toHaveLength(0)
+    expect(wrapper.find('.account-changes').exists()).toBe(false)
+  })
+
+  it('two organizations with work nobody recorded between them change once, where the second starts', () => {
+    const wrapper = mountAccounts(
+      usageOf([
+        stretch(known(ORG_A), '2030-03-04T09:00:00Z', 1800),
+        stretch(UNKNOWN, '2030-03-04T09:30:00Z', 600),
+        stretch(known(ORG_B), '2030-03-04T11:45:00Z', 1200),
+      ]),
+    )
+    expect(wrapper.findAll('.account-part')).toHaveLength(3)
+    expect(wrapper.findAll('.account-mark').map((mark) => mark.attributes('style'))).toEqual([
+      'inset-inline-start: 66.66666666666666%;',
+    ])
+    expect(wrapper.findAll('.chart-tick').map((tick) => words(tick.text()))).toEqual(['1'])
+    expect(changes(wrapper)).toEqual(['From the start 3fa1b2c4', '1 Mar 04, 11:45 9c0d77e1'])
   })
 })

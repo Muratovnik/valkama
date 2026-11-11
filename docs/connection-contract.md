@@ -910,7 +910,7 @@ the work and under which account:
 
 | Field | What it holds |
 | --- | --- |
-| `account_stretches` | the work in time order, one line for each run of stretches under one account: `account`, `started_at` (its first stretch's start), `ended_at` (the latest end among them), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. Two neighbouring lines never share an account, so each line after the first is a change of account. Stretches of agents working side by side follow one another by their start |
+| `account_stretches` | the work in time order, one line for each run of stretches under one account: `account`, `started_at` (its first stretch's start), `ended_at` (the latest end among them), `seconds`, `tokens`, `estimated_api_cost_usd`, `unpriced_tokens`. Two neighbouring lines never share an account, and an unknown account is a value of its own, so not every line after the first is a change of account: a change is a line under a known account after one under a different known account, with or without lines under an unknown account between them, and a line under an unknown account is never one. `a`, unknown, `a` has no change; `a`, unknown, `b` has one, where `b` starts. Stretches of agents working side by side follow one another by their start |
 | `accounts` | each account the work ran under, the most time first, then the most cost: `account`, `share` of `agent_seconds`, and the same figures |
 | `roles` | the work by who did it, ranked the same way: `role` — `main` for the session's own agent, `subagent`, or `advisor` for an adviser's own calls, whoever it advised — with `launch_class`, `effort` and the same figures |
 

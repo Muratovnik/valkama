@@ -312,8 +312,13 @@ def _ranked(
 
 
 def _accounts(rows: Sequence[sqlite3.Row], whole: _Tally) -> dict:
-    """The work by the account it ran under: each stretch of one account in time order, so a
-    change of account stands where it happened, and each account whole with its share."""
+    """The work by the account it ran under: each stretch of one account in time order, cut
+    wherever the next row's account differs, and each account whole with its share.
+
+    Neighbouring stretches differ in account, and an unknown account is a value of its own
+    here, so not every stretch after the first is a change of account: one is where a known
+    account follows a different known one, with or without unknown stretches between them.
+    The read gives the stretches; a reader applies that rule."""
 
     stretches: list[tuple[str | None, list[sqlite3.Row]]] = []
     for row in rows:

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
  * Under which organization an item's work ran: a strip of its stretches in the order the work was
- * done, each as long as its time, with a numbered mark where the organization changed; under it
- * each organization with its share of the time and what it spent, and the changes in words.
+ * done, each as long as its time, with a numbered mark where work under one known organization is
+ * followed by work under another (`accountStrip` holds that rule); under it each organization with
+ * its share of the time and what it spent, and the changes in words.
  *
- * The strip is drawn for the eye. The list and the changes say all it shows, the first stretch's
- * organization included, so no part of it is told by its hue alone. An organization the record
- * does not hold is drawn hatched in the neutral and named as unknown. An organization's id is
- * printed by its start, as an agent's is, and whole in its hint.
+ * The strip is drawn for the eye. The list names every organization it shows and the changes say
+ * where it changed, the organization it starts under included, so no part of it is told by its
+ * hue alone. An organization the record does not hold is drawn hatched in the neutral and named as
+ * unknown in the list; it is never a change. An organization's id is printed by its start, as an
+ * agent's is, and whole in its hint.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -65,20 +67,20 @@ const rows = computed(() =>
 )
 
 /**
- * The strip in words: the organization it starts under, then each change, numbered as over the
- * strip, with when it happened. Nothing to say where it never changed.
+ * The changes in words: the known organization the work starts under, then each change, numbered
+ * as over the strip, with when it happened. Nothing to say where it never changed.
  */
 const notes = computed(() => {
-  const { parts, changes } = strip.value
-  if (!changes.length) return []
+  const { first, changes } = strip.value
+  if (!first || !changes.length) return []
   return [
     {
       key: 'start',
       number: '',
       at: '',
       when: t('workItem.usage.accountStart'),
-      name: nameOf(parts[0].account),
-      id: !parts[0].account.unknown,
+      name: nameOf(first),
+      id: true,
     },
     ...changes.map((change) => ({
       key: String(change.number),

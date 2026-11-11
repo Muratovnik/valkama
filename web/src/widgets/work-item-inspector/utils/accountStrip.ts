@@ -14,8 +14,12 @@ const accountKey = (account: Account) => (account.unknown ? '' : (account.id ?? 
  * names, so a reload repaints nothing) and the neutral for an unknown one. A strip of stretches
  * that took no time gives each the same room, so a change still stands where it happened.
  *
- * Each part says where it starts and how much of the strip it takes, from 0 to 1; each change
- * after the first stretch is numbered in time order at the share of the strip where it happened.
+ * Each part says where it starts and how much of the strip it takes, from 0 to 1. Neighbouring
+ * stretches differ in organization, but only some of them are a change: one stands where work
+ * under a known organization follows work under a different known one, numbered in time order at
+ * the share of the strip where the later one starts. A stretch whose organization nobody recorded
+ * is neither a change nor hides one, so the known work on either side of it is compared across
+ * it. `first` is the known organization the work starts under, which the first change leaves.
  */
 export function accountStrip(stretches: readonly Stretch[], accounts: readonly Account[]) {
   const slots = seriesSlots(
@@ -38,6 +42,12 @@ export function accountStrip(stretches: readonly Stretch[], accounts: readonly A
     reached += size
     return part
   })
-  const changes = parts.slice(1).map((part, index) => ({ ...part, number: index + 1 }))
-  return { parts, changes, slotOf }
+  const known = parts.filter((part) => !part.account.unknown)
+  const changes = known
+    .filter(
+      (part, index) =>
+        index > 0 && accountKey(part.account) !== accountKey(known[index - 1].account),
+    )
+    .map((part, index) => ({ ...part, number: index + 1 }))
+  return { parts, changes, first: known.at(0)?.account, slotOf }
 }

@@ -100,7 +100,11 @@ const itemUsageSchema = strictObject({
   title: boundedText(TITLE, 200),
   scope: enumField(SCOPES),
   ...summary,
-  /** In time order; two neighbours never share an account, so each after the first is a change. */
+  /**
+   * In time order; two neighbours never share an account. A change of account is a line under a
+   * known account after one under a different known account, with or without lines under an
+   * unknown one between them; a line under an unknown account is never a change.
+   */
   account_stretches: z.array(
     strictObject({
       account: valueSchema,
