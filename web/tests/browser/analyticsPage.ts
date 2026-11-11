@@ -104,9 +104,14 @@ const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') 
 /**
  * Answers the page's reads from `answer`; with `failWeekBefore`, the read of the same days of the
  * week before fails while the others answer.
+ *
+ * The page's clock starts at `NOW` and runs on, as a person's does. A clock held still would stamp
+ * a press with the moment its handler was attached, and Vue drops such a press when it reaches a
+ * second handler on its way up, as a press on a day's coloured stack does on its way to the day.
+ * Nothing here needs the moment held: a run takes seconds of a Wednesday afternoon.
  */
 export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore = false) {
-  await page.clock.setFixedTime(NOW)
+  await page.clock.setSystemTime(NOW)
   await installBackend(page)
   await page.route('**/api/analytics/usage?*', async (route) => {
     if (answer === 'hold') return

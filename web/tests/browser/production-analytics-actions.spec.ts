@@ -5,8 +5,9 @@
  *
  * The table stands whole in both languages, scrolls sideways inside its own frame with its row
  * names kept in view, and says once when the period before was not read. The download is offered
- * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model or a day
- * narrows the view to it as a new place in the history, so Back returns; the task's bar then
+ * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model or a day,
+ * pressed by keyboard or by mouse on its coloured stack, narrows the view to it as a new place in
+ * the history, so Back returns; the task's bar then
  * opens the task the way the app opens any reference to it, and the opening is counted once. Each
  * run prints what it measured.
  */
@@ -294,8 +295,9 @@ for (const width of WIDTHS)
       table: await hitAreas(analytics.locator('.spending-table tbody')),
     }
 
-    // By pointer: model-a, then its one task.
-    await bars.getByRole('button', { name: 'Show the tasks of model-a', exact: true }).click()
+    // By pointer: model-a, then its one task. A bar is named by its action, and a row of the
+    // table a narrow page shows first by the value it heads.
+    await bars.getByRole('button', { name: /^(Show the tasks of )?model-a$/u }).click()
     const narrowed = pageAt({ filters: '{"model":["model-a"]}' })
     await expect.poll(() => path(page)).toBe(narrowed)
     await page.goBack()
@@ -309,11 +311,35 @@ for (const width of WIDTHS)
     await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(1)
 
-    // By keyboard: Tuesday, then its one task from the table.
+    // By pointer on the coloured stack of a day, drawn as a chart at every width: Tuesday.
+    await openReport(page, width, byModel)
+    const days = analytics.locator('.spending-days')
+    // A narrow page shows the days as a table first; the section's own control draws them.
+    await days.locator('.segmented-option', { hasText: 'Chart' }).click()
+    await expect(days).toHaveAttribute('data-shown', 'chart')
+    const stack = days.locator('.period-column').nth(1).locator('.period-segment').first()
+    await stack.scrollIntoViewIfNeeded()
+    const pressedAt = await stack.boundingBox()
+    const point = {
+      x: (pressedAt?.x ?? 0) + (pressedAt?.width ?? 0) / 2,
+      y: (pressedAt?.y ?? 0) + (pressedAt?.height ?? 0) / 2,
+    }
+    // The press lands on the stack itself, not on the column around it.
+    const landsOn = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.classList.contains('period-segment') ?? false,
+      point,
+    )
+    expect(landsOn).toBe(true)
+    await page.mouse.click(point.x, point.y)
+    const tuesdayAlone = pageAt({ period: 'custom', from: '2026-11-10', to: '2026-11-10' })
+    await expect.poll(() => path(page)).toBe(tuesdayAlone)
+
+    // By keyboard: Tuesday, then its one task from the table. A day is named by its action in
+    // the chart and by its date in the table, which a narrow page shows first.
     await openReport(page, width, byModel)
     const tuesday = analytics
       .locator('.spending-days')
-      .getByRole('button', { name: /^Show the tasks of .*10/u })
+      .getByRole('button', { name: /Tuesday, November 10$/u })
     const dayPresses = await tabTo(page, tuesday)
     const dayRing = await focusRing(tuesday)
     await page.keyboard.press('Enter')
@@ -333,6 +359,7 @@ for (const width of WIDTHS)
     await record(info, `analytics two presses ${width}`, {
       cursor,
       areas,
+      pressedAt,
       dayPresses,
       dayRing,
       rowPresses,

@@ -169,6 +169,22 @@ describe('a value pressed on the Analytics page', () => {
     expect(taskOpenings()).toBe(1)
   })
 
+  it('narrows the view to a day pressed on its coloured stack, not on the column around it', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'model' })
+    const tuesday = host.findAll('.spending-days button.period-column')[1]
+    const segment = tuesday?.find('.period-segment')
+    expect(segment?.element.tagName).toBe('SPAN')
+    // Vue drops a press stamped no later than its handler was attached, and the press bubbles
+    // from the segment's own listener to the column's: a person presses a moment after the chart
+    // is drawn, so the clock moves on before the press.
+    vi.setSystemTime(Date.now() + 1000)
+    await segment?.trigger('click')
+    expect(written(host)).toEqual([
+      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10' }, 'push'],
+    ])
+  })
+
   it('narrows a breakdown by session kind to a session’s own run, which the read admits by none', async () => {
     const world: TimedStretch[] = [
       {
