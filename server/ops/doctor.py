@@ -614,8 +614,9 @@ def _usage_copies_check(path: str) -> dict:
         f"{requests} request(s) were met in more than one usage run: {runs} run(s) left them"
         " to the run that counts each, so each is counted once",
         "Two transcripts holding one request means a client copied records between them."
-        " The runs named in usage_yields name the files; find what wrote the copies. The"
-        " totals are right either way.",
+        " Each run_id in usage_yields is an id in usage_runs, whose path is a transcript"
+        " holding one; usage_requests.run_id leads the same way to the run that counts it."
+        " Find what wrote the copies. The totals are right either way.",
         presentation_code="usage-copies-found",
         parameters={"requests": int(requests), "runs": int(runs)},
     )
