@@ -26,7 +26,7 @@ checkouts are therefore distinguishable even at the same version.
   `GET /api/analytics/uses` reads the counts of a range of days back. A count holds a
   day, a kind and a number, and nothing else: no text, no item, no session, no time
   finer than the day, and nothing leaves the machine. The counts live in the store
-  (`analytics_surface_uses`, added with schema 15), so a snapshot keeps them. The
+  (`analytics_surface_uses`, added with schema 16), so a snapshot keeps them. The
   Analytics module names the read model `analytics.uses` and the action
   `module.analytics.report-use`; no MCP tool counts or reads them. The Analytics page
   counts each time it is opened, once, and a count that cannot be written is dropped
@@ -127,7 +127,7 @@ checkouts are therefore distinguishable even at the same version.
   is read on across the next ones, kept in memory until it is whole, and read from its
   start again if the client wrote to it meanwhile or the process restarted. Without the
   liveness file nothing is read again. Before the first run a process reads again, there is
-  a verified snapshot with the liveness file copied beside it: the schema-15 upgrade's own,
+  a verified snapshot with the liveness file copied beside it: the schema-16 upgrade's own,
   or else one `usagerebuild` snapshot. A run that cannot be read again, because its
   transcript is gone, shorter or unreadable, is tried once each time it goes stale, and the
   run keeps the reason. A run that something moved meanwhile is tried on a later pass.
@@ -207,7 +207,7 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
-- **A usage request counts once in the whole store, at store schema 15.** `usage_requests`
+- **A usage request counts once in the whole store, at store schema 16.** `usage_requests`
   is now keyed by the request alone and names the one run that counts it: a main
   transcript's run before a subagent's, then the run whose first record is earlier, then
   the lower run id. A request found in two transcripts is counted by that run. A run reading
@@ -217,10 +217,12 @@ checkouts are therefore distinguishable even at the same version.
   while a run that left that request to it can no longer be read: the request stays
   counted once, where it was, instead of ending up in no run. A run that left a request
   and loses its transcript after the holder gave it up, before being read again itself,
-  can still leave that request uncounted. Schema 15 also records the client's request id
+  can still leave that request uncounted. Schema 16 also records the client's request id
   and which reading wrote each run, and adds the columns for what each segment ran under.
-  The upgrade keeps one row per request by the same rule, under a verified `preschema15` snapshot with the liveness file copied beside it,
-  and a build at schema 14 or older then refuses the store.
+  The upgrade keeps one row per request by the same rule, under a verified `preschema16`
+  snapshot with the liveness file copied beside it (a store at 14 takes this step and the
+  label event's in one open, under `preschema15`), and a build at schema 15 or older then
+  refuses the store.
 
 - **State names read in the interface's language.** A state of the workflow a new space is
   given that still has its own name — Backlog, Todo, Dev, Review, Done, Blocked, Cancelled —

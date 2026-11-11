@@ -1,6 +1,6 @@
 """Analytics' own table: how often each of its surfaces was opened, counted by day and kind.
 
-Added with schema 15, and additive: `store.connect()` runs this script against an
+Added with schema 16, and additive: `store.connect()` runs this script against an
 upgraded store exactly as against a fresh one, and an upgraded store holds no count
 until a surface is opened. It imports nothing, because the store's bring-up reads it.
 

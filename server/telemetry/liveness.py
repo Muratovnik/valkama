@@ -22,7 +22,7 @@ Several processes tick at once and only the first in `_LEAST_ADVANCE` writes.
 
 A recovery point that reads usage again needs the file as it was, so `copy_beside` puts
 a verified copy next to a snapshot of the store, under the name a store restored from
-that snapshot looks for. Restoring is copying both. The schema-15 upgrade and a rebuild
+that snapshot looks for. Restoring is copying both. The schema-16 upgrade and a rebuild
 of every run take one; the copies this process made are what `recovery_point` answers.
 """
 

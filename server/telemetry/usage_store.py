@@ -26,16 +26,16 @@ named by `price_book`), not a bill: a subscription pays differently. It is NULL 
 a row with no request and for a model no price is known for.
 
 `usage_requests`: which run counts each request, by a hash of its id (`request_key`),
-one row per request in the whole store since schema 15, so a resumed session writing
+one row per request in the whole store since schema 16, so a resumed session writing
 old records again, or a file copied into another session's folder, counts nothing twice.
 `request_id` is the same hash of the client's own request id where a Claude record
 carries one. Which run a request met in two runs belongs to is `usage_claims`' rule.
 
-`usage_yields`, since schema 15: one row for each request a run met and left to whichever
+`usage_yields`, since schema 16: one row for each request a run met and left to whichever
 run holds it. No run both holds and leaves the same request, and a row names no holder,
 so nothing here changes when a claim moves.
 
-Schema 15 added, all empty or 0 in an upgraded store until its runs are read again:
+Schema 16 added, all empty or 0 in an upgraded store until its runs are read again:
 
 - to a segment, what its work ran under, read from the transcript alone and NULL where
   the transcript says nothing, never a guess. Only ids and short labels are kept: no
@@ -119,7 +119,7 @@ UNPRICED_RUNS = (
     ") WHERE spent > 0"
 )
 
-#: The one table schema 15 rebuilds rather than extends: its key became the request alone.
+#: The one table schema 16 rebuilds rather than extends: its key became the request alone.
 _REQUESTS_TABLE = """CREATE TABLE IF NOT EXISTS usage_requests(
     request INTEGER PRIMARY KEY,
     run_id INTEGER NOT NULL,
@@ -134,7 +134,7 @@ _YIELDS = """CREATE TABLE IF NOT EXISTS usage_yields(
 );
 CREATE INDEX IF NOT EXISTS usage_yields_request ON usage_yields(request);"""
 
-#: Columns schema 15 appends, in the order the tables above declare them last.
+#: Columns schema 16 appends, in the order the tables above declare them last.
 _ADDED_COLUMNS = {
     "usage_runs": (
         ("launch_class", "TEXT"),
@@ -219,7 +219,7 @@ SCHEMA += _REQUESTS_TABLE + "\n" + _REQUESTS_INDEX + "\n" + _YIELDS + "\n"
 
 SCHEMA_TABLES = ("usage_runs", "usage_segments", "usage_requests", "usage_yields")
 
-#: The requests one run counts, where several runs counted it before schema 15: the row
+#: The requests one run counts, where several runs counted it before schema 16: the row
 #: of the run `usage_claims.Claimant.key` puts first. A main transcript's run before a
 #: subagent's, then the earlier first record, a run with none last, then the lower id.
 #: A row whose run is gone comes after every other.
@@ -241,7 +241,7 @@ def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
 
 
 def migrate(conn: sqlite3.Connection) -> None:
-    """Schema 15, once, inside the caller's transaction and under its recovery point.
+    """Schema 16, once, inside the caller's transaction and under its recovery point.
 
     The columns are appended, so every former value stays where it was, and every run is
     stale (`reading` 0). `usage_requests` is rebuilt with the request as its key, keeping
@@ -266,7 +266,7 @@ def migrate(conn: sqlite3.Connection) -> None:
 
 
 def assert_current(conn: sqlite3.Connection) -> None:
-    """Refuse to stamp a store whose usage tables lack what schema 15 added."""
+    """Refuse to stamp a store whose usage tables lack what schema 16 added."""
 
     for table, added in _ADDED_COLUMNS.items():
         present = set(_columns(conn, table))

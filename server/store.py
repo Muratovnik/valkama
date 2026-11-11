@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     # How much was worked on what, added with schema 11. Additive and empty in an
     # upgraded store, so this script is the whole of its migration.
     + usage_store.SCHEMA
-    # How often each analytics surface was opened, added with schema 15. Additive
+    # How often each analytics surface was opened, added with schema 16. Additive
     # and empty in an upgraded store, so this script is the whole of its migration.
     + analytics_store.SCHEMA
 )
@@ -799,7 +799,7 @@ def connect() -> sqlite3.Connection:
                     conn, f"preschema{stored_version + 1}", locate=backup_location
                 )
             if recovery_point is not None:
-                # From schema 15 on the upgrade leaves every usage run to be read again,
+                # From schema 16 on the upgrade leaves every usage run to be read again,
                 # and what a reading makes of time depends on the liveness file, which
                 # no snapshot of the store holds: its verified copy goes beside it.
                 liveness.copy_beside(path, recovery_point, DATA_PREFIX)
@@ -874,7 +874,7 @@ def connect() -> sqlite3.Connection:
             # existing table alone, so they are appended here.
             planning_store.migrate_threads(conn)
             _migrate_session_place(conn)
-            # Schema 15: the usage columns, and one row per request in the whole store.
+            # Schema 16: the usage columns, and one row per request in the whole store.
             usage_store.migrate(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)

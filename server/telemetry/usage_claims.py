@@ -6,7 +6,7 @@ into another's folder. Counting it in both would count its tokens twice, so
 
 The rule, the same at a first reading and at every reading again: a main transcript's
 run before a subagent's; between equals, the run whose first record is earlier, a run
-with none last; then the lower run id (`Claimant.key`). The schema-15 upgrade kept one
+with none last; then the lower run id (`Claimant.key`). The schema-16 upgrade kept one
 row of each request by the same order.
 
 - A reading that meets a request no run holds claims it. One that meets a request
