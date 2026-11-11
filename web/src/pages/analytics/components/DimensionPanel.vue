@@ -13,11 +13,15 @@
  * it is over and never the panel or the page. Elsewhere, as on a phone, the panel scrolls and the
  * table keeps a frame of its own.
  *
+ * Held, a button at the table gives it the whole panel under the figures and back (`tableWhole`),
+ * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway.
+ *
  * A value or a day pressed to narrow the view goes out with the dimension the answer was read by
  * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`).
  */
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
@@ -34,6 +38,7 @@ import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import ToggleChip from '@/shared/ui/ToggleChip.vue'
 
 const props = defineProps<{
   /** The period by account behind the answer, for where the accounts that worked changed. */
@@ -62,7 +67,14 @@ const emit = defineEmits<{
   'retry': []
   'update:across': [across: UsageDimension | null]
 }>()
+const { t } = useI18n()
 const measure = defineModel<Measure>('measure', { required: true })
+/** Whether the table takes the whole panel under the figures, where the panel is held. */
+const tableWhole = defineModel<boolean>('tableWhole', { default: false })
+const whole = computed(() => props.fills && tableWhole.value)
+const wholeWords = computed(() =>
+  t(`analytics.panel.table.${tableWhole.value ? 'collapse' : 'expand'}`),
+)
 
 /**
  * The dimension the answer was read by, not the one the page now asks for: while a new
@@ -95,6 +107,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
     ref="root"
     class="dimension-panel"
     :data-fills="fills"
+    :data-whole="whole"
   >
     <SpendingUnread
       v-if="!before"
@@ -107,7 +120,10 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
       :before="before"
     />
     <div class="dimension-body">
-      <div class="dimension-charts">
+      <div
+        v-show="!whole"
+        class="dimension-charts"
+      >
         <div class="dimension-pair">
           <SpendingBars
             :by="by"
@@ -149,7 +165,19 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
         @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
         @reread="cross.retry"
         @update:across="(next) => emit('update:across', next)"
-      />
+      >
+        <template
+          v-if="fills"
+          #actions
+        >
+          <ToggleChip
+            :pressed="tableWhole"
+            @toggle="tableWhole = !tableWhole"
+          >
+            {{ wholeWords }}
+          </ToggleChip>
+        </template>
+      </SpendingTable>
     </div>
   </div>
 </template>
@@ -199,6 +227,11 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
       fit-content(min(55%, 100% - 14rem - var(--space-4)))
       minmax(14rem, 1fr);
     gap: var(--space-4);
+  }
+
+  /* The table pressed to take it all: the charts step aside and it has the whole rest. */
+  &[data-whole='true'] .dimension-body {
+    grid-template-rows: minmax(0, 1fr);
   }
 
   /* Positioned, so what its parts place out of the flow (words for a screen reader alone)

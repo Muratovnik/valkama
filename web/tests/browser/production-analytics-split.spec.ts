@@ -11,7 +11,7 @@ import type { Page } from '@playwright/test'
 
 import { task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { record, serve, TASK_REPORT } from './analyticsPage.ts'
+import { pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 /** Thirty tasks over the three days of the week so far, each with a title a row has to fold. */
@@ -138,3 +138,61 @@ for (const [width, height] of [
     await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
     expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })
   })
+
+/** The button at the table that gives it the whole panel, by what it says in either state. */
+const wholeButton = (page: Page) =>
+  page.locator('.spending-table').getByRole('button', { name: /^(Expand|Collapse) table$/u })
+
+/** How tall the table stands, and whether the charts are drawn beside it. */
+const tableRoom = (page: Page) =>
+  page.evaluate(() => ({
+    table: Math.round(
+      document.querySelector('.spending-table')?.getBoundingClientRect().height ?? 0,
+    ),
+    charts: document.querySelector('.dimension-charts')?.checkVisibility() ?? false,
+  }))
+
+test('the table takes the whole panel and gives it back, and the page keeps the choice', async ({
+  page,
+}, info) => {
+  await openSplit(page, 1440, 900)
+  const button = wholeButton(page)
+  await expect(button).toHaveText('Expand table')
+  await expect(button).toHaveAttribute('aria-pressed', 'false')
+  const shared = await tableRoom(page)
+
+  await button.focus()
+  await page.keyboard.press('Enter')
+  await expect(button).toHaveText('Collapse table')
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
+  await expect(button).toBeFocused()
+  const whole = await tableRoom(page)
+  await record(info, 'analytics split whole table', { shared, whole })
+  expect(whole.charts).toBe(false)
+  expect(whole.table).toBeGreaterThan(shared.table + 200)
+  expect(page.url()).not.toMatch(/whole|expand/iu)
+
+  // A change of measure, of section, of period and a refresh keep the table whole.
+  await page.locator('.spending-tiles .segmented-option').nth(1).click()
+  await page.locator('.analytics-page-rail').getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('radio', { name: 'Past 4 weeks' }).click()
+  await page.getByRole('button', { name: 'Refresh' }).click()
+  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-whole', 'true')
+  await expect(wholeButton(page)).toHaveAttribute('aria-pressed', 'true')
+  const kept = await tableRoom(page)
+  expect(kept.charts).toBe(false)
+
+  await wholeButton(page).press('Space')
+  await expect(wholeButton(page)).toHaveAttribute('aria-pressed', 'false')
+  await expect(wholeButton(page)).toBeFocused()
+  await expect(page.locator('.dimension-charts')).toBeVisible()
+})
+
+test('a section that is not held has no button for the whole panel', async ({ page }) => {
+  await serve(page, THIRTY_TASKS)
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto(pageAt({ by: 'work_item', open: 'section' }))
+  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-fills', 'false')
+  await expect(wholeButton(page)).toHaveCount(0)
+})
