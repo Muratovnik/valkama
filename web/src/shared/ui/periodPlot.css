@@ -14,6 +14,12 @@
   scroll-padding-inline-start: var(--period-gutter);
   overflow-x: auto;
   overscroll-behavior-inline: contain;
+
+  /* Periods that act: the frame reaches past the chart's end by the gap the plot keeps after
+     its periods, where the focus ring of the last one is drawn whole. */
+  &.period-acting {
+    margin-inline-end: calc(-1 * var(--space-2));
+  }
 }
 
 .period-plot {
@@ -30,9 +36,14 @@
 
   /* Periods that act: each at least the smallest control a pointer hits, with the gap the
      periods keep between them, so the plot is as wide as that takes and no narrower than its
-     chart. The plot's own box grows with its tracks: the scale can stay in view only inside
-     the box that holds it, and keeps its width only in a track that does not give it up. */
-  &.period-acting {
+     chart; an empty track after them leaves a gap, so the periods still end on the chart's own
+     edge. The plot's box grows with its tracks: the scale can stay in view only inside the box
+     that holds it, and keeps its width only in a track that does not give it up. */
+  .period-acting > & {
+    grid-template-areas:
+      '. markers .'
+      'scale field .'
+      '. axis .';
     grid-template-columns:
       max-content
       minmax(
@@ -41,7 +52,8 @@
             var(--space-half)
         ),
         1fr
-      );
+      )
+      0;
     inline-size: max-content;
     min-inline-size: 100%;
   }
@@ -69,7 +81,7 @@
 .period-scale {
   grid-area: scale;
 
-  .period-acting > & {
+  .period-acting & {
     position: sticky;
     inset-inline-start: 0;
     z-index: 2;

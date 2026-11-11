@@ -188,12 +188,12 @@ function key(event: KeyboardEvent, at: number | null) {
       <div
         ref="frame"
         class="period-frame"
+        :class="{ 'period-acting': acting }"
         :style="{ '--period-gutter': gutter }"
       >
         <div
           ref="plot"
           class="period-plot"
-          :class="{ 'period-acting': acting }"
           :style="{ '--period-count': columns.length }"
         >
           <span

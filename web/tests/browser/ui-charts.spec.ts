@@ -89,6 +89,9 @@ function measure(page: Page) {
       },
       days: {
         frame: box(days),
+        // The plot the chart scrolls: wider than the chart where its periods, which act and so
+        // keep a width a pointer can hit, do not fit.
+        plot: box(days.querySelector('.period-plot') ?? days),
         field: box(field),
         // How far the middle of the scale's zero stands from the field's floor.
         zeroFromFloor: zeroBox ? (zeroBox.top + zeroBox.bottom) / 2 - floor : null,
@@ -164,8 +167,14 @@ for (const width of WIDTHS) {
     expect(crossings(seen.days.axis, 'inline'), 'axis labels cross').toEqual([])
     expect(crossings(seen.hours.axis, 'inline'), 'hour labels cross').toEqual([])
     expect(crossings(seen.days.scale, 'block'), 'scale labels cross').toEqual([])
+    // A label stands inside the plot, which the chart scrolls where it is the wider of the two.
+    const scrolled = {
+      ...seen.days.frame,
+      left: Math.min(seen.days.frame.left, seen.days.plot.left),
+      right: Math.max(seen.days.frame.right, seen.days.plot.right),
+    }
     for (const tick of [...seen.days.axis, ...seen.days.scale, ...seen.days.markers])
-      expect(inside(tick, seen.days.frame), 'a label outside its chart').toBe(true)
+      expect(inside(tick, scrolled), 'a label outside its chart').toBe(true)
     for (const key of seen.days.legend)
       expect(inside(key, seen.days.frame), 'a legend key outside its chart').toBe(true)
     expect(inside(seen.days.readout, seen.days.frame)).toBe(true)
@@ -184,7 +193,12 @@ for (const width of WIDTHS) {
   })
 }
 
-test('the time axis names fewer periods as the chart narrows', async ({ page }, testInfo) => {
+/**
+ * These periods act, so each keeps a width a pointer can hit and the plot stops narrowing with
+ * the chart: it scrolls instead. The axis then names as many periods as before and never more;
+ * that it names fewer where the plot itself narrows is held by the tests of `dayTicks`.
+ */
+test('the time axis names no more periods as the chart narrows', async ({ page }, testInfo) => {
   const counts: Record<number, number> = {}
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 })
@@ -197,7 +211,7 @@ test('the time axis names fewer periods as the chart narrows', async ({ page }, 
     body: JSON.stringify(counts),
     contentType: 'application/json',
   })
-  expect(counts[390]).toBeLessThan(counts[1440] ?? 0)
+  expect(counts[390]).toBeLessThanOrEqual(counts[1440] ?? 0)
   expect(counts[390]).toBeGreaterThanOrEqual(2)
 })
 

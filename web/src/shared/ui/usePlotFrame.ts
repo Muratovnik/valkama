@@ -3,12 +3,13 @@
  * more room than the chart has. It measures the field the periods stand in, says how far into
  * the plot they start (the room the scale takes, which stays in view over the plot's start, so a
  * period scrolled to must stand clear of it), and opens a span of periods on its end, the ones
- * nearest now: once for each span, never again on a resize, so a reader's own scroll is kept.
+ * nearest now. A frame standing on its end stays there while the plot's width settles, as it
+ * does when the scale's figures get their font; one a reader scrolled away keeps their place.
  */
 import type { Ref } from 'vue'
 import { computed, ref, watch } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 export function usePlotFrame(
   frame: Ref<HTMLElement | null>,
@@ -29,14 +30,30 @@ export function usePlotFrame(
         entry.target.getBoundingClientRect().left - plot.value.getBoundingClientRect().left
   })
 
+  const room = (element: HTMLElement) => element.scrollWidth - element.clientWidth
+  const toEnd = () => {
+    if (frame.value) frame.value.scrollLeft = room(frame.value)
+  }
   let opened: string | null = null
+  let atEnd = true
+  useEventListener(
+    frame,
+    'scroll',
+    () => {
+      if (frame.value) atEnd = frame.value.scrollLeft >= room(frame.value) - 1
+    },
+    { passive: true },
+  )
+  useResizeObserver(plot, () => {
+    if (atEnd) toEnd()
+  })
   watch(
     [span, width],
     () => {
-      const element = frame.value
-      if (!element || !width.value || opened === span()) return
+      if (!frame.value || !width.value || opened === span()) return
       opened = span()
-      element.scrollLeft = element.scrollWidth - element.clientWidth
+      atEnd = true
+      toEnd()
     },
     { flush: 'post' },
   )
