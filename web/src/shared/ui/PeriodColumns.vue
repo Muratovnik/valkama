@@ -46,6 +46,7 @@ import {
   changeNotes,
   columnSummary,
   dayTicks,
+  foldChanges,
   roundAxis,
   segmentPlace,
   segmentSummary,
@@ -98,7 +99,10 @@ const scale = computed<PlacedTick[]>(() =>
 const days = computed(() => dayTicks(props.columns, width.value, props.words.incomplete))
 
 const notes = computed(() => changeNotes(chart.value.columns))
-const markers = computed(() => changeMarkers(notes.value, props.columns.length))
+const folded = computed(() => foldChanges(notes.value, props.words))
+const markers = computed(() =>
+  changeMarkers(notes.value, props.columns.length, folded.value === null),
+)
 
 const { focused, readout, isShown, point, hold } = usePeriodReadout(
   () => chart.value.columns,
@@ -325,6 +329,7 @@ function key(event: KeyboardEvent, at: number | null) {
       <PeriodNotes
         v-if="notes.length"
         :notes="notes"
+        :folded="folded"
       />
     </template>
   </figure>

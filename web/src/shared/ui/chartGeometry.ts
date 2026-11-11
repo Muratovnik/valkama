@@ -164,6 +164,11 @@ export interface PeriodWords {
   emptyDescription?: string
   /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
   pending?: string
+  /**
+   * The one line under the chart that counts its changes where there are too many for a line
+   * each (`foldChanges`): "Account changes: 12". Without it every change has its line.
+   */
+  changes?: (count: number) => string
 }
 
 /** What a press in a period chart opens: a period, or one series in it. */
@@ -413,14 +418,35 @@ export function changeNotes(columns: readonly StackedColumn[]): ChangeNote[] {
     .map((note, at) => ({ ...note, number: at + 1 }))
 }
 
-/** The numbers over the plot, one label per period that changed, at that period's start. */
-export function changeMarkers(notes: readonly ChangeNote[], count: number): PlacedTick[] {
+/** Up to this many changes are noted a line each under the chart; more fold into one line. */
+const NOTED_CHANGES = 2
+
+/**
+ * The changes under the chart as one line that counts them, with every change in its whole
+ * text, where there are more than `NOTED_CHANGES` and the chart has words for it; null where
+ * each change keeps its own line.
+ */
+export function foldChanges(notes: readonly ChangeNote[], words: PeriodWords) {
+  if (!words.changes || notes.length <= NOTED_CHANGES) return null
+  const whole = notes.map((note) => `${note.period}: ${note.text}`).join('; ')
+  return { text: words.changes(notes.length), whole }
+}
+
+/**
+ * The numbers over the plot, one label per period that changed, at that period's start; with
+ * the changes folded into one line (`numbered` false) the lines stand there with no number.
+ */
+export function changeMarkers(
+  notes: readonly ChangeNote[],
+  count: number,
+  numbered = true,
+): PlacedTick[] {
   const byColumn = new Map<number, number[]>()
   for (const note of notes)
     byColumn.set(note.index, [...(byColumn.get(note.index) ?? []), note.number])
   return [...byColumn].map(([index, numbers]) => ({
     key: index,
-    text: numbers.join(', '),
+    text: numbered ? numbers.join(', ') : '',
     offset: index / count,
     edge: 'middle',
   }))

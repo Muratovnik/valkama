@@ -20,6 +20,7 @@ import {
   columnNotes,
   columnSummary,
   dayTicks,
+  foldChanges,
   labelledColumns,
   nextCursor,
   rankRows,
@@ -312,6 +313,16 @@ describe('the time axis', () => {
   })
 })
 
+/** The changes of fourteen days whose first `count` after the first start with a change. */
+const changed = (count: number) => {
+  const columns = Array.from({ length: 14 }, (_, index) => column(`d${index}`, { a: 1 }))
+  const marks = Array.from({ length: count }, (_, index) => ({
+    at: `d${index + 1}`,
+    label: `to ${index}`,
+  }))
+  return changeNotes(stackColumns(columns, series, marks).columns)
+}
+
 describe('changes marked on the time axis', () => {
   test('are numbered in time order, named in the period they start, and placed at its start', () => {
     const { columns } = stackColumns(
@@ -345,6 +356,27 @@ describe('changes marked on the time axis', () => {
       columnSummary(third, words, String),
       'd3: total 1; Account A 1. Switched to B. Limit reset',
     )
+  })
+
+  test('fold into one line that counts them from three on, the marks keeping no number', () => {
+    const said = { ...words, changes: (count: number) => `Changes: ${count}` }
+    for (const count of [0, 2]) {
+      assert.equal(foldChanges(changed(count), said), null)
+      assert.ok(changeMarkers(changed(count), 14).every((marker) => marker.text !== ''))
+    }
+    assert.deepEqual(foldChanges(changed(3), said), {
+      text: 'Changes: 3',
+      whole: 'd1: to 0; d2: to 1; d3: to 2',
+    })
+    const twelve = foldChanges(changed(12), said)
+    assert.equal(twelve?.text, 'Changes: 12')
+    assert.equal(twelve?.whole.split('; ').length, 12)
+    assert.ok(twelve?.whole.endsWith('d12: to 11'))
+    const marks = changeMarkers(changed(12), 14, false)
+    assert.equal(marks.length, 12)
+    assert.ok(marks.every((marker) => marker.text === ''))
+    // A chart with no words for the count keeps a line for each change.
+    assert.equal(foldChanges(changed(12), words), null)
   })
 })
 

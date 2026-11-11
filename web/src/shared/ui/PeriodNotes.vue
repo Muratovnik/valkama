@@ -4,18 +4,39 @@
  * change, numbered as its line up the plot, with the period it stands on and its words. Each is
  * one line whatever it says, so a new answer with longer words moves nothing under the chart:
  * the words end in an ellipsis and their hint says them whole, the number and the period stay
- * whole before them, and the chart's table says them in full.
+ * whole before them, and the chart's table says them in full. More changes than a line each can
+ * hold (`foldChanges`) are one line that counts them, its hint saying each, so a long period of
+ * changes takes no more room than one.
  */
+import { computed } from 'vue'
+
 import type { ChangeNote } from '@/shared/ui/chartGeometry.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
-defineProps<{ notes: readonly ChangeNote[] }>()
+const props = defineProps<{
+  notes: readonly ChangeNote[]
+  /** The changes as one line that counts them, and their whole text; null for a line each. */
+  folded?: { text: string; whole: string } | null
+}>()
+
+/** The changes said a line each: none where they are folded into one line. */
+const lines = computed(() => (props.folded ? [] : props.notes))
 </script>
 
 <template>
   <ol class="period-notes">
     <li
-      v-for="note in notes"
+      v-if="folded"
+      class="period-note"
+    >
+      <span
+        v-tooltip.detail="folded.whole"
+        class="period-note-text one-line"
+        >{{ folded.text }}</span
+      >
+    </li>
+    <li
+      v-for="note in lines"
       :key="note.number"
       class="period-note"
     >

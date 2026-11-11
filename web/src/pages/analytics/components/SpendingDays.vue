@@ -112,6 +112,7 @@ const chart = computed<PeriodChartProps>(() => ({
     // Time is always counted; tokens and a price can be absent from a day that spent.
     absent: props.measure === 'time' ? undefined : t(`analytics.days.absent.${props.measure}`),
     before: t('analytics.overview.before.word'),
+    changes: (count: number) => t('analytics.days.changes', { count }),
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
     note: t('analytics.days.note'),

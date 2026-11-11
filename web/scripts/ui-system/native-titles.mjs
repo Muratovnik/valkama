@@ -183,6 +183,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
+    'shared/ui/PeriodNotes.vue <span> v-tooltip.detail="folded.whole"',
+    'each change of a chart with too many for a line each, where the line under it only counts them',
+  ],
+  [
     'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="fresh.full"',
     'the day and the time of the newest record, where the bar says only how long ago it was',
   ],

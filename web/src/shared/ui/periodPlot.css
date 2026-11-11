@@ -76,6 +76,7 @@
 
 .period-markers {
   grid-area: markers;
+  min-block-size: calc(1lh + var(--space-1));
   padding-block-end: var(--space-1);
 }
 
