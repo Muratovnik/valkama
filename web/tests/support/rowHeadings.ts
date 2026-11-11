@@ -36,5 +36,5 @@ function rowHeading(cell: DOMWrapper<Element>): RowHeading {
 }
 
 /** Every row heading of the table's body, in order. */
-export const rowHeadings = (wrapper: VueWrapper | DOMWrapper<Element>) =>
+export const rowHeadings = (wrapper: Pick<VueWrapper, 'findAll'>) =>
   wrapper.findAll('tbody th[scope="row"]').map((cell) => rowHeading(cell))
