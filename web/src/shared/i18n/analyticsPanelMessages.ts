@@ -5,6 +5,9 @@
  */
 export const analyticsPanelMessages = {
   en: {
+    bars: {
+      more: '{count} more — in the table | {count} more — in the table',
+    },
     multiples: {
       title: '{measure} {per} of each, {by}',
       scale: 'Every chart from 0 to',
@@ -46,6 +49,9 @@ export const analyticsPanelMessages = {
     },
   },
   ru: {
+    bars: {
+      more: 'ещё {count} — в таблице | ещё {count} — в таблице | ещё {count} — в таблице',
+    },
     multiples: {
       title: '{measure} {per} у каждого, {by}',
       scale: 'Шкала всех графиков: от 0 до',

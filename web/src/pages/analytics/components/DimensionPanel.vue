@@ -14,13 +14,15 @@
  * table keeps a frame of its own.
  *
  * Held, a button at the table gives it the whole panel under the figures and back (`tableWhole`),
- * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway.
+ * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway. The
+ * line under the ranked list that counts the values it leaves out gives the table the same, and the
+ * focus with it.
  *
  * A value or a day pressed to narrow the view goes out with the dimension the answer was read by
  * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`).
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
@@ -100,6 +102,20 @@ const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
+
+/**
+ * The values the ranked list leaves out asked for: the table takes the whole panel, as its own
+ * button gives it, and the focus moves to it — to its frame where that scrolls, else its first
+ * control.
+ */
+async function showTable() {
+  tableWhole.value = true
+  await nextTick()
+  const table = root.value?.querySelector<HTMLElement>('.spending-table')
+  const frame = table?.querySelector<HTMLElement>('.spending-table-frame[tabindex]')
+  const target = frame ?? table?.querySelector<HTMLElement>('.spending-table-frame button')
+  target?.focus()
+}
 </script>
 
 <template>
@@ -133,6 +149,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
             :rows="usage.rows"
             :slots="slots"
             @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
+            @more="showTable"
           />
           <SpendingMultiples
             :by="by"

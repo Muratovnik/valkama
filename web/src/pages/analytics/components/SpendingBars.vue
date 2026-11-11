@@ -7,6 +7,9 @@
  * value the day chart folds away. A value named by the start of its id, an account, carries the
  * whole id as its detail.
  *
+ * It lists the first twelve values; past them one line says how many more there are and, pressed,
+ * asks for the whole table, sent out as `more`, since the table lists them all.
+ *
  * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; by any
  * other dimension, a value the read can filter by is a control that narrows the view to it, sent
  * out as `narrow`. The rows that are neither stay lines of the chart.
@@ -35,16 +38,25 @@ const props = defineProps<{
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
-/** A value pressed to narrow the view to it: its filter value, and its name. */
-const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
+/** A value pressed to narrow the view to it: its filter value, and its name; the table asked for. */
+const emit = defineEmits<{ more: []; narrow: [value: string | null, label: string] }>()
+
+/** How many values the list names before it leaves the rest to the table. */
+const LISTED = 12
 
 const { t } = useI18n()
 const words = useSpendingWords()
 
 const title = computed(() => words.chartTitle(props.measure, props.by))
 
-const lines = computed(() =>
+const all = computed(() =>
   spendingLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
+)
+const lines = computed(() => all.value.slice(0, LISTED))
+/** How many values the list leaves to the table; none while it lists them all. */
+const unlisted = computed(() => all.value.length - lines.value.length)
+const moreWords = computed(() =>
+  t('analytics.panel.bars.more', { count: unlisted.value }, unlisted.value),
 )
 const {
   rows: bars,
@@ -81,6 +93,14 @@ const barWords = computed(() => ({
         @follow="follow"
         @select="select"
       />
+      <button
+        v-if="unlisted"
+        type="button"
+        class="spending-bars-more"
+        @click="emit('more')"
+      >
+        {{ moreWords }}
+      </button>
     </template>
     <template #table>
       <RankedBarsTable
@@ -90,6 +110,39 @@ const barWords = computed(() => ({
         @follow="follow"
         @select="select"
       />
+      <button
+        v-if="unlisted"
+        type="button"
+        class="spending-bars-more"
+        @click="emit('more')"
+      >
+        {{ moreWords }}
+      </button>
     </template>
   </ChartSection>
 </template>
+
+<style scoped>
+/* The values past the first twelve, as one line under the list in the quiet ink of what a list
+   leaves out, pressed as a link to the table that holds them. */
+.spending-bars-more {
+  display: block;
+  min-block-size: var(--size-control-inline);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: var(--color-rule-strong);
+  text-underline-offset: var(--space-half);
+  background: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+    text-decoration-color: currentcolor;
+  }
+}
+</style>

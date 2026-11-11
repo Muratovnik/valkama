@@ -254,6 +254,27 @@ test('the table takes the whole panel and gives it back, and the page keeps the 
   await expect(page.locator('.dimension-charts')).toBeVisible()
 })
 
+test('the ranked list names twelve tasks and its last line gives the table the whole panel', async ({
+  page,
+}) => {
+  await openSplit(page, 1440, 900)
+  await expect(page.locator('.spending-bars .ranked-row')).toHaveCount(12)
+  const more = page
+    .locator('.spending-bars')
+    .getByRole('button', { name: '18 more — in the table' })
+  await more.click()
+  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-whole', 'true')
+  await expect(wholeButton(page)).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.dimension-charts')).toBeHidden()
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean(document.querySelector('.spending-table-frame')?.contains(document.activeElement)),
+      ),
+    )
+    .toBe(true)
+})
+
 test('a section that is not held has no button for the whole panel', async ({ page }, info) => {
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })
