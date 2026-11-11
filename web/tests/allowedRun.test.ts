@@ -7,9 +7,9 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { realIo, runAllowed } from './browser/allowedRun.ts'
+import { playwrightEnvironment, realIo, runAllowed } from './browser/allowedRun.ts'
 import type { RunnerIo } from './browser/allowedRun.ts'
-import { clipboardSpecs } from './browser/clipboardSpecs.ts'
+import { clipboardOptIn, clipboardSpecs } from './browser/clipboardSpecs.ts'
 
 const allowed = ['production-settings.spec.ts', 'ui-buttons.spec.ts']
 const notes = 'production-card-notes.spec.ts'
@@ -18,7 +18,7 @@ const notes = 'production-card-notes.spec.ts'
 function runner(lists: Record<string, string> = {}) {
   const written: string[][] = []
   const said: string[] = []
-  const playwright = vi.fn((_args: readonly string[]) => Promise.resolve(0))
+  const playwright = vi.fn((_args: readonly string[], _clipboard: boolean) => Promise.resolve(0))
   const io: RunnerIo = {
     playwright,
     readList: (file) => lists[file] ?? null,
@@ -37,9 +37,10 @@ describe('the allowed browser run', () => {
     const { io, playwright, said, written } = runner()
     expect(await runAllowed(['--workers=4'], io)).toBe(0)
     expect(written).toEqual([allowed])
-    const [args] = playwright.mock.calls[0] ?? []
+    const [args, clipboard] = playwright.mock.calls[0] ?? []
     expect(args?.slice(0, 2)).toEqual(['test', '--test-list=list.txt'])
     expect(args?.at(-1)).toBe('--workers=4')
+    expect(clipboard).toBe(false)
     expect(said.join('\n')).toContain(`clipboard specs left out: ${clipboardSpecs.join(', ')}`)
   })
 
@@ -89,6 +90,25 @@ describe('the allowed browser run', () => {
     const whole = runner()
     expect(await runAllowed([`--with-clipboard=${notes}`], whole.io)).toBe(0)
     expect(whole.written).toEqual([[...allowed, notes]])
+  })
+
+  it('lets the configuration select the clipboard specs only when --with-clipboard names one', async () => {
+    const plain = runner({ 'batch.txt': 'ui-buttons.spec.ts\n' })
+    expect(await runAllowed(['--specs=batch.txt'], plain.io)).toBe(0)
+    expect(plain.playwright.mock.calls.map(([, clipboard]) => clipboard)).toEqual([false])
+
+    const named = runner()
+    expect(await runAllowed([`--with-clipboard=${notes}`], named.io)).toBe(0)
+    expect(named.playwright.mock.calls.map(([, clipboard]) => clipboard)).toEqual([true])
+  })
+
+  it('runs Playwright with the opt-in set only when asked, whatever the shell held', () => {
+    const shell = { PATH: '/bin', [clipboardOptIn]: '1' }
+    expect(playwrightEnvironment(shell, false)).toEqual({ PATH: '/bin' })
+    expect(playwrightEnvironment({ PATH: '/bin' }, true)).toEqual({
+      PATH: '/bin',
+      [clipboardOptIn]: '1',
+    })
   })
 
   it('refuses --with-clipboard on a spec that is not a clipboard one', async () => {

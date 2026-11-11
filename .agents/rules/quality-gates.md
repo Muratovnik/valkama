@@ -29,8 +29,9 @@ Each command below runs in `web/`:
   and the suite's own `test` from `web/tests/browser/test.ts` as a spec does, so
   it needs no configuration of its own.
 - The whole suite, or a batch of it: `npm run test:browser:allowed`, never
-  Playwright handed a list of names. Playwright given no spec runs everything,
-  and the list of the whole suite does not fit a Windows command line; the
+  Playwright handed a list of names. Playwright given no spec runs every spec
+  its configuration selects, and the list of the whole suite does not fit a
+  Windows command line; the
   runner writes the list to a file Playwright reads, refuses an empty list or a
   missing list file before Playwright starts, and ends with each project's count
   and the total, to compare with what the run was meant to select. `--list`
@@ -38,10 +39,18 @@ Each command below runs in `web/`:
   names, one a line.
 
 The specs that write the system clipboard or are granted it are named in
-`web/tests/browser/clipboardSpecs.ts`. The runner leaves them out unless
-`--with-clipboard=<file>` names one, and `tests/clipboardSpecs.test.ts` fails on
-a spec that grants or writes the clipboard and is not on that list, so a spec
-that starts to goes onto it in the same change.
+`web/tests/browser/clipboardSpecs.ts`, and they run only when asked for: with
+`VALKAMA_BROWSER_CLIPBOARD=1` or through the runner's `--with-clipboard=<file>`.
+`web/playwright.config.ts` reads that list and selects none of them without the
+variable — not in a bare run, not when one is named, not under `--list` — and
+the runner sets it when `--with-clipboard` names one and removes it otherwise.
+A bare `npx playwright test` or `npm run test:browser` is therefore safe for the
+clipboard, but it is still not how the suite runs: it refuses nothing and ends
+with no count to compare, so the whole suite goes through the runner.
+`tests/clipboardSpecs.test.ts` fails on a spec that grants or writes the
+clipboard and is not on that list, so a spec that starts to goes onto it in the
+same change, and on a configuration that selects a listed spec without the
+variable.
 
 semgrep is the only dataflow analysis here: ruff matches patterns, semgrep
 follows a tainted value through a function. It reads the Python server alone,

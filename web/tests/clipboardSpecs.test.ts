@@ -7,9 +7,15 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import type { PlaywrightTestConfig } from '@playwright/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { clipboardListGaps, clipboardSpecs } from './browser/clipboardSpecs.ts'
+import {
+  clipboardIgnore,
+  clipboardListGaps,
+  clipboardOptIn,
+  clipboardSpecs,
+} from './browser/clipboardSpecs.ts'
 
 const suite = fileURLToPath(new URL('browser/', import.meta.url))
 
@@ -74,5 +80,53 @@ describe('the clipboard specs', () => {
       clipboardListGaps(sources, ['production-card-notes.spec.ts', 'production-gone.spec.ts'])
         .stale,
     ).toEqual(['production-gone.spec.ts'])
+  })
+})
+
+type Pattern = PlaywrightTestConfig['testMatch']
+
+/** Whether a file's absolute path matches a pattern the configuration states as RegExps. */
+function matches(pattern: Pattern, file: string): boolean {
+  return [pattern ?? []].flat().some((one) => {
+    if (!(one instanceof RegExp)) throw new TypeError(`not a RegExp: ${String(one)}`)
+    return one.test(file)
+  })
+}
+
+/** The specs of the suite on disk that `playwright.config.ts`, loaded under `env`, selects. */
+async function configSelects(env: Record<string, string | undefined>): Promise<string[]> {
+  vi.resetModules()
+  for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value)
+  const { default: config } = await import('../playwright.config.ts')
+  return readdirSync(suite)
+    .filter((name) => name.endsWith('.spec.ts'))
+    .filter((name) =>
+      (config.projects ?? []).some(
+        (project) =>
+          matches(project.testMatch, `${suite}${name}`) &&
+          !matches(project.testIgnore ?? config.testIgnore, `${suite}${name}`),
+      ),
+    )
+}
+
+describe('the browser configuration', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('selects no listed spec unless the run opts in, and every other spec as before', async () => {
+    const mocked = { VALKAMA_BROWSER_STORE: undefined }
+    const optedIn = await configSelects({ ...mocked, [clipboardOptIn]: '1' })
+    expect(optedIn).toEqual(expect.arrayContaining([...clipboardSpecs]))
+    expect(await configSelects({ ...mocked, [clipboardOptIn]: undefined })).toEqual(
+      optedIn.filter((name) => !clipboardSpecs.includes(name)),
+    )
+  })
+
+  it('opts in on `1` only, and leaves out a spec whose name merely begins with a listed one', () => {
+    expect(clipboardIgnore({ [clipboardOptIn]: 'yes' })).toHaveLength(clipboardSpecs.length)
+    const ignored = (name: string) => clipboardIgnore({}).some((one) => one.test(`/web/${name}`))
+    expect(ignored('production-open-session.spec.ts')).toBe(true)
+    expect(ignored('production-open-session-app.spec.ts')).toBe(false)
   })
 })

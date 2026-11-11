@@ -1,9 +1,11 @@
 /**
  * The browser specs that write the system clipboard or are granted it, by file name under
- * `tests/browser`. A run of the allowed set (`npm run test:browser:allowed`) leaves them out
- * unless it names one, and `tests/clipboardSpecs.test.ts` fails when a spec that grants or
- * writes the clipboard, itself or through a module of the suite it imports, is missing here,
- * or when a name here is no longer a spec, which would let a renamed one back in.
+ * `tests/browser`. `playwright.config.ts` does not select them unless `clipboardOptIn` is
+ * `1`, so a bare `npx playwright test` leaves them out; a run of the allowed set
+ * (`npm run test:browser:allowed`) sets it only when it names one. `tests/clipboardSpecs.test.ts`
+ * fails when a spec that grants or writes the clipboard, itself or through a module of the
+ * suite it imports, is missing here, or when a name here is no longer a spec, which would let
+ * a renamed one back in.
  *
  * The list may hold more than the check finds, never less: `production-card-bar-press` and
  * `ui-document-links` replace the page's clipboard with one that keeps copies in the page,
@@ -17,6 +19,25 @@ export const clipboardSpecs: readonly string[] = [
   'production-reference-preview-copy.spec.ts',
   'ui-document-links.spec.ts',
 ]
+
+/** The variable that lets a Playwright run select the specs above: `1` and nothing else. */
+export const clipboardOptIn = 'VALKAMA_BROWSER_CLIPBOARD'
+
+/**
+ * The configuration's `testIgnore`: each listed spec by its file name, unless the environment
+ * opts in. Playwright matches it against a file's absolute path, so a run that names such a
+ * spec, or lists the suite, does not reach it either.
+ */
+export function clipboardIgnore(env: Readonly<Record<string, string | undefined>>): RegExp[] {
+  return env[clipboardOptIn] === '1'
+    ? []
+    : clipboardSpecs.map((name) => new RegExp(`(?:^|[\\\\/])${literal(name)}$`))
+}
+
+/** A file name as a RegExp that matches it and nothing else. */
+function literal(name: string): string {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 /** A grant of clipboard access, or a call that writes it; a stub's `writeText:` is neither. */
 const clipboardUse = /\bclipboard-(?:read|write)\b|\bclipboard\.write(?:Text)?\s*\(/

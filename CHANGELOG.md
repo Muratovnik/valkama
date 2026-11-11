@@ -248,6 +248,13 @@ checkouts are therefore distinguishable even at the same version.
   spec in. It refuses, with exit code 2 and before Playwright starts, an empty list, a
   missing list file, a name that is no spec and a clipboard spec not named that way.
 
+- For contributors: a bare `npx playwright test` or `npm run test:browser` in `web/` no
+  longer selects the clipboard specs. `web/playwright.config.ts` reads the list in
+  `web/tests/browser/clipboardSpecs.ts` and leaves those specs out of every run, including
+  one that names a spec and `--list`, unless `VALKAMA_BROWSER_CLIPBOARD=1` is set;
+  `npm run test:browser:allowed` sets it only when `--with-clipboard=<file>` names a spec.
+  The suite still runs through `npm run test:browser:allowed`.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
