@@ -262,7 +262,7 @@ describe('the tiles on the page', () => {
       expect.stringContaining('No price for Nov 2 – 4 to compare with'),
     ])
     await page.get('.tile-figure[data-measure="tokens"]').trigger('click')
-    expect(page.emitted('state')?.at(-1)).toEqual([{ measure: 'tokens' }])
+    expect(page.emitted('state')?.at(-1)).toEqual([{ measure: 'tokens' }, 'replace'])
   })
 
   it('say what the period before spent when this one spent nothing, instead of standing empty', async () => {

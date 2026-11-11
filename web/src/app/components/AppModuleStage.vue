@@ -33,7 +33,7 @@ const emit = defineEmits<{
   'notice': [message: string]
   'open-project': [projectId: string, moduleId?: ModuleId]
   'question-taken': []
-  'state': [state: Record<string, string | number | boolean>]
+  'state': [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
 }>()
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
@@ -79,7 +79,7 @@ defineExpose({ openCardId, refresh })
     <AnalyticsView
       :route-state="route.state"
       :project-id="scopeProject"
-      @state="(state) => emit('state', state)"
+      @state="(state, mode) => emit('state', state, mode)"
     />
   </ModuleFrame>
 

@@ -291,8 +291,15 @@ export function usePlatformNavigation(
     writeRoute(inScope(moduleId, { kind: 'project', project_ref: { project_id: projectId } }))
   }
 
-  function updateModuleState(state: Record<string, string | number | boolean>) {
-    writeRoute({ ...route.value, state: Object.keys(state).length ? state : undefined }, 'replace')
+  /**
+   * A module's new state, in place by default; `push` makes it a new place in the history, for
+   * a change Back should return from.
+   */
+  function updateModuleState(
+    state: Record<string, string | number | boolean>,
+    mode: 'push' | 'replace' = 'replace',
+  ) {
+    writeRoute({ ...route.value, state: Object.keys(state).length ? state : undefined }, mode)
   }
 
   /** Moves to a route asked for from outside, with the order it carries. False if it cannot. */

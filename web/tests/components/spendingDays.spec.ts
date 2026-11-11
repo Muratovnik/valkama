@@ -59,6 +59,14 @@ function byAccount(): Usage {
 /** A week after the five days below, so none of them is still running. */
 const AFTER = new Date(2026, 10, 20)
 
+/** What a screen reader says of each day: the name of what pressing it does, then what it holds. */
+function spokenDays(days: ReturnType<typeof mount>) {
+  return days.findAll('.period-column').map((day) => ({
+    name: day.attributes('aria-label') ?? '',
+    holds: days.find(`[id="${day.attributes('aria-describedby') ?? ''}"]`).text(),
+  }))
+}
+
 /** One task worked on the days the accounts did: Wednesday is quiet. */
 const fiveDays = () =>
   usageAnswer({
@@ -156,9 +164,7 @@ describe('the days', () => {
     expect(
       chart.findAll('.period-slot').map((slot) => slot.findAll('.period-segment').length),
     ).toEqual([1, 0, 0])
-    expect(chart.findAll('[role="img"]')[1]?.attributes('aria-label')).toContain(
-      'No price: MAIN-2 Two',
-    )
+    expect(spokenDays(chart)[1]?.holds).toContain('No price: MAIN-2 Two')
     const rows = mountDays(usage, { ...options, narrow: true })
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
@@ -293,7 +299,7 @@ describe('the account marks', () => {
     expect(
       days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
     ).toEqual([expect.stringContaining('Accounts: acc-a → acc-b')])
-    const named = days.findAll('[role="img"]').map((day) => day.attributes('aria-label') ?? '')
+    const named = spokenDays(days).map((day) => day.holds)
     expect(named.map((name) => name.includes('Accounts:'))).toEqual([false, false, true, false])
     expect(named[2]).toContain('Accounts: acc-a → acc-b')
     expect(named.join(' ')).not.toContain('Unknown')

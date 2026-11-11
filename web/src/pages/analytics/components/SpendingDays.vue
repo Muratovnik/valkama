@@ -8,6 +8,9 @@
  * the chart (`accountChanges`): work whose organization nobody recorded is no account and marks
  * nothing. The marks are the ones read with the answer shown, and a read of the accounts that
  * failed says the marks are not there rather than leaving them out without a word.
+ *
+ * Each day is a control, in the chart and in its table, that narrows the view to that day alone
+ * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,10 +19,11 @@ import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
+import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
-import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
+import type { PeriodChartProps, PeriodSelection } from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
@@ -32,7 +36,11 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
+  /** Why the last press here did not narrow the view, in words; empty otherwise. */
+  notice?: string
 }>()
+/** A day pressed to narrow the view to it: `2030-03-04`, and its name in full. */
+const emit = defineEmits<{ day: [day: string, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -53,7 +61,9 @@ const chart = computed<PeriodChartProps>(() => ({
     ...column,
     label: words.day(column.key),
     fullLabel: words.fullDay(column.key),
+    action: t('analytics.drill.day', { day: words.fullDay(column.key) }),
   })),
+  actionable: 'column',
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts).map((change) => ({
@@ -72,6 +82,10 @@ const chart = computed<PeriodChartProps>(() => ({
   },
   formatValue: (amount: number) => words.scale(props.measure, amount),
 }))
+
+function select({ column }: PeriodSelection) {
+  emit('day', dayOf(column), words.fullDay(column))
+}
 </script>
 
 <template>
@@ -79,9 +93,13 @@ const chart = computed<PeriodChartProps>(() => ({
     class="spending-days"
     :title="title"
     :narrow="narrow"
+    :notice="notice"
   >
     <template #chart>
-      <PeriodColumns v-bind="chart" />
+      <PeriodColumns
+        v-bind="chart"
+        @select="select"
+      />
       <p
         v-if="accounts === 'failed'"
         class="spending-days-note"
@@ -90,7 +108,10 @@ const chart = computed<PeriodChartProps>(() => ({
       </p>
     </template>
     <template #table>
-      <PeriodColumnsTable v-bind="chart" />
+      <PeriodColumnsTable
+        v-bind="chart"
+        @select="select"
+      />
       <p
         v-if="accounts === 'failed'"
         class="spending-days-note"

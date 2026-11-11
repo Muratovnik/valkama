@@ -8,6 +8,9 @@
  * An answer whose period before could not be read says so above the figures, as a status a
  * screen reader hears too, with the page's own way to read it again; the figures stand, with no
  * change beside them.
+ *
+ * A value or a day pressed to narrow the view goes out with the dimension the answer was read
+ * by and the part of the report it was pressed in, which says why when it was refused.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +26,9 @@ import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+
+/** Where in the report a press asked to narrow the view. */
+export type ReportPart = 'bars' | 'days' | 'table'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -32,10 +38,19 @@ const props = defineProps<{
   filters: UsageFilters
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
+  /** Why the last press in a part of the report did not narrow the view; null otherwise. */
+  refused: { part: ReportPart; words: string } | null
   usage: Usage
 }>()
-/** Read the answer again, for a period before that could not be read. */
-const emit = defineEmits<{ retry: [] }>()
+/**
+ * Read the answer again, for a period before that could not be read; narrow the view to a value
+ * of the answer's dimension, or to a day, as pressed in a part of the report.
+ */
+const emit = defineEmits<{
+  day: [day: string, label: string]
+  narrow: [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
+  retry: []
+}>()
 const measure = defineModel<Measure>('measure', { required: true })
 
 const { t } = useI18n()
@@ -59,6 +74,14 @@ useResizeObserver(root, ([entry]) => {
   if (entry) width.value = entry.contentRect.width
 })
 const narrow = computed(() => width.value !== null && width.value < NARROW)
+
+/** The words of a refusal, in the part of the report it came from. */
+const noticeIn = (part: ReportPart) => (props.refused?.part === part ? props.refused.words : '')
+const notices = computed(() => ({
+  bars: noticeIn('bars'),
+  days: noticeIn('days'),
+  table: noticeIn('table'),
+}))
 </script>
 
 <template>
@@ -93,21 +116,27 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
       :by="by"
       :measure="measure"
       :narrow="narrow"
+      :notice="notices.bars"
       :rows="usage.rows"
+      @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
     />
     <SpendingDays
       :accounts="accounts"
       :by="by"
       :measure="measure"
       :narrow="narrow"
+      :notice="notices.days"
       :read-at="readAt"
       :usage="usage"
+      @day="(day, label) => emit('day', day, label)"
     />
     <SpendingTable
       :by="by"
       :filters="filters"
       :measure="measure"
+      :notice="notices.table"
       :usage="usage"
+      @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
     />
   </div>
 </template>

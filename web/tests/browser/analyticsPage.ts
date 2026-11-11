@@ -197,7 +197,8 @@ export async function measure(page: Page) {
       }
     }
     const root = document.documentElement
-    const sections = [...document.querySelectorAll<HTMLElement>('.chart-section')]
+    // The charts and the table beside the period before, in the page's order.
+    const sections = [...document.querySelectorAll<HTMLElement>('.chart-section, .spending-table')]
     return {
       viewport: root.clientWidth,
       pageScroll: root.scrollWidth - root.clientWidth,
@@ -211,6 +212,7 @@ export async function measure(page: Page) {
         '.spending-tiles',
         '.spending-bars h2',
         '.spending-days h2',
+        '.spending-table h2',
       ].map((selector) => box(document.querySelector(selector))?.x ?? null),
       tiles: [...document.querySelectorAll('.spending-tiles .segmented-option')].map((tile) =>
         box(tile),

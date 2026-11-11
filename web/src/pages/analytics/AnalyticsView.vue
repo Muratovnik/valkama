@@ -10,14 +10,18 @@
  * changing the period is how an empty one is left.
  *
  * A change the address cannot hold — a filter of more values than its link has room for — is
- * not made: the view stays as its address says, and the words under the filters say why, so the
+ * not made: the view stays as its address says, and the words where it was asked say why, so the
  * page never shows a view its link would not give back.
+ *
+ * A value or a day pressed in the report narrows the view to it and breaks it down by task, as a
+ * new place in the history, so Back returns to the view it was pressed in.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
 import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
+import type { ReportPart } from '@/pages/analytics/components/SpendingReport.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -52,7 +56,10 @@ const props = withDefaults(
   }>(),
   { routeState: undefined, projectId: null },
 )
-const emit = defineEmits<{ state: [state: Record<string, string | number | boolean>] }>()
+/** The view's new address: a change in place, or a new place in the history (`push`). */
+const emit = defineEmits<{
+  state: [state: Record<string, string | number | boolean>, mode?: 'push' | 'replace']
+}>()
 
 const { t } = useI18n()
 // Once per opening: the stage sets this page up each time it is navigated to.
@@ -61,18 +68,39 @@ const words = useSpendingWords()
 
 const view = computed(() => readAddress(props.routeState))
 
-/** Why the last change asked for was not made, in words; empty once the view moves on. */
-const refused = ref('')
+/** Why the last change asked for was not made, and where it was asked; null once the view moves. */
+const refused = ref<{ part: ReportPart | 'filters'; words: string } | null>(null)
 watch(view, () => {
-  refused.value = ''
+  refused.value = null
 })
+const filtersRefused = computed(() =>
+  refused.value?.part === 'filters' ? refused.value.words : '',
+)
+const reportRefused = computed(() =>
+  refused.value && refused.value.part !== 'filters'
+    ? { part: refused.value.part, words: refused.value.words }
+    : null,
+)
 
 /** Writes a change of the view into its address; false, with nothing written, if it does not fit. */
-function change(next: Partial<AnalyticsView>): boolean {
+function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace' = 'replace'): boolean {
   const changed = { ...view.value, ...next }
   if (!addressFits(changed)) return false
-  emit('state', writeAddress(changed))
+  emit('state', writeAddress(changed), mode)
   return true
+}
+
+/** The view narrowed to one value of a dimension, broken down by task. */
+function narrow(dimension: UsageDimension, value: string | null, label: string, part: ReportPart) {
+  const filters = orderFilters({ ...view.value.filters, [dimension]: [value] })
+  if (change({ filters, by: 'work_item' }, 'push')) return
+  refused.value = { part, words: t('analytics.drill.full', { value: label }) }
+}
+
+/** The view narrowed to one day, broken down by task. */
+function narrowToDay(day: string, label: string) {
+  if (change({ period: 'custom', from: day, to: day, by: 'work_item' }, 'push')) return
+  refused.value = { part: 'days', words: t('analytics.drill.full', { value: label }) }
 }
 
 const read = useUsageRead({ view: () => view.value, projectId: () => props.projectId })
@@ -128,7 +156,10 @@ watch(
 
 function filter(dimension: UsageDimension, values: (string | null)[]) {
   if (change({ filters: orderFilters({ ...view.value.filters, [dimension]: values }) })) return
-  refused.value = t('analytics.filters.full', { dimension: words.dimension(dimension) })
+  refused.value = {
+    part: 'filters',
+    words: t('analytics.filters.full', { dimension: words.dimension(dimension) }),
+  }
 }
 
 const emptyDescription = computed(() =>
@@ -202,10 +233,10 @@ const emptyDescription = computed(() =>
           @filter="filter"
         />
         <FieldError
-          v-if="refused"
+          v-if="filtersRefused"
           role="alert"
         >
-          {{ refused }}
+          {{ filtersRefused }}
         </FieldError>
         <VButton
           v-if="filterCount"
@@ -231,7 +262,10 @@ const emptyDescription = computed(() =>
           :filters="read.readWith.value"
           :read-at="read.askedAt.value"
           :measure="view.measure"
+          :refused="reportRefused"
           @update:measure="(measure) => change({ measure })"
+          @narrow="narrow"
+          @day="narrowToDay"
           @retry="read.retry"
         />
       </template>

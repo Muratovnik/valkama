@@ -12,10 +12,14 @@
  *
  * Its button downloads what it shows, for the whole view, as a CSV file (`spendingCsv`); with no
  * value to list it is disabled, and the words beside it say why.
+ *
+ * A row's name acts as its value does in the bars (`useLineActions`): a link to a task, or a
+ * control that narrows the view to the value, sent out as `narrow`.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { csvFileName, spendingCsv } from '@/pages/analytics/utils/spendingCsv.ts'
 import { comparedLines } from '@/pages/analytics/utils/usageFigures.ts'
@@ -30,6 +34,7 @@ import type {
 } from '@/shared/api/analyticsApi.ts'
 import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
+import FieldError from '@/shared/ui/FieldError.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -39,10 +44,15 @@ const props = defineProps<{
   filters: UsageFilters
   measure: Measure
   usage: Usage
+  /** Why the last press here did not narrow the view, in words; empty otherwise. */
+  notice?: string
 }>()
+/** A value pressed to narrow the view to it: its filter value, and its name. */
+const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
+const actions = useLineActions()
 
 const comparison = computed(() => props.usage.comparison)
 const heading = computed(() => words.dimension(props.by))
@@ -99,6 +109,8 @@ const lines = computed(() =>
     key: line.key,
     rest: line.kind !== 'category',
     name: nameOf(line.value),
+    link: actions.taskLink(props.by, line.value),
+    narrowsTo: actions.narrowsTo(props.by, line.value),
     cells: columns.value.map((column) => {
       if (column.key === 'before')
         return { ...column, text: line.before ? words.figure(props.measure, line.before) : '' }
@@ -110,6 +122,24 @@ const lines = computed(() =>
 )
 
 const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
+
+type Line = (typeof lines.value)[number]
+
+function follow(line: Line, event: MouseEvent) {
+  if (line.link) actions.follow(line.link, event)
+}
+
+/** A middle press on a link opens it elsewhere, and is a press on it all the same. */
+function followAside(line: Line, event: MouseEvent) {
+  if (event.button === 1) follow(line, event)
+}
+
+const narrows = (line: Line) => !line.link && line.narrowsTo !== undefined
+const narrowName = (line: Line) => actions.narrowName(line.name)
+
+function narrowTo(line: Line) {
+  if (line.narrowsTo !== undefined) emit('narrow', line.narrowsTo, line.name)
+}
 
 /** Nothing to download: no value in either period. */
 const nothing = computed(() => !lines.value.length)
@@ -152,6 +182,12 @@ function download() {
         </VButton>
       </template>
     </SectionHeader>
+    <FieldError
+      v-if="notice"
+      role="alert"
+    >
+      {{ notice }}
+    </FieldError>
     <p
       v-if="!comparison"
       class="spending-table-note"
@@ -194,7 +230,25 @@ function download() {
             scope="row"
             class="chart-cell chart-name"
           >
-            {{ line.name }}
+            <a
+              v-if="line.link"
+              class="chart-press"
+              :href="line.link.href"
+              @click="(event: MouseEvent) => follow(line, event)"
+              @auxclick="(event: MouseEvent) => followAside(line, event)"
+            >
+              {{ line.name }}
+            </a>
+            <button
+              v-else-if="narrows(line)"
+              type="button"
+              class="chart-press"
+              :aria-label="narrowName(line)"
+              @click="narrowTo(line)"
+            >
+              {{ line.name }}
+            </button>
+            <template v-else>{{ line.name }}</template>
           </th>
           <td
             v-for="cell in line.cells"

@@ -2,11 +2,13 @@
 /**
  * A chart of the page under its title, drawn or as its table: the same numbers either way. A
  * narrow page starts on the table, which a phone reads where a plot of columns does not; a
- * person's own choice stands until the page is left.
+ * person's own choice stands until the page is left. Why a press in it did nothing stands under
+ * its title, said to a screen reader as it comes (`notice`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import FieldError from '@/shared/ui/FieldError.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 
@@ -16,6 +18,8 @@ const props = defineProps<{
   /** Whether the page is too narrow to read a chart, which makes the table the first view. */
   narrow: boolean
   title: string
+  /** Why the last press in the chart did nothing, in words; empty otherwise. */
+  notice?: string
 }>()
 defineSlots<{ chart: () => unknown; table: () => unknown }>()
 
@@ -52,6 +56,12 @@ const switchLabel = computed(() => t('analytics.shown.label', { chart: props.tit
         />
       </template>
     </SectionHeader>
+    <FieldError
+      v-if="notice"
+      role="alert"
+    >
+      {{ notice }}
+    </FieldError>
     <slot
       v-if="shown === 'chart'"
       name="chart"

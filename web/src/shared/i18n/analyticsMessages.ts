@@ -149,6 +149,11 @@ export const analyticsMessages = {
           },
         },
       },
+      drill: {
+        value: 'Show the tasks of {value}',
+        day: 'Show the tasks of {day}',
+        full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
+      },
       filters: {
         title: 'Filters',
         titleCount: 'Filters · {count}',
@@ -308,6 +313,11 @@ export const analyticsMessages = {
             },
           },
         },
+      },
+      drill: {
+        value: 'Показать задачи: {value}',
+        day: 'Показать задачи за {day}',
+        full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',
       },
       filters: {
         title: 'Фильтры',
