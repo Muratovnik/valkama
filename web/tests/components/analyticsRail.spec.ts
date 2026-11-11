@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 
-import { serveUsage, task, value } from '../fixtures/analytics.ts'
+import { noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -203,5 +203,64 @@ describe('the reads', () => {
     expect(lead(page, 'model')).toBe('model-a')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
     holding = false
+  })
+})
+
+/** The hue of every mark the page draws for a value: tile part, bar, small chart, legend key. */
+const huesOf = (page: VueWrapper, key: string) =>
+  page
+    .findAll(
+      `.series-fill[data-key="${key}"], [data-key="${key}"] .series-fill, [data-series="${key}"] .series-fill`,
+    )
+    .map((mark) => mark.attributes('data-slot'))
+
+describe('a value', () => {
+  /**
+   * Four tasks whose ranking (3, 1, 2, 4) is not the order of their ids, and more work on no task
+   * than on any of them: a colour taken from a position in whatever set a chart is handed gives
+   * the tile's and the panel's charts different hues for one task.
+   */
+  const RANKED: TimedStretch[] = [
+    [3, 5],
+    [1, 3],
+    [2, 2],
+    [4, 1],
+  ].map(([number = 0, hours = 0]) => ({
+    at: new Date(2026, 10, 9, 10),
+    group: { work_item: task(number, `Task ${number}`) },
+    spend: { seconds: hours * HOUR },
+  }))
+  RANKED.push({
+    at: new Date(2026, 10, 10, 10),
+    group: { work_item: noTask },
+    spend: { seconds: 6 * HOUR },
+  })
+
+  it('has one hue on the whole page, its place in the ranking by the measure', async () => {
+    stubAnalyticsReads((query) => serveUsage(RANKED, query))
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
+    for (const [rank, number] of [3, 1, 2, 4].entries()) {
+      const hues = huesOf(page, `v:${task(number, '').id}`)
+      // The tile's part, the section's bar and the day chart's key at least.
+      expect(hues.length, `task ${number}`).toBeGreaterThanOrEqual(3)
+      expect(new Set(hues), `task ${number}`).toEqual(new Set([String(rank + 1)]))
+    }
+    // Work on no task is the neutral wherever it is drawn, never a hue.
+    expect(new Set(huesOf(page, 'none'))).toEqual(new Set(['other']))
+  })
+
+  it('is named in its tile when it is work on no task holding a twentieth or more', async () => {
+    stubAnalyticsReads((query) => serveUsage(RANKED, query))
+    const page = await mountAnalytics()
+    // Eleven hours on tasks, six on no task: 6 / 17 of the whole.
+    const bar = tile(page, 'work_item').get('.mini-share-bar')
+    expect(bar.attributes('aria-label')).toBe(
+      'Shares of Agent time: MAIN-3 Task 3 29%, MAIN-1 Task 1 18%, MAIN-2 Task 2 12%, MAIN-4 Task 4 6%, No task 35%',
+    )
+    const none = bar.get('[data-key="none"]')
+    expect(none.classes()).toContain('mini-share-apart')
+    expect(none.attributes('data-slot')).toBe('other')
+    // The lead stays the first real value.
+    expect(lead(page, 'work_item')).toBe('MAIN-3 Task 3')
   })
 })

@@ -88,16 +88,42 @@ describe('a dimension', () => {
     expect(figures?.first.share).toBeCloseTo(40 / WHOLE)
   })
 
-  it('shares the first four, a part a reader can see each, and folds the rest into one', () => {
+  it('shares the first four, a part a reader can see each, no task apart, and folds the rest', () => {
     const figures = dimensionFigures(answer(tasks).rows, 'work_item', 'time')
     const shares = figures?.parts.map((part) => [
       part.line?.value?.reference ?? part.key,
       part.share,
     ])
-    expect(shares?.map(([name]) => name)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4', 'rest'])
-    // The rest: the two smallest tasks, no task and unknown work, 3 + 1 + 15 + 6 hours.
-    expect(shares?.at(-1)?.[1]).toBeCloseTo(25 / WHOLE)
+    expect(shares?.map(([name]) => name)).toEqual([
+      'MAIN-1',
+      'MAIN-2',
+      'MAIN-3',
+      'MAIN-4',
+      'none',
+      'rest',
+    ])
+    // No task, 15 hours, is a part of its own; the first value is still a real one.
+    expect(figures?.parts.at(-2)?.line?.kind).toBe('none')
+    expect(shares?.at(-2)?.[1]).toBeCloseTo(15 / WHOLE)
+    expect(figures?.first.line.value?.reference).toBe('MAIN-1')
+    // The rest: the two smallest tasks and unknown work, 3 + 1 + 6 hours.
+    expect(shares?.at(-1)?.[1]).toBeCloseTo(10 / WHOLE)
     expect(figures?.parts.reduce((sum, part) => sum + part.share, 0)).toBeCloseTo(1)
+  })
+
+  it('leaves no task in the rest while it holds under a twentieth of the whole', () => {
+    const small: Stretch[] = [
+      { day: 0, group: { work_item: task(1, 'Big') }, spend: { seconds: 96 * HOUR } },
+      { day: 0, group: { work_item: noTask }, spend: { seconds: 4 * HOUR } },
+    ]
+    const just: Stretch[] = [
+      { day: 0, group: { work_item: task(1, 'Big') }, spend: { seconds: 95 * HOUR } },
+      { day: 0, group: { work_item: noTask }, spend: { seconds: 5 * HOUR } },
+    ]
+    const keys = (stretches: Stretch[]) =>
+      dimensionFigures(answer(stretches).rows, 'work_item', 'time')?.parts.map((part) => part.key)
+    expect(keys(small)).toEqual([`v:${task(1, '').id}`, 'rest'])
+    expect(keys(just)).toEqual([`v:${task(1, '').id}`, 'none'])
   })
 
   it('names a real value first even when work on no task is larger', () => {
@@ -118,7 +144,10 @@ describe('a dimension', () => {
     const figures = dimensionFigures(answer(unplaced).rows, 'work_item', 'time')
     expect(figures?.count).toBe(0)
     expect(figures?.first.line.kind).toBe('unknown')
-    expect(figures?.parts).toEqual([{ key: 'rest', line: null, share: 1 }])
+    // No task, a third of the whole, is its own part; unknown work is the rest.
+    expect(figures?.parts.map((part) => part.key)).toEqual(['none', 'rest'])
+    expect(figures?.parts[0]?.share).toBeCloseTo(1 / 3)
+    expect(figures?.parts[1]?.share).toBeCloseTo(2 / 3)
   })
 
   it('has no share in a measure the period has no figure for, and draws no part', () => {

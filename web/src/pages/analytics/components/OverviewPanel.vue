@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+
 /**
  * The overview of the Analytics page, where the page opens: the period at a glance, laid out to be
  * taken in without scrolling on a desktop screen.
@@ -16,7 +18,7 @@
  * Its own answer is the read by task, beside the period before; a press that could not narrow
  * the view says why where it was pressed.
  */
-import { computed, ref } from 'vue'
+import { useMediaQuery, useResizeObserver } from '@vueuse/core'
 
 import OverviewChanges from '@/pages/analytics/components/OverviewChanges.vue'
 import OverviewTop from '@/pages/analytics/components/OverviewTop.vue'
@@ -91,10 +93,49 @@ const chartColumn = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(chartColumn)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
+
+/**
+ * A tall window leaves room under the cards: the chart's plot takes it, so the cards stand at the
+ * bottom of what the panel shows and the period is drawn as high as the window allows. Under
+ * `TALL` the plot keeps its own height. The growth is what the plot adds to that height, so a
+ * second look at the same window finds no room left and changes nothing.
+ */
+const TALL = '(min-height: 940px)'
+const panel = ref<HTMLElement | null>(null)
+const grow = ref(0)
+const tall = useMediaQuery(TALL)
+
+/** The box the panel scrolls in: the nearest one around it that scrolls. */
+function scroller(from: HTMLElement) {
+  for (let box = from.parentElement; box; box = box.parentElement)
+    if (/auto|scroll/u.test(getComputedStyle(box).overflowY)) return box
+  return null
+}
+
+function fit() {
+  const own = panel.value
+  const frame = own && scroller(own)
+  if (!own || !frame || !tall.value) {
+    grow.value = 0
+    return
+  }
+  const bottom = frame.getBoundingClientRect().bottom
+  const padding = Number.parseFloat(getComputedStyle(frame).paddingBlockEnd) || 0
+  const room = bottom - padding - own.getBoundingClientRect().bottom
+  grow.value = Math.max(0, Math.round(grow.value + room))
+}
+
+useResizeObserver(panel, fit)
+useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
+watch(tall, fit)
 </script>
 
 <template>
-  <div class="overview-panel">
+  <div
+    ref="panel"
+    class="overview-panel"
+    :style="{ '--overview-plot-grow': `${grow}px` }"
+  >
     <SpendingTiles
       v-model:measure="measure"
       :split="usage.total.tokens"
@@ -150,6 +191,9 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
    taking the most of the width; the cards in one row under those while they fit, as many to a
    line as fit otherwise. A narrow panel stands each part under the one before. */
 .overview-panel {
+  /* What the plot adds to its height in a tall window; set from the room left under the cards. */
+  --overview-plot-grow: 0px;
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
@@ -166,6 +210,11 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
 .overview-chart {
   min-width: 0;
+
+  /* The plot's own height and the room a tall window leaves under the cards. */
+  & :deep(.period-field) {
+    block-size: calc(160px + var(--overview-plot-grow, 0px));
+  }
 }
 
 .overview-cards {

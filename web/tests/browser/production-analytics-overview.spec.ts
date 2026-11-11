@@ -276,3 +276,42 @@ test('a single day stands as its hours beside the day before', async ({ page }, 
   await expect(days.locator('.period-before')).toHaveCount(1)
   await page.screenshot(shot(info, 'analytics-overview-day-1440x900.png'))
 })
+
+/** The chart's plot and the room the panel leaves under the cards, inside its padding. */
+async function plotAndRoom(page: Page) {
+  return page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>('.analytics-panel')
+    const plot = document.querySelector('.overview-chart .period-field')
+    const cards = document.querySelector('.overview-cards')
+    if (!panel || !plot || !cards) throw new Error('no overview')
+    const { x, y, width, height } = plot.getBoundingClientRect()
+    const padding = Number.parseFloat(getComputedStyle(panel).paddingBlockEnd)
+    const room =
+      panel.getBoundingClientRect().bottom - padding - cards.getBoundingClientRect().bottom
+    const scrolls = panel.scrollHeight > panel.clientHeight
+    return { plot: { x, y, width, height }, room: Math.round(room), scrolls }
+  })
+}
+
+test('a tall window gives the room under the cards to the plot, a window of 900 keeps it', async ({
+  page,
+}, info) => {
+  await serve(page, WORLD)
+  await openOverview(page, 1440, 900)
+  const usual = await plotAndRoom(page)
+  await record(info, 'usual', usual)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  const plotHeight = async () => {
+    const measured = await plotAndRoom(page)
+    return measured.plot.height
+  }
+  await expect.poll(plotHeight).toBeGreaterThanOrEqual(280)
+  const tall = await plotAndRoom(page)
+  await record(info, 'tall', tall)
+  expect(tall.room).toBeGreaterThanOrEqual(0)
+  expect(tall.room).toBeLessThan(40)
+  expect(tall.scrolls).toBe(false)
+  // At 1440 by 900 the plot stands where it stood before the plot could grow, measured then.
+  const { x, y, width, height } = usual.plot
+  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 426, 532, 160])
+})

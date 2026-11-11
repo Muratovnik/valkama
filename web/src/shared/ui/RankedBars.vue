@@ -125,6 +125,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
             <span
               v-tooltip.detail="{ text: row.detail, words: row.label }"
               class="ranked-label one-line"
+              :class="{ 'ranked-quiet': row.quiet }"
               >{{ row.label }}</span
             >
             <span
@@ -228,14 +229,16 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 }
 
 /* The rows that are not categories read as a note on the breakdown rather than a part of it:
-   apart by air, their names in the quiet ink, slanted, their figures with no bar. */
+   apart by air, their names in the quiet ink, slanted, their figures with no bar. A row ranked
+   among them that names no value says so in the same ink. */
 .ranked-rest {
   margin-block-start: var(--space-3);
+}
 
-  & .ranked-label {
-    color: var(--color-text-tertiary);
-    font-style: italic;
-  }
+.ranked-rest .ranked-label,
+.ranked-label.ranked-quiet {
+  color: var(--color-text-tertiary);
+  font-style: italic;
 }
 
 .ranked-track {

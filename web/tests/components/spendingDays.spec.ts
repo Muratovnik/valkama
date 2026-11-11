@@ -134,18 +134,16 @@ describe('the days', () => {
     ])
     const source = { usage, by: 'work_item' as const, measure: 'time' as const }
     const series = stackLines(source)
-    // Six hues: the two that are not tasks, and the four largest tasks; the rest is «other».
-    expect(series.map((one) => one.key).toSorted()).toEqual(
-      [
-        'none',
-        'unknown',
-        ...[1, 2, 3, 4].map((number) => `v:${task(number, '').id}`),
-        'other',
-      ].toSorted(),
-    )
-    expect(series.filter((one) => one.slot !== 'other')).toHaveLength(6)
+    // The five largest tasks take the hues by rank; no task and unknown are their own series in
+    // the neutral, never a hue; task 6 is «other».
+    expect(series.map((one) => [one.key, one.slot])).toEqual([
+      ...[1, 2, 3, 4, 5].map((number) => [`v:${task(number, '').id}`, number]),
+      ['none', 'other'],
+      ['unknown', 'other'],
+      ['other', 'other'],
+    ])
     const columns = dayColumns(source, series, WEDNESDAY)
-    expect(columns[0]?.values.other).toBe(5 + 6)
+    expect(columns[0]?.values.other).toBe(5)
     expect(columns[1]?.values).toEqual({ none: 60 / 3600, unknown: 120 / 3600 })
     const legend = mountDays(usage).get('.chart-legend').text()
     expect(legend).toContain('No task')

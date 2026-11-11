@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /**
- * One card of the overview: the first five values of a dimension in the page's measure, each a
- * row with its name, a bar on the card's own scale and its figure. Only values: the folded tail,
- * work with no value and work nobody can place are no answer to «which ones», and the
- * dimension's own section lists them.
+ * One card of the overview: the first five rows of a dimension in the page's measure, each a
+ * row with its name, a bar on the card's own scale and its figure. Work with no value there and
+ * work nobody can place are ranked by their figure among the values, since they can be most of
+ * the period: their bar is the neutral, their name in the quiet ink, and they lead nowhere. The
+ * folded tail is no answer to «which ones», and the dimension's own section lists it. A value's
+ * bar is in its hue of the page (`rankedSlots`), the one its tile and charts draw it in.
  *
  * The heading opens that section. A row acts as a bar of the breakdown does (`useRankedLines`):
  * a task is a link to its card, a value the read can filter by narrows the view to it, sent out
@@ -18,7 +20,9 @@ import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWord
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TopRead } from '@/pages/analytics/composables/useTopValues.ts'
-import { spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
+import { figureOf, measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
+import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -51,17 +55,31 @@ const waiting = computed(() =>
     : t('analytics.overview.cards.reading'),
 )
 
+const weight = (line: SpendingLine) => measureOf(props.measure, line.spent) ?? 0
+
+/**
+ * The first rows: values, no value and unknown work alike by their figure; never the tail, and
+ * never a row with nothing in the period, which answers no «which ones».
+ */
 const lines = computed(() =>
   values.value
-    ? spendingLines(values.value, props.dimension, props.measure, FIRST)
-        .filter((line) => line.kind === 'category')
+    ? spendingLines(values.value, props.dimension, props.measure, Number.POSITIVE_INFINITY)
+        .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
+        .sort((left, right) => weight(right) - weight(left))
         .slice(0, FIRST)
     : [],
+)
+const slots = computed(() =>
+  values.value ? rankedSlots(values.value, props.dimension, props.measure) : new Map(),
 )
 const { rows, follow, select } = useRankedLines({
   by: () => props.dimension,
   lines: () => lines.value,
   measure: () => props.measure,
+  more: (line) => ({
+    slot: slots.value.get(line.key) ?? 'other',
+    quiet: line.kind !== 'category',
+  }),
   narrow: (value, label) => emit('narrow', value, label),
 })
 

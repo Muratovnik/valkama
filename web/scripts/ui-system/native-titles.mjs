@@ -199,6 +199,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
   ],
   [
+    'pages/analytics/components/RailTile.vue <MiniShareBar> v-tooltip.detail="tile.shares.label"',
+    'every part of the share bar with its share, work on no value and the rest among them, where the tile says only the first',
+  ],
+  [
     `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
     'that a notification comes with the window closed too, and that a click on it opens the card; it stood as a paragraph over the group',
   ],

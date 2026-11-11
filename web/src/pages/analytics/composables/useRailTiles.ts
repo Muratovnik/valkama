@@ -17,6 +17,7 @@ import { useRailReads } from '@/pages/analytics/composables/useRailReads.ts'
 import type { RailRead } from '@/pages/analytics/composables/useRailReads.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import { dimensionFigures, overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { spentAnything, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
@@ -25,7 +26,6 @@ import { OVERVIEW } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView, Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
-import { seriesSlots } from '@/shared/lib/seriesColors.ts'
 import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
 
@@ -158,12 +158,12 @@ export function useRailTiles(options: {
     const figures = dimensionFigures(read.usage.rows, dimension, measure)
     if (!figures) return { ...noData(), busy: read.refreshing }
     const { first } = figures
-    const named = figures.parts.flatMap((part) => (part.line ? [part.key] : []))
-    const slots = seriesSlots(named)
+    const slots = rankedSlots(read.usage.rows, dimension, measure)
     const parts = figures.parts.map((part) => ({
       key: part.key,
       share: part.share,
       slot: slots.get(part.key) ?? ('other' as const),
+      apart: part.line?.kind === 'none',
     }))
     const said = figures.parts.map(
       (part) =>

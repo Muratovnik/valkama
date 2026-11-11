@@ -1,6 +1,5 @@
 import {
   figureOf,
-  measureOf,
   spendingLines,
   spentAnything,
   spentOf,
@@ -19,9 +18,11 @@ import type {
   Usage,
   UsageDimension,
   UsageGroupValue,
+  UsageRow,
   UsageStep,
 } from '@/shared/api/analyticsApi.ts'
-import { SERIES_SLOT_COUNT, seriesSlots } from '@/shared/lib/seriesColors.ts'
+import { rankSlots } from '@/shared/lib/seriesColors.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { PeriodColumn, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 
 /** How many values a day's stack names; the rest of the period's values stack as «other». */
@@ -60,30 +61,50 @@ export interface StackLine extends PeriodSeries {
 }
 
 /**
- * The values a stack names: work with no value there and unknown work, each its own series as
- * in the bars and never folded, and the period's largest categories in the measure, as many as
- * the palette has hues left for, up to `STACKED`; only values with anything to draw. Their hues
- * come from `seriesSlots` over that set, so a value keeps its hue whatever its rank; the rest of
- * the period is one «other» series in the neutral, on top.
+ * The page's one colour key of a dimension: its categories ranked by the measure over the rows
+ * (`spendingLines`), the first `STACKED` of them each a hue by rank. Work with no value there,
+ * unknown work and the folded rest are the neutral, never a hue. The rail's tile, the section's
+ * bars, small charts and day chart and the overview's chart all read this one key, so a value has
+ * one colour on the page; another measure ranks again and may repaint.
+ */
+export function rankedSlots(
+  rows: readonly UsageRow[],
+  dimension: UsageDimension,
+  measure: Measure,
+): Map<string, SeriesSlot> {
+  return rankSlots(
+    rankedCategories(rows, dimension, measure).map((line) => line.key),
+    STACKED,
+  )
+}
+
+/** The categories with a figure in the measure, largest first. */
+function rankedCategories(rows: readonly UsageRow[], dimension: UsageDimension, measure: Measure) {
+  return spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
+    (line) => line.kind === 'category' && figureOf(measure, line.spent) !== 0,
+  )
+}
+
+/**
+ * The values a stack names: the period's largest categories in the measure, up to `STACKED`, each
+ * in its hue of the page's key (`rankedSlots`), then work with no value there and unknown work,
+ * each its own series in the neutral and never folded; only values with anything to draw. The
+ * rest of the period is one «other» series in the neutral, on top.
  */
 export function stackLines({ usage, by: dimension, measure }: StackSource) {
-  const amount = (line: SpendingLine) => measureOf(measure, line.spent) ?? 0
   // A value with no figure in the measure stays, so its days can say it has none.
   const lines = spendingLines(usage.rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
     (line) => figureOf(measure, line.spent) !== 0,
   )
   const apart = lines.filter((line) => line.kind !== 'category')
-  const categories = lines
-    .filter((line) => line.kind === 'category')
-    .sort((left, right) => amount(right) - amount(left))
-  const room = Math.min(STACKED, SERIES_SLOT_COUNT - apart.length)
-  const named = [...apart, ...categories.slice(0, room)]
-  const slots = seriesSlots(named.map((line) => line.key))
-  const series: StackLine[] = [...slots].map(([key, slot]) => ({
-    key,
+  const categories = lines.filter((line) => line.kind === 'category')
+  const slots = rankedSlots(usage.rows, dimension, measure)
+  const named = [...categories.slice(0, STACKED), ...apart]
+  const series: StackLine[] = named.map((line) => ({
+    key: line.key,
     label: '',
-    slot,
-    line: named.find((line) => line.key === key) ?? null,
+    slot: slots.get(line.key) ?? 'other',
+    line,
   }))
   if (lines.length > named.length)
     series.push({ key: 'other', label: '', slot: 'other', line: null })
