@@ -120,9 +120,11 @@ const kinds = computed(() => {
   ]
 })
 
-/** Who did the work: the role, then the class it was launched with and its effort. */
+/**
+ * Who did the work: the role, then the class its run was launched with and its effort. An adviser
+ * keeps the run's, so two advisers in different runs are two rows that say whose each was.
+ */
 function roleName(line: UsageRole) {
-  if (line.role === 'advisor') return t('workItem.usage.role.advisor')
   let launch = t('workItem.usage.classNone')
   if (line.launch_class.unknown) launch = t('workItem.usage.classUnknown')
   else if (line.launch_class.id !== null) launch = line.launch_class.id

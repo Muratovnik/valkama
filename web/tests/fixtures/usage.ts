@@ -205,7 +205,7 @@ export function whoUsage(overrides: Partial<ItemUsage> = {}): ItemUsage {
       {
         role: 'advisor',
         launch_class: none,
-        effort: none,
+        effort: { id: null, unknown: true },
         seconds: 0,
         tokens: roleTokens[2],
         estimated_api_cost_usd: 6,

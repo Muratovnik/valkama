@@ -1,7 +1,7 @@
 /**
  * Who did an item's work, on its Agents tab: the session's own agent, each subagent by the class it
- * was launched with, the adviser as a row of its own, each with the effort it ran at and its time,
- * tokens and cost, in the order the read ranks them. «None» and «unknown» are rows apart and say
+ * was launched with, an adviser as a row of its own with the class of the run it advised in, each
+ * with the effort it ran at and its time, tokens and cost, in the order the read ranks them. «None» and «unknown» are rows apart and say
  * which they are. The rows add up to the tab's own totals.
  */
 import { afterEach, describe, expect, it } from 'vitest'
@@ -79,7 +79,14 @@ describe('who did the work', () => {
           seconds: 1800,
           estimated_api_cost_usd: 6,
         }),
-        role({ role: 'advisor', seconds: 0, estimated_api_cost_usd: 2 }),
+        role({
+          role: 'advisor',
+          launch_class: value('bero'),
+          effort: value('high'),
+          seconds: 0,
+          estimated_api_cost_usd: 3,
+        }),
+        role({ role: 'advisor', effort: value('high'), seconds: 0, estimated_api_cost_usd: 2 }),
       ]),
     )
     expect(rolesOf(wrapper)).toEqual([
@@ -91,7 +98,8 @@ describe('who did the work', () => {
         '1K tokens',
         '≈\u{A0}$6.00',
       ],
-      ['Adviser', 'on the side', '1K tokens', '≈\u{A0}$2.00'],
+      ['Adviser · bero · effort high', 'on the side', '1K tokens', '≈\u{A0}$3.00'],
+      ['Adviser · no launch class · effort high', 'on the side', '1K tokens', '≈\u{A0}$2.00'],
     ])
     expect(wrapper.get('[data-breakdown="roles"]').attributes('aria-label')).toBe(
       'By role, launch class and effort',
@@ -116,7 +124,7 @@ describe('who did the work', () => {
     expect(rolesOf(wrapper).map((row) => row[0])).toEqual([
       'Subagent · bero · effort high',
       'Main agent · no launch class · effort unknown',
-      'Adviser',
+      'Adviser · no launch class · effort unknown',
     ])
   })
 })
