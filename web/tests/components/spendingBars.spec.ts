@@ -221,7 +221,7 @@ describe('the bars', () => {
 describe('the bars on the page', () => {
   it('break the period down by the dimension the answer was read by, adding up to the tile', async () => {
     stubAnalyticsReads((query) => answer([query.get('group_by') as UsageDimension]))
-    const page = await mountAnalytics({ routeState: { measure: 'tokens' } })
+    const page = await mountAnalytics({ routeState: { by: 'work_item', measure: 'tokens' } })
     await flushPromises()
     const rows = page.getComponent(RankedBars).props('rows') as RankedRow[]
     expect(page.get('.spending-bars h2').text()).toBe('Tokens by task')

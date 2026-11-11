@@ -138,7 +138,8 @@ export interface TimedStretch {
   spend: Spend
 }
 
-const DAY = 86_400_000
+const HOUR = 3_600_000
+const DAY = 24 * HOUR
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/u
 
 /** A moment of the query: a date is the start of that day at the query's offset. */
@@ -170,11 +171,12 @@ function admits(query: URLSearchParams, group: Stretch['group']) {
  * Where the read cuts a period into days: at its start, at every midnight of the asked offset
  * inside it and at its end. The days are fixed steps of 24 hours at that one offset, whatever
  * the browser's zone does in between: the read has no zone, only the offset it was asked at.
+ * Asked by the hour, it cuts at every hour instead.
  */
-function dayEdges(from: number, to: number, offset: number) {
+function dayEdges(from: number, to: number, offset: number, size = DAY) {
   const shift = offset * 60_000
   const edges = [from]
-  for (let edge = (Math.floor((from + shift) / DAY) + 1) * DAY - shift; edge < to; edge += DAY)
+  for (let edge = (Math.floor((from + shift) / size) + 1) * size - shift; edge < to; edge += size)
     edges.push(edge)
   edges.push(to)
   return edges
@@ -191,7 +193,8 @@ export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchP
   const offset = Number(query.get('utc_offset') ?? 0)
   const from = instant(query.get('from') ?? '', offset)
   const to = instant(query.get('to') ?? '', offset)
-  const edges = dayEdges(from, to, offset)
+  const hourly = query.get('step') === 'hour'
+  const edges = dayEdges(from, to, offset, hourly ? HOUR : DAY)
   const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isUsageDimension)
   const within = (start: number, end: number) =>
     stretches
@@ -208,6 +211,7 @@ export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchP
     groupBy,
     stretches: within(from, to),
     before: query.get('compare') === 'true' ? within(from - (to - from), from) : null,
+    step: hourly ? 'hour' : 'day',
   })
 }
 
@@ -235,8 +239,9 @@ function answerOf(options: {
   offset: number
   stretches: readonly Stretch[]
   before?: readonly Stretch[] | null
+  step?: Usage['period']['step']
 }): Answer {
-  const { edges, offset, groupBy, stretches, before } = options
+  const { edges, offset, groupBy, stretches, before, step = 'day' } = options
   const at = (moment: number) => momentAt(moment, offset)
   const first = edges[0] ?? 0
   const end = edges.at(-1) ?? first
@@ -253,7 +258,7 @@ function answerOf(options: {
   return {
     interface_version: 'valkama-analytics-api',
     usage: {
-      period: { from: at(first), to: at(end), step: 'day', utc_offset: offset },
+      period: { from: at(first), to: at(end), step, utc_offset: offset },
       group_by: groupBy,
       cost_basis: COST_BASIS,
       last_event_at: at(end),

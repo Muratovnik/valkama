@@ -85,9 +85,9 @@ for (const width of [1440, 1024, 390]) {
     await analytics.locator('.spending-tiles .segmented-option.active').focus()
     await page.keyboard.press('ArrowRight')
     await expect(analytics.locator('.spending-tiles .segmented-option.active')).toBeFocused()
-    const chosen = pageAt(
-      width < NARROW_FRAME ? { measure: 'tokens', open: 'section' } : { measure: 'tokens' },
-    )
+    // The task section is named in the address, as every dimension is.
+    const tokens = { by: 'work_item', measure: 'tokens' }
+    const chosen = pageAt(width < NARROW_FRAME ? { ...tokens, open: 'section' } : tokens)
     await expect.poll(() => page.url().slice(new URL(page.url()).origin.length)).toBe(chosen)
     await expect(analytics.locator('.spending-bars h2')).toHaveText('Tokens by task')
   })

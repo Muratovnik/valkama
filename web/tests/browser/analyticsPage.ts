@@ -131,12 +131,16 @@ export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore =
 /** Under this window width the page shows its list of sections or one section, not both. */
 export const NARROW_FRAME = 1024
 
+/** The task section's report, which the page showed at its plain address before it opened on its overview. */
+export const TASK_REPORT = pageAt({ by: 'work_item' })
+
 /**
- * Opens the page at `width` and waits for the report: its tiles and its days. A window too narrow
- * for the rail beside the panel opens on the list of sections unless the address says otherwise,
- * and the section the address names is chosen there, as a reader would.
+ * Opens the page at `width` and waits for the report: its tiles and its days; the report of the
+ * task section unless an address is given. A window too narrow for the rail beside the panel
+ * opens on the list of sections unless the address says otherwise, and the section the address
+ * names is chosen there, as a reader would.
  */
-export async function openReport(page: Page, width: number, address = pageAt()) {
+export async function openReport(page: Page, width: number, address = TASK_REPORT) {
   await page.setViewportSize({ width, height: 1000 })
   await page.goto(address)
   const analytics = page.locator('.analytics-page')

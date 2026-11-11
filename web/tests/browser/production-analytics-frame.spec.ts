@@ -5,9 +5,9 @@
  * At a window 1024 pixels wide or wider and 700 or more high the document never scrolls: the bar
  * stays where it is, and the rail and the panel each scroll on their own. Lower than that, the
  * panel takes the scroll and the document still does not. Every other module keeps the frame's
- * own scroll. The section on show is in the address, so a reload keeps it, and an address the
- * page wrote before it had sections opens the same period, measure and filters in the section of
- * its breakdown. Under 1024 pixels the rail is the screen, a list; a section chosen there takes
+ * own scroll. The section on show is in the address, so a reload keeps it; the plain address is
+ * the overview, and an address the page wrote before it had sections that names its breakdown
+ * opens the same period, measure and filters in the section of that breakdown. Under 1024 pixels the rail is the screen, a list; a section chosen there takes
  * its place, and the browser's Back returns to the list. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { pageAt, record, serve } from './analyticsPage.ts'
+import { pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -70,7 +70,8 @@ async function wheelOver(page: Page, selector: string, by: number) {
   await page.mouse.wheel(0, by)
 }
 
-async function openAt(page: Page, width: number, height: number, address = pageAt()) {
+/** Opens the page on the task section's report, which is taller than any window here. */
+async function openAt(page: Page, width: number, height: number, address = TASK_REPORT) {
   await serve(page)
   await page.setViewportSize({ width, height })
   await page.goto(address)
@@ -139,9 +140,10 @@ test('another module keeps the frame scrolling it', async ({ page }, info) => {
 })
 
 test('a section chosen on the rail is the address, and a reload keeps it', async ({ page }) => {
-  await openAt(page, 1440, 900)
+  await openAt(page, 1440, 900, pageAt())
   const rail = page.getByRole('navigation', { name: 'Sections of the usage' })
-  await expect(rail.locator('[aria-current="page"]')).toHaveText('Task')
+  // The plain address is the overview.
+  await expect(rail.locator('[aria-current="page"]')).toHaveText('Overview')
   await rail.getByRole('button', { name: 'Model' }).click()
   await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
   await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
@@ -149,16 +151,23 @@ test('a section chosen on the rail is the address, and a reload keeps it', async
   await expect(rail.locator('[aria-current="page"]')).toHaveText('Model')
   await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
 
-  // From the keyboard: the overview, which shows the figures and the days alone.
+  // From the keyboard: the task section, named in the address as every dimension is.
+  await rail.getByRole('button', { name: 'Task' }).focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => path(page)).toBe(pageAt({ by: 'work_item' }))
+  await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by task')
+
+  // And back to the overview, the plain address, which shows the period at a glance.
   await rail.getByRole('button', { name: 'Overview' }).focus()
   await page.keyboard.press('Enter')
-  await expect.poll(() => path(page)).toBe(pageAt({ by: 'overview' }))
+  await expect.poll(() => new URL(page.url()).search).toBe('')
   await expect(rail.getByRole('button', { name: 'Overview' })).toHaveAttribute(
     'aria-current',
     'page',
   )
   await expect(page.locator('.analytics-panel .spending-tiles')).toBeVisible()
   await expect(page.locator('.analytics-panel .spending-days')).toBeVisible()
+  await expect(page.locator('.analytics-panel .overview-changes')).toBeVisible()
   await expect(page.locator('.spending-bars, .spending-table')).toHaveCount(0)
 })
 

@@ -22,6 +22,9 @@
  *
  * A value or a day pressed in the report narrows the view to it and breaks it down by task, as a
  * new place in the history, so Back returns to the view it was pressed in.
+ *
+ * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
+ * is its whole report.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,6 +33,7 @@ import { useMediaQuery } from '@vueuse/core'
 
 import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
+import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
 import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
 import type { ReportPart } from '@/pages/analytics/components/SpendingReport.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -129,6 +133,8 @@ const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
 ])
 
 const overview = computed(() => view.value.by === OVERVIEW)
+/** This week, which the read holds against the same days of the week before. */
+const weekly = computed(() => view.value.period === 'week')
 
 const sectionName = computed(
   () => sections.value.find((section) => section.value === view.value.by)?.label ?? '',
@@ -244,7 +250,24 @@ const emptyDescription = computed(() =>
           @retry="read.retry"
         >
           <template #default="{ payload }">
+            <OverviewPanel
+              v-if="overview"
+              :usage="payload"
+              :accounts="read.accounts.value"
+              :filters="read.readWith.value"
+              :read-at="read.askedAt.value"
+              :measure="view.measure"
+              :project-scoped="Boolean(projectId)"
+              :refused="reportRefused"
+              :weekly="weekly"
+              @update:measure="(measure) => change({ measure })"
+              @narrow="narrow"
+              @day="narrowToDay"
+              @open="chooseSection"
+              @retry="read.retry"
+            />
             <SpendingReport
+              v-else
               :usage="payload"
               :accounts="read.accounts.value"
               :filters="read.readWith.value"

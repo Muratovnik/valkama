@@ -87,6 +87,14 @@ describe('the Analytics address', () => {
     expect(readAddress(undefined)).toEqual(DEFAULT_VIEW)
   })
 
+  it('opens the plain address on the overview, and names every dimension, the tasks too', () => {
+    expect(readAddress(undefined).by).toBe('overview')
+    expect(readAddress({}).by).toBe('overview')
+    expect(writeAddress({ ...DEFAULT_VIEW, by: 'work_item' })).toEqual({ by: 'work_item' })
+    expect(readAddress({ by: 'work_item' }).by).toBe('work_item')
+    expect(throughTheAddress({ ...DEFAULT_VIEW, by: 'work_item' }).by).toBe('work_item')
+  })
+
   it('holds one view in one address, whatever order its filters were set in', () => {
     const one = writeAddress({ ...DEFAULT_VIEW, filters: { role: ['main'], account: ['a'] } })
     const other = writeAddress({ ...DEFAULT_VIEW, filters: { account: ['a'], role: ['main'] } })
@@ -110,11 +118,12 @@ describe('the Analytics address', () => {
 
   /**
    * Addresses as the page wrote them before it had sections, when `by` named the breakdown and the
-   * plain address was the breakdown by task: each opens the same period, measure and filters, in
-   * the section of its breakdown, and a narrow screen opens on the list of sections.
+   * plain address was the breakdown by task: each that names its breakdown opens the same period,
+   * measure and filters in the section of it, and a narrow screen opens on the list of sections.
+   * The plain one opens the overview, where the page now opens.
    */
   it.each([
-    ['the plain page', {}, {}],
+    ['the plain page, on the overview', {}, { by: 'overview' }],
     [
       'a custom period by model in cost, filtered',
       {

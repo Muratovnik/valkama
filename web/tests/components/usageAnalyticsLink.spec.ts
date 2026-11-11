@@ -83,8 +83,10 @@ function follow(usage: ItemUsage): { view: AnalyticsView; words: string } {
   }
 }
 
+/** The link names its section, the breakdown by task, and does not leave it to the default. */
 const filteredTo = (items: string[]): AnalyticsView => ({
   ...DEFAULT_VIEW,
+  by: 'work_item',
   period: 'custom',
   from: '2026-08-13',
   to: '2026-08-16',
@@ -114,6 +116,7 @@ describe('the way to Analytics', () => {
     const usage = whoUsage({ account_stretches: [] })
     expect(follow(usage).view).toEqual({
       ...DEFAULT_VIEW,
+      by: 'work_item',
       filters: { work_item: [usage.work_item_id] },
     })
   })

@@ -3,8 +3,9 @@
  * The oracle is the requirement. The rail lists the overview first and then each dimension the
  * page may filter on, the one on show marked as the page by more than its colour; choosing one is
  * written into the address, in place where rail and panel stand side by side, and as a new place
- * where a narrow screen shows one at a time, so Back returns to the list. The overview shows the
- * figures and the days; a dimension shows its whole report. The bar names each filter set as a
+ * where a narrow screen shows one at a time, so Back returns to the list. The plain address is the
+ * overview, which shows the figures, the days, what changed and the cards of first values; a
+ * dimension shows its whole report. The bar names each filter set as a
  * chip that takes it out, offers every value from «add a filter», says how fresh the figures are
  * and reads them again.
  */
@@ -86,9 +87,9 @@ describe('the rail of sections', () => {
       'overview',
       ...USAGE_DIMENSIONS,
     ])
-    // The plain address is the breakdown by task, as it was before the page had sections.
-    expect(page.findAll('[aria-current="page"]').map((one) => one.text())).toEqual(['Task'])
-    expect(entry(page, 'work_item').classes()).toContain('selected')
+    // The plain address is the overview, where the page opens.
+    expect(page.findAll('[aria-current="page"]').map((one) => one.text())).toEqual(['Overview'])
+    expect(entry(page, 'overview').classes()).toContain('selected')
     // The rail replaced the breakdown's field: no field chooses a dimension any more.
     expect(page.text()).not.toContain('Break down by')
   })
@@ -108,8 +109,9 @@ describe('the rail of sections', () => {
     expect(page.findAll('[aria-current="page"]').map((one) => one.text())).toEqual(['Model'])
     expect(page.get('.spending-bars h2').text()).toBe('Tokens by model')
 
+    // The overview is the plain address, so choosing it writes no section.
     await entry(page, 'overview').trigger('click')
-    expect(written(page).at(-1)).toEqual([{ by: 'overview', measure: 'tokens' }, 'replace'])
+    expect(written(page).at(-1)).toEqual([{ measure: 'tokens' }, 'replace'])
     // The section on show chosen again writes nothing.
     await entry(page, 'model').trigger('click')
     expect(written(page)).toHaveLength(1)
@@ -117,19 +119,21 @@ describe('the rail of sections', () => {
 })
 
 describe('the panel', () => {
-  it('shows the figures and the days on the overview, and a dimension its whole report', async () => {
+  it('shows the figures, the days, what changed and the first values on the overview, and a dimension its whole report', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'overview' } })
     expect(page.get('.analytics-panel').attributes('aria-label')).toBe('Overview')
     expect(page.find('.spending-tiles').exists()).toBe(true)
     expect(page.find('.spending-days').exists()).toBe(true)
+    expect(page.find('.overview-changes').exists()).toBe(true)
+    expect(page.findAll('.overview-top')).toHaveLength(4)
     expect(page.find('.spending-bars').exists()).toBe(false)
     expect(page.find('.spending-table').exists()).toBe(false)
-    // The overview borrows the breakdown of the plain page, so moving to it asks nothing again.
+    // The overview's own read is by task, so moving to the task section asks nothing again.
     expect(reads.grouped('work_item')).toHaveLength(2)
     const asked = reads.asked.length
 
-    await page.setProps({ routeState: {} })
+    await page.setProps({ routeState: { by: 'work_item' } })
     await flushPromises()
     expect(reads.asked).toHaveLength(asked)
     expect(page.get('.analytics-panel').attributes('aria-label')).toBe('Task')
@@ -175,7 +179,7 @@ describe('a narrow screen', () => {
     const page = await mountAnalytics({ routeState: { by: 'overview', open: 'section' } })
     expect(page.get('.analytics-panel-back').text()).toBe('All sections')
     await page.get('.analytics-panel-back').trigger('click')
-    expect(written(page).at(-1)).toEqual([{ by: 'overview' }, 'push'])
+    expect(written(page).at(-1)).toEqual([{}, 'push'])
   })
 
   it('keeps a section open while a press narrows it', async () => {
@@ -187,7 +191,7 @@ describe('a narrow screen', () => {
     await bar.trigger('click')
     const [state, mode] = written(page).at(-1) ?? []
     expect(mode).toBe('push')
-    expect(state).toEqual({ open: 'section', filters: '{"model":["model-a"]}' })
+    expect(state).toEqual({ by: 'work_item', open: 'section', filters: '{"model":["model-a"]}' })
   })
 })
 
@@ -212,7 +216,8 @@ describe('the bar', () => {
 
   it('opens a field of every value per dimension from «add a filter»', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
-    const page = await mountAnalytics()
+    // A section whose reads are by task alone, so a read by model is the filter's.
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
     const add = page.get('.analytics-filter-add')
     const fields = page.get(`#${add.attributes('aria-controls') ?? 'none'}`)
     expect(add.attributes('aria-expanded')).toBe('false')

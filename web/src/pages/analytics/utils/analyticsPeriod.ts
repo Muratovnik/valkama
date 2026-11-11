@@ -41,6 +41,10 @@ export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | nul
   return { from: view.from, to: localDay(shiftDays(dayFrom(view.to), 1)), utcOffset }
 }
 
+/** How a view's period is cut into columns: a single day by its hours, any longer one by days. */
+export const stepOf = (view: AnalyticsView): 'day' | 'hour' =>
+  view.period === 'custom' && Boolean(view.from) && view.from === view.to ? 'hour' : 'day'
+
 /** A custom period's start and end, as they first stand when it is chosen: this week's days. */
 export function customDays(now: Date): { from: string; to: string } {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())

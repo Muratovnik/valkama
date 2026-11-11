@@ -122,6 +122,8 @@ export interface UsageQuery {
   /** Not included; a date or a time, as `from`. */
   to: string
   utcOffset: number
+  /** How the series is cut: by day, the default, or by hour. */
+  step?: 'day' | 'hour'
 }
 
 /** The query string of a read: each filter by its dimension's name, and `none` for the rest. */
@@ -129,7 +131,7 @@ export function usageParameters(query: UsageQuery): URLSearchParams {
   const parameters = new URLSearchParams({
     from: query.from,
     to: query.to,
-    step: 'day',
+    step: query.step ?? 'day',
     utc_offset: String(query.utcOffset),
   })
   if (query.groupBy.length) parameters.set('group_by', query.groupBy.join(','))

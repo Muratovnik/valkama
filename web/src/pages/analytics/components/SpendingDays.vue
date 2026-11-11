@@ -11,15 +11,26 @@
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
  * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
+ *
+ * A single day stands as its hours, which narrow nothing further. Given the steps of the period
+ * before (`before`), each column carries the figure of the step it is compared with, drawn as a
+ * dashed outline on the same scale, named in the legend and said in the readout and the table;
+ * while those steps are read there is no outline, and when they could not be read a note under
+ * the chart says so. A `brief` chart, standing beside the titles of its tasks, names
+ * each task by its number alone.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
+import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
+import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
 import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
+import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
@@ -36,6 +47,10 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
+  /** The steps of the period before, to outline behind each column; none outlined without. */
+  before?: BeforeSteps | null
+  /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
+  brief?: boolean
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
@@ -44,26 +59,56 @@ const emit = defineEmits<{ day: [day: string, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
+const overviewWords = useOverviewWords()
 
-const title = computed(() => words.dayChartTitle(props.measure, props.by))
+/** A single day, read by the hour. */
+const hourly = computed(() => props.usage.period.step === 'hour')
+
+const title = computed(() =>
+  hourly.value
+    ? overviewWords.hourChartTitle(props.measure, props.by)
+    : words.dayChartTitle(props.measure, props.by),
+)
+
+/** The steps of the period before, when they were read. */
+const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
+
+/** What the step compared with the column at `index` holds; nothing when none is compared. */
+function beforeOf(index: number) {
+  const step = beforeSteps.value?.[index]
+  return step ? { before: figureOf(props.measure, spentOf(step)) } : {}
+}
+
+/** A column's name, short and in full: a day, or an hour of a single day. */
+const nameOf = (key: string) =>
+  hourly.value
+    ? { label: overviewWords.hour(key), fullLabel: overviewWords.fullHour(key) }
+    : { label: words.day(key), fullLabel: words.fullDay(key) }
+
+/** A series' name: its value's, or by its task's number alone where the chart is `brief`. */
+function seriesName(line: StackLine['line']) {
+  if (!line) return t('analytics.days.other')
+  const reference = props.brief && props.by === 'work_item' ? line.value?.reference : null
+  return reference ?? words.lineLabel(props.by, line)
+}
 
 const series = computed(() =>
-  stackLines(props).map((one) => ({
-    ...one,
-    label: one.line ? words.lineLabel(props.by, one.line) : t('analytics.days.other'),
-  })),
+  stackLines(props).map((one) => ({ ...one, label: seriesName(one.line) })),
 )
 
 const chart = computed<PeriodChartProps>(() => ({
   label: title.value,
   series: series.value,
-  columns: dayColumns(props, series.value, props.readAt).map((column) => ({
+  columns: dayColumns(props, series.value, props.readAt).map((column, index) => ({
     ...column,
-    label: words.day(column.key),
-    fullLabel: words.fullDay(column.key),
-    action: t('analytics.drill.day', { day: words.fullDay(column.key) }),
+    ...nameOf(column.key),
+    ...beforeOf(index),
+    ...(hourly.value
+      ? {}
+      : { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }),
   })),
-  actionable: 'column',
+  // An hour narrows to the day it is already of, so only a day acts.
+  actionable: hourly.value ? null : 'column',
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts).map((change) => ({
@@ -74,6 +119,7 @@ const chart = computed<PeriodChartProps>(() => ({
   words: {
     // Time is always counted; tokens and a price can be absent from a day that spent.
     absent: props.measure === 'time' ? undefined : t(`analytics.days.absent.${props.measure}`),
+    before: t('analytics.overview.before.word'),
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
     note: t('analytics.days.note'),
@@ -100,6 +146,12 @@ function select({ column }: PeriodSelection) {
         v-bind="chart"
         @select="select"
       />
+      <p
+        v-if="before === 'failed'"
+        class="spending-days-note"
+      >
+        {{ t('analytics.overview.before.failed') }}
+      </p>
       <p
         v-if="accounts === 'failed'"
         class="spending-days-note"

@@ -7,8 +7,11 @@
  * the whole link.
  *
  * The section is written under `by`, the key that held the breakdown before the page had
- * sections, so an address written then opens the section of its breakdown. The overview is the
- * one section that is no dimension, and it is written like any other.
+ * sections, so an address written then with a breakdown named opens the section of it. The
+ * overview is the one section that is no dimension, and the page opens on it: the plain address
+ * is the overview, and every dimension is named, the breakdown by task too. A plain address the
+ * page wrote before it had sections, when the plain page was the breakdown by task, therefore
+ * opens the overview, the period's figures with that breakdown's first values among them.
  *
  * A preset is kept as its name, not as its dates: «this week» in a link opened next week is
  * next week's week, as the words say.
@@ -46,17 +49,14 @@ export interface AnalyticsView {
   to: string
 }
 
-/**
- * The dimension a plain address breaks work down by. It stays a dimension, not the overview:
- * the plain address is also what the page wrote for its breakdown by task before it had sections.
- */
-const DEFAULT_BREAKDOWN: UsageDimension = 'work_item'
+/** The dimension the overview's own read breaks work down by: its tasks, which it ranks. */
+const OVERVIEW_BREAKDOWN: UsageDimension = 'work_item'
 
 export const DEFAULT_VIEW: AnalyticsView = {
   period: 'week',
   from: '',
   to: '',
-  by: DEFAULT_BREAKDOWN,
+  by: OVERVIEW,
   measure: 'time',
   filters: {},
   open: false,
@@ -65,9 +65,9 @@ export const DEFAULT_VIEW: AnalyticsView = {
 const isSection = (value: unknown): value is AnalyticsSection =>
   value === OVERVIEW || isUsageDimension(value)
 
-/** The dimension a view's reads break work down by: its section's, or the default for the overview. */
+/** The dimension a view's reads break work down by: its section's, or the overview's tasks. */
 export const breakdownOf = (view: AnalyticsView): UsageDimension =>
-  view.by === OVERVIEW ? DEFAULT_BREAKDOWN : view.by
+  view.by === OVERVIEW ? OVERVIEW_BREAKDOWN : view.by
 
 type RouteState = Readonly<Record<string, string | number | boolean>>
 
