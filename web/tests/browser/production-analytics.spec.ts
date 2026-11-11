@@ -18,6 +18,7 @@ import {
   bars,
   boxes,
   expectBarsInTracks,
+  expectBesideOrUnder,
   expectNamesInView,
   expectWhole,
   LONG_TAIL,
@@ -183,9 +184,13 @@ for (const ru of [false, true])
           await says(analytics, ru)
           const measured = await measure(page)
           const unread = await boxes(page, '.spending-unread')
+          const [words] = await boxes(page, '.spending-unread-words')
+          const [retry] = await boxes(page, '.spending-unread .button')
           await record(info, `analytics ${ru ? 'ru ' : ''}${name} ${width}`, {
             ...measured,
             unread,
+            words,
+            retry,
             tileWords: await analytics
               .locator('.spending-tiles .segmented-option')
               .allTextContents(),
@@ -195,6 +200,7 @@ for (const ru of [false, true])
             expect(Math.abs(box.x - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
             expect(box.x + box.width).toBeLessThanOrEqual(width)
           }
+          expectBesideOrUnder(words, retry)
           await expectNoSilentClipping(
             page,
             `analytics ${ru ? 'ru ' : ''}${name} at ${width}px`,

@@ -158,6 +158,24 @@ export async function boxes(page: Page, selector: string) {
   )
 }
 
+type Box = Awaited<ReturnType<typeof boxes>>[number]
+
+/**
+ * A control that follows words: on their line it shares their middle, and wrapped under them it
+ * starts where they do, each within a pixel. Nothing to hold when either is not shown.
+ */
+export function expectBesideOrUnder(words: Box | undefined, control: Box | undefined) {
+  if (!words || !control) return
+  const beside = control.y < words.y + words.height
+  const off = beside
+    ? Math.abs(control.y + control.height / 2 - (words.y + words.height / 2))
+    : Math.abs(control.x - words.x)
+  expect(
+    off,
+    beside ? 'off the middle of the words' : 'off the start of the words',
+  ).toBeLessThanOrEqual(1)
+}
+
 /** How far the page itself scrolls sideways, which it never should. */
 export const pageScroll = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
