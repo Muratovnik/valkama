@@ -14,8 +14,8 @@ import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 const CHARTED = 8
 
 /**
- * The hue of each value the day chart stacks by name (`stackLines`), so a value has the one hue
- * in the day chart, its small chart and its bar. A value the day chart folds into «other» has
+ * The hue of each value the day chart stacks (`stackLines`, the page's ranked key), so a value
+ * has the one hue in the day chart, its small chart and its bar. A value the day chart folds into «other» has
  * none, and is drawn in the neutral everywhere.
  */
 export function valueSlots(source: StackSource): Map<string, SeriesSlot> {
