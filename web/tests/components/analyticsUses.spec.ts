@@ -12,8 +12,9 @@ import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AnalyticsView from '@/pages/analytics/AnalyticsView.vue'
 
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
-import { uiLoading } from '@/shared/api/platformUiState.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
+
+import { usageAnswer } from '../fixtures/analytics.ts'
 
 const USES = '/api/analytics/uses'
 const GLOBAL = { kind: 'global' as const }
@@ -27,7 +28,11 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status })
 }
 
-/** The server: grants a session, and answers a count as `count` says. */
+/** A period that spent nothing: the page's own read, answered so that only a count can fail. */
+const nothingSpent = () =>
+  usageAnswer({ first: new Date(2026, 10, 9), days: 1, groupBy: ['work_item'], stretches: [] })
+
+/** The server: grants a session, answers the page's read, and answers a count as `count` says. */
 function serve(count: () => Promise<Response> = async () => json({ use: {} })) {
   const reports: unknown[] = []
   vi.stubGlobal(
@@ -38,7 +43,9 @@ function serve(count: () => Promise<Response> = async () => json({ use: {} })) {
         reports.push(JSON.parse(init.body as string))
         return count()
       }
-      return new Response('{}', { status: 404 })
+      return typeof input === 'string' && input.startsWith('/api/analytics/usage')
+        ? json(nothingSpent())
+        : new Response('{}', { status: 404 })
     }),
   )
   return reports
@@ -95,9 +102,9 @@ describe('an opening of the Analytics page', () => {
     const reports = serve()
     const page = mount(AnalyticsView, { global: { plugins: [i18n()] } })
     await flushPromises()
-    // The page's read waiting, failing and arriving again is the same opening.
-    await page.setProps({ state: uiLoading<never>() })
-    await page.setProps({ state: undefined })
+    // Another view of the page, read again, is the same opening.
+    await page.setProps({ routeState: { by: 'model' } })
+    await page.setProps({ routeState: undefined })
     await flushPromises()
     expect(reports).toHaveLength(1)
 
@@ -145,6 +152,6 @@ describe('a report that cannot be written', () => {
     const page = mount(AnalyticsView, { global: { plugins: [i18n()] } })
     await flushPromises()
     expect(reports).toHaveLength(1)
-    expect(page.get('[role="status"]').text()).toContain('No usage collected yet')
+    expect(page.get('[role="status"]').text()).toContain('Nothing was spent in this period')
   })
 })
