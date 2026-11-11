@@ -221,6 +221,14 @@ checkouts are therefore distinguishable even at the same version.
   grants or writes the clipboard, itself or through a suite module it imports, is missing
   from that list, or when a name on it is no longer a spec.
 
+- For contributors: `npm run test:browser:allowed` in `web/` runs every browser spec but the
+  clipboard ones in one Playwright run. It writes the list to a file Playwright reads with
+  `--test-list`, so no list reaches a command line, and ends with each project's count of
+  tests and how they ended, and the total. `--list` shows what would run; `--specs=<file>`
+  runs the specs a file names, one a line; `--with-clipboard=<file>` lets a named clipboard
+  spec in. It refuses, with exit code 2 and before Playwright starts, an empty list, a
+  missing list file, a name that is no spec and a clipboard spec not named that way.
+
 ### Fixed
 
 - **Every sign stands on the middle of its words.** A mark's glyph, a state's dot, the session
