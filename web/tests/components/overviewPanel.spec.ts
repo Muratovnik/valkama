@@ -96,6 +96,20 @@ describe('the overview on the page', () => {
     expect(words(card(page, 'model').text())).toContain('model-b')
   })
 
+  it('leaves a value with nothing in the period out of its card', async () => {
+    // Four models with time this week, a fifth with tokens and no time at all.
+    const models: TimedStretch[] = [1, 2, 3, 4, 0].map((hours, index) => ({
+      at: new Date(2026, 10, 9, 10 + index),
+      group: { work_item: ONE, model: value(`model-${index}`) },
+      spend: { seconds: hours * 3600, tokens: 100 },
+    }))
+    stubAnalyticsReads((query) => serveUsage(models, query))
+    const page = await mountAnalytics()
+    const rows = card(page, 'model').findAll('.ranked-row')
+    expect(rows).toHaveLength(4)
+    expect(words(card(page, 'model').text())).not.toContain('model-4')
+  })
+
   it('ranks work on no task in the tasks’ card by its figure, neutral, quiet and leading nowhere', async () => {
     const onNoTask: TimedStretch = {
       at: new Date(2026, 10, 10, 12),

@@ -21,7 +21,7 @@ import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TopRead } from '@/pages/analytics/composables/useTopValues.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
-import { measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { figureOf, measureOf, spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -57,11 +57,14 @@ const waiting = computed(() =>
 
 const weight = (line: SpendingLine) => measureOf(props.measure, line.spent) ?? 0
 
-/** The first rows: values, no value and unknown work alike by their figure; never the tail. */
+/**
+ * The first rows: values, no value and unknown work alike by their figure; never the tail, and
+ * never a row with nothing in the period, which answers no «which ones».
+ */
 const lines = computed(() =>
   values.value
     ? spendingLines(values.value, props.dimension, props.measure, Number.POSITIVE_INFINITY)
-        .filter((line) => line.kind !== 'other')
+        .filter((line) => line.kind !== 'other' && figureOf(props.measure, line.spent) !== 0)
         .sort((left, right) => weight(right) - weight(left))
         .slice(0, FIRST)
     : [],
