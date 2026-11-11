@@ -54,6 +54,7 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
   >
     <SpendingTiles
       v-model:measure="measure"
+      :split="usage.total.tokens"
       :total="total"
       :before="before"
     />

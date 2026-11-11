@@ -5,7 +5,7 @@
  * changes from one day to the next, read from the period by account; and a table on a narrow page.
  */
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -16,7 +16,7 @@ import type { Usage } from '@/shared/api/analyticsApi.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
-import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
+import { momentAt, noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -189,8 +189,8 @@ describe('the days', () => {
 
   it('mark where the accounts that worked change, past a day nobody worked', () => {
     expect(accountChanges(byAccount()).map((change) => change.at)).toEqual([
-      new Date(2026, 10, 12).toISOString(),
-      new Date(2026, 10, 13).toISOString(),
+      momentAt(new Date(2026, 10, 12)),
+      momentAt(new Date(2026, 10, 13)),
     ])
     const days = mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(2)
@@ -250,5 +250,61 @@ describe('the days on the page', () => {
       'account',
     ])
     expect(byAccountPage.findAll('.period-mark').length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Berlin moves from +01:00 to +02:00 on 29 March 2026. A read asked after that cuts every day of
+ * the period at +02:00, so the days before the change start at 23:00 of the evening before in the
+ * browser's own time: a day is still the date its start names, as the read gave it.
+ */
+/** A day of March 2026 as a read asked at +02:00 writes its start. */
+const march = (day: number) => `2026-03-${day}T00:00:00+02:00`
+
+/** Friday 27 to Monday 30 March, an hour each day, as the read writes them at +02:00. */
+function acrossTheChange(): Usage {
+  const usage = usageAnswer({
+    first: new Date(2026, 2, 27),
+    days: 4,
+    groupBy: ['work_item'],
+    stretches: [0, 1, 2, 3].map((day) => ({
+      day,
+      group: { work_item: task(1, 'One') },
+      spend: { seconds: 3600 },
+    })),
+  }).usage
+  return {
+    ...usage,
+    period: { ...usage.period, from: march(27), to: march(31), utc_offset: 120 },
+    series: usage.series.map((point, index) => ({
+      ...point,
+      start: march(27 + index),
+      end: march(28 + index),
+    })),
+  }
+}
+
+describe('the days across the spring change of time', () => {
+  beforeEach(() => {
+    vi.stubEnv('TZ', 'Europe/Berlin')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('label each day by the date the read gave it, not the browser’s date that night', () => {
+    // The zone is fixed: the first two days are still at +01:00 in the browser's own time.
+    expect(new Date(2026, 2, 27).getTimezoneOffset()).toBe(-60)
+    const readAt = new Date(2026, 3, 1)
+    const table = mountDays(acrossTheChange(), { narrow: true, readAt })
+    expect(table.findAll('tbody th').map((name) => name.text())).toEqual([
+      'Friday, March 27',
+      'Saturday, March 28',
+      'Sunday, March 29',
+      'Monday, March 30',
+    ])
+    const axis = mountDays(acrossTheChange(), { readAt }).get('.period-axis').text()
+    expect(axis).toContain('27 Fri')
+    expect(axis).toContain('30 Mon')
   })
 })

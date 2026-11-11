@@ -10,10 +10,11 @@ import { useI18n } from 'vue-i18n'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
-import { useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
+import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
@@ -24,6 +25,21 @@ const SESSION_PREFIX = 8
  * value, and a filter's «none» admits an unknown one instead.
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
+
+const OFFSET = /(?:Z|([+-])(\d{2}):(\d{2}))$/u
+
+/**
+ * A moment of the read as the date and time it names at its own offset, held in a date to be
+ * read in UTC: `2030-03-29T00:00:00+02:00` is 29 March, whatever the browser's zone said that
+ * night. The read writes a period's moments at the one offset it was asked at, so a day across a
+ * change of daylight saving time keeps the date the read gave it. `shift` moves it first, in ms.
+ */
+function named(moment: string, shift = 0) {
+  const [, sign, hours = '0', minutes = '0'] = OFFSET.exec(moment) ?? []
+  const size = Number(hours) * 60 + Number(minutes)
+  const offset = sign === '-' ? -size : size
+  return new Date(Date.parse(moment) + shift + offset * 60_000)
+}
 
 export function useSpendingWords() {
   const i18n = useI18n()
@@ -41,6 +57,10 @@ export function useSpendingWords() {
     )
 
   const measure = (name: Measure) => t(`analytics.measures.${name}`)
+
+  /** Dates as `named` holds them: the date a moment names, read in UTC. */
+  const dayFormat = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(i18n.locale.value, { ...options, timeZone: 'UTC' })
 
   /** A measure's figure as a line reads it; no data in words, never a zero. */
   function figure(name: Measure, spent: Spent) {
@@ -60,13 +80,30 @@ export function useSpendingWords() {
         )
       : ''
 
-  /** A period by its first and last day: «2 – 8 Nov». */
+  /**
+   * What the tokens figure counts, by kind — input, output, cache writes, what was processed
+   * anew — and the cache reads it leaves apart; nothing when no request reported a token.
+   */
+  function tokenKinds(split: UsageTokens): string[] {
+    if (tokensAnew(split) === null) return []
+    const writes = [split.cache_write_5m, split.cache_write_1h].filter((count) => count !== null)
+    const kinds = {
+      input: split.input,
+      output: split.output,
+      cacheWrites: writes.length ? writes.reduce((sum, count) => sum + count, 0) : null,
+    }
+    const counted = Object.entries(kinds).flatMap(([kind, count]) =>
+      count === null ? [] : [t(`analytics.figures.kinds.${kind}`, { count: compact(count) })],
+    )
+    const apart = split.cached_read
+      ? [t('analytics.figures.cacheReads', { count: compact(split.cached_read) })]
+      : []
+    return [t('analytics.figures.anew', { kinds: counted.join(', ') }), ...apart]
+  }
+
+  /** A period by its first and last day, as its moments name them: «2 – 8 Nov». */
   function days(from: string, to: string) {
-    const end = new Date(Date.parse(to) - 1)
-    return new Intl.DateTimeFormat(i18n.locale.value, {
-      day: 'numeric',
-      month: 'short',
-    }).formatRange(new Date(from), end)
+    return dayFormat({ day: 'numeric', month: 'short' }).formatRange(named(from), named(to, -1))
   }
 
   /**
@@ -141,14 +178,11 @@ export function useSpendingWords() {
   const chartTitle = (name: Measure, by: UsageDimension) =>
     t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
 
-  const dayFormat = (options: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat(i18n.locale.value, options)
-
   /** A day as the time axis names it, «Mon 9», and in full for the readout and the table. */
   const day = (start: string) =>
-    dayFormat({ weekday: 'short', day: 'numeric' }).format(new Date(start))
+    dayFormat({ weekday: 'short', day: 'numeric' }).format(named(start))
   const fullDay = (start: string) =>
-    dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(start))
+    dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(named(start))
 
   /** A step of the value axis in the measure's units: hours as a span, tokens, dollars. */
   function scale(name: Measure, amount: number) {
@@ -185,6 +219,7 @@ export function useSpendingWords() {
     lineLabel,
     measure,
     noneLabel,
+    tokenKinds,
     unpriced,
     valueLabel,
   }

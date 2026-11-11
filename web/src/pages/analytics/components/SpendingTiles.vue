@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
  * The period's three figures — agent time, tokens and the cost estimated at API prices — each
- * with how it moved from the period before of the same length. They are also the choice of what
- * the charts below draw: one radio group, each tile a segment, the chosen one pressed.
+ * with how it moved from the period it is compared with, named by its days. They are also the
+ * choice of what the charts below draw: one radio group, each tile a segment, the chosen one
+ * pressed. The tokens say what they count — what was processed anew, by kind — and the cache
+ * reads they leave apart.
  *
  * The cost says it is an estimate and not a bill, and tokens with no price are said in words
  * under it, never folded into a zero: a cost of nothing and a cost nobody knows are different.
@@ -19,11 +21,14 @@ import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
+import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 
 const props = defineProps<{
   /** What the period before spent, and when it was; null when it was not read. */
   before: { from: string; spent: Spent; to: string } | null
+  /** The period's tokens by kind, for what the tokens figure counts and leaves apart. */
+  split: UsageTokens
   total: Spent
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
@@ -45,10 +50,11 @@ function moved(value: Measure) {
 const tiles = computed(() =>
   MEASURES.map((value) => {
     const change = moved(value)
-    const notes =
-      value === 'cost'
-        ? [t('analytics.figures.costNote'), words.unpriced(props.total)].filter(Boolean)
-        : []
+    const notes = {
+      time: [],
+      tokens: words.tokenKinds(props.split),
+      cost: [t('analytics.figures.costNote'), words.unpriced(props.total)].filter(Boolean),
+    }[value]
     return {
       value,
       label: words.measure(value),

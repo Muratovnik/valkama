@@ -12,14 +12,24 @@ import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 
-import { serveUsage, task } from '../fixtures/analytics.ts'
+import { momentAt, serveUsage, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
 const NOW: Spent = { seconds: 5400, tokens: 1_200_000, cost: 12.5, unpriced: 0 }
 const BEFORE = {
-  from: new Date(2026, 10, 2).toISOString(),
-  to: new Date(2026, 10, 9).toISOString(),
+  from: momentAt(new Date(2026, 10, 2)),
+  to: momentAt(new Date(2026, 10, 9)),
+}
+
+/** The 1.2M tokens of `NOW` by kind, beside ten times as many cache reads, which are apart. */
+const SPLIT = {
+  input: 600_000,
+  output: 360_000,
+  reasoning: 120_000,
+  cache_write_5m: 200_000,
+  cache_write_1h: 40_000,
+  cached_read: 12_000_000,
 }
 
 function mountTiles(
@@ -29,7 +39,7 @@ function mountTiles(
   locale: 'en' | 'ru' = 'en',
 ) {
   return mount(SpendingTiles, {
-    props: { total, before: before ? { ...BEFORE, spent: before } : null, measure },
+    props: { total, split: SPLIT, before: before ? { ...BEFORE, spent: before } : null, measure },
     global: { plugins: [analyticsI18n(locale)] },
   })
 }
@@ -133,6 +143,19 @@ describe('the tiles', () => {
     )
   })
 
+  // What a token figure counts is not obvious: the tile says it, kind by kind.
+  it('say what the tokens count, by kind, and the cache reads they leave apart', () => {
+    const tokens = tile(mountTiles(NOW, NOW), 'tokens')
+    expect(tokens.figure).toBe('1.2M')
+    expect(tokens.text).toContain('Processed anew: input 600K, output 360K, cache writes 240K')
+    expect(tokens.text).toContain('Cache reads, not counted: 12M')
+    const ru = tile(mountTiles(NOW, NOW, 'time', 'ru'), 'tokens')
+    expect(ru.text).toContain(
+      'Обработано заново: ввод 600 тыс., вывод 360 тыс., запись в кэш 240 тыс.',
+    )
+    expect(ru.text).toContain('Чтение из кэша, не учтено: 12 млн')
+  })
+
   it('say tokens without a price in words, and never a zero cost', () => {
     const unpriced = mountTiles({ seconds: 60, tokens: 900, cost: null, unpriced: 57 }, null)
     const cost = tile(unpriced, 'cost')
@@ -220,5 +243,32 @@ describe('the tiles on the page', () => {
     const radios = page.findAll('.spending-tiles [role="radio"]').map((radio) => radio.text())
     expect(radios[0]).toContain('↓ 100%')
     expect(radios[2]).toContain('↓ 100%')
+  })
+})
+
+describe('the tiles across the spring change of time', () => {
+  beforeEach(() => {
+    vi.stubEnv('TZ', 'Europe/Berlin')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('name the period compared with by the days the read gave it', () => {
+    expect(new Date(2026, 2, 23).getTimezoneOffset()).toBe(-60)
+    const tiles = mount(SpendingTiles, {
+      props: {
+        total: NOW,
+        split: SPLIT,
+        before: {
+          from: '2026-03-23T00:00:00+02:00',
+          to: '2026-03-30T00:00:00+02:00',
+          spent: NOW,
+        },
+        measure: 'time',
+      },
+      global: { plugins: [analyticsI18n()] },
+    })
+    expect(tile(tiles, 'time').text).toContain('The same as Mar 23 – 29')
   })
 })

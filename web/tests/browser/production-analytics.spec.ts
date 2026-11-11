@@ -1,191 +1,49 @@
 /**
  * The Analytics page in the real app at the widths it is used at: the tiles, the bars and the
  * days stand whole, nothing clips its own words, the page never scrolls sideways, a narrow page
- * reads each chart as a table, and Tab reaches every control. The double answers on the route the
- * page really reads, `/api/analytics/usage`, by what each read is grouped by.
+ * reads each chart as a table whose row names stay in view while its figures scroll, and Tab
+ * reaches every control. The double answers on the route the page really reads,
+ * `/api/analytics/usage`, by the period, the filters and the grouping each read asks for.
+ *
+ * Each state the page has is opened and measured, and the run prints what it measured: the page
+ * in Russian, waiting, failed and empty, a custom period with its two date fields, the filters
+ * open with chips, a chart of one value and one with a large «other», each chart beside its table.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { noTask, task, unknownTask, usageAnswer, value } from '../fixtures/analytics.ts'
-import type { Stretch } from '../fixtures/analytics.ts'
-import { installBackend } from './backend.ts'
+import { task } from '../fixtures/analytics.ts'
+import {
+  bars,
+  boxes,
+  expectBarsInTracks,
+  expectNamesInView,
+  expectWhole,
+  LONG_TAIL,
+  measure,
+  ONE_VALUE,
+  openReport,
+  pageAt,
+  pageScroll,
+  record,
+  scrolledNames,
+  serve,
+  tabWalk,
+} from './analyticsPage.ts'
+import type { Answer } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
-
-const PAGE = serializePlatformRoute({ module_id: 'analytics', scope: globalScope })
-
-const MONDAY = new Date(2026, 10, 9)
-/** Wednesday afternoon, so the week holds two whole days and one not over yet. */
-const NOW = new Date(2026, 10, 11, 14, 30)
-
-/** Twelve tasks with long titles, work on no task and work nobody can place, over three days. */
-const STRETCHES: Stretch[] = [
-  ...Array.from({ length: 12 }, (_, index) => ({
-    day: index % 3,
-    group: {
-      work_item: task(
-        index + 1,
-        `Rework the import of very long planning documents into the board, part ${index + 1}`,
-      ),
-    },
-    spend: {
-      seconds: (13 - index) * 5400,
-      tokens: (13 - index) * 1_250_000,
-      cost: index === 11 ? null : (13 - index) * 12.5,
-      unpriced: index === 11 ? 40_000 : 0,
-    },
-  })),
-  { day: 1, group: { work_item: noTask }, spend: { seconds: 7200, tokens: 900_000, cost: 8 } },
-  { day: 2, group: { work_item: unknownTask }, spend: { seconds: 1800, tokens: 10_000, cost: 1 } },
-]
-
-const BEFORE: Stretch[] = [
-  {
-    day: 0,
-    group: { work_item: task(1, 'One') },
-    spend: { seconds: 90_000, tokens: 9e6, cost: 99 },
-  },
-]
-
-/** Who worked: one account on Monday, two from Tuesday. */
-const ACCOUNTS: Stretch[] = [
-  { day: 0, group: { account: value('work@example.test') }, spend: { seconds: 3600 } },
-  { day: 1, group: { account: value('work@example.test') }, spend: { seconds: 3600 } },
-  { day: 1, group: { account: value('night@example.test') }, spend: { seconds: 3600 } },
-  { day: 2, group: { account: value('night@example.test') }, spend: { seconds: 3600 } },
-]
-
-async function serve(page: Page) {
-  await page.clock.setFixedTime(NOW)
-  await installBackend(page)
-  await page.route('**/api/analytics/usage?*', (route) => {
-    const query = new URL(route.request().url()).searchParams
-    const byAccount = query.get('group_by') === 'account'
-    const answer = usageAnswer({
-      first: MONDAY,
-      days: 3,
-      end: NOW,
-      groupBy: byAccount ? ['account'] : ['work_item'],
-      stretches: byAccount ? ACCOUNTS : STRETCHES,
-      before: query.get('compare') === 'true' ? BEFORE : null,
-    })
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(answer) })
-  })
-}
-
-/** Where the page's parts stand, rounded to the pixel, for the record and the assertions. */
-async function measure(page: Page) {
-  return page.evaluate(() => {
-    // This body is serialized and evaluated in the page, so a module-scope
-    // helper would not be in scope here.
-    // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
-    const box = (element: Element | null) => {
-      if (!element) return null
-      const { x, y, width, height } = element.getBoundingClientRect()
-      return {
-        x: Math.round(x),
-        y: Math.round(y),
-        width: Math.round(width),
-        height: Math.round(height),
-      }
-    }
-    const root = document.documentElement
-    const sections = [...document.querySelectorAll<HTMLElement>('.chart-section')]
-    return {
-      viewport: root.clientWidth,
-      pageScroll: root.scrollWidth - root.clientWidth,
-      page: box(document.querySelector('.analytics-page')),
-      // Where each part starts: the controls, the filters' chevron (its button reaches out by
-      // its fill's inset, by design), the tiles' box and the charts' headings, which stand on
-      // one edge of the page.
-      edges: [
-        '.analytics-controls',
-        '.disclosure-toggle svg',
-        '.spending-tiles',
-        '.spending-bars h2',
-        '.spending-days h2',
-      ].map((selector) => box(document.querySelector(selector))?.x ?? null),
-      tiles: [...document.querySelectorAll('.spending-tiles .segmented-option')].map((tile) =>
-        box(tile),
-      ),
-      sections: sections.map((section) => {
-        const frame = section.querySelector<HTMLElement>('.chart-table-frame')
-        return {
-          shown: section.dataset.shown,
-          box: box(section),
-          tableScroll: frame ? frame.scrollWidth - frame.clientWidth : null,
-          // How wide the table leaves the name of each row, a day or a value.
-          rowNames: [...section.querySelectorAll('th[scope="row"]')].map((name) =>
-            Math.round(name.getBoundingClientRect().width),
-          ),
-        }
-      }),
-    }
-  })
-}
-
-/**
- * What Tab stands on in the page, in order, until it leaves it: each control marked first, so
- * the walk names what it reached and what it never did. A group of radios is one stop, its
- * chosen option; the arrows move inside it.
- */
-async function tabWalk(page: Page) {
-  const controls = await page.evaluate(() => {
-    for (const marked of document.querySelectorAll<HTMLElement>('[data-stop]'))
-      delete marked.dataset.stop
-    const all = document.querySelectorAll<HTMLElement>(
-      '.analytics-page :is(a[href], button, input, select, textarea, summary, [tabindex])',
-    )
-    const stops = [...all].filter(
-      (element) =>
-        element.tabIndex >= 0 &&
-        !element.matches(':disabled') &&
-        // Shown, and not in a closed disclosure, whose content the browser skips.
-        element.checkVisibility({ visibilityProperty: true }),
-    )
-    for (const [index, element] of stops.entries()) element.dataset.stop = String(index)
-    return stops.length
-  })
-  await page.locator('body').focus()
-  const reached = new Set<string>()
-  for (let press = 0; press < 200 && reached.size < controls; press += 1) {
-    await page.keyboard.press('Tab')
-    const stop = await page.evaluate(
-      () => (document.activeElement as HTMLElement | null)?.dataset.stop ?? null,
-    )
-    if (stop !== null) reached.add(stop)
-  }
-  /** The controls Tab never stood on, by what they say, so a failure names them. */
-  const missed = await page.evaluate(
-    (seen) =>
-      [...document.querySelectorAll<HTMLElement>('[data-stop]')]
-        .filter((element) => !seen.includes(element.dataset.stop ?? ''))
-        .map(
-          (element) =>
-            `${element.tagName.toLowerCase()}.${element.className} ${element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40) ?? ''}`,
-        ),
-    [...reached],
-  )
-  return { controls, reached: reached.size, missed }
-}
 
 for (const width of [1440, 1024, 390]) {
   test(`the page stands whole and Tab reaches every control at ${width}px`, async ({
     page,
   }, info) => {
-    await page.setViewportSize({ width, height: 1000 })
     await serve(page)
-    await page.goto(PAGE)
-    const analytics = page.locator('.analytics-page')
+    const analytics = await openReport(page, width)
     await expect(analytics.locator('.tile-figure[data-measure="time"]')).toHaveText(
       /^5\sd\s17\sh$/u,
     )
-    await expect(analytics.locator('.spending-days')).toBeVisible()
 
     const narrow = width < 600
     for (const section of await analytics.locator('.chart-section').all())
@@ -198,26 +56,8 @@ for (const width of [1440, 1024, 390]) {
     )
 
     const measured = await measure(page)
-    await info.attach(`analytics-layout-${width}.json`, {
-      body: JSON.stringify(measured, null, 2),
-      contentType: 'application/json',
-    })
-    console.log(`analytics layout ${width}: ${JSON.stringify(measured)}`)
-    expect(measured.pageScroll).toBe(0)
-    for (const tile of measured.tiles) {
-      expect(tile?.x).toBeGreaterThanOrEqual(0)
-      expect((tile?.x ?? 0) + (tile?.width ?? 0)).toBeLessThanOrEqual(measured.viewport)
-    }
-    for (const section of measured.sections)
-      expect((section.box?.x ?? 0) + (section.box?.width ?? 0)).toBeLessThanOrEqual(
-        measured.viewport,
-      )
-    for (const edge of measured.edges)
-      expect(Math.abs((edge ?? Number.NaN) - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
-    // A table wider than its frame scrolls in it, and still leaves each row's name its words:
-    // a day squeezed to a letter a line is not readable as a table.
-    for (const section of measured.sections)
-      for (const name of section.rowNames) expect(name).toBeGreaterThanOrEqual(80)
+    await record(info, `analytics layout ${width}`, measured)
+    expectWhole(measured)
     await expectNoSilentClipping(page, `analytics at ${width}px`, '.analytics-page')
     await page.screenshot(shot(info, `analytics-${width}.png`))
     await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-bars-${width}.png`))
@@ -238,12 +78,197 @@ for (const width of [1440, 1024, 390]) {
     await analytics.locator('.spending-tiles .segmented-option.active').focus()
     await page.keyboard.press('ArrowRight')
     await expect(analytics.locator('.spending-tiles .segmented-option.active')).toBeFocused()
-    const chosen = serializePlatformRoute({
-      module_id: 'analytics',
-      scope: globalScope,
-      state: { measure: 'tokens' },
-    })
+    const chosen = pageAt({ measure: 'tokens' })
     await expect.poll(() => page.url().slice(new URL(page.url()).origin.length)).toBe(chosen)
     await expect(analytics.locator('.spending-bars h2')).toHaveText('Tokens by task')
   })
 }
+
+test('a phone scrolls the days table under its days, which stay in view', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await openReport(page, 390)
+  const names = await scrolledNames(page)
+  await record(info, 'analytics row names scrolled 390', names)
+  // The days table is wider than a phone: it scrolls in its frame, and its days stand still.
+  expect(expectNamesInView(names)).toBeGreaterThan(0)
+})
+
+test.describe('in Russian', () => {
+  test.use({ locale: 'ru-RU' })
+
+  for (const width of [1440, 1024, 390])
+    test(`the page stands whole at ${width}px`, async ({ page }, info) => {
+      await serve(page)
+      const analytics = await openReport(page, width)
+      await expect(analytics.locator('.spending-bars h2')).toContainText('по задачам')
+      const measured = await measure(page)
+      const names = await scrolledNames(page)
+      await record(info, `analytics ru layout ${width}`, {
+        ...measured,
+        tileWords: await analytics.locator('.spending-tiles .segmented-option').allTextContents(),
+        names,
+      })
+      expectWhole(measured)
+      expectNamesInView(names)
+      await expectNoSilentClipping(page, `analytics ru at ${width}px`, '.analytics-page')
+      await page.screenshot(shot(info, `analytics-ru-${width}.png`))
+    })
+})
+
+/** What stands for the report while it has none to show: a state's panel, or the empty one. */
+const STAND_IN = '.analytics-page :is(.platform-state-panel, .data-empty)'
+
+/** The stand-in and what it says. */
+async function standIn(page: Page) {
+  const panel = page.locator(STAND_IN)
+  await expect(panel).toBeVisible()
+  const [box] = await boxes(page, STAND_IN)
+  return {
+    busy: await panel.getAttribute('aria-busy'),
+    role: await panel.getAttribute('role'),
+    title: await panel.locator(':is(.platform-state-title, .empty-title)').textContent(),
+    actions: await panel.getByRole('button').allTextContents(),
+    box,
+    pageScroll: await pageScroll(page),
+  }
+}
+
+/** Each state the report can stand in for, and what its stand-in says and offers. */
+const STATES: {
+  actions: string[]
+  answer: Answer
+  busy: string | null
+  name: string
+  title: string
+}[] = [
+  { name: 'waiting', answer: 'hold', busy: 'true', title: 'Loading', actions: [] },
+  {
+    name: 'failed',
+    answer: 'failed',
+    busy: null,
+    title: 'Could not load this view',
+    actions: ['Retry'],
+  },
+  { name: 'empty', answer: [], busy: null, title: 'Nothing was spent in this period', actions: [] },
+]
+
+for (const width of [1440, 390])
+  for (const { name, answer, busy, title, actions } of STATES)
+    test(`the page ${name} stands whole at ${width}px`, async ({ page }, info) => {
+      await serve(page, answer)
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto(pageAt())
+      const shown = await standIn(page)
+      await record(info, `analytics ${name} ${width}`, shown)
+      expect(shown.title?.trim()).toBe(title)
+      expect(shown.busy).toBe(busy)
+      expect(shown.actions.map((action) => action.trim())).toEqual(actions)
+      expect(shown.pageScroll).toBe(0)
+      expect((shown.box?.x ?? 0) + (shown.box?.width ?? 0)).toBeLessThanOrEqual(width)
+      await expectNoSilentClipping(page, `analytics ${name} at ${width}px`, '.analytics-page')
+      await page.screenshot(shot(info, `analytics-${name}-${width}.png`))
+    })
+
+test('a custom period shows its two date fields whole at 390px', async ({ page }, info) => {
+  await serve(page)
+  await openReport(page, 390, pageAt({ period: 'custom', from: '2026-11-02', to: '2026-11-11' }))
+  const fields = page.locator('.analytics-controls input[type="date"]')
+  await expect(fields).toHaveCount(2)
+  await expect(fields.first()).toHaveValue('2026-11-02')
+  const measured = {
+    controls: await boxes(page, '.analytics-controls > *'),
+    dateInputs: await boxes(page, '.analytics-controls input[type="date"]'),
+    pageScroll: await pageScroll(page),
+    days: await page.locator('.spending-days tbody tr').count(),
+  }
+  await record(info, 'analytics custom period 390', measured)
+  expect(measured.pageScroll).toBe(0)
+  for (const field of measured.dateInputs) {
+    expect(field.x).toBeGreaterThanOrEqual(0)
+    expect(field.x + field.width).toBeLessThanOrEqual(390)
+    // A date field leaves its date and its picker room.
+    expect(field.width).toBeGreaterThanOrEqual(140)
+  }
+  expect(measured.days).toBe(10)
+  await expectNoSilentClipping(page, 'analytics custom period at 390px', '.analytics-page')
+  await page.locator('.analytics-controls').screenshot(shot(info, 'analytics-custom-390.png'))
+})
+
+for (const width of [1440, 390])
+  test(`the filters open with chips stand whole at ${width}px`, async ({ page }, info) => {
+    await serve(page)
+    const filters = { model: ['model-a'], work_item: [task(1, '').id, task(2, '').id] }
+    const analytics = await openReport(page, width, pageAt({ filters: JSON.stringify(filters) }))
+    await analytics.locator('.disclosure-toggle').click()
+    const chips = analytics.locator('.combo-chip')
+    await expect(chips).toHaveCount(3)
+    await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)
+    const measured = {
+      fields: await boxes(page, '[data-dimension]'),
+      chips: await boxes(page, '.combo-chip'),
+      chipWords: await chips.allTextContents(),
+      clear: await boxes(page, '.analytics-filter-clear'),
+      pageScroll: await pageScroll(page),
+    }
+    await record(info, `analytics filters open ${width}`, measured)
+    expect(measured.pageScroll).toBe(0)
+    for (const chip of measured.chips) expect(chip.x + chip.width).toBeLessThanOrEqual(width)
+    await expectNoSilentClipping(page, `analytics filters at ${width}px`, '.analytics-page')
+    await page.screenshot(shot(info, `analytics-filters-${width}.png`))
+  })
+
+for (const width of [1440, 390]) {
+  test(`a chart of one value stands whole at ${width}px`, async ({ page }, info) => {
+    await serve(page, ONE_VALUE)
+    const analytics = await openReport(page, width)
+    await analytics.locator('.spending-bars').getByRole('radio', { name: 'Chart' }).click()
+    await expect(analytics.locator('.spending-bars .ranked-bar')).toHaveCount(1)
+    const measured = await bars(page)
+    await record(info, `analytics one value ${width}`, measured)
+    expect(measured.rows.join(' ')).toContain('The only task')
+    expectBarsInTracks(measured)
+    await expectNoSilentClipping(page, `analytics one value at ${width}px`, '.analytics-page')
+    await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-one-${width}.png`))
+  })
+
+  test(`a chart with a large other stands whole at ${width}px`, async ({ page }, info) => {
+    await serve(page, LONG_TAIL)
+    const analytics = await openReport(page, width)
+    await analytics.locator('.spending-bars').getByRole('radio', { name: 'Chart' }).click()
+    await expect(analytics.locator('.spending-bars .ranked-rest')).toBeVisible()
+    const measured = await bars(page)
+    await record(info, `analytics large other ${width}`, measured)
+    expect(measured.rest).toEqual([expect.stringMatching(/^Other, \d+ more$/u)])
+    expectBarsInTracks(measured)
+    await expectNoSilentClipping(page, `analytics large other at ${width}px`, '.analytics-page')
+    await analytics.locator('.spending-bars').screenshot(shot(info, `analytics-other-${width}.png`))
+  })
+}
+
+for (const width of [1440, 1024])
+  test(`each chart beside its table at ${width}px`, async ({ page }, info) => {
+    await serve(page)
+    const analytics = await openReport(page, width)
+    const chart = await measure(page)
+    const charted = await bars(page)
+    for (const section of await analytics.locator('.chart-section').all()) {
+      await section.getByRole('radio', { name: 'Table' }).click()
+      await expect(section).toHaveAttribute('data-shown', 'table')
+    }
+    const table = await measure(page)
+    const names = await scrolledNames(page)
+    await record(info, `analytics chart against table ${width}`, {
+      chart: chart.sections.map((section) => section.box),
+      table: table.sections.map(({ box, tableScroll }) => ({ box, tableScroll })),
+      names,
+    })
+    expectWhole(table)
+    expectNamesInView(names)
+    // The table holds what its chart holds: a row for each bar and for each day.
+    await expect(analytics.locator('.spending-bars tbody tr')).toHaveCount(charted.rows.length)
+    await expect(analytics.locator('.spending-days tbody tr')).toHaveCount(3)
+    await expectNoSilentClipping(page, `analytics tables at ${width}px`, '.analytics-page')
+    await page.screenshot(shot(info, `analytics-tables-${width}.png`))
+  })

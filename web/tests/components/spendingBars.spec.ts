@@ -41,6 +41,13 @@ const STRETCHES: Stretch[] = [
   { day: 2, group: { work_item: unknownTask }, spend: { seconds: 1800, tokens: 100, cost: 0.1 } },
 ]
 
+/**
+ * The tokens processed anew, from the stretches themselves: the read splits them by kind and
+ * puts ten times as many cache reads beside them, which no figure may count.
+ */
+const tokensOf = (stretches: readonly Stretch[]) =>
+  stretches.reduce((total, stretch) => total + (stretch.spend.tokens ?? 0), 0)
+
 const answer = (groupBy: UsageDimension[], stretches: readonly Stretch[] = STRETCHES) =>
   usageAnswer({ first: MONDAY, days: 7, groupBy, stretches })
 
@@ -96,7 +103,7 @@ describe('the bars', () => {
     const rows = barsOf(mountBars(usage.rows, 'work_item', { measure }))
     const total = {
       time: usage.total.agent_seconds / 3600,
-      tokens: usage.total.tokens.input ?? 0,
+      tokens: tokensOf(STRETCHES),
       cost: usage.total.estimated_api_cost_usd ?? 0,
     }[measure]
     expect(sum(rows)).toBeCloseTo(total, 9)
@@ -203,7 +210,7 @@ describe('the bars on the page', () => {
     await flushPromises()
     const rows = page.getComponent(RankedBars).props('rows') as RankedRow[]
     expect(page.get('.spending-bars h2').text()).toBe('Tokens by task')
-    expect(sum(rows)).toBe(Number(answer(['work_item']).usage.total.tokens.input))
+    expect(sum(rows)).toBe(tokensOf(STRETCHES))
     expect(page.get('.tile-figure[data-measure="tokens"]').text()).toBe('78.5K')
   })
 })

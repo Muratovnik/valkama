@@ -92,6 +92,13 @@ export const analyticsMessages = {
         noPrice: 'No price',
         costNote: 'An estimate at API list prices, not a bill',
         unpriced: '{count} token without a price | {count} tokens without a price',
+        anew: 'Processed anew: {kinds}',
+        kinds: {
+          input: 'input {count}',
+          output: 'output {count}',
+          cacheWrites: 'cache writes {count}',
+        },
+        cacheReads: 'Cache reads, not counted: {count}',
       },
       change: {
         up: '↑ {change} against {period}',
@@ -214,6 +221,13 @@ export const analyticsMessages = {
         costNote: 'Оценка по прейскуранту API, а не счёт',
         unpriced:
           '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
+        anew: 'Обработано заново: {kinds}',
+        kinds: {
+          input: 'ввод {count}',
+          output: 'вывод {count}',
+          cacheWrites: 'запись в кэш {count}',
+        },
+        cacheReads: 'Чтение из кэша, не учтено: {count}',
       },
       change: {
         up: '↑ {change} к периоду {period}',

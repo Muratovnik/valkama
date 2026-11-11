@@ -17,7 +17,12 @@ import type {
 const COST_BASIS =
   'An estimate at public API list prices for each request. A subscription pays differently, so this is not a bill.'
 
-/** What one stretch spent: seconds, tokens processed anew, a price and the tokens without one. */
+/**
+ * What one stretch spent: seconds, tokens processed anew, a price and the tokens without one.
+ * The tokens anew are split as a read gives them — input, output with its reasoning inside it,
+ * cache writes — beside cache reads ten times their size, which no figure counts: a sum that
+ * took the cache reads in, or took one kind for all, would not add up to `tokens`.
+ */
 interface Spend {
   cost?: number | null
   seconds?: number
@@ -25,19 +30,35 @@ interface Spend {
   unpriced?: number
 }
 
-function measures({ seconds = 0, tokens = null, cost = null, unpriced = 0 }: Spend): UsageMeasures {
-  return {
-    agent_seconds: seconds,
-    estimated_seconds: 0,
-    quality: seconds > 0 ? 'observed' : null,
-    tokens: {
-      input: tokens,
+/** The kinds `tokens` anew are split into: half input, three tenths output, the rest cache writes. */
+function split(tokens: number | null): UsageMeasures['tokens'] {
+  if (tokens === null)
+    return {
+      input: null,
       cached_read: null,
       cache_write_5m: null,
       cache_write_1h: null,
       output: null,
       reasoning: null,
-    },
+    }
+  const input = Math.round(tokens / 2)
+  const output = Math.round((tokens * 3) / 10)
+  return {
+    input,
+    cached_read: tokens * 10,
+    cache_write_5m: tokens - input - output,
+    cache_write_1h: null,
+    output,
+    reasoning: Math.floor(output / 3),
+  }
+}
+
+function measures({ seconds = 0, tokens = null, cost = null, unpriced = 0 }: Spend): UsageMeasures {
+  return {
+    agent_seconds: seconds,
+    estimated_seconds: 0,
+    quality: seconds > 0 ? 'observed' : null,
+    tokens: split(tokens),
     estimated_api_cost_usd: cost,
     unpriced_tokens: unpriced,
   }
@@ -47,12 +68,17 @@ const plus = (left: number | null, right: number | null) =>
   left === null && right === null ? null : (left ?? 0) + (right ?? 0)
 
 function add(left: UsageMeasures, right: UsageMeasures): UsageMeasures {
-  return measures({
-    seconds: left.agent_seconds + right.agent_seconds,
-    tokens: plus(left.tokens.input, right.tokens.input),
-    cost: plus(left.estimated_api_cost_usd, right.estimated_api_cost_usd),
-    unpriced: left.unpriced_tokens + right.unpriced_tokens,
-  })
+  const tokens = { ...left.tokens }
+  for (const kind of Object.keys(tokens) as (keyof UsageMeasures['tokens'])[])
+    tokens[kind] = plus(left.tokens[kind], right.tokens[kind])
+  return {
+    ...measures({
+      seconds: left.agent_seconds + right.agent_seconds,
+      cost: plus(left.estimated_api_cost_usd, right.estimated_api_cost_usd),
+      unpriced: left.unpriced_tokens + right.unpriced_tokens,
+    }),
+    tokens,
+  }
 }
 
 export const value = (id: string): UsageGroupValue => ({ id, unknown: false })
@@ -169,7 +195,17 @@ export function serveUsage(stretches: readonly TimedStretch[], query: URLSearchP
   })
 }
 
-const at = (day: Date) => day.toISOString()
+const pad = (value: number) => String(value).padStart(2, '0')
+
+/**
+ * A moment as the read writes it, at the offset the period was asked at:
+ * `2030-03-04T00:00:00+03:00`. The browser's own offset at that moment by default.
+ */
+export function momentAt(moment: Date, offset = -moment.getTimezoneOffset()) {
+  const wall = new Date(moment.getTime() + offset * 60_000).toISOString().slice(0, 19)
+  const size = Math.abs(offset)
+  return `${wall}${offset < 0 ? '-' : '+'}${pad(Math.floor(size / 60))}:${pad(size % 60)}`
+}
 
 /**
  * The answer for `days` local days from `first`, the last one ending at `end` (now, for a
@@ -184,6 +220,8 @@ export function usageAnswer(options: {
   end?: Date
 }): { interface_version: 'valkama-analytics-api'; usage: Usage } {
   const { first, days, groupBy, stretches } = options
+  const offset = -first.getTimezoneOffset()
+  const at = (moment: Date) => momentAt(moment, offset)
   const dayStart = (index: number) =>
     new Date(first.getFullYear(), first.getMonth(), first.getDate() + index)
   const end = options.end ?? dayStart(days)
@@ -204,7 +242,7 @@ export function usageAnswer(options: {
   return {
     interface_version: 'valkama-analytics-api',
     usage: {
-      period: { from: at(first), to: at(end), step: 'day', utc_offset: -first.getTimezoneOffset() },
+      period: { from: at(first), to: at(end), step: 'day', utc_offset: offset },
       group_by: groupBy,
       cost_basis: COST_BASIS,
       last_event_at: at(end),
