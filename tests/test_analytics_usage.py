@@ -126,6 +126,27 @@ class TotalsTests(UsageStore):
         self.assertEqual(24, len(read["series"]))
         self.assertEqual(3600.0, read["series"][0]["agent_seconds"])
 
+    def test_an_hour_by_the_minute_holds_each_minutes_share_of_a_stretch(self) -> None:
+        self.session("s-1")
+        # Ninety seconds from half a minute past the hour: 30 s, 60 s and nothing after.
+        self.segment("s-1", 30, 120, tokens=(9, None, None, None, None, None), cost=0.9)
+        read = self.read(**{"from": stamp(0), "to": stamp(HOUR), "step": "minute"})
+        series = read["series"]
+        self.assertEqual(60, len(series))
+        self.assertEqual([30.0, 60.0, 0.0], [point["agent_seconds"] for point in series[:3]])
+        # A third of the 9 tokens by the first full minute, the rest in the second.
+        self.assertEqual([3, 6], [point["tokens"]["input"] for point in series[:2]])
+        self.assertEqual(9, read["total"]["tokens"]["input"])
+        # At an offset of half an hour a minute still starts on the caller's full minute.
+        shifted = self.read(
+            **{"from": stamp(0), "to": stamp(HOUR), "step": "minute", "utc_offset": "-330"}
+        )
+        self.assertEqual(
+            [point["agent_seconds"] for point in series],
+            [point["agent_seconds"] for point in shifted["series"]],
+        )
+        self.assertEqual("2030-03-03T18:30:00-05:30", shifted["series"][0]["start"])
+
     def test_an_empty_period_reads_nothing_rather_than_zero_tokens(self) -> None:
         self.session("s-1")
         self.segment("s-1", 10 * DAY, 10 * DAY + 60)
@@ -396,6 +417,7 @@ class RefusalTests(UsageStore):
             {**good, "compare": "yes"},
             {**good, "sort": "cost"},
             {"from": day(0), "to": day(200), "step": "hour"},
+            {"from": day(0), "to": day(2), "step": "minute"},
             # Moments a date cannot be written at, or before anything was stored.
             {"from": "0001-01-01", "to": "0001-01-02", "compare": "true"},
             {"from": "1969-12-31", "to": "1970-01-02"},
@@ -425,11 +447,17 @@ class RefusalTests(UsageStore):
         self.assertEqual(400, raised.exception.status)
 
     def test_the_longest_period_a_step_allows_is_answered(self) -> None:
-        hours = usage.MAX_STEPS * HOUR
-        read = self.read(
-            **{"from": stamp(0), "to": stamp(hours), "step": "hour", "utc_offset": "0"}
-        )
-        self.assertEqual(usage.MAX_STEPS, len(read["series"]))
+        for step, length in (("hour", HOUR), ("minute", 60)):
+            with self.subTest(step):
+                read = self.read(
+                    **{
+                        "from": stamp(0),
+                        "to": stamp(usage.MAX_STEPS * length),
+                        "step": step,
+                        "utc_offset": "0",
+                    }
+                )
+                self.assertEqual(usage.MAX_STEPS, len(read["series"]))
 
 
 class NothingLeaksTests(UsageStore):

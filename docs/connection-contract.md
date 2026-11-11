@@ -988,8 +988,8 @@ MCP tool reads it, for the same reason as above.
 | Parameter | What it takes |
 | --- | --- |
 | `from`, `to` | required. A date, `2030-03-04`, meaning the start of that day at `utc_offset`, or a time with its own offset, `2030-03-04T09:00:00Z` or `2030-03-04T09:00:00%2B03:00`: in a query string a `+` reads as a space, so it is sent as `%2B`. `to` is not included and must be later than `from`. Both, and with `compare` the period before too, lie between 1970 and the start of 9999 |
-| `step` | `day` (the default) or `hour` |
-| `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day or an hour of the series starts at the caller's midnight or full hour. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
+| `step` | `day` (the default), `hour` or `minute` |
+| `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day, an hour or a minute of the series starts at the caller's midnight, full hour or full minute. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
 | `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment` |
 | a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id` |
 | `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
@@ -997,8 +997,8 @@ MCP tool reads it, for the same reason as above.
 
 A filter admits a stretch of work when its value is among those named, and every filter
 must admit it. A parameter given with an empty value, `model=` or `none=`, is taken as
-not given, as on the reads above. A period may hold at most 2,400 steps. Any other
-parameter, a repeated one, a value out of its range or a list with an empty entry, such
+not given, as on the reads above. A period may hold at most 2,400 steps: forty hours by
+the minute, a hundred days by the hour. Any other parameter, a repeated one, a value out of its range or a list with an empty entry, such
 as `model=m-1,,m-2`, is refused with `400` and
 `{"error": {"code": "invalid_request", "message": …}}`, the shape the reads above refuse
 with.
@@ -1061,8 +1061,8 @@ A stretch of work that crosses a step boundary or an edge of the period is split
 proportion to its time. What it has spent of a figure by a moment is that figure times
 the share of its time before the moment, rounded half up to a whole unit; what it spends
 between two moments is the difference. So what falls between two moments depends on
-those moments alone: a period's total is the same by the hour and by the day, with
-`compare` and without, and two adjacent periods add up to the one they make. A stretch
+those moments alone: a period's total is the same by the minute, by the hour and by the
+day, with `compare` and without, and two adjacent periods add up to the one they make. A stretch
 with no length, a model called on the side, counts whole in the step that holds its
 moment.
 
