@@ -10,6 +10,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **The usage read answers by the minute.** `GET /api/analytics/usage` takes
+  `step=minute` beside `hour` and `day`, so a client can draw the last hour as it is
+  spent. A minute starts on the caller's full minute, and a period still holds at most
+  2,400 steps, which is forty hours by the minute. A stretch of work is split between its
+  minutes in proportion to its time, as it is between hours, so a minute's tokens and
+  cost are a share of the stretch, not a count of what was sent in that minute.
+
 ## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
 
 ### Added
