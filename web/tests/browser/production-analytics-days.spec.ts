@@ -1,6 +1,7 @@
 /**
  * The days of the Analytics page as a chart whose columns act, in the real app at the widths it
- * is used at, over spans of three days, four weeks and sixty days.
+ * is used at, over spans of three days, four weeks and sixty days, in both panels that draw one:
+ * the overview and a dimension's section.
  *
  * A day a pointer presses is never narrower than an inline action. A span
  * of such days wider than the chart scrolls sideways inside the chart and never moves the page:
@@ -99,68 +100,84 @@ const focusedColumn = (page: Page) =>
     }
   })
 
-for (const width of WIDTHS)
-  for (const span of SPANS)
-    test(`a day that acts keeps a width a pointer can hit over ${span.name} at ${width}px`, async ({
-      page,
-    }, info) => {
-      await serve(page, SIXTY_DAYS)
-      const analytics = await openReport(page, width, pageAt(span.state))
-      const days = analytics.locator('.spending-days')
-      // A narrow page shows the days as a table first; the section's own control draws them.
-      await days.locator('.segmented-option', { hasText: 'Chart' }).click()
-      await expect(days).toHaveAttribute('data-shown', 'chart')
-      await expect(days.locator('.period-column')).toHaveCount(span.days)
+/**
+ * The two panels whose days act: the overview, at the plain address, and a dimension's section,
+ * held beside the rail to the panel's height with its charts scrolling on their own.
+ */
+const PANELS: { key: string; name: string; state: Record<string, string> }[] = [
+  { key: 'overview', name: 'the overview', state: {} },
+  { key: 'task', name: 'the task section', state: { by: 'work_item' } },
+]
 
-      const opened = await chartPlace(page)
-      // Every day is wide enough to hit, and the page itself never scrolls sideways.
-      expect(Math.round(opened.narrowest * 10) / 10, 'the narrowest day').toBeGreaterThanOrEqual(
-        FLOOR,
-      )
-      expect(await pageScroll(page), 'the page scrolls sideways').toBe(0)
-      expect(opened.frame.right, 'the chart leaves the screen').toBeLessThanOrEqual(width)
-      // A span wider than the chart opens on its end: the last day stands whole inside it.
-      expect(Math.abs(opened.scrolled - opened.room), 'opened off its end').toBeLessThanOrEqual(1)
-      const last = opened.columns.at(-1)
-      expect(last?.right ?? 0, 'the last day').toBeLessThanOrEqual(opened.frame.right + 1)
-      // The scale stays at the chart's start, and the days' names stand under their columns.
-      expect(Math.abs(opened.scale.left - opened.frame.left), 'the scale').toBeLessThanOrEqual(1)
-      expect(Math.abs(opened.axis.left - opened.field.left), 'the names').toBeLessThanOrEqual(1)
-      expect(Math.abs(opened.axis.right - opened.field.right), 'the names').toBeLessThanOrEqual(1)
-      expect(
-        Math.abs(opened.gutter - (opened.field.left - opened.plot.left)),
-        'the room kept clear of the scale',
-      ).toBeLessThanOrEqual(1)
+for (const panel of PANELS)
+  for (const width of WIDTHS)
+    for (const span of SPANS)
+      test(`a day that acts keeps a width a pointer can hit over ${span.name} at ${width}px in ${panel.name}`, async ({
+        page,
+      }, info) => {
+        await serve(page, SIXTY_DAYS)
+        const analytics = await openReport(page, width, pageAt({ ...panel.state, ...span.state }))
+        const days = analytics.locator('.spending-days')
+        // A narrow page shows the days as a table first; the section's own control draws them.
+        await days.locator('.segmented-option', { hasText: 'Chart' }).click()
+        await expect(days).toHaveAttribute('data-shown', 'chart')
+        await expect(days.locator('.period-column')).toHaveCount(span.days)
 
-      // By keyboard: the chart is one stop, on its last day; Home goes to the first, End back.
-      await days.locator('.period-column').last().focus()
-      await page.keyboard.press('Home')
-      const first = await focusedColumn(page)
-      const atStart = await chartPlace(page)
-      expect(first.isColumn && first.visible && first.ring > 0, 'the first day’s ring').toBe(true)
-      expect(first.left, 'the first day under the scale').toBeGreaterThanOrEqual(
-        atStart.scale.right - 1,
-      )
-      expect(first.onTop, 'the first day is covered').toBe(true)
-      expect(Math.abs(atStart.scale.left - atStart.frame.left), 'the scale').toBeLessThanOrEqual(1)
-      await page.keyboard.press('End')
-      const end = await focusedColumn(page)
-      const atEnd = await chartPlace(page)
-      expect(end.isColumn && end.visible && end.ring > 0, 'the last day’s ring').toBe(true)
-      expect(end.right, 'the last day past the chart').toBeLessThanOrEqual(atEnd.frame.right + 1)
-      expect(await pageScroll(page), 'the page scrolls sideways').toBe(0)
-      await expectNoSilentClipping(page, `${span.name} at ${width}px`, '.spending-days')
-      await days.screenshot(shot(info, `days-${span.days}-${width}.png`))
+        const opened = await chartPlace(page)
+        // Every day is wide enough to hit, and the page itself never scrolls sideways.
+        expect(Math.round(opened.narrowest * 10) / 10, 'the narrowest day').toBeGreaterThanOrEqual(
+          FLOOR,
+        )
+        expect(await pageScroll(page), 'the page scrolls sideways').toBe(0)
+        expect(opened.frame.right, 'the chart leaves the screen').toBeLessThanOrEqual(width)
+        // A span wider than the chart opens on its end: the last day stands whole inside it.
+        expect(Math.abs(opened.scrolled - opened.room), 'opened off its end').toBeLessThanOrEqual(1)
+        const last = opened.columns.at(-1)
+        expect(last?.right ?? 0, 'the last day').toBeLessThanOrEqual(opened.frame.right + 1)
+        // The scale stays at the chart's start, and the days' names stand under their columns.
+        expect(Math.abs(opened.scale.left - opened.frame.left), 'the scale').toBeLessThanOrEqual(1)
+        expect(Math.abs(opened.axis.left - opened.field.left), 'the names').toBeLessThanOrEqual(1)
+        expect(Math.abs(opened.axis.right - opened.field.right), 'the names').toBeLessThanOrEqual(1)
+        expect(
+          Math.abs(opened.gutter - (opened.field.left - opened.plot.left)),
+          'the room kept clear of the scale',
+        ).toBeLessThanOrEqual(1)
 
-      await record(info, `analytics days ${span.days} ${width}`, {
-        narrowest: Math.round(opened.narrowest * 10) / 10,
-        room: Math.round(opened.room),
-        scrolledAtStart: Math.round(atStart.scrolled),
-        scale: Math.round(opened.scale.right - opened.scale.left),
-        firstDay: Math.round(first.left),
-        scaleEnd: Math.round(atStart.scale.right),
+        // By keyboard: the chart is one stop, on its last day; Home goes to the first, End back.
+        await days.locator('.period-column').last().focus()
+        await page.keyboard.press('Home')
+        const first = await focusedColumn(page)
+        const atStart = await chartPlace(page)
+        expect(first.isColumn && first.visible && first.ring > 0, 'the first day’s ring').toBe(true)
+        expect(first.left, 'the first day under the scale').toBeGreaterThanOrEqual(
+          atStart.scale.right - 1,
+        )
+        expect(first.onTop, 'the first day is covered').toBe(true)
+        expect(Math.abs(atStart.scale.left - atStart.frame.left), 'the scale').toBeLessThanOrEqual(
+          1,
+        )
+        await page.keyboard.press('End')
+        const end = await focusedColumn(page)
+        const atEnd = await chartPlace(page)
+        expect(end.isColumn && end.visible && end.ring > 0, 'the last day’s ring').toBe(true)
+        expect(end.right, 'the last day past the chart').toBeLessThanOrEqual(atEnd.frame.right + 1)
+        expect(await pageScroll(page), 'the page scrolls sideways').toBe(0)
+        await expectNoSilentClipping(
+          page,
+          `${span.name} at ${width}px in ${panel.name}`,
+          '.spending-days',
+        )
+        await days.screenshot(shot(info, `days-${panel.key}-${span.days}-${width}.png`))
+
+        await record(info, `analytics days ${panel.key} ${span.days} ${width}`, {
+          narrowest: Math.round(opened.narrowest * 10) / 10,
+          room: Math.round(opened.room),
+          scrolledAtStart: Math.round(atStart.scrolled),
+          scale: Math.round(opened.scale.right - opened.scale.left),
+          firstDay: Math.round(first.left),
+          scaleEnd: Math.round(atStart.scale.right),
+        })
       })
-    })
 
 /** What stands on top a little past the scale's end, at the middle of the plot's height. */
 const pastScale = (page: Page) =>
@@ -180,7 +197,8 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
   page,
 }) => {
   await serve(page, SIXTY_DAYS)
-  const analytics = await openReport(page, 1440, pageAt(SPANS[2]?.state))
+  // The task section, whose day chart stands under its other charts in the held layout.
+  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item', ...SPANS[2]?.state }))
   const days = analytics.locator('.spending-days')
   await days.locator('.segmented-option', { hasText: 'Chart' }).click()
   await expect(days.locator('.period-column')).toHaveCount(60)
@@ -220,6 +238,12 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
   await expect.poll(frameEnd).toBeGreaterThan(narrowed.frame.right)
   const widened = await chartPlace(page)
   expect(widened.scrolled, 'the reader’s place').toBe(200)
+  // Held beside the rail, the charts scroll on their own and the day chart stands below their
+  // fold: brought into view, as a reader scrolls to it, before a press is aimed at it. Scrolling
+  // the charts down moves nothing sideways, so the reader's place still holds.
+  await days.locator('.period-field').scrollIntoViewIfNeeded()
+  const inView = await chartPlace(page)
+  expect(inView.scrolled, 'the reader’s place').toBe(200)
   // Days stand under the scale now, and a press past its end reaches none of them.
   expect(await pastScale(page), 'a press past the scale').toEqual({ ground: true, period: false })
 
