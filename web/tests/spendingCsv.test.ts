@@ -2,9 +2,9 @@
  * The breakdown as a CSV file. The oracle is a file written out by hand from the requirement:
  * a row per value in the table's order with its id, reference and name; seconds, tokens, dollars
  * and unpriced tokens now and before as plain numbers; an absent figure an empty cell and never
- * 0; text quoted as RFC 4180 has it; a text cell that would start a formula written after a
- * single quote; the bounds of both periods and the filters on every row; a byte order mark first
- * and CRLF line ends.
+ * 0; text quoted as RFC 4180 has it; a single quote before a formula wherever a spreadsheet's
+ * separator could start a field; the bounds of both periods and the filters on every row; a byte
+ * order mark first and CRLF line ends.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -64,6 +64,23 @@ const csv = (before: Stretch[] | null) =>
 const HEADER =
   'breakdown,value_id,value_reference,value_name,value_kind,time_seconds,tokens,cost_usd,unpriced_tokens,before_time_seconds,before_tokens,before_cost_usd,before_unpriced_tokens,period_from,period_to,before_from,before_to,filters'
 
+/** The row a task of this title is written in, alone in a period with nothing before it. */
+const titledRow = (title: string) => {
+  const usage = usageAnswer({
+    first: new Date(Date.UTC(2026, 10, 8, 21)),
+    offset: 180,
+    days: 1,
+    groupBy: ['work_item'],
+    stretches: [{ day: 0, group: { work_item: task(7, title) }, spend: { seconds: 60 } }],
+    before: null,
+  }).usage
+  return spendingCsv({ by: 'work_item', filters: {}, measure: 'time', usage, name }).split(
+    '\r\n',
+  )[1]
+}
+const rowNamed = (cell: string) =>
+  `work_item,00000000-0000-4000-8000-000000000007,MAIN-7,${cell},category,60,,,0,,,,,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,,,`
+
 describe('the breakdown as a CSV file', () => {
   it('holds every value of both periods, its text safe for a spreadsheet', () => {
     const expected =
@@ -105,6 +122,23 @@ describe('the breakdown as a CSV file', () => {
     })
     expect(text.split('\r\n')[1]).toBe(
       `model,"'-model",,,category,60,,,0,0,0,0,0,2026-11-09T00:00:00+03:00,2026-11-10T00:00:00+03:00,2026-11-08T00:00:00+03:00,2026-11-09T00:00:00+03:00,`,
+    )
+  })
+
+  // Under a `;` or a tab separator each stretch between them is a field a formula can start.
+  it.each([
+    ['after a semicolon', 'x;=1+1;y', `"x;'=1+1;y"`],
+    ['after leading spaces', ' =1+1', `"' =1+1"`],
+    ['after a line break', 'first line\n=SUM(A1:A9)', `"first line\n'=SUM(A1:A9)"`],
+    ['after a comma', 'a,@b', `"a,'@b"`],
+    ['after a tab', 'a\t+b', `"a\t'+b"`],
+  ])('shows a formula that starts a field %s', (_where, title, cell) => {
+    expect(titledRow(title)).toBe(rowNamed(cell))
+  })
+
+  it('leaves a hyphen inside a word and a semicolon before a word as they are', () => {
+    expect(titledRow('Re-read the well-known log; then report')).toBe(
+      rowNamed('Re-read the well-known log; then report'),
     )
   })
 
