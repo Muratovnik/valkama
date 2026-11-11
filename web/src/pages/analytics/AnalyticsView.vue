@@ -228,6 +228,7 @@ const emptyDescription = computed(() =>
         <SpendingReport
           :usage="payload"
           :accounts="read.accounts.value"
+          :filters="read.readWith.value"
           :read-at="read.askedAt.value"
           :measure="view.measure"
           @update:measure="(measure) => change({ measure })"

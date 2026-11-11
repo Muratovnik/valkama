@@ -104,6 +104,8 @@ export function useUsageRead(options: {
   const askedAt = shallowRef<Date>(now())
   const filterValues = ref<Partial<Record<UsageDimension, FilterValues>>>({})
   const accounts = shallowRef<AccountsRead>('loading')
+  /** The filters the shown answer was read with, its scope's project among them. */
+  const readWith = shallowRef<UsageFilters>({})
 
   /** The scope's own filter: its project, or nothing at the top. */
   const scope = computed<UsageFilters>(() => {
@@ -160,6 +162,7 @@ export function useUsageRead(options: {
     const shown = state.value
     state.value = 'payload' in shown ? refreshing(shown.payload) : uiLoading()
     const { by } = view
+    const askedWith = filters.value
     const before = comparedPeriod(view, at)
     const asking = fetchUsage(query(period, [by], !before), signal)
     const askingBefore = before ? orNull(fetchUsage(query(before, [by], false), signal)) : null
@@ -174,6 +177,7 @@ export function useUsageRead(options: {
     }
     if (signal.aborted) return
     accounts.value = askingAccounts ? 'loading' : usage
+    readWith.value = askedWith
     state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
     if (!askingAccounts) return
     const byAccount = await askingAccounts
@@ -227,5 +231,5 @@ export function useUsageRead(options: {
     offering?.abort()
   })
 
-  return { accounts, askedAt, bounds, filterValues, offer, retry: read, state }
+  return { accounts, askedAt, bounds, filterValues, offer, readWith, retry: read, state }
 }

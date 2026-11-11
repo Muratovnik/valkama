@@ -128,6 +128,8 @@ export const analyticsMessages = {
         before: '{measure}, {period}',
         change: 'Change',
         unread: 'The period before was not read, so this table shows this period alone.',
+        download: 'Download CSV',
+        nothingToDownload: 'Nothing to download: this view holds no value.',
         moved: {
           up: '↑ {change}',
           down: '↓ {change}',
@@ -286,6 +288,8 @@ export const analyticsMessages = {
         before: '{measure}, {period}',
         change: 'Изменение',
         unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
+        download: 'Скачать CSV',
+        nothingToDownload: 'Скачивать нечего: в этом виде нет ни одного значения.',
         moved: {
           up: '↑ {change}',
           down: '↓ {change}',

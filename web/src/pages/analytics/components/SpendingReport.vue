@@ -22,12 +22,14 @@ import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts
 import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   /** The period by account behind the answer, for where the accounts that worked changed. */
   accounts: AccountsRead
+  /** The filters the answer was read with. */
+  filters: UsageFilters
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
@@ -103,6 +105,7 @@ const narrow = computed(() => width.value !== null && width.value < NARROW)
     />
     <SpendingTable
       :by="by"
+      :filters="filters"
       :measure="measure"
       :usage="usage"
     />

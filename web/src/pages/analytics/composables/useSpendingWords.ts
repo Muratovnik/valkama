@@ -7,6 +7,7 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import { named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -26,21 +27,6 @@ const SESSION_PREFIX = 8
  * value, and a filter's «none» admits an unknown one instead.
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
-
-const OFFSET = /(?:Z|([+-])(\d{2}):(\d{2}))$/u
-
-/**
- * A moment of the read as the date and time it names at its own offset, held in a date to be
- * read in UTC: `2030-03-29T00:00:00+02:00` is 29 March, whatever the browser's zone said that
- * night. The read writes a period's moments at the one offset it was asked at, so a day across a
- * change of daylight saving time keeps the date the read gave it. `shift` moves it first, in ms.
- */
-function named(moment: string, shift = 0) {
-  const [, sign, hours = '0', minutes = '0'] = OFFSET.exec(moment) ?? []
-  const size = Number(hours) * 60 + Number(minutes)
-  const offset = sign === '-' ? -size : size
-  return new Date(Date.parse(moment) + shift + offset * 60_000)
-}
 
 export function useSpendingWords() {
   const i18n = useI18n()

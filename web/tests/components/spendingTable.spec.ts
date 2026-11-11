@@ -53,7 +53,7 @@ const answer = (before: Stretch[] | null) =>
 
 function table(measure: Measure, before: Stretch[] | null = BEFORE, locale: 'en' | 'ru' = 'en') {
   return mount(SpendingTable, {
-    props: { by: 'work_item', measure, usage: answer(before) },
+    props: { by: 'work_item', filters: {}, measure, usage: answer(before) },
     global: { plugins: [analyticsI18n(locale)] },
   })
 }
@@ -165,6 +165,7 @@ describe('the breakdown beside the period before', () => {
     const wrapper = mount(SpendingTable, {
       props: {
         by: 'work_item',
+        filters: {},
         measure: 'time',
         usage: usageAnswer({
           first: new Date(2026, 10, 9),

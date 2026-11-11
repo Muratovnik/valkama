@@ -9,21 +9,34 @@
  * Largest first in the chosen measure, ties by name. A period before that was not read is said
  * once, over the table, and the table then holds this period alone. Wider than its column, it
  * scrolls in its own frame with each row's name kept in view (`ChartTable`).
+ *
+ * Its button downloads what it shows, for the whole view, as a CSV file (`spendingCsv`); with no
+ * value to list it is disabled, and the words beside it say why.
  */
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import { csvFileName, spendingCsv } from '@/pages/analytics/utils/spendingCsv.ts'
 import { comparedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
+import type {
+  Usage,
+  UsageDimension,
+  UsageFilters,
+  UsageGroupValue,
+} from '@/shared/api/analyticsApi.ts'
+import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   by: UsageDimension
+  /** The filters the answer was read with, which the downloaded file names. */
+  filters: UsageFilters
   measure: Measure
   usage: Usage
 }>()
@@ -73,17 +86,19 @@ const columns = computed<Column[]>(() => [
     : []),
 ])
 
+const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)
+
 const lines = computed(() =>
   comparedLines({
     rows: props.usage.rows,
     before: comparison.value?.rows ?? null,
     dimension: props.by,
     measure: props.measure,
-    name: (value) => words.valueLabel(props.by, value),
+    name: nameOf,
   }).map((line) => ({
     key: line.key,
     rest: line.kind !== 'category',
-    name: words.valueLabel(props.by, line.value),
+    name: nameOf(line.value),
     cells: columns.value.map((column) => {
       if (column.key === 'before')
         return { ...column, text: line.before ? words.figure(props.measure, line.before) : '' }
@@ -95,6 +110,20 @@ const lines = computed(() =>
 )
 
 const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
+
+/** Nothing to download: no value in either period. */
+const nothing = computed(() => !lines.value.length)
+const nothingId = useId()
+const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
+
+function download() {
+  const { by, filters, measure, usage } = props
+  offerDownload(
+    csvFileName(usage, by),
+    spendingCsv({ by, filters, measure, usage, name: nameOf }),
+    'text/csv;charset=utf-8',
+  )
+}
 </script>
 
 <template>
@@ -103,7 +132,26 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
       as="h2"
       level="page"
       :title="title"
-    />
+    >
+      <template #actions="{ size }">
+        <span
+          v-if="nothing"
+          :id="nothingId"
+          class="spending-table-note"
+        >
+          {{ t('analytics.table.nothingToDownload') }}
+        </span>
+        <VButton
+          class="spending-download"
+          :size="size"
+          :disabled="nothing"
+          :aria-describedby="downloadNote"
+          @click="download"
+        >
+          {{ t('analytics.table.download') }}
+        </VButton>
+      </template>
+    </SectionHeader>
     <p
       v-if="!comparison"
       class="spending-table-note"
