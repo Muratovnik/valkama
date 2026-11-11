@@ -156,6 +156,36 @@ describe('the tiles', () => {
     expect(ru.text).toContain('Чтение из кэша, не учтено: 12 млн')
   })
 
+  // A period that spent nothing has a figure in every measure, and it is zero: what the words
+  // for an absent figure say — no price, no tokens counted — is not true of it.
+  it('show a period that spent nothing as zeros in their units, fallen from the period before', () => {
+    const NOTHING = { seconds: 0, tokens: null, cost: null, unpriced: 0 }
+    const tiles = mountTiles(NOTHING, { seconds: 3600, tokens: 1000, cost: 2, unpriced: 0 })
+    expect(tile(tiles, 'time').figure).toBe('0\u{A0}min')
+    expect(tile(tiles, 'tokens').figure).toBe('0')
+    expect(tile(tiles, 'cost').figure).toBe('≈\u{A0}$0.00')
+    for (const measure of ['time', 'tokens', 'cost'] as const) {
+      expect(tile(tiles, measure).text).toContain('↓ 100% against Nov 2 – 8')
+      expect(tile(tiles, measure).text).not.toMatch(/No time|No tokens|No price/u)
+    }
+    const ru = mountTiles(NOTHING, NOW, 'time', 'ru')
+    expect(tile(ru, 'time').figure).toBe('0\u{A0}мин')
+    expect(tile(ru, 'tokens').figure).toBe('0')
+  })
+
+  // A figure the read does not hold is named absent, and gives no change.
+  it('name an absent price and absent tokens in words, with no change', () => {
+    const tiles = mountTiles({ seconds: 3600, tokens: null, cost: null, unpriced: 500 }, NOW)
+    expect(tile(tiles, 'tokens').figure).toBe('No tokens')
+    expect(tile(tiles, 'cost').figure).toBe('No price')
+    for (const measure of ['tokens', 'cost'] as const) {
+      expect(tile(tiles, measure).text).not.toMatch(/%/u)
+      const change = tile(tiles, measure).segment.querySelector<HTMLElement>('.tile-change')
+      expect(change?.dataset.direction).toBe('absent')
+    }
+    expect(tile(tiles, 'time').figure).toBe('1\u{A0}h')
+  })
+
   it('say tokens without a price in words, and never a zero cost', () => {
     const unpriced = mountTiles({ seconds: 60, tokens: 900, cost: null, unpriced: 57 }, null)
     const cost = tile(unpriced, 'cost')
@@ -239,10 +269,19 @@ describe('the tiles on the page', () => {
     serve([{ at: on(2), group: { work_item: task(1, 'One') }, spend: { seconds: 3600, cost: 2 } }])
     const page = await mountAnalytics()
     expect(page.text()).not.toContain('Nothing was spent in this period')
-    expect(page.get('.tile-figure[data-measure="time"]').text()).toBe('No time counted')
-    const radios = page.findAll('.spending-tiles [role="radio"]').map((radio) => radio.text())
-    expect(radios[0]).toContain('↓ 100%')
-    expect(radios[2]).toContain('↓ 100%')
+    // This week's figures are real zeros, compared as such: the words for a figure the read does
+    // not hold ("No time counted", "No price") are not true of them.
+    const figure = (measure: Measure) => page.get(`.tile-figure[data-measure="${measure}"]`).text()
+    expect(figure('time')).toBe('0\u{A0}min')
+    expect(figure('tokens')).toBe('0')
+    expect(figure('cost')).toBe('≈\u{A0}$0.00')
+    const radios = page
+      .findAll('.spending-tiles [role="radio"]')
+      .map((radio) => radio.text().replaceAll(/\s/gu, ' '))
+    expect(radios[0]).toContain('↓ 100% against Nov 2 – 4')
+    // The week before counted no token: nothing to compare this week's zero with.
+    expect(radios[1]).toContain('No tokens counted in Nov 2 – 4 to compare with')
+    expect(radios[2]).toContain('↓ 100% against Nov 2 – 4')
   })
 })
 

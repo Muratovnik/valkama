@@ -87,7 +87,6 @@ export const analyticsMessages = {
         cost: 'Estimated cost at API prices',
       },
       figures: {
-        noTime: 'No time counted',
         noTokens: 'No tokens',
         noPrice: 'No price',
         costNote: 'An estimate at API list prices, not a bill',
@@ -215,7 +214,6 @@ export const analyticsMessages = {
         cost: 'Оценка стоимости по ценам API',
       },
       figures: {
-        noTime: 'Время не учтено',
         noTokens: 'Нет токенов',
         noPrice: 'Нет цены',
         costNote: 'Оценка по прейскуранту API, а не счёт',

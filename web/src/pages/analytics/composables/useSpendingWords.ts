@@ -7,6 +7,7 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
@@ -62,12 +63,17 @@ export function useSpendingWords() {
   const dayFormat = (options: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(i18n.locale.value, { ...options, timeZone: 'UTC' })
 
-  /** A measure's figure as a line reads it; no data in words, never a zero. */
+  /**
+   * A measure's figure as a line reads it (`figureOf`): a zero in its unit for one that spent
+   * nothing there, and words for one the read does not hold — no price, no tokens counted —
+   * never a zero.
+   */
   function figure(name: Measure, spent: Spent) {
-    if (name === 'time') return usage.time(spent.seconds) || t('analytics.figures.noTime')
-    if (name === 'tokens')
-      return spent.tokens ? compact(spent.tokens) : t('analytics.figures.noTokens')
-    return usage.cost(spent.cost) || t('analytics.figures.noPrice')
+    const amount = figureOf(name, spent)
+    if (amount === null)
+      return t(name === 'tokens' ? 'analytics.figures.noTokens' : 'analytics.figures.noPrice')
+    if (name === 'time') return usage.time(spent.seconds) || t('time.minutes', { count: 0 })
+    return name === 'tokens' ? compact(amount) : usage.cost(amount)
   }
 
   /** The tokens a cost leaves out, said in words; nothing when it leaves none out. */
