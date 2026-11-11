@@ -919,8 +919,10 @@ the work and under which account:
 requests were made for. `unknown` is `true` where the store does not hold the value: an
 account or an effort the transcript did not say, a subagent's class nobody recorded. A
 value that is none by its nature has an `id` of `null` and `unknown` `false`: the launch
-class of the session's own agent, and an adviser's class and effort, since an adviser's
-row holds its executor's effort rather than one of its own.
+class of the session's own agent. An adviser keeps the class of the run it advised in and
+the effort its segment holds, as the period read's `role` does, so `roles` added up by
+`role` and `launch_class`, or by `role` and `effort`, is that read's answer for the item
+grouped the same way over a period that holds all its work.
 
 The `seconds` of each of these lists add up to `agent_seconds` and their costs to
 `estimated_api_cost_usd` exactly, in thousandths of a second and millionths of a dollar,

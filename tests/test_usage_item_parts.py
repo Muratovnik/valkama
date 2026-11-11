@@ -188,7 +188,8 @@ class ItemPartsTests(UsageStore):
                 ("subagent", ("bero", False), ("medium", False)),
                 ("subagent", ("rev", False), (None, True)),
                 ("subagent", (None, True), ("low", False)),
-                ("advisor", (None, False), (None, False)),
+                # An adviser keeps its run's class and the effort its segment holds.
+                ("advisor", (None, False), ("high", False)),
             ],
             [
                 (

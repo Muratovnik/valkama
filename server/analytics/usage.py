@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 
 from ..planning import executors
 from ..planning import usage as item_usage
-from ..planning.usage import UNKNOWN, Value
+from ..planning.usage import Value
 from ..projects import project_registry
 
 ACCOUNT = "account"
@@ -75,7 +75,7 @@ DIMENSIONS = (
     ENVIRONMENT,
 )
 #: Who spent a stretch: a session's own run, a subagent's, or an adviser in either.
-ROLES = ("main", "subagent", "advisor")
+ROLES = item_usage.ROLES
 
 #: The length of each step, in seconds. A day is always 24 hours at one offset.
 STEPS = {"hour": 3600, "day": 86400}
@@ -470,21 +470,15 @@ def _readers(
 
 
 def _launch_class(row: Sequence) -> Value:
-    """How the run was launched: none for a session's own run, unknown for a subagent's
-    run that does not say."""
+    """How the run was launched, by the item read's rule (`planning.usage.launch_class`)."""
 
-    if row[_AGENT] == "":
-        return None
-    found = row[_LAUNCH]
-    return UNKNOWN if found is None else found
+    return item_usage.launch_class(str(row[_AGENT]), row[_LAUNCH])
 
 
 def _role(row: Sequence) -> Value:
-    """Who spent the stretch. An adviser's segment is the adviser's in whichever run it is."""
+    """Who spent the stretch, by the item read's rule (`planning.usage.role`)."""
 
-    if row[_ADVISOR]:
-        return "advisor"
-    return "main" if row[_AGENT] == "" else "subagent"
+    return item_usage.role(str(row[_AGENT]), row[_ADVISOR])
 
 
 # -- the answer ----------------------------------------------------------------

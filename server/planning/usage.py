@@ -24,8 +24,10 @@ account in time order, the accounts ranked, and its work by role, launch class a
 Each of these adds up to the item's own `agent_seconds` and cost exactly, in thousandths of
 a second and millionths of a dollar, as the analytics read's figures do: a part is what the
 parts up to it add up to, rounded, less what those before it do. A value the store does not
-hold is unknown; the launch class of a session's own run and an adviser's class and effort
-are none, which is not unknown.
+hold is unknown; the launch class of a session's own run is none, which is not unknown.
+Who spent a stretch and how its run was launched follow one rule here, `role` and
+`launch_class`, which the analytics read groups by too, so the two say the same of the
+same rows.
 """
 
 from __future__ import annotations
@@ -60,6 +62,7 @@ PRICED_COLUMNS = tuple(column for kind, column in TOKEN_KINDS if kind != "reason
 MAIN = "main"
 SUBAGENT = "subagent"
 ADVISOR = "advisor"
+ROLES = (MAIN, SUBAGENT, ADVISOR)
 _OBSERVED = "observed"
 _ESTIMATED = "estimated"
 _MIXED = "mixed"
@@ -236,6 +239,26 @@ def ranking(seconds: float, cost: float | None, values: Iterable[Value]) -> tupl
     )
 
 
+def role(agent_id: str, advisor: object) -> str:
+    """Who spent a stretch: an adviser's segment is the adviser's in whichever run it is,
+    and any other is the session's own agent's on its own run, `agent_id` empty, or a
+    subagent's."""
+
+    if advisor:
+        return ADVISOR
+    return MAIN if agent_id == "" else SUBAGENT
+
+
+def launch_class(agent_id: str, held: str | None) -> Value:
+    """How a stretch's run was launched: none for a session's own run, which no one
+    launches, and unknown for a subagent's run that does not say. An adviser's segment has
+    its run's, so beside `role` it tells whose adviser it was."""
+
+    if agent_id == "":
+        return None
+    return UNKNOWN if held is None else held
+
+
 def _cut(parts: Sequence[float | None], whole: float | None, places: int) -> list[float | None]:
     """These parts at `places` decimals, adding up to `whole` as the read rounds it exactly.
 
@@ -329,17 +352,12 @@ def _accounts(rows: Sequence[sqlite3.Row], whole: _Tally) -> dict:
     }
 
 
-def _role(row: sqlite3.Row) -> tuple[str, str | None, str | None]:
-    """Who did a row's work, with the class it was launched with and the effort it ran at.
+def _role(row: sqlite3.Row) -> tuple[str, Value, str | None]:
+    """Who did a row's work, with the class its run was launched with and the effort the
+    row holds, by the rule the analytics read groups `role` and `launch_class` by."""
 
-    An adviser's row holds the executor's effort, not its own, and an adviser is launched
-    with no class, so both are none on it."""
-
-    if row["advisor"]:
-        return ADVISOR, None, None
-    if not row["agent_id"]:
-        return MAIN, None, row["effort"]
-    return SUBAGENT, row["launch_class"], row["effort"]
+    agent = str(row["agent_id"])
+    return role(agent, row["advisor"]), launch_class(agent, row["launch_class"]), row["effort"]
 
 
 def _roles(rows: Sequence[sqlite3.Row], whole: _Tally) -> list[dict]:
@@ -348,12 +366,13 @@ def _roles(rows: Sequence[sqlite3.Row], whole: _Tally) -> list[dict]:
     ranked = _ranked(rows, _role)
     return [
         {
-            "role": role,
-            "launch_class": value(launch_class, unknown=role == SUBAGENT),
-            "effort": value(effort, unknown=role != ADVISOR),
+            "role": who,
+            # None is a class of its own, a session's own run's; unknown is `UNKNOWN`.
+            "launch_class": value(launched, unknown=False),
+            "effort": value(effort),
             **part,
         }
-        for ((role, launch_class, effort), _), part in zip(
+        for ((who, launched, effort), _), part in zip(
             ranked, _parts([tally for _, tally in ranked], whole), strict=True
         )
     ]
