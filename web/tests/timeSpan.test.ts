@@ -69,6 +69,14 @@ describe('how long ago', () => {
     expect(agoWords(now - MINUTE, now, words)).toBe('1 min ago')
   })
 
+  it('under a minute counts its whole seconds where the words have them, under a second not', () => {
+    const counted = { ...words, seconds: (count: number) => `${count} s` }
+    expect(agoWords(now - 40 * SECOND, now, counted)).toBe('40 s ago')
+    expect(agoWords(now - 59 * SECOND - 999, now, counted)).toBe('59 s ago')
+    expect(agoWords(now - 999, now, counted)).toBe('just now')
+    expect(agoWords(now - MINUTE, now, counted)).toBe('1 min ago')
+  })
+
   it('2.97 days is 2 days and 23 hours, neither 2 days nor 3', () => {
     expect(read(agoWords(Date.parse('2026-08-10T09:15:00Z'), now, words))).toBe('2 d 23 h ago')
   })

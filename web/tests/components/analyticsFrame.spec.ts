@@ -266,7 +266,7 @@ describe('the bar', () => {
     })
     const page = await mountAnalytics()
     const fresh = page.get('.analytics-bar-fresh time')
-    expect(fresh.text()).toBe('Newest record 2\u{A0}h\u{A0}25\u{A0}min ago')
+    expect(fresh.text()).toBe('Newest record 12:05 · 2\u{A0}h\u{A0}25\u{A0}min ago')
     expect(fresh.attributes('datetime')).toBe(momentAt(new Date(2026, 10, 11, 12, 5)))
     const asked = reads.asked.length
     await page.get('.analytics-refresh').trigger('click')

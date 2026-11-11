@@ -13,7 +13,9 @@
  * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
  *
  * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
- * each named by its clock time. Given the steps of the period
+ * each named by its clock time. A minute after the newest record read has no data yet, which it
+ * shows and says rather than a zero, and a note under the minutes says their figures are an
+ * estimate: each stretch of work shared out by its time in each. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
  * dashed outline on the same scale, named in the legend and said in the readout and the table;
  * while those steps are read there is no outline, and when they could not be read a note under
@@ -113,6 +115,7 @@ const chart = computed<PeriodChartProps>(() => ({
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
     note: t('analytics.days.note'),
+    pending: t('analytics.time.notYet'),
     period: t(`analytics.time.steps.${step.value}.name`),
     total: t('analytics.days.total'),
   },
@@ -148,6 +151,12 @@ function select({ column }: PeriodSelection) {
       >
         {{ t('analytics.days.accountsFailed') }}
       </p>
+      <p
+        v-if="step === 'minute'"
+        class="spending-days-note spending-days-estimate"
+      >
+        {{ t('analytics.time.estimate') }}
+      </p>
     </template>
     <template #table>
       <PeriodColumnsTable
@@ -159,6 +168,12 @@ function select({ column }: PeriodSelection) {
         class="spending-days-note"
       >
         {{ t('analytics.days.accountsFailed') }}
+      </p>
+      <p
+        v-if="step === 'minute'"
+        class="spending-days-note spending-days-estimate"
+      >
+        {{ t('analytics.time.estimate') }}
       </p>
     </template>
   </ChartSection>

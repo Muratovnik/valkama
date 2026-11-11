@@ -6,7 +6,8 @@
  * «2 days» and not «3 days».
  */
 
-const MINUTE = 60_000
+const SECOND = 1000
+const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
@@ -21,6 +22,8 @@ export interface SpanWords {
   days: (count: number) => string
   hours: (count: number) => string
   minutes: (count: number) => string
+  /** A span under a minute in whole seconds, said instead of «just now» where it is given. */
+  seconds?: (count: number) => string
 }
 
 /** The dictionary's span words (`time.*`) through a component's own `t`. */
@@ -58,8 +61,13 @@ export function spanWords(milliseconds: number, words: SpanWords): string {
   return words.minutes(minutes)
 }
 
-/** How long ago a moment was, from `now`; under a minute is «just now». */
+/**
+ * How long ago a moment was, from `now`; under a minute is «just now», or its whole seconds where
+ * the words count them, and under a second is «just now» either way.
+ */
 export function agoWords(at: number, now: number, words: SpanWords): string {
   const span = now - at
-  return span < MINUTE ? words.justNow : words.ago(spanWords(span, words))
+  if (span >= MINUTE) return words.ago(spanWords(span, words))
+  const seconds = Math.floor(span / SECOND)
+  return words.seconds && seconds > 0 ? words.ago(words.seconds(seconds)) : words.justNow
 }

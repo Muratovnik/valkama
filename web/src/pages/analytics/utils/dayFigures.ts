@@ -45,6 +45,15 @@ export function unfinished(start: string, step: UsageStep, readAt: Date) {
   return begun <= now && now < begun + STEP_LENGTH[step]
 }
 
+/**
+ * Whether a step has no data yet: it starts after the newest record the store read
+ * (`last_event_at`), so what it holds is not in yet, which is not nothing. The step that record
+ * falls in has data, and with no record read at all no step has any.
+ */
+export function notYet(start: string, lastEventAt: string | null) {
+  return lastEventAt === null || Date.parse(start) > Date.parse(lastEventAt)
+}
+
 /** A series of the stack: the line it draws, or «other» for the values it does not name. */
 export interface StackLine extends PeriodSeries {
   line: SpendingLine | null
@@ -90,7 +99,8 @@ export interface StackSource {
 
 /**
  * Each day of the answer as a column of the measure, by the series of the stack. A value that
- * spent in a day with no figure in the measure is absent there, not a zero.
+ * spent in a day with no figure in the measure is absent there, not a zero, and a minute with no
+ * data yet (`notYet`) is pending, not a zero either.
  */
 export function dayColumns(
   { usage, by: dimension, measure }: StackSource,
@@ -109,11 +119,13 @@ export function dayColumns(
       if (figure === null) absent.add(into)
       else values[into] = (values[into] ?? 0) + figure
     }
+    const pending = usage.period.step === 'minute' && notYet(point.start, usage.last_event_at)
     return {
       key: point.start,
       values,
       absent: [...absent],
       incomplete: unfinished(point.start, usage.period.step, readAt),
+      ...(pending ? { pending } : {}),
     }
   })
 }

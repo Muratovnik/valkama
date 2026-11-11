@@ -133,6 +133,11 @@ export interface PeriodColumn {
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
   incomplete?: boolean
+  /**
+   * A period whose figures are not in yet, such as one after the newest record read: no data,
+   * which is not zero. It is drawn as a hatched ground with no sum, and says so in words.
+   */
+  pending?: boolean
 }
 
 /** Something that changed at the start of a period, such as the account the work ran under. */
@@ -157,6 +162,8 @@ export interface PeriodWords {
   /** The words before the figure of the period compared with, and the heading over them. */
   before?: string
   emptyDescription?: string
+  /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
+  pending?: string
 }
 
 /** What a press in a period chart opens: a period, or one series in it. */
@@ -330,9 +337,10 @@ export function columnSummary(stacked: StackedColumn, words: PeriodWords, format
   // The period compared with is said beside the sum, ahead of the series that may be cut off.
   const compared =
     words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
-  const head = hasSum(stacked)
-    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
-    : `${periodName(stacked)}${compared}`
+  const head =
+    hasSum(stacked) && !stacked.column.pending
+      ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+      : `${periodName(stacked)}${compared}`
   return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
     .filter(Boolean)
     .join('. ')
@@ -379,13 +387,15 @@ export function changeMarkers(notes: readonly ChangeNote[], count: number): Plac
 }
 
 /**
- * What is said of a period besides its numbers: that it is still running, which series have no
- * figure in it, what changed.
+ * What is said of a period besides its numbers: that it is still running, that it has no data
+ * yet, which series have no figure in it, what changed.
  */
 export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[] {
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
-  return [...(stacked.column.incomplete ? [words.incomplete] : []), ...absent, ...stacked.marks]
+  const pending = stacked.column.pending && words.pending ? [words.pending] : []
+  const running = stacked.column.incomplete ? [words.incomplete] : []
+  return [...running, ...pending, ...absent, ...stacked.marks]
 }
 
 /** A place the keyboard can stand on: a column, and in it a segment when segments act. */

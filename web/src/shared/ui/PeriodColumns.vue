@@ -9,7 +9,9 @@
  * on the same scale as a dashed outline over each column, an edge and not a hue, named in the
  * legend, and the readout says its figure in words. A series with no figure in a period
  * (`absent`, such as work with no price) draws nothing there, and the readout and the period's
- * name say so rather than a zero. `PeriodColumnsTable` is the same periods as a table.
+ * name say so rather than a zero. A period whose figures are not in yet (`pending`) stands as a
+ * hatched ground the plot's height, never a column of zero, and the readout and its name say it
+ * has no data yet. `PeriodColumnsTable` is the same periods as a table.
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
@@ -254,6 +256,11 @@ function key(event: KeyboardEvent, at: number | null) {
                 @pointerenter="hovered = index"
                 @pointerleave="hovered = null"
               >
+                <span
+                  v-if="one.column.pending"
+                  class="period-pending"
+                  aria-hidden="true"
+                />
                 <component
                   :is="columnTag"
                   class="period-column"
@@ -445,37 +452,6 @@ function key(event: KeyboardEvent, at: number | null) {
       black 0 var(--space-half),
       rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
     );
-  }
-}
-
-/* The period compared with: an open dashed edge as wide as the stack, over it and never under,
-   so it reads where it is higher and where it is lower without a hue of its own. Drawn in the
-   text's colour, it takes the forced palette's ink with the text. */
-.period-before {
-  position: absolute;
-  inset: auto 0 0;
-  inline-size: min(100%, var(--space-6));
-  margin-inline: auto;
-  border: var(--space-hair) dashed currentcolor;
-  border-block-end: 0;
-  color: var(--color-text-muted);
-  border-radius: var(--radius-status) var(--radius-status) 0 0;
-  pointer-events: none;
-}
-
-/* A change at the start of a period: a line up the plot in the gap before the period. */
-.period-mark {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: calc(var(--space-hair) - var(--space-half));
-  inline-size: var(--space-hair);
-  background: var(--color-text-tertiary);
-  pointer-events: none;
-
-  /* A change is part of what the chart says, so it keeps its line in a forced palette. */
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
   }
 }
 </style>

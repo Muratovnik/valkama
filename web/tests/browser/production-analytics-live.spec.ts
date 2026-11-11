@@ -9,7 +9,10 @@
  *
  * It reads itself again every thirty seconds while the page is seen and asks nothing while it is
  * hidden, which the test counts in reads against the page's own clock, moved by the test; no
- * other period reads itself again.
+ * other period reads itself again. The bar says how old the newest record is, in seconds under a
+ * minute, and counts it up without a read; the minutes after that record are hatched and say they
+ * have no data yet, in the chart and in its table, and a note says a minute's figures are an
+ * estimate.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -184,4 +187,81 @@ test('«Now» reads itself again every 30 s while the page is seen, and never wh
     whileHidden,
     weekAfterIntervals,
   })
+})
+
+test('the minutes after the newest record say they have no data yet, and the minutes are an estimate', async ({
+  page,
+}, info) => {
+  // The newest record read is three minutes before the moment of the view, and no work after it.
+  const newest = new Date(NOW.getTime() - 3 * 60_000)
+  const double = await serveLive(
+    page,
+    HOUR_OF_WORK.filter((stretch) => stretch.at < newest),
+  )
+  double.lastEventAt = newest
+  const analytics = await openReport(page, 1440, nowAddress)
+  const days = analytics.locator('.spending-days')
+  await expect(days.locator('.period-column')).toHaveCount(60)
+
+  // The note under the minutes says what a minute's figures are.
+  await expect(days.locator('.spending-days-estimate')).toHaveText(
+    'Figures per minute are an estimate: each stretch of work is shared out among the minutes it spans by its time in each.',
+  )
+
+  // The three minutes after 14:27:05 are hatched as the plot is tall, a minute of nothing before
+  // them is not: no data yet is told from zero by more than a hue.
+  const pending = days.locator('.period-slot:has(.period-pending)')
+  await expect(pending).toHaveCount(3)
+  const slots = await days.locator('.period-slot').evaluateAll((all) =>
+    all.map((slot) => ({
+      pending: slot.querySelector('.period-pending') !== null,
+      ground: Math.round(
+        slot.querySelector('.period-pending')?.getBoundingClientRect().height ?? 0,
+      ),
+      stack: Math.round(slot.querySelector('.period-stack')?.getBoundingClientRect().height ?? 0),
+    })),
+  )
+  expect(slots.map((slot) => slot.pending).lastIndexOf(false)).toBe(56)
+  const field = await days.locator('.period-field').boundingBox()
+  for (const slot of slots.slice(57)) {
+    expect(slot.ground).toBe(Math.round(field?.height ?? Number.NaN))
+    expect(slot.stack).toBe(0)
+  }
+  // 14:26, a minute of no work and with data, stands as a zero: no ground, no stack.
+  expect(slots[55]).toEqual({ pending: false, ground: 0, stack: 0 })
+
+  // In words: the readout of such a minute, and its row of the table.
+  await pending.first().hover()
+  // Its sum is not said: the minute holds no data yet, which is not a total of zero.
+  const readout = days.locator('.period-readout')
+  await expect(readout).toHaveText(/ 14:28, period before 0\. No data yet$/u)
+  await days.getByRole('radio', { name: 'Table' }).click()
+  const headingTexts = await days.locator('thead th').allTextContents()
+  const headings = headingTexts.map((text) => text.trim())
+  const cells = (minute: number) => days.locator('tbody tr').nth(minute).locator(':is(th, td)')
+  await expect(cells(57).first()).toContainText('14:28')
+  await expect(cells(57).nth(headings.indexOf('total'))).toHaveText('—No data yet')
+  await expect(cells(57).last()).toHaveText('No data yet')
+  await expect(cells(56).nth(headings.indexOf('total'))).toHaveText('0')
+  await expect(cells(56).last()).toHaveText('')
+  await expect(days.locator('.spending-days-estimate')).toBeVisible()
+
+  await record(info, 'live-not-yet', { slots: slots.slice(54) })
+})
+
+test('the bar counts the age of the newest record in seconds, without a read', async ({ page }) => {
+  await page.clock.install({ time: NOW })
+  const { count } = await watchPage(page)
+  const double = await serveLive(page, HOUR_OF_WORK)
+  double.lastEventAt = new Date(NOW.getTime() - 20_000)
+  const analytics = await openReport(page, 1440, nowAddress)
+  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
+  await settled(count, double)
+  const fresh = analytics.locator('.analytics-bar-fresh')
+  await expect(fresh).toHaveText('Newest record 14:29 · 30\u{A0}s ago')
+  const asked = await count()
+  // Five seconds on, inside the interval: the age moved on its own, and nothing was read.
+  await page.clock.runFor(5000)
+  await expect(fresh).toHaveText('Newest record 14:29 · 35\u{A0}s ago')
+  expect(await count()).toBe(asked)
 })

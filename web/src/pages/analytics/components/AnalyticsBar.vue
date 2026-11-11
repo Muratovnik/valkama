@@ -9,9 +9,10 @@
  * spent, as the filters' own disclosure did before the bar had chips; closed, they stay in the
  * document, as that disclosure's did. A chip names its value as its field does, from one list.
  *
- * How fresh the figures are is the newest record the store holds, of any session, as old as it
- * is now: a page left open says its figures grow old. A live period says beside it that it reads
- * itself again, and how often.
+ * How fresh the figures are is the newest record the store holds, of any session: its time and
+ * how old it is now, in seconds under a minute, counted on each second without a read, so a page
+ * left open says its figures grow old. A live period says beside it that it reads itself again,
+ * and how often.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -120,16 +121,21 @@ const liveWords = computed(() =>
   }),
 )
 
-const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 60_000) })
+const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 1000) })
 /** How fresh the figures are, as words and, where there is one, the moment they stand for. */
 const fresh = computed(() => {
   if (props.lastEventAt === undefined) return null
   if (props.lastEventAt === null) return { at: '', words: t('analytics.frame.freshNone'), full: '' }
   const at = Date.parse(props.lastEventAt)
-  const ago = agoWords(at, Math.max(now.value.getTime(), at), spanWordsOf(t))
+  const shownAt = Math.max(now.value.getTime(), at)
+  const seconds = (count: number) => t('analytics.time.seconds', { count })
+  const ago = agoWords(at, shownAt, { ...spanWordsOf(t), seconds })
+  // The clock time alone on the day it is seen, with its day before that.
+  const today = new Date(at).toDateString() === new Date(shownAt).toDateString()
+  const named = words.stepName(props.lastEventAt, 'minute')
   return {
     at: props.lastEventAt,
-    words: t('analytics.frame.fresh', { ago }),
+    words: t('analytics.frame.fresh', { at: today ? named.label : named.fullLabel, ago }),
     full: new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(
       at,
     ),

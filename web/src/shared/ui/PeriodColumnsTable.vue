@@ -2,9 +2,10 @@
 /**
  * `PeriodColumns` as a table: a row per period in time order, a column per series in the
  * stack's order, the period's sum, and a note of what the chart marks on it — that it is still
- * running, what has no figure, what changed at its start. Every number the chart draws is here,
- * a series with nothing in a period included; a figure nobody has reads as a dash and never as a
- * zero. A period compared with has a column of its own, after the sum. It is the chart's
+ * running, that it has no data yet, what has no figure, what changed at its start. Every number
+ * the chart draws is here,
+ * a series with nothing in a period included; a figure nobody has, and the sum of a period with
+ * no data yet, reads as a dash and never as a zero. A period compared with has a column of its own, after the sum. It is the chart's
  * accessible equivalent and may stand beside it or instead of it: what a press opens in the
  * chart, a period or one series in it, opens here from the period's name or from the series'
  * figure. A period's name that acts heads its row, so it is named by the period, and what
@@ -157,7 +158,11 @@ const empty = computed(() => !props.columns.length || !props.series.length)
           class="chart-cell"
           data-numeric="true"
         >
-          <template v-if="sum(row) === null">
+          <template v-if="row.one.column.pending">
+            <span aria-hidden="true">{{ ABSENT }}</span>
+            <span class="visually-hidden">{{ words.pending }}</span>
+          </template>
+          <template v-else-if="sum(row) === null">
             <span aria-hidden="true">{{ ABSENT }}</span>
             <span class="visually-hidden">{{ words.absent }}</span>
           </template>

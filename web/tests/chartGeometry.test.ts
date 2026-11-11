@@ -17,6 +17,7 @@ import type {
 import {
   changeMarkers,
   changeNotes,
+  columnNotes,
   columnSummary,
   dayTicks,
   labelledColumns,
@@ -234,6 +235,26 @@ describe('a period still running', () => {
     const named = new Set(dayTicks(columns, 330, words.incomplete).map((tick) => tick.key))
     assert.ok(named.has('d20'))
     assert.ok(named.has('d29'))
+  })
+})
+
+describe('a period with no data yet', () => {
+  test('says so instead of a sum, beside that it is running, and never reads as a zero', () => {
+    const said = { ...words, pending: 'no data yet' }
+    const { columns } = stackColumns(
+      [
+        column('m1', { a: 2 }),
+        { ...column('m2', {}), pending: true },
+        { ...column('m3', {}, true), pending: true },
+      ],
+      series,
+    )
+    const [first, second, third] = columns
+    assert.ok(first && second && third)
+    assert.equal(columnSummary(first, said, String), 'm1: total 2; Account A 2')
+    assert.equal(columnSummary(second, said, String), 'm2. no data yet')
+    assert.equal(columnSummary(third, said, String), 'm3. so far. no data yet')
+    assert.deepEqual(columnNotes(second, said), ['no data yet'])
   })
 })
 
