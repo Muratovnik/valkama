@@ -25,7 +25,8 @@ const STACKED = 5
 const DAY = 86_400_000
 
 /** A day whose end has not come at the moment it was read holds what it spent so far. */
-const unfinished = (start: string, readAt: Date) => Date.parse(start) + DAY > readAt.getTime()
+export const unfinished = (start: string, readAt: Date) =>
+  Date.parse(start) + DAY > readAt.getTime()
 
 /** A series of the stack: the line it draws, or «other» for the values it does not name. */
 export interface StackLine extends PeriodSeries {

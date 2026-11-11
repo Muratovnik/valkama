@@ -128,8 +128,12 @@ export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore =
   })
 }
 
-/** Under this window width the page shows its list of sections or one section, not both. */
-export const NARROW_FRAME = 1024
+/**
+ * Under this window width the page shows its list of sections or one section, not both. The page
+ * decides on its own box, which leaves the panel beside the rail at least 640 pixels or takes
+ * turns: in the app's frame a window of 1200 pixels does the first and one of 1024 the second.
+ */
+export const NARROW_FRAME = 1200
 
 /**
  * Opens the page at `width` and waits for the report: its tiles and its days. A window too narrow
@@ -141,7 +145,7 @@ export async function openReport(page: Page, width: number, address = pageAt()) 
   await page.goto(address)
   const analytics = page.locator('.analytics-page')
   await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
-  if (width < NARROW_FRAME && !(await analytics.locator('.analytics-panel').isVisible()))
+  if (!(await analytics.locator('.analytics-panel').isVisible()))
     await analytics.locator('.analytics-rail [aria-current="page"]').click()
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toBeVisible()
   await expect(analytics.locator('.spending-days')).toBeVisible()

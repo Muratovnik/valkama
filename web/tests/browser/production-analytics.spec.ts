@@ -50,9 +50,10 @@ for (const width of [1440, 1024, 390]) {
       /^5\sd\s17\sh$/u,
     )
 
-    // A report narrower than a chart reads well opens each chart as its table: on a phone, and
-    // in the panel beside the rail at 1024px, which leaves the report under 560px.
-    const narrow = width < 1440
+    // A report narrower than a chart reads well opens each chart as its table: on a phone. At
+    // 1024px the panel beside the rail would have left the report under 560px, so the section
+    // has the page to itself instead, and its charts their room.
+    const narrow = width < 1024
     for (const section of await analytics.locator('.chart-section').all())
       await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : 'chart')
 

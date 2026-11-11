@@ -20,6 +20,9 @@ import { momentAt, noTask, task, unknownTask, usageAnswer, value } from '../fixt
 import type { Stretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
+// What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
+vi.mock('@/pages/analytics/composables/useRailReads.ts', () => import('../support/quietRail.ts'))
+
 const MONDAY = new Date(2026, 10, 9)
 /** Wednesday afternoon: Monday and Tuesday are over, Wednesday is not. */
 const WEDNESDAY = new Date(2026, 10, 11, 14, 30)

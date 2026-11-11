@@ -187,6 +187,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'the day and the time of the newest record, where the bar says only how long ago it was',
   ],
   [
+    'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: tile.leadDetail, words: tile.lead }"',
+    'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
+  ],
+  [
     `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
     'that a notification comes with the window closed too, and that a click on it opens the card; it stood as a paragraph over the group',
   ],

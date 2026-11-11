@@ -3,7 +3,8 @@
  * The oracle is the requirement. The rail lists the overview first and then each dimension the
  * page may filter on, the one on show marked as the page by more than its colour; choosing one is
  * written into the address, in place where rail and panel stand side by side, and as a new place
- * where a narrow screen shows one at a time, so Back returns to the list. The overview shows the
+ * where the page — its own box, not the window — leaves the panel beside the rail under 640
+ * pixels and shows one at a time, so Back returns to the list. The overview shows the
  * figures and the days; a dimension shows its whole report. The bar names each filter set as a
  * chip that takes it out, offers every value from «add a filter», says how fresh the figures are
  * and reads them again.
@@ -35,16 +36,22 @@ const WORLD: TimedStretch[] = [
   },
 ]
 
-/** A screen the width of a phone, as the page asks the window: under 1024 pixels wide. */
-function narrowWindow() {
+/** Every box measured `width` pixels wide, as the page measures its own: a phone's by default. */
+function pageWidth(width = 390) {
   vi.stubGlobal(
-    'matchMedia',
-    vi.fn((query: string) => ({
-      matches: query.includes('1024px'),
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })),
+    'ResizeObserver',
+    class {
+      readonly report: ResizeObserverCallback
+      constructor(report: ResizeObserverCallback) {
+        this.report = report
+      }
+      observe(target: Element) {
+        const entry = { target, contentRect: { width } } as unknown as ResizeObserverEntry
+        this.report([entry], this as unknown as ResizeObserver)
+      }
+      unobserve() {}
+      disconnect() {}
+    },
   )
 }
 
@@ -52,6 +59,10 @@ const written = (page: VueWrapper) =>
   page.emitted<[Record<string, string>, ('push' | 'replace')?]>('state') ?? []
 
 const entries = (page: VueWrapper) => page.findAll('.analytics-rail-entry')
+/** The names the rail's entries go by, over their figures. */
+const names = (page: VueWrapper) => page.findAll('.analytics-rail-name').map((one) => one.text())
+const current = (page: VueWrapper) =>
+  page.findAll('[aria-current="page"] .analytics-rail-name').map((one) => one.text())
 const entry = (page: VueWrapper, section: string) => page.get(`[data-section="${section}"]`)
 const shown = (page: VueWrapper, selector: string) =>
   (page.get(selector).element as HTMLElement).style.display !== 'none'
@@ -70,7 +81,7 @@ describe('the rail of sections', () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics()
     expect(page.get('nav.analytics-rail').attributes('aria-label')).toBe('Sections of the usage')
-    expect(entries(page).map((one) => one.text())).toEqual([
+    expect(names(page)).toEqual([
       'Overview',
       'Account',
       'Project',
@@ -87,7 +98,7 @@ describe('the rail of sections', () => {
       ...USAGE_DIMENSIONS,
     ])
     // The plain address is the breakdown by task, as it was before the page had sections.
-    expect(page.findAll('[aria-current="page"]').map((one) => one.text())).toEqual(['Task'])
+    expect(current(page)).toEqual(['Task'])
     expect(entry(page, 'work_item').classes()).toContain('selected')
     // The rail replaced the breakdown's field: no field chooses a dimension any more.
     expect(page.text()).not.toContain('Break down by')
@@ -105,7 +116,7 @@ describe('the rail of sections', () => {
   it('marks the section of an address as the page, and writes a section chosen in place', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model', measure: 'tokens' } })
-    expect(page.findAll('[aria-current="page"]').map((one) => one.text())).toEqual(['Model'])
+    expect(current(page)).toEqual(['Model'])
     expect(page.get('.spending-bars h2').text()).toBe('Tokens by model')
 
     await entry(page, 'overview').trigger('click')
@@ -125,8 +136,9 @@ describe('the panel', () => {
     expect(page.find('.spending-days').exists()).toBe(true)
     expect(page.find('.spending-bars').exists()).toBe(false)
     expect(page.find('.spending-table').exists()).toBe(false)
-    // The overview borrows the breakdown of the plain page, so moving to it asks nothing again.
-    expect(reads.grouped('work_item')).toHaveLength(2)
+    // The overview borrows the breakdown of the plain page, so moving to it asks nothing again:
+    // the page's read, the same days of the week before, and the rail's tile of tasks.
+    expect(reads.grouped('work_item')).toHaveLength(3)
     const asked = reads.asked.length
 
     await page.setProps({ routeState: {} })
@@ -144,8 +156,23 @@ describe('the panel', () => {
 })
 
 describe('a narrow screen', () => {
+  it('takes turns where the page, whatever the window, leaves the panel under 640 pixels', async () => {
+    // The rail is 15 of the root's 16-pixel ems: 240 pixels, and 640 for the panel beside it.
+    for (const [width, side] of [
+      [879, false],
+      [880, true],
+    ] as const) {
+      pageWidth(width)
+      stubAnalyticsReads((query) => serveUsage(WORLD, query))
+      const page = await mountAnalytics({ routeState: { by: 'model' } })
+      expect(shown(page, '.analytics-rail'), `the rail at ${width}`).toBe(true)
+      expect(shown(page, '.analytics-panel'), `the panel at ${width}`).toBe(side)
+      page.unmount()
+    }
+  })
+
   it('shows the list alone, and a section chosen there in its place as a new place', async () => {
-    narrowWindow()
+    pageWidth()
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model' } })
     expect(shown(page, '.analytics-rail')).toBe(true)
@@ -170,7 +197,7 @@ describe('a narrow screen', () => {
   })
 
   it('leads back to the list from the head of a section as a new place', async () => {
-    narrowWindow()
+    pageWidth()
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'overview', open: 'section' } })
     expect(page.get('.analytics-panel-back').text()).toBe('All sections')
@@ -179,7 +206,7 @@ describe('a narrow screen', () => {
   })
 
   it('keeps a section open while a press narrows it', async () => {
-    narrowWindow()
+    pageWidth()
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model', open: 'section' } })
     const bar = page.findAll('.spending-bars button').find((one) => one.text().includes('model-a'))
@@ -222,7 +249,8 @@ describe('the bar', () => {
     expect(add.attributes('aria-expanded')).toBe('true')
     expect((fields.element as HTMLElement).style.display).toBe('')
     expect(fields.findAll('[data-dimension]')).toHaveLength(USAGE_DIMENSIONS.length)
-    expect(reads.grouped('model')).toHaveLength(1)
+    // The rail's tile of models, and what the model's field offers.
+    expect(reads.grouped('model')).toHaveLength(2)
   })
 
   it('says how old the newest record is, and reads the figures again', async () => {
@@ -251,6 +279,6 @@ describe('the bar', () => {
     expect(page.get('.analytics-bar-fresh').text()).toBe('Записей ещё нет')
     expect(page.get('.analytics-refresh').text()).toBe('Обновить')
     expect(page.get('.analytics-filter-add').text()).toBe('Добавить фильтр')
-    expect(entries(page)[0]?.text()).toBe('Обзор')
+    expect(names(page)[0]).toBe('Обзор')
   })
 })

@@ -246,6 +246,7 @@ const fresh = computed(() => {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
+  container-type: inline-size;
 }
 
 /* The period, the filters, the freshness and the read again on one line while they fit; the
@@ -291,6 +292,16 @@ const fresh = computed(() => {
   gap: var(--space-2) var(--space-4);
   align-items: center;
   margin-inline-start: auto;
+}
+
+/* A bar too narrow for the freshness beside the rest keeps the read again on a line of its own
+   from the start: otherwise the line wrapped when the first answer brought its freshness, and
+   moved everything under the bar down. */
+@container (width < 48rem) {
+  .analytics-bar-read {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .analytics-bar-fresh {

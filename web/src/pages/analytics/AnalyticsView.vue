@@ -6,8 +6,10 @@
  * figures are and a read of them again over the whole of it; under that a rail of the page's
  * sections — the overview, then a dimension each — and the panel of the section on show. The rail
  * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
- * read. On a screen too narrow for the two side by side the rail is the screen, a list, and a
- * section chosen there takes its place as a new place in the history, so Back returns to the list.
+ * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
+ * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
+ * history, so Back returns to the list. Each section's entry on the rail carries its figures
+ * (`useRailTiles`).
  *
  * The view — the period, the section, the measure, a filter per dimension and whether a narrow
  * screen shows the section — is the page's address: every change is written there, and a reload
@@ -26,12 +28,12 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useMediaQuery } from '@vueuse/core'
-
 import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import SpendingReport from '@/pages/analytics/components/SpendingReport.vue'
 import type { ReportPart } from '@/pages/analytics/components/SpendingReport.vue'
+import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
+import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
 
@@ -134,8 +136,13 @@ const sectionName = computed(
   () => sections.value.find((section) => section.value === view.value.by)?.label ?? '',
 )
 
-/** Under this window width the rail and the panel do not both fit, and take turns. */
-const narrowScreen = useMediaQuery('(width < 1024px)')
+/** Whether the page is too narrow for the panel beside the rail, which then take turns. */
+const page = ref<HTMLElement | null>(null)
+const { narrow: narrowScreen, railWidth } = usePanelRoom(page)
+/** The rail's column beside the panel's; one column, the screen's, while they take turns. */
+const bodyColumns = computed(() =>
+  narrowScreen.value ? undefined : { gridTemplateColumns: `${railWidth} minmax(0, 1fr)` },
+)
 const showsRail = computed(() => !narrowScreen.value || !view.value.open)
 const showsPanel = computed(() => !narrowScreen.value || view.value.open)
 
@@ -145,16 +152,19 @@ function chooseSection(by: AnalyticsSection) {
   else if (by !== view.value.by) change({ by })
 }
 
-/** Where focus goes as the list and a section take turns: the way back, or the section left. */
+/**
+ * Where focus goes as the list and a section take turns: the way back, or the section left. Only
+ * a move between them does that; the page found too narrow on opening or on a resize moves none.
+ */
 const rail = ref<InstanceType<typeof AnalyticsRail> | null>(null)
 const back = ref<InstanceType<typeof VButton> | null>(null)
 watch(
-  () => narrowScreen.value && view.value.open,
+  () => view.value.open,
   async (opened, was) => {
-    if (opened === was) return
+    if (opened === was || !narrowScreen.value) return
     await nextTick()
     if (opened) (back.value?.$el as HTMLElement | undefined)?.focus()
-    else if (narrowScreen.value) rail.value?.focusSelected()
+    else rail.value?.focusSelected()
   },
 )
 
@@ -176,6 +186,20 @@ function filter(dimension: UsageDimension, values: (string | null)[]) {
   }
 }
 
+const { tiles, refresh: refreshTiles } = useRailTiles({
+  dimensions: () => filterDimensions.value,
+  overview: () => read.state.value,
+  overviewAt: () => read.askedAt.value,
+  projectId: () => props.projectId,
+  view: () => view.value,
+})
+
+/** The bar's refresh reads the page and every tile of the rail again. */
+function refresh() {
+  void read.retry()
+  void refreshTiles()
+}
+
 const emptyDescription = computed(() =>
   read.bounds.value ? t('analytics.empty.description') : t('analytics.period.incomplete'),
 )
@@ -183,6 +207,7 @@ const emptyDescription = computed(() =>
 
 <template>
   <section
+    ref="page"
     class="analytics-page"
     :class="{ 'analytics-narrow': narrowScreen }"
     :aria-label="t('analytics.title')"
@@ -198,10 +223,13 @@ const emptyDescription = computed(() =>
       :view="view"
       @amend="(next) => change(next)"
       @filter="filter"
-      @refresh="read.retry"
+      @refresh="refresh"
     />
 
-    <div class="analytics-body">
+    <div
+      class="analytics-body"
+      :style="bodyColumns"
+    >
       <AnalyticsRail
         v-show="showsRail"
         ref="rail"
@@ -210,6 +238,7 @@ const emptyDescription = computed(() =>
         :list="narrowScreen"
         :sections="sections"
         :selected="view.by"
+        :tiles="tiles"
         @choose="chooseSection"
       />
       <section
@@ -282,9 +311,11 @@ const emptyDescription = computed(() =>
   padding: var(--space-4) var(--size-page-gutter);
 }
 
+/* One column while the list and a section take turns; beside each other, the rail's width is
+   set where the room for them is measured (`usePanelRoom`). */
 .analytics-body {
   display: grid;
-  grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -317,10 +348,6 @@ const emptyDescription = computed(() =>
 /* One at a time: the list of sections on its ground across the screen, or the section in its
    place. */
 .analytics-narrow {
-  & .analytics-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   & .analytics-page-rail {
     padding-inline: var(--size-page-gutter);
     border-start-end-radius: 0;

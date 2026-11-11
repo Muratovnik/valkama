@@ -1,3 +1,5 @@
+import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
+
 /**
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
@@ -7,6 +9,7 @@ export const analyticsMessages = {
     analytics: {
       title: 'Usage of agent work',
       failed: 'The usage of agent work could not be read.',
+      rail: analyticsRailMessages.en,
       unread: 'The period before could not be read, so no change is shown.',
       empty: {
         title: 'Nothing was spent in this period',
@@ -178,6 +181,7 @@ export const analyticsMessages = {
     analytics: {
       title: 'Расход работы агентов',
       failed: 'Не удалось прочитать расход работы агентов.',
+      rail: analyticsRailMessages.ru,
       unread: 'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
       empty: {
         title: 'За этот период ничего не потрачено',
