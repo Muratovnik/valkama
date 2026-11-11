@@ -7,8 +7,9 @@
  * (`SpendingTable`), which a second dimension chosen over it crosses with the first. A value has
  * one hue in the bars, the small charts and the day chart (`valueSlots`), and its name beside it.
  *
- * Where the page holds it to the panel's height (`fills`), the table takes what the charts leave
- * it, never less than about half, and the charts above scroll on their own: a wheel moves the part
+ * Where the page holds it to the panel's height (`fills`), the figures stay in view at the top and
+ * the charts and the table share the rest: the charts up to a little over half of it, scrolling on
+ * their own past that, the table the remainder and never less than 14rem. A wheel moves the part
  * it is over and never the panel or the page. Elsewhere, as on a phone, the panel scrolls and the
  * table keeps a frame of its own.
  *
@@ -95,59 +96,61 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
     class="dimension-panel"
     :data-fills="fills"
   >
-    <div class="dimension-charts">
-      <SpendingUnread
-        v-if="!before"
-        @retry="emit('retry')"
-      />
-      <SpendingTiles
-        v-model:measure="measure"
-        :split="usage.total.tokens"
-        :total="figures.total"
-        :before="before"
-      />
-      <div class="dimension-pair">
-        <SpendingBars
+    <SpendingUnread
+      v-if="!before"
+      @retry="emit('retry')"
+    />
+    <SpendingTiles
+      v-model:measure="measure"
+      :split="usage.total.tokens"
+      :total="figures.total"
+      :before="before"
+    />
+    <div class="dimension-body">
+      <div class="dimension-charts">
+        <div class="dimension-pair">
+          <SpendingBars
+            :by="by"
+            :measure="measure"
+            :narrow="narrow"
+            :notice="noticeIn('bars')"
+            :rows="usage.rows"
+            :slots="slots"
+            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
+          />
+          <SpendingMultiples
+            :by="by"
+            :measure="measure"
+            :narrow="narrow"
+            :slots="slots"
+            :usage="usage"
+          />
+        </div>
+        <SpendingDays
+          :accounts="accounts"
           :by="by"
           :measure="measure"
           :narrow="narrow"
-          :notice="noticeIn('bars')"
-          :rows="usage.rows"
-          :slots="slots"
-          @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
-        />
-        <SpendingMultiples
-          :by="by"
-          :measure="measure"
-          :narrow="narrow"
-          :slots="slots"
+          :notice="noticeIn('days')"
+          :read-at="readAt"
           :usage="usage"
+          @day="(day, label) => emit('day', day, label)"
         />
       </div>
-      <SpendingDays
-        :accounts="accounts"
+      <SpendingTable
+        :across="across"
         :by="by"
+        :cross="cross.state.value"
+        :dimensions="dimensions"
+        :filters="filters"
         :measure="measure"
-        :narrow="narrow"
-        :notice="noticeIn('days')"
-        :read-at="readAt"
+        :notice="noticeIn('table')"
         :usage="usage"
-        @day="(day, label) => emit('day', day, label)"
+        @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
+        @reread="cross.retry"
+        @update:across="(next) => emit('update:across', next)"
       />
     </div>
-    <SpendingTable
-      :across="across"
-      :by="by"
-      :cross="cross.state.value"
-      :dimensions="dimensions"
-      :filters="filters"
-      :measure="measure"
-      :notice="noticeIn('table')"
-      :usage="usage"
-      @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
-      @reread="cross.retry"
-      @update:across="(next) => emit('update:across', next)"
-    />
   </div>
 </template>
 
@@ -159,6 +162,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
    height (the tiles' control height) and finds no room to grow, so the part would spill onto the
    next. */
 .dimension-panel,
+.dimension-body,
 .dimension-charts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -176,11 +180,26 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
   container-type: inline-size;
 }
 
-/* Held to the panel's height: the charts take what they need up to what the table leaves, and
-   the table the rest, never less than about half. */
+/* Held to the panel's height: the figures stand whole at the top, outside any scroll, since they
+   choose what everything under them shows. The charts and the table share the rest: the charts
+   take what they hold up to 55% of it and scroll inside past that, the table the remainder and
+   never less than 14rem, so a few of its rows are always in view. */
 .dimension-panel[data-fills='true'] {
-  grid-template-rows: minmax(0, auto) minmax(min(22rem, 50%), 1fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
+
+  & > :not(.dimension-body) {
+    flex: none;
+  }
+
+  & .dimension-body {
+    flex: 1 1 0;
+    grid-template-rows:
+      fit-content(min(55%, 100% - 14rem - var(--space-4)))
+      minmax(14rem, 1fr);
+    gap: var(--space-4);
+  }
 
   /* Positioned, so what its parts place out of the flow (words for a screen reader alone)
      scrolls and is clipped with them instead of stretching the panel's own scroll. Its air at
