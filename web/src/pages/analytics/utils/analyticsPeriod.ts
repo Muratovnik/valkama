@@ -2,13 +2,8 @@
  * The days a view of the Analytics page names, in the browser's own time: what its period is
  * read as, and the days a custom period first stands at.
  */
+import { localDay } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
-
-const pad = (value: number) => String(value).padStart(2, '0')
-
-/** A day as the browser's calendar names it: `2030-03-04`. */
-export const localDay = (day: Date) =>
-  `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 
 const dayFrom = (text: string) => {
   const [year, month, date] = text.split('-').map(Number)

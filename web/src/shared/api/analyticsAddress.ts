@@ -45,6 +45,12 @@ type RouteState = Readonly<Record<string, string | number | boolean>>
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/u
 
+const pad = (value: number) => String(value).padStart(2, '0')
+
+/** A day as the browser's calendar names it and a custom period holds it: `2030-03-04`. */
+export const localDay = (day: Date) =>
+  `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
+
 const oneOf = <T extends string>(values: readonly T[], value: unknown, fallback: T): T =>
   values.includes(value as T) ? (value as T) : fallback
 
