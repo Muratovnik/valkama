@@ -11,7 +11,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { task, value } from '../fixtures/analytics.ts'
+import { noTask, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
 import { test } from './test.ts'
@@ -273,6 +273,26 @@ test('the ranked list names twelve tasks and its last line gives the table the w
       ),
     )
     .toBe(true)
+})
+
+test('work on no task, the largest share, is ranked first with a bar and a small chart', async ({
+  page,
+}) => {
+  await serve(page, [
+    ...THIRTY_TASKS,
+    {
+      at: new Date(2026, 10, 9, 12),
+      group: { work_item: noTask, account: value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f') },
+      spend: { seconds: 200 * 3600, tokens: 1000, cost: 1 },
+    },
+  ])
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  const first = page.locator('.spending-bars .ranked-row').first()
+  await expect(first).toHaveAttribute('data-kind', 'none')
+  await expect(first.locator('.ranked-label')).toHaveText('No task')
+  await expect(first.locator('.ranked-bar')).toHaveAttribute('data-slot', 'other')
+  await expect(page.locator('.spending-multiples .multiple-name').first()).toHaveText('No task')
 })
 
 test('a section that is not held has no button for the whole panel', async ({ page }, info) => {

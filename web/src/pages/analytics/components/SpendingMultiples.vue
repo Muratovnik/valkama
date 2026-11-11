@@ -2,7 +2,8 @@
 /**
  * The period step by step for each of the dimension's largest values, a small chart each on one
  * scale, then one for the rest of its values together; work with no value there and work nobody
- * can place stand apart by their figures (`dayMultiples`, `SmallMultiples`). Each chart is in its
+ * can place are among the largest where their figures put them, a chart of their own in the
+ * neutral hue (`dayMultiples`, `SmallMultiples`). Each chart is in its
  * value's hue on the page (`slots`) and says its name, so the hue never speaks alone. Drawn, or as
  * its table, as every chart of the page is (`ChartSection`).
  */
@@ -44,8 +45,9 @@ const multiples = computed<SmallMultiple[]>(() =>
   dayMultiples(props).map(({ line, values }) => ({
     key: line.key,
     label: words.lineLabel(props.by, line),
-    kind: line.kind,
-    slot: props.slots.get(line.key) ?? 'other',
+    // Work with no value is charted as a value is, on the same scale; the folded tail stands apart.
+    kind: line.kind === 'other' ? 'other' : 'category',
+    slot: line.kind === 'category' ? (props.slots.get(line.key) ?? 'other') : 'other',
     values,
     valueText: words.lineFigure(props.measure, line.spent),
   })),

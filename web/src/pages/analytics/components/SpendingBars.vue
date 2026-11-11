@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * The period's measure broken down by the chosen dimension, largest first: every category, none
- * folded, then work with no task and work nobody can place — rows that are never one. Each bar is
- * passed its amount in the measure's own units, hours and not a share, and the rows add up to the
- * figure on the tile above. A bar takes its value's hue on the page (`slots`), the neutral for a
- * value the day chart folds away. A value named by the start of its id, an account, carries the
+ * The period's measure broken down by the chosen dimension, largest first (`rankedLines`): work
+ * with no task and work nobody can place stand among the values where their figures put them, with
+ * a bar on the same scale in the neutral hue and their names in the quiet ink, since work on no
+ * task can be the largest share of a period. Each bar is passed its amount in the measure's own
+ * units, hours and not a share. A bar takes its value's hue on the page (`slots`), the neutral for
+ * a value the day chart folds away. A value named by the start of its id, an account, carries the
  * whole id as its detail.
  *
  * It lists the first twelve values; past them one line says how many more there are and, pressed,
@@ -20,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -50,7 +51,7 @@ const words = useSpendingWords()
 const title = computed(() => words.chartTitle(props.measure, props.by))
 
 const all = computed(() =>
-  spendingLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
+  rankedLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
 )
 const lines = computed(() => all.value.slice(0, LISTED))
 /** How many values the list leaves to the table; none while it lists them all. */
@@ -67,7 +68,10 @@ const {
   lines: () => lines.value,
   measure: () => props.measure,
   narrow: (value, label) => emit('narrow', value, label),
-  more: (line) => ({ kind: line.kind, slot: props.slots.get(line.key) ?? 'other' }),
+  more: (line) => ({
+    kind: line.kind,
+    slot: line.kind === 'category' ? (props.slots.get(line.key) ?? 'other') : 'other',
+  }),
 })
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
@@ -90,6 +94,7 @@ const barWords = computed(() => ({
         :label="title"
         :rows="bars"
         :words="barWords"
+        rank-all
         @follow="follow"
         @select="select"
       />
@@ -107,6 +112,7 @@ const barWords = computed(() => ({
         :label="title"
         :rows="bars"
         :words="barWords"
+        rank-all
         @follow="follow"
         @select="select"
       />
