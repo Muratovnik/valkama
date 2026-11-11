@@ -6,6 +6,11 @@
  * nearest now. A frame standing on its end stays there while the plot's width settles, as it
  * does when the scale's figures get their font, and while its own does, as when the window is
  * made narrower; one a reader scrolled away keeps their place.
+ *
+ * A period the keyboard reaches is brought clear of the scale here (`reveal`), not left to the
+ * browser. Focus scrolls a frame only when what it lands on lies outside the frame's box, and
+ * the scale is in that box: a span a few pixels wider than the chart opens with its first
+ * period inside the box but under the scale, so Home stood on a period nobody could see.
  */
 import type { Ref } from 'vue'
 import { computed, ref, watch } from 'vue'
@@ -68,5 +73,20 @@ export function usePlotFrame(
     { flush: 'post' },
   )
 
-  return { gutter: computed(() => `${gutter.value}px`), width }
+  /**
+   * Scrolls the frame, as far as it must, so `element` stands whole between the scale and the
+   * frame's end. The room past the scale is the gap the plot keeps after it, which holds the
+   * focus ring, as the frame's reach past the chart's end does at the other side.
+   */
+  function reveal(element: HTMLElement) {
+    const box = frame.value
+    if (!box) return
+    const room = box.getBoundingClientRect()
+    const own = element.getBoundingClientRect()
+    const start = room.left + gutter.value
+    if (own.left < start) box.scrollLeft -= start - own.left
+    else if (own.right > room.right) box.scrollLeft += own.right - room.right
+  }
+
+  return { gutter: computed(() => `${gutter.value}px`), reveal, width }
 }

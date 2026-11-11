@@ -29,6 +29,7 @@
  */
 import { computed, ref, useId } from 'vue'
 
+import { pressedLast } from '@/shared/lib/pressFocus.ts'
 import type {
   PeriodChartProps,
   PeriodSelection,
@@ -67,7 +68,7 @@ const acting = computed(() => props.actionable !== null)
 const frame = ref<HTMLElement | null>(null)
 const plot = ref<HTMLElement | null>(null)
 const field = ref<HTMLElement | null>(null)
-const { gutter, width } = usePlotFrame(
+const { gutter, reveal, width } = usePlotFrame(
   frame,
   plot,
   field,
@@ -159,10 +160,15 @@ function press(one: StackedColumn, at: number | null) {
   if (acts(at) && (at === null || series)) emit('select', { column: one.column.key, series })
 }
 
-function focus(index: number, at: number | null) {
+/**
+ * A period or segment that takes focus is stood on; one the keyboard reached is brought clear of
+ * the scale too, while a press leaves the plot where the pointer found it.
+ */
+function focus(event: FocusEvent, index: number, at: number | null) {
   if (!acts(at)) return
   standOn(index, at)
   focused.value = index
+  if (!pressedLast() && event.currentTarget instanceof HTMLElement) reveal(event.currentTarget)
 }
 
 function key(event: KeyboardEvent, at: number | null) {
@@ -247,7 +253,7 @@ function key(event: KeyboardEvent, at: number | null) {
                   class="period-column"
                   v-bind="columnAttrs(one, index)"
                   @click="press(one, null)"
-                  @focus="focus(index, null)"
+                  @focus="(event: FocusEvent) => focus(event, index, null)"
                   @blur="focused = null"
                   @keydown="(event: KeyboardEvent) => key(event, null)"
                 >
@@ -272,7 +278,7 @@ function key(event: KeyboardEvent, at: number | null) {
                       :style="segmentStyle(one, at)"
                       v-bind="segmentAttrs(one, index, at)"
                       @click="press(one, at)"
-                      @focus="focus(index, at)"
+                      @focus="(event: FocusEvent) => focus(event, index, at)"
                       @blur="focused = null"
                       @keydown="(event: KeyboardEvent) => key(event, at)"
                     />
