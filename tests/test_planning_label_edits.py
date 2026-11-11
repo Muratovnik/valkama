@@ -123,6 +123,47 @@ class LabelEditTests(BatchCase):
                     self.conn.commit()
                     self.assertEqual(before, self.untouched())
 
+    def test_an_author_the_history_cannot_hold_refuses_the_edit_before_it_writes(self) -> None:
+        # The event records the edit's author, so a label edit answers for it as a comment
+        # or a claim does. It is refused before the first write: the labels, the revision
+        # and the call rows stand as they were even when what the handler left is committed.
+        edit = {"labels_add": ["observation"]}
+
+        def http(path: str, **payload: object) -> object:
+            return api.handle_post(self.conn, path, payload)
+
+        for author in ("a" * 129, "two\rlines"):
+            writes: dict[str, Callable[[], object]] = {
+                "update_work_item": lambda author=author: self.agent(
+                    "update_work_item", id=self.ref, author=author, **edit
+                ),
+                "apply_work_item_changes": lambda author=author: self.apply(
+                    author=author, update=edit
+                ),
+                "POST work-item/update": lambda author=author: http(
+                    "/api/planning/work-item/update", id=self.ref, author=author, **edit
+                ),
+                "POST work-item/apply": lambda author=author: http(
+                    "/api/planning/work-item/apply", id=self.ref, author=author, update=edit
+                ),
+            }
+            for name, write in writes.items():
+                with self.subTest(author=author[:8], surface=name):
+                    service.update_work_item(self.conn, self.ref, labels=BEFORE)
+                    self.conn.commit()
+                    before = self.untouched()
+                    with self.assertRaisesRegex(
+                        (model.PlanningError, api.PlanningHttpError), "author must"
+                    ):
+                        write()
+                    self.conn.commit()
+                    self.assertEqual(before, self.untouched())
+
+    def test_the_event_carries_the_author_the_edit_named(self) -> None:
+        self.agent("update_work_item", id=self.ref, author="codex", labels_add=["observation"])
+        newest = self.record()["events"][-1]
+        self.assertEqual(("labels_changed", "codex"), (newest["action"], newest["author"]))
+
     def label_events(self) -> list[object]:
         """The details of the item's `labels_changed` events, oldest first, as JSON read back."""
 
