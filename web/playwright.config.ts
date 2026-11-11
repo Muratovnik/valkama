@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 
 import { appBuild, appPort, harnessPort, runResults } from './tests/browser/browserRun.ts'
+import { clipboardIgnore } from './tests/browser/clipboardSpecs.ts'
 import { python, serverStore, storeEnvironment } from './tests/browser/serverStore.ts'
 
 // Every path below is absolute and every server starts in `web/`, because Playwright
@@ -36,9 +37,14 @@ const appServer = {
 // routes and runs only without it.
 const store = serverStore()
 
+// The specs that write the system clipboard are not selected unless VALKAMA_BROWSER_CLIPBOARD
+// is `1`: not by a bare run, not by naming one, not by `--list`. Every project inherits this.
+const testIgnore = clipboardIgnore(process.env)
+
 export default store
   ? defineConfig({
       testDir: specs,
+      testIgnore,
       outputDir,
       fullyParallel: false,
       retries: 0,
@@ -61,6 +67,7 @@ export default store
     })
   : defineConfig({
       testDir: specs,
+      testIgnore,
       outputDir,
       // Before the first spec: the app port serves the bundle this run has just built.
       globalSetup: join(specs, 'servedApp.setup.ts'),
