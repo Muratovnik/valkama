@@ -94,6 +94,12 @@ export interface PeriodColumn {
   label: string
   /** Each series' amount in this period, by series key; a series it lacks is zero. */
   values: Readonly<Partial<Record<string, number>>>
+  /**
+   * The series that spent in this period without a figure — no price, nothing counted — in
+   * whole or in part. Absent is not zero: it draws nothing, reads as a dash where no amount
+   * stands, and is said in words beside the period.
+   */
+  absent?: readonly string[]
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
@@ -117,6 +123,8 @@ export interface PeriodWords {
   period: string
   /** The word before a period's sum. */
   total: string
+  /** What a series with no figure in a period says before its names: "No price". */
+  absent?: string
   emptyDescription?: string
 }
 
@@ -150,12 +158,19 @@ export interface StackSegment {
 }
 
 export interface StackedColumn {
+  /** The series with no figure in the period (`PeriodColumn.absent`), in the series' order. */
+  absent: PeriodSeries[]
   column: PeriodColumn
   marks: string[]
   /** Bottom first, in the series' order; a series with nothing in the period has no segment. */
   segments: StackSegment[]
+  /** The sum drawn; a period with nothing drawn and a series absent has no sum (`hasSum`). */
   total: number
 }
+
+/** Whether a period has a sum to say: anything drawn, or nothing absent, which is a real zero. */
+export const hasSum = (stacked: StackedColumn) =>
+  stacked.segments.length > 0 || stacked.absent.length === 0
 
 /**
  * Round steps from zero up to the first one at or past the largest value: 1, 2, 2.5 or 5 times
@@ -188,7 +203,8 @@ export function stackColumns(
       reached += value
     }
     const notes = marks.filter((mark) => mark.at === column.key).map((mark) => mark.label)
-    return { column, total: reached, segments, marks: notes }
+    const absent = series.filter((one) => column.absent?.includes(one.key))
+    return { column, total: reached, segments, marks: notes, absent }
   })
   const ticks = valueTicks(Math.max(0, ...stacked.map((one) => one.total)))
   return { columns: stacked, ticks, top: ticks.at(-1) || 1 }
@@ -277,7 +293,9 @@ export function columnSummary(stacked: StackedColumn, words: PeriodWords, format
   const parts = stacked.segments.map(
     (segment) => `${segment.series.label} ${format(segment.value)}`,
   )
-  const head = `${periodName(stacked)}: ${words.total} ${format(stacked.total)}`
+  const head = hasSum(stacked)
+    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}`
+    : periodName(stacked)
   return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
     .filter(Boolean)
     .join('. ')
@@ -323,9 +341,14 @@ export function changeMarkers(notes: readonly ChangeNote[], count: number): Plac
   }))
 }
 
-/** What is said of a period besides its numbers: that it is still running, what changed. */
+/**
+ * What is said of a period besides its numbers: that it is still running, which series have no
+ * figure in it, what changed.
+ */
 export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[] {
-  return [...(stacked.column.incomplete ? [words.incomplete] : []), ...stacked.marks]
+  const names = stacked.absent.map((one) => one.label).join(', ')
+  const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
+  return [...(stacked.column.incomplete ? [words.incomplete] : []), ...absent, ...stacked.marks]
 }
 
 /** A place the keyboard can stand on: a column, and in it a segment when segments act. */

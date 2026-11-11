@@ -69,8 +69,13 @@ export function useSpendingWords() {
     }).formatRange(new Date(from), end)
   }
 
-  /** How a figure moved, against the period it is compared with. */
-  function change(moved: Change, before: string) {
+  /**
+   * How a measure's figure moved, against the period it is compared with; with a figure absent,
+   * which period has none — no price, no token counted — and no change at all.
+   */
+  function change(name: Measure, moved: Change, before: string) {
+    if (moved.direction === 'absent')
+      return t(`analytics.change.absent.${name}.${moved.missing}`, { period: before })
     if (moved.direction === 'none') return t('analytics.change.none', { period: before })
     if (moved.direction === 'same') return t('analytics.change.same', { period: before })
     return t(`analytics.change.${moved.direction}`, {

@@ -264,3 +264,51 @@ describe('the period table', () => {
     expect(mountTable({ columns: [] }).get('[role="status"]').text()).toBe(words.empty)
   })
 })
+
+/**
+ * A figure nobody has, such as the cost of work with no price, is absent and not zero: the chart
+ * draws nothing for it and says so in words, and the table reads it as a dash with those words
+ * for a screen reader, while a day that spent nothing still reads as a zero.
+ */
+describe('a period with a series absent', () => {
+  const absentWords: PeriodWords = { ...words, absent: 'No price' }
+  const priced: PeriodColumn[] = [
+    { key: 'd1', label: '1', fullLabel: 'May 1', values: { ci: 2 }, absent: ['work'] },
+    { key: 'd2', label: '2', fullLabel: 'May 2', values: {}, absent: ['ci', 'work'] },
+    { key: 'd3', label: '3', fullLabel: 'May 3', values: {} },
+  ]
+  const props = { columns: priced, words: absentWords, marks: [] }
+
+  it('draws nothing for it and says it in words, the sum of what is drawn beside', () => {
+    const chart = mountColumns(props)
+    expect(chart.findAll('[role="img"]').map((image) => image.attributes('aria-label'))).toEqual([
+      'May 1: total 2 h; ci 2 h. No price: work',
+      'May 2. No price: ci, work',
+      'May 3: total 0 h',
+    ])
+    expect(
+      chart.findAll('.period-slot').map((slot) => slot.findAll('.period-segment').length),
+    ).toEqual([1, 0, 0])
+  })
+
+  it('reads as a dash in the table, never as a zero, and a day that spent nothing as zero', () => {
+    const rows = mountTable(props).findAll('tbody tr')
+    // The dash is what the eye reads; its words are for a screen reader.
+    const seen = rows.map((row) =>
+      row.findAll('th, td').map((cell) => {
+        const dash = cell.find('[aria-hidden="true"]')
+        return dash.exists() ? dash.text() : cell.text()
+      }),
+    )
+    expect(seen).toEqual([
+      ['May 1', '2 h', '—', '2 h', 'No price: work'],
+      ['May 2', '—', '—', '—', 'No price: ci, work'],
+      ['May 3', '0 h', '0 h', '0 h', ''],
+    ])
+    expect(rows[1]?.findAll('.visually-hidden').map((words) => words.text())).toEqual([
+      'No price',
+      'No price',
+      'No price',
+    ])
+  })
+})

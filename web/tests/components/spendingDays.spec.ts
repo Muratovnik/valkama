@@ -140,6 +140,34 @@ describe('the days', () => {
     expect(legend).toContain('Unknown')
   })
 
+  it('show a day whose work has no price as absent, never as a zero', () => {
+    // Monday is priced, Tuesday spent with no price, Wednesday spent nothing.
+    const usage = week([
+      { day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600, cost: 2 } },
+      {
+        day: 1,
+        group: { work_item: task(2, 'Two') },
+        spend: { seconds: 3600, cost: null, unpriced: 500 },
+      },
+    ])
+    const options = { measure: 'cost' as const, readAt: AFTER }
+    const chart = mountDays(usage, options)
+    expect(
+      chart.findAll('.period-slot').map((slot) => slot.findAll('.period-segment').length),
+    ).toEqual([1, 0, 0])
+    expect(chart.findAll('[role="img"]')[1]?.attributes('aria-label')).toContain(
+      'No price: MAIN-2 Two',
+    )
+    const rows = mountDays(usage, { ...options, narrow: true })
+      .getComponent(PeriodColumnsTable)
+      .findAll('tbody tr')
+      .map((row) => row.findAll('td').map((cell) => cell.text()))
+    // The columns: MAIN-1, MAIN-2, the total and the note.
+    expect(rows[0]?.slice(0, 3)).toEqual(['$2.00', '0', '$2.00'])
+    expect(rows[1]).toEqual(['0', '—No price', '—No price', 'No price: MAIN-2 Two'])
+    expect(rows[2]?.slice(0, 3)).toEqual(['0', '0', '0'])
+  })
+
   it('mark the day not over yet as so far, and only that day', () => {
     const days = mountDays(week())
     const stacks = days.findAll('.period-stack')

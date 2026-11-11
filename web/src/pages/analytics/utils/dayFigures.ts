@@ -1,4 +1,10 @@
-import { measureOf, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import {
+  figureOf,
+  measureOf,
+  spendingLines,
+  spentAnything,
+  spentOf,
+} from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
 
@@ -34,8 +40,9 @@ export interface StackLine extends PeriodSeries {
  */
 export function stackLines({ usage, by: dimension, measure }: StackSource) {
   const amount = (line: SpendingLine) => measureOf(measure, line.spent) ?? 0
+  // A value with no figure in the measure stays, so its days can say it has none.
   const lines = spendingLines(usage.rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
-    (line) => amount(line) > 0,
+    (line) => figureOf(measure, line.spent) !== 0,
   )
   const apart = lines.filter((line) => line.kind !== 'category')
   const categories = lines
@@ -62,7 +69,10 @@ export interface StackSource {
   usage: Usage
 }
 
-/** Each day of the answer as a column of the measure, by the series of the stack. */
+/**
+ * Each day of the answer as a column of the measure, by the series of the stack. A value that
+ * spent in a day with no figure in the measure is absent there, not a zero.
+ */
 export function dayColumns(
   { usage, by: dimension, measure }: StackSource,
   series: readonly StackLine[],
@@ -71,20 +81,22 @@ export function dayColumns(
   const named = new Set(series.filter((one) => one.line).map((one) => one.key))
   return usage.series.map((point) => {
     const values: Record<string, number> = {}
+    const absent = new Set<string>()
     for (const group of point.groups) {
       const value = group.group[dimension]
       const key = value ? valueKey(value) : 'unknown'
       const into = named.has(key) ? key : 'other'
-      values[into] = (values[into] ?? 0) + (measureOf(measure, spentOf(group)) ?? 0)
+      const figure = figureOf(measure, spentOf(group))
+      if (figure === null) absent.add(into)
+      else values[into] = (values[into] ?? 0) + figure
     }
-    return { key: point.start, values, incomplete: unfinished(point.start, readAt) }
+    return {
+      key: point.start,
+      values,
+      absent: [...absent],
+      incomplete: unfinished(point.start, readAt),
+    }
   })
-}
-
-/** Whether a group spent anything at all in its day. */
-const spentAnything = (group: Usage['rows'][number]) => {
-  const spent = spentOf(group)
-  return spent.seconds > 0 || Boolean(spent.tokens) || spent.cost !== null || spent.unpriced > 0
 }
 
 /** A change of the accounts that worked: on which day, which worked before and which then. */
@@ -96,7 +108,7 @@ export interface AccountChange {
 
 const accountsOf = (point: Usage['series'][number]) =>
   point.groups
-    .filter((group) => spentAnything(group))
+    .filter((group) => spentAnything(spentOf(group)))
     .flatMap((group) => (group.group.account ? [group.group.account] : []))
 
 const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupValue[]) => {

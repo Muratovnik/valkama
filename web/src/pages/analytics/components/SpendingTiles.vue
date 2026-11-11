@@ -6,15 +6,16 @@
  *
  * The cost says it is an estimate and not a bill, and tokens with no price are said in words
  * under it, never folded into a zero: a cost of nothing and a cost nobody knows are different.
- * A change is an arrow and words, never a colour alone, and a period before with nothing in it
- * says so rather than inventing a percentage.
+ * A change is an arrow and words, never a colour alone. A period before with nothing in it says
+ * so rather than inventing a percentage, and a figure absent on either side — no price, no
+ * token counted — gives no change, with words that say which side has none.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { changeOf, measureOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
+import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -30,20 +31,20 @@ const measure = defineModel<Measure>('measure', { required: true })
 const { t } = useI18n()
 const words = useSpendingWords()
 
-/** The period compared with by its days; a period before that was not read says that instead. */
-function changeWords(moved: Change) {
+/** The change of a measure, said against the days it is compared with; none when not read. */
+function moved(value: Measure) {
   const { before } = props
-  return before
-    ? words.change(moved, words.days(before.from, before.to))
-    : t('analytics.change.unread')
+  if (!before) return { direction: 'unread', words: t('analytics.change.unread') }
+  const change = changeOf(value, props.total, before.spent)
+  return {
+    direction: change.direction,
+    words: words.change(value, change, words.days(before.from, before.to)),
+  }
 }
 
 const tiles = computed(() =>
   MEASURES.map((value) => {
-    const moved = changeOf(
-      measureOf(value, props.total),
-      props.before ? measureOf(value, props.before.spent) : null,
-    )
+    const change = moved(value)
     const notes =
       value === 'cost'
         ? [t('analytics.figures.costNote'), words.unpriced(props.total)].filter(Boolean)
@@ -52,8 +53,8 @@ const tiles = computed(() =>
       value,
       label: words.measure(value),
       figure: words.figure(value, props.total),
-      change: changeWords(moved),
-      direction: moved.direction,
+      change: change.words,
+      direction: change.direction,
       notes,
     }
   }),

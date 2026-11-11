@@ -5,8 +5,9 @@
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched and says so under its name, so a short last column does not read as a drop; a
  * change at the start of a period (the account switched) is a numbered line up the plot, and
- * the note under the chart says what changed. `PeriodColumnsTable` is the same periods as a
- * table.
+ * the note under the chart says what changed. A series with no figure in a period (`absent`, such
+ * as work with no price) draws nothing there, and the readout and the period's name say so
+ * rather than a zero. `PeriodColumnsTable` is the same periods as a table.
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer

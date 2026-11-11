@@ -58,19 +58,42 @@ export function measureOf(measure: Measure, spent: Spent): number | null {
   return measure === 'tokens' ? spent.tokens : spent.cost
 }
 
-/** How a figure moved from the period before: by how much, or that there is nothing to compare. */
-export type Change = { direction: 'down' | 'same' | 'up'; ratio: number } | { direction: 'none' }
+/** Whether a line spent anything at all: some time, a token, a price or tokens without one. */
+export const spentAnything = (spent: Spent) =>
+  spent.seconds > 0 || Boolean(spent.tokens) || spent.cost !== null || spent.unpriced > 0
+
+/**
+ * A measure's figure as the page reads it: its amount; zero for a line that spent nothing; and
+ * null — absent, not zero — for one that spent something the measure has no figure for, work
+ * with no price or with no token counted.
+ */
+export function figureOf(measure: Measure, spent: Spent): number | null {
+  return measureOf(measure, spent) ?? (spentAnything(spent) ? null : 0)
+}
+
+/**
+ * How a figure moved from the period before: by how much; that the period before spent nothing,
+ * so a rise has no percentage; or which side has no figure to compare (`absent`).
+ */
+export type Change =
+  | { direction: 'down' | 'same' | 'up'; ratio: number }
+  | { direction: 'none' }
+  | { direction: 'absent'; missing: 'before' | 'both' | 'now' }
 
 /** Under half a percent either way is no change a person reads. */
 const STILL = 0.005
 
 /**
- * The change from `before` to `now`. A period before with nothing in it, or none read, is no
- * base to compare with: a rise from nothing has no percentage.
+ * The change of a measure from `before` to `now`. A figure absent on either side gives no
+ * change at all, and says which side it is; a period before that spent nothing is no base.
  */
-export function changeOf(now: number | null, before: number | null): Change {
-  if (before === null || before <= 0) return { direction: 'none' }
-  const ratio = ((now ?? 0) - before) / before
+export function changeOf(measure: Measure, now: Spent, before: Spent): Change {
+  const at = figureOf(measure, now)
+  const was = figureOf(measure, before)
+  if (at === null) return { direction: 'absent', missing: was === null ? 'both' : 'now' }
+  if (was === null) return { direction: 'absent', missing: 'before' }
+  if (was <= 0) return { direction: 'none' }
+  const ratio = (at - was) / was
   if (Math.abs(ratio) < STILL) return { direction: 'same', ratio: 0 }
   return { direction: ratio > 0 ? 'up' : 'down', ratio }
 }

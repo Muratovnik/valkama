@@ -24,8 +24,7 @@ import { uiEmpty, uiError, uiLoading } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 
 /** Whether a period spent anything at all: no time, no token and no price is nothing. */
-function spentNothing(usage: Usage) {
-  const { total } = usage
+function spentNothing(total: Usage['total']) {
   return (
     total.agent_seconds === 0 &&
     total.estimated_api_cost_usd === null &&
@@ -33,6 +32,13 @@ function spentNothing(usage: Usage) {
     Object.values(total.tokens).every((count) => count === null)
   )
 }
+
+/**
+ * Whether there is nothing to show: this period spent nothing, and neither did the one it is
+ * compared with. A period before that did spend is a fall to nothing, which the figures say.
+ */
+const nothingToShow = (usage: Usage) =>
+  spentNothing(usage.total) && (!usage.comparison || spentNothing(usage.comparison.total))
 
 const ready = (payload: Usage): PlatformUiState<Usage> => ({
   interface_version: 'valkama-ui-state',
@@ -115,7 +121,7 @@ export function useUsageRead(options: {
       const usage = await asking
       if (controller.signal.aborted) return
       if (by === 'account') accounts.value = usage
-      state.value = spentNothing(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
+      state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
     } catch {
       if (!controller.signal.aborted) state.value = uiError('analytics.failed')
     }

@@ -73,6 +73,39 @@ describe('the tiles', () => {
     expect(tile(notRead, 'time').text).not.toContain('Nothing spent')
   })
 
+  // Absent is not zero: work with no price, or no token counted, has no figure to compare.
+  it('give no change where a figure is absent, and say which period has none', () => {
+    const SPENT = { seconds: 3600, tokens: 1000, cost: 10, unpriced: 0 }
+    const UNPRICED = { seconds: 3600, tokens: null, cost: null, unpriced: 500 }
+    const noneNow = mountTiles(UNPRICED, SPENT)
+    expect(tile(noneNow, 'cost').text).toContain(
+      'No price for this period to compare with Nov 2 – 8',
+    )
+    expect(tile(noneNow, 'tokens').text).toContain(
+      'No tokens counted in this period to compare with Nov 2 – 8',
+    )
+    const noneThen = mountTiles(SPENT, UNPRICED)
+    expect(tile(noneThen, 'cost').text).toContain('No price for Nov 2 – 8 to compare with')
+    expect(tile(noneThen, 'tokens').text).toContain(
+      'No tokens counted in Nov 2 – 8 to compare with',
+    )
+    expect(tile(mountTiles(UNPRICED, UNPRICED), 'cost').text).toContain(
+      'No price for this period or for Nov 2 – 8',
+    )
+    for (const tiles of [noneNow, noneThen])
+      for (const measure of ['tokens', 'cost'] as const) {
+        expect(tile(tiles, measure).text).not.toMatch(/%|Nothing spent/u)
+        const change = tile(tiles, measure).segment.querySelector<HTMLElement>('.tile-change')
+        expect(change?.dataset.direction).toBe('absent')
+      }
+    // Time is always counted: the same periods still compare.
+    expect(tile(noneNow, 'time').text).toContain('The same as Nov 2 – 8')
+    const ru = mountTiles(UNPRICED, SPENT, 'time', 'ru')
+    expect(tile(ru, 'cost').text).toContain(
+      'Для этого периода нет цены, сравнить с периодом 2–8 нояб. нельзя',
+    )
+  })
+
   // Each change names the period it is compared with in the case its preposition takes.
   it('say each change in Russian in the case its words take', () => {
     const moved = mountTiles(
@@ -166,9 +199,31 @@ describe('the tiles on the page', () => {
     expect(radios.map((radio) => radio.text())).toEqual([
       expect.stringContaining('↑ 50%'),
       expect.stringContaining('↓ 50%'),
-      expect.stringContaining('Nothing spent in'),
+      // The week before had time and tokens but no price: no cost to compare, not nothing spent.
+      expect.stringContaining('No price for'),
     ])
     await page.get('.tile-figure[data-measure="tokens"]').trigger('click')
     expect(page.emitted('state')?.at(-1)).toEqual([{ measure: 'tokens' }])
+  })
+
+  it('say what the period before spent when this one spent nothing, instead of standing empty', async () => {
+    stubAnalyticsReads(() =>
+      usageAnswer({
+        first: new Date(2026, 10, 9),
+        days: 7,
+        groupBy: ['work_item'],
+        stretches: [],
+        before: [
+          { day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600, cost: 2 } },
+        ],
+      }),
+    )
+    const page = await mountAnalytics()
+    await flushPromises()
+    expect(page.text()).not.toContain('Nothing was spent in this period')
+    expect(page.get('.tile-figure[data-measure="time"]').text()).toBe('No time counted')
+    const radios = page.findAll('.spending-tiles [role="radio"]').map((radio) => radio.text())
+    expect(radios[0]).toContain('↓ 100%')
+    expect(radios[2]).toContain('↓ 100%')
   })
 })

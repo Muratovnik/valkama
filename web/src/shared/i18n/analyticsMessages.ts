@@ -71,6 +71,7 @@ export const analyticsMessages = {
         empty: 'No day in this period spent anything.',
         other: 'Other',
         accounts: 'Accounts: {before} → {after}',
+        absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
       shown: {
         label: 'Show {chart} as',
@@ -96,6 +97,18 @@ export const analyticsMessages = {
         same: 'The same as {period}',
         none: 'Nothing spent in {period} to compare with',
         unread: 'The period before was not read, nothing to compare with',
+        absent: {
+          tokens: {
+            before: 'No tokens counted in {period} to compare with',
+            now: 'No tokens counted in this period to compare with {period}',
+            both: 'No tokens counted in this period or in {period}',
+          },
+          cost: {
+            before: 'No price for {period} to compare with',
+            now: 'No price for this period to compare with {period}',
+            both: 'No price for this period or for {period}',
+          },
+        },
       },
       filters: {
         title: 'Filters',
@@ -177,6 +190,7 @@ export const analyticsMessages = {
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
         accounts: 'Аккаунты: {before} → {after}',
+        absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
       shown: {
         label: 'Показать «{chart}» как',
@@ -203,6 +217,18 @@ export const analyticsMessages = {
         same: 'Столько же, сколько за период {period}',
         none: 'За период {period} ничего не потрачено, сравнивать не с чем',
         unread: 'Предыдущий период не прочитан, сравнивать не с чем',
+        absent: {
+          tokens: {
+            before: 'За период {period} токены не учтены, сравнивать не с чем',
+            now: 'За этот период токены не учтены, сравнить с периодом {period} нельзя',
+            both: 'Токены не учтены ни за этот период, ни за период {period}',
+          },
+          cost: {
+            before: 'Для периода {period} нет цены, сравнивать не с чем',
+            now: 'Для этого периода нет цены, сравнить с периодом {period} нельзя',
+            both: 'Нет цены ни для этого периода, ни для периода {period}',
+          },
+        },
       },
       filters: {
         title: 'Фильтры',
