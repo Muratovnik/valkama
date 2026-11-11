@@ -210,18 +210,17 @@ const fresh = computed(() => {
             aria-hidden="true"
           />{{ liveWords }}
         </p>
-        <p
-          v-if="fresh"
-          class="analytics-bar-fresh"
-        >
-          <time
-            v-if="fresh.at"
-            v-tooltip.detail="fresh.full"
-            :datetime="fresh.at"
-            >{{ fresh.words }}</time
-          >
-          <template v-else>
-            {{ fresh.words }}
+        <p class="analytics-bar-fresh">
+          <template v-if="fresh">
+            <time
+              v-if="fresh.at"
+              v-tooltip.detail="fresh.full"
+              :datetime="fresh.at"
+              >{{ fresh.words }}</time
+            >
+            <template v-else>
+              {{ fresh.words }}
+            </template>
           </template>
         </p>
         <VButton
@@ -321,12 +320,20 @@ const fresh = computed(() => {
 }
 
 /* A bar too narrow for the freshness beside the rest keeps the read again on a line of its own
-   from the start: otherwise the line wrapped when the first answer brought its freshness, and
-   moved everything under the bar down. */
+   from the start, and the freshness on a line over it, held a line high before the first answer
+   brings its words: otherwise a line wrapped when they came, and moved everything under the bar
+   down. */
 @container (width < 48rem) {
   .analytics-bar-read {
     flex-basis: 100%;
     justify-content: flex-end;
+  }
+
+  .analytics-bar-fresh {
+    flex-basis: 100%;
+    order: -1;
+    min-block-size: 1lh;
+    text-align: end;
   }
 }
 
