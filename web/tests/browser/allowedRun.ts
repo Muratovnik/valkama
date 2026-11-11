@@ -4,17 +4,19 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { harnessPort } from './browserRun.ts'
-import { clipboardSpecs } from './clipboardSpecs.ts'
+import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
 
 /**
  * `npm run test:browser:allowed`: every browser spec but the ones that write the system
  * clipboard, in one Playwright run.
  *
- * Playwright given no spec runs the whole suite, clipboard specs included, and a list of two
- * hundred names does not fit a Windows command line. So the list never goes on one: it is
- * written to a file Playwright reads with `--test-list`, and the runner refuses, before
- * Playwright starts, a list that is empty, a list file that is missing, a name that is no
- * spec, and a clipboard spec that `--with-clipboard=<file>` does not name.
+ * Playwright given no spec runs the whole suite but the clipboard specs, which the
+ * configuration selects only under `clipboardOptIn`; and a list of two hundred names does not
+ * fit a Windows command line. So the list never goes on one: it is written to a file
+ * Playwright reads with `--test-list`, and the runner refuses, before Playwright starts, a
+ * list that is empty, a list file that is missing, a name that is no spec, and a clipboard
+ * spec that `--with-clipboard=<file>` does not name. Playwright runs with `clipboardOptIn`
+ * set when `--with-clipboard` names a spec, and without it otherwise.
  *
  *   npm run test:browser:allowed -- --list                 what would run, and the total
  *   npm run test:browser:allowed -- --specs=<file>         the specs a file names, one a line
@@ -36,8 +38,11 @@ interface Request {
 
 /** What the runner reads, writes and starts, so a test can stand in for each. */
 export interface RunnerIo {
-  /** Runs Playwright with these arguments and resolves with its exit code. */
-  playwright: (args: readonly string[]) => Promise<number>
+  /**
+   * Runs Playwright with these arguments and resolves with its exit code; `clipboard` says
+   * whether its configuration may select the clipboard specs.
+   */
+  playwright: (args: readonly string[], clipboard: boolean) => Promise<number>
   /** A list file's text, or null when there is no such file. */
   readList: (file: string) => string | null
   say: (line: string) => void
@@ -119,12 +124,28 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   const left = clipboardSpecs.filter((name) => !specs.includes(name))
   io.say(`${specs.length} spec files; clipboard specs left out: ${left.join(', ') || 'none'}`)
   const summary = fileURLToPath(new URL('runSummary.ts', import.meta.url))
-  return io.playwright([
-    'test',
-    `--test-list=${io.writeList(specs)}`,
-    `--reporter=line,${summary}`,
-    ...request.playwright,
-  ])
+  return io.playwright(
+    [
+      'test',
+      `--test-list=${io.writeList(specs)}`,
+      `--reporter=line,${summary}`,
+      ...request.playwright,
+    ],
+    request.withClipboard.length > 0,
+  )
+}
+
+/**
+ * The environment Playwright runs in: this one, with `clipboardOptIn` set to `1` when the run
+ * may select a clipboard spec and removed when it may not, whatever the caller's shell held.
+ */
+export function playwrightEnvironment(
+  base: NodeJS.ProcessEnv,
+  clipboard: boolean,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base, [clipboardOptIn]: '1' }
+  if (!clipboard) delete env[clipboardOptIn]
+  return env
 }
 
 const web = fileURLToPath(new URL('../..', import.meta.url))
@@ -132,10 +153,14 @@ const suiteDirectory = join(web, 'tests/browser')
 
 /** The real file system and Playwright, run from `web/` with this process's Node. */
 export const realIo: RunnerIo = {
-  playwright: (args) =>
+  playwright: (args, clipboard) =>
     new Promise((resolve, reject) => {
       const cli = join(web, 'node_modules/@playwright/test/cli.js')
-      const child = spawn(process.execPath, [cli, ...args], { cwd: web, stdio: 'inherit' })
+      const child = spawn(process.execPath, [cli, ...args], {
+        cwd: web,
+        env: playwrightEnvironment(process.env, clipboard),
+        stdio: 'inherit',
+      })
       child.on('error', reject)
       // A code is null only when a signal ended the process, which is a failed run.
       child.on('exit', (code, signal) => resolve(signal ? 1 : Number(code)))
