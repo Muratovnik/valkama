@@ -9,10 +9,39 @@ and jscpd before the suites; `npm run format` applies the two formatters.
 `npm run test:browser` adds the axe pass over the harness surfaces, and
 `desktop`'s own `npm test` asserts the renderer options and the packaged fuse
 set as text, because configuration is what silently reverts and no test of
-behavior can see it. The browser suite serves the harness on 4174 and the built
-app on 4175 and never reuses a server, so a second checkout running it at the
-same time sets `VALKAMA_BROWSER_PORT` to another harness port; the app takes the
-next one.
+behavior can see it.
+
+The browser suite serves the harness on 4174 and the built app on 4175 and never
+reuses a server, so a second checkout running it at the same time sets
+`VALKAMA_BROWSER_PORT` to another harness port; the app takes the next one. It
+builds the app into the ignored `web/test-results/<port>/app` and keeps the run's
+traces in `web/test-results/<port>/results`, so a run leaves the committed
+`web/dist` as it was. The `server-` specs, run with `VALKAMA_BROWSER_STORE`, are
+the exception: the Python server serves `web/dist` alone, so they build there.
+Each command below runs in `web/`:
+
+- One spec: `npx playwright test <file> --workers=4`. A name is a prefix, so give
+  the whole file name when it begins another.
+- A probe spec kept outside the suite, such as in a worktree's ignored
+  `tmp/<name>/`: `VALKAMA_BROWSER_PROBES=<its directory> npx playwright test
+  --config tests/browser/probe.config.ts`. Name the file `ui-…` or
+  `production-…` for the project it runs in; it imports `@playwright/test`, `@/`
+  and the suite's own `test` from `web/tests/browser/test.ts` as a spec does, so
+  it needs no configuration of its own.
+- The whole suite, or a batch of it: `npm run test:browser:allowed`, never
+  Playwright handed a list of names. Playwright given no spec runs everything,
+  and the list of the whole suite does not fit a Windows command line; the
+  runner writes the list to a file Playwright reads, refuses an empty list or a
+  missing list file before Playwright starts, and ends with each project's count
+  and the total, to compare with what the run was meant to select. `--list`
+  shows the selection without running it; `--specs=<file>` runs the specs a file
+  names, one a line.
+
+The specs that write the system clipboard or are granted it are named in
+`web/tests/browser/clipboardSpecs.ts`. The runner leaves them out unless
+`--with-clipboard=<file>` names one, and `tests/clipboardSpecs.test.ts` fails on
+a spec that grants or writes the clipboard and is not on that list, so a spec
+that starts to goes onto it in the same change.
 
 semgrep is the only dataflow analysis here: ruff matches patterns, semgrep
 follows a tainted value through a function. It reads the Python server alone,
