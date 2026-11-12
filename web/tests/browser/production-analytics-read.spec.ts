@@ -163,8 +163,9 @@ test('«Now» keeps its summary through a minute of failing ticks, and the next 
     double.asked.push(new URL(route.request().url()).searchParams)
     return route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
   })
-  const analytics = await openReport(page, 1440, pageAt({ period: 'now' }))
+  // The page's time stops before it opens, so a slow open cannot move the pause into the past.
   await page.clock.pauseAt(new Date(LIVE_NOW.getTime() + 10_000))
+  const analytics = await openReport(page, 1440, pageAt({ period: 'now' }))
   await settled(count, double)
   const before = await shown(page)
   expect(before.figures).toHaveLength(3)
@@ -237,9 +238,10 @@ test('a new period read for 3 s dims the panel and the tiles until its answer, m
   // The page's own clock, to move by hand: what a wait shows depends on how long it has run.
   await page.clock.install({ time: NOW })
   const answer = await serveSwitched(page, WORLD)
+  // The page's time stops before it opens, so a slow open cannot move the pause into the past.
+  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   const analytics = await openReport(page, 1440, pageAt())
   await expect(analytics.locator('.analytics-rail .rail-tile[data-state="loading"]')).toHaveCount(0)
-  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   const panel = analytics.locator('.overview-panel')
   const tile = '.analytics-rail [data-section="model"] .rail-tile'
   const week = { shown: await shown(page), frame: await frame(page) }

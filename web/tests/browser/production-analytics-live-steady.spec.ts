@@ -146,9 +146,10 @@ async function refreshOf(page: Page, by: string, prepare: (analytics: Locator) =
   await page.clock.install({ time: NOW })
   const { count } = await watchPage(page)
   const double = await serveLive(page, busyHour(1))
+  // The page's time stops before it opens, so a slow open cannot move the pause into the past.
+  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   const analytics = await openReport(page, 1440, pageAt({ period: 'now', by }))
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   await settled(count, double)
   const time = analytics.locator('.tile-figure[data-measure="time"]')
   const shown = (await time.textContent()) ?? ''
