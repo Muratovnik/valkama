@@ -3,7 +3,9 @@
  * it — work on no task, a session's own run, a value nobody can place — except for the role, which
  * every stretch has; the values that spent anything in the period; and a value chosen that the
  * period did not spend, as one a pasted link names, under its id. The field that chooses and the
- * chip that shows a choice name a value from this one list, so the two never call it differently.
+ * chip that shows a choice name a value from this one list, so the two never call it differently;
+ * the field says under a choice what its name leaves out (`valueDetail`), so two sessions of one
+ * title or an account named by the owner can be told apart where they are chosen.
  */
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -26,7 +28,13 @@ export function useFilterOptions() {
           const value = row.group[dimension]
           return !value || value.id === null
             ? []
-            : [{ value: valueKey(value), label: words.valueLabel(dimension, value) }]
+            : [
+                {
+                  value: valueKey(value),
+                  label: words.valueLabel(dimension, value),
+                  description: words.valueDetail(dimension, value),
+                },
+              ]
         })
       : []
     const none = words.noneLabel(dimension)
