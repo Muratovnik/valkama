@@ -203,6 +203,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'every part of the share bar with its share, work on no value and the rest among them, where the tile says only the first',
   ],
   [
+    'pages/analytics/components/SpendingTableHead.vue <p> v-tooltip.detail="{ text: summary, words: counts }"',
+    'the whole account of the rows, work on no value by name among them, and the column and way they are sorted, where the line says only how many values spent in the period and before it; while its own words are cut, they come first, whole',
+  ],
+  [
     `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
     'that a notification comes with the window closed too, and that a click on it opens the card; it stood as a paragraph over the group',
   ],

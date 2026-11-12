@@ -338,12 +338,18 @@ test('the table counts the values of the period as the rail’s tile does', asyn
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(TASK_REPORT)
   const line = page.locator('.spending-table-summary')
-  await expect(line).toHaveText(/^30 in the period · and «No task», sorted by /u)
+  // The line says how many tasks in a few words; its hint gives the whole account and the order.
+  await expect(line).toHaveText('30 tasks')
+  await expect(line).toHaveAttribute(
+    'data-tooltip',
+    /^30 in the period · and «No task», sorted by «Agent time», largest first$/u,
+  )
+  expect(await line.evaluate((one) => one.scrollWidth <= one.clientWidth)).toBe(true)
   const tile = page.locator('.analytics-page-rail').getByRole('button', { name: /^Task\b/u })
   const tileText = (await tile.textContent()) ?? ''
   const lineText = (await line.textContent()) ?? ''
   const values = /(\d+) values?/u.exec(tileText)?.[1]
-  const first = /^(\d+) in the period/u.exec(lineText.trim())?.[1]
+  const first = /^(\d+) tasks$/u.exec(lineText.trim())?.[1]
   expect(values).toBe('30')
   expect(first).toBe(values)
 })

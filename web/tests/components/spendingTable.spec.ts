@@ -201,16 +201,17 @@ describe('the breakdown beside the period before', () => {
 
   it('sorts by the heading pressed, largest first and then the other way, and says how', async () => {
     const wrapper = table('time')
-    const summary = () => words(wrapper.get('.spending-table-summary').text())
+    // The line says how many values in a few words; its hint gives the whole account and the order.
+    const line = (shown = wrapper) => shown.get('.spending-table-summary')
+    const summary = () => words(line().attributes('data-tooltip') ?? '')
     const names = () => rows(wrapper).map((row) => row[0])
     // Alpha and Beta spent now, Gamma only before; work on no task and unknown work spent now.
+    expect(words(line().text())).toBe('2 tasks · 1 outside the period')
     expect(summary()).toBe(
       '2 in the period · 1 only before · and «No task», «Unknown», sorted by «Agent time», largest first',
     )
     expect(wrapper.get('thead th:nth-child(2)').attributes('aria-sort')).toBe('descending')
-    expect(words(table('time', BEFORE, 'ru').get('.spending-table-summary').text())).toMatch(
-      /^2 в периоде · 1 только в прошлом · и «Без задачи», «Неизвестно», по /u,
-    )
+    expect(words(line(table('time', BEFORE, 'ru')).text())).toBe('2 задачи · 1 вне периода')
 
     // The time before: Alpha, no task, Gamma, then the two that spent nothing before, in the
     // order the table had them.
