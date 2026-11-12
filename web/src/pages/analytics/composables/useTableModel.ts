@@ -43,7 +43,7 @@ export interface TableCell {
 }
 
 /** A column's heading: its name, and what the name leaves out, for its hint. */
-export interface TableColumn {
+interface TableColumn {
   /** Whether the column holds the chosen measure, which reads in the figures' own ink. */
   chosen: boolean
   key: string
