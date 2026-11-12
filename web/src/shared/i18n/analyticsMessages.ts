@@ -190,8 +190,8 @@ export const analyticsMessages = {
         total: 'Tokens',
         count: '{count} kind | {count} kinds',
         apart: {
-          cached_read: 'Cache read, not counted',
-          reasoning: 'Reasoning, part of output',
+          cached_read: 'Cache read',
+          reasoning: 'Reasoning',
         },
       },
       overview: analyticsOverviewMessages.en,
@@ -382,8 +382,8 @@ export const analyticsMessages = {
         total: 'Токены',
         count: '{count} вид | {count} вида | {count} видов',
         apart: {
-          cached_read: 'Чтение кэша, не учтено',
-          reasoning: 'Рассуждения, часть выхода',
+          cached_read: 'Чтение кэша',
+          reasoning: 'Рассуждения',
         },
       },
       overview: analyticsOverviewMessages.ru,

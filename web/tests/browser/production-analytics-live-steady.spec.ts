@@ -82,7 +82,7 @@ const layout = (page: Page) =>
 
 /**
  * What the page draws that a refresh must never blank, even for a moment: the minutes, their
- * stacks, the outline of the hour before and the marks of the accounts, and the table's rows.
+ * stacks, the mark of the hour before and the marks of the accounts, and the table's rows.
  */
 const DRAWN = {
   minutes: '.spending-days .period-column',

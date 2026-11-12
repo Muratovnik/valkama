@@ -50,8 +50,8 @@ describe('the panel of the tokens by kind', () => {
       ['Output', '1.8M', '600K', '↑ 200%'],
       ['Cache write, 5 min', '1.2M', '400K', '↑ 200%'],
       ['Total', '6M', ''],
-      ['Cache read, not counted', '60M', '20M', '↑ 200%'],
-      ['Reasoning, part of output', '600K', '200K', '↑ 200%'],
+      ['Cache read', '60M', '20M', '↑ 200%'],
+      ['Reasoning', '600K', '200K', '↑ 200%'],
     ])
     expect(panel.find('.spending-unread').exists()).toBe(false)
   })
@@ -65,15 +65,15 @@ describe('the panel of the tokens by kind', () => {
     ])
   })
 
-  it('names the kinds in Russian, the cache reads as not counted', () => {
+  it('names the kinds in Russian, the ones apart under the total', () => {
     const panel = mountPanel(true, 'ru')
     expect(rows(panel).map((row) => row[0])).toEqual([
       'Вход',
       'Выход',
       'Запись в кэш, 5 мин',
       'Итого',
-      'Чтение кэша, не учтено',
-      'Рассуждения, часть выхода',
+      'Чтение кэша',
+      'Рассуждения',
     ])
   })
 })

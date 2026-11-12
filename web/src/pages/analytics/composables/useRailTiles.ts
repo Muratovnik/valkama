@@ -64,24 +64,6 @@ const standing = (state: RailTileModel['state'], lead: string): RailTileModel =>
   shares: null,
 })
 
-/** A share is said in whole percents: what rounds away at either end is said as more or less. */
-const SHARE_STEP = 0.01
-
-/**
- * A share of a whole in whole percents, never claiming more or less than it holds: «100 %» only
- * for all of it and «0 %» only for none, so a share a hair under the whole reads «>99 %» and one
- * a hair over nothing «<1 %». The page's words say shares by the same rule (`words.share`).
- */
-function wholeShare(locale: string, ratio: number) {
-  const percent = (part: number) =>
-    new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
-      Math.abs(part),
-    )
-  if (ratio > 0 && ratio < SHARE_STEP / 2) return `<${percent(SHARE_STEP)}`
-  if (ratio < 1 && ratio >= 1 - SHARE_STEP / 2) return `>${percent(1 - SHARE_STEP)}`
-  return percent(ratio)
-}
-
 export function useRailTiles(options: {
   /** The page's shared reads, which the dimensions' reads go through. */
   shared: SharedUsage
@@ -94,14 +76,13 @@ export function useRailTiles(options: {
   projectId: () => string | null
   view: () => AnalyticsView
 }) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const words = useSpendingWords()
   const kindWords = useKindWords()
   const rail = useRailReads(options)
 
-  // When `useSpendingWords` says shares (`words.share`), this line becomes
-  // `const { share } = words` and `wholeShare` goes.
-  const share = (ratio: number) => wholeShare(locale.value, ratio)
+  // A share is said in whole percents, by the page's one rule.
+  const { share } = words
 
   const reading = () => standing('loading', t('analytics.rail.reading'))
   const failed = () => standing('failed', t('analytics.rail.failed'))

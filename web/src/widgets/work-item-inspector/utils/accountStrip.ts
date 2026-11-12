@@ -26,7 +26,7 @@ export function accountStrip(stretches: readonly Stretch[], accounts: readonly A
     accounts.filter((account) => !account.unknown).map((account) => accountKey(account)),
   )
   const slotOf = (account: Account): SeriesSlot =>
-    account.unknown ? 'other' : (slots.get(accountKey(account)) ?? 'other')
+    account.unknown ? 'apart' : (slots.get(accountKey(account)) ?? 'other')
   const total = stretches.reduce((sum, stretch) => sum + stretch.seconds, 0)
   let reached = 0
   const parts = stretches.map((stretch, index) => {
