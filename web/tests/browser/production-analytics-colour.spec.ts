@@ -77,3 +77,78 @@ test('at 1440px a task is one colour in its tile, its bar and the day chart', as
   expect(none.legend).not.toBeNull()
   expect(hues.has(none.legend ?? '')).toBe(false)
 })
+
+/**
+ * Seven tasks, so two fold into «other», and work on no task larger than any of them: the day
+ * chart stacks the five tasks, then no task, then the rest, each part of the stack on its own.
+ */
+const FOLDED: TimedStretch[] = [
+  ...[1, 2, 3, 4, 5, 6, 7].map((number) => ({
+    at: new Date(2026, 10, 11, 9),
+    group: { work_item: task(number, `Task ${number}`) },
+    spend: { seconds: (9 - number) * HOUR, tokens: 1000 },
+  })),
+  {
+    at: new Date(2026, 10, 11, 12),
+    group: { work_item: noTask },
+    spend: { seconds: 20 * HOUR, tokens: 1000 },
+  },
+]
+
+/** The day chart's legend, in its order: each key and its swatch's fill. */
+const legendKeys = (page: Page) =>
+  page
+    .locator('.spending-days .chart-key:has(.chart-swatch)')
+    .evaluateAll((keys) =>
+      keys.map((key) => [
+        (key as HTMLElement).dataset.series ?? '',
+        getComputedStyle(key.querySelector('.chart-swatch') ?? key).backgroundColor,
+      ]),
+    )
+
+/** The series of Wednesday's stack from the baseline up. */
+const stackOrder = (page: Page) =>
+  page
+    .locator('.spending-days .period-slot')
+    .last()
+    .locator('.period-segment')
+    .evaluateAll((segments) =>
+      segments
+        .map((segment) => ({
+          key: (segment as HTMLElement).dataset.series ?? '',
+          bottom: segment.getBoundingClientRect().bottom,
+        }))
+        .toSorted((low, high) => high.bottom - low.bottom)
+        .map((segment) => segment.key),
+    )
+
+/** The three channels of a computed colour. */
+const channels = (colour: string) => (colour.match(/\d+/gu) ?? []).slice(0, 3).map(Number)
+
+test('at 1440px work on no task and the folded rest are two greys, and the legend reads as the stack', async ({
+  page,
+}, info) => {
+  await serve(page, FOLDED)
+  await openReport(page, 1440)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expect(page.locator('.spending-days .period-segment[data-series="other"]')).toHaveCount(1)
+
+  const keys = await legendKeys(page)
+  const stack = await stackOrder(page)
+  const none = await colours(page, 'none')
+  const fills = Object.fromEntries(keys)
+  await record(info, 'neutrals', { keys, stack, none })
+
+  // The legend names the stack's series in the stack's order, the baseline's first.
+  expect(keys.map(([key]) => key)).toEqual(stack)
+  expect(stack.slice(-2)).toEqual(['none', 'other'])
+  // Both are greys, no hue; they are two greys, and no task is the one it is in its tile and bar.
+  for (const key of ['none', 'other']) {
+    const [red, green, blue] = channels(fills[key] ?? '')
+    expect(red, `${key} is a grey`).toBe(green)
+    expect(green, `${key} is a grey`).toBe(blue)
+  }
+  expect(fills.none).not.toBe(fills.other)
+  expect(none.tile).toBe(fills.none)
+  expect(none.bar).toBe(fills.none)
+})

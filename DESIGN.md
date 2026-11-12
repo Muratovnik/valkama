@@ -35,7 +35,8 @@ colors:
   series-4: "#9085e9"
   series-5: "#c98500"
   series-6: "#d55181"
-  series-other: "#b3b3b3"
+  series-apart: "#b3b3b3"
+  series-other: "#e6e6e6"
 
 typography:
   scale:
@@ -869,10 +870,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
   order, never by rank, so a filter repaints nothing — out of six `--color-series-*` hues
   ordered so that neighbours in a stack stay apart under protanopia and deuteranopia. A
-  seventh series folds into `--color-series-other`, the neutral that also draws, in a stack,
-  the rows that are not categories — the folded tail, «no task», «unknown». In a section's
+  seventh series folds into `--color-series-other`, the lighter of two neutrals, which draws
+  the folded tail; the rows that are not categories, «no task» and «unknown», are the darker
+  `--color-series-apart`. Two greys and no hue: in a stack the two can stand on each other and
+  are often a period's two largest parts, so they differ in lightness for every reader, and the
+  legend names them in the stack's order. In a section's
   ranked chart and small charts «no task» and «unknown» stand where their figures put them,
-  drawn on the same scale in that neutral with their names in the quiet ink, since the largest
+  drawn on the same scale in their neutral with their names in the quiet ink, since the largest
   share of a period can be work on no task; only the folded tail closes the chart, apart and
   unranked, and sets no scale. Elsewhere, as in a card of first values, all three close the
   chart in a list of their own, set apart by air, draw no bar and are read by their figures.
@@ -891,9 +895,12 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   last periods, keeps the value axis in view over the plot's start, and brings a period the
   keyboard reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
-  one shown stands on the same scale as an open dashed outline over each column, an edge and
-  not a hue: the legend names it beside a short dashed edge, the readout says its figure beside
-  the sum, and the table gives it a column after the sum. A single day stands by the hour, and
+  one shown stands on the same scale as a short line at its height over each column, an edge
+  and not a hue, so a period before that was larger never outweighs the columns shown: the
+  legend names it beside the same short line, the readout says its figure beside the sum, and
+  the table gives it a column after the sum. The time axis names each period under the middle
+  of its column, the first and the last too, moved in only as far as a name would hang past the
+  plot; the plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
   an hour only shows. Where a ranked chart shares a row with others, as a card of first values
   does, it is `dense`: the name and the value on one line and a thin bar under them.
   Two small charts stand beside a figure rather than in a section of their own, as the
@@ -2059,7 +2066,7 @@ over it. A plain address opens the overview.
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
 before, and the chosen cell sets the measure of everything else on the page; the period
-chart with the period before as a dashed outline; the tasks that grew and fell the most;
+chart with the period before as a short line at its height; the tasks that grew and fell the most;
 and the first five tasks, models, roles and projects, each card opening its section.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The

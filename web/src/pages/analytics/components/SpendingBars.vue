@@ -70,7 +70,7 @@ const {
   narrow: (value, label) => emit('narrow', value, label),
   more: (line) => ({
     kind: line.kind,
-    slot: line.kind === 'category' ? (props.slots.get(line.key) ?? 'other') : 'other',
+    slot: props.slots.get(line.key) ?? 'other',
   }),
 })
 

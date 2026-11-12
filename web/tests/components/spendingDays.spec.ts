@@ -135,11 +135,11 @@ describe('the days', () => {
     const source = { usage, by: 'work_item' as const, measure: 'time' as const }
     const series = stackLines(source)
     // The five largest tasks take the hues by rank; no task and unknown are their own series in
-    // the neutral, never a hue; task 6 is «other».
+    // one neutral, never a hue; task 6 is «other», in the other neutral on top of them.
     expect(series.map((one) => [one.key, one.slot])).toEqual([
       ...[1, 2, 3, 4, 5].map((number) => [`v:${task(number, '').id}`, number]),
-      ['none', 'other'],
-      ['unknown', 'other'],
+      ['none', 'apart'],
+      ['unknown', 'apart'],
       ['other', 'other'],
     ])
     const columns = dayColumns(source, series, WEDNESDAY)

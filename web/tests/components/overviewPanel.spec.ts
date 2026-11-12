@@ -128,7 +128,7 @@ describe('the overview on the page', () => {
     const [none, two, one] = rows
     expect(none?.attributes('href')).toBeUndefined()
     expect(none?.get('.ranked-label').classes()).toContain('ranked-quiet')
-    expect(none?.get('.ranked-bar').attributes('data-slot')).toBe('other')
+    expect(none?.get('.ranked-bar').attributes('data-slot')).toBe('apart')
     // The tasks in their hues of the page, by their rank among the tasks.
     expect(two?.get('.ranked-bar').attributes('data-slot')).toBe('1')
     expect(one?.get('.ranked-bar').attributes('data-slot')).toBe('2')
