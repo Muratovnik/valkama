@@ -322,7 +322,8 @@ test('work on no task, the largest share, is ranked first with a bar and a small
   const first = page.locator('.spending-bars .ranked-row').first()
   await expect(first).toHaveAttribute('data-kind', 'none')
   await expect(first.locator('.ranked-label')).toHaveText('No task')
-  await expect(first.locator('.ranked-bar')).toHaveAttribute('data-slot', 'other')
+  // Work on no task takes the darker neutral, never the folded rest's lighter one.
+  await expect(first.locator('.ranked-bar')).toHaveAttribute('data-slot', 'apart')
   await expect(page.locator('.spending-multiples .multiple-name').first()).toHaveText('No task')
 })
 
