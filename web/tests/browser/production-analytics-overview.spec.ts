@@ -316,3 +316,52 @@ test('a tall window gives the room under the cards to the plot, and 1440 by 900 
   const { x, y, width, height } = usual.plot
   expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 443, 532, 165])
 })
+
+const OTHER_ACCOUNT = value('0d6f1c3a-8b2e-4f5a-9e7d-3c1b2a4f6e8d')
+
+/**
+ * A full week: five tasks, models, roles and projects in each card, no task and a sixth task
+ * in the chart's legend, and accounts that change twice: one on Monday, both on Tuesday, the
+ * other on Wednesday.
+ */
+const FULL: TimedStretch[] = [
+  ...[0, 1, 2, 3, 4, 5].map((index): TimedStretch => {
+    const day = [9, 10, 10, 11, 11, 9][index] ?? 9
+    const stretch = worked(
+      day,
+      TASKS[index],
+      [`model-${(index % 5) + 1}`, `role-${(index % 5) + 1}`, `project-${(index % 5) + 1}`],
+      6 - index,
+    )
+    const account = day === 11 || index === 2 ? OTHER_ACCOUNT : ACCOUNT
+    return { ...stretch, group: { ...stretch.group, account } }
+  }),
+  worked(10, noTask, ['model-1', 'role-1', 'project-1'], 2),
+  worked(2, TASKS[0], ['model-1', 'role-1', 'project-1'], 4),
+]
+
+test('at 1440 by 900 a full overview fits its panel: the plot gives up height before it scrolls', async ({
+  page,
+}, info) => {
+  await serve(page, FULL)
+  const panel = await openOverview(page, 1440, 900)
+  for (const card of await panel.locator('.overview-top').all())
+    await expect(card.locator('.ranked-row')).toHaveCount(5)
+  await expect(panel.locator('.period-mark')).toHaveCount(2)
+  const legendLines = await panel
+    .locator('.overview-chart .chart-key')
+    .evaluateAll(
+      (keys) => new Set(keys.map((key) => Math.round(key.getBoundingClientRect().top))).size,
+    )
+  expect(legendLines).toBe(2)
+  const fitted = async () => {
+    const measured = await plotAndRoom(page)
+    return measured.scrolls
+  }
+  await expect.poll(fitted).toBe(false)
+  const full = await plotAndRoom(page)
+  const box = await panel.evaluate((element) => [element.scrollHeight, element.clientHeight])
+  await record(info, 'full', { ...full, box, legendLines })
+  expect(box[0]).toBe(box[1])
+  expect(full.plot.height).toBeGreaterThanOrEqual(100)
+})

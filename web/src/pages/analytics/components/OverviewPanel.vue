@@ -103,7 +103,7 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
  * second look at the same box finds the same answer and changes nothing.
  */
 const OWN = 160
-const FLOOR = 112
+const FLOOR = 100
 const panel = ref<HTMLElement | null>(null)
 const grow = ref(0)
 
