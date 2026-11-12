@@ -52,3 +52,32 @@ test('doctor reports require localized presentation facts and honest counts', ()
   duplicate.summary.ok = 2
   assert.throws(() => validateDoctorReport(duplicate), /doctor\.levels: duplicate check id/)
 })
+
+function reportWithParameters(parameters: Record<string, number>) {
+  const value = report()
+  return {
+    ...value,
+    levels: value.levels.map((level) => ({
+      ...level,
+      checks: level.checks.map((check) => ({
+        ...check,
+        presentation: { ...check.presentation, parameters },
+      })),
+    })),
+  }
+}
+
+test('doctor parameters accept finite fractional measurements and refuse non-finite ones', () => {
+  const measured = reportWithParameters({ seconds: 4_746_789.732, share: 91.5 })
+  assert.deepEqual(validateDoctorReport(measured).levels[0]?.checks[0]?.presentation.parameters, {
+    seconds: 4_746_789.732,
+    share: 91.5,
+  })
+
+  for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.throws(
+      () => validateDoctorReport(reportWithParameters({ seconds: value })),
+      /doctor\.levels\[0\]\.checks\[0\]\.presentation\.parameters\.seconds: unknown value/,
+    )
+  }
+})

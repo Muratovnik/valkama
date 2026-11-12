@@ -34,7 +34,8 @@ function invalid(path: string, detail: string): never {
 }
 
 const statusSchema = enumField(['ok', 'warn', 'fail', 'unknown'] as const)
-const parameterValueSchema = z.union([z.string().max(2048), z.number().safe(), z.boolean()])
+// Plain z.number() admits fractions and still refuses NaN and Infinity; .safe() would refuse fractions.
+const parameterValueSchema = z.union([z.string().max(2048), z.number(), z.boolean()])
 const parametersSchema = plainObject
   .pipe(z.record(z.string().min(1).max(64), parameterValueSchema))
   .refine((value) => Object.keys(value).length <= 24, { message: 'too many parameters' })

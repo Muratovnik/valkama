@@ -117,7 +117,8 @@ async function load() {
   failed.value = false
   try {
     report.value = await fetchDoctorReport()
-  } catch {
+  } catch (error) {
+    console.error(error)
     failed.value = true
   } finally {
     loading.value = false
