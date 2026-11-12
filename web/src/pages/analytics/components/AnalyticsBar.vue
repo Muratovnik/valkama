@@ -5,42 +5,43 @@
  * the figures are; and a read of them again. It stays where it is while the rail and the panel
  * under it scroll, since it says what everything under it is of.
  *
- * Adding a filter opens a field per dimension under the bar, each offering every value the period
- * spent, as the filters' own disclosure did before the bar had chips; closed, they stay in the
- * document, as that disclosure's did. A chip names its value as its field does, from one list.
+ * The bar is one line wherever it has room for the period, its days and the read again, so the
+ * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
+ * room the rest leaves, counting those it has none for, and the list of filters they open lies
+ * over the panel. The bar is short (`short`) on a phone and where a span of days leaves no room
+ * for the freshness's sentence, at 1440 pixels among them.
  *
  * How fresh the figures are is the newest record the store holds, of any session: its time and
  * how old it is now, in seconds under a minute, counted on each second without a read, so a page
  * left open says its figures grow old. Its clock time is the browser's own, as the time axis
- * under it reads. The freshness stands in a box of its own width with figures of one width, so
- * its count going up moves nothing beside it. A live period says beside it, by a mark and how
+ * under it reads. The freshness keeps at least the room of a short age, with figures of one
+ * width, so its count going up moves nothing beside it; a longer one takes the width of its
+ * words, and only a bar with no room left cuts it, its hint saying it whole; a short bar says
+ * the age alone, and the read again by its icon. A live period says beside it, by a mark and how
  * often, that it reads itself again; its hint says it in full. A read again that failed says so
  * beside it (`RefreshFailed`).
  *
  * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
  * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
  */
-import { computed, onMounted, ref, useId, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useIntervalFn, useNow } from '@vueuse/core'
+import { useElementSize, useIntervalFn, useNow } from '@vueuse/core'
 
-import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
+import AnalyticsChips from '@/pages/analytics/components/AnalyticsChips.vue'
 import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
-import { useFilterOptions } from '@/pages/analytics/composables/useFilterOptions.ts'
 import { LIVE_INTERVAL } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
-import { filterKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import { PERIODS } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView, PeriodPreset } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { agoWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
-import SearchComboboxChips from '@/shared/ui/SearchComboboxChips.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -68,13 +69,11 @@ const emit = defineEmits<{
   filter: [dimension: UsageDimension, values: (string | null)[]]
   refresh: []
 }>()
-/** Whether the field of each dimension is open under the bar. */
+/** Whether the list of filters is open over the panel. */
 const adding = defineModel<boolean>('adding', { required: true })
 
 const { locale, t } = useI18n()
 const words = useSpendingWords()
-const { options } = useFilterOptions()
-const fieldsId = useId()
 
 const periodOptions = computed(() =>
   PERIODS.map((value) => ({ value, label: t(`analytics.period.${value}`) })),
@@ -94,6 +93,19 @@ function showChosen() {
 onMounted(showChosen)
 watch(() => props.view.period, showChosen, { flush: 'post' })
 
+/**
+ * Whether the bar is short of room for its words: a phone's, or one beside a span of days under
+ * 87.5 root ems, where the period, the days and the read again leave the freshness's sentence no
+ * room. A short bar says the freshness by its age and its buttons by their icons.
+ */
+const bar = useTemplateRef<HTMLElement>('bar')
+const { width: barWidth } = useElementSize(bar)
+const short = computed(() => {
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const room = barWidth.value / rem
+  return room > 0 && (room <= 30 || (props.view.period === 'custom' && room < 87.5))
+})
+
 const rangeError = computed(() =>
   props.view.period === 'custom' &&
   props.view.from &&
@@ -102,35 +114,6 @@ const rangeError = computed(() =>
     ? t('analytics.period.reversed')
     : '',
 )
-
-/** Each value a filter is set to, named as its field names it, in the dimensions' order. */
-const chips = computed(() =>
-  props.dimensions.flatMap((dimension) => {
-    const values = props.view.filters[dimension] ?? []
-    const keys = values.map((value) => filterKey(value))
-    const named = options(dimension, props.values[dimension], keys)
-    return values.map((value, index) => ({
-      dimension,
-      value,
-      key: `${dimension}:${keys[index]}`,
-      label: t('analytics.frame.filter', {
-        dimension: words.dimension(dimension),
-        value: named.find((option) => option.value === keys[index])?.label ?? value,
-      }),
-    }))
-  }),
-)
-
-const chipNames = computed(() => chips.value.map(({ key, label }) => ({ value: key, label })))
-
-function takeOut(index: number) {
-  const chip = chips.value[index]
-  if (!chip) return
-  const kept = (props.view.filters[chip.dimension] ?? []).filter((value) => value !== chip.value)
-  emit('filter', chip.dimension, kept)
-}
-
-const removeLabel = (label: string) => t('analytics.filters.remove', { label })
 
 /** That the period is live and how often it reads itself again: in full, and as the bar says it. */
 const liveInterval = computed(() => t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }))
@@ -161,7 +144,11 @@ const fresh = computed(() => {
 </script>
 
 <template>
-  <div class="analytics-bar">
+  <div
+    ref="bar"
+    class="analytics-bar"
+    :class="{ 'analytics-bar-short': short }"
+  >
     <div class="analytics-bar-line">
       <SegmentedControl
         ref="periods"
@@ -183,8 +170,14 @@ const fresh = computed(() => {
           :label="t('analytics.period.from')"
           :model-value="view.from"
           :max="today"
+          hide-label
           @update:model-value="(from) => emit('amend', { from: String(from) })"
         />
+        <span
+          class="analytics-bar-days-dash"
+          aria-hidden="true"
+          >–</span
+        >
         <VTextInput
           class="analytics-day"
           type="date"
@@ -193,31 +186,19 @@ const fresh = computed(() => {
           :model-value="view.to"
           :max="today"
           :error="rangeError"
+          hide-label
           @update:model-value="(to) => emit('amend', { to: String(to) })"
         />
       </div>
-      <div class="analytics-bar-filters">
-        <SearchComboboxChips
-          :chips="chipNames"
-          :disabled="false"
-          :remove-label="removeLabel"
-          @remove="takeOut"
-        />
-        <VButton
-          class="analytics-filter-add"
-          variant="ghost"
-          size="compact"
-          :aria-expanded="adding"
-          :aria-controls="fieldsId"
-          @click="adding = !adding"
-        >
-          <VIcon
-            name="plus"
-            :size="16"
-          />
-          {{ t('analytics.frame.addFilter') }}
-        </VButton>
-      </div>
+      <AnalyticsChips
+        v-model:adding="adding"
+        :dimensions="dimensions"
+        :filters="view.filters"
+        :short="short"
+        :values="values"
+        @filter="(dimension, chosen) => emit('filter', dimension, chosen)"
+        @clear="emit('amend', { filters: {} })"
+      />
       <div class="analytics-bar-read">
         <p
           v-if="live"
@@ -239,9 +220,11 @@ const fresh = computed(() => {
               :data-age="fresh.ago"
               ><span class="analytics-bar-fresh-words">{{ fresh.words }}</span></time
             >
-            <template v-else>
-              {{ fresh.words }}
-            </template>
+            <span
+              v-else
+              class="analytics-bar-fresh-none one-line"
+              >{{ fresh.words }}</span
+            >
           </template>
         </p>
         <RefreshFailed @retry="emit('refresh')" />
@@ -258,27 +241,6 @@ const fresh = computed(() => {
         </VButton>
       </div>
     </div>
-    <div
-      v-show="adding"
-      :id="fieldsId"
-      class="analytics-filter-body"
-    >
-      <AnalyticsFilters
-        :dimensions="dimensions"
-        :filters="view.filters"
-        :values="values"
-        @filter="(dimension, chosen) => emit('filter', dimension, chosen)"
-      />
-      <VButton
-        v-if="chips.length"
-        class="analytics-filter-clear"
-        variant="text"
-        size="compact"
-        @click="emit('amend', { filters: {} })"
-      >
-        {{ t('analytics.filters.clear') }}
-      </VButton>
-    </div>
     <FieldError
       v-if="filtersRefused"
       role="alert"
@@ -289,65 +251,71 @@ const fresh = computed(() => {
 </template>
 
 <style scoped>
+/* Over the panel, so the list of filters it opens stands over the panel's charts too. */
 .analytics-bar {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: var(--space-3);
   min-width: 0;
   container-type: inline-size;
 }
 
-/* The period, the filters, the freshness and the read again on one line while they fit; the
-   filters take the room left, the freshness and the read again keep to the far end, and the
-   line wraps as a narrow window needs. */
+/* The period, its days, the filters, the freshness and the read again on one line: the filters
+   take the room the rest leaves and give it up first, the freshness cut only once they have none.
+   A narrow bar wraps the line instead (below). */
 .analytics-bar-line {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   align-items: center;
   min-width: 0;
 }
 
 .analytics-period {
+  flex: none;
   flex-wrap: wrap;
   max-width: 100%;
 }
 
 .analytics-bar-days {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  align-items: end;
-  min-width: 0;
-}
-
-.analytics-day {
-  inline-size: 11rem;
-}
-
-.analytics-bar-filters {
-  display: flex;
-  flex: 1 1 auto;
+  flex: none;
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
 }
 
+.analytics-day {
+  inline-size: 9rem;
+}
+
+.analytics-bar-days-dash {
+  color: var(--color-text-muted);
+}
+
 .analytics-bar-read {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 1 auto;
   gap: var(--space-2) var(--space-4);
   align-items: center;
+  min-width: 0;
   margin-inline-start: auto;
 }
 
-/* A bar too narrow for the freshness beside the rest keeps the read again on a line of its own
-   from the start, and the freshness on a line over it, held a line high before the first answer
-   brings its words: otherwise a line wrapped when they came, and moved everything under the bar
-   down. */
+/* A bar too narrow for the freshness beside the rest wraps its line, and keeps the read again on
+   a line of its own from the start, and the freshness on a line over it, held a line high before
+   the first answer brings its words: otherwise a line wrapped when they came, and moved
+   everything under the bar down. */
 @container (width < 48rem) {
+  .analytics-bar-line {
+    flex-wrap: wrap;
+  }
+
   .analytics-bar-read {
     flex-basis: 100%;
+    flex-wrap: wrap;
     justify-content: flex-end;
   }
 
@@ -359,17 +327,32 @@ const fresh = computed(() => {
   }
 }
 
-/* The freshness keeps one box whatever its count says, «9 s» or «12 min», and its figures one
-   width, so a tick of its count moves and resizes nothing beside it; a longer age ends in an
-   ellipsis and its hint says it whole. */
+/* The freshness keeps at least the room of a short age, «9 s» or «12 min», held by an empty
+   item under its words, and its figures one width, so a tick of its count moves and resizes
+   nothing beside it. A longer age takes the width of its words; a line with no room left cuts
+   them at the end, and the hint says them whole. */
 .analytics-bar-fresh {
   display: grid;
-  inline-size: 21em;
+  flex: 0 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
   text-align: end;
+
+  &::before {
+    content: '';
+    grid-area: 1 / 1;
+    inline-size: 21em;
+    max-inline-size: 100%;
+  }
+}
+
+.analytics-bar-fresh-time,
+.analytics-bar-fresh-none {
+  grid-area: 1 / 1;
 }
 
 /* A phone: the periods one row that scrolls sideways, and the filter, the freshness and the
@@ -402,14 +385,19 @@ const fresh = computed(() => {
   .analytics-bar-fresh {
     flex: 1 1 auto;
     order: 0;
-    min-width: 0;
-    inline-size: auto;
+  }
+}
+
+/* A short bar (`short`) says only the age of the freshness, the record's clock time left to its
+   hint and its name, and the read again by its icon. The whole words stay in each element for
+   assistive technology, hidden from sight, and the age the bar shows is drawn and never read
+   twice. */
+.analytics-bar-short {
+  & .analytics-bar-fresh::before {
+    content: none;
   }
 
-  /* The freshness says only its age, the record's clock time left to its hint and its name: the
-     whole sentence stays in the element for assistive technology, hidden from sight, and the
-     age the bar shows is drawn and never read twice. */
-  .analytics-bar-fresh-time {
+  & .analytics-bar-fresh-time {
     position: relative;
 
     &::after {
@@ -417,8 +405,7 @@ const fresh = computed(() => {
     }
   }
 
-  .analytics-bar-fresh-words,
-  .analytics-refresh-words {
+  & :is(.analytics-bar-fresh-words, .analytics-refresh-words) {
     position: absolute;
     inline-size: 1px;
     block-size: 1px;
@@ -431,6 +418,7 @@ const fresh = computed(() => {
 /* A live period says so in words; the mark before them is their sign, not their meaning. */
 .analytics-bar-live {
   display: flex;
+  flex: none;
   gap: var(--space-1);
   align-items: center;
   margin: 0;
@@ -448,14 +436,5 @@ const fresh = computed(() => {
     background: CanvasText;
     forced-color-adjust: none;
   }
-}
-
-.analytics-filter-body {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.analytics-filter-clear {
-  justify-self: start;
 }
 </style>

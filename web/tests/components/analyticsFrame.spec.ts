@@ -2,9 +2,9 @@
  * The frame of the Analytics page: a bar over a rail of sections and the panel of the one on show.
  * The oracle is the requirement. The rail lists the overview first and then each dimension the
  * page may filter on, the one on show marked as the page by more than its colour; choosing one is
- * written into the address, in place where rail and panel stand side by side, and as a new place
- * where the page — its own box, not the window — leaves the panel beside the rail under 640
- * pixels and shows one at a time, so Back returns to the list. The plain address is the
+ * written into the address as a new place, so Back returns to the section it was chosen in, or to
+ * the list where the page — its own box, not the window — leaves the panel beside the rail under
+ * 640 pixels and shows one at a time. The plain address is the
  * overview, which shows the figures, the days, what changed and the cards of first values; a
  * dimension shows its whole report. The bar names each filter set as a
  * chip that takes it out, offers every value from «add a filter», says how fresh the figures are
@@ -114,7 +114,7 @@ describe('the rail of sections', () => {
     ])
   })
 
-  it('marks the section of an address as the page, and writes a section chosen in place', async () => {
+  it('marks the section of an address as the page, and writes a section chosen as a new place', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model', measure: 'tokens' } })
     expect(current(page)).toEqual(['Model'])
@@ -122,7 +122,7 @@ describe('the rail of sections', () => {
 
     // The overview is the plain address, so choosing it writes no section.
     await entry(page, 'overview').trigger('click')
-    expect(written(page).at(-1)).toEqual([{ measure: 'tokens' }, 'replace'])
+    expect(written(page).at(-1)).toEqual([{ measure: 'tokens' }, 'push'])
     // The section on show chosen again writes nothing.
     await entry(page, 'model').trigger('click')
     expect(written(page)).toHaveLength(1)
