@@ -40,6 +40,16 @@ checkouts are therefore distinguishable even at the same version.
   is opened, after a verified recovery point; `blocks`, `discovered-from` and
   `duplicates` are left as they are.
 
+### Fixed
+
+- **The chrome no longer shows interim values at launch.** Until the module list was read
+  the context bar said the module's id (`planning`), and until the remembered place was
+  restored it said «Global» and marked «Work» as current, whatever the app then came back
+  to. The title and the scope selector now keep their place empty until they can say the
+  final value, and the rail marks no entry until the route is known. The groups under the
+  list of work going on now are drawn once its first frame has come, so «Analytics» no
+  longer drops by the list's height a second after launch.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed
