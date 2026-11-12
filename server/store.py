@@ -35,6 +35,7 @@ from .platform import core as platform_core
 from .platform import migrations as platform_migrations
 from .platform import relations as platform_relations
 from .projects import project_registry
+from .quota import store as quota_store
 from .store_identity import metadata as store_metadata
 from .store_identity.refs import planning_space_ref
 from .telemetry import liveness, usage_store
@@ -199,6 +200,9 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     # How often each analytics surface was opened, added with schema 16. Additive
     # and empty in an upgraded store, so this script is the whole of its migration.
     + analytics_store.SCHEMA
+    # The quota accounts and samples, added with schema 17. Additive and empty in an
+    # upgraded store, so this script is the whole of its migration.
+    + quota_store.SCHEMA
 )
 
 
@@ -281,7 +285,15 @@ MIGRATIONS = {
 # again), the requests each run left to another (`usage_yields`, empty until the runs are
 # read again), a segment the columns its later dimensions fill, and Analytics the counts of
 # how often each of its surfaces was opened (`analytics_surface_uses`, empty).
-STORE_SCHEMA_VERSION = 16
+#
+# 17 added the subscription quota's accounts and samples (`quota_accounts`,
+# `quota_samples`), empty in an upgraded store, and no existing row changed its meaning.
+# It is raised so the upgrade takes a recovery point of its own, and because what opens
+# a store without bringing it up -- a hook's `ingest.open_light`, the listener's reader,
+# `open_read_only` -- takes the stamp for the catalog: a quota source of this build would
+# write into a store at 16 that has no quota tables yet, where stamped 17 it waits for a
+# full open, and a build at 16 would keep samples past their year.
+STORE_SCHEMA_VERSION = 17
 
 
 class StoreTooNewError(RuntimeError):
@@ -406,6 +418,7 @@ SCHEMA_TABLES = (
     "owner_alert_settings",
     *usage_store.SCHEMA_TABLES,
     *analytics_store.SCHEMA_TABLES,
+    *quota_store.SCHEMA_TABLES,
 )
 
 #: What a session row learned to say about itself when session identity
@@ -768,9 +781,10 @@ def connect() -> sqlite3.Connection:
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
             # labelled for it; a store at 9 needs only schema 10's steps, one at
-            # 10 only schema 11's to 16's, one at 11 only schema 12's to 16's, one
-            # at 12 only schema 13's to 16's, one at 13 only schema 14's to 16's, one
-            # at 14 only schema 15's and 16's, and one at 15 only schema 16's.
+            # 10 only schema 11's to 17's, one at 11 only schema 12's to 17's, one
+            # at 12 only schema 13's to 17's, one at 13 only schema 14's to 17's, one
+            # at 14 only schema 15's to 17's, one at 15 only schema 16's and 17's, and
+            # one at 16 only schema 17's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a

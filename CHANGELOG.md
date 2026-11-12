@@ -10,6 +10,23 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **The store keeps subscription quota samples and accounts, at store schema 17.**
+  `quota_samples` holds one row per reading of one window that changed, from the
+  status line, the mod, the poll or an import, each named by its organization or its
+  session, its seat and its window: five hours, the week, a model's week, extra usage or
+  a gateway's spend limit. `quota_accounts` holds an account by its organization and
+  UUID, with its plan and the owner's label, and no e-mail address or name, so a label
+  holds from week to week; a sample without the UUID belongs to the account whose
+  samples name its seat that week. Samples are kept a year and are in every store
+  snapshot. A usage segment's seat is read as a state: the latest sample of each feed
+  at or before it holds until its window resets, its own session's feeds first. The
+  upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
+  after it.
+- **`valkama quota import --source FILE`** imports quota history from JSON lines, one
+  sample a line, all or nothing. Importing the same file again adds nothing.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed
