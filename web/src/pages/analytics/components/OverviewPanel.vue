@@ -106,10 +106,16 @@ const pending = useAnewDimmed(usePanelStanding())
  * that lacks the room for the floor scrolls, and the chart keeps it. `grow` is what the field
  * adds to the floor, worked out from the room the content leaves with that addition in place,
  * so a second look at the same box finds the same answer and changes nothing.
+ *
+ * A box short of the floor by no more than the air the panel keeps under its content gives up
+ * that much of the air instead (`air`): the content stands whole inside the box, and a scroll
+ * would have moved nothing but a few pixels of air. Shorter still, the panel keeps all its air
+ * and scrolls, and what it scrolls to is content.
  */
 const FLOOR = 200
 const panel = ref<HTMLElement | null>(null)
 const grow = ref(0)
+const air = ref(0)
 
 /** The box the panel scrolls in: the nearest one around it that scrolls. */
 function scroller(from: HTMLElement) {
@@ -123,12 +129,18 @@ function fit() {
   const frame = own && scroller(own)
   if (!own || !frame) {
     grow.value = 0
+    air.value = 0
     return
   }
-  const bottom = frame.getBoundingClientRect().bottom + frame.scrollTop
+  // Where the content's end would stand unscrolled: a scrolled box has moved it up by its scroll.
+  const end = own.getBoundingClientRect().bottom + frame.scrollTop
   const padding = Number.parseFloat(getComputedStyle(frame).paddingBlockEnd) || 0
-  const room = bottom - padding - own.getBoundingClientRect().bottom
-  grow.value = Math.max(0, Math.floor(grow.value + room))
+  const room = frame.getBoundingClientRect().bottom - padding - end
+  const next = Math.max(0, Math.floor(grow.value + room))
+  // How far the content still reaches into the air with the field at `next`: only at the floor.
+  const short = next - grow.value - room
+  air.value = short > 0 && short <= padding ? Math.ceil(short) : 0
+  grow.value = next
 }
 
 useResizeObserver(panel, fit)
@@ -140,7 +152,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
     ref="panel"
     class="overview-panel"
     :class="{ 'read-pending': pending }"
-    :style="{ '--overview-field-height': `${FLOOR + grow}px` }"
+    :style="{ '--overview-field-height': `${FLOOR + grow}px`, '--overview-air': `${air}px` }"
   >
     <SpendingTiles
       v-model:measure="measure"
@@ -197,10 +209,14 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   /* The chart's drawing field: its floor, and what it adds to fill the panel's box (`fit`). */
   --overview-field-height: 200px;
 
+  /* The air under the content the panel gives up rather than scroll by it alone (`fit`). */
+  --overview-air: 0px;
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
+  margin-block-end: calc(-1 * var(--overview-air));
   container-type: inline-size;
 }
 
