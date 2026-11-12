@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 
 from server.analytics import usage
+from server.planning import live_sessions
 from server.planning import usage as item_usage
 from server.projects import project_registry
 from tests.analytics_fixtures import DAY, HOUR, UsageStore, day, stamp, tokens_sum
@@ -242,9 +243,16 @@ class GroupTests(UsageStore):
         executors = [row["group"]["executor"] for row in read["rows"]]
         self.assertEqual(["s-1", "s-unrecorded"], [e["id"] for e in executors])
         self.assertEqual(180.0, read["rows"][0]["agent_seconds"])
-        # What it was opened as and where, and nothing that changes while it runs.
+        # What it was opened as and where, and the name its client gave it: none written yet.
         self.assertEqual(
-            {"id": "s-1", "unknown": False, "family": "claude", "opened_in": "", "opened_host": ""},
+            {
+                "id": "s-1",
+                "unknown": False,
+                "family": "claude",
+                "opened_in": "",
+                "opened_host": "",
+                "title": None,
+            },
             executors[0],
         )
         self.assertEqual(
@@ -254,9 +262,54 @@ class GroupTests(UsageStore):
                 "family": "",
                 "opened_in": "",
                 "opened_host": "",
+                "title": None,
             },
             executors[1],
         )
+
+    def titled(self, session: str, *records: dict, client: str = "claude") -> None:
+        """A session whose transcript holds these records, as its client writes them."""
+
+        self.session(session, client=client)
+        path = self.root / "transcripts" / f"{session}.jsonl"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text("".join(json.dumps(record) + "\n" for record in records), "utf-8")
+
+    def test_an_executor_is_named_by_the_title_its_client_gave_the_session(self) -> None:
+        live_sessions._titles.clear()
+        self.addCleanup(live_sessions._titles.clear)
+        self.titled(
+            "s-named",
+            {"type": "ai-title", "aiTitle": "Its own"},
+            {"type": "custom-title", "customTitle": "Fix the rail"},
+        )
+        self.titled("s-codex", {"type": "ai-title", "aiTitle": "Not read"}, client="codex")
+        self.session("s-silent")
+        for session in ("s-named", "s-codex", "s-silent"):
+            self.segment(session, 0, 60)
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "executor"})
+        named = {row["group"]["executor"]["id"]: row["group"]["executor"] for row in read["rows"]}
+        # A person's name for it wins, as the live work beside the board says it.
+        self.assertEqual("Fix the rail", named["s-named"]["title"])
+        self.assertEqual("claude", named["s-named"]["family"])
+        # Another client's transcript is not read, and a session with no title names nothing.
+        self.assertIsNone(named["s-codex"]["title"])
+        self.assertIsNone(named["s-silent"]["title"])
+
+    def test_a_transcript_is_read_once_per_read_and_not_again_while_it_is_unchanged(self) -> None:
+        live_sessions._titles.clear()
+        self.addCleanup(live_sessions._titles.clear)
+        self.titled("s-1", {"type": "ai-title", "aiTitle": "Once"})
+        # Two days, a period before and two dimensions: the session is named in every part.
+        self.segment("s-1", 0, 60, organization="org-1")
+        self.segment("s-1", DAY, DAY + 60, organization="org-2")
+        query = {"from": day(1), "to": day(2), "group_by": "executor,account", "compare": "true"}
+        with mock.patch.object(live_sessions, "_title_in", wraps=live_sessions._title_in) as tail:
+            first = self.read(**query)
+            self.assertEqual(1, tail.call_count)
+            self.assertEqual(first, self.read(**query))
+            self.assertEqual(1, tail.call_count)
+        self.assertEqual("Once", first["rows"][0]["group"]["executor"]["title"])
 
     def test_a_sessions_own_run_has_no_launch_class_and_a_subagents_may_be_unknown(
         self,

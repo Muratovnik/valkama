@@ -49,7 +49,7 @@ import sqlite3
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from ..planning import executors
+from ..planning import executors, live_sessions
 from ..planning import usage as item_usage
 from ..planning.usage import Value
 from ..projects import project_registry
@@ -487,16 +487,21 @@ def _role(row: Sequence) -> Value:
 _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
     PROJECT: {"name": None},
-    EXECUTOR: {"family": "", "opened_in": "", "opened_host": ""},
+    EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
 }
+
+#: What a session's executor says of it that the answer carries: where it was opened.
+_PLACE = ("family", "opened_in", "opened_host")
 
 
 def _labels(
     conn: sqlite3.Connection, dimension: str, ids: set[str], projects: Sequence[Mapping]
 ) -> dict[str, dict]:
     """What a person already sees for each of these values: an item's number and title,
-    a project's name, where a session was opened. Nothing that changes while it is read,
-    so two reads of the same rows give the same answer."""
+    a project's name, where a session was opened and the name its client gave it, as
+    the live work beside the board names it (`planning.live_sessions.titles`). Only that
+    name can change while the figures do not, when a person renames the session; each
+    transcript is read once per read, and again only once it has changed."""
 
     if dimension == WORK_ITEM:
         return item_usage.item_names(conn, ids)
@@ -507,9 +512,14 @@ def _labels(
             if project["project_id"] in ids
         }
     if dimension == EXECUTOR:
+        named = sorted(ids)
+        titles = live_sessions.titles(conn, named)
         return {
-            session: {name: executor[name] for name in _UNNAMED[EXECUTOR]}
-            for session, executor in executors.session_executors(conn, sorted(ids)).items()
+            session: {
+                **{name: executor[name] for name in _PLACE},
+                "title": titles.get(session),
+            }
+            for session, executor in executors.session_executors(conn, named).items()
         }
     return {}
 
