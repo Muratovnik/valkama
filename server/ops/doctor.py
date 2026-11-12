@@ -25,11 +25,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 import sys
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib import error, request
 
@@ -96,7 +97,7 @@ def _check(
 LEVELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("installation", "Installation", ("configuration", "store", "runtime", "skills")),
     ("projects", "Projects", ("projects",)),
-    ("capabilities", "Capabilities", ("drivers",)),
+    ("capabilities", "Capabilities", ("drivers", "quota")),
     ("connections", "Connections", ("adapters",)),
 )
 
@@ -114,6 +115,7 @@ def diagnose(*, port: int = 8642, probe: bool = True) -> dict:
         "runtime": _guarded("runtime", "Runtime", lambda: _runtime_checks(port, probe=probe)),
         "skills": _guarded("skills", "Valkama skill", _skill_checks),
         "drivers": _guarded("drivers", "Execution drivers", _driver_checks),
+        "quota": _guarded("quota", "Quota sources", _quota_source_checks),
         "adapters": _guarded("adapters", "Adapters", _adapter_checks),
         "projects": _guarded("projects", "Projects", _project_checks),
     }
@@ -861,6 +863,127 @@ _SKILL_FINDINGS = {
         "Remove it, or replace it with `valkama skill install --client {client} --force`.",
     ),
 }
+
+
+#: How long a registered status line may go without a reading before the doctor calls
+#: it silent. A reading is kept only when a value changed, and a session that works
+#: changes its five-hour share with every response.
+STATUSLINE_SILENT_DAYS = 3
+#: `valkama statusline` in a status line command, however the command names Valkama:
+#: the stable command, the launcher's shim or a checkout's entry point.
+_STATUSLINE_COMMAND = re.compile(
+    r"""(?:^|[\s/\\'"])(?:valkama|valkama\.cmd|valkama\.py|valkama-launcher\.py)['"]?"""
+    r"\s+statusline(?=\s|$)",
+    re.IGNORECASE,
+)
+
+
+def status_line_command(settings: Path) -> str | None:
+    """The status line command a Claude Code settings file names, or None.
+
+    Read-only. A missing file names none; one that cannot be read or is not a JSON
+    object raises `OSError` or `ValueError`.
+    """
+
+    try:
+        text = settings.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    document = json.loads(text)
+    if not isinstance(document, dict):
+        raise ValueError("the settings file is not a JSON object")
+    status_line = document.get("statusLine")
+    if not isinstance(status_line, dict) or status_line.get("type") != "command":
+        return None
+    command = status_line.get("command")
+    return command if isinstance(command, str) else None
+
+
+def _last_status_line_reading(path: str) -> str | None:
+    if not os.path.isfile(path):
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT MAX(at) FROM quota_samples WHERE source = 'statusline'"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row and isinstance(row[0], str) else None
+
+
+def _quota_source_checks() -> list[dict]:
+    """Whether Claude Code's status line feeds the quota: off, silent or working."""
+
+    settings = skills.client_home("claude") / "settings.json"
+    scope = (
+        f" Only {settings} is read: sessions under WSL or under another CLAUDE_CONFIG_DIR"
+        " are not checked."
+    )
+    title = "Status line quota source"
+    parameters: dict[str, object] = {"settings": str(settings)}
+    try:
+        command = status_line_command(settings)
+    except (OSError, ValueError) as failure:
+        return [
+            _check(
+                "quota-statusline",
+                title,
+                "unknown",
+                f"{settings} cannot be read: {failure}.{scope}",
+                "Make the file valid JSON; Claude Code does not read it as it is either.",
+                presentation_code="quota-statusline-unreadable",
+                parameters=parameters,
+            )
+        ]
+    if command is None or not _STATUSLINE_COMMAND.search(command):
+        return [
+            _check(
+                "quota-statusline",
+                title,
+                "warn",
+                "off: Claude Code's status line does not run `valkama statusline`, so no"
+                f" quota is read from it.{scope}",
+                "Make `valkama statusline` the status line command; a status line command"
+                " already set stays shown when it is passed with `--previous`.",
+                presentation_code="quota-statusline-off",
+                parameters=parameters,
+            )
+        ]
+    last = _last_status_line_reading(store.db_path())
+    since = datetime.now(UTC) - timedelta(days=STATUSLINE_SILENT_DAYS)
+    parameters = {**parameters, "last": last, "days": STATUSLINE_SILENT_DAYS}
+    if last is None or last < since.isoformat(timespec="milliseconds").replace("+00:00", "Z"):
+        return [
+            _check(
+                "quota-statusline",
+                title,
+                "warn",
+                "silent: `valkama statusline` is Claude Code's status line, but no status"
+                f" line reading reached the store in {STATUSLINE_SILENT_DAYS} days"
+                f" (last: {last or 'never'}). Claude Code runs the status line only in"
+                " terminal sessions, not in the VS Code extension, and reports the quota only"
+                f" for a subscription account, after a session's first response.{scope}",
+                "Work in a Claude Code terminal session; a reading the store could not take"
+                " waits in the hook spool and arrives with the next hook event.",
+                presentation_code="quota-statusline-silent",
+                parameters=parameters,
+            )
+        ]
+    return [
+        _check(
+            "quota-statusline",
+            title,
+            "ok",
+            f"working: Claude Code's status line runs `valkama statusline`; last reading {last}."
+            f"{scope}",
+            presentation_code="quota-statusline-working",
+            parameters=parameters,
+        )
+    ]
 
 
 def _skill_checks() -> list[dict]:

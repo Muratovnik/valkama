@@ -9,14 +9,21 @@ A pending file ends in `.jsonl` and is named `<occurred_ns>-<event_uid>.jsonl`,
 so the directory listing is the delivery order. A file that cannot be read back
 is renamed `.rejected`: kept for a person to read, counted by `doctor`, and
 never retried.
+
+A line is a lifecycle event (`normalize.spool_line`) or a quota reading the status
+line command could not write (`statusline.spool_line`). This module imports only
+`os` at load, because that command writes here on the path where the store is busy
+and has its budget to keep; what reads a file back loads the rest.
 """
 
 from __future__ import annotations
 
-import json
 import os
 
-from .normalize import HookEvent, read_spool_line, spool_line, timestamp
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from ..quota.samples import Reading
+    from .normalize import HookEvent
 
 PENDING_SUFFIX = ".jsonl"
 REJECTED_SUFFIX = ".rejected"
@@ -29,7 +36,16 @@ def directory(store_path: str) -> str:
 
 
 def write(spool: str, record: HookEvent, *, occurred_ns: int, spooled_at: str, reason: str) -> str:
-    """Spool one event and return its file. The file appears whole or not at all.
+    """Spool one event and return its file; see `write_line`."""
+
+    from .normalize import spool_line
+
+    line = spool_line(record, spooled_at=spooled_at, reason=reason)
+    return write_line(spool, line, occurred_ns=occurred_ns, uid=record.event_uid)
+
+
+def write_line(spool: str, line: bytes, *, occurred_ns: int, uid: str) -> str:
+    """Spool one line and return its file. The file appears whole or not at all.
 
     The store's own directory must already exist; this creates only `spool/`
     inside it. That directory's existence is what tells the first full open
@@ -42,11 +58,11 @@ def write(spool: str, record: HookEvent, *, occurred_ns: int, spooled_at: str, r
         os.mkdir(spool)
     except FileExistsError:
         pass
-    name = f"{occurred_ns:020d}-{record.event_uid}{PENDING_SUFFIX}"
+    name = f"{occurred_ns:020d}-{uid}{PENDING_SUFFIX}"
     final = os.path.join(spool, name)
     temporary = os.path.join(spool, f".{name}.tmp")
     with open(temporary, "xb") as handle:
-        handle.write(spool_line(record, spooled_at=spooled_at, reason=reason))
+        handle.write(line)
     os.replace(temporary, final)
     return final
 
@@ -61,16 +77,21 @@ def pending(spool: str) -> list[str]:
     return sorted(name for name in names if name.endswith(PENDING_SUFFIX))
 
 
-def read(path: str) -> list[tuple[HookEvent, str]] | None:
-    """Every event in one file with its `spooled_at`, or nothing if any line is invalid.
+def read(path: str) -> list[tuple[HookEvent | Reading, str]] | None:
+    """Every event or reading in one file with its `spooled_at`, or nothing if any line is invalid.
 
     One bad line rejects the file: a file is the unit that is delivered and
     deleted, so delivering half of it would leave the rest nowhere.
     """
 
+    import json
+
+    from . import statusline
+    from .normalize import read_spool_line
+
     with open(path, "rb") as handle:
         data = handle.read()
-    events: list[tuple[HookEvent, str]] = []
+    events: list[tuple[HookEvent | Reading, str]] = []
     for raw in data.splitlines():
         if not raw.strip():
             continue
@@ -78,7 +99,10 @@ def read(path: str) -> list[tuple[HookEvent, str]] | None:
             line = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             return None
-        event = read_spool_line(line) if isinstance(line, dict) else None
+        event: tuple[HookEvent | Reading, str] | None = None
+        if isinstance(line, dict):
+            quota = statusline.SPOOL_KEY in line
+            event = statusline.read_spool_line(line) if quota else read_spool_line(line)
         if event is None:
             return None
         events.append(event)
@@ -111,6 +135,8 @@ def remove(path: str) -> None:
 
 def summary(spool: str) -> dict:
     """What `doctor` reports: pending files, the oldest one's time, rejected files."""
+
+    from .normalize import timestamp
 
     try:
         names = os.listdir(spool)

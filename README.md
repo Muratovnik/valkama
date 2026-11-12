@@ -953,6 +953,22 @@ never a variable's value
 allowlisted set of fields is kept: never the prompt, tool arguments other than an
 Agent call's short description, or assistant text.
 
+`valkama statusline` is the command Claude Code runs as its status line. It
+records the `rate_limits` the status line input carries, the five-hour window
+and the week, as quota samples of that session, through the same store-or-spool
+path, and prints nothing of its own. A status line command the user already had
+is passed as `--previous=<base64 of its UTF-8 text>`; it then runs with the same
+input through the same shell, and its output is what the status line shows.
+Only terminal sessions run a status line; the VS Code extension does not.
+`valkama statusline --help` states the interface, and
+[the hook contract](docs/hook-contract.md#the-status-line-command) says how to
+write and restore the setting.
+
+```
+valkama statusline                       < statusline-input.json
+valkama statusline --previous=Y2F0       < statusline-input.json
+```
+
 The same hooks tell a working agent what a person did in the interface on the
 work its session holds. `post-tool-use`, `user-prompt-submit` and `stop` answer
 with a short notice when there is news: a comment, an answer, a status change, a
