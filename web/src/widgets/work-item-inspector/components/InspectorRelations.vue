@@ -143,28 +143,31 @@ function when(value: string): string {
       >
         {{ error }}
       </p>
-      <section
-        v-for="group in groups"
-        :key="group.key"
-        class="relation-group"
+      <div
+        v-if="groups.length"
+        class="link-groups"
       >
-        <h4 class="group-heading">
-          {{ group.label }}
-          <span class="group-count">{{ group.links.length }}</span>
-        </h4>
-        <ul class="link-list">
-          <li
-            v-for="link in group.links"
-            :key="`${link.direction}-${link.work_item_id}`"
-            class="link-row"
-          >
-            <button
-              class="link-open"
-              type="button"
-              @click="emit('open', link.reference)"
+        <section
+          v-for="group in groups"
+          :key="group.key"
+          class="relation-group"
+        >
+          <h4 class="group-heading">
+            {{ group.label }}
+            <span class="group-count">{{ group.links.length }}</span>
+          </h4>
+          <ul class="link-list">
+            <li
+              v-for="link in group.links"
+              :key="`${link.direction}-${link.work_item_id}`"
+              class="link-row"
             >
-              <span class="link-reference">{{ link.reference }}</span>
-              <span class="link-body">
+              <button
+                class="link-open"
+                type="button"
+                @click="emit('open', link.reference)"
+              >
+                <span class="link-reference">{{ link.reference }}</span>
                 <span
                   v-slash-breaks="link.title"
                   class="link-title"
@@ -172,32 +175,33 @@ function when(value: string): string {
                 <!-- The other end's state, when the server could say it: a finished blocker reads as finished. -->
                 <SemanticState
                   v-if="link.state_category && link.state_name"
+                  class="link-state"
                   variant="inline"
                   dimension="work-item-state"
                   :state="link.state_category"
                   :label="linkState(link)"
                 />
-              </span>
-            </button>
-            <VButton
-              v-if="writable"
-              v-tooltip.name="t('workItem.unlink')"
-              class="link-remove"
-              variant="ghost"
-              size="inline"
-              :disabled="busy"
-              :aria-label="t('workItem.related.remove', { reference: link.reference })"
-              icon
-              @click="remove(link)"
-            >
-              <VIcon
-                name="close"
-                :size="16"
-              />
-            </VButton>
-          </li>
-        </ul>
-      </section>
+              </button>
+              <VButton
+                v-if="writable"
+                v-tooltip.name="t('workItem.unlink')"
+                class="link-remove"
+                variant="ghost"
+                size="inline"
+                :disabled="busy"
+                :aria-label="t('workItem.related.remove', { reference: link.reference })"
+                icon
+                @click="remove(link)"
+              >
+                <VIcon
+                  name="close"
+                  :size="16"
+                />
+              </VButton>
+            </li>
+          </ul>
+        </section>
+      </div>
       <DataEmptyState
         v-if="!groups.length"
         :title="t('workItem.noLinks')"
@@ -282,15 +286,30 @@ function when(value: string): string {
   gap: var(--space-heading-content);
 }
 
+/* One column set for every group of links, which the groups, their rows and each row's
+   button subgrid: the reference, the title, the other end's state and the remove. An
+   ordinary reference fills its column, so titles start on one line down the list, and a
+   longer key widens the column for every row rather than moving its own title alone. */
+.link-groups {
+  display: grid;
+  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr) auto auto;
+  gap: var(--space-heading-content) var(--space-2);
+  min-width: 0;
+  container: link-groups / inline-size;
+}
+
 /* A group is a caption over its rows, and the rows hang directly under it:
    the caption and its count are one line of the same quiet type. */
 .relation-group {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  row-gap: var(--space-1);
 }
 
 .group-heading {
   display: flex;
+  grid-column: 1 / -1;
   gap: var(--space-2);
   align-items: baseline;
   margin: 0;
@@ -310,26 +329,27 @@ function when(value: string): string {
 
 .link-list {
   display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-/* The row and its one action in two columns, so every remove stands at the
-   same edge instead of wherever the title happened to end. */
+/* The row's one action has the last column, so every remove stands at the same edge
+   instead of wherever the title happened to end. */
 .link-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: start;
 }
 
-/* The reference column holds an ordinary reference at full width, so titles
-   start on one line down the list; a longer key widens only its own row. */
 .link-open {
   display: grid;
-  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: subgrid;
+  grid-column: 1 / 4;
+  row-gap: var(--space-half);
   align-items: baseline;
   min-width: 0;
   padding: var(--space-1) 0;
@@ -347,14 +367,6 @@ function when(value: string): string {
   white-space: nowrap;
 }
 
-.link-body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  align-items: baseline;
-  min-width: 0;
-}
-
 .link-title {
   color: var(--color-text);
   font: var(--font-note);
@@ -362,6 +374,30 @@ function when(value: string): string {
 
   .link-open:is(:hover, :focus-visible) & {
     text-decoration: underline;
+  }
+}
+
+/* The other end's state stands in one place on every row, whatever the title's length: in
+   its own column on the title's first line, every dot on one edge. It followed the title in
+   a row that wrapped, so it ended a short title's line and stood under a long one, and down
+   a list it jumped between the two. A name longer than the column's room ends in an ellipsis
+   and says itself whole in a hint, so one renamed state does not take every title's room. */
+.link-open .link-state {
+  justify-self: start;
+  max-inline-size: 18ch;
+}
+
+/* A phone's list has no room for that column beside a title: it left titles 128px of 341.
+   There the state stands under every title, at its edge. */
+@container link-groups (width < 480px) {
+  .link-title {
+    grid-column: 2 / 4;
+  }
+
+  .link-open .link-state {
+    grid-row: 2;
+    grid-column: 2 / 4;
+    max-inline-size: 100%;
   }
 }
 

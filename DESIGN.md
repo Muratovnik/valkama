@@ -1412,6 +1412,11 @@ never in heavier ink, and reads high or urgent after its reference; its glyphs a
 not pressed, since the card is one button. A search result leads with the
 same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
+A link's row in «Связи» says the other end's state in one place whatever the length of its
+title: in a column the whole list shares, on the title's first line with every dot on one
+edge, and under the title, at its edge, where the list is a phone's. The state followed its
+title in a row that wrapped, so down a list it jumped between the end of a short title's line
+and a line of its own under a long one.
 A card's chain section stands in «Связи», after the item's links and references: what
 the work grew into is a relation of the item, and the map and its hundreds of rows held
 Overview's first screen between the next step and the description. Its «Эпик | Цепочка»
