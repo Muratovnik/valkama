@@ -75,7 +75,7 @@ const figures = computed(() => tileFigures(props.usage))
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
 
 const cards = computed<OverviewCard[]>(() =>
-  OVERVIEW_CARDS.filter((card) => card !== 'role' && !(props.projectScoped && card === 'project')),
+  OVERVIEW_CARDS.filter((card) => !(props.projectScoped && card === 'project')),
 )
 
 const beforeSteps = usePeriodBefore({

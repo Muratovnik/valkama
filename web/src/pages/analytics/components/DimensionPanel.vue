@@ -321,12 +321,12 @@ async function showTable() {
     display: contents;
   }
 
-  /* A part sticks inside its scroller's padding, and the page leaves the air of --space-12 under
-     the panel's content: held at 0 the table stood that high over the panel's edge, the charts
-     showing through under it. */
+  /* A part sticks inside its scroller's padding, and the page leaves the air of --space-6 under
+     the panel's content (`.analytics-panel` in `AnalyticsView.vue`; change both together): held
+     at 0 the table stood that high over the panel's edge, the charts showing through under it. */
   .dimension-panel[data-fills='false'] .dimension-table {
     position: sticky;
-    inset-block-end: calc(-1 * var(--space-12));
+    inset-block-end: calc(-1 * var(--space-6));
     z-index: 4;
     max-block-size: 50svh;
     padding-block-start: var(--space-3);

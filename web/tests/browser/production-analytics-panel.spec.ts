@@ -8,7 +8,9 @@
  * tokens, the table and the file split the tokens by kind. At 1440 pixels the ranked list and the
  * small charts beside it are titled in one line each, and so is the line over the table that
  * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
- * word. Each run prints what it measured.
+ * word. The section of the tokens by kind is such a panel too: its counted kinds add up to the
+ * summary's «Tokens» figure, the cache reads stand apart from them, and its address gives it
+ * back. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -16,6 +18,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { openReport, pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
+import { shot } from './boardPage.ts'
 import { brokenWords } from './brokenWords.ts'
 import { test } from './test.ts'
 
@@ -354,4 +357,97 @@ test('with the measure tokens the table and its file split the tokens by kind', 
       ',filters,input_tokens,cached_read_tokens,cache_write_5m_tokens,cache_write_1h_tokens,output_tokens,reasoning_tokens',
     ),
   ).toBe(true)
+})
+
+/**
+ * The week's tokens by kind as the double splits them (`split` in the fixture): every stretch of
+ * the week is a whole number of ten thousand tokens, half input, three tenths output, the rest
+ * written to the cache for five minutes, and ten times as many read from it.
+ */
+const WEEK_TOKENS = [
+  ...Array.from({ length: 12 }, (_, index) => (13 - index) * 1_250_000),
+  900_000,
+  10_000,
+]
+const WEEK_KINDS = {
+  input: WEEK_TOKENS.reduce((sum, tokens) => sum + Math.round(tokens / 2), 0),
+  output: WEEK_TOKENS.reduce((sum, tokens) => sum + Math.round((tokens * 3) / 10), 0),
+  cacheWrite: WEEK_TOKENS.reduce(
+    (sum, tokens) => sum + tokens - Math.round(tokens / 2) - Math.round((tokens * 3) / 10),
+    0,
+  ),
+  cacheRead: WEEK_TOKENS.reduce((sum, tokens) => sum + tokens * 10, 0),
+  reasoning: WEEK_TOKENS.reduce(
+    (sum, tokens) => sum + Math.floor(Math.round((tokens * 3) / 10) / 3),
+    0,
+  ),
+}
+const compact = (count: number) =>
+  new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)
+
+test('the tokens by kind are a panel whose counted kinds add up to the «Tokens» figure', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(pageAt())
+  const figure = page.locator('.tile-figure[data-measure="tokens"]')
+  await expect(figure).toBeVisible()
+  const tokens = await figure.evaluate((element) => element.textContent.trim())
+
+  await page
+    .getByRole('navigation', { name: 'Sections of the usage' })
+    .getByRole('button', { name: 'Token kinds', exact: true })
+    .click()
+  await expect
+    .poll(() => page.url().slice(new URL(page.url()).origin.length))
+    .toBe(pageAt({ by: 'token_kind' }))
+  const panel = page.locator('.kinds-panel')
+  const table = panel.locator('.kinds-table')
+  await expect(table.locator('tbody tr').first()).toBeVisible()
+
+  const rows = await table
+    .locator('tbody tr')
+    .evaluateAll((all) =>
+      all.map((row) => [...row.children].slice(0, 2).map((cell) => cell.textContent.trim())),
+    )
+  await record(info, 'analytics token kinds', { tokens, rows })
+  // The counted kinds are exactly the double's, and they add up to the figure of the summary.
+  const { input, output, cacheWrite, cacheRead, reasoning } = WEEK_KINDS
+  expect(input + output + cacheWrite).toBe(WEEK_TOKENS.reduce((sum, one) => sum + one, 0))
+  expect(rows).toEqual([
+    ['Input', compact(input)],
+    ['Output', compact(output)],
+    ['Cache write, 5 min', compact(cacheWrite)],
+    ['Total', compact(input + output + cacheWrite)],
+    ['Cache read, not counted', compact(cacheRead)],
+    ['Reasoning, part of output', compact(reasoning)],
+  ])
+  expect(rows[3]?.[1]).toBe(tokens)
+  await expect(panel.locator('.kinds-figure-value')).toHaveText(tokens)
+
+  // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
+  const bars = panel.locator('.kinds-bars')
+  await expect(bars.locator('ol .ranked-label')).toHaveText([
+    'Input',
+    'Output',
+    'Cache write, 5 min',
+  ])
+  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText([
+    'Cache read, not counted',
+    'Reasoning, part of output',
+  ])
+  await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
+  // A small chart of each counted kind on one scale, the cache reads apart by their figure.
+  await expect(panel.locator('.kinds-multiples h2')).toHaveText('Tokens per day of each kind')
+  expect(await parts(page), 'parts that spill or overlap').toEqual([])
+
+  // The address gives the section back.
+  await page.reload()
+  await expect(table.locator('tbody tr').first()).toBeVisible()
+  await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveAttribute(
+    'data-section',
+    'token_kind',
+  )
+  await page.locator('.analytics-panel').screenshot(shot(info, 'analytics-kinds-1440.png'))
 })

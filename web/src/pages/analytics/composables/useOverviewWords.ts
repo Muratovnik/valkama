@@ -11,7 +11,7 @@ import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 
 /** The dimensions the overview gives a card of first values, in the cards' order. */
-export const OVERVIEW_CARDS = ['work_item', 'model', 'role', 'project'] as const
+export const OVERVIEW_CARDS = ['work_item', 'model', 'project'] as const
 export type OverviewCard = (typeof OVERVIEW_CARDS)[number]
 
 export function useOverviewWords() {

@@ -31,8 +31,8 @@
  * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
  * is its whole report.
  *
- * The live period «Now» reads itself again on an interval while the page is seen
- * (`useLiveRefresh`); no other period does.
+ * The periods still running, «Now» and «Today», read themselves again on an interval while the
+ * page is seen (`useLiveRefresh`); no other period does.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -41,6 +41,7 @@ import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
+import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
@@ -56,6 +57,7 @@ import {
   orderFilters,
   OVERVIEW,
   readAddress,
+  TOKEN_KINDS_SECTION,
   writeAddress,
 } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView } from '@/shared/api/analyticsAddress.ts'
@@ -148,6 +150,7 @@ const lines = provideLineActions(() => filterDimensions.value)
 /** The page's sections, in the rail's order: the overview, then each dimension filtered on. */
 const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
   { value: OVERVIEW, label: t('analytics.frame.overview') },
+  { value: TOKEN_KINDS_SECTION, label: t('analytics.kinds.section') },
   ...filterDimensions.value.map((value) => ({ value, label: words.dimension(value) })),
 ])
 
@@ -240,19 +243,22 @@ function refresh() {
 }
 
 /**
- * «Now» reads itself again while the page is seen, an interval after the last read of the view,
- * whatever asked it: a refresh, or a new period or filter.
+ * «Now» and «Today» read themselves again while the page is seen, an interval after the last read
+ * of the view, whatever asked it: a refresh, or a new period or filter.
  */
-const live = computed(() => view.value.period === 'now')
+const live = computed(() => view.value.period === 'now' || view.value.period === 'today')
 const liveRefresh = useLiveRefresh({ live: () => live.value, refresh })
 watch(
   () => read.askedAt.value,
   () => liveRefresh.restart(),
 )
 
-const emptyDescription = computed(() =>
-  read.bounds.value ? t('analytics.empty.description') : t('analytics.period.incomplete'),
-)
+/** What an empty answer suggests: a longer period, and a filter taken out only when one is set. */
+const emptyDescription = computed(() => {
+  if (!read.bounds.value) return t('analytics.period.incomplete')
+  const filtered = Object.values(view.value.filters).some((values) => values?.length)
+  return filtered ? t('analytics.empty.description') : t('analytics.empty.unfiltered')
+})
 </script>
 
 <template>
@@ -342,6 +348,11 @@ const emptyDescription = computed(() =>
               @open="chooseSection"
               @retry="read.retry"
             />
+            <TokenKindsPanel
+              v-else-if="view.by === TOKEN_KINDS_SECTION"
+              :usage="payload"
+              @retry="read.retry"
+            />
             <DimensionPanel
               v-else
               v-model:table-whole="tableWhole"
@@ -416,7 +427,10 @@ const emptyDescription = computed(() =>
   align-content: start;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-3) var(--size-page-gutter) var(--space-12);
+
+  /* The air under the content is the one a section's held table sticks past
+     (`DimensionPanel.vue`, `.dimension-table`): change both together. */
+  padding: var(--space-3) var(--size-page-gutter) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
