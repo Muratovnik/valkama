@@ -7,6 +7,11 @@ the files the first one was about to create. What has to be serialized is
 therefore the whole of `store.connect()`, which is more than any lock SQLite
 itself could hold.
 
+The lock is the operating system's on the file's first byte, so it goes with
+the process that held it however that process ends. `try_lock` and `unlock`
+are that primitive on its own, and `tests/machine_lock.py` takes the same one
+for the heavy test runs of a machine.
+
 `msvcrt` and `fcntl` are both in the standard library and neither is importable
 on the other platform, so each is imported at the point it is used.
 """
@@ -18,6 +23,48 @@ import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import BinaryIO
+
+
+def try_lock(handle: BinaryIO) -> bool:
+    """Take the exclusive lock on the file `handle` has open, without waiting.
+
+    The handle is opened `a+b`; on Windows the lock is on the first byte, which
+    is written first when the file is empty, so whatever follows that byte stays
+    readable to every other process.
+    """
+
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            handle.seek(0)
+            if os.fstat(handle.fileno()).st_size == 0:
+                handle.write(b"0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    return True
+
+
+def unlock(handle: BinaryIO) -> None:
+    """Give back the lock `try_lock` took on this handle."""
+
+    if sys.platform == "win32":
+        import msvcrt
+
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 @contextmanager
@@ -26,42 +73,12 @@ def migration_lock(path: str, *, timeout: float = 5.0) -> Iterator[None]:
 
     lock_path = path + ".migration.lock"
     deadline = time.monotonic() + timeout
-    handle = open(lock_path, "a+b")
-    acquired = False
-    try:
-        while True:
-            try:
-                if sys.platform == "win32":
-                    import msvcrt
-
-                    handle.seek(0)
-                    if handle.tell() == os.fstat(handle.fileno()).st_size == 0:
-                        handle.write(b"0")
-                        handle.flush()
-                    handle.seek(0)
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-                break
-            except OSError:
-                if time.monotonic() >= deadline:
-                    raise RuntimeError("timed out waiting for the store migration lock") from None
-                time.sleep(0.05)
-        yield
-    finally:
+    with open(lock_path, "a+b") as handle:
+        while not try_lock(handle):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("timed out waiting for the store migration lock")
+            time.sleep(0.05)
         try:
-            if acquired:
-                if sys.platform == "win32":
-                    import msvcrt
-
-                    handle.seek(0)
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    import fcntl
-
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            yield
         finally:
-            handle.close()
+            unlock(handle)

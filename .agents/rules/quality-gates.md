@@ -79,6 +79,24 @@ Use it instead of a wrapper of your own, and `serve --out DIR` with
 It does not move `TEMP`, which is what keeps the suite's renames from failing
 with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
 
+Two heavy runs on one machine fail tests that pass alone: a timing budget of the
+suite was missed by half while another checkout's full suite ran beside it. So
+the `unittest` step of `gates` and every run of `npm run test:browser:allowed`
+but `--list` hold one lock, `tests/machine_lock.py`: a file in the user's
+temporary directory, where every checkout and worktree of the machine meets it.
+The step holds it for its own duration and the runner for Playwright's; the other
+steps, a `--only` that leaves `unittest` out, a spec run with
+`npx playwright test <file>`, and a bare `coverage run` take none. It is the
+operating system's lock on the file, so it goes with a holder that dies. A run
+that finds it held waits with no time limit and says for whom, when it starts and
+again every minute, then says when it got the lock and goes on:
+
+```text
+waiting for the heavy-test lock <file>: it is held by <run> in <checkout>, process <pid>, since <date> <time> (<n> min <n> s ago)
+still waiting after 1 min 0 s: the lock is held by <the same, or the run that took it next>
+took the heavy-test lock after 2 min 41 s
+```
+
 `tests/commit_subjects.py` reads the subject of every commit `HEAD` reaches,
 merges included. Twice an integration branch reached the merge into `main`
 carrying `merge: …` and Git's default merge subject, the release audit passed

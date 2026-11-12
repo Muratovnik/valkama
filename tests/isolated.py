@@ -31,6 +31,10 @@ Each rule here is a way a hand-written wrapper went wrong:
   directory of the task it was first written for.
 - `serve` says when the committed `web/dist` it serves is behind `web/src`. A
   browser check once took screenshots of a bundle ten commits behind its sources.
+- The `unittest` step holds the machine's heavy-test lock, `tests/machine_lock.py`,
+  for its own duration and no longer. The whole suite beside another checkout's
+  failed timing budgets that hold alone, so a second such run waits and says for
+  whom; the other steps are light and take no lock.
 
 A served store copy holds whatever the live store holds, so it lives inside the
 throwaway profile, together with any backup a migration writes beside it, and
@@ -118,6 +122,8 @@ class Step:
     directory: str = "."
     #: It reads the commits of the checkout, so a directory without them refuses it.
     needs_history: bool = False
+    #: It holds the machine's heavy-test lock while it runs.
+    exclusive: bool = False
 
     @property
     def needs_modules(self) -> bool:
@@ -148,6 +154,7 @@ GATE_STEPS = (
         "unittest",
         "python",
         'python -m coverage run -m unittest discover -s . -p "test_*.py"',
+        exclusive=True,
     ),
     Step("coverage", "python", "python -m coverage report"),
     Step("web-test", "web", "npm test", "web"),
@@ -165,6 +172,7 @@ class Run(NamedTuple):
     cwd: Path
     needs_modules: bool = False
     needs_history: bool = False
+    exclusive: bool = False
 
 
 def _say(line: str) -> None:
@@ -402,11 +410,18 @@ def _refusal(run: Run) -> tuple[str, str] | None:
     return None
 
 
-def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) -> int:
+def run_gates(
+    runs: Sequence[Run],
+    out: Path,
+    environment: Mapping[str, str],
+    *,
+    lock: Path | None = None,
+) -> int:
     """Run every step; the result is 0 only when at least one ran and none failed or was refused.
 
     The modules are read again at each step, because another session's `npm ci`
-    may have replaced them while the steps before it ran.
+    may have replaced them while the steps before it ran. An exclusive step waits
+    for the heavy-test lock, the machine's unless `lock` names another file.
     """
 
     logs = out / LOGS
@@ -429,7 +444,17 @@ def run_gates(runs: Sequence[Run], out: Path, environment: Mapping[str, str]) ->
                 log.write_text(f"{detail}\n", encoding="utf-8", newline="\n")
                 report(f"{run.name:<14} refused  {detail}")
                 continue
-            code = _run_step(run, log, environment)
+            if run.exclusive:
+                # Imported here, not at the top, for the reason `_refusal` gives.
+                from tests import machine_lock
+
+                holding: contextlib.AbstractContextManager[None] = machine_lock.held(
+                    f"tests/isolated.py gates: the {run.name} step", path=lock, say=report
+                )
+            else:
+                holding = contextlib.nullcontext()
+            with holding:
+                code = _run_step(run, log, environment)
             if code != 0:
                 failed.append(run.name)
             report(f"{run.name:<14} exit={code}  {_tail(log)}")
@@ -496,6 +521,7 @@ def gates(steps: Sequence[Step], out: Path) -> int:
             ROOT / step.directory,
             step.needs_modules,
             step.needs_history,
+            step.exclusive,
         )
         for step in steps
     ]
