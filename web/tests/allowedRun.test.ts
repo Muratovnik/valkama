@@ -5,11 +5,18 @@
  * start the very run it exists to prevent.
  */
 
+import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it, vi } from 'vitest'
 
-import { playwrightEnvironment, realIo, runAllowed } from './browser/allowedRun.ts'
+import { lockedCommand, playwrightEnvironment, realIo, runAllowed } from './browser/allowedRun.ts'
 import type { RunnerIo } from './browser/allowedRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './browser/clipboardSpecs.ts'
+import { python } from './browser/serverStore.ts'
 
 const allowed = ['production-settings.spec.ts', 'ui-buttons.spec.ts']
 const notes = 'production-card-notes.spec.ts'
@@ -18,7 +25,9 @@ const notes = 'production-card-notes.spec.ts'
 function runner(lists: Record<string, string> = {}) {
   const written: string[][] = []
   const said: string[] = []
-  const playwright = vi.fn((_args: readonly string[], _clipboard: boolean) => Promise.resolve(0))
+  const playwright = vi.fn((_args: readonly string[], _clipboard: boolean, _lock: string | null) =>
+    Promise.resolve(0),
+  )
   const io: RunnerIo = {
     playwright,
     readList: (file) => lists[file] ?? null,
@@ -111,6 +120,22 @@ describe('the allowed browser run', () => {
     })
   })
 
+  it('holds the heavy-test lock for a run, naming what it runs, and for --list holds none', async () => {
+    const whole = runner()
+    expect(await runAllowed([], whole.io)).toBe(0)
+    expect(whole.playwright.mock.calls[0]?.[2]).toMatch(
+      /^npm run test:browser:allowed, the whole suite, harness port \d+$/,
+    )
+
+    const batch = runner({ 'batch.txt': 'ui-buttons.spec.ts\n' })
+    expect(await runAllowed(['--specs=batch.txt'], batch.io)).toBe(0)
+    expect(batch.playwright.mock.calls[0]?.[2]).toContain('the specs batch.txt names')
+
+    const listed = runner()
+    expect(await runAllowed(['--list'], listed.io)).toBe(0)
+    expect(listed.playwright.mock.calls[0]?.[2]).toBeNull()
+  })
+
   it('refuses --with-clipboard on a spec that is not a clipboard one', async () => {
     const { io, playwright } = runner()
     expect(await runAllowed(['--with-clipboard=ui-buttons.spec.ts'], io)).not.toBe(0)
@@ -129,5 +154,85 @@ describe('the allowed browser run', () => {
 
   it('finds the suite on disk, clipboard specs among it', () => {
     expect(realIo.suiteSpecs()).toEqual(expect.arrayContaining([...clipboardSpecs]))
+  })
+})
+
+/** A started process: what it has written so far, and its exit code once it ends. */
+function started(command: readonly string[]) {
+  const [program = '', ...args] = command
+  const child = spawn(program, args, { stdio: ['pipe', 'pipe', 'inherit'] })
+  const chunks: string[] = []
+  child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString()))
+  const exited = new Promise<number>((resolve, reject) => {
+    child.on('error', reject)
+    child.on('exit', (code, signal) => resolve(signal ? 1 : Number(code)))
+  })
+  return { child, exited, said: () => chunks.join('') }
+}
+
+async function until(condition: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 15_000
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+/** Holds the lock at argv[1] from Python until its input closes, after saying its process id. */
+const pythonHolder = `
+import os, sys
+sys.path.insert(0, sys.argv[2])
+from pathlib import Path
+from tests import machine_lock
+with machine_lock.held("a Python holder", path=Path(sys.argv[1])):
+    print("held", os.getpid(), flush=True)
+    sys.stdin.read()
+`
+
+describe('the heavy-test lock the runner takes', () => {
+  it('makes a run wait, saying whose run it waits for, while Python holds the lock', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'valkama-lock-'))
+    const lock = join(directory, 'heavy.lock')
+    const marker = join(directory, 'ran')
+    const root = fileURLToPath(new URL('../..', import.meta.url))
+    const holder = started([python, '-c', pythonHolder, lock, root])
+    try {
+      await until(() => holder.said().startsWith('held'), 'the Python holder')
+      const pid = holder.said().trim().split(' ')[1]
+
+      const write = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, '')`
+      const waiter = started(lockedCommand('a node run', [process.execPath, '-e', write], lock))
+      await until(() => waiter.said().includes('waiting'), 'the waiter to say so')
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      expect(existsSync(marker)).toBe(false)
+      expect(waiter.said()).toContain('it is held by a Python holder in ')
+      expect(waiter.said()).toContain(`process ${pid},`)
+
+      holder.child.stdin.end()
+      expect(await waiter.exited).toBe(0)
+      expect(existsSync(marker)).toBe(true)
+      expect(waiter.said()).toContain('took the heavy-test lock after')
+    } finally {
+      holder.child.kill()
+      await holder.exited
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('runs the command through the lock of this checkout, for the process of the runner', () => {
+    const command = lockedCommand('a run', ['node', 'cli.js', '--workers=4'])
+    expect(command.slice(0, 2)).toEqual([
+      python,
+      fileURLToPath(new URL('../../tests/machine_lock.py', import.meta.url)),
+    ])
+    expect(command.slice(2)).toEqual([
+      'run',
+      '--run=a run',
+      `--pid=${process.pid}`,
+      '--',
+      'node',
+      'cli.js',
+      '--workers=4',
+    ])
   })
 })
