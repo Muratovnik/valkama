@@ -42,6 +42,8 @@ export function useReadWorkItemPreview(projectTitle: (projectId: string) => stri
   const last = shallowRef<{ read: PreviewRead; reference: string } | null>(null)
 
   return (reference: string, candidates: readonly PreviewCandidate[]): ReferencePreview => {
+    /** When the latest read for this reference began, so the card's wait counts from it. */
+    let since: number | null = null
     const subject = (): WorkItemPreviewSubject => {
       const answered = last.value?.reference === reference ? last.value.read : null
       if (answered && answered.status !== 'ready')
@@ -51,10 +53,12 @@ export function useReadWorkItemPreview(projectTitle: (projectId: string) => stri
         reference,
         item: record?.item ?? null,
         project: record ? projectTitle(record.candidate.project_id) : null,
+        since,
       }
     }
     return previewOf(subject, async (signal) => {
       last.value = null
+      since = Date.now()
       const held = reads.cached(reference, candidates)
       const answer = reads.read(reference, candidates, signal).then(
         (read) => {

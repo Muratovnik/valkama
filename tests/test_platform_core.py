@@ -283,6 +283,8 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             ):
                 client.request("GET", "/api/events?view=planning")
                 response = client.getresponse()
+                # The read model's frame names its revision first.
+                self.assertTrue(response.readline().startswith(b"id: "))
                 self.assertIn(b"before", response.readline())
                 said = {"live_work": "after"}
                 deadline = time.monotonic() + 3

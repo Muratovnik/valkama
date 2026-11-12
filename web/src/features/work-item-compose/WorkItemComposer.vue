@@ -163,7 +163,6 @@ async function submit() {
               <FacetChoiceMark
                 v-if="selected"
                 :mark="selected.mark"
-                explained
               />
             </template>
             <template #option="{ option }">
@@ -180,7 +179,6 @@ async function submit() {
               <FacetChoiceMark
                 v-if="selected"
                 :mark="selected.mark"
-                explained
               />
             </template>
             <template #option="{ option }">

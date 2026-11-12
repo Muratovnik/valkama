@@ -163,10 +163,6 @@ export function scanNativeTitles(sources, register = NATIVE_TITLES) {
 /** `file <tag> v-tooltip.detail="…"` or `file script [vTooltip, …]` → what it says that the screen does not. */
 export const DETAIL_TOOLTIPS = new Map([
   [
-    'entities/work-item/components/drawMarks.ts script [vTooltip, { text: hint.text, words: hint.words }, undefined, { detail: true }]',
-    'what a priority means; no surface prints it, and beside a glyph alone it says the priority too; while the word beside it is cut, the word comes first, whole',
-  ],
-  [
     `entities/work-item/components/WorkItemCopyButtons.vue <button> v-tooltip.detail="t('workItem.head.copyReferenceHint')"`,
     'that a press copies the number, which reads as a number and not as a control',
   ],
@@ -264,7 +260,7 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',
-    'the whole row in a sentence: what its state means, which its second line says in a word and a row on one line not at all, how long, and its epic or folder whole',
+    'the state with how long on a one-line row, which the row does not draw, and a session’s folder its one line leaves out; a two-line row draws both, so it has none, and a cut title has its own hint',
   ],
   [
     `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,

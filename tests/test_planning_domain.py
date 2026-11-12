@@ -627,6 +627,121 @@ class PlanningDomainTests(unittest.TestCase):
             [(link["kind"], link["direction"], link["reference"]) for link in backward],
         )
 
+    def link_events(self, reference: str) -> list[tuple[str, str]]:
+        history = service.get_work_item(self.conn, reference)["events"]
+        return [
+            (event["action"], event["detail"])
+            for event in history
+            if event["action"] in ("linked", "unlinked")
+        ]
+
+    def stored_links(self) -> list[tuple[str, str, str]]:
+        return [
+            tuple(row)
+            for row in self.conn.execute(
+                "SELECT from_id, to_id, kind FROM work_item_links ORDER BY id"
+            )
+        ]
+
+    def test_relates_to_is_one_link_whichever_end_writes_it(self) -> None:
+        """Linked from the other end, or again, `relates-to` stays the link written first.
+
+        Stored from each end, one relation lay twice, and each card listed it twice.
+        """
+
+        first = self.item("First")
+        second = self.item("Second")
+        for source, target in ((first, second), (second, first), (first, second)):
+            service.link_work_items(
+                self.conn, source["reference"], target["reference"], "relates-to"
+            )
+        self.assertEqual(
+            [(first["work_item_id"], second["work_item_id"], "relates-to")], self.stored_links()
+        )
+        # The repeats changed nothing, so neither end's history says they did.
+        self.assertEqual(
+            [("linked", f"relates-to {second['reference']}")], self.link_events(first["reference"])
+        )
+        self.assertEqual(
+            [("linked", f"relates-to from {first['reference']}")],
+            self.link_events(second["reference"]),
+        )
+        # Each end reads it once, in the direction it was written.
+        self.assertEqual(
+            [("relates-to", "outgoing", second["reference"])],
+            [
+                (link["kind"], link["direction"], link["reference"])
+                for link in service.get_work_item(self.conn, first["reference"])["links"]
+            ],
+        )
+        self.assertEqual(
+            [("relates-to", "incoming", first["reference"])],
+            [
+                (link["kind"], link["direction"], link["reference"])
+                for link in service.get_work_item(self.conn, second["reference"])["links"]
+            ],
+        )
+
+    def test_relates_to_is_removed_from_either_end(self) -> None:
+        first = self.item("First")
+        second = self.item("Second")
+        service.link_work_items(self.conn, first["reference"], second["reference"], "relates-to")
+        service.link_work_items(
+            self.conn, second["reference"], first["reference"], "relates-to", remove=True
+        )
+        self.assertEqual([], self.stored_links())
+        self.assertEqual(
+            [
+                ("linked", f"relates-to {second['reference']}"),
+                ("unlinked", f"relates-to from {second['reference']}"),
+            ],
+            sorted(self.link_events(first["reference"])),
+        )
+        # Removed again, nothing is there to remove, and no history says otherwise.
+        service.link_work_items(
+            self.conn, first["reference"], second["reference"], "relates-to", remove=True
+        )
+        self.assertEqual(2, len(self.link_events(first["reference"])))
+        self.assertEqual(2, len(self.link_events(second["reference"])))
+
+    def test_a_directed_link_keeps_its_direction(self) -> None:
+        """`blocks` read from the other end is another link, and is not removed from there."""
+
+        first = self.item("First")
+        second = self.item("Second")
+        service.link_work_items(self.conn, first["reference"], second["reference"], "blocks")
+        service.link_work_items(
+            self.conn, second["reference"], first["reference"], "blocks", remove=True
+        )
+        self.assertEqual(
+            [(first["work_item_id"], second["work_item_id"], "blocks")], self.stored_links()
+        )
+        service.link_work_items(
+            self.conn, second["reference"], first["reference"], "discovered-from"
+        )
+        self.assertEqual(
+            [
+                (first["work_item_id"], second["work_item_id"], "blocks"),
+                (second["work_item_id"], first["work_item_id"], "discovered-from"),
+            ],
+            self.stored_links(),
+        )
+
+    def test_the_store_refuses_a_mirrored_relates_to(self) -> None:
+        """A writer that skipped the service's lookup still cannot store a relation twice."""
+
+        first = self.item("First")["work_item_id"]
+        second = self.item("Second")["work_item_id"]
+        insert = "INSERT INTO work_item_links(from_id,to_id,kind) VALUES(?,?,?)"
+        self.conn.execute(insert, (first, second, "relates-to"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(insert, (second, first, "relates-to"))
+        # The directed kinds keep both directions.
+        for kind in ("blocks", "discovered-from", "duplicates"):
+            self.conn.execute(insert, (first, second, kind))
+            self.conn.execute(insert, (second, first, kind))
+        self.conn.rollback()
+
     def close(self, reference: str, state: str) -> None:
         service.set_summary(self.conn, reference, {"done": "d", "next": "n"})
         service.transition_work_item(self.conn, reference, state)

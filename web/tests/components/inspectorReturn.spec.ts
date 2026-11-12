@@ -9,8 +9,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
+import type { WorkItem } from '@/shared/api/planningModel.ts'
+
 import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
-import { getButton, showRelations, workItemFixture } from '../fixtures/workItem.ts'
+import { getButton, showChain, showTab, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -43,8 +45,8 @@ function serveChain() {
   return scopes
 }
 
-async function open(returnTo?: InspectorReturn) {
-  const wrapper = mountInspector(ROOT, { returnTo })
+async function open(returnTo?: InspectorReturn, item: WorkItem = ROOT) {
+  const wrapper = mountInspector(item, { returnTo })
   await flushPromises()
   await flushPromises()
   return wrapper
@@ -58,6 +60,24 @@ const rows = (wrapper: VueWrapper, label: string) =>
 
 const shown = (wrapper: VueWrapper) => wrapper.get('[role="tab"][aria-selected="true"]').text()
 
+/** The toggle of the card's first group of related work. */
+const toggle = (wrapper: VueWrapper) => wrapper.get('.relation-group h4 button')
+
+/** An open item that blocks the card's own, by its reference. */
+function blocker(reference: string): WorkItem['links'][number] {
+  return {
+    kind: 'blocks',
+    direction: 'incoming',
+    work_item_id: `00000000-0000-4000-8000-0000000000${reference.slice(-2)}`,
+    reference,
+    title: `Work of ${reference}`,
+    state_name: 'Backlog',
+    state_category: 'backlog',
+    is_terminal: false,
+    state_unavailable: null,
+  }
+}
+
 const focusedReference = () => (document.activeElement as HTMLElement | null)?.dataset.reference
 
 describe('a card reopened by Back', () => {
@@ -67,7 +87,7 @@ describe('a card reopened by Back', () => {
     const scopes = serveChain()
     // Read the 21st backlog row off the card as the reader would have reached it.
     const first = await open()
-    await showRelations(first)
+    await showChain(first)
     await getButton(first, 'Show all · 107').trigger('click')
     const reference = rows(first, 'Backlog')[20].get('.chain-row-reference').text()
     first.unmount()
@@ -77,7 +97,7 @@ describe('a card reopened by Back', () => {
       opened: reference,
       reference: ROOT.reference,
       scroll: 900,
-      section: 'relations',
+      section: 'chain',
     })
     // The scope it was read in is the one asked for, and the groups open as they were.
     expect(scopes.at(-1)).toBe('epic')
@@ -97,9 +117,42 @@ describe('a card reopened by Back', () => {
       opened: done?.reference ?? '',
       reference: ROOT.reference,
       scroll: 0,
-      section: 'relations',
+      section: 'chain',
     })
     expect(focusedReference()).toBe(done?.reference)
+  })
+
+  it('comes back to the Chain of a leaf, whose tab waits for the read that offers it', async () => {
+    serveChain()
+    const leaf = workItemFixture('Leaf', 1)
+    const wrapper = await open(
+      { chain: null, opened: 'MAIN-1', reference: leaf.reference, scroll: 0, section: 'chain' },
+      leaf,
+    )
+    expect(shown(wrapper)).toBe('Chain')
+    expect(wrapper.find('section.chain .chain-summary-line').exists()).toBe(true)
+  })
+
+  it('comes back to Relations with the groups the reader opened still open', async () => {
+    serveChain()
+    const item = {
+      ...ROOT,
+      links: ['MAIN-21', 'MAIN-22', 'MAIN-23', 'MAIN-24', 'MAIN-25', 'MAIN-26'].map((reference) =>
+        blocker(reference),
+      ),
+    }
+    const first = await open(undefined, item)
+    await showTab(first, 'Relations')
+    expect(toggle(first).attributes('aria-expanded')).toBe('false')
+    await toggle(first).trigger('click')
+    await first.findAll('.link-open')[5].trigger('click')
+    const [[, left]] = first.emitted('open') as [string, InspectorReturn][]
+    first.unmount()
+
+    expect(left).toMatchObject({ opened: 'MAIN-26', section: 'relations' })
+    const wrapper = await open(left, item)
+    expect(shown(wrapper)).toBe('Relations')
+    expect(toggle(wrapper).attributes('aria-expanded')).toBe('true')
   })
 
   it('comes back to Execution while the card offers it, and to Overview once it does not', async () => {

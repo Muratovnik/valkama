@@ -8,13 +8,16 @@
  * The number's column is as wide as the list's longest number and the session's glyph, so
  * the titles start at one x and the second lines under them. The epic's title is the row's
  * context, not its name: on one line it gives way first, never taking more than two fifths of
- * the room, and the row's own title keeps the rest.
+ * the room, and the row's own title keeps the rest. The title, the epic, the second line and a
+ * closed state's word each have their own hint, which says that text whole only while it is cut
+ * (`clipped`), whatever else in the row is cut.
  *
  * Its inks are the row's (`NavWorkRow`): the words beside the title take `--nav-row-aside-ink`
  * and the title `--nav-row-title-ink`, muted by default and the title the row's own colour.
  */
 import { computed } from 'vue'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -63,6 +66,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
     <span class="nav-row-words">
       <template v-if="epic">
         <span
+          v-tooltip:right.clipped="epic"
           class="nav-row-epic trimmed-word one-line"
           :style="epicStyle"
           >{{ epic }}</span
@@ -73,7 +77,11 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
           >›</span
         >
       </template>
-      <span class="nav-row-title trimmed-word one-line">{{ title }}</span>
+      <span
+        v-tooltip:right.clipped="title"
+        class="nav-row-title trimmed-word one-line"
+        >{{ title }}</span
+      >
       <span
         v-if="meta"
         class="nav-row-meta"
@@ -83,11 +91,16 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
           v-if="meta.agents"
           name="agent"
           :size="12"
-        /><span class="trimmed-word">{{ meta.word }}</span>
+        /><span
+          v-tooltip:right.clipped="meta.word"
+          class="trimmed-word"
+          >{{ meta.word }}</span
+        >
       </span>
     </span>
     <span
       v-if="detail"
+      v-tooltip:right.clipped="detail"
       class="nav-row-detail one-line"
       aria-hidden="true"
       >{{ detail }}</span
@@ -166,6 +179,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
 /* The second line: the state, how long and where the row belongs, smaller and muted, under
    the title and starting where it does, tucked up to it (`--nav-row-tuck`). */
 .nav-row-detail {
+  position: relative;
   grid-column: 2;
   padding-block-end: calc(var(--nav-row-tuck));
   margin-block-start: calc(-1 * var(--nav-row-tuck));
@@ -180,6 +194,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
 .nav-row-epic {
   --nav-row-epic-letters: 3ch;
 
+  position: relative;
   flex: 0 6 auto;
   min-width: min(3ch, var(--nav-row-epic-letters));
   max-width: 40%;
@@ -191,8 +206,11 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
   color: var(--nav-row-aside-ink, var(--color-navigation-text-muted));
 }
 
-/* Short of room it ends in an ellipsis, cut sideways only (`.trimmed-word`). */
+/* Short of room it ends in an ellipsis, cut sideways only (`.trimmed-word`). Each of these texts
+   paints over the link's own box (`position: relative`), so the pointer reaches its hint
+   (`clipped`), not the link under it. */
 .nav-row-title {
+  position: relative;
   flex: 1 1 auto;
   color: var(--nav-row-title-ink, currentcolor);
 }
@@ -211,6 +229,7 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
   white-space: nowrap;
 
   > .trimmed-word {
+    position: relative;
     min-width: 0;
   }
 }

@@ -16,7 +16,7 @@ import type { PlatformPlanningPayload } from '@/shared/api/platformPlanningTypes
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { uiReady } from '@/shared/api/platformUiState.ts'
 import { messages } from '@/shared/i18n/index.ts'
-import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { executionHistory } from '../browser/executionFixtures.ts'
 
@@ -78,12 +78,32 @@ describe('background work leaves what is drawn in place', () => {
       props: { drawn: true, failed: false, pending: true },
       global: { plugins: [i18n] },
     })
+    // The status line stands, empty, from the start, so the word written into it is announced.
+    const line = status.get('[role="status"]')
+    expect(line.text()).toBe('')
     await vi.advanceTimersByTimeAsync(599)
-    expect(status.find('[role="status"]').exists()).toBe(false)
+    expect(line.text()).toBe('')
     await vi.advanceTimersByTimeAsync(1)
-    expect(status.get('[role="status"]').text()).toBe(messages.en.graph.layoutLoading)
+    expect(status.get('[role="status"]').element).toBe(line.element)
+    expect(line.text()).toBe(messages.en.graph.layoutLoading)
+    // A layout that lands just after the word keeps it long enough to be read.
     await status.setProps({ pending: false })
-    expect(status.find('[role="status"]').exists()).toBe(false)
+    expect(line.text()).toBe(messages.en.graph.layoutLoading)
+    await vi.advanceTimersByTimeAsync(LOADING_MIN_SHOWN_MS - 1)
+    expect(line.text()).toBe(messages.en.graph.layoutLoading)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(line.text()).toBe('')
+  })
+
+  it('says nothing of a layout over a drawing that lands within 600ms', async () => {
+    const status = mount(GraphLayoutStatus, {
+      props: { drawn: true, failed: false, pending: true },
+      global: { plugins: [i18n] },
+    })
+    await vi.advanceTimersByTimeAsync(599)
+    await status.setProps({ pending: false })
+    await vi.advanceTimersByTimeAsync(LOADING_MIN_SHOWN_MS)
+    expect(status.get('[role="status"]').text()).toBe('')
   })
 
   it('says a first layout is running after the delay every first load takes', async () => {
@@ -92,9 +112,9 @@ describe('background work leaves what is drawn in place', () => {
       global: { plugins: [i18n] },
     })
     await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS - 1)
-    expect(status.find('[role="status"]').exists()).toBe(false)
+    expect(status.get('[role="status"]').text()).toBe('')
     await vi.advanceTimersByTimeAsync(1)
-    expect(status.find('[role="status"]').exists()).toBe(true)
+    expect(status.get('[role="status"]').text()).toBe(messages.en.graph.layoutLoading)
   })
 
   it('says at once that a layout failed, with a way to try again', async () => {

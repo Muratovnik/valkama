@@ -661,7 +661,9 @@ TOOLS = [
         "link_work_items",
         "Relate two work items",
         "blocks carries readiness; relates-to, discovered-from and duplicates"
-        " carry meaning. remove=true takes the link away.",
+        " carry meaning. relates-to is one link whichever end names it, and"
+        " linking it again from the other end changes nothing. remove=true takes"
+        " the link away, a relates-to one from either end.",
         WRITES,
         {
             "id": _REFERENCE,

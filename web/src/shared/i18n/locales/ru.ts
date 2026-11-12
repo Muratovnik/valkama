@@ -18,7 +18,6 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 import { pastedImageMessages } from '@/shared/i18n/pastedImageMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
-import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
@@ -36,7 +35,6 @@ import { workItemUsageMessages } from '@/shared/i18n/workItemUsageMessages.ts'
 export const ru = {
   workItemLink: workItemLinkMessages.ru.workItemLink,
   compose: workItemComposeMessages.ru.compose,
-  priorityMeaning: priorityMessages.ru.priorityMeaning,
   history: activityMessages.ru.history,
   alerts: alertMessages.ru.alerts,
   open: openMessages.ru.open,
@@ -319,7 +317,6 @@ export const ru = {
     heading: 'Диагностика установки',
     recheck: 'Проверить снова',
     checking: 'Проверяем…',
-    loading: 'Проверяем установку',
     loadFailed: 'Не удалось получить отчёт о состоянии. Повторите проверку.',
     refreshFailed: 'Новую проверку завершить не удалось. Ниже остался предыдущий отчёт.',
     summary: 'Требуют внимания: {attention} · пройдено: {passed}',
@@ -613,7 +610,6 @@ export const ru = {
   usage: {
     heading: 'Потребление',
     noAdapter: 'локальный источник отсутствует',
-    loading: 'Читаем локальные журналы',
     none: 'По этому элементу ещё ничего не запускалось.',
     unknown: '—',
     unsupported: 'источник не сообщает это поле',
@@ -646,7 +642,6 @@ export const ru = {
     heading: 'Выполнения',
     launch: 'Запустить попытку',
     stop: 'Остановить',
-    loading: 'Читаем попытки',
     none: 'По этому элементу ещё ничего не запускалось.',
     changed: 'Изменено',
     evidence: 'файлов: {files} · +{insertions} −{deletions} · коммитов: {commits}',
@@ -729,7 +724,6 @@ export const ru = {
       mode: 'Задача',
       search: 'Ссылка, номер или название',
       searchHint: 'Поиск в текущем пространстве. До 50 результатов.',
-      searching: 'Поиск…',
       noResults: 'Подходящих задач нет',
       title: 'Название задачи',
       createLink: 'Создать и связать',
@@ -750,7 +744,6 @@ export const ru = {
       showOnGraph: 'Показать на графе',
       onGraph: 'На графе',
       details: 'График и темп',
-      loading: 'Читаем цепочку…',
       loadFailed: 'Не удалось загрузить цепочку.',
       primaryOnly: 'Цепочка доступна только для элементов основного хранилища.',
       refreshFailed: 'Не удалось обновить цепочку; показан последний ответ.',
@@ -819,7 +812,6 @@ export const ru = {
     relations: 'Связи',
     activity: 'Системные события',
     back: 'Назад',
-    loading: 'Читаем единицу работы',
     loadFailed: 'Не удалось загрузить единицу работы.',
     view: {
       kanban: 'Канбан',

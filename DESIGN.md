@@ -582,13 +582,29 @@ and only fades the end of a strip that scrolls on past it.
   operator's, not the data's, and a switch of space that took them away for the length of
   a read read as the view being lost. What the bar counts it says only once it has read it.
 - A wait is said only once it has lasted, and then long enough to be read: nothing for
-  the first 300 ms, and once shown at least 400 ms, whatever arrives meanwhile.
-  `web/src/shared/ui/loadingPresence.ts` holds both numbers and the rule;
-  `PlatformStatePanel` and the downloaded views follow it, and a screen whose own branch
-  takes the panel away keeps the branch while the rule says the wait is held. While it
-  is not shown, the panel keeps its box and its busy mark and paints nothing, so the
+  the first 300 ms, and once shown at least 400 ms, with whatever arrives meanwhile held
+  back until then. `web/src/shared/ui/loadingPresence.ts` holds both numbers and the rule,
+  and every read wait goes through it: `PlatformStatePanel`, the downloaded views, and a
+  wait said in a line of its own — a section of a card, a dialog's note, a search, whose
+  delay counts from the keystroke. A screen whose own branch takes the panel away keeps
+  the branch while the rule says the wait is held. While it is not shown, the panel keeps
+  its box and its busy mark and paints nothing, and a line keeps a line's height, so the
   place does not collapse and grow back. A switch of space on a two-megabyte board reads
   in about 170–200 ms, which is why the delay is not shorter.
+- A read wait has one word, the panel's: «Загрузка», "Loading". The surfaces that each
+  said what they were reading — «Читаем цепочку…», «Ищу коммит…», «Поиск…» — gave one
+  state five names. «Строим граф…» is not a read but the layout of what was read: it keeps
+  its words and its longer delay over a drawing (600 ms), and once shown it stays as long
+  as any wait does. A search told to open its first match says that instead of the word.
+- A wait is announced once, when it is shown: its word is written into a `role="status"`
+  region that stands, empty, before the wait begins, and leaves it with the mark. A region
+  drawn together with its words is not reliably announced, and one that held them from the
+  first frame announced reads that answered before anyone saw them. A view or a dialog has
+  one such region (`web/src/shared/ui/WaitStatus.vue`, which the panel carries): a section
+  waiting inside it, a card's chain or its attempts, keeps its visible word and its busy
+  mark and announces nothing of its own, so one wait is not said twice. `aria-busy` only
+  marks what is being read — most screen readers ignore it — and is absent rather than
+  `false` when nothing is.
 - Interface copy leads with the useful action, state, or cause. Do not append
   self-justifying capability disclaimers, restate the inverse state, or use
   vague quality claims. Name a concrete boundary only where it changes the
@@ -829,7 +845,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and to the close, and focus moves to the new content's first control as it
   does on an open. A panel opened by no input, from an address or a reload, holds
   focus on what it is read with until a Tab, so that no control stands ringed for
-  something nobody pressed and the keys that scroll work at once.
+  something nobody pressed and the keys that scroll work at once. A card an
+  address opens does not wait for its space: it reads its own record beside the
+  space's read, and what it takes from the space — the states it may move to,
+  its parent's reference — comes in later into places already held for it, the
+  state as its menu and the parent's row with its label.
 - **Hints:** a hint is `vTooltip` and its one host, `TooltipHost`, never the
   `title` attribute, which the browser draws late, in its own font and colours, and
   never for text cut short. It shows after a short rest of the pointer and at once on
@@ -1390,10 +1410,18 @@ on Done from another column still closes, wherever the drop lands, and stands
 on top.
 Graph nodes allocate separate rows for status, title, and relationship
 metadata so labels cannot collide.
-A long list paints what fills its height first and draws every other row right
-after, with its columns already as wide as all the rows need; no row is ever
-taken out of the page again, so a sort, a filter, the keyboard and find in page
-reach all of them once it has settled.
+A list of fewer than 300 rows paints what fills its height first and draws every
+other row right after, with its columns already as wide as all the rows need, and
+keeps every row in the page. From 300 rows a list keeps in the page only the rows
+in and about its scrolled window, and gaps hidden from a reader hold the height
+of the rest, so the scroll bar is as long as the whole list. Its columns are as
+wide as all the rows need wherever it scrolls; a sort and a filter act on every
+row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
+and bring the row into view; the Tab stop and the row focus is in stay in the
+page wherever the list scrolls; the table tells a reader how many rows it has
+and each row where it stands; and a printed list prints every row. The cost, for
+now: on a list that long, find in page and a screen reader's browse mode reach
+only the rows in the page.
 A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
 row leads its reference with the kind (but a task) in one fixed glyph slot, so
@@ -1411,12 +1439,30 @@ never in heavier ink, and reads high or urgent after its reference; its glyphs a
 not pressed, since the card is one button. A search result leads with the
 same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
-A card's chain section stands in «Связи», after the item's links and references: what
-the work grew into is a relation of the item, and the map and its hundreds of rows held
-Overview's first screen between the next step and the description. Its «Эпик | Цепочка»
-switch stands only where the two answer differently, by the counts the chain read gives
-for both scopes: where the work grew nothing past the root's children the two are one
-list, and a root with no children has no epic scope to read.
+«Связи» holds the item's related work, then its evidence. A group of related work longer than
+five rows opens folded to its heading, which counts its rows by state — «Привело к 14 ·
+11 выполнено · 2 бэклог · 1 отменено» — and a shorter group opens; what the reader opened
+or folded holds while the card is open and comes back with it by Back. An epic's fourteen
+rows of «Привело к» put everything under them a long scroll away. A link's row says the
+other end's state in one place whatever the length of its title: in a column every group
+of the list shares, on the title's first line with every dot on one edge, and under the
+title, at its edge, where the list is a phone's. The state followed its title in a row that
+wrapped, so down a list it jumped between the end of a short title's line and a line of its
+own under a long one, and groups that sized their own columns put it at another edge in each.
+A card's chain is a tab of its own, «Цепочка», in the order Обзор · Агенты · Цепочка ·
+Исполнение · Память · Связи · Системные события, of which a card shows those it offers.
+The card offers it only where there is a chain — an item with children, or one work was
+discovered from — and for an item with no children only once the chain read has said so;
+a card on the tab whose next read finds no chain steps back to «Обзор». The chain stood in
+«Связи» before, after the links and references, as a relation of the item, which put it
+under every link of an epic; the map and its hundreds of rows had held Overview's first
+screen between the next step and the description before that. The tab names it, so it has
+no heading of its own: it opens on its «Эпик | Цепочка» switch and «На графе», and Back from
+the graph opens the card on this tab. The switch stands only where the two answer
+differently, by the counts the chain read gives for both scopes: where the work grew nothing
+past the root's children the two are one list, and a root with no children has no epic scope
+to read. An item of an attached store has the tab only where it has children, and there it
+says that its chain is read in the primary store.
 The section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the

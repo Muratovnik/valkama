@@ -14,8 +14,7 @@ import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, openList } from './boardPage.ts'
-import { planningReadModel } from './planningFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
+import { brief, identity, serveSpace, stateOf, stillFrames } from './longSpace.ts'
 import { test } from './test.ts'
 
 /**
@@ -26,68 +25,10 @@ import { test } from './test.ts'
  */
 test.use({ trace: 'off' })
 
-const identity = (n: number) => `00000000-0000-4000-8000-${String(5000 + n).padStart(12, '0')}`
-
-/** A workflow of six states, as wide a board as a desktop column is narrow. */
-const STATES = (
-  [
-    ['backlog', 'Backlog', 'backlog', false],
-    ['todo', 'Todo', 'queued', false],
-    ['dev', 'Dev', 'active', false],
-    ['review', 'Review', 'review', false],
-    ['blocked', 'Blocked', 'blocked', false],
-    ['done', 'Done', 'completed', true],
-  ] as const
-).map(([key, name, category, terminal], position) => ({
-  state_id: identity(900 + position),
-  key,
-  name,
-  category,
-  is_terminal: terminal,
-  position,
-}))
-
-const workflow = {
-  ...planningReadModel.workflow,
-  initial_state_id: STATES[0].state_id,
-  states: STATES,
-  transitions: STATES.slice(1).map((state, index) => ({
-    from: STATES[index].state_id,
-    to: state.state_id,
-  })),
-}
-
-/** An item names its state without the workflow's ordering. */
-const stateOf = (index: number) => {
-  const { key, name, category, is_terminal, state_id } = STATES[index % (STATES.length - 1)]
-  return { key, name, category, is_terminal, state_id }
-}
-
 const POOL = ['agent-packets', 'coordinator', 'decision-review', 'ui', 'runtime-state', 'docs']
 
 /** The fullest row of this space, drawn with nothing to spare. */
 const LIST_ROW_NODES = 43
-
-function brief(number: number, state: ReturnType<typeof stateOf>, extra: object = {}) {
-  return {
-    ...planningReadModel.work_items[1],
-    work_item_id: identity(number),
-    reference: `MAIN-${number}`,
-    number,
-    title: `Work item ${number} with a title long enough to take two lines`,
-    state,
-    kind: 'task',
-    priority: 'medium',
-    claim_ref: '',
-    claim_state: null,
-    parent_id: null,
-    labels: [],
-    ready: false,
-    checklist: [],
-    revision: 1,
-    ...extra,
-  }
-}
 
 /**
  * Sixty tiles, each with four labels, a glyph or two, a holder and steps, so
@@ -108,34 +49,6 @@ function space(labelled: boolean) {
     }),
   )
 }
-
-async function serveSpace(
-  page: Page,
-  items: object[],
-  links: object[] = [],
-  answered: Promise<void> = Promise.resolve(),
-) {
-  await page.route('**/api/planning?*', async (route) => {
-    await answered
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body)
-      Object.assign(response.body, { workflow, work_items: items, links, stale_claims: [] })
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
-}
-
-/** Two frames with nothing left to do: every observer has answered. */
-const stillFrames = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<void>((done) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 300)))
-      }),
-  )
 
 /**
  * The layouts of drawing the board, read from before the space's data arrives
@@ -282,7 +195,9 @@ test('a list row draws what it shows, with one component for its state', async (
   expect(Math.max(...nodes)).toBeLessThanOrEqual(LIST_ROW_NODES)
 })
 
-test('a long list paints its first rows first, then all of them, and no column moves', async ({
+// One row short of the length a list draws only its window from
+// (production-list-window.spec.ts holds that one).
+test('a list one row short of a window paints its first rows first, then all of them, and no column moves', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -290,7 +205,7 @@ test('a long list paints its first rows first, then all of them, and no column m
   // Everything that makes a column wider lies in the last row, the longest
   // unchanged, far below the fold; a date of another year prints its year too.
   const updated_at = new Date().toISOString()
-  const rows = Array.from({ length: 300 }, (_, index) =>
+  const rows = Array.from({ length: 299 }, (_, index) =>
     brief(1000 + index, stateOf(0), { updated_at }),
   )
   rows[280] = brief(9280, stateOf(2), {
@@ -334,14 +249,14 @@ test('a long list paints its first rows first, then all of them, and no column m
   gate.open?.()
   await opening
   const list = page.locator('.work-item-list tbody tr')
-  await expect(list).toHaveCount(300)
+  await expect(list).toHaveCount(299)
   await stillFrames(page)
   const frames = await page.evaluate(
     () => (globalThis as unknown as { listFrames: { cells: number[]; rows: number }[] }).listFrames,
   )
   // Under what fills the list's height at first, and every row in the end.
   expect(frames[0]?.rows).toBeLessThan(60)
-  expect(frames.at(-1)?.rows).toBe(300)
+  expect(frames.at(-1)?.rows).toBe(299)
   // The widths the far rows need were there from the first frame.
   expect(frames.at(-1)?.cells).toEqual(frames[0]?.cells)
   await expect(page.locator('.list-row-held')).toHaveCount(0)

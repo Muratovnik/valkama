@@ -45,6 +45,7 @@ import type { FocusRight } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VDisclosure from '@/shared/ui/VDisclosure.vue'
@@ -91,9 +92,17 @@ const incomplete = computed(() => props.partial || Boolean(props.result?.has_mor
 const drafted = computed(() =>
   props.entries.some((entry) => holdsDraft(entry.request, props.drafts[requestIdentity(entry)])),
 )
+/**
+ * The first read, said as every wait is (`loadingPresence`): nothing for a read that
+ * answers quickly, and once said, long enough to be read, with what it found held back
+ * meanwhile. A poll with an answer on screen is no wait.
+ */
+const { shown: firstShown, held: firstHeld } = useLoadingPresence(
+  () => props.loading && !props.result,
+)
 /** What the refresh beside it would change: the first read, its failure, or the count. */
 const statusText = computed(() => {
-  if (props.loading && !props.result) return t('requests.loading')
+  if (firstHeld.value) return firstShown.value ? t('platform.states.loading') : ''
   if (props.failed) return t(drafted.value ? 'requests.error' : 'requests.errorBare')
   if (waiting.value)
     return t(incomplete.value ? 'requests.countIncomplete' : 'requests.count', {
@@ -213,8 +222,10 @@ defineExpose({ holdsFocus, holdsReader })
     class="request-list"
     :aria-busy="busyMark"
   >
+    <!-- Stands from the start of the first read, so the wait's word, written into its
+         status line only once the wait is shown, is announced. -->
     <div
-      v-if="statusText"
+      v-if="statusText || firstHeld"
       class="request-toolbar"
     >
       <p
@@ -245,73 +256,76 @@ defineExpose({ holdsFocus, holdsReader })
         <VIcon name="refresh" />
       </VButton>
     </div>
-    <p
-      v-if="partial"
-      class="request-note"
-      role="status"
-    >
-      {{ t('requests.partial') }}
-    </p>
-    <p
-      v-if="result?.has_more"
-      class="request-note"
-      role="status"
-    >
-      {{ t('requests.truncated') }}
-    </p>
-    <p
-      v-for="source in skipped"
-      :key="source.key"
-      class="request-note"
-    >
-      {{ source.text }}
-    </p>
-    <DataEmptyState
-      v-if="empty"
-      :title="emptyLabel"
-      compact
-    >
-      <template #action>
-        <VButton
-          ref="emptyRefresh"
-          @click="askRefresh"
-          >{{ t('requests.refresh') }}</VButton
-        >
-      </template>
-    </DataEmptyState>
-    <RequestCard
-      v-for="entry in entries"
-      :key="requestIdentity(entry)"
-      :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
-      :entry="entry"
-      :draft="draftFor(entry)"
-      :data-request-waiting="waitingMark(entry)"
-      standalone
-      @update:draft="emit('draft', requestIdentity(entry), $event)"
-      @updated="updated"
-      @dismiss="dismiss"
-      @select="emit('select', $event)"
-    />
-    <VDisclosure
-      v-if="answered.length"
-      v-model:open="answeredOpen"
-    >
-      <template #summary>{{ t('requests.hub.answered', { count: answered.length }) }}</template>
-      <div class="request-answered">
-        <RequestCard
-          v-for="entry in answered"
-          :key="requestIdentity(entry)"
-          :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
-          :entry="entry"
-          :draft="draftFor(entry)"
-          standalone
-          @update:draft="emit('draft', requestIdentity(entry), $event)"
-          @updated="updated"
-          @dismiss="dismiss"
-          @select="emit('select', $event)"
-        />
-      </div>
-    </VDisclosure>
+    <!-- What the first read found is held back while its wait is shown. -->
+    <template v-if="!firstHeld">
+      <p
+        v-if="partial"
+        class="request-note"
+        role="status"
+      >
+        {{ t('requests.partial') }}
+      </p>
+      <p
+        v-if="result?.has_more"
+        class="request-note"
+        role="status"
+      >
+        {{ t('requests.truncated') }}
+      </p>
+      <p
+        v-for="source in skipped"
+        :key="source.key"
+        class="request-note"
+      >
+        {{ source.text }}
+      </p>
+      <DataEmptyState
+        v-if="empty"
+        :title="emptyLabel"
+        compact
+      >
+        <template #action>
+          <VButton
+            ref="emptyRefresh"
+            @click="askRefresh"
+            >{{ t('requests.refresh') }}</VButton
+          >
+        </template>
+      </DataEmptyState>
+      <RequestCard
+        v-for="entry in entries"
+        :key="requestIdentity(entry)"
+        :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
+        :entry="entry"
+        :draft="draftFor(entry)"
+        :data-request-waiting="waitingMark(entry)"
+        standalone
+        @update:draft="emit('draft', requestIdentity(entry), $event)"
+        @updated="updated"
+        @dismiss="dismiss"
+        @select="emit('select', $event)"
+      />
+      <VDisclosure
+        v-if="answered.length"
+        v-model:open="answeredOpen"
+      >
+        <template #summary>{{ t('requests.hub.answered', { count: answered.length }) }}</template>
+        <div class="request-answered">
+          <RequestCard
+            v-for="entry in answered"
+            :key="requestIdentity(entry)"
+            :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
+            :entry="entry"
+            :draft="draftFor(entry)"
+            standalone
+            @update:draft="emit('draft', requestIdentity(entry), $event)"
+            @updated="updated"
+            @dismiss="dismiss"
+            @select="emit('select', $event)"
+          />
+        </div>
+      </VDisclosure>
+    </template>
   </div>
 </template>
 

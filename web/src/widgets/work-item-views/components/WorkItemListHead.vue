@@ -83,7 +83,10 @@ function choose(value: string) {
 
 <template>
   <thead>
-    <tr :class="{ narrow }">
+    <tr
+      aria-rowindex="1"
+      :class="{ narrow }"
+    >
       <th
         v-for="column in columns"
         :key="column.key"

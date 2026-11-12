@@ -1,7 +1,7 @@
 /**
  * Every icon is the size it is drawn at, and a one-line label stays on one line, in the built
  * application: on the board with the navigation's live work and its quiet work unfolded, on
- * the portfolio, on a card, its «…» menu, its Relations with the chain and its `@` list, and on
+ * the portfolio, on a card, its «…» menu, its Relations, its Chain and its `@` list, and on
  * a question's review and on a card no fixture shows otherwise, which asks a question, has a
  * parent and holds a pasted picture, at a desktop width, at a phone's and with the navigation at
  * its narrowest, in both languages.
@@ -121,12 +121,19 @@ async function card(page: Page, before?: () => Promise<unknown>) {
   await expect(drawer).toHaveCSS('transform', 'none')
 }
 
-/** The card's links, each with the press that removes it, and the chain under them. */
+/** The card's links, each with the press that removes it. */
 async function links(page: Page) {
   const small = smallChain()
   await card(page, () => serveChain(page, small.chain, small.items))
-  await page.getByRole('tab', { name: /Relations|Связи/u }).click()
+  await page.getByRole('tab', { name: /^(Relations|Связи)$/u }).click()
   await expect(page.locator('.drawer .relations svg.lucide').first()).toBeVisible()
+}
+
+/** The card's chain, on its own tab: its actions, its map and its rows. */
+async function chainTab(page: Page) {
+  const small = smallChain()
+  await card(page, () => serveChain(page, small.chain, small.items))
+  await page.getByRole('tab', { name: /^(Chain|Цепочка)$/u }).click()
   await expect(page.locator('.drawer section.chain .chain-row').first()).toBeVisible()
 }
 
@@ -168,7 +175,18 @@ async function asking(page: Page) {
   await expect(drawer.locator('button.rich-image')).toBeAttached()
 }
 
-const SCENES = { board, chain, portfolio, card, links, menu, mentions, review, asking } as const
+const SCENES = {
+  board,
+  chain,
+  portfolio,
+  card,
+  links,
+  'card chain': chainTab,
+  menu,
+  mentions,
+  review,
+  asking,
+} as const
 
 /** Every icon on the page whose box differs from the size it is drawn at, and how many stand. */
 function measureIcons() {

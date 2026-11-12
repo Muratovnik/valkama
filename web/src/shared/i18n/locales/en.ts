@@ -18,7 +18,6 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 import { pastedImageMessages } from '@/shared/i18n/pastedImageMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
-import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
@@ -36,7 +35,6 @@ import { workItemUsageMessages } from '@/shared/i18n/workItemUsageMessages.ts'
 export const en = {
   workItemLink: workItemLinkMessages.en.workItemLink,
   compose: workItemComposeMessages.en.compose,
-  priorityMeaning: priorityMessages.en.priorityMeaning,
   history: activityMessages.en.history,
   alerts: alertMessages.en.alerts,
   open: openMessages.en.open,
@@ -320,7 +318,6 @@ export const en = {
     heading: 'Installation health',
     recheck: 'Check again',
     checking: 'Checking…',
-    loading: 'Checking this installation',
     loadFailed: 'The health report could not be loaded. Run the check again.',
     refreshFailed: 'The new check failed. The previous report remains below.',
     summary: '{attention} need attention · {passed} passed',
@@ -614,7 +611,6 @@ export const en = {
   usage: {
     heading: 'Usage',
     noAdapter: 'no local source',
-    loading: 'Reading the local journals',
     none: 'Nothing has been run for this item yet.',
     unknown: '—',
     unsupported: 'not reported by this source',
@@ -647,7 +643,6 @@ export const en = {
     heading: 'Executions',
     launch: 'Start an attempt',
     stop: 'Stop',
-    loading: 'Reading the attempts',
     none: 'Nothing has been run for this item yet.',
     changed: 'Changed',
     evidence: '{files} files · +{insertions} −{deletions} · {commits} commits',
@@ -730,7 +725,6 @@ export const en = {
       mode: 'Task',
       search: 'Reference, number or title',
       searchHint: 'Search this space. Up to 50 matches.',
-      searching: 'Searching…',
       noResults: 'No matching tasks',
       title: 'Task title',
       createLink: 'Create and link',
@@ -751,7 +745,6 @@ export const en = {
       showOnGraph: 'Show on graph',
       onGraph: 'On graph',
       details: 'Chart and pace',
-      loading: 'Reading the chain…',
       loadFailed: 'The chain could not be loaded.',
       primaryOnly: 'The chain is available only for work items of the primary store.',
       refreshFailed: 'The chain could not be refreshed; this is the last answer.',
@@ -821,7 +814,6 @@ export const en = {
     relations: 'Relations',
     activity: 'System events',
     back: 'Back',
-    loading: 'Reading the work item',
     loadFailed: 'The work item could not be loaded.',
     view: {
       kanban: 'Kanban',

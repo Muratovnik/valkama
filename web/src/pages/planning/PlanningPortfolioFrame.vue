@@ -40,12 +40,15 @@ const missingState = computed(() =>
     :aria-label="t('platform.modules.planning')"
   >
     <div class="planning-frame-content">
-      <PlatformStatePanel
+      <div
         v-if="missingState"
         class="planning-missing-project"
-        :state="missingState"
-        :retryable="false"
-      />
+      >
+        <PlatformStatePanel
+          :state="missingState"
+          :retryable="false"
+        />
+      </div>
       <PlatformStatePanel
         :state="portfolio"
         :empty-description="t('platform.planning.noSpacesDetail')"

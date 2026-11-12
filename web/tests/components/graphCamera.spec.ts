@@ -137,7 +137,7 @@ describe('graph camera ownership', () => {
       selectedId: item.work_item_id,
     })
     await laidOut()
-    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.attributes('aria-busy')).toBeUndefined()
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     graph.unmount()
   })
@@ -149,12 +149,12 @@ describe('graph camera ownership', () => {
     // The queue or the search narrowed the items, and what is left stands in sight.
     await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
     await laidOut()
-    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.attributes('aria-busy')).toBeUndefined()
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     // The same narrowing refreshed by the stream: the camera stays.
     await graph.setProps({ items: [{ ...other, revision: 1 }], version: 2 })
     await laidOut()
-    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.attributes('aria-busy')).toBeUndefined()
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     graph.unmount()
   })
@@ -172,7 +172,7 @@ describe('graph camera ownership', () => {
     viewport.value = camera.setViewport.mock.calls.at(-1)?.[0] as typeof viewport.value
     graph.findComponent(GraphBar).vm.$emit('update:showUnlinked', true)
     await laidOut()
-    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.attributes('aria-busy')).toBeUndefined()
     expect(camera.setViewport).toHaveBeenCalledTimes(2)
     graph.unmount()
   })
@@ -214,17 +214,17 @@ describe('graph camera ownership', () => {
     for (const showDone of [true, false, true, false]) {
       graph.findComponent(GraphBar).vm.$emit('update:showDone', showDone)
       await laidOut()
-      expect(graph.attributes('aria-busy')).toBe('false')
+      expect(graph.attributes('aria-busy')).toBeUndefined()
       expect(graph.get('.graph-canvas').classes()).toContain('settled')
       expect(graph.findComponent({ name: 'VueFlow' }).vm).toBe(flow)
     }
     await graph.setProps({ items: [done], version: 2 })
     await laidOut()
-    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.attributes('aria-busy')).toBeUndefined()
     expect(graph.get('.graph-canvas').attributes('style')).toContain('display: none')
     graph.findComponent(GraphBar).vm.$emit('update:showDone', true)
     await laidOut()
-    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.attributes('aria-busy')).toBeUndefined()
     expect(graph.get('.graph-canvas').classes()).toContain('settled')
     expect(graph.get('.graph-canvas').attributes('style') ?? '').not.toContain('display: none')
     expect(graph.findComponent({ name: 'VueFlow' }).vm).toBe(flow)

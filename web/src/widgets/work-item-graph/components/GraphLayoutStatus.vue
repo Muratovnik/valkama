@@ -13,12 +13,17 @@
  * long is a flicker; only a layout that is still running after
  * `RELAYOUT_NOTICE_DELAY_MS` says so. With nothing drawn yet there is nothing
  * to keep, and the word comes after the shorter delay every first load takes.
- * A failure is news either way and is said at once.
+ * Once said, the word stays as long as any wait's does (`loadingPresence`), so a
+ * layout that lands just after it does not flash it. A failure is news either way
+ * and is said at once.
+ *
+ * The status line stands, empty, whenever nothing failed, and the word is written
+ * into it when it is said: a status region drawn together with its words is not
+ * reliably announced.
  */
-import { onScopeDispose, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
+import { LOADING_DELAY_MS, useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -41,24 +46,9 @@ const { t } = useI18n()
  */
 const RELAYOUT_NOTICE_DELAY_MS = 600
 
-const noticed = shallowRef(false)
-let timer: ReturnType<typeof setTimeout> | undefined
-watch(
-  () => props.pending,
-  (pending) => {
-    clearTimeout(timer)
-    noticed.value = false
-    if (!pending) return
-    timer = setTimeout(
-      () => {
-        noticed.value = true
-      },
-      props.drawn ? RELAYOUT_NOTICE_DELAY_MS : LOADING_DELAY_MS,
-    )
-  },
-  { immediate: true },
-)
-onScopeDispose(() => clearTimeout(timer))
+const { shown: noticed } = useLoadingPresence(() => props.pending, {
+  delay: () => (props.drawn ? RELAYOUT_NOTICE_DELAY_MS : LOADING_DELAY_MS),
+})
 </script>
 
 <template>
@@ -79,11 +69,12 @@ onScopeDispose(() => clearTimeout(timer))
     >
   </div>
   <p
-    v-else-if="pending && noticed"
+    v-else
     class="graph-layout-status"
     role="status"
   >
     <span
+      v-if="noticed"
       v-tooltip.clipped="t('graph.layoutLoading')"
       class="graph-layout-status-text one-line"
       >{{ t('graph.layoutLoading') }}</span

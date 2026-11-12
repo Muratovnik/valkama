@@ -66,6 +66,7 @@ async function openRecorded(page: Page) {
     measure()
     new MutationObserver((changes) => {
       for (const change of changes)
+        // Not busy is no attribute at all, recorded as ''.
         if (change.type === 'attributes') record.busy.push(graph.getAttribute('aria-busy') ?? '')
       measure()
     }).observe(graph, { attributeFilter: ['aria-busy'], childList: true, subtree: true })
@@ -107,7 +108,7 @@ test('a background refresh that brings an item moves neither the field nor the c
       const { busy } = await recorded()
       return busy
     })
-    .toEqual(['true', 'false'])
+    .toEqual(['true', ''])
   await expect(page.locator('.flow-node-card').filter({ hasText: 'MAIN-5001' })).toHaveCount(1)
   const { field } = await recorded()
   expect(new Set(field)).toEqual(new Set([field[0]]))
@@ -118,7 +119,7 @@ test('a background refresh that brings an item moves neither the field nor the c
 test('a background refresh that changes nothing drawn lays nothing out', async ({ page }) => {
   const { camera, pane, recorded } = await openRecorded(page)
   await refresh(page)
-  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.graph:not([aria-busy])')).toHaveCount(1)
   const { busy, field } = await recorded()
   expect(busy).toEqual([])
   expect(new Set(field)).toEqual(new Set([field[0]]))

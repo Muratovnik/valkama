@@ -252,6 +252,48 @@ class MergeMovesTests(MergeTestCase):
         )  # the tick before the merge is still its own history
 
 
+class MergeRelationTests(MergeTestCase):
+    def test_a_relation_both_items_hold_stays_one_link_on_the_survivor(self) -> None:
+        """Moved to the survivor, a `relates-to` it already has from the other end adds nothing.
+
+        A merge looked for the survivor's link in the moved link's direction only,
+        so it wrote the mirror of one the survivor had, and the card listed it twice.
+        """
+
+        nearby = self.item("Nearby work")
+        service.link_work_items(self.conn, nearby, self.survivor, "relates-to")
+        service.link_work_items(self.conn, self.first, nearby, "relates-to")
+        self.merge(self.first)
+        self.assertEqual(
+            [("relates-to", "incoming", nearby)],
+            [
+                (link["kind"], link["direction"], link["reference"])
+                for link in self.get(self.survivor)["links"]
+                if link["kind"] == "relates-to"
+            ],
+        )
+        self.assertEqual(
+            [("relates-to", "outgoing", self.survivor)],
+            [
+                (link["kind"], link["direction"], link["reference"])
+                for link in self.get(nearby)["links"]
+            ],
+        )
+        # The one link removed is the merged item's; nothing claims the survivor linked again.
+        self.assertEqual(
+            [
+                ("linked", f"relates-to {self.survivor}"),
+                ("linked", f"relates-to from {self.first}"),
+                ("unlinked", f"relates-to from {self.first}"),
+            ],
+            sorted(
+                (event["action"], event["detail"])
+                for event in self.get(nearby)["events"]
+                if event["action"] in ("linked", "unlinked")
+            ),
+        )
+
+
 class MergeRefusalTests(MergeTestCase):
     def test_what_cannot_be_one_change_is_refused_before_anything_is_written(self) -> None:
         service.create_planning_space(self.conn, project_id="far", name="Far", key="FAR")

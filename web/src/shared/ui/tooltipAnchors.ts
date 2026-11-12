@@ -25,7 +25,8 @@
  * clamp, or a label hidden for want of room. An empty or absent text shows nothing.
  *
  * The value is the text, or `{ text, note }`: the note is a second line in the quiet ink,
- * a state under an action. `{ text, clipped: true }` holds a detail back until its element
+ * a state under an action. The text may run over several lines: a line break in it is kept,
+ * each line a fact of its own. `{ text, clipped: true }` holds a detail back until its element
  * is cut, where whether it says anything the screen does not is decided as the page runs.
  *
  * `{ text, words }` is a detail on an element whose own words can be cut: a one-line name

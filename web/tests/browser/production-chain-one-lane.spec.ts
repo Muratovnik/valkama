@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainOf, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
-import { serve, showRelations } from './chainFixtures.ts'
+import { serve, showChain } from './chainFixtures.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -40,7 +40,7 @@ for (const width of [1280, 390]) {
         entity: planningWorkItemEntity(workItemRef),
       }),
     )
-    await showRelations(page)
+    await showChain(page)
     const section = page.locator('.drawer section.chain')
     await expect(section.locator('.chain-rows')).toBeVisible()
 

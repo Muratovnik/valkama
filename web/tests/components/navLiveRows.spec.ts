@@ -1,7 +1,7 @@
 /**
  * A row of the rail's list in words and under the hand: the second line that says what the
  * session is doing and how long, moved on by one clock for the whole list; the sentence its
- * hint and its name say; a session's own row, named and opened from the row; «Open
+ * name says and the short lines its hint shows; a session's own row, named and opened from the row; «Open
  * session» at the end of an item's row where a session stands behind it; and the panel a
  * press goes on in, which outlives the row it came from.
  */
@@ -11,6 +11,8 @@ import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MINUTE_MS } from '@/widgets/app-nav/composables/useMinuteClock.ts'
+
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { liveFrame, liveRow, liveSession, liveSpace } from '../support/liveFrame.ts'
 import { drawn, hintOf, rail, row, unmountRails } from '../support/navRail.ts'
@@ -155,24 +157,18 @@ describe('the second line', () => {
 describe('the sentence a row says', () => {
   it('says what it is, where it belongs, the state with what it means, how long and the agents', () => {
     const { wrapper } = rail(states())
-    const said = (name: string) => [
-      hintOf(row(wrapper, name)),
-      row(wrapper, name).querySelector('.nav-row-link')?.getAttribute('aria-label'),
-    ]
-    expect(said('MAIN-2')).toEqual(
-      Array.from(
-        { length: 2 },
-        () =>
-          'MAIN-2 Work MAIN-2: asking for 3\u{A0}min — the session stopped in the middle of a turn for a permission or an answer',
-      ),
+    const named = (name: string) =>
+      row(wrapper, name).querySelector('.nav-row-link')?.getAttribute('aria-label')
+    expect(named('MAIN-2')).toBe(
+      'MAIN-2 Work MAIN-2: asking for 3\u{A0}min — the session stopped in the middle of a turn for a permission or an answer',
     )
-    expect(said('MAIN-3')[0]).toBe(
+    expect(named('MAIN-3')).toBe(
       'MAIN-3 Work MAIN-3: waiting for 2\u{A0}h — the session’s turn is over, 2 agents',
     )
-    expect(said('MAIN-1')[0]).toBe(
+    expect(named('MAIN-1')).toBe(
       'MAIN-1 Work MAIN-1, part of Structured answers: working for 5\u{A0}min',
     )
-    expect(said('Compare two exports')[0]).toBe(
+    expect(named('Compare two exports')).toBe(
       'Session “Compare two exports” in example-project: working for 25\u{A0}min',
     )
   })
@@ -184,14 +180,47 @@ describe('the sentence a row says', () => {
       since: ago(2 * 60 * MINUTE),
     })
     const { wrapper } = rail(space([liveRow('MAIN-8', { state: 'held' })], [waiting]), 'ru')
-    expect(hintOf(row(wrapper, 'MAIN-8'))).toBe(
+    expect(row(wrapper, 'MAIN-8').querySelector('.nav-row-link')?.getAttribute('aria-label')).toBe(
       'MAIN-8 Work MAIN-8: у сессии — сессия сейчас работает над другой задачей',
     )
     const session = row(wrapper, 'Compare two exports')
     expect(session.querySelector('.nav-row-detail')?.textContent).toBe('ждёт 2\u{A0}ч')
-    expect(hintOf(session)).toBe(
+    expect(session.querySelector('.nav-row-link')?.getAttribute('aria-label')).toBe(
       'Сессия «Compare two exports»: ждёт уже 2\u{A0}ч — ход сессии закончен',
     )
+  })
+})
+
+describe('the hint a row shows', () => {
+  it('says a two-line row nothing: its state, how long and epic are on its line under the title', () => {
+    const { wrapper } = rail(states())
+    for (const name of ['MAIN-1', 'MAIN-2', 'MAIN-3', 'Compare two exports'])
+      expect(tooltipOf(row(wrapper, name))).toBeUndefined()
+  })
+
+  it('names a cut title on its own hint, which says it only while the title is cut', () => {
+    const { wrapper } = rail(states())
+    const title = row(wrapper, 'MAIN-1').querySelector('.nav-row-title')
+    expect(title && tooltipOf(title)).toMatchObject({ clipped: true, text: 'Work MAIN-1' })
+  })
+
+  it('says a two-line row’s second line whole on its own hint, which says it only while cut', () => {
+    const { wrapper } = rail(states())
+    const detail = row(wrapper, 'MAIN-1').querySelector('.nav-row-detail')
+    const whole = detail?.textContent?.trim()
+    expect(whole).toBeTruthy()
+    expect(detail && tooltipOf(detail)).toMatchObject({ clipped: true, text: whole })
+  })
+
+  it('says a one-line row’s state in Russian, which the row does not draw', () => {
+    const waiting = liveSession(SESSION, {
+      title: 'Compare two exports',
+      folder: '',
+      since: ago(2 * 60 * MINUTE),
+    })
+    const { wrapper } = rail(space([liveRow('MAIN-8', { state: 'held' })], [waiting]), 'ru')
+    expect(hintOf(row(wrapper, 'MAIN-8'))).toBe('у сессии')
+    expect(tooltipOf(row(wrapper, 'Compare two exports'))).toBeUndefined()
   })
 })
 

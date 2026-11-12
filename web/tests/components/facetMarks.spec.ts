@@ -49,30 +49,29 @@ describe('FacetMarks', () => {
     // The word is in the DOM, visually hidden, and the hover text says it too.
     expect(priority.get('.facet-word').text()).toBe('Urgent')
     expect(priority.get('.facet-word').classes()).toContain('facet-word-hidden')
-    expect(hintOf(priority)).toBe('Urgent — blocks work or loses data')
+    expect(hintOf(priority)).toBe('Urgent')
     expect(priority.find('svg').exists()).toBe(true)
     expect(wrapper.get('[data-facet="kind"] .facet-word').text()).toBe('Bug')
   })
 
-  it('says what each priority means beside its word on hover, in both languages', () => {
-    // The word is on screen, so the hover says only what it means: it never repeats the word.
+  it('names each priority level on hover and nothing more, in both languages', () => {
+    // The card prints every level as a word, so each level has a mark to hover.
     const hovers = [
-      ['en', 'urgent', 'blocks work or loses data'],
-      ['en', 'high', 'serious; could block work'],
-      ['en', 'medium', 'noticeably affects work, with a workaround'],
-      ['en', 'low', 'minor'],
-      ['ru', 'urgent', 'блокирует работу или теряет данные'],
-      ['ru', 'high', 'серьёзно, может заблокировать'],
-      ['ru', 'medium', 'заметно влияет, есть обход'],
-      ['ru', 'low', 'мелочь'],
+      ['en', 'urgent', 'Urgent'],
+      ['en', 'high', 'High'],
+      ['en', 'medium', 'Medium'],
+      ['en', 'low', 'Low'],
+      ['ru', 'urgent', 'Срочный'],
+      ['ru', 'high', 'Высокий'],
+      ['ru', 'medium', 'Средний'],
+      ['ru', 'low', 'Низкий'],
     ] as const
-    for (const [locale, priority, hover] of hovers) {
-      // The card prints every level as a word, so each level has a mark to hover.
+    for (const [locale, priority, name] of hovers) {
       const mark = marks(
         { item: boardItem(1, 'backlog', { priority }), surface: 'card', facets: ['priority'] },
         locale,
       ).get('[data-facet="priority"]')
-      expect(hintOf(mark), `${locale} ${priority}`).toBe(hover)
+      expect(hintOf(mark), `${locale} ${priority}`).toBe(name)
     }
   })
 
@@ -222,7 +221,7 @@ describe('FacetMarks', () => {
       await glyph.trigger('click')
     }
     // The glyph keeps its word as the pointer's hover text, not a filter's name.
-    expect(hintOf(wrapper.get('[data-facet="priority"]'))).toBe('High — serious; could block work')
+    expect(hintOf(wrapper.get('[data-facet="priority"]'))).toBe('High')
     expect(wrapper.emitted('filter')).toBeUndefined()
     await wrapper.get('.label-chip').trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'ui' }]])

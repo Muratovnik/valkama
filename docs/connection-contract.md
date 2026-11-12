@@ -753,6 +753,16 @@ after 150 ms, which reads as nothing being visible. An on-demand listener answer
 
 ### What a link says about its other end
 
+A `relates-to` link is one link whichever end names it. `link_work_items` from
+the other end, or again from the same one, adds nothing and writes no history;
+`remove: true` from either end takes it away, and the history of both items says
+so. The store refuses a second record of it. A store in which an earlier build
+recorded one relation twice, once from each end, keeps the earlier record when
+it is opened, after a verified recovery point labelled `prerelatesonce`. Every
+reader therefore sees the link once: `outgoing` from the item that wrote it and
+`incoming` from the other. `blocks`, `discovered-from` and `duplicates` stay
+directed, and only the end that wrote one removes it.
+
 A reader judges a link by the item at its far end: a `blocks` link holds only
 while its blocker is unfinished, and that blocker may live in another space,
 under another workflow. So a link names that end's state itself, and nobody has
@@ -1152,6 +1162,35 @@ refused as above.
 
 `total` names every kind, `0` for one not counted in the period; `days` lists each day
 with a count, oldest first, with every kind. No MCP tool counts or reads uses.
+
+### The space's stream
+
+`GET /api/planning` answers a space's whole read model, and
+`GET /api/events?view=planning` sends it again as an unnamed event each time it
+changes. Both carry `revision` first: the SHA-256, in hex, of the model's compact JSON
+without it. Two reads that answer the same model carry the same revision, and any
+difference in what the model says, an item, a link or `live_work`, changes it. Each
+frame of the stream also names it as its event `id`.
+
+The page reads the space and only then opens its stream, with that read's revision as
+`since`. When the model still has that revision, sending it would repeat the read, so
+the stream sends this short event in its place, and its first frame is the next change:
+
+```text
+id: 3f9c…
+event: current
+data: 3f9c…
+```
+
+A change that landed between the read and the stream gives the model another revision,
+and that model is the stream's first frame. `since` is taken once, not empty, and only
+with `view=planning`; any other use of it is refused with 400.
+
+A browser that lost the stream reconnects to the same address by itself and sends the
+last event's `id` as `Last-Event-ID`. A request that carries that header is sent the
+model whatever `since` says: the page may by then hold a model newer than the read the
+address names, and it takes the first frame after a dropped connection as news even
+when that frame says what the page has.
 
 ### The live-work frame
 

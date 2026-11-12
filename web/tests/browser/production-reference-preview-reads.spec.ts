@@ -6,6 +6,8 @@
 import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
 
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
+
 import { drawnColours } from './contrast.ts'
 import { attachedDataScopeId, attachedSpaceRef, dataScopeId } from './planningFixtures.ts'
 import {
@@ -118,7 +120,7 @@ test('a quick answer never says it is reading; a slow one does, then replaces it
   const said = await page.evaluate(
     () => (window as unknown as { previewWords: string[] }).previewWords,
   )
-  expect(said.join(' ')).not.toContain('Reading')
+  expect(said.join(' ')).not.toContain('Loading')
 
   const unanswered: Route[] = []
   reads.answer((route) => {
@@ -129,12 +131,16 @@ test('a quick answer never says it is reading; a slow one does, then replaces it
   await rest(page, reference(dialog, 'MAIN-13'))
   await expect.poll(() => unanswered.length).toBe(1)
   await page.clock.runFor(PAST_THE_DELAY_MS)
-  await expect(card(page)).toContainText('Reading…')
   await expect(card(page)).toContainText('MAIN-13')
+  // The wait is said once it has lasted, counted from the read, as every wait is.
+  await page.clock.runFor(LOADING_DELAY_MS)
+  await expect(card(page)).toContainText('Loading')
   const box = await card(page).boundingBox()
   await unanswered[0]?.fulfill(briefAnswer(held(13, 'Answered slowly')))
+  // However soon after the word the answer came, it stands once the word has been read.
+  await page.clock.runFor(LOADING_MIN_SHOWN_MS)
   await expect(card(page)).toContainText('Answered slowly')
-  await expect(card(page)).not.toContainText('Reading')
+  await expect(card(page)).not.toContainText('Loading')
   // It grows downwards, from where it hung, at the width it had.
   const grown = await card(page).boundingBox()
   expect(grown?.x).toBe(box?.x)
@@ -165,7 +171,7 @@ test('closing the card cancels the read it was still waiting for', async ({ page
   })
   reads.answer(() => new Promise(() => {}))
   await rest(page, reference(dialog, 'MAIN-12'))
-  await expect(card(page)).toContainText('Reading…')
+  await expect(card(page)).toContainText('Loading')
   await page.keyboard.press('Escape')
   await expect(card(page)).toHaveCount(0)
   await expect.poll(() => failed).toEqual(['net::ERR_ABORTED'])

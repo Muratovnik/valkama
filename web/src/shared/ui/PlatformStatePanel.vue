@@ -9,6 +9,7 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
+import WaitStatus from '@/shared/ui/WaitStatus.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -33,22 +34,29 @@ const { t, te } = useI18n()
 /**
  * A read that answers quickly shows nothing, and a wait once shown stays long enough to
  * be read: `loadingPresence` decides both. While the wait is not shown yet the panel
- * stands with its box, its busy mark and its status text, and only the picture waits,
- * so the place it holds does not collapse and grow back; and for the rest of the
- * minimum after the wait ends, the panel goes on saying it is loading in place of what
- * it was handed. A screen that hands this panel a wait gets the delay whatever it does,
+ * stands with its box and its busy mark and paints nothing, so the place it holds does
+ * not collapse and grow back. Its status region (`WaitStatus`) stands, empty, for as long
+ * as the panel does, whatever state it shows, and the word is written into it when the
+ * wait is shown, so a screen reader hears the wait once and only when the eye sees it,
+ * never for a read that answered first, and a wait that follows what was drawn is heard
+ * as well as the first one. The region stands beside the panel's box, outside its busy
+ * mark, so the panel has two roots and takes no class: a host places it from outside.
+ * For the rest of the minimum after the wait ends, the panel goes on saying it is
+ * loading in place of what it was handed. A screen that hands this panel a wait gets the delay whatever it does,
  * and the minimum as long as the panel stays; one whose own branch takes the panel away
- * keeps that branch while the rule's `held` says so, as the workspace's stage does.
+ * keeps that branch while the rule's `held` says so; the workspace's stage keeps the
+ * panel standing around its views instead.
  */
-const presence = useLoadingPresence(
-  () => props.state.status === 'loading',
-  () => props.since,
-)
+const presence = useLoadingPresence(() => props.state.status === 'loading', {
+  since: () => props.since,
+})
 const LOADING = uiLoading<T>()
 const shownState = computed<PlatformUiState<T>>(() =>
   presence.held.value && props.state.status !== 'loading' ? LOADING : props.state,
 )
 const pictureWaits = computed(() => shownState.value.status === 'loading' && !presence.shown.value)
+/** The wait is on screen, so its status region says it. */
+const waitShown = computed(() => shownState.value.status === 'loading' && presence.shown.value)
 
 const reason = computed(() => ('reason' in shownState.value ? (shownState.value.reason ?? '') : ''))
 const reasonText = computed(() => (te(reason.value) ? t(reason.value) : reason.value))
@@ -72,16 +80,19 @@ const payload = computed<T | undefined>(() =>
  * refresh that failed. Only the second is news, and only news may take a line
  * of the layout. The first used to print "Refreshing…" into the flow, so the
  * whole screen jumped 26px down and back every few seconds on a live board;
- * it is now announced to assistive technology alone.
+ * it is now announced to assistive technology alone, by the panel's status region.
  */
 const refreshInFlight = computed(() => shownState.value.status === 'degraded' && !reason.value)
 
-/** A read that failed demands attention; every other state is a report. */
-const panelRole = computed(() =>
-  shownState.value.status === 'error' || shownState.value.status === 'permission-denied'
-    ? 'alert'
-    : 'status',
-)
+/**
+ * A read that failed demands attention; every other state is a report. A wait is no
+ * region of its own: its status region says it, and a second one would say it twice.
+ */
+const panelRole = computed(() => {
+  const { status } = shownState.value
+  if (status === 'error' || status === 'permission-denied') return 'alert'
+  return status === 'loading' ? undefined : 'status'
+})
 
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
 const busyMark = computed(() => shownState.value.status === 'loading' || undefined)
@@ -117,13 +128,6 @@ const failed = computed(
         >{{ reasonText }}</span
       >
     </aside>
-    <span
-      v-if="refreshInFlight"
-      class="visually-hidden"
-      role="status"
-    >
-      {{ t('platform.states.refreshing') }}
-    </span>
     <slot :payload="payload" />
   </template>
   <!-- The empty status renders the same quiet object every ready-but-empty
@@ -169,7 +173,12 @@ const failed = computed(
       :size="22"
     />
     <div class="platform-state-copy">
-      <h2 class="platform-state-title">{{ t(`platform.states.${shownState.status}`) }}</h2>
+      <h2
+        v-if="!pictureWaits"
+        class="platform-state-title"
+      >
+        {{ t(`platform.states.${shownState.status}`) }}
+      </h2>
       <p
         v-if="reason"
         class="platform-state-reason"
@@ -191,6 +200,10 @@ const failed = computed(
       </VButton>
     </slot>
   </section>
+  <WaitStatus
+    :shown="waitShown"
+    :refreshing="refreshInFlight"
+  />
 </template>
 
 <style scoped>
@@ -224,8 +237,8 @@ const failed = computed(
     background: transparent;
   }
 
-  /* A wait not long enough to be shown keeps its box and its words for assistive
-     technology, and paints nothing. */
+  /* A wait not long enough to be shown keeps its box and its status region, and paints
+     nothing; its word arrives when it is shown. */
   &.waiting > * {
     opacity: 0;
   }

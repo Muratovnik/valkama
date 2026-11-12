@@ -209,7 +209,9 @@ take no mark.
 - `discovered-from` records work found while doing another item. File it in the
   `create_work_item` call itself:
   `links: [{"other": "MAIN-12", "kind": "discovered-from"}]`;
-- `relates-to` and `duplicates` carry meaning only.
+- `relates-to` and `duplicates` carry meaning only. `relates-to` is one link
+  whichever end names it: linking it from the other end adds nothing, and
+  `remove: true` from either end takes it away.
 
 Steps of the same change stay on the checklist; a link is for separate work.
 

@@ -7,6 +7,10 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
+import { installBackend } from './backend.ts'
 import {
   expectFadeOnCut,
   fadedEnds,
@@ -18,6 +22,9 @@ import {
   still,
   wordsUnderFade,
 } from './cardTabsRow.ts'
+import { serve as serveChain, smallChain } from './chainFixtures.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
+import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('at 390px the row fades at the end that has more sections, and only there', async ({
@@ -44,6 +51,46 @@ test('at 390px the row fades at the end that has more sections, and only there',
 
   await strip.evaluate((node) => node.scrollTo({ left: 0 }))
   await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: false, end: true })
+})
+
+test('at 390px a card with a chain scrolls its row of six sections to the last, whole', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await enableExecutionTab(page)
+  await page.setViewportSize({ width: 390, height: 700 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serveChain(page, chain, items, edges)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  const strip = page.locator('.drawer .inspector-tabs')
+  const tabs = strip.getByRole('tab')
+  await expect(tabs).toHaveText([
+    'Обзор',
+    'Цепочка',
+    'Исполнение',
+    'Память',
+    'Связи',
+    'Системные события',
+  ])
+  console.info('row of six at 390', JSON.stringify({ overrun: await overrun(strip) }))
+  await strip.evaluate((node) => node.scrollTo({ left: node.scrollWidth }))
+  await still(strip)
+  await expect.poll(() => fadedEnds(strip)).toMatchObject({ start: true, end: false })
+  const row = await strip.boundingBox()
+  const last = await tabs.last().boundingBox()
+  expect(last?.x ?? Number.NaN).toBeGreaterThanOrEqual((row?.x ?? 0) - 0.5)
+  expect((last?.x ?? 0) + (last?.width ?? Number.NaN)).toBeLessThanOrEqual(
+    (row?.x ?? 0) + (row?.width ?? 0) + 0.5,
+  )
+  await expectFadeOnCut(strip, 'at the end of six')
 })
 
 test('at 1280px the sections fit and the row draws no mask', async ({ page }) => {

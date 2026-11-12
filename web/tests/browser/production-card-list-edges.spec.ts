@@ -16,7 +16,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainOf, mapMember } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
-import { serve, showRelations } from './chainFixtures.ts'
+import { serve, showChain } from './chainFixtures.ts'
 import { enableExecutionTab } from './executionFixtures.ts'
 import { frames } from './frames.ts'
 import { openPlanFor } from './openSessionFixtures.ts'
@@ -104,7 +104,7 @@ const members = [
 /** The card's chain as a card opens it: Done folded. */
 async function openChain(page: Page, width: number) {
   await openCard(page, width, {}, () => serve(page, chainOf(ROOT, members)))
-  await showRelations(page)
+  await showChain(page)
   const list = page.locator('.drawer section.chain .chain-members')
   await expect(list.locator('.chain-row')).toHaveCount(8 + 2)
   return list
@@ -206,12 +206,11 @@ async function expectFoldOnEdge(toggle: Locator, edge: number, what: string) {
 }
 
 for (const width of [1280, 390]) {
-  test(`a chain's disclosures draw their chevrons on its heading's edge at ${width}px`, async ({
-    page,
-  }) => {
+  test(`a chain's disclosures draw their chevrons on its edge at ${width}px`, async ({ page }) => {
     const list = await openChain(page, width)
     const section = page.locator('.drawer section.chain')
-    const [edge] = await wordsLeft(section.locator('.section-header-title'))
+    // The tab names the section, which has no heading: its figures' words start its edge.
+    const [edge] = await wordsLeft(section.locator('.chain-summary-line'))
     await expect(section.locator('.chain-details-toggle')).toBeVisible()
     // «Chart and pace» over the list and «Done» in it, one under the other.
     await expectFoldOnEdge(section.locator('.chain-details-toggle'), edge ?? Number.NaN, 'chart')
@@ -283,7 +282,8 @@ test("a chain's chevrons stay inside their press, its ring and the palette's ink
 }) => {
   const list = await openChain(page, 1280)
   const section = page.locator('.drawer section.chain')
-  const [edge] = await wordsLeft(section.locator('.section-header-title'))
+  // The section's edge, where its figures' words start; the tab is its heading.
+  const [edge] = await wordsLeft(section.locator('.chain-summary-line'))
   for (const toggle of [
     section.locator('.chain-details-toggle'),
     list.locator('.chain-done-toggle'),

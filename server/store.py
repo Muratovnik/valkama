@@ -494,6 +494,7 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
     if absent:
         raise RuntimeError(f"post-migration sessions lacks {', '.join(absent)}")
     planning_store.assert_threads_postconditions(conn)
+    planning_store.assert_links_postconditions(conn)
     usage_store.assert_current(conn)
 
 
@@ -859,6 +860,19 @@ def connect() -> sqlite3.Connection:
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preinteractions", locate=backup_location
                 )
+            # A `relates-to` link stored from both ends loses its later record, which
+            # only a recovery point keeps; an upgrade's covers it, and a store already
+            # at this schema takes its own. The step raises no schema: a build before
+            # it reads the one record as it read any link, and the index turns its
+            # `INSERT OR IGNORE` of a mirror into nothing.
+            if (
+                planning_store.symmetric_mirrors_present(conn)
+                and source_identity is None
+                and pretable_backup is None
+            ):
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "prerelatesonce", locate=backup_location
+                )
             # Session identity is additive, so it takes its own recovery point
             # only when nothing above took one already for this same open.
             if (
@@ -914,6 +928,15 @@ def connect() -> sqlite3.Connection:
             # Schema 10: columns cannot come from the script, which leaves an
             # existing table alone, so they are appended here.
             planning_store.migrate_threads(conn)
+            # A mirror written between the read above and this transaction would be
+            # deleted with no recovery point holding it: refused, the next open takes one.
+            if (
+                planning_store.symmetric_mirrors_present(conn)
+                and source_identity is None
+                and pretable_backup is None
+            ):
+                raise RuntimeError("merging mirrored links requires a pre-mutation snapshot")
+            planning_store.migrate_symmetric_links(conn)
             _migrate_session_place(conn)
             # Schema 16: the usage columns, and one row per request in the whole store.
             usage_store.migrate(conn)

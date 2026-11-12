@@ -995,14 +995,120 @@ class PlanningScopeHttpTests(unittest.TestCase):
             if response.readline() == b"":
                 break
 
+    def open_stream(
+        self, path: str, headers: dict[str, str] | None = None
+    ) -> http.client.HTTPResponse:
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        client.request("GET", path, headers=headers or {})
+        response = client.getresponse()
+
+        def hang_up() -> None:
+            # The handler lets go of the store at its next keep-alive after the socket
+            # closes, and the store's directory cannot be removed while it holds it.
+            response.close()
+            client.close()
+            deadline = time.monotonic() + 3
+            while http_surface.watchers.WATCHERS._queues and time.monotonic() < deadline:
+                time.sleep(0.05)
+
+        self.addCleanup(hang_up)
+        self.assertEqual(200, response.status)
+        return response
+
+    def read_event(self, response: http.client.HTTPResponse) -> tuple[str, str | None, str]:
+        """The next event as `EventSource` dispatches it: its name, its id and its data."""
+
+        name, event_id, data = "message", None, None
+        for _ in range(40):
+            line = response.readline()
+            if line == b"":
+                raise AssertionError("Planning stream closed before its next event")
+            field, _, value = line.decode().rstrip("\n").partition(": ")
+            if field == "event":
+                name = value
+            elif field == "id":
+                event_id = value
+            elif field == "data":
+                data = value
+            elif line == b"\n" and data is not None:
+                return name, event_id, data
+        raise AssertionError("Planning stream sent no complete event")
+
+    def opening(self, response: http.client.HTTPResponse) -> list[tuple[str, str | None, str]]:
+        """What the stream sent before the live-work frame, which it sends right after."""
+
+        events = []
+        while (event := self.read_event(response))[0] != "live":
+            events.append(event)
+        return events
+
+    def rename_primary_item(self, title: str) -> None:
+        with contextlib.closing(sqlite3.connect(self.primary)) as changed:
+            changed.execute("UPDATE work_items SET title=?", (title,))
+            changed.commit()
+
+    def test_a_stream_given_the_reads_revision_does_not_send_that_model_again(self) -> None:
+        status, read = self.request(self.model_path("primary"))
+        self.assertEqual(200, status, read)
+        revision = read["revision"]
+        response = self.open_stream(f"{self.stream_path('primary')}&since={revision}")
+        self.assertEqual([("current", revision, revision)], self.opening(response))
+        # The model it did not send is still the one it compares with, and news still comes.
+        self.rename_primary_item("Renamed after the stream opened")
+        name, event_id, data = self.read_event(response)
+        changed = json.loads(data)
+        self.assertEqual("message", name)
+        self.assertEqual(
+            ["Renamed after the stream opened"], [i["title"] for i in changed["work_items"]]
+        )
+        self.assertNotEqual(revision, changed["revision"])
+        self.assertEqual(changed["revision"], event_id)
+
+    def test_a_change_between_the_read_and_the_stream_is_sent(self) -> None:
+        status, read = self.request(self.model_path("primary"))
+        self.assertEqual(200, status, read)
+        self.rename_primary_item("Renamed between the read and the stream")
+        response = self.open_stream(f"{self.stream_path('primary')}&since={read['revision']}")
+        ((name, event_id, data),) = self.opening(response)
+        first = json.loads(data)
+        self.assertEqual("message", name)
+        self.assertEqual(
+            ["Renamed between the read and the stream"], [i["title"] for i in first["work_items"]]
+        )
+        self.assertNotEqual(read["revision"], first["revision"])
+        self.assertEqual(first["revision"], event_id)
+
+    def test_a_browser_coming_back_is_sent_the_model_whatever_its_address_says(self) -> None:
+        status, read = self.request(self.model_path("primary"))
+        self.assertEqual(200, status, read)
+        revision = read["revision"]
+        response = self.open_stream(
+            f"{self.stream_path('primary')}&since={revision}", {"Last-Event-ID": revision}
+        )
+        ((name, event_id, data),) = self.opening(response)
+        # The same model the read answered, revision and all: the two agree on what it is.
+        self.assertEqual(("message", revision), (name, event_id))
+        self.assertEqual(read, json.loads(data))
+
     def test_exact_stream_refuses_invalid_or_stale_scope_before_streaming(self) -> None:
         self.bind("attached")
         self.assertEqual(409, self.request(self.stream_path("primary"))[0])
         path = self.stream_path("attached")
-        for suffix in ("&space=OTHER", "&space_key=SAME", "&extra=1", "&view=planning"):
+        for suffix in (
+            "&space=OTHER",
+            "&space_key=SAME",
+            "&extra=1",
+            "&view=planning",
+            "&since=",
+            "&since=a&since=b",
+        ):
             with self.subTest(suffix=suffix):
                 self.assertEqual(400, self.request(path + suffix)[0])
         self.assertEqual(400, self.request(path.replace("view=planning", "view=spaces"))[0])
+        # A revision is a space model's: no other view has one to compare.
+        for view in ("spaces", "activity", "live"):
+            with self.subTest(view=view):
+                self.assertEqual(400, self.request(f"/api/events?view={view}&since=x")[0])
         for query in ("project=", "project=&data_scope_id=&space_key=", "project=&project=x"):
             with self.subTest(query=query):
                 self.assertEqual(400, self.request("/api/events?view=planning&" + query)[0])

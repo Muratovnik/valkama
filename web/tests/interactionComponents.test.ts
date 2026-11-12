@@ -168,7 +168,7 @@ test('the work-item inspector uses the persisted overlay drawer without consumin
 })
 
 test('command dialogs layer over the inspector using shared modal focus ownership', () => {
-  assert.match(planningSurface, /v-if="open && boundSpaceResourceRef && model"/)
+  assert.match(planningSurface, /v-if="open && boundSpaceResourceRef"/)
   assert.doesNotMatch(planningSurface, /open && !composerOpen/)
   assert.match(cardDrawer, /<ResizableInspector/)
   assert.match(inspector, /<OverlayHost/)

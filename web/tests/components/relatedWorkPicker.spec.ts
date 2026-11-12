@@ -12,6 +12,7 @@ import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { workItem } from '../browser/planningFixtures.ts'
 
@@ -168,8 +169,29 @@ describe('related task picker', () => {
     expect(signal.aborted).toBe(true)
     finishOld([candidate(8)])
     await flushPromises()
+    // The two searches were one wait of half a second, said at 300 ms: it stays its minimum.
+    expect(wrapper.get('.picker-wait[role="status"]').text()).toBe(
+      messages.en.platform.states.loading,
+    )
+    expect(wrapper.text()).not.toContain('Candidate 9')
+    await vi.advanceTimersByTimeAsync(LOADING_MIN_SHOWN_MS)
     expect(wrapper.text()).toContain('Candidate 9')
     expect(wrapper.text()).not.toContain('Candidate 8')
+    wrapper.unmount()
+  })
+
+  it('says nothing for a search that answers inside the delay, the pause before it included', async () => {
+    vi.mocked(searchPlanningWorkItems).mockResolvedValue([candidate(4)])
+    const wrapper = picker()
+    await wrapper.get('input[type="text"]').setValue('Candidate')
+    // The status region stands from the keystroke, empty until the wait has lasted.
+    expect(wrapper.get('.picker-wait[role="status"]').text()).toBe('')
+    await vi.advanceTimersByTimeAsync(251)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Candidate 4')
+    expect(wrapper.find('.picker-wait').exists()).toBe(false)
+    await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS + LOADING_MIN_SHOWN_MS)
+    expect(wrapper.text()).not.toContain(messages.en.platform.states.loading)
     wrapper.unmount()
   })
 
@@ -247,7 +269,7 @@ describe('grouped related tasks', () => {
     })
     const groups = wrapper.findAll('.relation-group')
     expect(groups).toHaveLength(1)
-    expect(groups[0].get('.group-heading').text()).toBe('Relates to 2')
+    expect(groups[0].get('h4').text()).toBe('Relates to 2')
     expect(groups[0].findAll('.link-row')).toHaveLength(2)
     // The count stands apart from the words it counts, in the accessible text too.
     expect(wrapper.get('h3').text()).toBe('Related work 2')

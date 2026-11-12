@@ -19,6 +19,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import type { ResolvedRef } from '@/shared/types/reference.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RichText from '@/shared/ui/RichText.vue'
 
 const props = defineProps<{
@@ -57,6 +58,11 @@ watch(
   },
   { immediate: true },
 )
+/**
+ * The lookup said as every wait is (`loadingPresence`): nothing for a commit found quickly,
+ * and once said, long enough to be read, with what was found held back meanwhile.
+ */
+const { shown: waitShown, held: waitHeld } = useLoadingPresence(() => loading.value)
 
 const attached = computed(() => {
   const date = new Date(props.record.at)
@@ -68,7 +74,7 @@ const attached = computed(() => {
 /** What the lookup found, or why there is nothing more to show. */
 const finding = computed(() => {
   if (props.record.kind === 'memory') return t('textLinks.memoryPointer')
-  if (loading.value) return t('textLinks.loading')
+  if (waitHeld.value) return waitShown.value ? t('platform.states.loading') : ''
   if (failed.value) return t('textLinks.failed')
   return resolved.value?.resolved ? '' : t('textLinks.commitMissing')
 })
@@ -91,18 +97,19 @@ const finding = computed(() => {
       />
       <p class="peek-meta">{{ attached }}</p>
       <p
-        v-if="resolved?.resolved && resolved.repository"
+        v-if="resolved?.resolved && resolved.repository && !waitHeld"
         class="peek-meta peek-path"
       >
         {{ resolved.repository }}
       </p>
       <pre
-        v-if="resolved?.resolved"
+        v-if="resolved?.resolved && !waitHeld"
         class="peek-detail"
         >{{ resolved.detail }}</pre>
+      <!-- Stands empty from the start of the lookup, so its word is announced when shown. -->
       <p
-        v-if="finding"
-        class="peek-meta"
+        v-if="finding || waitHeld"
+        class="peek-meta peek-finding"
         role="status"
       >
         {{ finding }}
@@ -127,6 +134,11 @@ const finding = computed(() => {
   color: var(--color-text-muted);
   font: var(--font-detail);
   overflow-wrap: anywhere;
+}
+
+/* One line tall before a wait's word arrives, so the word moves nothing when it does. */
+.peek-finding {
+  min-height: 1lh;
 }
 
 .peek-path {

@@ -12,7 +12,16 @@
  *
  * `PlatformStatePanel` follows it for every state it is handed, and `lazyView` for
  * every download, so a screen that shows a wait through either cannot get it wrong. A
- * screen whose own branch takes the panel away has to keep the branch while `held`.
+ * screen whose own branch takes the panel away has to keep the branch while `held`, and
+ * a wait said in a line of its own — a section of a card, a dialog's note, a search —
+ * takes `shown` and `held` from here too, and says the panel's word,
+ * `platform.states.loading`.
+ *
+ * A screen reader hears what the eye sees: a wait is announced once, when it is shown, by
+ * writing its word into a status region that has stood empty since the wait began. A
+ * region drawn together with its words is not reliably announced, and one that held its
+ * words from the first frame told a reader about a read that answered before anyone saw
+ * it.
  */
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
@@ -22,17 +31,34 @@ export const LOADING_DELAY_MS = 300
 /** How long a wait, once shown, stays shown, however soon what it waited for arrives. */
 export const LOADING_MIN_SHOWN_MS = 400
 
+/** When a wait began, and how long it runs before it is said, where those are not the rule's. */
+interface LoadingPresenceOptions {
+  /**
+   * The delay before the wait is said, read as each wait begins; `LOADING_DELAY_MS` when
+   * absent. Only background work over something already drawn waits longer, as the
+   * graph's re-layout does. The minimum once shown is the same for every wait.
+   */
+  delay?: () => number
+  /**
+   * When the wait began (`Date.now()`), for a wait that began before whatever shows it was
+   * drawn: the delay is the wait's, not the mark's, so a mark drawn late does not add a
+   * second delay.
+   */
+  since?: () => number | undefined
+}
+
 /**
  * Follow one wait.
  *
- * `waiting` says whether it is still under way. `since`, when given, is when it began
- * (`Date.now()`), for a wait that began before whatever shows it was drawn: the delay is
- * the wait's, not the mark's, so a mark drawn late does not add a second delay.
+ * `waiting` says whether it is still under way.
  *
  * `shown` is whether the mark is on screen. `held` is whether what the wait stands in
  * for must still stay away: while waiting, and for the rest of the minimum after it.
  */
-export function useLoadingPresence(waiting: () => boolean, since?: () => number | undefined) {
+export function useLoadingPresence(
+  waiting: () => boolean,
+  { since, delay }: LoadingPresenceOptions = {},
+) {
   const shown = shallowRef(false)
   let shownAt = 0
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -57,8 +83,9 @@ export function useLoadingPresence(waiting: () => boolean, since?: () => number 
         // Waiting again before the minimum ran out: the mark simply stays.
         if (shown.value) return
         const waited = Date.now() - (since?.() ?? Date.now())
-        if (waited >= LOADING_DELAY_MS) show()
-        else timer = setTimeout(show, LOADING_DELAY_MS - waited)
+        const before = delay?.() ?? LOADING_DELAY_MS
+        if (waited >= before) show()
+        else timer = setTimeout(show, before - waited)
         return
       }
       if (!shown.value) return

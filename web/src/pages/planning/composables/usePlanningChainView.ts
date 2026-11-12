@@ -162,7 +162,7 @@ export function usePlanningChainView(options: ChainViewOptions) {
     exitBranch: () => options.write(withBranch(options.state(), null)),
     /**
      * The scope of the chain the address names when its root is the open card: the card's own
-     * chain, as its «Show on graph» names it, so the card opens on its Relations. The card's
+     * chain, as its «Show on graph» names it, so the card opens on its Chain. The card's
      * section is not in the address, and Back after «Show on graph» reopened it on Overview,
      * a tab away from the chain just looked at. Any other card opens as it always has.
      */

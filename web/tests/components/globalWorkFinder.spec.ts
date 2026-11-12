@@ -10,6 +10,7 @@ import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearch
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 
 import { finderResponse, finderTarget } from '../support/globalFinder.ts'
@@ -116,11 +117,10 @@ describe('global task finder', () => {
     await search(wrapper, 'new query')
     expect(oldSignal.aborted).toBe(true)
     resolveOld({ ...finderResponse('old query'), items: [] })
-    await flushPromises()
+    await vi.advanceTimersByTimeAsync(LOADING_MIN_SHOWN_MS)
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
     await wrapper.get('[role="combobox"]').setValue('next query')
     expect(wrapper.findAll('[role="option"]')).toHaveLength(0)
-    expect(wrapper.text()).toContain('Searching mapped projects')
   })
 
   it('aborts on close and unmount and suppresses stale errors', async () => {
@@ -294,9 +294,9 @@ describe('global task finder', () => {
     const input = wrapper.get('[role="combobox"]')
     await input.setValue('needle')
     await input.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.text()).toContain('the first match opens when it arrives')
+    await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS)
+    expect(wrapper.text()).toContain('The first match opens when it arrives')
     expect(wrapper.emitted('select')).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(251)
     resolve(finderResponse())
     await flushPromises()
     expect(wrapper.emitted('select')).toEqual([[finderTarget()]])
