@@ -8,8 +8,10 @@
  * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
- * history, so Back returns to the list. Each section's entry on the rail carries its figures
- * (`useRailTiles`).
+ * history, so Back returns to the list. Beside the rail a section chosen on it or from a card of
+ * the overview is a new place too, so Back returns to the section it was chosen in; the period,
+ * the measure, the filters and the second dimension change the place in hand. Each section's
+ * entry on the rail carries its figures (`useRailTiles`).
  *
  * The view — the period, the section, the measure, a filter per dimension and whether a narrow
  * screen shows the section — is the page's address: every change is written there, and a reload
@@ -97,8 +99,13 @@ const reportRefused = computed(() =>
     : null,
 )
 
-/** Writes a change of the view into its address; false, with nothing written, if it does not fit. */
-function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace' = 'replace'): boolean {
+/**
+ * Writes a change of the view into its address; false, with nothing written, if it does not fit.
+ * A section opened — from the rail or a card's heading — and a narrowing are new places Back
+ * returns from (`push`); the period, the measure, the filters and the second dimension change
+ * the place in hand (`replace`). Each caller names which, so none falls to a default.
+ */
+function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace'): boolean {
   const changed = { ...view.value, ...next }
   if (!addressFits(changed)) return false
   emit('state', writeAddress(changed), mode)
@@ -162,10 +169,13 @@ const holdsSection = computed(
   () => !overview.value && !narrowScreen.value && 'payload' in read.state.value,
 )
 
-/** A section chosen on the rail: in place beside it, or in place of the list as a new place. */
+/**
+ * A section chosen on the rail or from a card's heading, as a new place in the history, so Back
+ * returns to the section it was chosen in: beside the rail, or in place of the list.
+ */
 function chooseSection(by: AnalyticsSection) {
   if (narrowScreen.value) change({ by, open: true }, 'push')
-  else if (by !== view.value.by) change({ by })
+  else if (by !== view.value.by) change({ by }, 'push')
 }
 
 /**
@@ -202,7 +212,8 @@ watch(
 )
 
 function filter(dimension: UsageDimension, values: (string | null)[]) {
-  if (change({ filters: orderFilters({ ...view.value.filters, [dimension]: values }) })) return
+  const filters = orderFilters({ ...view.value.filters, [dimension]: values })
+  if (change({ filters }, 'replace')) return
   refused.value = {
     part: 'filters',
     words: t('analytics.filters.full', { dimension: words.dimension(dimension) }),
@@ -258,7 +269,7 @@ const emptyDescription = computed(() =>
       :today="today"
       :values="read.filterValues.value"
       :view="view"
-      @amend="(next) => change(next)"
+      @amend="(next) => change(next, 'replace')"
       @filter="filter"
       @refresh="refresh"
     />
@@ -322,7 +333,7 @@ const emptyDescription = computed(() =>
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
               :refused="reportRefused"
-              @update:measure="(measure) => change({ measure })"
+              @update:measure="(measure) => change({ measure }, 'replace')"
               @narrow="narrow"
               @day="narrowToDay"
               @open="chooseSection"
@@ -340,8 +351,8 @@ const emptyDescription = computed(() =>
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :refused="reportRefused"
-              @update:measure="(measure) => change({ measure })"
-              @update:across="(across) => change({ across })"
+              @update:measure="(measure) => change({ measure }, 'replace')"
+              @update:across="(across) => change({ across }, 'replace')"
               @narrow="narrow"
               @day="narrowToDay"
               @retry="read.retry"
