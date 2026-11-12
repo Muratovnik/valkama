@@ -114,10 +114,7 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
       if (view.value === null) attempt()
       // Made once the first download is under way, so a view drawn after it has already
       // run for the delay says so in its first frame.
-      const presence = useLoadingPresence(
-        () => downloading.value,
-        () => since,
-      )
+      const presence = useLoadingPresence(() => downloading.value, { since: () => since })
       onBeforeUnmount(() => {
         mounted = false
       })

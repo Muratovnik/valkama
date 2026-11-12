@@ -7,7 +7,6 @@
 export const workItemPreviewMessages = {
   en: {
     preview: {
-      loading: 'Reading…',
       failed: 'Could not read the work item.',
       unavailable: "The work item's store is unavailable right now.",
       held: 'Held by {holder}',
@@ -19,7 +18,6 @@ export const workItemPreviewMessages = {
   },
   ru: {
     preview: {
-      loading: 'Читаю…',
       failed: 'Не удалось прочитать задачу.',
       unavailable: 'Хранилище задачи сейчас недоступно.',
       held: 'Держит {holder}',

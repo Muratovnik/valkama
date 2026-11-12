@@ -29,6 +29,7 @@ import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -56,8 +57,24 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const stateName = useStateName()
 
+/**
+ * The first read of the chain, shown as every wait is: nothing for a read that answers
+ * quickly, and once shown, long enough to be read, with the chain held back meanwhile.
+ * A read again with the chain on screen keeps it there and shows nothing.
+ *
+ * The section is a block of the card, so its wait is no announcement of its own: the card
+ * has one status region for its waits, and the section says its wait by its busy mark and
+ * its word on screen.
+ */
+const { shown: firstShown, held: firstHeld } = useLoadingPresence(
+  () => !props.chain && props.loading,
+)
+/** The word the held line shows: the panel's, once the wait is shown, and nothing before. */
+const firstWord = computed(() => (firstShown.value ? t('platform.states.loading') : ''))
+
 const visible = computed(() => {
   if (!props.readable) return true
+  if (props.container && firstHeld.value) return true
   return props.chain ? props.chain.total > 0 : props.container && (props.loading || props.failed)
 })
 
@@ -224,7 +241,7 @@ defineExpose({ restore, reveal, view })
          counts the root as well, and in Epic scope it named a third population. -->
     <SectionHeader :title="t('workItem.chain.title')">
       <template
-        v-if="chain"
+        v-if="chain && !firstHeld"
         #actions="{ size }"
       >
         <SegmentedControl
@@ -254,14 +271,13 @@ defineExpose({ restore, reveal, view })
     />
 
     <p
-      v-if="!chain && loading"
+      v-if="firstHeld"
       class="chain-quiet"
-      role="status"
     >
-      {{ t('workItem.chain.loading') }}
+      {{ firstWord }}
     </p>
     <div
-      v-if="failed"
+      v-if="failed && !firstHeld"
       class="chain-failure"
       role="alert"
     >
@@ -277,7 +293,7 @@ defineExpose({ restore, reveal, view })
     </div>
 
     <div
-      v-if="chain && groups && listed && labels"
+      v-if="chain && groups && listed && labels && !firstHeld"
       class="chain-body"
     >
       <ChainBranchMap
@@ -423,7 +439,9 @@ defineExpose({ restore, reveal, view })
   font-variant-numeric: tabular-nums;
 }
 
+/* One line tall before its word arrives, so the word moves nothing when it does. */
 .chain-quiet {
+  min-height: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

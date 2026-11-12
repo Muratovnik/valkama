@@ -295,11 +295,15 @@ describe('the chain section of a card', () => {
     )
     const wrapper = await open()
     expect(section(wrapper).attributes('aria-busy')).toBe('true')
-    expect(section(wrapper).get('[role="status"]').text()).toBe('Reading the chain…')
+    // The line stands from the start of the read; its word waits for the delay, which a
+    // read answered at once never reaches. A section announces nothing of its own: the
+    // card has one status region for its waits.
+    expect(section(wrapper).get('.chain-quiet').text()).toBe('')
+    expect(section(wrapper).find('[role="status"]').exists()).toBe(false)
     answer.resolve(json(chainResponse(largeEpicChain())))
     await flushPromises()
     expect(section(wrapper).attributes('aria-busy')).toBeUndefined()
-    expect(section(wrapper).find('[role="status"]').exists()).toBe(false)
+    expect(section(wrapper).find('.chain-quiet').exists()).toBe(false)
   })
 
   it('holds no section for an item with no chain, and shows nothing while it loads', async () => {

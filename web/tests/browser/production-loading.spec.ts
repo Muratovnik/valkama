@@ -23,7 +23,7 @@ test('a stalled board read settles with a localized recovery action and can retr
   await expect.poll(() => stalled !== undefined).toBe(true)
   // While it is read, the bar stands and the stage says so.
   await expect(page.locator('.workspace-head')).toBeVisible()
-  await expect(page.locator('.workspace-stage .workspace-reading')).toHaveAttribute(
+  await expect(page.locator('.workspace-stage > .platform-state-panel')).toHaveAttribute(
     'aria-busy',
     'true',
   )
@@ -31,9 +31,7 @@ test('a stalled board read settles with a localized recovery action and can retr
   const failure = page.locator('[data-scroll-owner="planning-state"] [role="alert"]')
   await expect(failure).toContainText('Локальный сервис не ответил вовремя')
   await expect(failure.getByRole('button', { name: 'Повторить', exact: true })).toBeVisible()
-  await expect(
-    page.locator('[aria-busy="true"]:is(.workspace-reading, .platform-state-panel)'),
-  ).toHaveCount(0)
+  await expect(page.locator('.platform-state-panel[aria-busy="true"]')).toHaveCount(0)
   await stalled?.abort()
   await page.unroute(planningRead)
   await failure.getByRole('button', { name: 'Повторить', exact: true }).click()

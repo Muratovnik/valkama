@@ -324,7 +324,7 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   // The whole space again: every open item in its frame, so nothing is left out
   // and there is no switch to draw what is.
   await expect(page.getByRole('switch', { name: 'Draw items with no links' })).toHaveCount(0)
-  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.graph:not([aria-busy])')).toHaveCount(1)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   await expect(page.locator('.flow-node-root')).toHaveCount(0)
   await page.locator('.graph').screenshot(shot(info, 'space-graph-linked-only.png'))
@@ -391,7 +391,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await page.locator('.workspace-chip').click()
   await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
   await page.getByRole('radio', { name: 'Graph', exact: true }).click()
-  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.graph:not([aria-busy])')).toHaveCount(1)
   await expect(chip).toHaveCount(0)
 
   // Back in the chain from a link, the chip is the other way out.

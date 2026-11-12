@@ -104,7 +104,7 @@ async function addTerminalGraphWork(page: Page, terminalOnly = false) {
 }
 
 async function assertSettledGraph(page: Page, count: number) {
-  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.graph:not([aria-busy])')).toHaveCount(1)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   await expect(page.locator('.vue-flow__transformationpane')).toHaveCSS('opacity', '1')
   await expect(page.locator('.flow-node-card')).toHaveCount(count)
@@ -198,7 +198,7 @@ test('a link naming a chain no item answers to says so in its own words and keep
   )
   // Asking again cannot help a reference nothing answers to.
   await expect(failure.getByRole('button', { name: 'Retry' })).toHaveCount(0)
-  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.graph:not([aria-busy])')).toHaveCount(1)
   await expect(page.locator('.flow-node-card').first()).toBeVisible()
   await expect(chip).toHaveCount(0)
   // The address keeps naming the chain until the operator lets it go.

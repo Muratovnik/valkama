@@ -187,7 +187,7 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
     const held = page.waitForRequest('**/api/modules/planning/search?*')
     await search.fill('a slow search')
     await held
-    await expect(status).toContainText('Searching mapped projects')
+    await expect(status).toContainText('Loading')
     await shot(`loading-${width}`)
     await expect.poll(() => release).toBeDefined()
     release?.()
@@ -208,7 +208,7 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
   const held = page.waitForRequest('**/api/modules/planning/search?*')
   await page.keyboard.type(workItemRef.reference)
   await held
-  await expect(dialog.getByRole('status')).toContainText('Searching mapped projects')
+  await expect(dialog.getByRole('status')).toContainText('Loading')
   await page.keyboard.press('Enter')
   await expect(dialog).toBeVisible()
   await expect.poll(() => release).toBeDefined()

@@ -12,6 +12,7 @@ import { useStateName } from '@/shared/lib/useStateName.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -76,6 +77,14 @@ const submitLabel = computed(() => {
   return t('workItem.linkAdd')
 })
 const frozen = computed(() => busy.value || Boolean(created.value) || !props.writable)
+/**
+ * The search said as every wait is (`loadingPresence`): nothing for one that answers
+ * quickly, the pause before the request included, and once said, long enough to be read,
+ * with its results held back meanwhile.
+ */
+const { shown: searchShown, held: searchHeld } = useLoadingPresence(() => searching.value)
+/** What the dialog's status line says of the search: the panel's word once it is shown. */
+const searchWord = computed(() => (searchShown.value ? t('platform.states.loading') : ''))
 
 watch(
   () => props.open,
@@ -218,12 +227,13 @@ function close() {
         :maxlength="200"
         :disabled="busy || !writable"
       />
+      <!-- Empty from the start of the search, and given its word only when the wait is shown. -->
       <p
-        v-if="searching"
-        class="picker-note"
+        v-if="searchHeld"
+        class="picker-note picker-wait"
         role="status"
       >
-        {{ t('workItem.related.searching') }}
+        {{ searchWord }}
       </p>
       <p
         v-else-if="searchError"
@@ -238,7 +248,7 @@ function close() {
         inline
       />
       <ul
-        v-if="eligible.length"
+        v-if="eligible.length && !searchHeld"
         class="picker-results"
       >
         <li
@@ -296,6 +306,11 @@ function close() {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* One line tall before the wait's word arrives, so the word moves nothing when it does. */
+.picker-wait {
+  min-height: 1lh;
 }
 
 .picker-error {
