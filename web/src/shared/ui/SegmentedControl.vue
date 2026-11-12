@@ -265,6 +265,12 @@ function move(event: KeyboardEvent) {
     text-align: start;
     white-space: normal;
   }
+
+  /* A tile's words keep their own inks, so the ink a segment takes under the pointer would change
+     nothing on one: a tile not pressed takes the hovered ground instead, and nothing moves. */
+  .segmented-option:hover:not(:disabled, .active) {
+    background: var(--color-surface-hover);
+  }
 }
 
 .segmented-option:hover:not(:disabled, .active) {
