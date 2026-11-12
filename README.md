@@ -1064,6 +1064,16 @@ Valkama shows a Windows notification, so you need not watch the board or the cha
 works with Valkama's window closed, because the process that wrote the event shows it.
 A launch from Valkama that fails can notify you too; that one is off until you turn it on.
 
+Valkama also warns before a subscription quota window runs out: a week, and a model's own
+week, at 75 % and again at 90 % spent, and the five-hour window when its forecast says it
+runs out before its reset. That warning comes from the listener, after each pass of its
+usage reader, so it needs the listener running, which `launcher autostart` keeps; the
+window may be closed. Each level is given once per window, a restart included, and a new
+reset starts the levels again. A reading older than fifteen minutes, or one whose session
+the reader has not yet tied to an organization, warns of nothing until a fresh one comes.
+The notification names the level, the reset, how old its data is and what to do, and a
+click on it opens nothing.
+
 **What it needs:**
 
 - **The desktop app.** Its installer puts the Valkama shortcut in the Start menu, whose

@@ -40,7 +40,9 @@ agent at work has an MCP process, so one of them runs whenever work can be obser
 first, then the runs an older reading left stale), on its own connection in the
 background, a bounded amount per pass. Only the listener runs it: it
 alone answers the reads of those rows, and anything an MCP process would do here
-another one would be doing too.
+another one would be doing too. After each pass the listener on the owner's port also
+decides the quota alerts (`alerts.quota`): a pass is what learns the organization a
+session's quota reading belongs to, and the listener runs with no window open.
 """
 
 from __future__ import annotations
@@ -54,6 +56,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 from . import store, transcripts
+from .alerts import quota as quota_alerts
 from .hooks import ingest, spool
 from .planning import service as planning_service
 from .planning import subscriptions as planning_subscriptions
@@ -290,18 +293,27 @@ def _pulse(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
             return
 
 
-def start_usage(report: Callable[[str], None]) -> threading.Event:
-    """Read transcripts into usage rows in the background until the event this returns is set."""
+def start_usage(report: Callable[[str], None], *, alerts: bool = False) -> threading.Event:
+    """Read transcripts into usage rows in the background until the event this returns is set.
+
+    `alerts` is whether each pass is followed by the quota alerts: only on the owner's
+    listener, as for the alerts of a launch that ended (`watchers`).
+    """
 
     stop = threading.Event()
     thread = threading.Thread(
-        target=_usage, args=(store.db_path(), stop, report), name=USAGE_THREAD, daemon=True
+        target=_usage,
+        args=(store.db_path(), stop, report, alerts),
+        name=USAGE_THREAD,
+        daemon=True,
     )
     thread.start()
     return stop
 
 
-def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> None:
+def _usage(
+    path: str, stop: threading.Event, report: Callable[[str], None], alerts: bool = False
+) -> None:
     """Pass after pass. A store that cannot be opened or written now is tried again later."""
 
     if stop.wait(USAGE_START_SECONDS):
@@ -325,6 +337,9 @@ def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
                 if text != said:
                     report(f"usage reader did not finish a pass: {text}")
                     said = text
+            if alerts and conn is not None:
+                # Never raises: a failure is a line in the alerts log.
+                quota_alerts.after_pass(conn)
             pause = USAGE_BACKLOG_PAUSE_SECONDS if backlog else USAGE_PAUSE_SECONDS
             if stop.wait(pause):
                 return

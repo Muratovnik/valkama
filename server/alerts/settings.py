@@ -1,9 +1,10 @@
 """The owner's alert settings: their shape, their defaults and their one row.
 
 The process that alerts is the one that wrote the event -- an agent's MCP
-session, or the listener's reaper -- and never a page, so these settings live in
-the store, in `owner_alert_settings`, rather than in a browser's storage. A store
-without the row answers the defaults below.
+session, or the listener's reaper -- or, for the quota, the listener's usage
+reader, and never a page, so these settings live in the store, in
+`owner_alert_settings`, rather than in a browser's storage. A store without the
+row answers the defaults below.
 
 A payload is held to an exact shape: an unknown key is refused rather than kept,
 because a key nothing reads is a setting the owner believes in and nothing obeys;
@@ -29,14 +30,15 @@ from typing import TypedDict
 
 #: The events an alert can be raised for. `question` is an agent's question or
 #: decision; `review` is work moved to a review state; `launchFailed` is a launch
-#: from Valkama that ended in failure.
-EVENTS = ("question", "review", "launchFailed")
+#: from Valkama that ended in failure; `quota` is a subscription quota window running
+#: out (`alerts.quota`).
+EVENTS = ("question", "review", "launchFailed", "quota")
 #: How much a toast reveals: only that an answer is needed, the item's number
 #: and title, or those plus the first line of the question.
 CONTENTS = ("generic", "title", "prompt")
 LOCALES = ("ru", "en")
 
-_EVENT_DEFAULTS = {"question": True, "review": True, "launchFailed": False}
+_EVENT_DEFAULTS = {"question": True, "review": True, "launchFailed": False, "quota": True}
 _KEYS = ("enabled", "events", "content", "locale")
 _ROW_KEY = "settings"
 #: The primary language id Windows gives Russian, in the low ten bits of a LANGID.

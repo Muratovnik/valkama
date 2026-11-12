@@ -1,4 +1,5 @@
-"""Quota's own tables: the accounts the owner names, and the samples every source records.
+"""Quota's own tables: the accounts the owner names, the samples every source records, and
+the alerts the owner was given.
 
 Added with schema 17, and additive: `store.connect()` runs this script against an
 upgraded store exactly as against a fresh one, and an upgraded store holds no account
@@ -28,6 +29,14 @@ model, the model. Rows older than a year are deleted by the start-up housekeepin
 - `percent` is the share of the window spent, 0 to 100 and past 100 only where a source
   reports an overrun; `amount` and `currency` are money spent, for the two kinds that
   carry money, and a currency the source did not state is NULL, never a guess.
+
+`quota_alerts`: one row per alert the owner was given about a window running out
+(`alerts.quota`), so a restart does not give it again. A row is the alert's key: the
+account, as its organization and its seat, the window (its kind and, for a model's week,
+the model, `''` for none), the reset the window named and the level. `account_uuid` is the
+account's UUID where it was known when the alert was raised, NULL for a provisional seat;
+it is not part of the key, so learning it later does not raise the same alert again. A row
+whose window has reset can match no reading any more, and the next evaluation deletes it.
 """
 
 from __future__ import annotations
@@ -45,6 +54,10 @@ SOURCES = ("statusline", "mod", "poll", "import")
 BY_ORGANIZATION = ("poll", "import")
 #: How long a sample is kept.
 RETENTION_DAYS = 365
+#: The windows an alert is raised for, and its levels: a share of a week spent, or the
+#: five-hour window forecast to run out before its reset.
+ALERT_KINDS = ("five_hour", "week", "week_model")
+ALERT_LEVELS = ("75", "90", "exhausted")
 
 
 def _listed(values: tuple[str, ...]) -> str:
@@ -87,11 +100,26 @@ CREATE INDEX IF NOT EXISTS quota_samples_session
 CREATE INDEX IF NOT EXISTS quota_samples_at ON quota_samples(at);
 CREATE INDEX IF NOT EXISTS quota_samples_account_seat
     ON quota_samples(organization, seat) WHERE account_uuid IS NOT NULL;
+CREATE TABLE IF NOT EXISTS quota_alerts(
+    organization TEXT NOT NULL,
+    seat TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ({_listed(ALERT_KINDS)})),
+    model TEXT NOT NULL,
+    resets_at TEXT NOT NULL,
+    level TEXT NOT NULL CHECK(level IN ({_listed(ALERT_LEVELS)})),
+    account_uuid TEXT,
+    sample_at TEXT NOT NULL,
+    raised_at TEXT NOT NULL,
+    CHECK((kind = 'week_model') = (model != '')),
+    PRIMARY KEY(organization, seat, kind, model, resets_at, level)
+) WITHOUT ROWID;
 """
 
-SCHEMA_TABLES = ("quota_accounts", "quota_samples")
+SCHEMA_TABLES = ("quota_accounts", "quota_samples", "quota_alerts")
 
 __all__ = [
+    "ALERT_KINDS",
+    "ALERT_LEVELS",
     "BY_ORGANIZATION",
     "KINDS",
     "MONEY_KINDS",

@@ -1,4 +1,4 @@
-"""Schema 17: the subscription quota's accounts and samples.
+"""Schema 17: the subscription quota's accounts, samples and the alerts given about them.
 
 The sources are stores built from the catalogs the last schema-16 and schema-15 builds
 created, populated as those builds wrote them. What this suite holds the migration to:
@@ -45,6 +45,17 @@ ADDED = {
         "resets_at",
         "amount",
         "currency",
+    ],
+    "quota_alerts": [
+        "organization",
+        "seat",
+        "kind",
+        "model",
+        "resets_at",
+        "level",
+        "account_uuid",
+        "sample_at",
+        "raised_at",
     ],
 }
 SOURCES: dict[int, Callable[[str], None]] = {15: schema15.build, 16: schema16.build}
