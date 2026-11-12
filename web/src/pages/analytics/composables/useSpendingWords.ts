@@ -8,6 +8,7 @@
  */
 import { useI18n } from 'vue-i18n'
 
+import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
@@ -322,6 +323,20 @@ export function useSpendingWords() {
       by: t(`analytics.byDimension.${by}`),
     })
 
+  /**
+   * A figure per hour of agent time beside the period before's, in the page's compact numbers
+   * with the unit said once: «$17.9/h, was 8.1», «1.2M/h, was 800K»; no «was» where the period
+   * before has none. `detail` says what the line is of, the cost's as the estimate it is.
+   */
+  function perHour(name: 'cost' | 'tokens', rate: PerHour) {
+    const now = compact(rate.now)
+    const line =
+      rate.was === null
+        ? t(`analytics.figures.perHour.${name}`, { now })
+        : t(`analytics.figures.perHour.${name}Was`, { now, was: compact(rate.was) })
+    return { line, detail: t(`analytics.figures.perHour.${name}Detail`) }
+  }
+
   /** A step's figure in the measure's units, or the words for a step with none. */
   function amount(name: Measure, value: number | null) {
     if (value === null) return t(`analytics.days.absent.${name}`)
@@ -382,6 +397,7 @@ export function useSpendingWords() {
     share,
     period,
     per,
+    perHour,
     stepChartTitle,
     stepName,
     trend,

@@ -21,6 +21,12 @@
  * so rather than inventing a percentage, a rise from a base too little for a share
  * (`risenFromLittle`) says what it rose from, and a figure absent on either side — no price, no
  * token counted — gives no change, with words that say which side has none.
+ *
+ * Under the change the tokens and the cost say what an hour of agent time took of them, beside
+ * the period before's (`perHour`): «$17.9/h, was 8.1». The line's hint says what it is of, the
+ * cost's as the estimate it is. A period that worked no time has no such figure, and a period
+ * before that was not read or worked none gives no «was»; the line keeps its place either way,
+ * so the tile's height is the same whatever the answer.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,7 +34,7 @@ import { useI18n } from 'vue-i18n'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { risenFromLittle } from '@/pages/analytics/utils/overviewFigures.ts'
-import { tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
+import { perHour, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
 import { overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
 
@@ -69,6 +75,14 @@ function moved(value: Measure) {
   }
 }
 
+/** What an hour of agent time took of a measure, in words; none of time, or without time. */
+function rateOf(value: Measure) {
+  if (value === 'time') return null
+  const { before, total } = figures.value
+  const rate = perHour(value, total, before?.spent ?? null)
+  return rate ? words.perHour(value, rate) : null
+}
+
 const tiles = computed(() =>
   MEASURES.map((value) => {
     const { total } = figures.value
@@ -81,6 +95,10 @@ const tiles = computed(() =>
     const label = words.measure(value)
     const figure = words.figure(value, total)
     const steps = overviewFigures(props.usage, value, props.readAt)
+    const said = rateOf(value)
+    // The line per hour as its hint takes it: what it is of, and its own words.
+    const rate = said ? { text: said.detail, words: said.line } : null
+    const rateWhole = said ? `${said.detail}: ${said.line}` : ''
     return {
       value,
       label,
@@ -88,8 +106,9 @@ const tiles = computed(() =>
       trend: words.trend(value, steps, props.usage.period.step),
       change: change.words,
       direction: change.direction,
+      rate,
       notes,
-      whole: [label, figure, change.words, ...notes].join('. '),
+      whole: [label, figure, change.words, rateWhole, ...notes].filter(Boolean).join('. '),
     }
   }),
 )
@@ -138,6 +157,12 @@ const tileOf = (value: Measure) => byValue.value.get(value)
           class="tile-change one-line"
           :data-direction="tileOf(option.value)?.direction"
           >{{ tileOf(option.value)?.change }}</span
+        >
+        <span
+          v-if="option.value !== 'time'"
+          v-tooltip.detail="tileOf(option.value)?.rate"
+          class="tile-rate one-line"
+          >{{ tileOf(option.value)?.rate?.words }}</span
         >
         <span
           v-for="note in tileOf(option.value)?.notes"
@@ -202,9 +227,16 @@ const tileOf = (value: Measure) => byValue.value.get(value)
 }
 
 .tile-change,
+.tile-rate,
 .tile-note {
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* A line per hour keeps its place with nothing to say, so the tile keeps its height. */
+.tile-rate {
+  min-block-size: 1lh;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The change and each note keep one line, so the tiles stand one height at every width. */

@@ -25,7 +25,7 @@ test('the summary tiles stand one height at every width, each cut line whole in 
     )
     // Each line under a figure is one line high, however long its words at this width.
     const lines = await tiles
-      .locator('.tile-change, .tile-note')
+      .locator('.tile-change, .tile-rate, .tile-note')
       .evaluateAll((all) =>
         all.map(
           (line) =>

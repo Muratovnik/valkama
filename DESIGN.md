@@ -2068,9 +2068,12 @@ The overview answers «how much, and is that more than before»: three cells —
 tokens and the cost estimate at API prices — each with its change against the period
 before and, beside its figure, its own measure as a small trend over the steps of the
 period chart (`MiniTrend`, words as the rail's tile says them), and the chosen cell sets the
-measure of everything else on the page; across the
-panel under them, the period chart with the period before as a short line at its height; and under the
-chart one row of cards: the four tasks that grew or fell the most, each its name over its
+measure of everything else on the page. Under its change the tokens cell and the cost cell say
+what an hour of agent time took of them beside the period before's, «$17.9/h, was 8.1», the
+cost's hint naming it an estimate at API prices; a period with no agent time has no such line
+and a period before with none gives no «was», the line's place kept either way, and the chart
+draws no second axis for it. Across the panel under the cells stands the period chart, with the
+period before as a short line at its height, and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
 hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's

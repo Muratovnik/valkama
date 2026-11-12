@@ -2,6 +2,7 @@
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
+import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
@@ -98,21 +99,7 @@ export const analyticsMessages = {
         tokens: 'Tokens',
         cost: 'Estimated cost at API prices',
       },
-      figures: {
-        noTokens: 'No tokens',
-        noPrice: 'No price',
-        costNote: 'An estimate at API list prices, not a bill',
-        unpriced: '{count} token without a price | {count} tokens without a price',
-        anew: 'Processed anew: {kinds}',
-        kinds: {
-          input: 'input {count}',
-          output: 'output {count}',
-          cacheWrites: 'cache writes {count}',
-        },
-        cacheReads: 'Cache reads, not counted: {count}',
-        trend: '{measure} {per} from {from} to {to}: highest {top} ({day}), last {last}',
-        trendNone: '{measure} {per}: {figure}',
-      },
+      figures: analyticsFigureMessages.en,
       change: {
         up: '↑ {change} against {period}',
         down: '↓ {change} against {period}',
@@ -291,22 +278,7 @@ export const analyticsMessages = {
         tokens: 'Токены',
         cost: 'Оценка стоимости по ценам API',
       },
-      figures: {
-        noTokens: 'Нет токенов',
-        noPrice: 'Нет цены',
-        costNote: 'Оценка по прейскуранту API, а не счёт',
-        unpriced:
-          '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
-        anew: 'Обработано заново: {kinds}',
-        kinds: {
-          input: 'вход {count}',
-          output: 'выход {count}',
-          cacheWrites: 'запись в кэш {count}',
-        },
-        cacheReads: 'Чтение из кэша, не учтено: {count}',
-        trend: '{measure} {per} с {from} по {to}: наибольшее {top} ({day}), последнее {last}',
-        trendNone: '{measure} {per}: {figure}',
-      },
+      figures: analyticsFigureMessages.ru,
       change: {
         up: '↑ {change} к периоду {period}',
         down: '↓ {change} к периоду {period}',
