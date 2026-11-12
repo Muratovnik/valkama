@@ -13,10 +13,12 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { saidBy } from '../support/liveRegion.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -185,16 +187,33 @@ describe('the reads', () => {
     expect(lead(page, 'overview')).toBe('4\u{A0}h')
   })
 
-  it('say they are reading until their answer lands, then keep it while the next is read', async () => {
+  it('show their wait once it has lasted, hold it for the minimum, and keep the figures on show while they are read again', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
     let holding = true
     const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
     const page = await mountAnalytics()
-    expect(lead(page, 'model')).toBe('Reading…')
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    // Nothing is said or shown before the delay; the tile keeps its place until then.
+    expect(said).toEqual([''])
+    expect(lead(page, 'model')).toBe('')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await page.vm.$nextTick()
+    expect(lead(page, 'model')).toBe('Loading')
+    expect(said).toEqual(['', 'Loading'])
+
     for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
     await flushPromises()
+    // The figures wait for the minimum the wait was shown for, then take its place.
+    expect(lead(page, 'model')).toBe('Loading')
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(lead(page, 'model')).toBe('Loading')
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
     expect(lead(page, 'model')).toBe('model-a')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBeUndefined()
+    expect(said).toEqual(['', 'Loading', ''])
 
     holding = true
     await page.get('.analytics-refresh').trigger('click')
@@ -203,6 +222,46 @@ describe('the reads', () => {
     expect(lead(page, 'model')).toBe('model-a')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
     holding = false
+  })
+
+  it('show and say nothing for a read that answers inside the delay', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    const reads = stubAnalyticsReads((query) =>
+      query.get('group_by') === 'model' ? 'hold' : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
+    await page.vm.$nextTick()
+    expect(lead(page, 'model')).toBe('')
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    // Nothing was shown, so nothing is held: the figures are there at once.
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(said).toEqual([''])
+  })
+
+  it('say a cold entry once for all its waits, and clear after the last one has held its minimum', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = true
+    const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
+    const page = await mountAnalytics()
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    // Several reads, a tile each and the overview's cards, wait together on a cold entry.
+    expect(reads.held.length).toBeGreaterThan(1)
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await page.vm.$nextTick()
+    expect(said).toEqual(['', 'Loading'])
+
+    holding = false
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(said).toEqual(['', 'Loading'])
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
+    expect(said).toEqual(['', 'Loading', ''])
   })
 
   it('keep their figures when a read of them again fails, and the bar says the read failed', async () => {

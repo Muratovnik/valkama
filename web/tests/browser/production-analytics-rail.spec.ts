@@ -61,7 +61,7 @@ const settled = async (page: Page) => {
   await expect
     .poll(async () => {
       const words = await leads(page)
-      return words.includes('Reading…')
+      return words.includes('Loading')
     })
     .toBe(false)
   await expect(page.locator('.analytics-rail [aria-busy="true"]')).toHaveCount(0)
@@ -75,7 +75,7 @@ for (const width of [1440, 1024, 390])
     const release = await holdReads(page)
     await page.setViewportSize({ width, height: 900 })
     await page.goto(pageAt())
-    await expect(page.locator('.analytics-rail .rail-tile-lead').first()).toHaveText('Reading…')
+    await expect(page.locator('.analytics-rail .rail-tile-lead').first()).toHaveText('Loading')
     await page.evaluate(() => document.fonts.ready)
     const reading = await tiles(page)
 
@@ -84,7 +84,7 @@ for (const width of [1440, 1024, 390])
     const arrived = await tiles(page)
     expect(arrived, 'the figures arrived').toEqual(reading)
     const words = await leads(page)
-    expect(words.filter((lead) => lead === 'Reading…')).toEqual([])
+    expect(words.filter((lead) => lead === 'Loading')).toEqual([])
 
     // A new period: the tiles say other figures in the same boxes.
     await page.getByRole('radio', { name: 'Past 4 weeks' }).click()

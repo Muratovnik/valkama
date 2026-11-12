@@ -191,7 +191,7 @@ export const DETAIL_TOOLTIPS = new Map([
     'that the period is live, where the bar shows only its mark and how often it reads itself again',
   ],
   [
-    'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: tile.leadDetail, words: tile.lead }"',
+    'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: leadDetail, words: lead }"',
     'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
   ],
   [

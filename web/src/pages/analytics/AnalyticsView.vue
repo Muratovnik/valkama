@@ -46,6 +46,7 @@ import { provideLineActions } from '@/pages/analytics/composables/useLineActions
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
+import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -133,6 +134,8 @@ function narrowToDay(day: string, label: string) {
 
 /** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
 const shared = provideSharedUsage({ view: () => view.value, projectId: () => props.projectId })
+/** The page's one status region for its read waits: it says the word while any of them shows. */
+const { said } = provideReadWaits()
 const read = useUsageRead({ shared, view: () => view.value, projectId: () => props.projectId })
 
 const today = computed(() => localDay(read.askedAt.value))
@@ -317,6 +320,12 @@ const emptyDescription = computed(() => {
     :class="{ 'analytics-narrow': narrowScreen }"
     :aria-label="t('analytics.title')"
   >
+    <!-- Always in the markup, empty until a wait has lasted: the page's waits are said here once. -->
+    <span
+      class="visually-hidden analytics-read-wait"
+      role="status"
+      >{{ said }}</span
+    >
     <AnalyticsBar
       v-model:adding="adding"
       class="analytics-page-bar"

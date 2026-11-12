@@ -431,7 +431,7 @@ describe('the Analytics page', () => {
   it('says a period that spent nothing spent nothing, and keeps its controls', async () => {
     serve()
     const page = await mountAnalytics({ projectId: 'empty' })
-    expect(page.get('[role="status"]').text()).toContain('Nothing was spent in this period')
+    expect(page.get('.data-empty').text()).toContain('Nothing was spent in this period')
     expect(radio(page, 'This week')).toBeDefined()
   })
 

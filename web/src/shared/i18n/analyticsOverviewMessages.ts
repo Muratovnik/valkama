@@ -23,7 +23,6 @@ export const analyticsOverviewMessages = {
     cards: {
       label: 'The first values of the period',
       open: 'Open the section',
-      reading: 'Reading the values…',
       failed: 'The values could not be read.',
       empty: 'Nothing spent in this period.',
       work_item: 'Tasks',
@@ -51,7 +50,6 @@ export const analyticsOverviewMessages = {
     cards: {
       label: 'Первые значения периода',
       open: 'Открыть раздел',
-      reading: 'Читаю значения…',
       failed: 'Не удалось прочитать значения.',
       empty: 'За этот период ничего не потрачено.',
       work_item: 'Задачи',

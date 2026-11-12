@@ -13,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
+
 import {
   figuresAnswer,
   momentAt,
@@ -24,6 +26,7 @@ import {
 } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { saidBy } from '../support/liveRegion.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -180,6 +183,34 @@ describe('the overview on the page', () => {
     const page = await mountAnalytics()
     expect(words(card(page, 'model').text())).toContain('The values could not be read.')
     expect(card(page, 'project').findAll('.ranked-row')).toHaveLength(2)
+  })
+
+  it("holds a card's first read as its wait: said at once, shown after the delay, held for the minimum", async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = true
+    const reads = stubAnalyticsReads((query) =>
+      holding && query.get('group_by') === 'model' ? 'hold' : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    const shownWord = () => card(page, 'model').get('.overview-top-wait').text()
+    expect(said).toEqual([''])
+    expect(shownWord()).toBe('')
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await page.vm.$nextTick()
+    expect(shownWord()).toBe('Loading')
+
+    holding = false
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    expect(shownWord()).toBe('Loading')
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(shownWord()).toBe('Loading')
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
+    expect(card(page, 'model').findAll('.ranked-row').length).toBeGreaterThan(0)
+    expect(said).toEqual(['', 'Loading', ''])
   })
 
   it('says the week before was not read where the changes stand, and reads it again', async () => {
