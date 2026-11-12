@@ -449,7 +449,6 @@ export function priorityMark(
     form,
     glyph: PRIORITY_GLYPHS[priority],
     text: { key: `priority.${priority}` },
-    hint: { key: `priorityMeaning.meaning.${priority}` },
     tone: { dimension: 'work-item-priority', state: priority },
     filter: plain ? null : { facet: 'priority', value: priority },
     quiet: priority === 'medium',
