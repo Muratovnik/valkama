@@ -69,7 +69,7 @@ const most = computed(() =>
 const moved = computed(() => {
   const shown = new Set(
     [...most.value.up, ...most.value.down]
-      .toSorted((left, right) => Math.abs(right.by) - Math.abs(left.by))
+      .sort((left, right) => Math.abs(right.by) - Math.abs(left.by))
       .slice(0, SHOWN),
   )
   return {
