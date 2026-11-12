@@ -56,6 +56,7 @@ const {
   documentPage,
   entryRestorePending,
   goHome,
+  moveRoute,
   openProject,
   operatingScope,
   pendingSession,
@@ -277,7 +278,7 @@ usePlatformEntryRestore({
   entryRestorePending,
   blocked: routeBlocked,
   defaultRoute: DEFAULT_ROUTE,
-  writeRoute,
+  writeRoute: moveRoute,
 })
 </script>
 
