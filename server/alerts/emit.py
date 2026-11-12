@@ -69,7 +69,9 @@ class Show:
 
     tag: str
     message: messages.Message
-    work_item_id: str
+    #: The item it is about; `None` for a toast about no item, the quota's, which no page
+    #: silences and no summary of items takes in.
+    work_item_id: str | None
     #: What a summary of this and other toasts is written with.
     settings: alert_settings.Settings
     #: A question is also shown by the panel of open questions, not only by its card.
@@ -374,8 +376,14 @@ class Emitter:
         try:
             for tag in removals:
                 toast.remove(tag, messages.GROUP)
+            for due in shows:
+                if due.work_item_id is None:
+                    toast.show(due.message)
             unseen = [
-                due for due in shows if not listener_sees(due.work_item_id, question=due.question)
+                due
+                for due in shows
+                if due.work_item_id is not None
+                and not listener_sees(due.work_item_id, question=due.question)
             ]
             if len(unseen) == 1:
                 toast.show(unseen[0].message)

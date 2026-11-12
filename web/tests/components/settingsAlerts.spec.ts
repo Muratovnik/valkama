@@ -13,7 +13,7 @@ type Held = { body: unknown; release: (answer?: Answer) => void }
 
 const STORED = {
   enabled: true,
-  events: { question: true, review: false, launchFailed: false },
+  events: { question: true, review: false, launchFailed: false, quota: false },
   content: 'title',
   locale: 'en',
 }
@@ -105,7 +105,7 @@ describe('SettingsAlerts settings', () => {
     expect(writes).toEqual([
       {
         enabled: true,
-        events: { question: true, review: true, launchFailed: false },
+        events: { question: true, review: true, launchFailed: false, quota: false },
         content: 'title',
         locale: 'ru',
       },
@@ -138,11 +138,11 @@ describe('SettingsAlerts settings', () => {
     const { writes } = serve()
     const wrapper = await mountAlerts()
     const boxes = () => wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
-    expect(boxes().map((box) => box.element.checked)).toEqual([true, false, false])
+    expect(boxes().map((box) => box.element.checked)).toEqual([true, false, false, false])
 
     await wrapper.get('[role="switch"]').trigger('click')
     await flushPromises()
-    expect(boxes().map((box) => box.element.checked)).toEqual([false, false, false])
+    expect(boxes().map((box) => box.element.checked)).toEqual([false, false, false, false])
     expect(boxes().every((box) => box.element.disabled)).toBe(true)
     expect(writes.at(-1)).toMatchObject({
       enabled: false,
@@ -151,7 +151,7 @@ describe('SettingsAlerts settings', () => {
 
     await wrapper.get('[role="switch"]').trigger('click')
     await flushPromises()
-    expect(boxes().map((box) => box.element.checked)).toEqual([true, false, false])
+    expect(boxes().map((box) => box.element.checked)).toEqual([true, false, false, false])
     expect(boxes().every((box) => !box.element.disabled)).toBe(true)
   })
 
@@ -196,7 +196,7 @@ describe('SettingsAlerts settings', () => {
     })
     held[1]?.release()
     await flushPromises()
-    expect(boxes.map((box) => box.element.checked)).toEqual([false, true, true])
+    expect(boxes.map((box) => box.element.checked)).toEqual([false, true, true, false])
   })
 
   it('does not take a change back for a write a newer one has replaced', async () => {
@@ -214,7 +214,7 @@ describe('SettingsAlerts settings', () => {
 
     held[1]?.release()
     await flushPromises()
-    expect(boxes.map((box) => box.element.checked)).toEqual([true, true, true])
+    expect(boxes.map((box) => box.element.checked)).toEqual([true, true, true, false])
   })
 
   it('writes the language when the interface changes it', async () => {
