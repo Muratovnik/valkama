@@ -6,7 +6,7 @@
  */
 import { expect } from '@playwright/test'
 
-import { openReport, pageAt, record, serve } from './analyticsPage.ts'
+import { openReport, pageAt, record, serve, shortfalls } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1280, 1440, 1920]
@@ -34,11 +34,12 @@ test('the summary tiles stand one height at every width, each cut line whole in 
         ),
       )
     for (const line of lines) expect(line).toBeLessThan(1.5)
-    // The trend beside a figure gives way first: no figure is cut for it.
-    const cut = await tiles
-      .locator('.tile-figure')
-      .evaluateAll((all) => all.map((figure) => figure.scrollWidth > figure.clientWidth))
-    expect(cut, `the figures at ${width}px`).toEqual([false, false, false])
+    // The trend beside a figure gives way first: no figure is cut for it, by any fraction of a
+    // pixel, which whole-pixel `scrollWidth` would not see.
+    const figures = await shortfalls(page, '.spending-tiles .tile-figure')
+    expect(figures, `the figures at ${width}px`).toHaveLength(3)
+    for (const figure of figures)
+      expect(figure.short, `«${figure.text}» at ${width}px`).toBeLessThanOrEqual(0.01)
   }
   await record(info, 'tiles-heights', heights)
   const widest = heights[1920] ?? []

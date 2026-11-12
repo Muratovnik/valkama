@@ -15,7 +15,7 @@ export const analyticsOverviewMessages = {
       label: 'What changed from {period}',
       up: 'Rose most',
       down: 'Fell most',
-      still: 'No task moved from {period}.',
+      still: 'Compared with {period}, no task moved.',
       unread: 'The period before could not be read, so nothing is compared.',
       newly: 'Nothing before',
       gone: 'Nothing now',

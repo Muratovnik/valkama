@@ -103,9 +103,22 @@ function split(page: Page) {
       table: Math.round(table.height),
       rankedRows: wholeIn('.spending-bars .ranked-row'),
       tableRows: tableRowsWhole(),
-      // The heading row over the frame, and the controls in it: one row is as tall as they are.
+      // The heading row over the frame, the controls in it and the count's row under them: the
+      // title and the controls are one row as tall as the controls, the count one line under it.
       headRow: Math.round(boxOf('.spending-table-head')?.height ?? 0),
       controls: Math.round(boxOf('.spending-table-controls')?.height ?? 0),
+      counts: Math.round(boxOf('.spending-table-counts')?.height ?? 0),
+      countLine: Math.round(
+        Number.parseFloat(
+          getComputedStyle(document.querySelector('.spending-table-counts') ?? document.body)
+            .lineHeight,
+        ),
+      ),
+      rowGap: Math.round(
+        Number.parseFloat(
+          getComputedStyle(document.querySelector('.spending-table-head') ?? document.body).rowGap,
+        ),
+      ),
       // The name's column, and the table it stands in.
       name: Math.round(boxOf('.spending-table-frame tbody th')?.width ?? 0),
       figures: Math.round(
@@ -201,10 +214,11 @@ for (const [width, height] of [
       width === 1440 ? 4 : 7,
     )
     expect(new Set(measured.lines), 'lines in a cell').toEqual(new Set([1]))
-    expect(measured.headRow, 'the heading row on one line').toBeLessThanOrEqual(
-      measured.controls + 2,
+    expect(measured.counts, 'the count on one line').toBeLessThanOrEqual(measured.countLine + 1)
+    expect(measured.headRow, 'the title and the controls on one line').toBeLessThanOrEqual(
+      measured.controls + measured.rowGap + measured.counts + 2,
     )
-    expect(measured.headRow).toBeLessThanOrEqual(36)
+    expect(measured.controls).toBeLessThanOrEqual(36)
     // The figures' columns are as narrow as what they hold, so the name's column has the rest.
     expect(Math.max(...measured.slack), 'room left in a figure column').toBeLessThanOrEqual(2)
     expect(measured.name + 2).toBeGreaterThanOrEqual(measured.tableWidth - measured.figures)
