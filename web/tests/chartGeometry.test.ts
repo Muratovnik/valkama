@@ -259,6 +259,24 @@ describe('the time axis', () => {
       ],
     )
   })
+
+  test('the first name it prints, and the first it prints of each later month, carry the month', () => {
+    // 29 October to 4 November, named «Thu 29» … and, with the month, «Oct 29» ….
+    const days = [29, 30, 31, 1, 2, 3, 4].map((day, index) => ({
+      ...column(`d${index}`, {}),
+      label: `D${day}`,
+      dated: { label: `${index < 3 ? 'Oct' : 'Nov'} ${day}`, month: index < 3 ? '10' : '11' },
+    }))
+    const printed = (width: number) => dayTicks(days, width, '').map((tick) => tick.text)
+    assert.deepEqual(printed(1000), ['Oct 29', 'D30', 'D31', 'Nov 1', 'D2', 'D3', 'D4'])
+    // Where 1 November is not named, the first name of November carries the month.
+    assert.deepEqual(printed(150), ['Oct 31', 'Nov 4'])
+    // A period whose name needs no month, an hour, keeps its name.
+    assert.deepEqual(
+      dayTicks([column('h1', {})], 1000, '').map((tick) => tick.text),
+      ['h1'],
+    )
+  })
 })
 
 /** The changes of fourteen days whose first `count` after the first start with a change. */

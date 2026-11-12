@@ -900,7 +900,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   legend names it beside the same short line, the readout says its figure beside the sum, and
   the table gives it a column after the sum. The time axis names each period under the middle
   of its column, the first and the last too, moved in only as far as a name would hang past the
-  plot; the plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
+  plot. A day is named by its weekday, and the first name the axis prints and the first it prints
+  of each later month by the date with the month, «Oct 27», «Nov 1», so a span across months
+  says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
   an hour only shows. Where a ranked chart shares a row with others, as a card of first values
   does, it is `dense`: the name and the value on one line and a thin bar under them.
   Two small charts stand beside a figure rather than in a section of their own, as the

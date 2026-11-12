@@ -145,6 +145,13 @@ export interface PeriodColumn {
    * compared.
    */
   before?: number | null
+  /**
+   * The period's short name with its month, «Oct 27», and which month that is: the time axis
+   * prints it instead of `label` under the first period it names and under the first it names of
+   * each later month, so a span across months says which. None where a name needs no month, as
+   * an hour's.
+   */
+  dated?: { label: string; month: string }
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
@@ -362,7 +369,8 @@ export function columnWidth(count: number, width: number): number {
 /**
  * The time axis: each period it has room to name under the middle of its column, and any still
  * running; the first and the last too, which the axis moves in only as far as their names would
- * hang past the plot.
+ * hang past the plot. The first name printed, and the first printed of each later month, carry
+ * their month (`PeriodColumn.dated`).
  */
 export function dayTicks(
   columns: readonly PeriodColumn[],
@@ -372,14 +380,18 @@ export function dayTicks(
   const count = columns.length
   const named = new Set(labelledColumns(count, width))
   for (const [index, column] of columns.entries()) if (column.incomplete) named.add(index)
+  let month: string | undefined
   return [...named]
     .sort((left, right) => left - right)
     .flatMap((index) => {
       const column = columns[index]
       if (!column) return []
+      const { dated } = column
+      const text = dated && dated.month !== month ? dated.label : column.label
+      month = dated?.month
       const note = column.incomplete ? { note: incomplete } : {}
       const offset = (index + 0.5) / count
-      return [{ key: column.key, text: column.label, offset, edge: 'middle' as const, ...note }]
+      return [{ key: column.key, text, offset, edge: 'middle' as const, ...note }]
     })
 }
 

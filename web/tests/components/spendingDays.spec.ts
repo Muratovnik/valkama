@@ -224,6 +224,29 @@ describe('the days', () => {
     expect(notes).toEqual(['', '', '', 'Accounts: acc-a → acc-b', 'Accounts: acc-b → acc-a, acc-b'])
   })
 
+  it('name the month on the axis at its first day and where a new month starts', () => {
+    // 27 October to 2 November; unmeasured, the axis names the first day and the last.
+    const usage = usageAnswer({
+      first: new Date(2026, 9, 27),
+      days: 7,
+      groupBy: ['work_item'],
+      stretches: [{ day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600 } }],
+    }).usage
+    const names = (locale: 'en' | 'ru') =>
+      mountDays(usage, { readAt: AFTER }, locale)
+        .findAll('.period-axis .chart-tick')
+        .map((tick) => tick.text())
+    expect(names('en')).toEqual(['Oct 27', 'Nov 2'])
+    expect(names('ru')).toEqual(['27 окт.', '2 нояб.'])
+    // The table names every day in full, its month included.
+    const rows = mountDays(usage, { readAt: AFTER, narrow: true })
+      .getComponent(PeriodColumnsTable)
+      .findAll('tbody th')
+      .map((name) => name.text())
+    expect(rows[0]).toBe('Tuesday, October 27')
+    expect(rows[5]).toBe('Sunday, November 1')
+  })
+
   it('say the same in Russian', () => {
     const days = mountDays(week(), {}, 'ru')
     expect(days.get('h2').text()).toBe('Время агентов по дням, по задачам')
@@ -411,7 +434,7 @@ describe('the days across the spring change of time', () => {
       'Monday, March 30',
     ])
     const axis = mountDays(acrossTheChange(), { readAt }).get('.period-axis').text()
-    expect(axis).toContain('27 Fri')
+    expect(axis).toContain('Mar 27')
     expect(axis).toContain('30 Mon')
   })
 })

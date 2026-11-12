@@ -10,7 +10,9 @@
  * failed says the marks are not there rather than leaving them out without a word.
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
- * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
+ * and breaks it down by task: it goes out as `day`, with the day as a custom period names it. The
+ * axis names a day by its weekday, «27 Tue», and the first day it names and the first of each
+ * later month by the date with its month, «Oct 27» (`dayTicks`); the table names each in full.
  *
  * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
  * each named by its clock time. A minute after the newest record read has no data yet, which it
@@ -31,7 +33,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
-import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
+import { dayOf, named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -59,7 +61,7 @@ const props = defineProps<{
 /** A day pressed to narrow the view to it: `2030-03-04`, and its name in full. */
 const emit = defineEmits<{ day: [day: string, label: string] }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const words = useSpendingWords()
 
 /** How the period is cut: by days, which narrow the view, or by hours or minutes, which do not. */
@@ -67,6 +69,16 @@ const step = computed(() => props.usage.period.step)
 const byDay = computed(() => step.value === 'day')
 
 const title = computed(() => words.stepChartTitle(props.measure, props.by, step.value))
+
+/** A day by its date and month, «Oct 27», and the month it is in, for the time axis. */
+function dated(start: string) {
+  const format = new Intl.DateTimeFormat(locale.value, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+  return { dated: { label: format.format(named(start)), month: dayOf(start).slice(0, 7) } }
+}
 
 /** The steps of the period before, when they were read. */
 const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
@@ -96,7 +108,10 @@ const chart = computed<PeriodChartProps>(() => ({
     ...words.stepName(column.key, step.value),
     ...beforeOf(index),
     ...(byDay.value
-      ? { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }
+      ? {
+          action: t('analytics.drill.day', { day: words.fullDay(column.key) }),
+          ...dated(column.key),
+        }
       : {}),
   })),
   // An hour or a minute narrows to the day it is already of, so only a day acts.
