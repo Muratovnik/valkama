@@ -1212,32 +1212,47 @@ def link_work_items(
     remove: bool = False,
     author: str | None = None,
 ) -> dict:
+    """Add or remove one link, writing history on both ends only when it changed.
+
+    A `relates-to` link is one record whichever end wrote it, so it is found and
+    removed from either end; the directed kinds are only the record written.
+    A link already there, or a removed one already gone, changes nothing and
+    says nothing.
+    """
+
     from_row = read_model.item_row(conn, source)
     to_row = read_model.item_row(conn, target)
-    if str(from_row["work_item_id"]) == str(to_row["work_item_id"]):
+    from_id, to_id = str(from_row["work_item_id"]), str(to_row["work_item_id"])
+    if from_id == to_id:
         raise model.PlanningError("a work item cannot be linked to itself")
     link = model.link_kind(kind)
+    stored = _stored_link(conn, from_id, to_id, link)
     if remove:
-        conn.execute(
-            "DELETE FROM work_item_links WHERE from_id = ? AND to_id = ? AND kind = ?",
-            (str(from_row["work_item_id"]), str(to_row["work_item_id"]), link),
-        )
+        changed = stored is not None
+        if changed:
+            conn.execute("DELETE FROM work_item_links WHERE id = ?", (stored,))
         action = "unlinked"
     else:
-        conn.execute(
-            "INSERT OR IGNORE INTO work_item_links(from_id,to_id,kind) VALUES(?,?,?)",
-            (str(from_row["work_item_id"]), str(to_row["work_item_id"]), link),
+        # OR IGNORE: a link another writer stored since the lookup, in either
+        # direction for a symmetric kind, is refused by the store's unique index.
+        changed = (
+            stored is None
+            and conn.execute(
+                "INSERT OR IGNORE INTO work_item_links(from_id,to_id,kind) VALUES(?,?,?)",
+                (from_id, to_id, link),
+            ).rowcount
+            == 1
         )
         action = "linked"
-    detail = f"{link} {read_model.reference(conn, to_row)}"
-    _log(conn, str(from_row["work_item_id"]), action, detail, author)
-    _log(
-        conn,
-        str(to_row["work_item_id"]),
-        action,
-        f"{link} from {read_model.reference(conn, from_row)}",
-        author,
-    )
+    if changed:
+        _log(conn, from_id, action, f"{link} {read_model.reference(conn, to_row)}", author)
+        _log(
+            conn,
+            to_id,
+            action,
+            f"{link} from {read_model.reference(conn, from_row)}",
+            author,
+        )
     return {
         "from": read_model.reference(conn, from_row),
         "to": read_model.reference(conn, to_row),
@@ -1485,8 +1500,7 @@ def _fold(
         images.carry(conn, identity, survivor_id)
         if found:
             set_checklist(conn, identity, [], force=True, author=author)
-        if not _linked(conn, identity, survivor_id, "duplicates"):
-            link_work_items(conn, identity, survivor_id, "duplicates", author=author)
+        link_work_items(conn, identity, survivor_id, "duplicates", author=author)
         current = read_model.item_by_id(conn, identity)
         if current["claim_ref"]:
             _hold(conn, current, "")
@@ -1613,20 +1627,31 @@ def _repoint_links(
             continue
         link_work_items(conn, source, target, kind, remove=True, author=author)
         source, target = (survivor_id, target) if source == identity else (source, survivor_id)
-        if not _linked(conn, source, target, kind):
-            link_work_items(conn, source, target, kind, author=author)
+        # A link the survivor already has is left as it is, with no event.
+        link_work_items(conn, source, target, kind, author=author)
         moved += 1
     return moved
 
 
-def _linked(conn: sqlite3.Connection, source: str, target: str, kind: str) -> bool:
-    return (
-        conn.execute(
-            "SELECT 1 FROM work_item_links WHERE from_id = ? AND to_id = ? AND kind = ?",
+def _stored_link(conn: sqlite3.Connection, source: str, target: str, kind: str) -> int | None:
+    """The id of the record that holds this link, or None when there is none.
+
+    A symmetric kind is one record whichever end wrote it, so it is looked for in
+    both directions; a directed kind only as written.
+    """
+
+    if kind in model.SYMMETRIC_LINK_KINDS:
+        row = conn.execute(
+            "SELECT id FROM work_item_links WHERE kind = ?"
+            " AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
+            (kind, source, target, target, source),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM work_item_links WHERE from_id = ? AND to_id = ? AND kind = ?",
             (source, target, kind),
         ).fetchone()
-        is not None
-    )
+    return None if row is None else int(row[0])
 
 
 def _counts(moved: dict[str, int]) -> str:
