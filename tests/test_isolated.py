@@ -944,17 +944,21 @@ class SupervisorTests(Workspace):
 class ThroughTheCommandTests(Workspace):
     """The command as a caller runs it, against the real server."""
 
-    def source_store(self) -> Path:
-        source = self.root / "source.sqlite3"
+    def make_store(self, path: Path) -> Path:
+        """A store the product creates at `path`, through its own connection."""
+
         subprocess.run(
             [sys.executable, "-c", "from server import store; store.connect().close()"],
             cwd=ROOT,
-            env={**os.environ, "VALKAMA_DB": str(source)},
+            env={**os.environ, "VALKAMA_DB": str(path)},
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=True,
         )
-        return source
+        return path
+
+    def source_store(self) -> Path:
+        return self.make_store(self.root / "source.sqlite3")
 
     def command(self, *arguments: str) -> tuple[int, str]:
         """Run it with pipes, and wait on them as `execFileSync` and a pipeline do.
@@ -1036,6 +1040,38 @@ class ThroughTheCommandTests(Workspace):
         self.assertFalse(self.home.exists())
         self.assertEqual([], [p for p in files_under(self.out) if "sqlite3" in p.name])
         self.assertEqual(before, source.read_bytes())
+
+    def test_the_default_copy_serves_the_profile_store_when_valkama_db_is_unset(self) -> None:
+        # The command as a caller runs it, with no VALKAMA_DB. In this process the
+        # suite has already set one, which is why the in-process test cannot see
+        # the default going wrong.
+        profile_store = self.real / ".valkama" / "valkama.sqlite3"
+        profile_store.parent.mkdir()
+        self.make_store(profile_store)
+        with contextlib.closing(sqlite3.connect(profile_store)) as writer:
+            writer.execute("CREATE TABLE synthetic_marker (note TEXT NOT NULL)")
+            writer.execute("INSERT INTO synthetic_marker VALUES ('from the profile')")
+            writer.commit()
+        before = profile_store.read_bytes()
+
+        with mock.patch.dict(os.environ):
+            os.environ.pop("VALKAMA_DB", None)
+            self.assertNotIn("VALKAMA_DB", os.environ)
+            code, said = self.command("serve", "--out", str(self.out), "--store-copy")
+        served = self.served(code, said)
+
+        self.assertEqual(200, self.get(served["port"], "/api/modules"))
+        copy = isolated.store_path(self.home)
+        with contextlib.closing(sqlite3.connect(f"{copy.as_uri()}?mode=ro", uri=True)) as held:
+            notes = [row[0] for row in held.execute("SELECT note FROM synthetic_marker")]
+        self.assertEqual(["from the profile"], notes)
+        self.assertEqual(before, profile_store.read_bytes())
+
+        code, said = self.stop()
+
+        self.assertEqual(0, code, said)
+        self.assertFalse(self.home.exists())
+        self.assertEqual(before, profile_store.read_bytes())
 
     def test_a_store_copy_brings_the_callers_project_registry_and_leaves_it_alone(self) -> None:
         caller = self.root / "caller"
