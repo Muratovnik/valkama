@@ -105,9 +105,6 @@ function measure(page: Page) {
         scale: all('[data-harness="days"] .period-scale .chart-tick').map((element) =>
           box(element),
         ),
-        markers: all('[data-harness="days"] .period-markers .chart-tick').map((element) =>
-          box(element),
-        ),
         legend: all('[data-harness="days"] .chart-key').map((element) => box(element)),
         readout: box(days.querySelector('.period-readout') ?? days),
         stacks: all('[data-harness="days"] .period-stack').map((element) => box(element)),
@@ -197,7 +194,7 @@ for (const width of WIDTHS) {
     )
     expect(long?.labelText).toBe('example-project-with-a-rather-long-repository-identifier')
 
-    // Days: the axis labels, the scale and the change markers stand clear of each other and
+    // Days: the axis labels and the scale stand clear of each other and
     // inside the figure; the scale's zero stands on the field's floor; the running day is
     // hatched and still named on the axis.
     expect(crossings(seen.days.axis, 'inline'), 'axis labels cross').toEqual([])
@@ -209,7 +206,7 @@ for (const width of WIDTHS) {
       left: Math.min(seen.days.frame.left, seen.days.plot.left),
       right: Math.max(seen.days.frame.right, seen.days.plot.right),
     }
-    for (const tick of [...seen.days.axis, ...seen.days.scale, ...seen.days.markers])
+    for (const tick of [...seen.days.axis, ...seen.days.scale])
       expect(inside(tick, scrolled), 'a label outside its chart').toBe(true)
     for (const key of seen.days.legend)
       expect(inside(key, seen.days.frame), 'a legend key outside its chart').toBe(true)

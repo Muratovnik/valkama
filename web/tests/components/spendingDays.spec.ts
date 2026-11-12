@@ -194,19 +194,24 @@ describe('the days', () => {
     expect(days.text()).not.toContain('so far')
   })
 
-  it('mark where the accounts that worked change, past a day nobody worked', () => {
+  it('mark where the accounts that worked change, past a day nobody worked', async () => {
     expect(accountChanges(byAccount(), 'time').map((change) => change.at)).toEqual([
       momentAt(new Date(2026, 10, 12)),
       momentAt(new Date(2026, 10, 13)),
     ])
     const days = mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(2)
-    expect(
-      days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
-    ).toEqual([
-      expect.stringContaining('Accounts: acc-a → acc-b'),
-      expect.stringContaining('Accounts: acc-b → acc-a, acc-b'),
-    ])
+    // Said where the day is read, not in a note under the chart.
+    expect(days.find('.period-notes').exists()).toBe(false)
+    // A span of time keeps its figure and unit together with a space no line breaks at.
+    const readout = () => days.get('.period-readout').text().replaceAll(/\s/gu, ' ')
+    expect(readout()).toBe(
+      'Friday, November 13: total 1 h. Account change: acc-b → acc-a, acc-b. MAIN-1 One 1 h',
+    )
+    await days.get('.period-slot:nth-child(4)').trigger('pointerenter')
+    expect(readout()).toBe(
+      'Thursday, November 12: total 1 h. Account change: acc-a → acc-b. MAIN-1 One 1 h',
+    )
   })
 
   it('read as a table on a narrow page, with the same days, so far and the marks', () => {
@@ -221,7 +226,13 @@ describe('the days', () => {
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
-    expect(notes).toEqual(['', '', '', 'Accounts: acc-a → acc-b', 'Accounts: acc-b → acc-a, acc-b'])
+    expect(notes).toEqual([
+      '',
+      '',
+      '',
+      'Account change: acc-a → acc-b',
+      'Account change: acc-b → acc-a, acc-b',
+    ])
   })
 
   it('name the month on the axis at its first day and where a new month starts', () => {
@@ -345,16 +356,20 @@ describe('the account marks', () => {
     ])
   })
 
-  it('say the change under the chart and to a screen reader by the known accounts alone', () => {
+  it('say the change in the readout and to a screen reader by the known accounts alone', async () => {
     const accounts = daysOf(['acc-a'], [UNRECORDED], ['acc-b', UNRECORDED], ['acc-b'])
     const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(1)
-    expect(
-      days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
-    ).toEqual([expect.stringContaining('Accounts: acc-a → acc-b')])
+    await days.get('.period-slot:nth-child(3)').trigger('pointerenter')
+    expect(days.get('.period-readout').text()).toContain('Account change: acc-a → acc-b')
     const named = spokenDays(days).map((day) => day.holds)
-    expect(named.map((name) => name.includes('Accounts:'))).toEqual([false, false, true, false])
-    expect(named[2]).toContain('Accounts: acc-a → acc-b')
+    expect(named.map((name) => name.includes('Account change:'))).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ])
+    expect(named[2]).toContain('Account change: acc-a → acc-b')
     expect(named.join(' ')).not.toContain('Unknown')
 
     const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
@@ -362,7 +377,7 @@ describe('the account marks', () => {
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
-    expect(notes).toEqual(['', '', 'Accounts: acc-a → acc-b', ''])
+    expect(notes).toEqual(['', '', 'Account change: acc-a → acc-b', ''])
   })
 })
 

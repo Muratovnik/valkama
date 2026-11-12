@@ -4,8 +4,9 @@
  * work ran under. The value axis starts at zero and names a few round steps; the time axis
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched and says so under its name, so a short last column does not read as a drop; a
- * change at the start of a period (the account switched) is a numbered line up the plot, and
- * the note under the chart says what changed. A period compared with this one (`before`) stands
+ * change at the start of a period (the account switched) is a line up the plot in the gap before
+ * it, and the period's readout, name and table row say what changed: no row of the chart is kept
+ * for it, above the plot or under it. A period compared with this one (`before`) stands
  * on the same scale as a short mark at its height over each column, an edge and not a hue, named
  * in the legend, and the readout says its figure in words. A series with no figure in a period
  * (`absent`, such as work with no price) draws nothing there, and the readout and the period's
@@ -15,11 +16,11 @@
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
- * or the keyboard, each series by name, and the last period when neither stands on one. That
- * readout is two lines high whatever it says (`usePeriodReadout`), and each note under the
- * chart one (`PeriodNotes`): a longer line ends in an ellipsis and is whole in its hint, in the
- * period's name and in the table, so pointing at a period, leaving it or a new answer moves
- * nothing on the page.
+ * or the keyboard, each series by name, and the last period begun when neither stands on one.
+ * That readout is one line whatever it says (`usePeriodReadout`): a longer line ends in an
+ * ellipsis and is whole in its hint, in the period's name and in the table, so pointing at a
+ * period, leaving it or a new answer moves nothing on the page. The time axis keeps its names
+ * apart, measured in the axis's own font (`dayTicks`).
  *
  * Presentational: data and words come in, a press on a period (`actionable: 'column'`) or on
  * one series in it (`'segment'`) goes out as `select`. A
@@ -36,7 +37,10 @@
  */
 import { computed, ref, useId } from 'vue'
 
+import { useEventListener } from '@vueuse/core'
+
 import { pressedLast } from '@/shared/lib/pressFocus.ts'
+import { drawnWidth } from '@/shared/lib/textWidth.ts'
 import type {
   PeriodChartProps,
   PeriodSelection,
@@ -44,12 +48,9 @@ import type {
   StackedColumn,
 } from '@/shared/ui/chartGeometry.ts'
 import {
-  changeMarkers,
-  changeNotes,
   columnSummary,
   columnWidth,
   dayTicks,
-  foldChanges,
   roundAxis,
   segmentPlace,
   segmentSummary,
@@ -58,7 +59,6 @@ import {
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import PeriodNotes from '@/shared/ui/PeriodNotes.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
 import { usePeriodReadout } from '@/shared/ui/usePeriodReadout.ts'
@@ -108,13 +108,24 @@ const scale = computed<PlacedTick[]>(() =>
     edge: 'middle',
   })),
 )
-const days = computed(() => dayTicks(props.columns, width.value, props.words.incomplete))
-
-const notes = computed(() => changeNotes(chart.value.columns))
-const folded = computed(() => foldChanges(notes.value, props.words))
-const markers = computed(() =>
-  changeMarkers(notes.value, props.columns.length, folded.value === null),
+/**
+ * The product's fonts can arrive after the axis was laid out, and its names were then measured in
+ * a fallback: each arrival measures them again.
+ */
+const fontsArrived = ref(0)
+useEventListener(
+  () => (typeof document === 'undefined' ? undefined : document.fonts),
+  'loadingdone',
+  () => (fontsArrived.value += 1),
 )
+
+/** The names of the time axis, each measured in the axis's font (`ChartTicks`, `--font-count`). */
+const days = computed(() => {
+  void fontsArrived.value
+  const font = getComputedStyle(document.documentElement).getPropertyValue('--font-count').trim()
+  const measure = (text: string) => drawnWidth(text, font)
+  return dayTicks(props.columns, width.value, props.words.incomplete, measure)
+})
 
 const { focused, readout, isShown, point, hold } = usePeriodReadout(
   () => chart.value.columns,
@@ -218,14 +229,13 @@ function key(event: KeyboardEvent, at: number | null) {
         :outline="outline"
       />
       <p
-        v-tooltip.clipped="readout.whole"
-        class="period-readout"
+        v-tooltip.clipped="readout"
+        class="period-readout one-line"
         aria-hidden="true"
         @pointerenter="hold(true)"
         @pointerleave="hold(false)"
       >
-        <span class="one-line">{{ readout.head }}</span>
-        <span class="one-line">{{ readout.series }}</span>
+        {{ readout }}
       </p>
       <div
         ref="frame"
@@ -246,12 +256,6 @@ function key(event: KeyboardEvent, at: number | null) {
             v-if="acting"
             class="period-gutter"
             aria-hidden="true"
-          />
-          <ChartTicks
-            v-if="markers.length"
-            class="period-markers"
-            along="inline"
-            :ticks="markers"
           />
           <ChartTicks
             class="period-scale"
@@ -342,11 +346,6 @@ function key(event: KeyboardEvent, at: number | null) {
           />
         </div>
       </div>
-      <PeriodNotes
-        v-if="notes.length"
-        :notes="notes"
-        :folded="folded"
-      />
     </template>
   </figure>
 </template>

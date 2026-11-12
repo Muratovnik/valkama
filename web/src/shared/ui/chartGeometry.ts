@@ -187,11 +187,6 @@ export interface PeriodWords {
   emptyDescription?: string
   /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
   pending?: string
-  /**
-   * The one line under the chart that counts its changes where there are too many for a line
-   * each (`foldChanges`): "Account changes: 12". Without it every change has its line.
-   */
-  changes?: (count: number) => string
 }
 
 /** What a press in a period chart opens: a period, or one series in it. */
@@ -366,22 +361,59 @@ export function columnWidth(count: number, width: number): number {
   return Math.min(COLUMN.most, Math.max(COLUMN.least, half))
 }
 
+/** The least room between two names on the time axis, in pixels: more than a space. */
+const LABEL_GAP = 8
+
+/**
+ * Where a name of the time axis stands, in pixels from the axis's start: under the middle of its
+ * column, moved in only as far as it would hang past either end, as `ChartTicks` places it.
+ */
+function labelSpan(index: number, count: number, width: number, wide: number) {
+  const middle = ((index + 0.5) / count) * width
+  const start = Math.max(0, Math.min(middle - wide / 2, width - wide))
+  return { start, end: start + wide }
+}
+
 /**
  * The time axis: each period it has room to name under the middle of its column, and any still
  * running; the first and the last too, which the axis moves in only as far as their names would
  * hang past the plot. The first name printed, and the first printed of each later month, carry
  * their month (`PeriodColumn.dated`).
+ *
+ * No two names come closer than `LABEL_GAP`, each as wide as `measure` says its text and its
+ * note are: a period still running keeps its name, and a neighbour that would touch it gives
+ * way, as does any name that would touch one nearer the end. Without a measure (0 for every
+ * text) only names standing in one place would touch.
  */
 export function dayTicks(
   columns: readonly PeriodColumn[],
   width: number,
   incomplete: string,
+  measure: (text: string) => number = () => 0,
 ): PlacedTick[] {
   const count = columns.length
-  const named = new Set(labelledColumns(count, width))
-  for (const [index, column] of columns.entries()) if (column.incomplete) named.add(index)
+  const running = columns.flatMap((column, index) => (column.incomplete ? [index] : []))
+  // The running periods first, then the rest from the end back: who gives way is decided here.
+  const wanted = [...new Set([...running.reverse(), ...labelledColumns(count, width).reverse()])]
+  const kept: { end: number; index: number; start: number }[] = []
+  for (const index of wanted) {
+    const column = columns[index]
+    if (!column) continue
+    // Measured at its widest — dated or not — since which name carries the month is known last.
+    const wide = Math.max(
+      measure(column.label),
+      column.dated ? measure(column.dated.label) : 0,
+      column.incomplete ? measure(incomplete) : 0,
+    )
+    const span = labelSpan(index, count, width, wide)
+    const clear = kept.every(
+      (other) => span.end + LABEL_GAP <= other.start || other.end + LABEL_GAP <= span.start,
+    )
+    if (clear || width <= 0) kept.push({ index, ...span })
+  }
   let month: string | undefined
-  return [...named]
+  return kept
+    .map((one) => one.index)
     .sort((left, right) => left - right)
     .flatMap((index) => {
       const column = columns[index]
@@ -434,18 +466,29 @@ const seriesParts = (segments: readonly StackSegment[], format: Format) =>
   segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
 
 /**
- * A period as the two lines of the readout over its chart: its name, sum, the period compared
- * with and what is said of it; then each series in it, the largest first.
+ * A period as the one line of the readout over its chart: its name, sum and the period compared
+ * with, what is said of it — such as a change of account at its start — and then each series in
+ * it, the largest first, so what a narrow line cuts is the tail of the series.
  */
-export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
+export function readoutLine(stacked: StackedColumn, words: PeriodWords, format: Format) {
   const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
-  return {
-    head: [
-      columnHead(stacked, words, format),
-      ...columnNotes(stacked, words, { withSum: true }),
-    ].join('. '),
-    series: seriesParts(largest, format).join(', '),
-  }
+  const series = seriesParts(largest, format).join(', ')
+  return [
+    columnHead(stacked, words, format),
+    ...columnNotes(stacked, words, { withSum: true }),
+    ...(series ? [series] : []),
+  ].join('. ')
+}
+
+/**
+ * The period the readout says while neither the pointer nor the keyboard stands on one: the last
+ * period begun, which is the one still running where one is, so a day read by its hours says the
+ * hour under way rather than the last hour of the day, still to come; the last period otherwise.
+ */
+export function lastBegun(columns: readonly StackedColumn[]): number {
+  for (let index = columns.length - 1; index >= 0; index -= 1)
+    if (columns[index]?.column.incomplete) return index
+  return columns.length - 1
 }
 
 /** One segment in words, with the sum of the period it stands in. */
@@ -457,56 +500,6 @@ export function segmentSummary(
 ): string {
   const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${sumWords(stacked, words, format)}`
   return [head, ...columnNotes(stacked, words, { withSum: true })].join('. ')
-}
-
-/** A change the chart marks, numbered in time order: the plot shows the number, a note the words. */
-export interface ChangeNote {
-  index: number
-  number: number
-  period: string
-  text: string
-}
-
-export function changeNotes(columns: readonly StackedColumn[]): ChangeNote[] {
-  return columns
-    .flatMap((one, index) =>
-      one.marks.map((text) => ({ index, period: one.column.fullLabel ?? one.column.label, text })),
-    )
-    .map((note, at) => ({ ...note, number: at + 1 }))
-}
-
-/** Up to this many changes are noted a line each under the chart; more fold into one line. */
-const NOTED_CHANGES = 2
-
-/**
- * The changes under the chart as one line that counts them, with every change in its whole
- * text, where there are more than `NOTED_CHANGES` and the chart has words for it; null where
- * each change keeps its own line.
- */
-export function foldChanges(notes: readonly ChangeNote[], words: PeriodWords) {
-  if (!words.changes || notes.length <= NOTED_CHANGES) return null
-  const whole = notes.map((note) => `${note.period}: ${note.text}`).join('; ')
-  return { text: words.changes(notes.length), whole }
-}
-
-/**
- * The numbers over the plot, one label per period that changed, at that period's start; with
- * the changes folded into one line (`numbered` false) the lines stand there with no number.
- */
-export function changeMarkers(
-  notes: readonly ChangeNote[],
-  count: number,
-  numbered = true,
-): PlacedTick[] {
-  const byColumn = new Map<number, number[]>()
-  for (const note of notes)
-    byColumn.set(note.index, [...(byColumn.get(note.index) ?? []), note.number])
-  return [...byColumn].map(([index, numbers]) => ({
-    key: index,
-    text: numbered ? numbers.join(', ') : '',
-    offset: index / count,
-    edge: 'middle',
-  }))
 }
 
 /**

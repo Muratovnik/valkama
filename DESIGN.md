@@ -883,12 +883,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and the readout over the
   plot and every accessible name say each series by name. The readout says the period under the
-  pointer or the keyboard, the last one when neither stands on one, and keeps one line whatever
-  it says, as each note under the chart does: a longer text ends in an ellipsis and is whole in
-  its hint and in the table, so pointing, leaving and a new answer move nothing on the page. A
+  pointer or the keyboard, the last period begun when neither stands on one — the hour under way
+  of a day read by its hours, not its last hour still to come — and keeps one line whatever it
+  says: the period, its sum and the period before, what is said of it, then the series largest
+  first; a longer line ends in an ellipsis and is whole in its hint and in the table, never
+  wrapped, so pointing, leaving and a new answer move nothing on the page. A
   period still running is hatched (a mask, which adds no colour) and says «so far» under its name, so it does not read as a drop; a change
-  at a period's start, such as the account the work ran under, is a numbered line up the
-  plot with its words under the chart. The periods are one Tab stop and the arrows walk
+  at a period's start, such as the account the work ran under, is a line up the plot in the gap
+  before its column, a shape and not a hue, and the period's readout, name and table row say it,
+  «Account change: a → a, b», naming each account as Settings does: the chart keeps no row for
+  changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own. A period that acts when pressed is never
   narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
   all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
@@ -903,9 +907,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   legend names it beside the same short line, the readout says its figure beside the sum, and
   the table gives it a column after the sum. The time axis names each period under the middle
   of its column, the first and the last too, moved in only as far as a name would hang past the
-  plot. A day is named by its weekday, and the first name the axis prints and the first it prints
-  of each later month by the date with the month, «Oct 27», «Nov 1», so a span across months
-  says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
+  plot, and no two names come within 8px of each other, measured in the axis's font: a period
+  still running keeps its name, and a neighbour that would touch it gives way. A day is named by
+  its weekday, and the first name the axis prints and the first it prints of each later month by
+  the date with the month, «Oct 27», «Nov 1» (`stepName` in the page's words, so every chart of
+  days has it), so a span across months says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
   an hour only shows. Where a ranked chart shares a row with others, as a card of first values
   does, it is `dense`: the name and the value on one line and a thin bar under them, each value
   as wide as its own figure and its name taking the rest of the row.

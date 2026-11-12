@@ -12,7 +12,7 @@
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
-import { named } from '@/pages/analytics/utils/readMoments.ts'
+import { dayOf, named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -295,10 +295,21 @@ export function useSpendingWords() {
   const fullClock = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long', ...CLOCK }).format(named(start))
 
-  /** A step of a period by its start, short and in full: a day by its date, else its time. */
+  /**
+   * A step of a period by its start, short and in full: a day by its weekday and date, else its
+   * time. A day carries too its date with the month, «Oct 27», and which month that is, which a
+   * time axis prints where a month starts (`PeriodColumn.dated`); a time needs no month.
+   */
   const stepName = (start: string, step: UsageStep) =>
     step === 'day'
-      ? { label: day(start), fullLabel: longDay(start) }
+      ? {
+          label: day(start),
+          fullLabel: longDay(start),
+          dated: {
+            label: dayFormat({ day: 'numeric', month: 'short' }).format(named(start)),
+            month: dayOf(start).slice(0, 7),
+          },
+        }
       : { label: clock(start), fullLabel: fullClock(start) }
 
   /** How a chart is cut by its steps: «per day», «per minute». */
@@ -321,7 +332,7 @@ export function useSpendingWords() {
   const axis = (name: Measure) =>
     name === 'time' ? durationAxis(spanWordsOf(t), HOUR_SECONDS) : undefined
 
-  /** What changed in the accounts that worked: «Accounts: a → a, b». */
+  /** What changed in the accounts that worked: «Account change: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
       before: before.map((value) => valueLabel('account', value)).join(', '),
