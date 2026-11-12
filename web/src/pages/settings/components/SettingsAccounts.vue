@@ -113,6 +113,7 @@ const status = computed(() => {
           v-tooltip.detail="t('settings.accountAliases.kept')"
           class="account-input"
           autocomplete="off"
+          size="compact"
           :control-id="row.fieldId"
           :model-value="row.text"
           :label="row.fieldLabel"
