@@ -13,8 +13,9 @@
  * it is over and never the panel or the page. Elsewhere, in the list's place on a narrow page or a
  * phone, the panel scrolls and the table keeps a frame of its own; where the window is tall enough
  * that frame stays at the panel's bottom edge while the figures and the charts pass under it, so its
- * heading row is in view from the start and a wheel over it moves the table alone. A part focused
- * under it is brought up over it (`uncover`).
+ * heading row is in view from the start and a wheel over it moves the table alone. How much of the
+ * panel's edge it covers goes up (`cover`), and the page pads its scroll by that, so a part the
+ * browser brings into view, focused or scrolled to, stands over the table and never under it.
  *
  * Held, a button at the table gives it the whole panel under the figures and back (`tableWhole`),
  * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway. The
@@ -25,8 +26,10 @@
  * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`).
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
@@ -65,9 +68,11 @@ const props = defineProps<{
 }>()
 /**
  * Read the answer again; narrow the view to a value of the answer's dimension, or to a day, as
- * pressed in a part of the panel; cross the table with a second dimension, or with none.
+ * pressed in a part of the panel; cross the table with a second dimension, or with none. `cover`
+ * says how high the table stands over the bottom edge of the scroll the panel is in, 0 for none.
  */
 const emit = defineEmits<{
+  'cover': [height: number]
   'day': [day: string, label: string]
   'narrow': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   'retry': []
@@ -106,30 +111,27 @@ const narrow = useNarrowCharts(root)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
-/** The element that scrolls the panel where the page does not hold it: its nearest scrolling box. */
-function scrollerOf(from: HTMLElement | null) {
-  for (let node = from?.parentElement; node; node = node.parentElement)
-    if (['auto', 'scroll'].includes(getComputedStyle(node).overflowY)) return node
-  return null
-}
-
-/** The air left under a part brought up over the table, room for its focus ring. */
+/** The air left under a part brought into view over the table, room for its focus ring. */
 const RING_ROOM = 8
 
+const table = () => root.value?.querySelector<HTMLElement>('.dimension-table') ?? null
+const cover = ref(0)
+
 /**
- * Where the table stays at the panel's bottom edge, a part focused under it is scrolled up to stand
- * over it: the browser brings a focused part into the panel's view, and the table would cover it.
+ * How high the table stands over the bottom edge of the panel's scroll while it sticks there, with
+ * room for a ring over it; 0 where it stands in the flow. Its height follows its rows, a crossing
+ * and the window, and whether it sticks follows the window's height and the page's hold.
  */
-function uncover(event: FocusEvent) {
-  const table = root.value?.querySelector<HTMLElement>('.dimension-table')
-  const target = event.target
-  if (props.fills || !table || !(target instanceof Element) || table.contains(target)) return
-  requestAnimationFrame(() => {
-    if (getComputedStyle(table).position !== 'sticky') return
-    const covered = target.getBoundingClientRect().bottom - table.getBoundingClientRect().top
-    if (covered > 0) scrollerOf(root.value)?.scrollBy({ top: covered + RING_ROOM })
-  })
+function measureCover() {
+  const sticking = table()
+  const sticks = !props.fills && sticking && getComputedStyle(sticking).position === 'sticky'
+  cover.value = sticks ? Math.ceil(sticking.getBoundingClientRect().height) + RING_ROOM : 0
 }
+useResizeObserver(table, measureCover)
+useEventListener(globalThis, 'resize', measureCover)
+watch(() => props.fills, measureCover, { flush: 'post' })
+watch(cover, (height) => emit('cover', height), { immediate: true })
+onBeforeUnmount(() => emit('cover', 0))
 
 /** Dimmed while a new view is read in place of this answer (`readPending.css`). */
 const pending = useAnewDimmed(usePanelStanding())
@@ -156,7 +158,6 @@ async function showTable() {
     :class="{ 'read-pending': pending }"
     :data-fills="fills"
     :data-whole="whole"
-    @focusin="uncover"
   >
     <SpendingUnread
       v-if="!before"
@@ -308,9 +309,10 @@ async function showTable() {
 /* Unheld, the panel scrolls as a whole. Where the window is tall enough, the table stays at its
    bottom edge, up to half the window high, on the ground the panel stands on, and what stands
    above passes under it: its heading row is in view from the start and a wheel over its frame
-   moves the table alone. Scrolled to its end, the panel shows the table in its own place under the
-   day chart, so nothing above it is out of reach. A short window, a phone on its side, keeps the
-   table in the flow, where it would cover what it stands under. */
+   moves the table alone, and the page's scroll padding by its height (`cover`) keeps what is
+   brought into view above it. Scrolled to its end, the panel shows the table in its own place
+   under the day chart, so nothing above it is out of reach. A short window, a phone on its side,
+   keeps the table in the flow, where it would cover what it stands under. */
 @media (height >= 40rem) {
   /* A part that sticks stays inside its parent's box, which here would start under the figures
      and hold the table down off the panel's edge until they scroll away: unheld, the charts and
