@@ -1,11 +1,12 @@
 /**
  * The three summary tiles stand one height at every width the page is read at, the height of
  * the widest, because each line under a figure keeps one line; what a cut line hides is whole
- * in the tile's hint, never an empty one.
+ * in the tile's hint, never an empty one. A tile not chosen answers the pointer with a ground of
+ * its own, as a segment of the period does with its ink, and nothing moves.
  */
 import { expect } from '@playwright/test'
 
-import { openReport, record, serve } from './analyticsPage.ts'
+import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1280, 1440, 1920]
@@ -58,4 +59,43 @@ test('the summary tiles stand one height at every width, each cut line whole in 
   for (const note of notes) expect(said).toContain(note)
   const figure = await tokens.locator('.tile-figure').textContent()
   expect(said).toContain(figure?.trim() ?? '')
+})
+
+test('a tile not chosen takes a ground under the pointer, and nothing moves', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await openReport(page, 1440, pageAt())
+  const tiles = page.locator('.spending-tiles .segmented-option')
+  await expect(tiles).toHaveCount(3)
+  await expect(tiles.nth(0)).toHaveAttribute('aria-checked', 'true')
+  const look = () =>
+    tiles.evaluateAll((all) =>
+      all.map((tile) => {
+        const box = tile.getBoundingClientRect()
+        const parts = [...tile.querySelectorAll('*')].map((part) => {
+          const { x, y, width, height } = part.getBoundingClientRect()
+          return [x, y, width, height].map((side) => Math.round(side)).join(',')
+        })
+        return {
+          ground: getComputedStyle(tile).backgroundColor,
+          box: [box.x, box.y, box.width, box.height].map((side) => Math.round(side)).join(','),
+          parts: parts.join(' '),
+        }
+      }),
+    )
+  await page.mouse.move(0, 0)
+  const resting = await look()
+  await tiles.nth(1).hover()
+  const hovered = await look()
+  await record(info, 'tiles-hover', { resting, hovered })
+  expect(hovered[1]?.ground, 'the hovered tile').not.toBe(resting[1]?.ground)
+  expect(hovered[0]?.ground, 'the chosen tile').toBe(resting[0]?.ground)
+  expect(hovered[2]?.ground, 'the other tile').toBe(resting[2]?.ground)
+  // A hovered tile does not read as the chosen one.
+  expect(hovered[1]?.ground).not.toBe(resting[0]?.ground)
+  for (const [index, tile] of hovered.entries()) {
+    expect(tile.box, `tile ${index + 1}`).toBe(resting[index]?.box)
+    expect(tile.parts, `the words of tile ${index + 1}`).toBe(resting[index]?.parts)
+  }
 })

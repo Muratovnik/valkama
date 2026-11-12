@@ -137,7 +137,7 @@ describe('the panel', () => {
     expect(page.find('.spending-tiles').exists()).toBe(true)
     expect(page.find('.spending-days').exists()).toBe(true)
     expect(page.find('.overview-changes').exists()).toBe(true)
-    expect(page.findAll('.overview-top')).toHaveLength(4)
+    expect(page.findAll('.overview-top')).toHaveLength(3)
     expect(page.find('.spending-bars').exists()).toBe(false)
     expect(page.find('.spending-table').exists()).toBe(false)
     // The overview's own read is by task, so moving to the task section asks nothing again: the
