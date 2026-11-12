@@ -1,0 +1,12 @@
+{
+  "name": "valkama",
+  "owner": { "name": "Nikolai Muratov" },
+  "description": "Valkama's Claude Code mods.",
+  "plugins": [
+    {
+      "name": "valkama-quota",
+      "source": "./server/mod/valkama-quota",
+      "description": "Hands each Claude Code session's plan-limit reading to Valkama after a model response, as the quota source `mod`."
+    }
+  ]
+}

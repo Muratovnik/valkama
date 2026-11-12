@@ -1125,7 +1125,7 @@ again; whatever else listens on that old port would receive the text.
 ## The status line command
 
 ```
-valkama statusline [--previous=<base64>]
+valkama statusline [--source=statusline|mod] [--previous=<base64>]
 ```
 
 This is the command Claude Code runs as its status line (`statusLine` in its
@@ -1273,6 +1273,117 @@ the store module or `json`, and it imports `subprocess` and `ctypes` only to run
 a previous command. It holds `store.STORE_SCHEMA_VERSION` in a copy of its own,
 which a test keeps equal.
 
+## The mod
+
+`server/mod/valkama-quota` is a Claude Code mod, a plugin whose hooks module runs
+inside the session, and the `mod` source of the quota samples. It reads the same
+windows the status line carries, from the engine itself, so it reports wherever
+the session runs: in the VS Code extension, which runs no status line, too.
+
+### When it reads
+
+| Engine event | What it hands over |
+| --- | --- |
+| `session.start`, after the engine's own start | `$.session.usage().rateLimits`, which a resumed session already has |
+| `session.measure` whose `changed` holds `rateLimits` | the event's `rateLimits`: a window moved a whole point during the turn |
+| `turn.complete`, after the engine's own completion | `$.session.usage().rateLimits`, the freshest reading there is, tenths included |
+
+A session before its first response has no windows, and nothing is handed over.
+After `/clear`, `/resume` or `/branch` the session goes on under a new id, which
+the next reading carries.
+
+### How it hands a reading over
+
+The mod runs the receiver with `$.process.run`, by argument vector and with no
+shell, the way a hook is registered in exec form:
+
+```
+<python> -I -S <launcher directory>/valkama-launcher.py statusline --source=mod
+```
+
+`<python>` is the `python` the launcher manifest `valkama-launcher.json` records,
+and `<launcher directory>` the directory `valkama launcher install` uses by
+default: `%LOCALAPPDATA%\Valkama\bin` on Windows, else `$XDG_BIN_HOME` or
+`~/.local/bin`. The mod reads the manifest on each hand-over, so a later
+`launcher install` is followed at once. A launcher installed into another
+directory is not found.
+
+Stdin is the status line's own fields and nothing else:
+
+```json
+{"session_id": "…",
+ "rate_limits": {"five_hour": {"used_percentage": 23.5, "resets_at": 1791993600},
+                 "seven_day": {"used_percentage": 41, "resets_at": 1792202400}}}
+```
+
+`used_percentage` is the engine's `percentUsed`, and `resets_at` its `resetsAt`
+in Unix seconds, left out when the engine gives no reset. So one parser, one write
+path and one spool serve both sources: `--source=mod` changes only the source the
+reading is recorded under, and which windows it keeps.
+
+| Field | From |
+| --- | --- |
+| `source` | `mod` |
+| `session_id` | `session_id` |
+| `at` | when the receiver ran, UTC to the millisecond, as for the status line |
+| `five_hour`, `week` | `rate_limits.five_hour`, `rate_limits.seven_day` |
+| `seat` | the seven-day window's reset, as for the status line |
+
+A gateway's `spend_limit` reaches the mod without its dollars and is not kept
+from it. Everything else is the status line command's: a reading the store cannot
+take now goes to the spool, input that carries no reading writes nothing and
+prints nothing, and a reading the store would refuse is reported on stderr and
+written nowhere. A `--source` that names neither `statusline` nor `mod`, or is
+given twice, records nothing. The flag is an addition: a status line command
+without it behaves as before, and `interfaces.statusline` stays at version 1.
+
+### What it never does
+
+- **It never holds a turn.** The hook answers first; the hand-over runs after it.
+- **It runs one receiver at a time.** While one runs, the newest reading of each
+  session waits for it, and a reading the receiver took is not handed over again.
+  A slow Valkama holds one process, never one per response.
+- **It is bounded.** A receiver still running after 10 seconds is stopped by the
+  engine, which fails nothing; the next reading tries again.
+- **Valkama missing costs only the reading.** No manifest, a manifest naming no
+  interpreter, a receiver that cannot start or exits with a failure: nothing is
+  shown, nothing fails, and the next reading tries again.
+
+### Installing it
+
+Installing is the user's step; Valkama does not install, enable or remove the mod.
+The repository is a Claude Code marketplace named `valkama`
+(`.claude-plugin/marketplace.json`) that lists the mod as `valkama-quota`. The
+managed launcher has to be installed first, from a release that has the mod's
+receiver.
+
+From GitHub, at the prompt of a Claude Code terminal session:
+
+```
+/plugin install valkama-quota --marketplace Muratovnik/valkama
+```
+
+From a checkout, in a shell:
+
+```
+claude plugin marketplace add <checkout>
+claude plugin install valkama-quota@valkama
+```
+
+A marketplace added from a folder is read from that folder itself: the mod runs
+the checkout's working tree, and `/reload-plugins` picks up its edits. One
+installed from GitHub runs the copy made at install, which `claude plugin update`
+replaces. `claude plugin disable valkama-quota@valkama` switches it off, and
+`claude plugin uninstall valkama-quota@valkama` removes it.
+
+### Its tests
+
+`claude plugin test server/mod/valkama-quota` runs the mod's own suite against the
+engine: what it hands over and when, where it finds the launcher, and Valkama
+missing, failing or slow. `tests/test_mod.py` holds, in the Python suite, the names
+the two sides spell to each other: the manifest and shim, the receiver's command
+and source, the mod's name the doctor looks for and the marketplace entry.
+
 ## What a client update can change
 
 Beyond the hook input, Valkama depends on these details of its clients, and a
@@ -1287,6 +1398,7 @@ empty conversation.
 | `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_HOST_SESSION_ID`, `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` | a session start and the identity transform ([Where a session is open](#where-a-session-is-open)) | the session is not placed and opens in the fallback place |
 | The executable names above the hook: `Code.exe` and its forks, a JetBrains `…64.exe`, `WindowsTerminal.exe`, `OpenConsole.exe`, `ChatGPT.exe` | a session start on Windows | the IDE is taken for VS Code, and a Codex app session is not placed |
 | The last `entrypoint` in a Claude Code transcript, and `payload.originator` on the first line of a Codex rollout | the open plan, for a session recorded before places were | the session is not placed |
+| The mod API, which Claude Code calls early access: the events `session.start`, `session.measure` and `turn.complete`, `$.session.usage().rateLimits`, `$.fs.read` and `$.process.run` | [the mod](#the-mod) | the mod hands nothing over, and `doctor` calls the `mod` source silent; `claude plugin test server/mod/valkama-quota` shows which call moved |
 | `<config>/sessions/<pid>.json` of Claude Code, its `sessionId` and `pid` only | the desktop app, at a click, to see whether the process runs | the session's row decides whether it runs |
 | `CLAUDE_PID` and `CLAUDE_CODE_SESSION_ID` | [the watcher](#the-watcher) | a watcher whose client is gone, or that runs for another session, is ended by the session's end or its `timeout` alone |
 | `claude://code/continue?session=<id>`, `claude-cli://open?cwd=<folder>&q=/resume <id>`, `vscode://openai.chatgpt/local/<id>` and the extension's "still open somewhere else" notice holding its input | the open plan, only once each has been watched working and named in `url_schemes.SEEN_LIVE`, which no build names yet | nothing: until then the plan takes the way round described in [What a click opens](connection-contract.md#what-a-click-opens) |
@@ -1324,6 +1436,18 @@ Under Capabilities → Quota sources:
   configuration directory (`CLAUDE_CONFIG_DIR`, or `~/.claude`) and changes
   nothing. Sessions under WSL, or under another `CLAUDE_CONFIG_DIR`, are not
   checked, and the text says so.
+- **Mod quota source**: `off` when Claude Code does not load the mod for the
+  user: it is not installed, or installed and not enabled; `silent` when it
+  does but no `mod` reading reached the store in three days, with the reminder
+  that the mod needs the managed launcher; `working` otherwise. The first two
+  are warnings, and a settings file or plugin record that is not JSON leaves
+  the source `unknown`. The mod counts as loaded when `settings.json`
+  enables `valkama-quota@<marketplace>` under `enabledPlugins` and
+  `plugins/installed_plugins.json` records it installed, or when
+  `CLAUDE_CODE_PLUGIN_DIRS` in the settings' `env` names a folder holding it.
+  The doctor reads those two files and the named folders' manifests, and
+  changes nothing. A mod enabled for one project, loaded with `--plugin-dir`
+  or from a shell's `CLAUDE_CODE_PLUGIN_DIRS` is not seen, and the text says so.
 
 ## Not covered
 

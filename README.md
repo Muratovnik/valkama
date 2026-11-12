@@ -967,7 +967,36 @@ write and restore the setting.
 ```
 valkama statusline                       < statusline-input.json
 valkama statusline --previous=Y2F0       < statusline-input.json
+valkama statusline --source=mod          < mod-reading.json
 ```
+
+The same quota comes from Valkama's Claude Code mod, `valkama-quota` in
+`server/mod/valkama-quota`, in every session, the VS Code extension's included.
+After each model response, and when a window moves during a turn, the mod hands
+the session's reading to `valkama statusline --source=mod` through the managed
+launcher, as the same JSON fields the status line sends; the reading is recorded
+under the source `mod`. The hand-over runs after the hook has answered, one at a
+time, and is stopped after 10 seconds, so a missing, slow or failing Valkama
+costs the reading and never a turn. The repository is a Claude Code marketplace
+named `valkama`. With the launcher installed from a release that has
+`--source=mod` (`valkama statusline --help` lists it), install the mod at the
+prompt of a Claude Code terminal session:
+
+```
+/plugin install valkama-quota --marketplace Muratovnik/valkama
+```
+
+or from a checkout, in a shell:
+
+```
+claude plugin marketplace add <checkout>
+claude plugin install valkama-quota@valkama
+```
+
+`claude plugin disable valkama-quota@valkama` switches it off. Its own tests run
+with `claude plugin test server/mod/valkama-quota`, and
+[the hook contract](docs/hook-contract.md#the-mod) says what it hands over and
+when.
 
 The same hooks tell a working agent what a person did in the interface on the
 work its session holds. `post-tool-use`, `user-prompt-submit` and `stop` answer
@@ -1203,7 +1232,8 @@ files and process memory.
 | Path | Owns |
 | --- | --- |
 | `valkama.py` | the source entry point — it prepares `sys.path` and hands off to `server/cli.py`, or for `hook` to `server/hooks/entry.py` and for `serve --on-demand` to `server/on_demand.py` before the command line is imported |
-| `server/` | the Python server, managed launcher, domain modules, and CLI/HTTP/MCP surfaces |
+| `server/` | the Python server, managed launcher, domain modules, and CLI/HTTP/MCP surfaces; the skill clients install (`server/skill/`) and the Claude Code mod (`server/mod/`) |
+| `.claude-plugin/` | the marketplace file that makes the repository a Claude Code marketplace listing the mod |
 | `web/` | the Vue application, its build and its tests |
 | `desktop/` | the Electron window — its own npm package, tests and release output |
 | `windows/` | what exists only because the host is Windows: the tray script, the icon, its generator, the installer |
