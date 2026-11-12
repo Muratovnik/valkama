@@ -160,18 +160,46 @@ class RecordTests(_Store):
         self.assertEqual(1, report.pruned_samples)
         self.assertEqual([], self.rows())
 
-    def test_an_organization_seat_is_an_account_whose_plan_follows_and_label_stays(self) -> None:
-        self.record(poll("2030-03-04T09:00:00Z", week(40)))
+    def test_an_organization_s_account_is_kept_by_its_uuid_across_weeks(self) -> None:
+        self.record(poll("2030-03-04T09:00:00Z", week(40), account_uuid="account-1"))
         with self.conn:
             self.conn.execute("UPDATE quota_accounts SET label = 'Mine'")
-        self.record(poll("2030-03-04T09:10:00Z", week(41), plan="Team"))
-        self.record(poll("2030-03-04T09:20:00Z", week(42)))
-        self.record(poll("2030-03-04T09:30:00Z", week(43), seat=None))
-        self.record(mod("2030-03-04T09:40:00Z", week(44)))
-        self.assertEqual(
-            [(ORGANIZATION, SEAT, "Team", "Mine")],
-            [tuple(row) for row in self.conn.execute("SELECT * FROM quota_accounts")],
+        self.record(poll("2030-03-04T09:10:00Z", week(41), plan="Team", account_uuid="account-1"))
+        self.record(poll("2030-03-04T09:20:00Z", week(42), account_uuid="account-1"))
+        # The next week's seat is another key; the account and its label stay one row.
+        next_week = poll(
+            "2030-03-04T09:25:00Z",
+            samples.Window("week", 0, "2030-03-15T09:00:00Z"),
+            seat="week:2030-03-15T09:00Z",
+            account_uuid="account-1",
         )
+        self.record(next_week)
+        # A reading without the UUID makes no account: its seat is read for one.
+        self.record(poll("2030-03-04T09:30:00Z", week(43)))
+        self.record(poll("2030-03-04T09:35:00Z", week(43), seat=None))
+        self.record(mod("2030-03-04T09:40:00Z", week(44)))
+        self.record(poll("2030-03-04T09:45:00Z", week(1), account_uuid="account-2"))
+        self.assertEqual(
+            [(ORGANIZATION, "account-1", "Team", "Mine"), (ORGANIZATION, "account-2", None, None)],
+            [
+                tuple(row)
+                for row in self.conn.execute("SELECT * FROM quota_accounts ORDER BY account_uuid")
+            ],
+        )
+        self.assertEqual(
+            ["account-1", "account-1", "account-1", "account-1", None, None, None, "account-2"],
+            [row[0] for row in self.conn.execute("SELECT account_uuid FROM quota_samples")],
+        )
+
+    def test_the_account_is_part_of_the_series(self) -> None:
+        self.assertEqual(1, self.record(poll("2030-03-04T09:00:00Z", week(40))))
+        self.assertEqual(
+            1, self.record(poll("2030-03-04T09:05:00Z", week(40), account_uuid="account-1"))
+        )
+        self.assertEqual(
+            0, self.record(poll("2030-03-04T09:10:00Z", week(40), account_uuid="account-1"))
+        )
+        self.assertEqual(0, self.record(poll("2030-03-04T09:15:00Z", week(40))))
 
     def test_a_reading_that_cannot_be_kept_writes_nothing(self) -> None:
         five = samples.Window("five_hour", 10, "2030-03-04T14:00:00Z")
@@ -188,10 +216,14 @@ class RecordTests(_Store):
             "not a time": poll("yesterday", five),
             "ahead": poll("2030-03-05T12:06:00Z", five),
             "bad seat": poll(at, five, seat="week:2030-03-08T09:05Z"),
-            "plan without a seat": poll(at, five, seat=None, plan="Team"),
+            "plan without an account": poll(at, five, plan="Team"),
             "plan of a session": samples.Reading(
                 "mod", at, (five,), SEAT, session_id=SESSION, plan="Team"
             ),
+            "account of a session": samples.Reading(
+                "mod", at, (five,), SEAT, session_id=SESSION, account_uuid="account-1"
+            ),
+            "account not an id": poll(at, five, account_uuid="a b"),
             "kind": poll(at, samples.Window("month", 1)),
             "model elsewhere": poll(at, samples.Window("week", 1, model="Opus")),
             "no model": poll(at, samples.Window("week_model", 1)),
@@ -228,6 +260,13 @@ class RecordTests(_Store):
         ):
             with self.subTest(values=values), self.assertRaises(sqlite3.IntegrityError):
                 self.conn.execute(insert, values)
+        # An account's UUID belongs to an organization's sample alone.
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                "INSERT INTO quota_samples(at, source, session_id, account_uuid, kind, percent)"
+                " VALUES (?, 'mod', ?, 'account-1', 'week', 1)",
+                (at, SESSION),
+            )
         self.conn.rollback()
 
 

@@ -30,13 +30,14 @@ from tests.test_schema12_migration import _catalog, _columns, _rows, _shape
 
 #: The tables schema 17 adds and their columns, in order.
 ADDED = {
-    "quota_accounts": ["organization", "seat", "plan", "label"],
+    "quota_accounts": ["organization", "account_uuid", "plan", "label"],
     "quota_samples": [
         "id",
         "at",
         "source",
         "organization",
         "session_id",
+        "account_uuid",
         "seat",
         "kind",
         "model",
@@ -177,6 +178,7 @@ class FromSixteenTests(_SchemaSeventeen):
             seat="week:2030-03-08T09:00Z",
             organization=ORGANIZATION,
             plan="Team",
+            account_uuid="account-1",
         )
         with conn:
             self.assertEqual(2, samples.record(conn, reading, now=NOW))
@@ -203,7 +205,7 @@ class FromSixteenTests(_SchemaSeventeen):
             [tuple(row) for row in restored.execute("SELECT * FROM quota_accounts")],
         )
         self.assertEqual(
-            [("org-1", "week:2030-03-08T09:00Z", "Team", None)],
+            [("org-1", "account-1", "Team", None)],
             [tuple(row) for row in accounts],
         )
 

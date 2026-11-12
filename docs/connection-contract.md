@@ -1161,7 +1161,8 @@ A sample is one reading of one window of one account. It holds:
 | `source` | `statusline`, the Claude Code status line command; `mod`, the Claude Code mod; `poll`, the poll of the usage endpoint; `import`, history imported from a file |
 | `organization` | the organization's id, for `poll` and `import` |
 | `session_id` | the session the reading came through, for `statusline` and `mod`. Its organization is not written: it is read when the sample is read, from the session's usage rows at `at` |
-| `seat` | `week:` and the week's reset to the nearest ten minutes, `week:2030-03-08T09:00Z`; `null` when the reading showed no week, or imported history named none. A sample without a seat belongs to no seat's series, and a forecast does not read it |
+| `account_uuid` | the account's UUID, where the source gave it: the poll, and imported history that carries it. `null` otherwise, and always for `statusline` and `mod`, whose readings name no account; such a sample's account is read from its seat |
+| `seat` | `week:` and the week's reset to the nearest ten minutes, `week:2030-03-08T09:00Z`; `null` when the reading showed no week, or imported history named none. It tells the seats of one organization apart within one week. A sample without a seat belongs to no seat's series, and a forecast does not read it |
 | `kind` | the window: `five_hour`, `week`, `week_model` (the week of one model), `extra_usage` (usage credits past the plan's limits) or `spend_limit` (a gateway's spend limit) |
 | `model` | the model of a `week_model` window as the source names it; `null` for every other kind |
 | `percent` | the share of the window spent, from 0; above 100 only where the source reports an overrun. Required except for `extra_usage` |
@@ -1177,41 +1178,58 @@ Every source names its windows its own way, and each name is one kind here:
 | `poll` | `limits[].kind` `session`, `weekly_all`, `weekly_scoped` (its model apart); the older buckets `five_hour`, `seven_day`; `spend` | `five_hour`, `week`, `week_model`; `five_hour`, `week`; `extra_usage` |
 
 Every source writes through one function, `server.quota.samples.record`, with a reading:
-its source, its time, its windows, its seat, and its organization or its session. A
+its source, its time, its windows, its seat, its organization or its session, and the
+account's UUID when an organization's source knows it. A
 source that sees the week passes the seat `samples.seat_of` gives for its windows; the
 seat is never filled in for it. A window is kept only when it differs, in its percent,
 reset, amount or currency, from the latest sample of its series at or before the
-reading. The series is the organization or the session, the seat, the kind and the
-model, whatever the source. So a gap between two samples means the value did not
+reading. The series is the organization or the session, the account's UUID, the seat, the
+kind and the model, whatever the source. So a gap between two samples means the value did not
 change, a reading given twice keeps nothing the second time, and history imported
 again adds nothing. A sample is never rewritten. Samples older than a year are deleted
 when a server starts.
 
-An account is an organization and a seat in it. Its row holds the plan a source named
-and the label the owner gives it, and nothing else of a profile: no e-mail address and
-no name. A reading identified by an organization and a seat makes the row if it is not
-there yet, and a plan it names replaces the one there. A label is the owner's: no source
-changes it.
+An account is an organization and the account's UUID in it. Its row holds the plan a
+source named and the label the owner gives it, and nothing else of a profile: no e-mail
+address and no name. A reading that names an organization and an account's UUID makes the
+row if it is not there yet, and a plan it names replaces the one there; a plan comes only
+with the UUID. A label is the owner's: no source changes it. The UUID does not change when
+a week resets, so the row, its label and whatever is kept against the account hold from
+week to week.
 
-Seat keys come from the week's reset, so a seat's key changes when its week resets.
-Two seats whose weeks reset within the same ten minutes cannot be told apart and share
-one key.
+A seat key comes from the week's reset, so it changes every week, and two seats whose
+weeks reset within the same ten minutes cannot be told apart by it and share one key. A
+sample without an account's UUID belongs to the account whose samples in the same
+organization name the same seat: a key names one week's reset, so the same key is the same
+week. A seat no sample with a UUID names, or that samples of two accounts name, is
+provisional: it is known for its week and its account is not. Without a source that gives
+the UUID, seats are told apart only within a week.
 
 A usage segment holds its organization and no seat, because a change of seat leaves no
 trace in a transcript. Its seat is read from the samples, and a sample that arrives
-later rewrites nothing:
+later rewrites nothing. Samples are kept only when a value changes, so a quiet stretch
+has none and the last sample still says where things stand: the seat is a state, not the
+sample nearest in time.
 
-1. Samples count when they have a seat and lie within thirty minutes of the segment. A
-   sample during the segment is at no distance from it.
-2. Samples of the segment's own session come first, and only while that session was
-   working for the segment's organization at the sample's time.
-3. Without one, a sample of the organization counts: one a poll or an import made for
-   it, or another session's while that session was working for it.
-4. The nearest of them names the seat, the earlier one on a tie. With none, the seat is
-   unknown. A segment with no organization is on a seat unknown too.
+1. A feed is the samples with a seat that one identity made of one window: one session,
+   or the organization's poll and imports, and one kind with its model. A feed's latest
+   sample at or before a moment is its state then. The state holds until that sample's
+   window resets, or the week its seat names ends when that comes first; the next sample
+   of the feed replaces it.
+2. The feeds whose latest sample at or before the segment's end still holds at the
+   segment's start count, and of them the most recent sample names the seat. A sample
+   after the segment's end does not.
+3. The feeds of the segment's own session come first, and a session's feed counts only
+   while that session was working for the segment's organization at its latest sample's
+   time.
+4. Without one, the feeds of the organization count: its poll's and imports', and another
+   session's while that session was working for it.
+5. With none, the seat is unknown. A segment with no organization is on a seat unknown too.
+6. The account is the naming sample's UUID, or else the one the seat belongs to by the
+   rule above; a provisional seat has none.
 
 The read says which rule named the seat: `session` or `organization`, with that sample's
-time.
+time, and the account's UUID or none for a provisional seat.
 
 Percentages and money never share a figure. No answer carries a sum of percentages: a
 percentage belongs to one account and one window, and the percentages of different
@@ -1224,13 +1242,13 @@ sample a line:
 ```json
 {"organization": "6f1c2a8e-0000-4000-8000-000000000001", "at": "2030-03-04T09:00:00Z",
  "kind": "week", "percent": 42, "resets_at": "2030-03-08T09:00:00Z",
- "seat": "week:2030-03-08T09:00Z"}
+ "seat": "week:2030-03-08T09:00Z", "account_uuid": "0b7d4e19-0000-4000-8000-000000000002"}
 ```
 
 `organization`, `at` and `kind` are required, and the other fields of a sample may be
 left out. Each line is kept through the same function, as the `import` source, oldest
-first, in one transaction. A line's seat is kept as the line gives it and never derived
-from its reset. Any other field, a line that is not such an object, or a value a sample
+first, in one transaction. A line's seat and account's UUID are kept as the line gives
+them and never derived from its reset. Any other field, a line that is not such an object, or a value a sample
 cannot hold refuses the whole file, naming the line, and writes nothing. The command
 prints the lines read, how many were added, how many matched the sample before them
 (`unchanged`) or were older than a year (`expired`), and each organization's first and

@@ -11,7 +11,11 @@ The seat of a reading is the week's reset, to the nearest ten minutes (`seat_for
 two seats of one organization spend separate limits, and the reset of the week is what
 tells them apart in a reading. A source that sees the week passes `seat_of(windows)`; a
 reading with no week, or history that says none, passes `None`, and such a sample belongs
-to no seat's series.
+to no seat's series. The seat's key changes when its week resets; what holds across weeks
+is the account, the organization and the account's UUID, which a reading of an
+organization passes as `account_uuid` when its source knows it and which makes the
+account's row. A reading without one gets its account from its seat when read
+(`seats.account_of_seat`).
 """
 
 from __future__ import annotations
@@ -82,8 +86,9 @@ class Reading:
 
     `organization` for `poll` and `import`, `session_id` for `statusline` and `mod`, and
     never both. `at` and every `resets_at` are ISO 8601 times with an offset. `seat` is
-    given, even when it is `None`, so no caller leaves the seat to a default. `plan` is the
-    plan a profile named, for an organization's reading with a seat.
+    given, even when it is `None`, so no caller leaves the seat to a default.
+    `account_uuid` is the account's UUID, for an organization's reading whose source knows
+    it; `plan` is the plan a profile named, given only with an account's UUID.
     """
 
     source: str
@@ -93,6 +98,7 @@ class Reading:
     organization: str | None = None
     session_id: str | None = None
     plan: str | None = None
+    account_uuid: str | None = None
 
 
 def instant(text: str) -> str:
@@ -184,10 +190,14 @@ def _validated(reading: Reading, now: dt.datetime) -> Reading:
         raise SampleError(f"not an id: {named!r}")
     if reading.seat is not None and not _SEAT.fullmatch(reading.seat):
         raise SampleError(f"not a seat: {reading.seat!r}")
-    if reading.plan is not None and (
-        not by_organization or reading.seat is None or not _PLAN.fullmatch(reading.plan)
+    if reading.account_uuid is not None and (
+        not by_organization or not _TOKEN.fullmatch(reading.account_uuid)
     ):
-        raise SampleError("a plan is a short name given with an organization's seat")
+        raise SampleError("an account's UUID is an id given with an organization's reading")
+    if reading.plan is not None and (
+        reading.account_uuid is None or not _PLAN.fullmatch(reading.plan)
+    ):
+        raise SampleError("a plan is a short name given with an account's UUID")
     at = instant(reading.at)
     if dt.datetime.fromisoformat(at) > now + _AHEAD:
         raise SampleError(f"a reading dated ahead of this clock: {at}")
@@ -205,13 +215,15 @@ def _validated(reading: Reading, now: dt.datetime) -> Reading:
         reading.organization,
         reading.session_id,
         reading.plan,
+        reading.account_uuid,
     )
 
 
 #: The latest sample of a series at or before a moment, for each kind of identity.
 _LATEST = (
     "SELECT percent, resets_at, amount, currency FROM quota_samples WHERE {} = ?"
-    " AND seat IS ? AND kind = ? AND model IS ? AND at <= ? ORDER BY at DESC, id DESC LIMIT 1"
+    " AND account_uuid IS ? AND seat IS ? AND kind = ? AND model IS ? AND at <= ?"
+    " ORDER BY at DESC, id DESC LIMIT 1"
 )
 _LATEST_OF_ORGANIZATION = _LATEST.format("organization")
 _LATEST_OF_SESSION = _LATEST.format("session_id")
@@ -236,7 +248,7 @@ def record(conn: sqlite3.Connection, reading: Reading, *, now: dt.datetime | Non
     added = 0
     for window in kept.windows:
         latest = conn.execute(
-            query, (value, kept.seat, window.kind, window.model, kept.at)
+            query, (value, kept.account_uuid, kept.seat, window.kind, window.model, kept.at)
         ).fetchone()
         if latest is not None and tuple(latest) == (
             window.percent,
@@ -246,13 +258,15 @@ def record(conn: sqlite3.Connection, reading: Reading, *, now: dt.datetime | Non
         ):
             continue
         conn.execute(
-            "INSERT INTO quota_samples(at, source, organization, session_id, seat, kind, model,"
-            " percent, resets_at, amount, currency) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO quota_samples(at, source, organization, session_id, account_uuid, seat,"
+            " kind, model, percent, resets_at, amount, currency)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 kept.at,
                 kept.source,
                 kept.organization,
                 kept.session_id,
+                kept.account_uuid,
                 kept.seat,
                 window.kind,
                 window.model,
@@ -263,12 +277,12 @@ def record(conn: sqlite3.Connection, reading: Reading, *, now: dt.datetime | Non
             ),
         )
         added += 1
-    if kept.organization is not None and kept.seat is not None:
+    if kept.organization is not None and kept.account_uuid is not None:
         conn.execute(
-            "INSERT INTO quota_accounts(organization, seat, plan) VALUES (?,?,?)"
-            " ON CONFLICT(organization, seat) DO UPDATE SET plan = excluded.plan"
+            "INSERT INTO quota_accounts(organization, account_uuid, plan) VALUES (?,?,?)"
+            " ON CONFLICT(organization, account_uuid) DO UPDATE SET plan = excluded.plan"
             " WHERE excluded.plan IS NOT NULL",
-            (kept.organization, kept.seat, kept.plan),
+            (kept.organization, kept.account_uuid, kept.plan),
         )
     return added
 

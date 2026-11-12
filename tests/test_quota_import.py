@@ -2,9 +2,10 @@
 
 Held here: the lines are kept through the one write path as the `import` source, oldest
 first, so a second import of the same file adds nothing; a line's seat is kept as given,
-none included; one line the store cannot keep refuses the whole file and writes nothing;
-and the report counts the lines, what was added and why the rest was not, with each
-organization's first and last time. Every id and time is invented.
+none included, and so is an account's UUID, which makes the account's row; one line the
+store cannot keep refuses the whole file and writes nothing; and the report counts the
+lines, what was added and why the rest was not, with each organization's first and last
+time. Every id and time is invented.
 """
 
 from __future__ import annotations
@@ -30,11 +31,12 @@ def line(organization: str, at: str, kind: str = "week", **fields: object) -> st
     return json.dumps({"organization": organization, "at": at, "kind": kind, **fields})
 
 
+WEEK = {"resets_at": "2030-03-08T09:00:00Z", "seat": SEAT, "account_uuid": "account-1"}
 LINES = [
-    line("org-1", "2030-03-04T09:10:00Z", percent=41, resets_at="2030-03-08T09:00:00Z", seat=SEAT),
-    line("org-1", "2030-03-04T09:00:00Z", percent=40, resets_at="2030-03-08T09:00:00Z", seat=SEAT),
+    line("org-1", "2030-03-04T09:10:00Z", percent=41, **WEEK),
+    line("org-1", "2030-03-04T09:00:00Z", percent=40, **WEEK),
     "",
-    line("org-1", "2030-03-04T09:20:00Z", percent=41, resets_at="2030-03-08T09:00:00Z", seat=SEAT),
+    line("org-1", "2030-03-04T09:20:00Z", percent=41, **WEEK),
     line("org-1", "2030-03-04T09:30:00Z", "five_hour", percent=5, resets_at=None),
     line("org-2", "2030-03-04T08:00:00Z", "week_model", percent=3, model="Opus", seat=None),
     line("org-2", "2030-03-04T08:30:00Z", "extra_usage", amount=1.5),
@@ -103,6 +105,11 @@ class ImportTests(unittest.TestCase):
             ],
             self.rows(),
         )  # fmt: skip
+        # A line's account makes the account's row, and only such a line does.
+        self.assertEqual(
+            [("org-1", "account-1", None, None)],
+            [tuple(row) for row in self.conn.execute("SELECT * FROM quota_accounts")],
+        )
 
     def test_importing_the_same_file_again_adds_nothing(self) -> None:
         history.import_lines(self.conn, LINES, now=NOW)
@@ -119,6 +126,7 @@ class ImportTests(unittest.TestCase):
             "missing kind": json.dumps({"organization": "org-1", "at": "2030-03-04T09:00:00Z"}),
             "kind": line("org-1", "2030-03-04T09:00:00Z", "month", percent=1),
             "seat not text": line("org-1", "2030-03-04T09:00:00Z", percent=1, seat=7),
+            "account not text": line("org-1", "2030-03-04T09:00:00Z", percent=1, account_uuid=7),
             "time": line("org-1", "2030-03-04 09:00", percent=1),
             "percent": line("org-1", "2030-03-04T09:00:00Z", percent="41"),
         }

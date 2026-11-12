@@ -1,18 +1,32 @@
-"""Which seat of its organization a stretch of usage was spent on, read when it is read.
+"""Which seat and account of its organization a stretch of usage was spent on, read when read.
 
 A usage segment keeps the organization its requests were made for and no seat: changing
 seats leaves no trace in a transcript, so the seat is joined at read time from the quota
 samples instead, and a sample that arrives after the segment rewrites nothing.
 
-The rule: the sample nearest in time to the segment, among the samples with a seat that
-lie within `NEAR` of it, and of those the samples of the segment's own session first.
-Only when its own session has none does a sample of the same organization count: one
-the poll or an import made for that organization, or another session's that was then
-working for it. A session's sample counts for an organization when the session's own
-usage rows say it was working for that organization at the sample's moment: the latest
-of its main run's segments begun at or before then names it. A segment with no
-organization, or with no such sample near enough, has no seat it can be shown to be on:
-`UNKNOWN`.
+A seat is a state, not the sample nearest in time: a sample is kept only when a value
+changed, so a quiet stretch has no sample in it and the last one still says where things
+stand. What says it is a feed: the samples with a seat that one identity (a session, or
+an organization's poll and imports) made of one window (a kind and, for a model's week,
+the model). A feed's latest sample at or before a moment is its state then, and that
+state holds until the window resets: the sample's `resets_at`, or the end of the week its
+seat names when that comes first, since a seat names one week. The next sample of the
+feed replaces it, which taking the latest already says.
+
+The rule for a segment: of the feeds whose latest sample at or before the segment's end
+still holds at its start, the most recent sample names the seat. The feeds of the
+segment's own session come first; only when none of them holds do the feeds of its
+organization count: its poll's and imports', and another session's. A session's feed
+counts for an organization when the session's own usage rows say it was working for that
+organization at its latest sample's moment: the latest of its main run's segments begun at
+or before then names it. A segment with no organization, or with no feed holding at it,
+has no seat it can be shown to be on: `UNKNOWN`.
+
+The account is what holds across weeks: the account's UUID the naming sample carries, or
+else the one account of the organization whose samples name the same seat
+(`account_of_seat`). A seat key names one week's reset, so the same key is the same week.
+A seat no sample with a UUID names, or that two accounts' samples name, is provisional:
+the seat is known for that week and its account is not.
 """
 
 from __future__ import annotations
@@ -20,28 +34,30 @@ from __future__ import annotations
 import datetime as dt
 import sqlite3
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from . import samples
 
-#: How far from a segment a sample may lie and still name its seat. The poll reads every
-#: five to fifteen minutes and a session's source after each answer, but a sample is kept
-#: only when its value changed, so an hour of unchanged work holds none: this is twice the
-#: poll's longer interval, past which a seat change in between would go unseen.
-NEAR = dt.timedelta(minutes=30)
+#: The longest a sample's state can hold: a seat names the reset of the week the reading
+#: was in, at most seven days on, rounded by up to five minutes. A feed whose latest sample
+#: is older than this has lapsed, so a read looks no further back.
+_LONGEST_HOLD = dt.timedelta(days=7, minutes=5)
 
 
 @dataclass(frozen=True)
 class Seat:
-    """The seat a segment was spent on and what says so, or the seat unknown.
+    """The seat a segment was spent on, what says so and whose it is, or the seat unknown.
 
-    `basis` is `session` when a sample of the segment's own session named the seat and
-    `organization` when only another sample of its organization did; `sample_at` is that
-    sample's time. All three are `None` for a seat unknown.
+    `basis` is `session` when a feed of the segment's own session named the seat and
+    `organization` when only another feed of its organization did; `sample_at` is the time
+    of that feed's sample. `account_uuid` is the account's UUID, `None` for a provisional
+    seat. All four are `None` for a seat unknown.
     """
 
     seat: str | None
     basis: str | None
     sample_at: str | None
+    account_uuid: str | None = None
 
 
 UNKNOWN = Seat(None, None, None)
@@ -58,6 +74,58 @@ def organization_at(conn: sqlite3.Connection, session_id: str, at: str) -> str |
     return None if row is None else row[0]
 
 
+def account_of_seat(conn: sqlite3.Connection, organization: str, seat: str) -> str | None:
+    """The UUID of the one account whose samples in `organization` name `seat`; or None."""
+
+    found = conn.execute(
+        "SELECT DISTINCT account_uuid FROM quota_samples WHERE organization = ? AND seat = ?"
+        " AND account_uuid IS NOT NULL LIMIT 2",
+        (organization, seat),
+    ).fetchall()
+    return str(found[0][0]) if len(found) == 1 else None
+
+
+def _week_end(seat: str) -> str:
+    """The reset a seat names, as the store writes a time: `week:…T09:00Z` is 09:00:00.000Z."""
+
+    return seat.removeprefix("week:").removesuffix("Z") + ":00.000Z"
+
+
+class _Sample(NamedTuple):
+    """One sample with a seat, as a read of the feeds takes it."""
+
+    id: int
+    at: str
+    organization: str | None
+    session_id: str | None
+    kind: str
+    model: str | None
+    seat: str
+    resets_at: str | None
+    account_uuid: str | None
+
+    @property
+    def feed(self) -> tuple[str | None, str | None, str, str | None]:
+        return (self.organization, self.session_id, self.kind, self.model)
+
+    @property
+    def lapses_at(self) -> str:
+        """When its state stops holding: its window's reset, or its seat's week's end."""
+
+        week_end = _week_end(self.seat)
+        return week_end if self.resets_at is None else min(self.resets_at, week_end)
+
+
+#: Every sample with a seat of the feeds a read looks at, in the order they were made.
+_FEED_SAMPLES = (
+    "SELECT id, at, organization, session_id, kind, model, seat, resets_at, account_uuid"
+    " FROM quota_samples WHERE seat IS NOT NULL AND at BETWEEN ? AND ? AND ({})"
+    " ORDER BY at, id"
+)
+_OWN = _FEED_SAMPLES.format("session_id = ?")
+_OTHERS = _FEED_SAMPLES.format("organization = ? OR (session_id IS NOT NULL AND session_id != ?)")
+
+
 def seat_of_segment(
     conn: sqlite3.Connection,
     *,
@@ -66,53 +134,38 @@ def seat_of_segment(
     started_at: str,
     ended_at: str,
 ) -> Seat:
-    """The seat of one usage segment, from the samples near it; `UNKNOWN` with none."""
+    """The seat of one usage segment, from the feeds holding at it; `UNKNOWN` with none."""
 
     if organization is None:
         return UNKNOWN
-    start, end = dt.datetime.fromisoformat(started_at), dt.datetime.fromisoformat(ended_at)
-    window = (
-        samples.instant((start - NEAR).isoformat()),
-        samples.instant((end + NEAR).isoformat()),
+    start, end = samples.instant(started_at), samples.instant(ended_at)
+    since = samples.instant((dt.datetime.fromisoformat(start) - _LONGEST_HOLD).isoformat())
+
+    def holding(query: str, values: tuple[str, ...], basis: str) -> Seat | None:
+        latest: dict[tuple[str | None, str | None, str, str | None], _Sample] = {}
+        for row in conn.execute(query, (since, end, *values)):
+            sample = _Sample(*row)
+            latest[sample.feed] = sample
+        found: _Sample | None = None
+        for sample in latest.values():
+            if sample.lapses_at <= start:
+                continue
+            if sample.session_id is not None and (
+                organization_at(conn, sample.session_id, sample.at) != organization
+            ):
+                continue
+            if found is None or (sample.at, sample.id) > (found.at, found.id):
+                found = sample
+        if found is None:
+            return None
+        account = found.account_uuid or account_of_seat(conn, organization, found.seat)
+        return Seat(found.seat, basis, found.at, account)
+
+    return (
+        holding(_OWN, (session_id,), "session")
+        or holding(_OTHERS, (organization, session_id), "organization")
+        or UNKNOWN
     )
 
-    def distance(at: str) -> dt.timedelta:
-        moment = dt.datetime.fromisoformat(at)
-        if moment < start:
-            return start - moment
-        return max(moment - end, dt.timedelta(0))
 
-    def nearest(rows: list[tuple[str, str]], basis: str) -> Seat | None:
-        if not rows:
-            return None
-        seat, at = min(rows, key=lambda row: (distance(row[1]), row[1]))
-        return Seat(seat, basis, at)
-
-    own = [
-        (str(seat), str(at))
-        for seat, at in conn.execute(
-            "SELECT seat, at FROM quota_samples WHERE session_id = ? AND seat IS NOT NULL"
-            " AND at BETWEEN ? AND ? ORDER BY at, id",
-            (session_id, *window),
-        )
-        if organization_at(conn, session_id, at) == organization
-    ]
-    found = nearest(own, "session")
-    if found is not None:
-        return found
-    others = [
-        (str(seat), str(at))
-        for seat, at, sample_organization, sample_session in conn.execute(
-            "SELECT seat, at, organization, session_id FROM quota_samples"
-            " WHERE seat IS NOT NULL AND at BETWEEN ? AND ?"
-            " AND (organization = ? OR (session_id IS NOT NULL AND session_id != ?))"
-            " ORDER BY at, id",
-            (*window, organization, session_id),
-        )
-        if sample_organization == organization
-        or organization_at(conn, sample_session, at) == organization
-    ]
-    return nearest(others, "organization") or UNKNOWN
-
-
-__all__ = ["NEAR", "UNKNOWN", "Seat", "organization_at", "seat_of_segment"]
+__all__ = ["UNKNOWN", "Seat", "account_of_seat", "organization_at", "seat_of_segment"]

@@ -6,10 +6,11 @@ of one reading of one organization:
     {"organization": "…", "at": "2030-03-04T09:00:00.000Z", "kind": "week",
      "percent": 42, "resets_at": "2030-03-08T09:00:00Z", "seat": "week:2030-03-08T09:00Z"}
 
-`organization`, `at` and `kind` are required; `percent`, `resets_at`, `seat`, `model`,
-`amount` and `currency` may be left out or `null`, under the rules of `samples.Window`.
-A seat is kept as the line gives it and never derived here: a line without one belongs
-to no seat's series. Any other field, a line that is no such object, or a value the
+`organization`, `at` and `kind` are required; `percent`, `resets_at`, `seat`,
+`account_uuid`, `model`, `amount` and `currency` may be left out or `null`, under the rules
+of `samples.Window` and `samples.Reading`. A seat and an account's UUID are kept as the
+line gives them and never derived here: a line without a seat belongs to no seat's
+series, and a line with an account's UUID makes that account's row. Any other field, a line that is no such object, or a value the
 store cannot keep refuses the whole file before anything is written; an empty line is
 skipped.
 
@@ -29,7 +30,7 @@ from dataclasses import dataclass, field
 from . import samples
 
 _REQUIRED = ("organization", "at", "kind")
-_OPTIONAL = ("percent", "resets_at", "seat", "model", "amount", "currency")
+_OPTIONAL = ("percent", "resets_at", "seat", "account_uuid", "model", "amount", "currency")
 
 
 @dataclass
@@ -102,6 +103,7 @@ def _reading(line: str) -> samples.Reading:
         windows=(window,),
         seat=_text(parsed.get("seat"), "seat"),
         organization=parsed["organization"],
+        account_uuid=_text(parsed.get("account_uuid"), "account_uuid"),
     )
 
 
