@@ -427,9 +427,10 @@ describe('the breakdown crossed with a second dimension', () => {
       'Total',
     ])
     expect(rows(wrapper)).toEqual([
-      ['MAIN-2 Beta', '2 h', '0 min', '10 min', '9 min', '8 min', '13 min', '2 h 40 min'],
-      ['MAIN-1 Alpha', '30 min', '1 h', '0 min', '0 min', '0 min', '0 min', '1 h 30 min'],
-      ['No task', '0 min', '15 min', '0 min', '0 min', '0 min', '0 min', '15 min'],
+      // A pair that spent nothing is an empty cell, not a zero.
+      ['MAIN-2 Beta', '2 h', '—', '10 min', '9 min', '8 min', '13 min', '2 h 40 min'],
+      ['MAIN-1 Alpha', '30 min', '1 h', '—', '—', '—', '—', '1 h 30 min'],
+      ['No task', '—', '15 min', '—', '—', '—', '—', '15 min'],
     ])
     expect(wrapper.findAll('tfoot th, tfoot td').map((cell) => words(cell.text()))).toEqual([
       'Total',

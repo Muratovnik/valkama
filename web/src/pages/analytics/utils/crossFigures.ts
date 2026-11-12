@@ -4,8 +4,13 @@
  * work with no value there and work nobody can place as columns of their own, never folded
  * (`spendingLines`). Every cell is what the pair spent; the rows add up to the columns' totals and
  * both to the read's total. Words come in from the caller; this holds the numbers.
+ *
+ * Nothing that is zero in the measure takes a place: a column of the second dimension whose
+ * figure there is zero — a model that ran only as the adviser, under agent time — is no column,
+ * and a pair whose figure there is zero is no cell, which the table says as empty, not as a zero.
+ * A figure absent there, work with no price, is not zero and keeps its place.
  */
-import { addSpent, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { addSpent, figureOf, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -20,7 +25,10 @@ const NOTHING: Spent = { seconds: 0, tokens: null, cost: null, unpriced: 0 }
 const UNPLACED: UsageGroupValue = { id: null, unknown: true }
 
 interface CrossRow {
-  /** What the value spent in each column, by the column's key; a column it did not spend in is absent. */
+  /**
+   * What the value spent in each column, by the column's key; a column whose figure in the
+   * measure it holds at zero is absent.
+   */
   cells: Map<string, Spent>
   key: string
   kind: ValueKind
@@ -44,8 +52,10 @@ export function crossOf(
   across: UsageDimension,
   measure: Measure,
 ): Crossed {
-  const columns = spendingLines(usage.rows, across, measure, ACROSS_SHOWN)
-  const named = new Set(columns.map((column) => column.key))
+  const shown = spendingLines(usage.rows, across, measure, ACROSS_SHOWN)
+  // A column is named before the zero ones go, so the work of one that goes is in no other.
+  const named = new Set(shown.map((column) => column.key))
+  const columns = shown.filter((column) => figureOf(measure, column.spent) !== 0)
   const rows: CrossRow[] = spendingLines(usage.rows, by, measure, Number.POSITIVE_INFINITY).map(
     (line) => {
       const value = line.value ?? UNPLACED
@@ -59,5 +69,7 @@ export function crossOf(
     const cells = byKey.get(valueKey(row.group[by] ?? UNPLACED))?.cells
     cells?.set(column, addSpent(cells.get(column) ?? NOTHING, spentOf(row)))
   }
+  for (const row of rows)
+    for (const [key, spent] of row.cells) if (figureOf(measure, spent) === 0) row.cells.delete(key)
   return { columns, rows, total: spentOf(usage.total) }
 }
