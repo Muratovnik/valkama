@@ -96,4 +96,11 @@ describe('a crossed table', () => {
     const cells = table.lines.flatMap((line) => line.cells.slice(0, pairs).map((cell) => cell.text))
     expect(cells).not.toContain('0\u{A0}min')
   })
+
+  it('counts the roles of the period in the measure, as the tile does, the adviser apart', () => {
+    // Under agent time the tile counted two roles and the table three. The
+    // adviser's cost is a figure, so under the cost all three are roles of the period.
+    expect(tableIn('time').counts).toBe('2 in the period · 1 with no agent time')
+    expect(tableIn('cost').counts).toBe('3 in the period')
+  })
 })

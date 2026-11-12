@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * The heading row over a dimension's table (`SpendingTable`): its title; in a few words how many
- * values of the period it lists and how many spent only before it, «189 tasks · 237 outside the
- * period», with the whole account of its rows and their order in its hint; and its controls — one
+ * values of the period it lists in the measure, how many spent nothing there and how many spent
+ * only before it, «2 roles · 1 with no agent time · 237 outside the period», with the whole
+ * account of its rows and their order in its hint; and its controls — one
  * its panel may set (`actions`), the second dimension, and the download of what it shows, in that
  * order. With no value to list the download is disabled, and words say why.
  *
@@ -16,6 +17,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 
+import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
@@ -30,6 +32,8 @@ const props = defineProps<{
   dimensions: readonly UsageDimension[]
   /** The rows the table lists. */
   lines: readonly TableLine[]
+  /** The measure the rows are counted in: a value with nothing there is said apart. */
+  measure: Measure
   /** The whole account of the rows and their order, the hint of the words about them. */
   summary: string
   title: string
@@ -45,12 +49,21 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const words = useSpendingWords()
 
-/** How many values of the period the rows are, and how many spent only before it. */
+/**
+ * How many values of the period the rows are, as the rail's tile counts them; how many spent in
+ * it nothing in the measure; and how many spent only before it.
+ */
 const counts = computed(() => {
-  const { now, before } = tableCounts(props.lines)
-  const values = t(`analytics.panel.table.counts.values.${props.by}`, { count: now }, now)
-  const outside = before ? t('analytics.panel.table.counts.outside', { count: before }) : ''
-  return outside ? `${values} · ${outside}` : values
+  const { now, elsewhere, before } = tableCounts(props.lines)
+  return [
+    t(`analytics.panel.table.counts.values.${props.by}`, { count: now }, now),
+    elsewhere
+      ? t(`analytics.panel.table.counts.elsewhere.${props.measure}`, { count: elsewhere })
+      : '',
+    before ? t('analytics.panel.table.counts.outside', { count: before }) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 })
 
 const NONE = 'none'

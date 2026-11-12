@@ -23,6 +23,7 @@ import {
   changeOf,
   comparedLines,
   figureOf,
+  measureOf,
   spentAnything,
   spentOf,
 } from '@/pages/analytics/utils/usageFigures.ts'
@@ -58,8 +59,12 @@ export interface TableLine {
   /** Whether the line is no value of the dimension: work with no value there, or unknown. */
   rest: boolean
   value: UsageGroupValue
-  /** When the line spent: in this period, only in the period before, or in neither. */
-  when: 'before' | 'neither' | 'now'
+  /**
+   * When the line spent: in this period with a figure above zero in the measure; in this period
+   * but nothing there (`elsewhere`: the adviser's tokens are no agent time, work with no price is
+   * none under the cost); only in the period before; or in neither.
+   */
+  when: 'before' | 'elsewhere' | 'neither' | 'now'
   detail?: string
 }
 
@@ -69,26 +74,34 @@ export interface TableCounts {
   apart: string[]
   /** Rows that spent only in the period before. */
   before: number
-  /** Values of the dimension that spent anything in this period, as the rail's tile counts them. */
+  /** Values of the dimension that spent in this period, but nothing in the measure. */
+  elsewhere: number
+  /** Values of the dimension with a figure above zero in the measure, as the rail's tile counts them. */
   now: number
 }
 
 /**
- * How many rows of a table are values of this period and how many spent only before, and which
- * rows of no value spent in this period: together, every row that spent anything.
+ * How many rows of a table are values of this period in the measure, how many spent in it only
+ * in another measure and how many only before, and which rows of no value spent in this period:
+ * together, every row that spent anything.
  */
 export function tableCounts(lines: readonly TableLine[]): TableCounts {
-  const now = lines.filter((line) => line.when === 'now')
+  const values = (when: TableLine['when']) =>
+    lines.filter((line) => !line.rest && line.when === when).length
   return {
-    now: now.filter((line) => !line.rest).length,
+    now: values('now'),
+    elsewhere: values('elsewhere'),
     before: lines.filter((line) => line.when === 'before').length,
-    apart: now.filter((line) => line.rest).map((line) => line.name),
+    apart: lines
+      .filter((line) => line.rest && (line.when === 'now' || line.when === 'elsewhere'))
+      .map((line) => line.name),
   }
 }
 
-/** When a line spent, from what it spent now and, where read, before. */
-function whenOf(now: Spent, before: Spent | null): TableLine['when'] {
-  if (spentAnything(now)) return 'now'
+/** When a line spent, from what it spent now, in the measure and at all, and, where read, before. */
+function whenOf(measure: Measure, now: Spent, before: Spent | null): TableLine['when'] {
+  if ((measureOf(measure, now) ?? 0) > 0) return 'now'
+  if (spentAnything(now)) return 'elsewhere'
   return before && spentAnything(before) ? 'before' : 'neither'
 }
 
@@ -217,7 +230,7 @@ export function useTableModel(source: () => TableSource) {
     }).map((line) =>
       lineOf(line.value, line.key, line.kind, [
         cellsOf(line.now, line.before, kindsOf(kinds, line.key)),
-        whenOf(line.now, line.before),
+        whenOf(measure, line.now, line.before),
       ]),
     )
     const total = cellsOf(
@@ -250,7 +263,7 @@ export function useTableModel(source: () => TableSource) {
     const lines = rows.map((row) =>
       lineOf(row.value, row.key, row.kind, [
         cellsOf((key) => row.cells.get(key), row.total, kindsOf(kinds, row.key)),
-        whenOf(row.total, null),
+        whenOf(measure, row.total, null),
       ]),
     )
     const byColumn = new Map(columns.map((column) => [column.key, column.spent]))
@@ -280,14 +293,17 @@ export function useTableModel(source: () => TableSource) {
 
   /**
    * What the heading row says of the rows (`tableCounts`): the values of this period, counted as
-   * the rail's tile counts them; those that spent only before; and the rows of no value that
-   * spent now, by name, so the parts add up to the rows shown.
+   * the rail's tile counts them; those that spent in it nothing in the measure; those that spent
+   * only before; and the rows of no value that spent now, by name, so the parts add up to the
+   * rows shown.
    */
   function countWords(lines: readonly TableLine[]) {
-    const { now, before, apart } = tableCounts(lines)
+    const { measure } = source()
+    const { now, elsewhere, before, apart } = tableCounts(lines)
     const names = apart.map((name) => `«${name}»`).join(', ')
     return [
       t('analytics.panel.table.counts.now', { count: now }),
+      elsewhere ? t(`analytics.panel.table.counts.elsewhere.${measure}`, { count: elsewhere }) : '',
       before ? t('analytics.panel.table.counts.before', { count: before }) : '',
       names ? t('analytics.panel.table.counts.apart', { names }) : '',
     ]

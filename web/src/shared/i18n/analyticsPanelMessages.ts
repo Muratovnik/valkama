@@ -33,6 +33,11 @@ export const analyticsPanelMessages = {
       },
       counts: {
         now: '{count} in the period',
+        elsewhere: {
+          time: '{count} with no agent time',
+          tokens: '{count} with no tokens',
+          cost: '{count} with no price',
+        },
         before: '{count} only before',
         apart: 'and {names}',
         outside: '{count} outside the period',
@@ -98,6 +103,11 @@ export const analyticsPanelMessages = {
       },
       counts: {
         now: '{count} в периоде',
+        elsewhere: {
+          time: '{count} без времени агентов',
+          tokens: '{count} без токенов',
+          cost: '{count} без цены',
+        },
         before: '{count} только в прошлом',
         apart: 'и {names}',
         outside: '{count} вне периода',

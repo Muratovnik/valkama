@@ -124,6 +124,7 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
       :by="by"
       :dimensions="dimensions"
       :lines="model.lines"
+      :measure="measure"
       :summary="summary"
       :title="model.title"
       :waiting="waiting"
