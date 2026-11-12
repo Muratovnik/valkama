@@ -18,7 +18,6 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 import { pastedImageMessages } from '@/shared/i18n/pastedImageMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
-import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
@@ -36,7 +35,6 @@ import { workItemUsageMessages } from '@/shared/i18n/workItemUsageMessages.ts'
 export const ru = {
   workItemLink: workItemLinkMessages.ru.workItemLink,
   compose: workItemComposeMessages.ru.compose,
-  priorityMeaning: priorityMessages.ru.priorityMeaning,
   history: activityMessages.ru.history,
   alerts: alertMessages.ru.alerts,
   open: openMessages.ru.open,
