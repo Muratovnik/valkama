@@ -53,6 +53,9 @@ function valueDetail(name: UsageDimension, value: UsageGroupValue | null) {
 /** The space no line breaks at. */
 const NO_BREAK = '\u{A0}'
 
+/** A share is said in whole percents: what rounds away at either end is said as more or less. */
+const SHARE_STEP = 0.01
+
 export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
@@ -67,6 +70,17 @@ export function useSpendingWords() {
     new Intl.NumberFormat(i18n.locale.value, { style: 'percent', maximumFractionDigits: 0 }).format(
       Math.abs(ratio),
     )
+
+  /**
+   * A share of a whole in whole percents, never claiming more or less than it holds: «100 %»
+   * only for all of it and «0 %» only for none, so a share a hair under the whole reads «>99 %»
+   * and one a hair over nothing «<1 %».
+   */
+  function share(ratio: number) {
+    if (ratio > 0 && ratio < SHARE_STEP / 2) return `<${percent(SHARE_STEP)}`
+    if (ratio < 1 && ratio >= 1 - SHARE_STEP / 2) return `>${percent(1 - SHARE_STEP)}`
+    return percent(ratio)
+  }
 
   const measure = (name: Measure) => t(`analytics.measures.${name}`)
 
@@ -246,8 +260,19 @@ export function useSpendingWords() {
   /** A day as the time axis names it, «Mon 9», and in full for the readout and the table. */
   const day = (start: string) =>
     dayFormat({ weekday: 'short', day: 'numeric' }).format(named(start))
-  const fullDay = (start: string) =>
+  const longDay = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(named(start))
+
+  /**
+   * A day as a sentence names it after «of» or «за»: by its date first where a weekday would
+   * have to be declined, «11 ноября, ср», and in full where it need not, «Wednesday, November 11».
+   */
+  const fullDay = (start: string) =>
+    t('analytics.drill.dayName', {
+      date: dayFormat({ day: 'numeric', month: 'long' }).format(named(start)),
+      weekday: dayFormat({ weekday: 'short' }).format(named(start)),
+      weekdayLong: dayFormat({ weekday: 'long' }).format(named(start)),
+    })
 
   /** An hour or a minute as the time axis names it, «14:05», and in full with its day. */
   const clock = (start: string) => dayFormat(CLOCK).format(named(start))
@@ -257,7 +282,7 @@ export function useSpendingWords() {
   /** A step of a period by its start, short and in full: a day by its date, else its time. */
   const stepName = (start: string, step: UsageStep) =>
     step === 'day'
-      ? { label: day(start), fullLabel: fullDay(start) }
+      ? { label: day(start), fullLabel: longDay(start) }
       : { label: clock(start), fullLabel: fullClock(start) }
 
   /** How a chart is cut by its steps: «per day», «per minute». */
@@ -303,6 +328,7 @@ export function useSpendingWords() {
     day,
     fullDay,
     scale,
+    share,
     period,
     per,
     stepChartTitle,

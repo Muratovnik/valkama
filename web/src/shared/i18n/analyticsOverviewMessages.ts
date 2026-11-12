@@ -17,8 +17,8 @@ export const analyticsOverviewMessages = {
       down: 'Fell most',
       still: 'No task moved from {period}.',
       unread: 'The period before could not be read, so nothing is compared.',
-      newly: 'nothing before',
-      gone: 'nothing now',
+      newly: 'Nothing before',
+      gone: 'Nothing now',
     },
     cards: {
       label: 'The first values of the period',
@@ -45,8 +45,8 @@ export const analyticsOverviewMessages = {
       down: 'Упало сильнее всего',
       still: 'По сравнению с периодом {period} ни одна задача не изменилась.',
       unread: 'Прошлый период не удалось прочитать, поэтому сравнивать не с чем.',
-      newly: 'раньше ничего',
-      gone: 'сейчас ничего',
+      newly: 'Раньше ничего',
+      gone: 'Сейчас ничего',
     },
     cards: {
       label: 'Первые значения периода',

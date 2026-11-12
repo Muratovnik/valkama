@@ -92,8 +92,11 @@ export interface TableSource {
   cross?: { across: UsageDimension; usage: Usage } | null
 }
 
-/** A kind the read does not report is absent, not zero. */
+/** A kind the read does not report is absent, not zero; so is a crossed pair that spent nothing. */
 const ABSENT = '—'
+
+/** A crossed pair with no cell spent nothing in the measure: an empty cell, not a zero. */
+const emptyCell = (key: string): TableCell => ({ key, chosen: false, text: ABSENT, sort: 0 })
 
 /** How a change sorts: by its share; from nothing as the largest rise; with no figure, never. */
 function changeRank(change: Change | null): number | null {
@@ -223,15 +226,21 @@ export function useTableModel(source: () => TableSource) {
     const { by, measure } = source()
     const { columns, rows, total } = crossOf(read, by, across, measure)
     const kinds = kindsByValue(read.rows, by)
-    const nothing: Spent = { seconds: 0, tokens: null, cost: null, unpriced: 0 }
-    const cellsOf = (cells: (key: string) => Spent, all: Spent, tokens: UsageTokens) => [
-      ...columns.map((column) => figureCell(column.key, measure, cells(column.key), false)),
+    const cellsOf = (
+      cells: (key: string) => Spent | undefined,
+      all: Spent,
+      tokens: UsageTokens,
+    ) => [
+      ...columns.map((column) => {
+        const spent = cells(column.key)
+        return spent ? figureCell(column.key, measure, spent, false) : emptyCell(column.key)
+      }),
       figureCell('total', measure, all, true),
       ...kindCells(tokens),
     ]
     const lines = rows.map((row) =>
       lineOf(row.value, row.key, row.kind, [
-        cellsOf((key) => row.cells.get(key) ?? nothing, row.total, kindsOf(kinds, row.key)),
+        cellsOf((key) => row.cells.get(key), row.total, kindsOf(kinds, row.key)),
         whenOf(row.total, null),
       ]),
     )
@@ -252,7 +261,7 @@ export function useTableModel(source: () => TableSource) {
         ...kindColumns(),
       ],
       lines,
-      total: cellsOf((key) => byColumn.get(key) ?? nothing, total, read.total.tokens),
+      total: cellsOf((key) => byColumn.get(key), total, read.total.tokens),
       firstSort: 'total',
     }
   }

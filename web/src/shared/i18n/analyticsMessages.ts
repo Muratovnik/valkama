@@ -18,6 +18,7 @@ export const analyticsMessages = {
         title: 'Nothing was spent in this period',
         description:
           'No agent work was recorded in this period with these filters. Choose a longer period or clear a filter.',
+        unfiltered: 'No agent work was recorded in this period. Choose a longer period.',
       },
       period: {
         label: 'Period',
@@ -156,6 +157,7 @@ export const analyticsMessages = {
       drill: {
         value: 'Show the tasks of {value}',
         day: 'Show the tasks of {day}',
+        dayName: '{weekdayLong}, {date}',
         full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
       },
       filters: {
@@ -192,6 +194,7 @@ export const analyticsMessages = {
         title: 'За этот период ничего не потрачено',
         description:
           'За этот период с этими фильтрами работа агентов не записана. Выберите период длиннее или снимите фильтр.',
+        unfiltered: 'За этот период работа агентов не записана. Выберите период длиннее.',
       },
       period: {
         label: 'Период',
@@ -278,8 +281,8 @@ export const analyticsMessages = {
           '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
         anew: 'Обработано заново: {kinds}',
         kinds: {
-          input: 'ввод {count}',
-          output: 'вывод {count}',
+          input: 'вход {count}',
+          output: 'выход {count}',
           cacheWrites: 'запись в кэш {count}',
         },
         cacheReads: 'Чтение из кэша, не учтено: {count}',
@@ -331,6 +334,7 @@ export const analyticsMessages = {
       drill: {
         value: 'Показать задачи: {value}',
         day: 'Показать задачи за {day}',
+        dayName: '{date}, {weekday}',
         full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',
       },
       filters: {

@@ -158,7 +158,7 @@ describe('the overview on the page', () => {
         part(one, 'note'),
       ]),
     ).toEqual([
-      ['up', 'MAIN-2 Two', '+ 2 h', 'nothing before'],
+      ['up', 'MAIN-2 Two', '+ 2 h', 'Nothing before'],
       ['down', 'MAIN-1 One', '− 1 h', ''],
     ])
   })

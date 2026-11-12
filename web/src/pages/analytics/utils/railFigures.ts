@@ -17,12 +17,16 @@ import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageF
  * — a tenth of the figure now or less — is said by the base itself (`from`), as a period before
  * that spent nothing already is (`none`).
  *
- * A dimension's tile is how many values worked in the period, the first of them in the measure
+ * A dimension's tile is how many values worked in the period in the measure, the first of them
  * with its share of the whole, and the shares of the first few, what they leave out folded into
- * one rest. Work with no value there and work nobody can place are never a first value while a
- * real one worked; they are part of the whole, and of the rest, except work with no value there
- * that holds a share a reader should not miss (`APART_PART`): that is a part of its own, after
- * the values and before the rest, so the largest bucket is never hidden inside the rest.
+ * one rest. A value worked in the measure when it has a figure there above zero: the adviser's
+ * tokens are no agent time, so under time it is no value of the period, and work with no price
+ * is none under the cost. The count is of real values, as the table's count of the period is;
+ * work with no value there and work nobody can place are not among them, and neither is a first
+ * value while a real one worked; they are part of the whole, and of the rest, except work with
+ * no value there that holds a share a reader should not miss (`APART_PART`): that is a part of
+ * its own, after the values and before the rest, so the largest bucket is never hidden inside
+ * the rest.
  */
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -94,7 +98,10 @@ interface SharePortion {
 }
 
 export interface DimensionFigures {
-  /** How many values of the dimension worked in the period, work with no value there aside. */
+  /**
+   * How many values of the dimension have a figure above zero in the measure, work with no value
+   * there aside.
+   */
   count: number
   /** The first value in the measure — a real one while any worked — and its share, if any. */
   first: { line: SpendingLine; share: number | null }
@@ -114,7 +121,8 @@ export function dimensionFigures(
     spentAnything(line.spent),
   )
   const weight = (line: SpendingLine) => measureOf(measure, line.spent) ?? 0
-  const categories = lines.filter((line) => line.kind === 'category')
+  const worked = (line: SpendingLine) => weight(line) > 0
+  const categories = lines.filter((line) => line.kind === 'category' && worked(line))
   const first =
     categories[0] ?? [...lines].sort((left, right) => weight(right) - weight(left)).at(0)
   if (!first) return null
