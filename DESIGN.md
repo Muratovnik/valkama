@@ -733,6 +733,17 @@ same way, not a record that could not be loaded. The context bar keeps the
 selected Planning space or operating scope and global activity controls in
 fixed, predictable positions.
 
+The chrome says only what it has read. Until the module list names the module, the
+context bar's title stands empty on its line; until the projects are read and the
+place a launch comes back to is restored, the scope selector keeps its box and paints
+nothing, and the rail marks no entry as current. At launch it once said the module's id,
+then «Global» and «Work» as current, and then wherever the app actually came back to.
+The groups under the list of work going on now are drawn once the list has its first
+frame, or once the connection is lost: they used to stand under «Work» at once and drop
+by the list's height a second later. They keep their place in the flow while they wait,
+so no room is held for rows that may not come; a folded list and a rail of icons hold
+nothing back.
+
 The rail's width is the reader's. Its right edge is a window splitter, the same edge a
 drawer is resized by: dragged, or stepped 16px by the arrow keys, Home and End taking it to
 its narrowest and widest. It starts at 260px, goes no narrower than 200px and no wider than

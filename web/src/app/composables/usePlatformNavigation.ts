@@ -253,8 +253,9 @@ export function usePlatformNavigation(
     route.value = next
   }
 
+  /** Settles once the route has moved, or the router has refused the move. */
   function writeRoute(next: PlatformRoute, mode: 'push' | 'replace' = 'push') {
-    void navigate(next, mode)
+    return navigate(next, mode)
   }
 
   function switchModule(moduleId: ModuleId) {

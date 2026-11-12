@@ -72,9 +72,11 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
       ? activeRegistration.value.manifest
       : undefined,
   )
+  // No title until the module list has named this module: the address's id stood in the
+  // context bar for the moment before it, then turned into the title.
   const moduleTitle = computed(() => {
     const manifest = activeRegistration.value?.manifest
-    if (manifest === undefined) return inputs.route.value.module_id
+    if (manifest === undefined) return ''
     return inputs.te(manifest.title_key) ? inputs.translate(manifest.title_key) : manifest.module_id
   })
   const routeUnavailable = computed<PlatformRouteUnavailable | null>(() => {
