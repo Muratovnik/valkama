@@ -110,6 +110,8 @@ export const analyticsMessages = {
           cacheWrites: 'cache writes {count}',
         },
         cacheReads: 'Cache reads, not counted: {count}',
+        trend: '{measure} {per} from {from} to {to}: highest {top} ({day}), last {last}',
+        trendNone: '{measure} {per}: {figure}',
       },
       change: {
         up: '↑ {change} against {period}',
@@ -302,6 +304,8 @@ export const analyticsMessages = {
           cacheWrites: 'запись в кэш {count}',
         },
         cacheReads: 'Чтение из кэша, не учтено: {count}',
+        trend: '{measure} {per} с {from} по {to}: наибольшее {top} ({day}), последнее {last}',
+        trendNone: '{measure} {per}: {figure}',
       },
       change: {
         up: '↑ {change} к периоду {period}',

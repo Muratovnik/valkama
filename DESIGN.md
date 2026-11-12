@@ -905,7 +905,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   does, it is `dense`: the name and the value on one line and a thin bar under them, each value
   as wide as its own figure and its name taking the rest of the row.
   Two small charts stand beside a figure rather than in a section of their own, as the
-  Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
+  Analytics rail's tiles and the page's three figures use them: `MiniTrend`, a column per period on a hairline floor with no
   scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,
   largest first, with what they leave out last in the neutral. Each is one image whose words say
   what it draws — the highest and the last period, every part with its share — so neither is read
@@ -2066,7 +2066,9 @@ over it. A plain address opens the overview.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
-before, and the chosen cell sets the measure of everything else on the page; across the
+before and, beside its figure, its own measure as a small trend over the steps of the
+period chart (`MiniTrend`, words as the rail's tile says them), and the chosen cell sets the
+measure of everything else on the page; across the
 panel under them, the period chart with the period before as a short line at its height; and under the
 chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The

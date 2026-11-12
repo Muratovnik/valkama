@@ -1,7 +1,8 @@
 /**
  * The rail of the Analytics page: what each section's tile says beside its name, and what its
- * small charts say in words to a reader who cannot see them. `analyticsMessages` holds these
- * under `analytics.rail`.
+ * share bars say in words to a reader who cannot see them. Its trend says what the page's
+ * figures say of theirs (`analytics.figures.trend`). `analyticsMessages` holds these under
+ * `analytics.rail`.
  */
 export const analyticsRailMessages = {
   en: {
@@ -11,8 +12,6 @@ export const analyticsRailMessages = {
     reading: 'Reading…',
     from: '↑ from {before}',
     unread: 'Nothing to compare with',
-    trend: '{measure} {per} from {from} to {to}: highest {top} ({day}), last {last}',
-    trendNone: '{measure} {per}: {figure}',
     shares: 'Shares of {measure}: {parts}',
     rest: 'the rest',
   },
@@ -23,8 +22,6 @@ export const analyticsRailMessages = {
     reading: 'Читается…',
     from: '↑ с {before}',
     unread: 'Не с чем сравнить',
-    trend: '{measure} {per} с {from} по {to}: наибольшее {top} ({day}), последнее {last}',
-    trendNone: '{measure} {per}: {figure}',
     shares: 'Доли, {measure}: {parts}',
     rest: 'остальное',
   },

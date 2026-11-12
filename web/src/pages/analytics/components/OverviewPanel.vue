@@ -33,7 +33,7 @@ import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/u
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
+import { refusedIn } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -68,8 +68,6 @@ const emit = defineEmits<{
   retry: []
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
-
-const figures = computed(() => tileFigures(props.usage))
 
 /** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
@@ -146,9 +144,8 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   >
     <SpendingTiles
       v-model:measure="measure"
-      :split="usage.total.tokens"
-      :total="figures.total"
-      :before="figures.before"
+      :usage="usage"
+      :read-at="readAt"
     />
     <div
       ref="chartColumn"

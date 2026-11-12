@@ -305,3 +305,30 @@ export function usageAnswer(options: {
   if (options.end) edges[days] = options.end.getTime()
   return answerOf({ ...options, edges, offset: options.offset ?? -first.getTimezoneOffset() })
 }
+
+/**
+ * An answer that holds only what the page's figures read: the period's total, the period
+ * before's when given, with its days, and no rows and no steps. A test of the figures alone
+ * mounts them with it; one of their steps builds a period with `usageAnswer`.
+ */
+export function figuresAnswer(total: Spend, before?: { from: string; spent: Spend; to: string }) {
+  const whole = (spend: Spend) => totalOf([{ day: 0, group: {}, spend }])
+  const usage: Usage = {
+    period: {
+      from: '2026-11-09T00:00:00+00:00',
+      to: '2026-11-16T00:00:00+00:00',
+      step: 'day',
+      utc_offset: 0,
+    },
+    group_by: [],
+    cost_basis: COST_BASIS,
+    last_event_at: null,
+    total: whole(total),
+    rows: [],
+    series: [],
+    comparison: before
+      ? { period: { from: before.from, to: before.to }, total: whole(before.spent), rows: [] }
+      : null,
+  }
+  return usage
+}

@@ -13,7 +13,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 
-import { momentAt, noTask, serveUsage, task, usageAnswer, value } from '../fixtures/analytics.ts'
+import {
+  figuresAnswer,
+  momentAt,
+  noTask,
+  serveUsage,
+  task,
+  usageAnswer,
+  value,
+} from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -335,16 +343,8 @@ describe('the figures of the overview', () => {
   const mountTiles = (seconds: number, was: number) =>
     mount(SpendingTiles, {
       props: {
-        total: { seconds, tokens: null, cost: null, unpriced: 0 },
-        split: {
-          input: null,
-          output: null,
-          reasoning: null,
-          cache_write_5m: null,
-          cache_write_1h: null,
-          cached_read: null,
-        },
-        before: { ...before, spent: { seconds: was, tokens: null, cost: null, unpriced: 0 } },
+        usage: figuresAnswer({ seconds }, { ...before, spent: { seconds: was } }),
+        readAt: new Date(2026, 10, 11, 14, 30),
         measure: 'time',
       },
       global: { plugins: [analyticsI18n()] },

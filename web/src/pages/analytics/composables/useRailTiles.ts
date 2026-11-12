@@ -28,7 +28,7 @@ import { spentAnything, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { OVERVIEW, TOKEN_KINDS_SECTION } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView, Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension, UsageStep } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
@@ -88,44 +88,6 @@ export function useRailTiles(options: {
   const failed = () => standing('failed', t('analytics.rail.failed'))
   const noData = () => standing('empty', t('analytics.rail.noData'))
 
-  /** A day's figure in the measure's units, or the words for a day with none. */
-  function amount(measure: Measure, value: number | null) {
-    if (value === null) return t(`analytics.days.absent.${measure}`)
-    return value === 0 && measure === 'time'
-      ? t('time.minutes', { count: 0 })
-      : words.scale(measure, value)
-  }
-
-  /**
-   * The steps in words — days, or the minutes of the live hour: the first and the last, the
-   * highest, and the last one's figure.
-   */
-  function trendLabel(measure: Measure, figures: OverviewFigures, step: UsageStep) {
-    const name = (key: string) => words.stepName(key, step).label
-    const days = figures.trend
-    let top = days.at(0)
-    for (const day of days) if ((day.value ?? 0) > (top?.value ?? 0)) top = day
-    const first = days.at(0)
-    const last = days.at(-1)
-    if (!first || !last || !top?.value)
-      return t('analytics.rail.trendNone', {
-        measure: words.measure(measure),
-        per: words.per(step),
-        figure: words.figure(measure, figures.total),
-      })
-    return t('analytics.rail.trend', {
-      measure: words.measure(measure),
-      per: words.per(step),
-      from: name(first.key),
-      to: name(last.key),
-      top: amount(measure, top.value),
-      day: name(top.key),
-      last: [amount(measure, last.value), last.incomplete ? t('analytics.days.soFar') : '']
-        .filter(Boolean)
-        .join(' '),
-    })
-  }
-
   /** How the total moved, as words beside it. */
   function moved(measure: Measure, figures: OverviewFigures, usage: Usage) {
     const { change } = figures
@@ -147,10 +109,7 @@ export function useRailTiles(options: {
       quiet: !spent,
       aside: moved(measure, figures, shown.payload),
       busy: shown.status === 'degraded',
-      trend: {
-        label: trendLabel(measure, figures, shown.payload.period.step),
-        points: figures.trend,
-      },
+      trend: words.trend(measure, figures, shown.payload.period.step),
     }
   }
 

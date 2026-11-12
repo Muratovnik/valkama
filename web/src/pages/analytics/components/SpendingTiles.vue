@@ -9,6 +9,12 @@
  * tile's hint says it whole — its name, figure, change and notes — while any of them is cut,
  * and the tile's name says it all too.
  *
+ * Beside each figure its measure stands step by step over the period the main chart draws — its
+ * days, the hours of a single day, the minutes of the live hour — as a small trend
+ * (`MiniTrend`) whose words say what it draws, as the rail's tile of the overview says its own.
+ * It takes the place of the figure's line and keeps it with nothing to draw, so a new answer
+ * changes the columns' heights and nothing around them.
+ *
  * The cost says it is an estimate and not a bill, and tokens with no price are said in words
  * under it, never folded into a zero: a cost of nothing and a cost nobody knows are different.
  * A change is an arrow and words, never a colour alone. A period before with nothing in it says
@@ -22,22 +28,23 @@ import { useI18n } from 'vue-i18n'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { risenFromLittle } from '@/pages/analytics/utils/overviewFigures.ts'
+import { tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
+import { overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import type { Usage } from '@/shared/api/analyticsApi.ts'
+import MiniTrend from '@/shared/ui/MiniTrend.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
-  /** What the period before spent, and when it was; null when it was not read. */
-  before: { from: string; spent: Spent; to: string } | null
-  /** The period's tokens by kind, for what the tokens figure counts and leaves apart. */
-  split: UsageTokens
-  total: Spent
+  /** When the answer was asked for, which says which step is not over yet. */
+  readAt: Date
+  /** The answer the figures are of: its total, its steps and the period before, if read. */
+  usage: Usage
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
 
@@ -45,13 +52,15 @@ const { t } = useI18n()
 const words = useSpendingWords()
 const overviewWords = useOverviewWords()
 
+const figures = computed(() => tileFigures(props.usage))
+
 /** The change of a measure, said against the days it is compared with; none when not read. */
 function moved(value: Measure) {
-  const { before } = props
+  const { before, total } = figures.value
   if (!before) return { direction: 'unread', words: t('analytics.change.unread') }
-  const change = changeOf(value, props.total, before.spent)
+  const change = changeOf(value, total, before.spent)
   const period = words.period(before.from, before.to)
-  const steep = change.direction === 'up' && risenFromLittle(value, props.total, before.spent)
+  const steep = change.direction === 'up' && risenFromLittle(value, total, before.spent)
   return {
     direction: change.direction,
     words: steep
@@ -62,18 +71,21 @@ function moved(value: Measure) {
 
 const tiles = computed(() =>
   MEASURES.map((value) => {
+    const { total } = figures.value
     const change = moved(value)
     const notes = {
       time: [],
-      tokens: words.tokenKinds(props.split),
-      cost: [t('analytics.figures.costNote'), words.unpriced(props.total)].filter(Boolean),
+      tokens: words.tokenKinds(props.usage.total.tokens),
+      cost: [t('analytics.figures.costNote'), words.unpriced(total)].filter(Boolean),
     }[value]
     const label = words.measure(value)
-    const figure = words.figure(value, props.total)
+    const figure = words.figure(value, total)
+    const steps = overviewFigures(props.usage, value, props.readAt)
     return {
       value,
       label,
       figure,
+      trend: words.trend(value, steps, props.usage.period.step),
       change: change.words,
       direction: change.direction,
       notes,
@@ -108,11 +120,20 @@ const tileOf = (value: Measure) => byValue.value.get(value)
             :size="14"
           />
         </span>
-        <span
-          class="tile-figure"
-          :data-measure="option.value"
-          >{{ tileOf(option.value)?.figure }}</span
-        >
+        <span class="tile-lead">
+          <span
+            class="tile-figure one-line"
+            :data-measure="option.value"
+            >{{ tileOf(option.value)?.figure }}</span
+          >
+          <span class="tile-trend">
+            <MiniTrend
+              v-if="tileOf(option.value)"
+              :label="tileOf(option.value)?.trend.label ?? ''"
+              :points="tileOf(option.value)?.trend.points ?? []"
+            />
+          </span>
+        </span>
         <span
           class="tile-change one-line"
           :data-direction="tileOf(option.value)?.direction"
@@ -155,7 +176,26 @@ const tileOf = (value: Measure) => byValue.value.get(value)
   color: var(--color-text);
 }
 
+/* The figure and its trend on one line: the figure as wide as itself, the trend after it at the
+   tile's end, as wide as it may be up to its own measure and never so narrow it says nothing.
+   The trend is about as tall as the figure's line, and keeps its place with nothing to draw. */
+.tile-lead {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.tile-trend {
+  display: grid;
+  flex: 0 1 8rem;
+  min-inline-size: var(--space-12);
+}
+
 .tile-figure {
+  flex: 0 1 auto;
+  min-width: 0;
   color: var(--color-text);
   font: var(--font-drawer-title);
   font-variant-numeric: tabular-nums;
