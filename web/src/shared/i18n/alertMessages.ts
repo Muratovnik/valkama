@@ -14,11 +14,13 @@ export const alertMessages = {
       on: 'On',
       off: 'Off',
       events: 'Events',
-      eventsHint: 'About what agents did. Your own actions do not notify you.',
+      eventsHint:
+        'About what agents did and your subscription quota. Your own actions do not notify you.',
       event: {
         question: 'An answer or a decision is needed',
         review: 'A work item is in review',
         launchFailed: 'A launch from Valkama failed',
+        quota: 'A subscription quota is running out',
       },
       contentLabel: 'What to show',
       contentHint:
@@ -91,11 +93,13 @@ export const alertMessages = {
       on: 'Включено',
       off: 'Выключено',
       events: 'События',
-      eventsHint: 'О том, что сделали агенты. О ваших собственных действиях оповещений нет.',
+      eventsHint:
+        'О том, что сделали агенты, и о квоте подписки. О ваших собственных действиях оповещений нет.',
       event: {
         question: 'Нужен ответ или решение',
         review: 'Задача на проверке',
         launchFailed: 'Запуск из Valkama упал',
+        quota: 'Квота подписки на исходе',
       },
       contentLabel: 'Что показывать',
       contentHint:

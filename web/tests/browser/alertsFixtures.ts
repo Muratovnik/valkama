@@ -2,7 +2,7 @@ import type { Page, Route } from '@playwright/test'
 
 export const ALERT_SETTINGS = {
   enabled: true,
-  events: { question: true, review: true, launchFailed: false },
+  events: { question: true, review: true, launchFailed: false, quota: true },
   content: 'title',
   locale: 'en',
 }
