@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
+
 ### Changed
 
 - **The Analytics page is rebuilt as a monitor.** A rail down the side holds a tile for
