@@ -22,6 +22,7 @@ export const analyticsMessages = {
       period: {
         label: 'Period',
         now: 'Now',
+        today: 'Today',
         week: 'This week',
         weeks4: 'Past 4 weeks',
         custom: 'Custom',
@@ -196,6 +197,7 @@ export const analyticsMessages = {
       period: {
         label: 'Период',
         now: 'Сейчас',
+        today: 'Сегодня',
         week: 'Эта неделя',
         weeks4: 'Последние 4 недели',
         custom: 'Свой',

@@ -14,7 +14,8 @@
  * opens the overview, the period's figures with that breakdown's first values among them.
  *
  * A preset is kept as its name, not as its dates: «this week» in a link opened next week is
- * next week's week, as the words say, and «now» is the hour up to whenever it is opened.
+ * next week's week, as the words say, «today» is the day it is opened on, and «now» is the hour
+ * up to whenever it is opened.
  *
  * The one reader and the one writer of that address. The page reads its view here and writes
  * every change here; a way to the page from elsewhere, such as an item's Agents tab, writes its
@@ -24,7 +25,7 @@ import { isUsageDimension, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-export const PERIODS = ['now', 'week', 'weeks4', 'custom'] as const
+export const PERIODS = ['now', 'today', 'week', 'weeks4', 'custom'] as const
 export type PeriodPreset = (typeof PERIODS)[number]
 
 export const MEASURES = ['time', 'tokens', 'cost'] as const
