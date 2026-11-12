@@ -367,3 +367,54 @@ describe('a value', () => {
     expect(lead(page, 'work_item')).toBe('MAIN-3 Task 3')
   })
 })
+
+describe('a share', () => {
+  it('is said in whole percents, never as all or none of what it is not', async () => {
+    // A second on a task beside 999 on no task: a thousandth, and the rest a hair under all.
+    stubAnalyticsReads((query) =>
+      serveUsage(
+        [
+          {
+            at: new Date(2026, 10, 9, 10),
+            group: { work_item: task(1, 'One') },
+            spend: { seconds: 1 },
+          },
+          { at: new Date(2026, 10, 9, 11), group: { work_item: noTask }, spend: { seconds: 999 } },
+        ],
+        query,
+      ),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'work_item')).toBe('MAIN-1 One')
+    expect(aside(page, 'work_item')).toBe('<1%')
+    expect(tile(page, 'work_item').get('.mini-share-bar').attributes('aria-label')).toBe(
+      'Shares of Agent time: No task >99%',
+    )
+  })
+})
+
+describe('a tile of «Now»', () => {
+  it('says no count beside work with no value when no value worked', async () => {
+    // Ten minutes of the live hour, on no task and launched by the session itself.
+    stubAnalyticsReads((query) =>
+      serveUsage(
+        [
+          {
+            at: new Date(2026, 10, 11, 14, 10),
+            group: { work_item: noTask, launch_class: noTask },
+            spend: { seconds: 600 },
+          },
+        ],
+        query,
+      ),
+    )
+    const page = await mountAnalytics({ routeState: { period: 'now' } })
+    expect(lead(page, 'launch_class')).toBe('The session itself')
+    expect(count(page, 'launch_class').exists()).toBe(false)
+    expect(lead(page, 'work_item')).toBe('No task')
+    expect(count(page, 'work_item').exists()).toBe(false)
+    // Work nobody can place is no work with no value: its tile keeps its count of none.
+    expect(lead(page, 'model')).toBe('Unknown')
+    expect(count(page, 'model').text()).toBe('0 values')
+  })
+})
