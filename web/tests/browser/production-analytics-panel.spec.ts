@@ -420,11 +420,16 @@ test('the tokens by kind are a panel whose counted kinds add up to the Â«TokensÂ
     ['Output', compact(output)],
     ['Cache write, 5 min', compact(cacheWrite)],
     ['Total', compact(input + output + cacheWrite)],
-    ['Cache read, not counted', compact(cacheRead)],
-    ['Reasoning, part of output', compact(reasoning)],
+    ['Cache read', compact(cacheRead)],
+    ['Reasoning', compact(reasoning)],
   ])
   expect(rows[3]?.[1]).toBe(tokens)
   await expect(panel.locator('.kinds-figure-value')).toHaveText(tokens)
+  // The two kinds apart are named briefly; the note beside the figure says why they stand apart.
+  const note = panel.locator('.kinds-note')
+  await expect(note).toBeVisible()
+  await expect(note).toContainText(/cache reads stand apart/u)
+  await expect(note).toContainText(/reasoning is part of output/u)
 
   // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
   const bars = panel.locator('.kinds-bars')
@@ -433,10 +438,7 @@ test('the tokens by kind are a panel whose counted kinds add up to the Â«TokensÂ
     'Output',
     'Cache write, 5 min',
   ])
-  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText([
-    'Cache read, not counted',
-    'Reasoning, part of output',
-  ])
+  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
   await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
   await expect(panel.locator('.kinds-multiples h2')).toHaveText('Tokens per day of each kind')
