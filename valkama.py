@@ -22,6 +22,13 @@ if __name__ == "__main__":
 
         sys.exit(hook_main(sys.argv[2:]))
 
+    # Claude Code runs its status line command on every refresh of the status
+    # line, so it takes the same early way out.
+    if sys.argv[1:2] == ["statusline"]:
+        from server.hooks.statusline import main as statusline_main
+
+        sys.exit(statusline_main(sys.argv[2:]))
+
     # The launcher's `mcp` is dispatched early too. When this is the release the
     # launcher names, the process becomes the session's stdio front, which runs
     # the server as a child; loading every surface into the front would only

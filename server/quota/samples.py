@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import datetime as dt
 import math
-import re
-import sqlite3
-from collections.abc import Iterable
-from dataclasses import dataclass
 
 from . import store as quota_store
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    import sqlite3
+    from collections.abc import Iterable
 
 #: What each live source calls a window, and the kind it is here. The status line and
 #: the mod name the client's `rate_limits` windows; the poll names the usage endpoint's
@@ -46,14 +47,19 @@ SOURCE_WINDOWS: dict[str, dict[str, str]] = {
     },
 }
 
+# The shapes below are character sets rather than patterns: `re` is the second largest
+# import of the status line command, which records a reading on every refresh.
+_UPPER = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+_DIGITS = frozenset("0123456789")
+_ALPHANUMERIC = _UPPER | frozenset("abcdefghijklmnopqrstuvwxyz") | _DIGITS
 #: An organization or a session id: a short plain token, as the usage rows keep ids.
-_TOKEN = re.compile(r"[A-Za-z0-9._:-]{1,128}")
+_TOKEN = _ALPHANUMERIC | frozenset("._:-")
 #: A model as a source names it, an id or a display name such as `Opus 4`.
-_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._:-]{0,63}")
+_MODEL = _ALPHANUMERIC | frozenset(" ._:-")
 #: A plan's short name, such as `Team` or `Max`.
-_PLAN = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,31}")
-_SEAT = re.compile(r"week:\d{4}-\d{2}-\d{2}T\d{2}:\d0Z")
-_CURRENCY = re.compile(r"[A-Z]{3}")
+_PLAN = _ALPHANUMERIC | frozenset(" ._-")
+#: A seat, `D` standing for an ASCII digit and every other character for itself.
+_SEAT = "week:DDDD-DD-DDTDD:D0Z"
 _EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 #: How far ahead of the clock a reading may be dated: a source's clock is this one's.
 _AHEAD = dt.timedelta(minutes=5)
@@ -63,8 +69,69 @@ class SampleError(ValueError):
     """A reading this store cannot keep as it was given; nothing of it was written."""
 
 
-@dataclass(frozen=True)
-class Window:
+def _plain(
+    value: object, allowed: frozenset[str], longest: int, first: frozenset[str] = _ALPHANUMERIC
+) -> bool:
+    """Whether `value` is text of 1 to `longest` characters of `allowed`, the first in `first`."""
+
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= longest
+        and value[0] in first
+        and all(character in allowed for character in value)
+    )
+
+
+def _seat_shaped(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == len(_SEAT)
+        and all(
+            character in _DIGITS if shape == "D" else character == shape
+            for character, shape in zip(value, _SEAT, strict=True)
+        )
+    )
+
+
+class _Value:
+    """What `dataclass(frozen=True)` gave the two values below: equality, a hash, a repr.
+
+    They are written out because the status line command builds a reading on every
+    refresh of the client's status line, and `dataclasses`, with the `inspect` it loads,
+    cost that command more than all of its own work.
+    """
+
+    __slots__: tuple[str, ...] = ()
+
+    def _fill(self, **values: object) -> None:
+        for name in self.__slots__:
+            object.__setattr__(self, name, values.pop(name))
+        if values:
+            raise TypeError(f"{type(self).__name__} has no field {sorted(values)[0]!r}")
+
+    def _values(self) -> tuple[object, ...]:
+        return tuple(getattr(self, name) for name in self.__slots__)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError(f"a {type(self).__name__} is not changed once made")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError(f"a {type(self).__name__} is not changed once made")
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _Value) or type(other) is not type(self):
+            return NotImplemented
+        return self._values() == other._values()
+
+    def __hash__(self) -> int:
+        return hash(self._values())
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{name}={getattr(self, name)!r}" for name in self.__slots__)
+        return f"{type(self).__name__}({fields})"
+
+
+class Window(_Value):
     """One window of a reading, in this store's kinds (`store.KINDS`).
 
     `percent` is required except for `extra_usage`, which may carry only `amount`;
@@ -72,16 +139,34 @@ class Window:
     `currency` belong to the two money kinds alone.
     """
 
+    __slots__ = ("amount", "currency", "kind", "model", "percent", "resets_at")
     kind: str
-    percent: float | None = None
-    resets_at: str | None = None
-    model: str | None = None
-    amount: float | None = None
-    currency: str | None = None
+    percent: float | None
+    resets_at: str | None
+    model: str | None
+    amount: float | None
+    currency: str | None
+
+    def __init__(
+        self,
+        kind: str,
+        percent: float | None = None,
+        resets_at: str | None = None,
+        model: str | None = None,
+        amount: float | None = None,
+        currency: str | None = None,
+    ) -> None:
+        self._fill(
+            kind=kind,
+            percent=percent,
+            resets_at=resets_at,
+            model=model,
+            amount=amount,
+            currency=currency,
+        )
 
 
-@dataclass(frozen=True)
-class Reading:
+class Reading(_Value):
     """What one source saw at one moment.
 
     `organization` for `poll` and `import`, `session_id` for `statusline` and `mod`, and
@@ -91,14 +176,46 @@ class Reading:
     it; `plan` is the plan a profile named, given only with an account's UUID.
     """
 
+    __slots__ = (
+        "account_uuid",
+        "at",
+        "organization",
+        "plan",
+        "seat",
+        "session_id",
+        "source",
+        "windows",
+    )
     source: str
     at: str
     windows: tuple[Window, ...]
     seat: str | None
-    organization: str | None = None
-    session_id: str | None = None
-    plan: str | None = None
-    account_uuid: str | None = None
+    organization: str | None
+    session_id: str | None
+    plan: str | None
+    account_uuid: str | None
+
+    def __init__(
+        self,
+        source: str,
+        at: str,
+        windows: tuple[Window, ...],
+        seat: str | None,
+        organization: str | None = None,
+        session_id: str | None = None,
+        plan: str | None = None,
+        account_uuid: str | None = None,
+    ) -> None:
+        self._fill(
+            source=source,
+            at=at,
+            windows=windows,
+            seat=seat,
+            organization=organization,
+            session_id=session_id,
+            plan=plan,
+            account_uuid=account_uuid,
+        )
 
 
 def instant(text: str) -> str:
@@ -160,14 +277,16 @@ def _window(window: Window) -> Window:
         raise SampleError(f"no window kind {window.kind!r}; the kinds are {quota_store.KINDS}")
     if (window.kind == "week_model") != (window.model is not None):
         raise SampleError("a model belongs to a `week_model` window and to no other")
-    if window.model is not None and not _MODEL.fullmatch(window.model):
+    if window.model is not None and not _plain(window.model, _MODEL, 64):
         raise SampleError(f"not a model name: {window.model!r}")
     percent = _number(window.percent, "percent")
     amount = _number(window.amount, "amount")
     money = window.kind in quota_store.MONEY_KINDS
     if not money and (amount is not None or window.currency is not None):
         raise SampleError(f"a `{window.kind}` window carries no money")
-    if window.currency is not None and (amount is None or not _CURRENCY.fullmatch(window.currency)):
+    if window.currency is not None and (
+        amount is None or not _plain(window.currency, _UPPER, 3, _UPPER)
+    ):
         raise SampleError("a currency is three capital letters beside an amount")
     if percent is None and (window.kind != "extra_usage" or amount is None):
         raise SampleError(f"a `{window.kind}` window needs its percent")
@@ -175,7 +294,7 @@ def _window(window: Window) -> Window:
     return Window(window.kind, percent, resets_at, window.model, amount, window.currency)
 
 
-def _validated(reading: Reading, now: dt.datetime) -> Reading:
+def validated(reading: Reading, now: dt.datetime) -> Reading:
     """The reading as the store keeps it, or `SampleError` before anything is written."""
 
     if reading.source not in quota_store.SOURCES:
@@ -186,16 +305,16 @@ def _validated(reading: Reading, now: dt.datetime) -> Reading:
     if named is None or other is not None:
         wanted = "an organization" if by_organization else "a session"
         raise SampleError(f"a `{reading.source}` reading is identified by {wanted} alone")
-    if not _TOKEN.fullmatch(named):
+    if not _plain(named, _TOKEN, 128, _TOKEN):
         raise SampleError(f"not an id: {named!r}")
-    if reading.seat is not None and not _SEAT.fullmatch(reading.seat):
+    if reading.seat is not None and not _seat_shaped(reading.seat):
         raise SampleError(f"not a seat: {reading.seat!r}")
     if reading.account_uuid is not None and (
-        not by_organization or not _TOKEN.fullmatch(reading.account_uuid)
+        not by_organization or not _plain(reading.account_uuid, _TOKEN, 128, _TOKEN)
     ):
         raise SampleError("an account's UUID is an id given with an organization's reading")
     if reading.plan is not None and (
-        reading.account_uuid is None or not _PLAN.fullmatch(reading.plan)
+        reading.account_uuid is None or not _plain(reading.plan, _PLAN, 32)
     ):
         raise SampleError("a plan is a short name given with an account's UUID")
     at = instant(reading.at)
@@ -239,7 +358,7 @@ def record(conn: sqlite3.Connection, reading: Reading, *, now: dt.datetime | Non
     """
 
     clock = now or dt.datetime.now(dt.UTC)
-    kept = _validated(reading, clock)
+    kept = validated(reading, clock)
     if kept.at < retained_from(clock):
         return 0
     by_organization = kept.organization is not None
@@ -305,4 +424,5 @@ __all__ = [
     "retained_from",
     "seat_for_week",
     "seat_of",
+    "validated",
 ]

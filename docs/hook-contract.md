@@ -1122,6 +1122,150 @@ Host Runtime registers the hook from that. After the listener's port changes, th
 old address stops answering and messages show as they were until the installer is run
 again; whatever else listens on that old port would receive the text.
 
+## The status line command
+
+```
+valkama statusline [--previous=<base64>]
+```
+
+This is the command Claude Code runs as its status line (`statusLine` in its
+settings), and the `statusline` source of the subscription quota samples
+described in the [connection contract](connection-contract.md#subscription-quota-samples-and-accounts).
+It follows the hook rules above: exit status 0, nothing on stdout of its own, a
+diagnostic on stderr, and the same early dispatch, so it loads neither the MCP
+nor the HTTP surface.
+
+What Claude Code does with the command, from its status line documentation:
+
+- It runs the command when a session starts or resumes, after each assistant
+  message, after `/compact`, when the permission or vim mode changes, when the
+  command itself changes, every `refreshInterval` seconds when that is set, and
+  when a rate-limit window it last sent reaches its `resets_at`. Updates are
+  debounced by 300 ms, and an update that comes while the command still runs
+  cancels that run. No timeout is documented.
+- It writes one JSON object to the command's stdin and shows the command's
+  stdout, every line a row, only when the command exits 0.
+- `rate_limits` is in that object only for a claude.ai Pro, Max or Ultra
+  account, or behind a Claude apps gateway with a spend limit, and only after
+  the session's first API response. Each of its windows, `five_hour`,
+  `seven_day` and `spend_limit`, may be absent, and one whose `resets_at` has
+  passed is dropped. The object names no account.
+- On Windows the command runs through Git Bash when Git Bash is installed, and
+  through PowerShell when it is not.
+- Only a terminal session runs a status line. The VS Code extension does not.
+
+### What it records
+
+When stdin is a JSON object of at most 1 MiB with `session_id` and
+`rate_limits`, the command records one reading through `quota.samples.record`:
+
+| Field | From |
+| --- | --- |
+| `source` | `statusline` |
+| `session_id` | `session_id`; the reading's organization is read later, from the session |
+| `at` | when the command ran, UTC to the millisecond |
+| `five_hour`, `week`, `spend_limit` | `rate_limits.five_hour`, `rate_limits.seven_day`, `rate_limits.spend_limit`: `used_percentage` as the percent, `resets_at` from Unix seconds |
+| `amount`, `currency` | `rate_limits.spend_limit.used_usd` and `USD`, when the gateway sent them |
+| `seat` | the seven-day window's reset, as `samples.seat_of` names it; none without that window |
+
+A window that is absent, or whose `used_percentage` is not a number, is left
+out. A window is kept only when it differs from the previous sample of its
+series, so the same reading on every refresh adds nothing.
+
+Input without `rate_limits`, input that is not a JSON object, malformed or
+larger than 1 MiB writes nothing and prints nothing. A reading the store would
+refuse, such as a `session_id` that is not a plain id, is reported on stderr
+and written nowhere.
+
+The store is opened as a hook opens it, with one difference: the command does
+not wait for another writer. A store that is missing, at another schema
+version, or busy at that moment sends the reading to the spool, as one line in
+a file of its own:
+
+```json
+{"quota": 1, "source": "statusline", "at": "2026-11-12T10:00:00.250Z",
+ "session_id": "…", "seat": "week:2026-11-15T09:00Z",
+ "windows": [{"kind": "week", "resets_at": "2026-11-15T09:00:00.000Z",
+              "model": null, "currency": null, "percent": 41.2, "amount": null}],
+ "spooled_at": "2026-11-12T10:00:00.250Z", "spool_reason": "busy"}
+```
+
+Such a file is drained with the hook events: by the next hook's direct write
+and by a server's start-up. A line that differs from this shape, or a reading
+in it the store refuses, sets the file aside as `*.rejected`. So does a build
+from before this command, which has no reader for the line.
+
+### Chaining the status line that was there
+
+`--previous` carries the status line command that this one replaced: the
+standard base64 (RFC 4648, with padding) of the UTF-8 bytes of the `command`
+string, as the settings file holds it once its JSON is read. When it is given,
+`valkama statusline`:
+
+1. starts that command with the same working directory and environment, before
+   it records the reading, so the two overlap;
+2. writes it the same stdin bytes;
+3. runs it through the shell that runs `valkama statusline`. On Windows that
+   is the process that started this one when it is Git Bash (`bash.exe` or
+   `sh.exe`, run with `-c`) or PowerShell (`pwsh.exe` or `powershell.exe`, run
+   with `-NoProfile -NonInteractive -Command`), which it is whenever Claude Code
+   started it. Otherwise it is Git Bash from `CLAUDE_CODE_GIT_BASH_PATH`, beside
+   `git` on `PATH` or under `Program Files`, and PowerShell when there is none.
+   Elsewhere it is `/bin/sh -c`, the shell Claude Code runs a hook's shell
+   form with;
+4. prints exactly what that command wrote to stdout, when it exits 0. When it
+   exits otherwise it prints nothing, which Claude Code shows the same way. The
+   command's stderr stays on stderr, where `claude --debug` reads it;
+5. stops the command when it has run for 10 seconds, and prints nothing. On
+   Windows every process the command started is stopped with it. On POSIX the
+   command stays in this command's process group, so a stop Claude Code sends
+   to the group when it cancels a run reaches it too.
+
+Without `--previous` the command prints nothing.
+
+### Writing and restoring the setting
+
+What writes the setting for a user writes this, and keeps the user's original
+settings bytes to restore:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "<python> -I -S <launcher directory>/valkama-launcher.py statusline --previous=<base64>"
+  }
+}
+```
+
+- `<python>` is the interpreter the launcher manifest records, and `<launcher
+  directory>` the directory of the stable command, as for a hook in exec form.
+  Paths use forward slashes, because Git Bash reads a backslash as an escape.
+- Claude Code picks Git Bash or PowerShell when it runs the command, so the
+  string has to mean the same in both. An unquoted path without whitespace
+  does. A path with a space has no spelling both accept, since PowerShell runs a
+  quoted program only after `&` and Bash refuses `&` there; use its short 8.3
+  form. The stable command `valkama.cmd` works too, at the cost of a `cmd.exe`
+  start on every refresh.
+- The base64 alphabet, `A-Z a-z 0-9 + / =`, needs no quoting in either shell.
+- `--previous` is left out when there was no status line before.
+- The other fields of the user's `statusLine` object, such as `padding`,
+  `refreshInterval` and `hideVimModeIndicator`, stay as they were. Only
+  `command` changes.
+- A command that already runs `valkama statusline` is not wrapped again.
+
+To restore, write back the bytes that were kept. Nothing else holds state:
+`--previous` decodes to the original command exactly, so the live setting can
+be compared with what was kept before it is overwritten.
+
+### What it costs
+
+The command runs on every refresh, so it imports only what writing a reading
+needs: the light open, the C JSON scanner and `quota.samples`, which keeps its
+shape checks free of `dataclasses` and `re` for this reason. It never imports
+the store module or `json`, and it imports `subprocess` and `ctypes` only to run
+a previous command. It holds `store.STORE_SCHEMA_VERSION` in a copy of its own,
+which a test keeps equal.
+
 ## What a client update can change
 
 Beyond the hook input, Valkama depends on these details of its clients, and a
@@ -1162,6 +1306,17 @@ Under Installation → Store:
   oldest owed end, files no row names, and recorded copies missing from disk.
   This is a warning when a file has no row, a recorded copy is missing, or a
   copy has been owed for more than a day.
+
+Under Capabilities → Quota sources:
+
+- **Status line quota source**: `off` when Claude Code's status line does not
+  run `valkama statusline`; `silent` when it does but no status line reading
+  reached the store in three days, with the reminder that only a terminal
+  session runs a status line, not the VS Code extension; `working` otherwise.
+  The first two are warnings. The doctor reads `settings.json` in Claude Code's
+  configuration directory (`CLAUDE_CONFIG_DIR`, or `~/.claude`) and changes
+  nothing. Sessions under WSL, or under another `CLAUDE_CONFIG_DIR`, are not
+  checked, and the text says so.
 
 ## Not covered
 

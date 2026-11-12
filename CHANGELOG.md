@@ -36,6 +36,13 @@ checkouts are therefore distinguishable even at the same version.
   whether it is off, working, paused or refused, and what to do.
 - **`valkama quota import --source FILE`** imports quota history from JSON lines, one
   sample a line, all or nothing. Importing the same file again adds nothing.
+- **`valkama statusline`**, Claude Code's status line command, is the first live quota
+  source. It records the five-hour window, the week and a gateway's spend limit from the
+  status line input as samples of the session, straight into the store or through the
+  hook spool, and prints nothing of its own. A status line the user had is passed with
+  `--previous=<base64>` and still shows: it runs with the same input through the same
+  shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
+  working.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

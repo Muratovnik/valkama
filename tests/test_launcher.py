@@ -201,13 +201,31 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(["hook", "claude", "stop"], json.loads(result.stdout))
 
+    def test_a_release_from_before_the_status_line_command_answers_it_with_nothing(self) -> None:
+        """A rollback past `valkama statusline` leaves a blank status line, not a usage error."""
+
+        hooks = self.checkout / "server" / "hooks"
+        hooks.mkdir(parents=True)
+        (hooks / "entry.py").write_text("", encoding="utf-8", newline="\n")
+        commit(self.checkout, ENTRY, "a release with hooks and no status line command")
+        command = Path(str(self.install()["command"]))
+        result = self.run_command(command, "statusline", "--previous=Y2F0")
+        self.assertEqual((0, b""), (result.returncode, result.stdout), result.stderr)
+
+        (hooks / "statusline.py").write_text("", encoding="utf-8", newline="\n")
+        commit(self.checkout, ENTRY, "a release with the status line command")
+        result = self.run_command(Path(str(self.install()["command"])), "statusline")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["statusline"], json.loads(result.stdout))
+
     def test_the_posix_command_hands_every_argument_to_the_shim(self) -> None:
         """The hook guard lives in the shim both commands run; the wrapper only forwards."""
 
         text, _mode = launcher._command_bytes("posix", Path(sys.executable))
         self.assertIn(f'"$SCRIPT_DIR/{launcher.SHIM_NAME}" "$@"', text.decode("utf-8"))
         shim = launcher._shim_bytes(Path("/releases/abc/valkama.py")).decode("utf-8")
-        self.assertIn('sys.argv[1:2] == ["hook"]', shim)
+        self.assertIn("sys.argv[1] in EARLY_ENTRIES", shim)
+        self.assertIn('"hook": ["server", "hooks", "entry.py"]', shim)
 
     def test_clients_run_the_committed_tree_not_the_working_tree(self) -> None:
         head = git(self.checkout, "rev-parse", "HEAD")

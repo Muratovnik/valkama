@@ -270,6 +270,37 @@ class RecordTests(_Store):
         self.conn.rollback()
 
 
+class ValueTests(unittest.TestCase):
+    """A window and a reading are values: equal by their fields, hashable, never changed."""
+
+    def test_equal_fields_make_equal_values_and_one_field_tells_them_apart(self) -> None:
+        first = mod("2030-03-04T12:00:00Z", week(40.5))
+        same = samples.Reading(
+            source="mod",
+            at="2030-03-04T12:00:00Z",
+            windows=(samples.Window(kind="week", percent=40.5, resets_at=WEEK_RESET),),
+            seat=SEAT,
+            session_id=SESSION,
+        )
+        self.assertEqual(first, same)
+        self.assertEqual(hash(first), hash(same))
+        self.assertEqual(1, len({first, same}))
+        self.assertNotEqual(first, mod("2030-03-04T12:00:00Z", week(40.6)))
+        self.assertNotEqual(week(40.5), samples.Window("week_model", 40.5, WEEK_RESET))
+        self.assertNotEqual(week(40.5), ("week", 40.5, WEEK_RESET, None, None, None))
+        self.assertIn("percent=40.5", repr(week(40.5)))
+
+    def test_a_value_is_not_changed_once_made(self) -> None:
+        window = week(40.5)
+        with self.assertRaises(AttributeError):
+            window.percent = 1.0  # type: ignore[misc]
+        with self.assertRaises(AttributeError):
+            del window.kind
+        with self.assertRaises(AttributeError):
+            window.extra = 1  # type: ignore[attr-defined]
+        self.assertEqual(40.5, window.percent)
+
+
 class VocabularyTests(unittest.TestCase):
     def test_the_kinds_are_the_five_windows(self) -> None:
         self.assertEqual(

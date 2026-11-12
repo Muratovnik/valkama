@@ -535,6 +535,116 @@ class DoctorHookTests(unittest.TestCase):
         self.assertEqual(["unknown"], [check["status"] for check in checks])
 
 
+class DoctorStatusLineTests(unittest.TestCase):
+    """Whether Claude Code's status line feeds the quota: off, silent or working.
+
+    The settings live in a synthetic `CLAUDE_CONFIG_DIR`; the doctor only reads them.
+    """
+
+    def setUp(self) -> None:
+        self.claude = isolate_home(self) / ".claude"
+        self.claude.mkdir()
+        self.settings = self.claude / "settings.json"
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "valkama.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def write_settings(self, command: str | None, **extra: object) -> None:
+        document: dict[str, object] = dict(extra)
+        if command is not None:
+            document["statusLine"] = {"type": "command", "command": command, "padding": 2}
+        self.settings.write_text(json.dumps(document), encoding="utf-8")
+
+    def check(self) -> dict:
+        [only] = doctor._quota_source_checks()
+        self.assertEqual("quota-statusline", only["id"])
+        self.assertIn("WSL", only["detail"])
+        self.assertIn("CLAUDE_CONFIG_DIR", only["detail"])
+        return only
+
+    def reading(self, at: str) -> None:
+        from server.quota import samples
+
+        conn = store.connect()
+        try:
+            with conn:
+                samples.record(
+                    conn,
+                    samples.Reading(
+                        "statusline",
+                        at,
+                        (samples.Window("five_hour", 12.0, None),),
+                        None,
+                        session_id="session-1",
+                    ),
+                )
+        finally:
+            conn.close()
+
+    def test_without_a_status_line_running_valkama_the_source_is_off(self) -> None:
+        for name, setting in (
+            ("no settings file", None),
+            ("no status line", "absent"),
+            ("another status line", "jq -r .model.display_name"),
+            ("a command that only resembles it", "myvalkama statusline"),
+        ):
+            with self.subTest(case=name):
+                if setting is None:
+                    self.settings.unlink(missing_ok=True)
+                else:
+                    self.write_settings(None if setting == "absent" else setting)
+                found = self.check()
+                self.assertEqual(
+                    ("warn", "quota-statusline-off"),
+                    (found["status"], found["presentation"]["code"]),
+                )
+                self.assertTrue(found["detail"].startswith("off:"))
+
+    def test_registered_without_a_recent_reading_the_source_is_silent(self) -> None:
+        self.write_settings(
+            "C:/Python/python.exe -I -S D:/Valkama/bin/valkama-launcher.py"
+            " statusline --previous=Y2F0"
+        )
+        for name, at in (("never", None), ("four days ago", time.time() - 4 * 86400)):
+            with self.subTest(case=name):
+                if at is not None:
+                    self.reading(time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(at)))
+                found = self.check()
+                self.assertEqual(
+                    ("warn", "quota-statusline-silent"),
+                    (found["status"], found["presentation"]["code"]),
+                )
+                self.assertIn(
+                    "only in terminal sessions, not in the VS Code extension", found["detail"]
+                )
+
+    def test_registered_with_a_recent_reading_the_source_is_working(self) -> None:
+        self.write_settings("~/.local/bin/valkama statusline")
+        self.reading(time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 3600)))
+        found = self.check()
+        self.assertEqual(
+            ("ok", "quota-statusline-working"), (found["status"], found["presentation"]["code"])
+        )
+
+    def test_unreadable_settings_leave_the_source_unknown(self) -> None:
+        self.settings.write_text("{not json", encoding="utf-8")
+        found = self.check()
+        self.assertEqual(
+            ("unknown", "quota-statusline-unreadable"),
+            (found["status"], found["presentation"]["code"]),
+        )
+
+    def test_the_doctor_only_reads_the_settings(self) -> None:
+        self.write_settings("valkama statusline", theme="dark")
+        before = (self.settings.read_bytes(), self.settings.stat().st_mtime_ns)
+        doctor.diagnose(probe=False)
+        self.assertEqual(before, (self.settings.read_bytes(), self.settings.stat().st_mtime_ns))
+        self.assertEqual(["settings.json"], sorted(path.name for path in self.claude.iterdir()))
+
+
 class DoctorUsagePriceTests(unittest.TestCase):
     """A model with tokens and no price is a finding, not a cost of zero."""
 
