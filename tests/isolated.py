@@ -66,7 +66,6 @@ sys.path.insert(0, str(ROOT))
 
 from server import processes, store
 from server.projects import project_registry, registry_owner
-from tests import commit_subjects
 from windows import release
 
 HOME = "home"
@@ -394,6 +393,10 @@ def _refusal(run: Run) -> tuple[str, str] | None:
         refusal = modules_refusal(run.cwd)
         return None if refusal is None else ("npm ci is needed first", refusal)
     if run.needs_history:
+        # Imported here, not at the top: importing the `tests` package points
+        # VALKAMA_DB at the suite's file, and `serve` must read the caller's own.
+        from tests import commit_subjects
+
         refusal = commit_subjects.history_refusal(run.cwd)
         return None if refusal is None else ("there is no Git history to read", refusal)
     return None
