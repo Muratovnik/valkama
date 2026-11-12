@@ -199,6 +199,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
   ],
   [
+    'pages/analytics/components/SpendingTable.vue <button> v-tooltip.detail="{ text: column.detail, words: column.text }"',
+    "what a crossed column's heading names by a name alone: the client and the start of a session's id, an account's whole id; while the heading is cut, it comes first, whole",
+  ],
+  [
     'pages/analytics/components/RailTile.vue <MiniShareBar> v-tooltip.detail="tile.shares.label"',
     'every part of the share bar with its share, work on no value and the rest among them, where the tile says only the first',
   ],

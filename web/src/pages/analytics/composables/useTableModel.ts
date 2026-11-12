@@ -42,6 +42,15 @@ export interface TableCell {
   text: string
 }
 
+/** A column's heading: its name, and what the name leaves out, for its hint. */
+export interface TableColumn {
+  /** Whether the column holds the chosen measure, which reads in the figures' own ink. */
+  chosen: boolean
+  key: string
+  text: string
+  detail?: string
+}
+
 export interface TableLine {
   cells: TableCell[]
   key: string
@@ -163,7 +172,7 @@ export function useTableModel(source: () => TableSource) {
     const { comparison } = usage
     const period = comparison ? words.period(comparison.period.from, comparison.period.to) : ''
     const kinds = kindsByValue(usage.rows, by)
-    const columns = [
+    const columns: TableColumn[] = [
       ...MEASURES.map((key) => ({
         key,
         text: t(`analytics.panel.table.heads.${key}`),
@@ -245,23 +254,24 @@ export function useTableModel(source: () => TableSource) {
       ]),
     )
     const byColumn = new Map(columns.map((column) => [column.key, column.spent]))
+    const headings: TableColumn[] = [
+      ...columns.map((column) => ({
+        key: column.key,
+        text: words.lineLabel(across, column),
+        // What the heading's name leaves out, as a row's would: a session's id, an account's.
+        detail: words.valueDetail(across, column.value),
+        chosen: false,
+      })),
+      { key: 'total', text: t('analytics.panel.table.total'), chosen: true },
+      ...kindColumns(),
+    ]
     return {
       title: t('analytics.panel.table.crossTitle', {
         measure: words.measure(measure),
         by: t(`analytics.byDimension.${by}`),
         across: t(`analytics.byDimension.${across}`),
       }),
-      columns: [
-        ...columns.map((column) => ({
-          key: column.key,
-          text: words.lineLabel(across, column),
-          // What the heading's name leaves out, as a row's would: a session's id, an account's.
-          detail: words.valueDetail(across, column.value),
-          chosen: false,
-        })),
-        { key: 'total', text: t('analytics.panel.table.total'), chosen: true },
-        ...kindColumns(),
-      ],
+      columns: headings,
       lines,
       total: cellsOf((key) => byColumn.get(key), total, read.total.tokens),
       firstSort: 'total',

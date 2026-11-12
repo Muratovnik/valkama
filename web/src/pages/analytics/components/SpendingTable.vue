@@ -88,7 +88,13 @@ const { sort, sortBy, lines, direction, marks } = useTableSort(model, () => loca
 
 /** Every column's heading, the names' first; each sorts the rows by its column. */
 const headings = computed(() => [
-  { key: NAME_COLUMN, text: words.dimension(props.by), chosen: false, numeric: false },
+  {
+    key: NAME_COLUMN,
+    text: words.dimension(props.by),
+    chosen: false,
+    numeric: false,
+    detail: undefined,
+  },
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
@@ -194,6 +200,7 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
             :aria-sort="marks[column.key]?.aria"
           >
             <button
+              v-tooltip.detail="{ text: column.detail, words: column.text }"
               type="button"
               class="table-sort"
               :aria-description="t('analytics.panel.table.sortBy', { column: column.text })"
