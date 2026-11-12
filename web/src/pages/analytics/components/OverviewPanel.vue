@@ -6,14 +6,15 @@ import { computed, ref } from 'vue'
  * taken in without scrolling on a desktop screen.
  *
  * - The period's three figures, which also choose the page's measure (`SpendingTiles`).
- * - The period's chart by day, or by hour for a single day, stacked by task, with the period the
- *   figures are compared with outlined behind it on the same scale (`usePeriodBefore`) and the
- *   marks of where the accounts changed.
- * - Beside it, what changed most from the period before, task by task.
- * - Under them, a card of the first five values of each dimension a person asks about most —
- *   tasks, models, roles and projects; no project at a project's scope, where every figure is
- *   that project's — each asked of the same read (`useTopValues`). A card's heading opens its
- *   section and a row narrows the view, as a bar of that section does.
+ * - The period's chart by day, or by hour for a single day, across the panel's whole width,
+ *   stacked by task, with the period the figures are compared with outlined behind it on the
+ *   same scale (`usePeriodBefore`) and the marks of where the accounts changed.
+ * - Under it one row of cards: what changed most from the period before, task by task, then the
+ *   first five values of each dimension a person asks about most — tasks, models and projects;
+ *   no project at a project's scope, where every figure is that project's — each asked of the
+ *   same read (`useTopValues`). A card's heading opens its section and a row narrows the view,
+ *   as a bar of that section does. The roles have no card: there are two of them, and the rail's
+ *   tile says both.
  *
  * Its own answer is the read by task, beside the period before; a press that could not narrow
  * the view says why where it was pressed.
@@ -73,7 +74,7 @@ const figures = computed(() => tileFigures(props.usage))
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
 
 const cards = computed<OverviewCard[]>(() =>
-  OVERVIEW_CARDS.filter((card) => !(props.projectScoped && card === 'project')),
+  OVERVIEW_CARDS.filter((card) => card !== 'role' && !(props.projectScoped && card === 'project')),
 )
 
 const beforeSteps = usePeriodBefore({
@@ -144,28 +145,21 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
       :total="figures.total"
       :before="figures.before"
     />
-    <div class="overview-middle">
-      <div
-        ref="chartColumn"
-        class="overview-chart"
-      >
-        <SpendingDays
-          :accounts="accounts"
-          :before="beforeSteps"
-          :by="by"
-          :measure="measure"
-          :narrow="narrow"
-          :notice="noticeIn('days')"
-          :read-at="readAt"
-          :usage="usage"
-          brief
-          @day="(day, label) => emit('day', day, label)"
-        />
-      </div>
-      <OverviewChanges
+    <div
+      ref="chartColumn"
+      class="overview-chart"
+    >
+      <SpendingDays
+        :accounts="accounts"
+        :before="beforeSteps"
+        :by="by"
         :measure="measure"
+        :narrow="narrow"
+        :notice="noticeIn('days')"
+        :read-at="readAt"
         :usage="usage"
-        @retry="emit('retry')"
+        brief
+        @day="(day, label) => emit('day', day, label)"
       />
     </div>
     <FieldError
@@ -175,6 +169,11 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
       {{ noticeIn('bars') }}
     </FieldError>
     <div class="overview-cards">
+      <OverviewChanges
+        :measure="measure"
+        :usage="usage"
+        @retry="emit('retry')"
+      />
       <OverviewTop
         v-for="card in cards"
         :key="card"
@@ -189,25 +188,18 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
 </template>
 
 <style scoped>
-/* The figures across the panel; the chart and what changed side by side under them, the chart
-   taking the most of the width; the cards in one row under those while they fit, as many to a
-   line as fit otherwise. A narrow panel stands each part under the one before. */
+/* The figures across the panel, the chart across it under them, and the cards — what changed
+   first — in one row under the chart while they fit, as many to a line as fit otherwise, and
+   one to a line on a phone. */
 .overview-panel {
   /* What the plot adds to its height, or takes from it, to fill the panel's box; set by `fit`. */
   --overview-plot-grow: 0px;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
   container-type: inline-size;
-}
-
-.overview-middle {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: start;
 }
 
 .overview-chart {
@@ -223,11 +215,5 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   gap: var(--space-5);
-}
-
-@container (width < 48rem) {
-  .overview-middle {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 </style>

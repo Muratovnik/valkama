@@ -1,7 +1,8 @@
 /**
  * The overview of the Analytics page in the real app, where the page opens. The oracle is the
- * requirement: on a desktop window of 1440 by 900 its three figures, the period's chart, what
- * changed and the four cards of first values all stand in the panel without scrolling it; a
+ * requirement: on a desktop window of 1440 by 900 its three figures, the period's chart across the
+ * panel and, in one row under it, what changed and the three cards of first values all stand in
+ * the panel without scrolling it, the plot at least 200 pixels high; a
  * figure is the control that chooses the page's measure, pressed by more than a colour and from
  * the keyboard, and the address keeps it; the chart outlines the period before on its own scale;
  * what changed names the tasks that moved most by the measure's own units; a card's heading opens
@@ -139,18 +140,25 @@ test('opens a plain address on the overview, every part in sight at 1440×900', 
   expect(count('.spending-tiles')).toHaveLength(1)
   expect(count('.spending-days')).toHaveLength(1)
   expect(count('.overview-changes')).toHaveLength(1)
-  expect(count('.overview-top')).toHaveLength(4)
+  expect(count('.overview-top')).toHaveLength(3)
   for (const part of layout.parts) {
     expect(part.top, part.selector).toBeGreaterThanOrEqual(layout.panel.top)
     expect(part.bottom, part.selector).toBeLessThanOrEqual(layout.panel.bottom)
     expect(part.right, part.selector).toBeLessThanOrEqual(layout.panel.right)
   }
-  // The four cards stand in one row.
-  expect(new Set(count('.overview-top').map((card) => card.top)).size).toBe(1)
-  await expect(panel.locator('.overview-top h3')).toHaveText([
+  // The chart spans the panel as the figures do; what changed and the three cards stand in one
+  // row under it, what changed first.
+  const [tiles] = count('.spending-tiles')
+  const [chart] = count('.spending-days')
+  expect([chart?.left, chart?.right]).toEqual([tiles?.left, tiles?.right])
+  const row = [...count('.overview-changes'), ...count('.overview-top')]
+  expect(new Set(row.map((card) => card.top)).size).toBe(1)
+  expect(row.every((card) => card.top > (chart?.bottom ?? 0))).toBe(true)
+  expect(row[0]?.left).toBe(tiles?.left)
+  await expect(panel.locator('.overview-cards h3')).toHaveText([
+    'What changed',
     'Tasks',
     'Models',
-    'Roles',
     'Projects',
   ])
   // The page's read and the same days of the week before, the accounts, the steps of the week
@@ -219,22 +227,38 @@ test('what changed names the tasks that moved most, in the measure’s own units
   const changes = panel.locator('.overview-changes')
   const up = changes.locator('[data-way="up"]')
   const down = changes.locator('[data-way="down"]')
-  await expect(up.locator('.overview-changes-name')).toHaveText([
-    /^MAIN-2 /u,
-    /^MAIN-3 /u,
-    /^MAIN-5 /u,
-  ])
+  // Four of the five that moved, by the most either way: MAIN-5, two hours from nothing, ties
+  // with MAIN-3 and comes after it.
+  await expect(up.locator('.overview-changes-name')).toHaveText([/^MAIN-2 /u, /^MAIN-3 /u])
   await expect(up.locator('.overview-changes-amount')).toHaveText([
     /^\+\s2\sh\s45\smin$/u,
     /^\+\s2\sh$/u,
-    /^\+\s2\sh$/u,
   ])
-  await expect(up.nth(2).locator('.overview-changes-note')).toHaveText('nothing before')
   await expect(down.locator('.overview-changes-name')).toHaveText(['No task', /^MAIN-1 /u])
   await expect(down.locator('.overview-changes-amount')).toHaveText([/^−\s4\sh$/u, /^−\s4\sh$/u])
   // A task is a link to its card; work on no task leads nowhere.
   await expect(up.first()).toHaveAttribute('href', /MAIN-2/u)
   await expect(down.first()).not.toHaveAttribute('href')
+  // An entry is two lines: the name across the card's width, the arrow and the amount under it;
+  // the four no taller than a card's five rows.
+  const entry = await up.first().evaluate((line) => {
+    const box = (selector: string) => line.querySelector(selector)?.getBoundingClientRect()
+    const name = box('.overview-changes-name')
+    const amount = box('.overview-changes-amount')
+    return {
+      spare: Math.round(line.getBoundingClientRect().width - (name?.width ?? 0)),
+      under: (amount?.top ?? 0) >= (name?.bottom ?? 0),
+    }
+  })
+  expect(entry.under).toBe(true)
+  expect(entry.spare).toBeLessThanOrEqual(16)
+  const tallest = await panel.locator('.overview-cards > *').evaluateAll((cards) =>
+    cards.map((card) => {
+      const last = card.lastElementChild?.getBoundingClientRect().bottom ?? 0
+      return Math.round(last - card.getBoundingClientRect().top)
+    }),
+  )
+  expect(tallest[0]).toBeLessThanOrEqual(Math.max(...tallest.slice(1)))
 })
 
 test('a card’s heading opens its section, and a row narrows the view as a bar does', async ({
@@ -293,7 +317,7 @@ async function plotAndRoom(page: Page) {
   })
 }
 
-test('a tall window gives the room under the cards to the plot, and 1440 by 900 fits it', async ({
+test('a tall window gives the room under the cards to the plot, and 1440 by 900 fits 200 pixels of it', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -311,10 +335,16 @@ test('a tall window gives the room under the cards to the plot, and 1440 by 900 
   expect(tall.room).toBeGreaterThanOrEqual(0)
   expect(tall.room).toBeLessThan(40)
   expect(tall.scrolls).toBe(false)
-  // At 1440 by 900 the plot takes the few pixels the panel leaves, and nothing scrolls.
+  const page1920 = await page.evaluate(() => [
+    document.documentElement.scrollHeight,
+    document.documentElement.clientHeight,
+  ])
+  expect(page1920[0]).toBe(page1920[1])
+  // At 1440 by 900 the plot, across the panel, takes what the panel leaves: at least 200 pixels,
+  // and nothing scrolls.
   expect(usual.scrolls).toBe(false)
-  const { x, y, width, height } = usual.plot
-  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 443, 532, 165])
+  expect(Math.round(usual.plot.height)).toBeGreaterThanOrEqual(200)
+  expect(Math.round(usual.plot.width)).toBeGreaterThanOrEqual(800)
 })
 
 const OTHER_ACCOUNT = value('0d6f1c3a-8b2e-4f5a-9e7d-3c1b2a4f6e8d')
@@ -348,12 +378,13 @@ test('at 1440 by 900 a full overview fits its panel: the plot gives up height be
   for (const card of await panel.locator('.overview-top').all())
     await expect(card.locator('.ranked-row')).toHaveCount(5)
   await expect(panel.locator('.period-mark')).toHaveCount(2)
+  // Across the panel the legend takes one line.
   const legendLines = await panel
     .locator('.overview-chart .chart-key')
     .evaluateAll(
       (keys) => new Set(keys.map((key) => Math.round(key.getBoundingClientRect().top))).size,
     )
-  expect(legendLines).toBe(2)
+  expect(legendLines).toBe(1)
   const fitted = async () => {
     const measured = await plotAndRoom(page)
     return measured.scrolls
@@ -364,4 +395,46 @@ test('at 1440 by 900 a full overview fits its panel: the plot gives up height be
   await record(info, 'full', { ...full, box, legendLines })
   expect(box[0]).toBe(box[1])
   expect(full.plot.height).toBeGreaterThanOrEqual(100)
+})
+
+/**
+ * Three models this week: two of hours, named as clients name them, and one of seconds, whose
+ * figure is the longest words of the card.
+ */
+const MODELS: TimedStretch[] = [
+  worked(9, TASKS[0], ['claude-sonnet-5-5', 'main', 'alpha'], 3),
+  worked(10, TASKS[1], ['claude-opus-5-5', 'main', 'alpha'], 2),
+  { ...worked(11, TASKS[2], ['gpt-6.1-sol', 'main', 'alpha'], 0), spend: { seconds: 30 } },
+  worked(2, TASKS[0], ['claude-sonnet-5-5', 'main', 'alpha'], 1),
+]
+
+test('a card’s figure is as wide as itself, and the name of its row takes the rest', async ({
+  page,
+}, info) => {
+  await serve(page, MODELS)
+  const panel = await openOverview(page, 1440, 900)
+  const models = panel.locator('[data-card="model"]')
+  await expect(models.locator('.ranked-value')).toHaveText([/^3\sh$/u, /^2\sh$/u, 'under a minute'])
+  const rows = await models.locator('.ranked-line').evaluateAll((lines) =>
+    lines.map((line) => {
+      const label = line.querySelector('.ranked-label')
+      const figure = line.querySelector('.ranked-value')?.getBoundingClientRect()
+      return {
+        name: label?.textContent ?? '',
+        cut: !label || label.scrollWidth > label.clientWidth,
+        nameWidth: Math.round(label?.getBoundingClientRect().width ?? 0),
+        figureRight: Math.round(figure?.right ?? 0),
+      }
+    }),
+  )
+  await record(info, 'model rows', rows)
+  // The long figure of the last row takes no room from the names above it.
+  expect(rows.map((row) => [row.name, row.cut])).toEqual([
+    ['claude-sonnet-5-5', false],
+    ['claude-opus-5-5', false],
+    ['gpt-6.1-sol', false],
+  ])
+  expect(rows[0]?.nameWidth).toBeGreaterThan(rows[2]?.nameWidth ?? 0)
+  // The figures still end on one edge.
+  expect(new Set(rows.map((row) => row.figureRight)).size).toBe(1)
 })

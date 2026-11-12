@@ -895,7 +895,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   not a hue: the legend names it beside a short dashed edge, the readout says its figure beside
   the sum, and the table gives it a column after the sum. A single day stands by the hour, and
   an hour only shows. Where a ranked chart shares a row with others, as a card of first values
-  does, it is `dense`: the name and the value on one line and a thin bar under them.
+  does, it is `dense`: the name and the value on one line and a thin bar under them, each value
+  as wide as its own figure and its name taking the rest of the row.
   Two small charts stand beside a figure rather than in a section of their own, as the
   Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
   scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,
@@ -2058,9 +2059,12 @@ over it. A plain address opens the overview.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
-before, and the chosen cell sets the measure of everything else on the page; the period
-chart with the period before as a dashed outline; the tasks that grew and fell the most;
-and the first five tasks, models, roles and projects, each card opening its section.
+before, and the chosen cell sets the measure of everything else on the page; across the
+panel under them, the period chart with the period before as a dashed outline; and under the
+chart one row of cards: the four tasks that grew or fell the most, each its name over its
+change, then the first five tasks, models and projects, each card opening its section. The
+roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
+hovered ground under the pointer, and nothing moves.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
 ranked bars list the first twelve and say how many more the table holds; the small charts
