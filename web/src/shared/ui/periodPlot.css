@@ -25,6 +25,7 @@
 
 .period-plot {
   --period-count: 1;
+  --period-column: var(--space-6);
 
   display: grid;
   grid-template-areas:
@@ -101,7 +102,7 @@
 .period-before {
   position: absolute;
   inset: auto 0 0;
-  inline-size: min(100%, var(--space-6));
+  inline-size: min(100%, var(--period-column));
   margin-inline: auto;
   border: var(--space-hair) dashed currentcolor;
   border-block-end: 0;
@@ -116,7 +117,7 @@
 .period-pending {
   position: absolute;
   inset: 0;
-  inline-size: min(100%, var(--space-6));
+  inline-size: min(100%, var(--period-column));
   margin-inline: auto;
   background: var(--color-rule-strong);
   mask-image: repeating-linear-gradient(

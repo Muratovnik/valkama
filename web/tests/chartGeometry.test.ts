@@ -19,6 +19,7 @@ import {
   changeNotes,
   columnNotes,
   columnSummary,
+  columnWidth,
   dayTicks,
   foldChanges,
   labelledColumns,
@@ -208,6 +209,19 @@ describe('stacked columns', () => {
       insetBlockEnd: 'calc(25% + var(--space-half))',
       blockSize: 'max(0px, calc(75% - var(--space-half)))',
     })
+  })
+})
+
+describe('the width of a column', () => {
+  test('grows to 56px where a few periods have room, and stays 24px where many or narrow', () => {
+    // A week of four days across an 850px plot: broad columns, not thin lines.
+    assert.equal(columnWidth(4, 850), 56)
+    // Four weeks of days in 560px, and the sixty minutes of an hour: as before.
+    assert.equal(columnWidth(28, 560), 24)
+    assert.equal(columnWidth(60, 850), 24)
+    // Between the two, half a period's room; unmeasured, as before.
+    assert.equal(columnWidth(10, 800), 40)
+    assert.equal(columnWidth(4, 0), 24)
   })
 })
 
