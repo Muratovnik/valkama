@@ -268,10 +268,10 @@ const { connection: liveConnection, reconnect } = usePlanningSubscription(
   openStreamTarget,
   (next, returning) => {
     const key = planningKey.value
-    // The stream's first frame is the space as it stands when the page connects, which
-    // is what the read has just answered; taken as news, it read an open card twice.
-    // Back from a dropped connection it is news whatever it says: what the space does
-    // not carry, a question or a history, may have moved while the page was away.
+    // A frame equal to the space the page holds is no news. The stream already leaves out
+    // the model the read answered; this keeps any other copy of it from reading an open
+    // card twice. Back from a dropped connection it is news whatever it says: what the
+    // space does not carry, a question or a history, may have moved while the page was away.
     if (!returning && holdsResource(resource.value, key, next)) return
     const drawn = returning || model.value !== null
     resource.value = beginResource(resource.value, key)
