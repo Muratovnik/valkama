@@ -396,4 +396,13 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
     white-space: normal;
   }
 }
+
+/* Under the measure «tokens», which the note on the kinds stands for, the tokens by kind follow
+   the change and the table is wider than its frame: every column stands at its least, so a
+   heading over figures takes a second line, as in a narrower table, rather than push the change
+   past the frame's edge. The kinds after it are reached by the frame's own scroll. */
+.spending-table:has(> .spending-table-kinds) .chart-heading[data-numeric='true'] {
+  min-inline-size: 7em;
+  white-space: normal;
+}
 </style>

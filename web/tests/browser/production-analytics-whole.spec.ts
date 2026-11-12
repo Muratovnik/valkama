@@ -3,7 +3,9 @@
  * still give way: the figures of the three cells, beside their trends, and the names on the rail,
  * beside their counts. The figures are as long as a month of a busy workstation writes them. The
  * line that counts a section table's rows is whole in every measure, and the heading row over the
- * table stands the same whichever measure is chosen.
+ * table stands the same whichever measure is chosen. Under the measure «tokens» the table's own
+ * columns stand in its frame as it opens, and the tokens by kind follow them, reached by the
+ * frame's sideways scroll.
  *
  * Each is measured by the width its text takes laid out whole against its box (`shortfalls`):
  * a cut by a third of a pixel costs a figure its last characters to the ellipsis as surely as one
@@ -12,7 +14,16 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { LONG_FIGURES, openReport, pageAt, record, serve, shortfalls } from './analyticsPage.ts'
+import {
+  LONG_FIGURES,
+  openReport,
+  pageAt,
+  pageScroll,
+  record,
+  serve,
+  shortfalls,
+} from './analyticsPage.ts'
+import { brokenWords } from './brokenWords.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [390, 1024, 1280, 1440, 1920]
@@ -93,6 +104,19 @@ const COUNTS = {
 
 const MEASURES = ['time', 'tokens', 'cost'] as const
 
+/**
+ * The widths the tokens' table is read at, and how many of its first columns — the name, the three
+ * measures, the period before and the change — stand whole in its frame as it opens. At 1024
+ * pixels the frame is 713 wide and those six need some 770 in Russian even with the name at its
+ * least, the change's column as wide as «Сейчас токены не учтены»: there only the name is held,
+ * at the frame's start, and the rest are reached by its scroll, as on a phone.
+ */
+const TOKEN_WIDTHS = [
+  { width: 1024, inView: 1 },
+  { width: 1440, inView: 6 },
+  { width: 1920, inView: 6 },
+]
+
 /** Whether the sorted column's mark is drawn, and inside the table's frame. */
 const sortMark = (page: Page) =>
   page.evaluate(() => {
@@ -136,5 +160,57 @@ for (const locale of ['ru-RU', 'en-US'] as const) {
         // The heading row over the table stands the same in every measure.
         expect(new Set(heads).size, 'the heading row across the measures').toBe(1)
       })
+
+    for (const { width, inView } of TOKEN_WIDTHS)
+      test(`under «tokens» at ${width}px its own columns stand in the frame, the kinds after them`, async ({
+        page,
+      }, info) => {
+        await serve(page, LONG_FIGURES)
+        await openReport(page, width, pageAt({ by: 'work_item', measure: 'tokens' }))
+        await page.evaluate(() => document.fonts.ready)
+        const frame = await tableFrame(page)
+        const broken = await brokenWords(page, '.spending-table-frame .chart-heading')
+        await record(info, `tokens table ${locale} ${width}`, { frame, broken })
+        // The name, the three measures, the period before and the change, then the six kinds.
+        expect(frame.headings).toHaveLength(12)
+        for (const heading of frame.headings.slice(0, inView)) {
+          expect(heading.start, `«${heading.text}»`).toBeGreaterThanOrEqual(frame.left - 0.5)
+          expect(heading.end, `«${heading.text}»`).toBeLessThanOrEqual(frame.right + 0.5)
+        }
+        const change = frame.headings[5]?.end ?? Number.NaN
+        for (const kind of frame.headings.slice(6))
+          expect(kind.start, `«${kind.text}»`).toBeGreaterThanOrEqual(change - 0.5)
+        // What the frame does not show is reached by its own scroll, to the last kind, and the
+        // page itself never scrolls sideways.
+        expect(frame.last).toBeLessThanOrEqual(frame.right + 0.5)
+        expect(await pageScroll(page)).toBe(0)
+        // A heading given a second line breaks between its words.
+        expect(broken).toEqual([])
+      })
+  })
+}
+
+/** The table's frame as it opens: its visible box, and where each heading stands in it. */
+async function tableFrame(page: Page) {
+  return page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>('.spending-table-frame')
+    if (!frame) throw new Error('no table frame')
+    const headings = () => [...frame.querySelectorAll('thead th')]
+    frame.scrollLeft = 0
+    const left = frame.getBoundingClientRect().left + frame.clientLeft
+    const shown = headings().map((th) => {
+      const { left: start, right: end } = th.getBoundingClientRect()
+      return { text: th.textContent.trim(), start, end }
+    })
+    frame.scrollLeft = frame.scrollWidth
+    const last = headings().at(-1)?.getBoundingClientRect().right ?? Number.NaN
+    frame.scrollLeft = 0
+    return {
+      left,
+      right: left + frame.clientWidth,
+      scroll: frame.scrollWidth - frame.clientWidth,
+      headings: shown,
+      last,
+    }
   })
 }

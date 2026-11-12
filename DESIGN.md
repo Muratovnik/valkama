@@ -2117,7 +2117,10 @@ their tile does, and says apart those that spent in the period only in another m
 adviser has tokens and no agent time — and those that spent only before it. The line is a row
 of its own, kept while it has nothing to say, so its words are whole whatever the measure adds
 to them and choosing a measure moves nothing under it; where even that row is too narrow it
-breaks between its parts, never inside one.
+breaks between its parts, never inside one. Under the measure «tokens» each value's tokens by
+kind follow its change: the name, the three measures, the period before and the change stand
+in the frame as it opens, their headings taking a second line rather than the frame's room,
+and the kinds are reached by the table's own sideways scroll.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
