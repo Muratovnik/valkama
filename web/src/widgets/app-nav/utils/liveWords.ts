@@ -1,6 +1,6 @@
 /**
- * What a row of the side panel's list says in words: its second line, under the title, the
- * hint's title and short lines (`rowHintParts`), and the sentence its accessible name says whole.
+ * What a row of the side panel's list says in words: its second line, under the title, what its
+ * hint adds to what the row draws (`rowHidden`), and the sentence its accessible name says whole.
  *
  * The second line is what the session is doing, `working`, `asking` or `waiting`, then how
  * long, then after « · » where it belongs: the epic of an item, the folder of a session that
@@ -127,11 +127,21 @@ function stateSentence(words: Words, entry: LiveEntry, now: number): string {
   return t(`liveWork.means.${sign}`, { state: state || t(`liveWork.doing.${sign}`) })
 }
 
-/** The state in a short line: its word and how long, or what stands for it. */
+/**
+ * The state a row does not draw, in a short line: its word and how long, or what stands for it.
+ * A closed item says its state in its meta already, so it has no line here.
+ */
 function stateLine(words: Words, entry: LiveEntry, now: number): string {
+  const { t } = words
+  if (
+    entry.kind === 'item' &&
+    entry.row.is_terminal &&
+    entry.row.state === null &&
+    !entry.row.fading
+  )
+    return ''
   const standing = standingWords(words, entry)
   if (standing !== null) return standing
-  const { t } = words
   const live = liveOf(entry)
   return [doing(t, live), spanSince(t, live.since, now)].filter(Boolean).join(' · ')
 }
@@ -149,16 +159,15 @@ export function rowTitle(t: Words['t'], entry: LiveEntry): string {
 }
 
 /**
- * A row's hint: its title, which the hint shows first while the row cuts it, and the short lines
- * under it, one fact each: the epic or the folder, the state with how long, and the agents.
+ * What a row does not draw, in short lines, for its hint: a one-line row's state with how long,
+ * and a session's folder, which its one line leaves out. A two-line row draws its state, how
+ * long and where it belongs under the title, so it leaves nothing out. The title has its own
+ * hint while the row cuts it, and the agents are a count on the row already.
  */
-export function rowHintParts(
-  words: Words,
-  entry: LiveEntry,
-  now: number,
-): { lines: string; title: string } {
-  const lines = [context(entry), stateLine(words, entry, now), agentsOf(words.t, entry)]
-  return { lines: lines.filter(Boolean).join('\n'), title: rowTitle(words.t, entry) }
+export function rowHidden(words: Words, entry: LiveEntry, now: number, lines: 1 | 2): string {
+  if (lines === 2) return ''
+  const folder = entry.kind === 'session' ? context(entry) : ''
+  return [folder, stateLine(words, entry, now)].filter(Boolean).join('\n')
 }
 
 /**

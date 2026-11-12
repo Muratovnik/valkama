@@ -248,7 +248,7 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',
-    'the epic or folder, the state with how long and the agents, in short lines under the title: the row’s second line says the state in a word, and the count of agents is a figure; while its title is cut, the title comes first, whole',
+    'the state with how long on a one-line row, which the row does not draw, and a session’s folder its one line leaves out; a two-line row draws both, so it has none, and a cut title has its own hint',
   ],
   [
     `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,

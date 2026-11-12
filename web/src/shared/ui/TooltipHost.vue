@@ -276,8 +276,8 @@ onBeforeUnmount(stopHearing)
             v-if="whole && hint.words"
             class="tooltip-words"
             >{{ hint.words }}</span
-          >{{ hint.text }}
-          <span
+          >{{ hint.text
+          }}<span
             v-if="hint.note"
             class="tooltip-note"
             >{{ hint.note }}</span

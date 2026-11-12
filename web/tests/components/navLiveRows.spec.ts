@@ -192,22 +192,19 @@ describe('the sentence a row says', () => {
 })
 
 describe('the hint a row shows', () => {
-  it('shows the title when the row cuts it, then the epic, the state with how long and the agents', () => {
+  it('says a two-line row nothing: its state, how long and epic are on its line under the title', () => {
     const { wrapper } = rail(states())
-    const hint = (name: string) => tooltipOf(row(wrapper, name))
-    expect(hint('MAIN-1')).toMatchObject({
-      text: 'Structured answers\nworking · 5\u{A0}min',
-      words: 'Work MAIN-1',
-    })
-    expect(hint('MAIN-2')?.text).toBe('asking · 3\u{A0}min')
-    expect(hint('MAIN-3')?.text).toBe('waiting · 2\u{A0}h\n2 agents')
-    expect(hint('Compare two exports')).toMatchObject({
-      text: 'example-project\nworking · 25\u{A0}min',
-      words: 'Compare two exports',
-    })
+    for (const name of ['MAIN-1', 'MAIN-2', 'MAIN-3', 'Compare two exports'])
+      expect(tooltipOf(row(wrapper, name))).toBeUndefined()
   })
 
-  it('shows a row’s words in Russian as its lines, and a session’s state with its own folder', () => {
+  it('names a cut title on its own hint, which says it only while the title is cut', () => {
+    const { wrapper } = rail(states())
+    const title = row(wrapper, 'MAIN-1').querySelector('.nav-row-title')
+    expect(title && tooltipOf(title)).toMatchObject({ clipped: true, text: 'Work MAIN-1' })
+  })
+
+  it('says a one-line row’s state in Russian, which the row does not draw', () => {
     const waiting = liveSession(SESSION, {
       title: 'Compare two exports',
       folder: '',
@@ -215,7 +212,7 @@ describe('the hint a row shows', () => {
     })
     const { wrapper } = rail(space([liveRow('MAIN-8', { state: 'held' })], [waiting]), 'ru')
     expect(hintOf(row(wrapper, 'MAIN-8'))).toBe('у сессии')
-    expect(hintOf(row(wrapper, 'Compare two exports'))).toBe('ждёт · 2\u{A0}ч')
+    expect(tooltipOf(row(wrapper, 'Compare two exports'))).toBeUndefined()
   })
 })
 
