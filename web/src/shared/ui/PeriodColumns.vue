@@ -45,6 +45,7 @@ import {
   changeMarkers,
   changeNotes,
   columnSummary,
+  columnWidth,
   dayTicks,
   foldChanges,
   roundAxis,
@@ -224,7 +225,10 @@ function key(event: KeyboardEvent, at: number | null) {
         <div
           ref="plot"
           class="period-plot"
-          :style="{ '--period-count': columns.length }"
+          :style="{
+            '--period-count': columns.length,
+            '--period-column': `${columnWidth(columns.length, width)}px`,
+          }"
         >
           <span
             v-if="acting"
@@ -394,7 +398,7 @@ function key(event: KeyboardEvent, at: number | null) {
 /* The period under the pointer or the keyboard lifts, and the readout says what it holds. */
 .period-stack {
   position: relative;
-  inline-size: min(100%, var(--space-6));
+  inline-size: min(100%, var(--period-column));
 
   .period-slot[data-shown='true'] & {
     filter: brightness(1.2);

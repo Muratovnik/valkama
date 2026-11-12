@@ -103,4 +103,20 @@ test('on a phone the bar is two rows, its periods one row, and the rail right un
   expect(measured.gap).toBeGreaterThanOrEqual(0)
   expect(measured.gap).toBeLessThan(40)
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible()
+
+  // The freshness shows its age alone, whole; the sentence with the clock time is its hint.
+  const time = page.locator('.analytics-bar-fresh time')
+  const shown = await time.evaluate((element) => ({
+    drawn: getComputedStyle(element, '::after').content,
+    cut: element.scrollWidth > element.clientWidth,
+    words: element.textContent ?? '',
+  }))
+  await record(info, 'bar-phone-fresh', shown)
+  const [, age] = /^Newest record \d\d:\d\d · (.+)$/u.exec(shown.words.trim()) ?? []
+  expect(age).toBeTruthy()
+  // Drawn, and kept out of the name, which already says the age in its sentence.
+  expect(shown.drawn).toBe(`"${age}" / ""`)
+  expect(shown.cut, 'the age is cut').toBe(false)
+  await time.hover()
+  await expect(page.getByRole('tooltip')).toContainText(shown.words.trim())
 })

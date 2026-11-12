@@ -347,6 +347,20 @@ function edgeOf(index: number, count: number): PlacedTick['edge'] {
   return 'middle'
 }
 
+/** The narrowest a period's column is drawn, and the widest it grows where its period has room. */
+const COLUMN = { least: 24, most: 56 }
+
+/**
+ * How wide each period's column is drawn, in pixels, among `count` periods across `width`: half
+ * the room of its period, from 24px up to 56px. A few periods across a wide plot stand as broad
+ * columns rather than a row of thin lines, and many periods or a narrow plot keep 24px, which the
+ * plot draws no wider than the period's room.
+ */
+export function columnWidth(count: number, width: number): number {
+  const half = count && width ? Math.floor(width / count / 2) : 0
+  return Math.min(COLUMN.most, Math.max(COLUMN.least, half))
+}
+
 /** The time axis: each period it has room to name under its column, and any still running. */
 export function dayTicks(
   columns: readonly PeriodColumn[],

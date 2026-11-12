@@ -149,6 +149,7 @@ const fresh = computed(() => {
   const named = words.stepName(momentAtOffset(at), 'minute')
   return {
     at: props.lastEventAt,
+    ago,
     words: t('analytics.frame.fresh', { at: today ? named.label : named.fullLabel, ago }),
     full: new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(
       at,
@@ -231,9 +232,10 @@ const fresh = computed(() => {
             <time
               v-if="fresh.at"
               v-tooltip.detail="{ text: fresh.full, words: fresh.words }"
-              class="one-line"
+              class="analytics-bar-fresh-time one-line"
               :datetime="fresh.at"
-              >{{ fresh.words }}</time
+              :data-age="fresh.ago"
+              ><span class="analytics-bar-fresh-words">{{ fresh.words }}</span></time
             >
             <template v-else>
               {{ fresh.words }}
@@ -401,6 +403,18 @@ const fresh = computed(() => {
     inline-size: auto;
   }
 
+  /* The freshness says only its age, the record's clock time left to its hint and its name: the
+     whole sentence stays in the element for assistive technology, hidden from sight, and the
+     age the bar shows is drawn and never read twice. */
+  .analytics-bar-fresh-time {
+    position: relative;
+
+    &::after {
+      content: attr(data-age) / '';
+    }
+  }
+
+  .analytics-bar-fresh-words,
   .analytics-refresh-words {
     position: absolute;
     inline-size: 1px;
