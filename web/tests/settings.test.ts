@@ -96,6 +96,7 @@ test('settings stored with the notify fields of older builds read cleanly and lo
     openers: { claude: { kind: 'terminal', command: '' } },
   })
   assert.deepEqual(Object.keys(merged).toSorted(), [
+    'accountAliases',
     'editor',
     'executionTab',
     'kindColors',

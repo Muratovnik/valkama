@@ -26,10 +26,12 @@ The title is the client's own: Claude Code writes the name it shows for a sessio
 that session's transcript, `ai-title` for the one it made and `custom-title` for the
 one a person gave, which wins. It is the only thing read from a transcript's content
 here, from the file's last `_TAIL_BYTES`, where the client writes it again with each
-prompt. It may say what the person asked for, so it goes into the frame and nowhere
-else: never into the store, a log line or a diagnostic. A file is read again only when
-it changed, and then at most once in `_REREAD_SECONDS`, so a session at work costs the
-status of its file on most frames. Another client's transcript is not read.
+prompt. It may say what the person asked for, so it goes only into what the person
+reads -- the frame, and the Analytics read, which names an executor by it (`titles`) --
+and never into the store, a log line or a diagnostic. A file is read again only when it
+changed, and then at most once in `_REREAD_SECONDS`, so a session at work costs the
+status of its file on most frames, and a read naming many sessions costs one status
+each. Another client's transcript is not read.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ import json
 import os
 import sqlite3
 import time
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from .. import sessions
@@ -47,7 +49,10 @@ from . import live_work
 _TAIL_BYTES = 1024 * 1024
 _REREAD_SECONDS = 30.0
 _TITLE_LENGTH = 200
-_REMEMBERED = 256
+#: How many transcripts' names are kept. An Analytics read over a long period names every
+#: session that worked in it, and a store gains a few a day: emptied at 256, a read of a
+#: year would read every tail again each time. A name is two hundred signs at most.
+_REMEMBERED = 4096
 
 #: The client's two records of a session's name, and the field of each that holds it.
 _TITLE_FIELDS = {"custom-title": "customTitle", "ai-title": "aiTitle"}
@@ -141,6 +146,26 @@ def _title(path: str) -> str | None:
     return title
 
 
+def _session_title(client: str, transcript_path: str | None) -> str | None:
+    """A session's name, read only from a Claude Code transcript."""
+
+    if sessions.client_family(client) != "claude":
+        return None
+    return _title(str(transcript_path or ""))
+
+
+def titles(conn: sqlite3.Connection, session_ids: Iterable[str]) -> dict[str, str | None]:
+    """The name of each of these sessions that has a row, as the frame names it, by id."""
+
+    named = sorted(set(session_ids))
+    if not named:
+        return {}
+    return {
+        str(row["id"]): _session_title(row["client"], row["transcript_path"])
+        for row in conn.execute(_SESSIONS, (json.dumps(named),))
+    }
+
+
 def _folder_name(folder: str) -> str:
     return os.path.basename(folder.rstrip("\\/"))
 
@@ -169,13 +194,12 @@ def listed(
         session = str(row["id"])
         work = apart[session]
         folder = str(row["opened_folder"] or row["cwd"] or "")
-        claude = sessions.client_family(row["client"]) == "claude"
         found.append(
             Listed(
                 folder,
                 {
                     "session": session,
-                    "title": _title(str(row["transcript_path"] or "")) if claude else None,
+                    "title": _session_title(row["client"], row["transcript_path"]),
                     "folder": _folder_name(folder),
                     "state": work.state,
                     "long": work.long,

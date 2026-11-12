@@ -7,9 +7,11 @@ import { defineComponent, h } from 'vue'
  * languages; a period breaks only after its dash, never inside a date.
  */
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+
+import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 
 import { analyticsI18n } from '../support/analyticsReads.ts'
 
@@ -100,4 +102,50 @@ describe('a share of the whole', () => {
       expect(said(0.003)).toBe(`<1${space}%`)
       expect(said(0)).toBe(`0${space}%`)
     })
+})
+
+/** A session of Claude Code as the read gives one, with the title its client gave it or none. */
+const session = (title: string | null) => ({
+  id: '1a2b3c4d-0000-4000-8000-000000000001',
+  unknown: false,
+  family: 'claude',
+  opened_in: '',
+  opened_host: '',
+  title,
+})
+const account = { id: 'f0f0f0f0-1111-4222-8333-444455556666', unknown: false }
+
+describe('the name of an executor and an account', () => {
+  afterEach(() => localStorage.clear())
+
+  it('names a session by its title and says its client and id start in the hint', () => {
+    const words = wordsIn('en')
+    expect(words.valueLabel('executor', session('Fix the rail'))).toBe('Fix the rail')
+    expect(words.valueDetail('executor', session('Fix the rail'))).toBe('claude · 1a2b3c4d')
+  })
+
+  it('names a session with no title as before, with nothing left for the hint', () => {
+    const words = wordsIn('en')
+    expect(words.valueLabel('executor', session(null))).toBe('claude · 1a2b3c4d')
+    expect(words.valueDetail('executor', session(null))).toBeUndefined()
+  })
+
+  it('names an account by the owner’s name for it, with its whole id in the hint', () => {
+    const words = wordsIn('ru')
+    expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
+    useSettingsStore().settings.accountAliases = { [account.id]: 'Основной' }
+    expect(words.valueLabel('account', account)).toBe('Основной')
+    expect(words.valueDetail('account', account)).toBe(account.id)
+    expect(words.accounts([account], [account, { id: 'b7', unknown: false }])).toContain(
+      'Основной → Основной, b7',
+    )
+  })
+
+  it('names an account the owner left unnamed by the start of its id', () => {
+    useSettingsStore().settings.accountAliases = { other: 'Other' }
+    const words = wordsIn('en')
+    expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
+    expect(words.valueDetail('account', account)).toBe(account.id)
+    expect(words.valueDetail('account', { id: 'b7', unknown: false })).toBeUndefined()
+  })
 })

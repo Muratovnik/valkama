@@ -255,6 +255,8 @@ export function useTableModel(source: () => TableSource) {
         ...columns.map((column) => ({
           key: column.key,
           text: words.lineLabel(across, column),
+          // What the heading's name leaves out, as a row's would: a session's id, an account's.
+          detail: words.valueDetail(across, column.value),
           chosen: false,
         })),
         { key: 'total', text: t('analytics.panel.table.total'), chosen: true },

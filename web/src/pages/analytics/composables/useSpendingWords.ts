@@ -1,11 +1,15 @@
 /**
  * How the Analytics page names what it shows: a dimension, and a value of one as a card or the
  * rail already names it — a task by its number and title, a project by its name, a session by
- * its client and the start of its id, an account by the start of its id as an item's card does
- * (`valueDetail` is the whole id). Work with no value — no task, a session's own run — and a
- * value nobody can place say so in words of their own, per dimension: «unknown» is said only of
- * what nobody can place.
+ * the title its client gave it as the live work names it, else by its client and the start of
+ * its id, and an account by the name the owner gave it in Settings, else by the start of its id
+ * as an item's card does. What a name leaves out is its `valueDetail`, which the page says in the
+ * hint or beside the name: a titled session's client and the start of its id, so two of one title
+ * can be told apart, and an account's whole id. Work with no value — no task, a session's own
+ * run — and a value nobody can place say so in words of their own, per dimension: «unknown» is
+ * said only of what nobody can place.
  */
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
 import { named } from '@/pages/analytics/utils/readMoments.ts'
@@ -19,7 +23,9 @@ import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/u
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
@@ -41,25 +47,36 @@ const HOUR_SECONDS = 3600
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
 
-/**
- * What a value's name leaves out, for its hint and its table: the whole id of an account, which
- * the page names by the start of it; nothing where the name is the whole of what it says.
- */
-function valueDetail(name: UsageDimension, value: UsageGroupValue | null) {
-  const id = value?.id
-  return name === 'account' && id && agentIdStart(id) !== id ? id : undefined
-}
-
 /** The space no line breaks at. */
 const NO_BREAK = '\u{A0}'
 
 /** A share is said in whole percents: what rounds away at either end is said as more or less. */
 const SHARE_STEP = 0.01
 
+/** A session as it is named when its client gave it no title: «claude · 1a2b3c4d». */
+const sessionPlace = (value: UsageGroupValue & { id: string }) =>
+  [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
+
 export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
   const usage = useUsageWords()
+  const { settings } = storeToRefs(useSettingsStore())
+
+  /** The owner's name for an account, or null where it has none. */
+  const accountName = (id: string) => aliasOf(settings.value.accountAliases, id)
+
+  /**
+   * What a value's name leaves out, for its hint and its table: the client and the start of the id
+   * of a session named by its title; the whole id of an account named by the owner's name or by the
+   * start of its id; nothing where the name is the whole of what it says.
+   */
+  function valueDetail(name: UsageDimension, value: UsageGroupValue | null): string | undefined {
+    const id = value?.id
+    if (!value || !id) return
+    if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
+    if (name === 'account' && (accountName(id) !== null || agentIdStart(id) !== id)) return id
+  }
 
   const compact = (value: number) =>
     new Intl.NumberFormat(i18n.locale.value, {
@@ -210,11 +227,10 @@ export function useSpendingWords() {
         ? [value.reference, value.title].filter(Boolean).join(' ')
         : t('analytics.values.deleted')
     if (name === 'project') return value.name ?? value.id
-    if (name === 'executor')
-      return [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
+    if (name === 'executor') return value.title ?? sessionPlace(value)
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
-    if (name === 'account') return agentIdStart(value.id)
+    if (name === 'account') return accountName(value.id) ?? agentIdStart(value.id)
     return value.id
   }
 

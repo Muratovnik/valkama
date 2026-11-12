@@ -30,6 +30,12 @@ directory, and the MCP server only exists while a client is talking to it.
   they are. Change them under Settings → General → Task type colors; a change applies at
   once. The choice is kept in `localStorage`, on the device, so a browser and the desktop
   app each remember their own.
+- **Names for accounts.** The usage records hold only the id of the organization work
+  was billed to. Under Settings → General → Accounts, each account the past year saw is
+  listed with its id and its share of agent time, and you can give it a name or clear
+  one. Analytics then labels the account by that name, with the id in the hint. Names are
+  kept in `localStorage` like the colours, so a browser and the desktop app each
+  remember their own.
 - **Questions and decisions** in the task's discussion and a shared inbox. Agents
   create typed requests; the owner answers, in their own words if they prefer, or
   declines the exact request, and can change an answer while the task is open.
