@@ -1,14 +1,18 @@
 <script setup lang="ts">
 /**
- * The heading row over a dimension's table (`SpendingTable`): its title; in a few words how many
- * values of the period it lists in the measure, how many spent nothing there and how many spent
- * only before it, «2 roles · 1 with no agent time · 237 outside the period», with the whole
- * account of its rows and their order in its hint; and its controls — one
+ * The heading row over a dimension's table (`SpendingTable`): its title and its controls — one
  * its panel may set (`actions`), the second dimension, and the download of what it shows, in that
  * order. With no value to list the download is disabled, and words say why.
  *
- * One line: the words about the rows give way first, down to nothing, and are whole in their hint.
- * Only a narrow table lets the row wrap.
+ * Under it a line says in a few words how many values of the period the table lists in the
+ * measure, how many spent nothing there and how many spent only before it, «2 roles · 1 with no
+ * agent time · 237 outside the period», with the whole account of its rows and their order in its
+ * hint. The line is a row of its own, so its words are whole however many parts the measure gives
+ * it: beside the title and the controls it was cut in half under the measure «tokens». Where even
+ * its row is too narrow it breaks between its parts, never inside one. It keeps its place while
+ * there is nothing to count, so choosing a measure or a second dimension moves nothing under it.
+ *
+ * The title and the controls keep one line; only a narrow table lets them wrap.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -53,7 +57,8 @@ const words = useSpendingWords()
  * How many values of the period the rows are, as the rail's tile counts them; how many spent in
  * it nothing in the measure; and how many spent only before it.
  */
-const counts = computed(() => {
+const parts = computed(() => {
+  if (props.waiting || !props.lines.length) return []
   const { now, elsewhere, before } = tableCounts(props.lines)
   return [
     t(`analytics.panel.table.counts.values.${props.by}`, { count: now }, now),
@@ -61,10 +66,17 @@ const counts = computed(() => {
       ? t(`analytics.panel.table.counts.elsewhere.${props.measure}`, { count: elsewhere })
       : '',
     before ? t('analytics.panel.table.counts.outside', { count: before }) : '',
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  ].filter(Boolean)
 })
+const counts = computed(() => parts.value.join(' · '))
+/**
+ * The parts as the line sets them, each but the last closed by its separator: the line breaks
+ * between parts and so never starts with one. The space after it is the words' and not the
+ * layout's, which drops it at a part's end: the line reads «2 roles · 1 with no agent time».
+ */
+const shownParts = computed(() =>
+  parts.value.map((part, index, all) => (index < all.length - 1 ? `${part} · ` : part)),
+)
 
 const NONE = 'none'
 const acrossOptions = computed(() => [
@@ -92,13 +104,6 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
       level="page"
       :title="title"
     />
-    <p
-      v-if="!waiting && lines.length"
-      v-tooltip.detail="{ text: summary, words: counts }"
-      class="spending-table-summary one-line"
-    >
-      {{ counts }}
-    </p>
     <div class="spending-table-controls">
       <slot name="actions" />
       <ChoiceSelect
@@ -126,22 +131,51 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
         {{ t('analytics.table.download') }}
       </VButton>
     </div>
+    <div class="spending-table-counts">
+      <p
+        v-if="parts.length"
+        v-tooltip.detail="{ text: summary, words: counts }"
+        class="spending-table-summary"
+      >
+        <span
+          v-for="part in shownParts"
+          :key="part"
+          class="spending-table-count"
+          >{{ part }}</span
+        >
+      </p>
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* The title and the controls on one line, and the line about the rows on a row of its own
+   under them, as wide as the table. */
 .spending-table-head {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   align-items: center;
 }
 
-.spending-table-summary {
-  flex: 1 1 0;
-  min-inline-size: 0;
-  margin: 0;
+/* Its place is kept with nothing in it: a line of the detail's height. */
+.spending-table-counts {
+  flex: 1 0 100%;
+  min-block-size: 1lh;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* Each part keeps its words together, «45 with no tokens ·»; the line breaks only between them. */
+.spending-table-summary {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-1);
+  margin: 0;
+}
+
+.spending-table-count {
+  white-space: nowrap;
 }
 
 .spending-table-note {

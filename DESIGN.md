@@ -2111,10 +2111,13 @@ takes what is left and scrolls in its own frame, its heading, names and total he
 button gives the table the whole panel and gives it back. Where the window is too low for
 that, the panel scrolls as one and the table stays at its foot: the wheel over the table
 scrolls the table, and what focus or a press brings into view stops above it. The table
-sorts by any column, crosses with a second dimension and downloads what it shows. Its
-heading row counts the values of the period that have a figure in the measure, as their tile
-does, and says apart those that spent in the period only in another measure — the adviser has
-tokens and no agent time — and those that spent only before it.
+sorts by any column, crosses with a second dimension and downloads what it shows. A line
+under its heading row counts the values of the period that have a figure in the measure, as
+their tile does, and says apart those that spent in the period only in another measure — the
+adviser has tokens and no agent time — and those that spent only before it. The line is a row
+of its own, kept while it has nothing to say, so its words are whole whatever the measure adds
+to them and choosing a measure moves nothing under it; where even that row is too narrow it
+breaks between its parts, never inside one.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
