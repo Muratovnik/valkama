@@ -188,10 +188,13 @@ for (const [width, height] of [
     await page.goto(pageAt())
     await settled(page)
     await page.evaluate(() => document.fonts.ready)
-    const sections = await page
-      .locator('.analytics-rail-entry')
-      .evaluateAll((all) => all.map((entry) => (entry as HTMLElement).dataset.section))
-    expect(sections.slice(0, 2)).toEqual(['overview', 'token_kind'])
+    // Under load the rail can still be drawing once the reads settle: wait for its first entries.
+    const entries = page.locator('.analytics-rail-entry')
+    await expect(entries.nth(0)).toHaveAttribute('data-section', 'overview')
+    await expect(entries.nth(1)).toHaveAttribute('data-section', 'token_kind')
+    const sections = await entries.evaluateAll((all) =>
+      all.map((entry) => (entry as HTMLElement).dataset.section),
+    )
 
     // The largest kind the tokens figure counts and its share; the double's input is half of it.
     const tile = page.locator('.analytics-rail-entry[data-section="token_kind"]')
