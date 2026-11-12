@@ -10,9 +10,10 @@ import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FADING_MS } from '@/shared/stores/liveWorkStore.ts'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 import { busyFrame, liveFrame, liveRow, liveSession, liveSpace } from '../support/liveFrame.ts'
-import { drawn, hintOf, rail, row, unmountRails } from '../support/navRail.ts'
+import { drawn, rail, row, unmountRails } from '../support/navRail.ts'
 import type { Rail } from '../support/navRail.ts'
 
 const STORAGE = 'valkama-nav-open'
@@ -238,9 +239,9 @@ describe('a row the frame no longer has', () => {
     expect(drawn(wrapper)).toEqual(['MAIN-3', 'MAIN-5', 'MAIN-8'])
     expect(row(wrapper, 'MAIN-5').classList).toContain('muted')
     expect(row(wrapper, 'MAIN-5').querySelector('.session-sign')).toBeNull()
-    // Its second line says what its hint says, and no state or time that no longer runs.
+    // Its second line says that the work ended, so the row has no hint of its own.
     expect(row(wrapper, 'MAIN-5').querySelector('.nav-row-detail')?.textContent).toBe('work ended')
-    expect(hintOf(row(wrapper, 'MAIN-5'))).toBe('work ended')
+    expect(tooltipOf(row(wrapper, 'MAIN-5'))).toBeUndefined()
     vi.advanceTimersByTime(FADING_MS - 1)
     await flushPromises()
     expect(drawn(wrapper)).toContain('MAIN-5')

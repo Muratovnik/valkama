@@ -8,13 +8,15 @@
  * The number's column is as wide as the list's longest number and the session's glyph, so
  * the titles start at one x and the second lines under them. The epic's title is the row's
  * context, not its name: on one line it gives way first, never taking more than two fifths of
- * the room, and the row's own title keeps the rest.
+ * the room, and the row's own title keeps the rest. The title has its own hint, which says it
+ * whole only while the title is cut (`clipped`), whatever else in the row is cut.
  *
  * Its inks are the row's (`NavWorkRow`): the words beside the title take `--nav-row-aside-ink`
  * and the title `--nav-row-title-ink`, muted by default and the title the row's own colour.
  */
 import { computed } from 'vue'
 
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -73,7 +75,11 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
           >›</span
         >
       </template>
-      <span class="nav-row-title trimmed-word one-line">{{ title }}</span>
+      <span
+        v-tooltip:right.clipped="title"
+        class="nav-row-title trimmed-word one-line"
+        >{{ title }}</span
+      >
       <span
         v-if="meta"
         class="nav-row-meta"
@@ -191,8 +197,10 @@ const epicStyle = computed(() => ({ '--nav-row-epic-letters': `${props.epic?.len
   color: var(--nav-row-aside-ink, var(--color-navigation-text-muted));
 }
 
-/* Short of room it ends in an ellipsis, cut sideways only (`.trimmed-word`). */
+/* Short of room it ends in an ellipsis, cut sideways only (`.trimmed-word`). It paints over the
+   link's own box, so the pointer reaches it and its hint (`clipped`), not the link under it. */
 .nav-row-title {
+  position: relative;
   flex: 1 1 auto;
   color: var(--nav-row-title-ink, currentcolor);
 }

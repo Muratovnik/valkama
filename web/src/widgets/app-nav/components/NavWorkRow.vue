@@ -17,9 +17,9 @@
  *
  * The first line is a row of one line, whatever follows it: the sign, the number, the title
  * and the controls at the end stand where they stand on a row that has no second line. The
- * row's accessible name says the whole row in a sentence (`rowSentence`). Its hint shows the
- * title, when the row cuts it, over short lines: the epic or folder, the state with how long,
- * and the agents (`rowHintParts`).
+ * row's accessible name says the whole row in a sentence (`rowSentence`). Its hint says only what
+ * the row does not draw (`rowHidden`): a one-line row's state with how long. The title's own hint
+ * (`NavWorkLink`) says it while the row cuts it.
  *
  * The sign is the session's (`SessionSign`). An item pinned with no work, or gone from the
  * frame, has none. Quiet, pinned idle and gone rows are muted; a pinned item that has closed
@@ -42,12 +42,7 @@ import { useMinuteClock } from '@/widgets/app-nav/composables/useMinuteClock.ts'
 import { useRowOpen } from '@/widgets/app-nav/composables/useRowOpen.ts'
 import { rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
 import type { ItemEntry, LiveEntry } from '@/widgets/app-nav/utils/liveList.ts'
-import {
-  rowHintParts,
-  rowSentence,
-  rowTitle,
-  secondLine,
-} from '@/widgets/app-nav/utils/liveWords.ts'
+import { rowHidden, rowSentence, rowTitle, secondLine } from '@/widgets/app-nav/utils/liveWords.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -109,10 +104,10 @@ const epic = computed(() =>
 )
 const detail = computed(() => (props.lines === 2 ? secondLine(t, props.entry, now.value) : ''))
 const sentence = computed(() => rowSentence(words, props.entry, now.value))
-const parts = computed(() => rowHintParts(words, props.entry, now.value))
-/** The hint beside the rail: the title when the row cuts it, over its short lines. */
+const hidden = computed(() => rowHidden(words, props.entry, now.value, props.lines))
+/** The hint beside the rail: what the row does not draw. None where nothing is left out. */
 const rowHint = computed(() =>
-  props.size === 'touch' ? null : { text: parts.value.lines, words: parts.value.title },
+  props.size === 'touch' || hidden.value === '' ? null : { text: hidden.value },
 )
 
 const href = computed(() =>

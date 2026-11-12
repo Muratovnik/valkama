@@ -96,8 +96,8 @@ describe('rows with no work moving', () => {
     expect(quiet.querySelector('.nav-row-link')?.getAttribute('aria-label')).toMatch(
       /^MAIN-14 Quiet claim, часть «Structured answers»: молчит с 03 нояб\.?$/u,
     )
-    expect(hintOf(quiet)).toMatch(/^Structured answers\nмолчит с 03 нояб\.?$/u)
-    expect(tooltipOf(quiet)?.words).toBe('Quiet claim')
+    // The row draws its title and epic, not the quiet date: the hint says the date alone.
+    expect(hintOf(quiet)).toMatch(/^молчит с 03 нояб\.?$/u)
     expect(tooltipOf(quiet)?.clipped).toBe(false)
   })
 
