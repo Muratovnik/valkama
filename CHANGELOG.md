@@ -34,6 +34,16 @@ checkouts are therefore distinguishable even at the same version.
   agent time, and lets you name it or clear the name. Analytics labels the account by
   that name, with the id in the hint. Names are kept on the device, like task type colours.
 
+### Changed
+
+- **A card's Agents tab says the totals and leads to Analytics.** Under the figures — work,
+  all agents, cost, tokens — now stands the link to the same work on the Analytics page,
+  which breaks it down by kind of token, model and effort; the card no longer repeats those
+  lists. Who did the work is one list by role and launch class, rows that differed only by
+  effort added together, and a row of under a minute with no tokens is left out. What a
+  figure counts is said when you point at it, focus it or tap it, and only a cost missing a
+  price keeps a line of its own under the figures.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

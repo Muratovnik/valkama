@@ -279,10 +279,6 @@ export const DETAIL_TOOLTIPS = new Map([
     'what the reference beside the number is: the item’s epic; while its own words are cut, they come first, whole',
   ],
   [
-    'widgets/work-item-inspector/components/AgentsUsageSummary.vue <li> v-tooltip.detail="row.title"',
-    'how a kind of tokens is counted, which the row’s figure does not say',
-  ],
-  [
     'widgets/work-item-inspector/components/ChainBranchMap.vue <button> v-tooltip.detail="lane.lane.title"',
     'the title of the item a lane branches from; the lane is named by its reference',
   ],

@@ -1,7 +1,7 @@
 /**
  * How much work an item took, on its Agents tab in the real app: the whole at the head with what
- * each number is, the tokens by kind and the models, each agent's share beside it, and its
- * session's total with what bound to no item. The doubles answer on the routes the interface
+ * each figure counts, each agent's share beside it, and its session's total with what bound to no
+ * item. The doubles answer on the routes the interface
  * really reads, `/api/planning/work-item/usage` and `/api/planning/session/usage`.
  */
 import AxeBuilder from '@axe-core/playwright'
@@ -42,41 +42,30 @@ test('the tab counts the session’s own run with the agents the record names', 
   await expect(rows.nth(1)).toContainText('1.5K\u{A0}tokens')
 })
 
-test('the head says the whole, what each number is, every kind and every model', async ({
-  page,
-}) => {
+test('the head says the whole, and each figure says what it counts', async ({ page }) => {
   await serve(page, richUsage({ tokens: { ...richUsage().tokens, cache_write_1h: null } }))
   await page.goto(CARD)
   const section = await openAgents(page)
-  const head = section.locator('.work-usage')
-  await expect(head.locator('.work-usage-figure')).toHaveText([
+  const head = section.locator('.work-usage-figures')
+  const figure = (name: RegExp) => head.getByRole('button', { name })
+  await expect(head.getByRole('button')).toHaveText([
     'Work ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
     'All agents ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
     'Cost ≈\u{A0}$240.67',
+    // A kind nobody reported adds nothing, and the cached reads stay apart.
     'Tokens 17.9M',
   ])
-  await expect(head.locator('.work-usage-notes li')).toHaveText([
-    /Agents worked in parallel/u,
-    /an estimate at API prices and not a bill/u,
-    /history is rebuilt from transcripts/u,
-  ])
-  const kinds = head.locator('.work-usage-grid').first().locator('.work-usage-row')
-  await expect(kinds).toHaveText([
-    /^Input\s*5,000,000$/u,
-    /^Read from cache\s*392,000,000$/u,
-    /^Written to cache, short\s*11,000,000$/u,
-    // A kind nobody reported says so, and never 0.
-    /^Written to cache, long\s*no data$/u,
-    /^Output\s*1,900,000$/u,
-    /^of it reasoning\s*600,000$/u,
-    // Input, cache writes and output: the reasoning is in the output already.
-    /^Processed anew\s*17,900,000$/u,
-  ])
-  const models = head.locator('.work-usage-grid.has-columns .work-usage-row')
-  await expect(models).toHaveCount(2)
-  await expect(models.nth(1)).toContainText('claude-example-2')
-  await expect(models.nth(1)).toContainText('on the side')
-  await expect(models.nth(1)).toContainText('≈\u{A0}$66.32')
+  // What each figure counts is its description and its why, and not a line under the figures.
+  await expect(figure(/^Work/u)).toHaveAccessibleDescription(/history is rebuilt from transcripts/u)
+  await expect(figure(/^All agents/u)).toHaveAccessibleDescription(/Agents worked in parallel/u)
+  await expect(figure(/^Cost/u)).toHaveAccessibleDescription(/at API prices and not a bill/u)
+  await expect(figure(/^Tokens/u)).toHaveAccessibleDescription(/Reads from the cache are counted/u)
+  await expect(section.locator('.work-usage-note')).toHaveCount(0)
+  await figure(/^Cost/u).hover()
+  await expect(page.getByRole('tooltip')).toContainText('not a bill')
+  // The kinds and the models are the Analytics page's, which the link under the figures opens.
+  await expect(section.locator('.work-usage')).not.toContainText('Read from cache')
+  await expect(section.locator('.work-usage')).not.toContainText('claude-example-2')
 })
 
 test('a cost that leaves models out says which, and is marked incomplete', async ({ page }) => {
@@ -84,7 +73,7 @@ test('a cost that leaves models out says which, and is marked incomplete', async
   await page.goto(CARD)
   const section = await openAgents(page)
   await expect(section.locator('.work-usage-figures')).toContainText('Cost ≈\u{A0}$240.67+')
-  await expect(section.locator('.work-usage-notes')).toContainText(
+  await expect(section.locator('.work-usage-note')).toHaveText(
     'The cost is incomplete: no price for model-with-no-price.',
   )
 })
@@ -259,7 +248,7 @@ test('an epic’s tab lists its own agents, and its counter counts only them', a
   await expect(section).not.toContainText('a3a79fc9')
   await expect(section).not.toContainText('a58241d0')
   // The summary keeps the whole of the epic, the children's time included.
-  await expect(section.locator('.work-usage-figure').nth(1)).toHaveText(
+  await expect(section.locator('.work-usage-figures').getByRole('button').nth(1)).toHaveText(
     'All agents ≈\u{A0}16\u{A0}h\u{A0}40\u{A0}min',
   )
   expect(asked).toEqual(expect.arrayContaining(['epic', 'item']))

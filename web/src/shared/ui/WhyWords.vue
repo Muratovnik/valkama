@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * The words that say what the asker recommends, on an option or on a verdict, and why when the
- * asker said: pointing at the words, focusing them from the keyboard or pressing them shows the
- * why beside them. Without a why the words are what they were, and nothing to press.
+ * Words with a why behind them — what an asker recommends and why, or a figure and what it
+ * counts: pointing at the words, focusing them from the keyboard or pressing them shows the why
+ * beside them, so a finger reaches it as the pointer does. Without a why the words are what they
+ * were, and nothing to press. The words are `text`, or the default slot where they are drawn in
+ * more than one ink; `text` names them either way.
  *
  * The press is its own: in a form it stands inside the option's `<label>`, where a button is the
  * one thing a press on the label does not pass to the option's control. The pointer opens the
@@ -20,11 +22,11 @@ import RichText from '@/shared/ui/RichText.vue'
 
 withDefaults(
   defineProps<{
-    /** The words of the recommendation, as the row says them. */
+    /** The words, as the line says them. */
     text: string
     /** Whether the press is a tab stop; the host's rule for its own presses in the row. */
     tabStop?: number
-    /** Markdown: why the asker recommends it. */
+    /** Markdown: why the words say what they say. */
     why?: string
   }>(),
   { why: undefined, tabStop: undefined },
@@ -55,16 +57,18 @@ onBeforeUnmount(stay)
 </script>
 
 <template>
-  <span v-if="!why">{{ text }}</span>
+  <span v-if="!why"
+    ><slot>{{ text }}</slot></span
+  >
   <span v-else>
     <InfoTip
       ref="tip"
-      class="request-advice-tip"
+      class="why-words-tip"
       :label="text"
     >
       <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
       <div
-        class="request-advice-why"
+        class="why-words-why"
         @pointerenter="stay"
         @pointerleave="leave"
       >
@@ -73,7 +77,7 @@ onBeforeUnmount(stay)
       <template #trigger="{ toggle, popup }">
         <button
           type="button"
-          class="request-advice-words"
+          class="why-words"
           :tabindex="tabStop"
           :aria-describedby="whyId"
           @pointerenter="point(popup.expanded === true, toggle, $event)"
@@ -81,7 +85,7 @@ onBeforeUnmount(stay)
           @focus="show(popup.expanded === true, toggle, $event)"
           @click="show(popup.expanded === true, toggle, $event)"
         >
-          {{ text }}
+          <slot>{{ text }}</slot>
         </button>
       </template>
     </InfoTip>
@@ -95,12 +99,12 @@ onBeforeUnmount(stay)
 
 <style scoped>
 /* On the words' baseline, as the words without a why stand. */
-.request-advice-tip {
+.why-words-tip {
   vertical-align: baseline;
 }
 
 /* The words as the row writes them, a line tall as they are, marked as having more to show. */
-.request-advice-words {
+.why-words {
   min-block-size: 0;
   padding: 0;
   border: 0;
@@ -113,7 +117,7 @@ onBeforeUnmount(stay)
   cursor: help;
 }
 
-.request-advice-why {
+.why-words-why {
   overflow-wrap: anywhere;
 }
 </style>
