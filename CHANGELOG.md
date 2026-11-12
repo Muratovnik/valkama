@@ -43,6 +43,19 @@ checkouts are therefore distinguishable even at the same version.
   `--previous=<base64>` and still shows: it runs with the same input through the same
   shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
   working.
+- **The quota source `mod`: Valkama's Claude Code mod `valkama-quota`.** It reads the
+  five-hour window and the week inside every Claude Code session, the VS Code
+  extension's included, which runs no status line: at a session's start, when a window
+  moves during a turn and after each response. It hands the reading to the new
+  `valkama statusline --source=mod` through the managed launcher, as the status line's
+  own JSON fields, so the reading takes the status line's parser, store-or-spool path
+  and refusals. The hand-over runs after the hook answers, one at a time, and is stopped
+  after 10 seconds, so a missing, slow or failing Valkama costs the reading, never a
+  turn. The repository is now a Claude Code marketplace, `valkama`: install the mod with
+  `/plugin install valkama-quota --marketplace Muratovnik/valkama`, or with
+  `claude plugin marketplace add <checkout>` and
+  `claude plugin install valkama-quota@valkama`. `doctor` reports the mod as off
+  (not installed or not enabled), silent (no `mod` reading in three days) or working.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
