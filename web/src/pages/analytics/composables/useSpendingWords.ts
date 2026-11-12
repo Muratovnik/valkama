@@ -12,6 +12,8 @@
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
+import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
+import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import { named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
@@ -27,6 +29,7 @@ import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
+import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
@@ -336,6 +339,69 @@ export function useSpendingWords() {
       by: t(`analytics.byDimension.${by}`),
     })
 
+  /**
+   * A figure per hour of agent time beside the period before's, in the page's compact numbers
+   * with the unit said once: «$17.9/h, was 8.1», «1.2M/h, was 800K»; no «was» where the period
+   * before has none. `detail` says what the line is of, the cost's as the estimate it is.
+   */
+  function perHour(name: 'cost' | 'tokens', rate: PerHour) {
+    const now = compact(rate.now)
+    const line =
+      rate.was === null
+        ? t(`analytics.figures.perHour.${name}`, { now })
+        : t(`analytics.figures.perHour.${name}Was`, { now, was: compact(rate.was) })
+    return { line, detail: t(`analytics.figures.perHour.${name}Detail`) }
+  }
+
+  /** A step's figure in the measure's units, or the words for a step with none. */
+  function amount(name: Measure, value: number | null) {
+    if (value === null) return t(`analytics.days.absent.${name}`)
+    return value === 0 && name === 'time' ? t('time.minutes', { count: 0 }) : scale(name, value)
+  }
+
+  /**
+   * A period's steps in words — days, hours, or the minutes of the live hour: the first and the
+   * last, the highest, and the last one's figure; the total alone where no step has one.
+   */
+  function trendWords(name: Measure, figures: OverviewFigures, step: UsageStep) {
+    const steps = figures.trend
+    const label = (key: string) => stepName(key, step).label
+    let top = steps.at(0)
+    for (const one of steps) if ((one.value ?? 0) > (top?.value ?? 0)) top = one
+    const first = steps.at(0)
+    const last = steps.at(-1)
+    if (!first || !last || !top?.value)
+      return t('analytics.figures.trendNone', {
+        measure: measure(name),
+        per: per(step),
+        figure: figure(name, figures.total),
+      })
+    return t('analytics.figures.trend', {
+      measure: measure(name),
+      per: per(step),
+      from: label(first.key),
+      to: label(last.key),
+      top: amount(name, top.value),
+      day: label(top.key),
+      last: [amount(name, last.value), last.incomplete ? t('analytics.days.soFar') : '']
+        .filter(Boolean)
+        .join(' '),
+    })
+  }
+
+  /**
+   * A period's steps as a small trend (`MiniTrend`) with its words: the rail's tile of the
+   * overview and each of the page's figures draw and say it the same way.
+   */
+  const trend = (
+    name: Measure,
+    figures: OverviewFigures,
+    step: UsageStep,
+  ): { label: string; points: TrendPoint[] } => ({
+    label: trendWords(name, figures, step),
+    points: figures.trend,
+  })
+
   return {
     accounts,
     axis,
@@ -347,8 +413,10 @@ export function useSpendingWords() {
     share,
     period,
     per,
+    perHour,
     stepChartTitle,
     stepName,
+    trend,
     dimension,
     figure,
     lineChange,

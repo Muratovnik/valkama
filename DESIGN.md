@@ -910,7 +910,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   does, it is `dense`: the name and the value on one line and a thin bar under them, each value
   as wide as its own figure and its name taking the rest of the row.
   Two small charts stand beside a figure rather than in a section of their own, as the
-  Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
+  Analytics rail's tiles and the page's three figures use them: `MiniTrend`, a column per period on a hairline floor with no
   scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,
   largest first, with what they leave out last in the neutral. Each is one image whose words say
   what it draws — the highest and the last period, every part with its share — so neither is read
@@ -2071,12 +2071,21 @@ over it. A plain address opens the overview.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
-before, and the chosen cell sets the measure of everything else on the page; across the
-panel under them, the period chart with the period before as a short line at its height; and under the
-chart one row of cards: the four tasks that grew or fell the most, each its name over its
+before and, beside its figure, its own measure as a small trend over the steps of the
+period chart (`MiniTrend`, words as the rail's tile says them), and the chosen cell sets the
+measure of everything else on the page. Under its change the tokens cell and the cost cell say
+what an hour of agent time took of them beside the period before's, «$17.9/h, was 8.1», the
+cost's hint naming it an estimate at API prices; a period with no agent time has no such line
+and a period before with none gives no «was», the line's place kept either way, and the chart
+draws no second axis for it. Across the panel under the cells stands the period chart, with the
+period before as a short line at its height, and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
-hovered ground under the pointer, and nothing moves.
+hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's
+drawing field, where its columns stand without the scale and the steps' names, is never lower
+than 200 pixels, however many account changes it marks; where the panel lacks the room the
+panel scrolls rather than the chart shrinking, and a tall window's room under the cards goes
+to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
 ranked bars list the first twelve and say how many more the table holds; the small charts

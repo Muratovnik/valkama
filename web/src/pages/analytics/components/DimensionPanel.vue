@@ -87,8 +87,7 @@ const wholeWords = computed(() =>
  * breakdown is read the last one stays on screen, and its rows name only their own dimension.
  */
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
-const figures = computed(() => tileFigures(props.usage))
-const before = computed(() => figures.value.before)
+const before = computed(() => tileFigures(props.usage).before)
 
 /** The second dimension, where it is another than the section's own. */
 const across = computed(() => (props.across && props.across !== by.value ? props.across : null))
@@ -165,9 +164,8 @@ async function showTable() {
     />
     <SpendingTiles
       v-model:measure="measure"
-      :split="usage.total.tokens"
-      :total="figures.total"
-      :before="before"
+      :usage="usage"
+      :read-at="readAt"
     />
     <div class="dimension-body">
       <div

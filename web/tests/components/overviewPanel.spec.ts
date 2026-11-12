@@ -13,7 +13,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 
-import { momentAt, noTask, serveUsage, task, usageAnswer, value } from '../fixtures/analytics.ts'
+import {
+  figuresAnswer,
+  momentAt,
+  noTask,
+  serveUsage,
+  task,
+  usageAnswer,
+  value,
+} from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -241,9 +249,8 @@ describe('the period before on the overview', () => {
       })
       const page = await mountAnalytics({ routeState })
       // What the figures are compared with, as the tiles hold it.
-      const cells = page.findComponent(SpendingTiles).props('before')
-      expect(cells).not.toBeNull()
-      if (!cells) return
+      const cells = page.findComponent(SpendingTiles).props('usage').comparison
+      if (!cells) throw new Error('the tiles compare with nothing')
       const shown = served[0]?.period
       if (!shown) throw new Error('the page read nothing')
       // Every read of a period before the one shown is of the period the figures compare with.
@@ -251,13 +258,13 @@ describe('the period before on the overview', () => {
         (usage) => Date.parse(usage.period.to) <= Date.parse(shown.from),
       )
       expect(earlier.length).toBeGreaterThan(0)
-      for (const usage of earlier) expect(span(usage.period)).toEqual(span(cells))
+      for (const usage of earlier) expect(span(usage.period)).toEqual(span(cells.period))
       // And the outline adds up to the figure the tiles compare with.
       const outlined = page.findComponent(SpendingDays).props('before')
       expect(Array.isArray(outlined), `the outline stands at ${String(outlined)}`).toBe(true)
       const steps = Array.isArray(outlined) ? outlined : []
       const seconds = steps.reduce((sum, step) => sum + step.agent_seconds, 0)
-      expect(seconds).toBe(cells.spent.seconds)
+      expect(seconds).toBe(cells.total.agent_seconds)
     })
 })
 
@@ -335,16 +342,8 @@ describe('the figures of the overview', () => {
   const mountTiles = (seconds: number, was: number) =>
     mount(SpendingTiles, {
       props: {
-        total: { seconds, tokens: null, cost: null, unpriced: 0 },
-        split: {
-          input: null,
-          output: null,
-          reasoning: null,
-          cache_write_5m: null,
-          cache_write_1h: null,
-          cached_read: null,
-        },
-        before: { ...before, spent: { seconds: was, tokens: null, cost: null, unpriced: 0 } },
+        usage: figuresAnswer({ seconds }, { ...before, spent: { seconds: was } }),
+        readAt: new Date(2026, 10, 11, 14, 30),
         measure: 'time',
       },
       global: { plugins: [analyticsI18n()] },

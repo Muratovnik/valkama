@@ -49,6 +49,8 @@ const PARTS = [
   '.spending-days .period-frame',
   '.spending-days .period-field',
   '.spending-table thead',
+  '.spending-tiles',
+  '.spending-tiles .mini-trend',
 ]
 
 /** The parts that scroll, which a refresh must leave as far scrolled as they were. */
@@ -82,7 +84,8 @@ const layout = (page: Page) =>
 
 /**
  * What the page draws that a refresh must never blank, even for a moment: the minutes, their
- * stacks, the mark of the hour before and the marks of the accounts, and the table's rows.
+ * stacks, the mark of the hour before, the marks of the accounts, the table's rows and the steps
+ * of the figures' trends.
  */
 const DRAWN = {
   minutes: '.spending-days .period-column',
@@ -90,6 +93,7 @@ const DRAWN = {
   before: '.spending-days .period-before',
   marks: '.spending-days .period-mark',
   rows: '.spending-table tbody tr',
+  trends: '.spending-tiles .mini-trend-period',
 }
 
 /**
@@ -198,7 +202,7 @@ test('a refresh of «Now» moves nothing on a section and keeps the reader’s p
 test('a refresh of «Now» moves nothing on the overview and keeps the reader’s place', async ({
   page,
 }, info) => {
-  // The overview stands whole in the window, so there is no scroll to keep.
+  // The overview's panel unscrolled: its top is the place a refresh keeps.
   const refresh = await refreshOf(page, 'overview', async () => {})
   expect(refresh.after.layout).toEqual(refresh.before.layout)
   expect(refresh.after.place).toEqual(refresh.before.place)
