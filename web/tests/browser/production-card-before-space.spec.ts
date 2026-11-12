@@ -93,44 +93,48 @@ async function watchCard(page: Page) {
   }
 }
 
-test('a card opened by its address stands before its space has answered', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 })
-  await installBackend(page, {
-    card: (read) => ({ ...read, parent_id: blockedWorkItem.work_item_id }),
-    space: inEpic,
+/** A wide window, and a phone's, where the drawer takes the whole width. */
+for (const width of [1280, 390])
+  test(`a card opened by its address stands before its space has answered, ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installBackend(page, {
+      card: (read) => ({ ...read, parent_id: blockedWorkItem.work_item_id }),
+      space: inEpic,
+    })
+    const late = await lateSpace(page)
+    await page.goto(CARD)
+    const drawer = page.locator('.drawer')
+    await expect(drawer.getByRole('heading', { name: workItem.title })).toBeVisible()
+    await expect(drawer.locator('.description-copy')).toHaveText(workItem.description)
+    expect(late.answered, 'the card stood only once the space had answered').toBe(false)
+
+    // What the space brings has its place already: the parent's row, and the state as a menu.
+    await expect(drawer).toHaveCSS('transform', 'none')
+    const stop = await watchCard(page)
+    await expect(drawer.locator('.card-parent')).toContainText(blockedWorkItem.reference)
+    expect(late.answered).toBe(true)
+    // A few frames after the space has been drawn, so a late move would be seen.
+    await expect(page.locator('.work-item-tile').first()).toBeVisible()
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    )
+    const samples = await stop()
+
+    expect(samples.length).toBeGreaterThan(1)
+    expect(samples.filter((frame) => !frame.title || !frame.description)).toEqual([])
+    expect(samples.filter((frame) => !frame.stateMenu || !frame.parentRow)).toEqual([])
+    // The parent's reference came in while the watch ran, and stayed.
+    expect(samples[0]?.parentLink).toBe(false)
+    expect(samples.at(-1)?.parentLink).toBe(true)
+    expect(new Set(samples.map((frame) => frame.factsBottom)).size).toBe(1)
+    expect(new Set(samples.map((frame) => frame.descriptionTop)).size).toBe(1)
+
+    // The state's menu offers the workflow's moves once the space has named them.
+    await drawer.locator('.card-facts .card-state').first().click()
+    await expect(page.locator('[role="option"]:not([aria-disabled="true"])')).not.toHaveCount(0)
   })
-  const late = await lateSpace(page)
-  await page.goto(CARD)
-  const drawer = page.locator('.drawer')
-  await expect(drawer.getByRole('heading', { name: workItem.title })).toBeVisible()
-  await expect(drawer.locator('.description-copy')).toHaveText(workItem.description)
-  expect(late.answered, 'the card stood only once the space had answered').toBe(false)
-
-  // What the space brings has its place already: the parent's row, and the state as a menu.
-  await expect(drawer).toHaveCSS('transform', 'none')
-  const stop = await watchCard(page)
-  await expect(drawer.locator('.card-parent')).toContainText(blockedWorkItem.reference)
-  expect(late.answered).toBe(true)
-  // A few frames after the space has been drawn, so a late move would be seen.
-  await expect(page.locator('.work-item-tile').first()).toBeVisible()
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  )
-  const samples = await stop()
-
-  expect(samples.length).toBeGreaterThan(1)
-  expect(samples.filter((frame) => !frame.title || !frame.description)).toEqual([])
-  expect(samples.filter((frame) => !frame.stateMenu || !frame.parentRow)).toEqual([])
-  // The parent's reference came in while the watch ran, and stayed.
-  expect(samples[0]?.parentLink).toBe(false)
-  expect(samples.at(-1)?.parentLink).toBe(true)
-  expect(new Set(samples.map((frame) => frame.factsBottom)).size).toBe(1)
-  expect(new Set(samples.map((frame) => frame.descriptionTop)).size).toBe(1)
-
-  // The state's menu offers the workflow's moves once the space has named them.
-  await drawer.locator('.card-facts .card-state').first().click()
-  await expect(page.locator('[role="option"]:not([aria-disabled="true"])')).not.toHaveCount(0)
-})
 
 test('a card opened by its address reads its record once, the space beside it', async ({
   page,
