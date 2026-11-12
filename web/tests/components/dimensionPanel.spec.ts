@@ -108,10 +108,11 @@ describe('the panel of a dimension', () => {
     expect(hues).not.toContain(undefined)
 
     // Work under no known model is no value of the dimension: it is ranked by its figure, with a
-    // small chart and a bar of its own on the values' scale, in the neutral hue.
+    // small chart and a bar of its own on the values' scale, in the neutral of what is not a
+    // value, never the lighter one of the folded rest.
     expect(text(page, '.spending-multiples .multiples-apart .multiple-name')).toEqual([])
-    expect(multiples.get('Unknown')).toBe('other')
-    expect(bars.get('Unknown')).toBe('other')
+    expect(multiples.get('Unknown')).toBe('apart')
+    expect(bars.get('Unknown')).toBe('apart')
   })
 
   it('writes the top of the small charts’ one scale once', async () => {

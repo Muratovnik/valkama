@@ -30,6 +30,10 @@
     background: var(--color-series-6);
   }
 
+  &[data-slot='apart'] {
+    background: var(--color-series-apart);
+  }
+
   &[data-slot='other'] {
     background: var(--color-series-other);
   }
@@ -41,6 +45,7 @@
       forced-color-adjust: none;
     }
 
+    &[data-slot='apart'],
     &[data-slot='other'] {
       background: GrayText;
     }

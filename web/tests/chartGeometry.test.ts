@@ -261,8 +261,8 @@ describe('a period still running', () => {
     assert.deepEqual(ticks.at(-1), {
       key: 'd3',
       text: 'd3',
-      offset: 1,
-      edge: 'end',
+      offset: 2.5 / 3,
+      edge: 'middle',
       note: 'so far',
     })
   })
@@ -313,15 +313,17 @@ describe('the time axis', () => {
     assert.deepEqual(labelledColumns(0, 500), [])
   })
 
-  test('the first and the last label keep inside the axis, the others stand under their column', () => {
+  test('every label stands by its middle under the middle of its column, the first and the last too', () => {
+    // Pinning the first and the last to the axis's ends put «Mon, 9» 48px off its column at
+    // 1440px; the axis now only moves a label in where it would hang past an end (`ChartTicks`).
     const columns = Array.from({ length: 4 }, (_, index) => column(`d${index}`, {}))
     assert.deepEqual(
       dayTicks(columns, 1000, '').map((tick) => [tick.edge, tick.offset]),
       [
-        ['start', 0],
+        ['middle', 0.5 / 4],
         ['middle', 1.5 / 4],
         ['middle', 2.5 / 4],
-        ['end', 1],
+        ['middle', 3.5 / 4],
       ],
     )
   })

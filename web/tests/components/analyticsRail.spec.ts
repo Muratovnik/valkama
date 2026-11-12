@@ -348,8 +348,9 @@ describe('a value', () => {
       expect(hues.length, `task ${number}`).toBeGreaterThanOrEqual(3)
       expect(new Set(hues), `task ${number}`).toEqual(new Set([String(rank + 1)]))
     }
-    // Work on no task is the neutral wherever it is drawn, never a hue.
-    expect(new Set(huesOf(page, 'none'))).toEqual(new Set(['other']))
+    // Work on no task is the neutral of what is not a value wherever it is drawn, never a hue
+    // and never the lighter neutral of the folded rest.
+    expect(new Set(huesOf(page, 'none'))).toEqual(new Set(['apart']))
   })
 
   it('is named in its tile when it is work on no task holding a twentieth or more', async () => {
@@ -362,7 +363,7 @@ describe('a value', () => {
     )
     const none = bar.get('[data-key="none"]')
     expect(none.classes()).toContain('mini-share-apart')
-    expect(none.attributes('data-slot')).toBe('other')
+    expect(none.attributes('data-slot')).toBe('apart')
     // The lead stays the first real value.
     expect(lead(page, 'work_item')).toBe('MAIN-3 Task 3')
   })

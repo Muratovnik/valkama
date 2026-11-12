@@ -197,9 +197,12 @@ test('the chart outlines the period before on its own scale, in the legend, the 
   await expect(days.locator('.period-scale')).toContainText('15')
   const heights = await days.locator('.period-slot').evaluateAll((slots) =>
     slots.map((slot) => {
-      const stack = slot.querySelector('.period-stack')?.getBoundingClientRect().height ?? 0
-      const before = slot.querySelector('.period-before')?.getBoundingClientRect().height ?? 0
-      return { stack: Math.round(stack), before: Math.round(before) }
+      const stack = slot.querySelector('.period-stack')?.getBoundingClientRect()
+      // The period before is a short mark: its height on the plot is where its middle stands.
+      const mark = slot.querySelector('.period-before')?.getBoundingClientRect()
+      const floor = stack?.bottom ?? 0
+      const before = mark ? floor - (mark.top + mark.bottom) / 2 : 0
+      return { stack: Math.round(stack?.height ?? 0), before: Math.round(before) }
     }),
   )
   // Monday: eight hours against twelve; Wednesday so far: four hours against a quarter of one.
@@ -311,10 +314,11 @@ test('a tall window gives the room under the cards to the plot, and 1440 by 900 
   expect(tall.room).toBeGreaterThanOrEqual(0)
   expect(tall.room).toBeLessThan(40)
   expect(tall.scrolls).toBe(false)
-  // At 1440 by 900 the plot takes the few pixels the panel leaves, and nothing scrolls.
+  // At 1440 by 900 the plot takes the few pixels the panel leaves, and nothing scrolls; 2px of
+  // them stand under the day names, where their glyphs hang past the last line.
   expect(usual.scrolls).toBe(false)
   const { x, y, width, height } = usual.plot
-  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 443, 532, 165])
+  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 443, 532, 163])
 })
 
 const OTHER_ACCOUNT = value('0d6f1c3a-8b2e-4f5a-9e7d-3c1b2a4f6e8d')

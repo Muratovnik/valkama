@@ -3,7 +3,7 @@
  * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
  * beside them, the change numbers over them and the periods' names under — what keeps the
  * scale in view while the periods scroll, and what a period's slot holds besides its stack: the
- * outline of the period before, the ground of a period with no data yet and the line of a change.
+ * mark of the period before, the ground of a period with no data yet and the line of a change.
  */
 
 /* A plot wider than the chart scrolls here, and the page never does. A period scrolled to
@@ -91,23 +91,28 @@
   }
 }
 
+/* The names are set solid (`--font-count`), so their glyphs hang a pixel or two past the last
+   line; the room under it keeps them inside the plot, which the frame is as tall as. Without it
+   the frame scrolls up and down by that pixel and shows a bar for it. */
 .period-axis {
   grid-area: axis;
-  padding-block-start: var(--space-2);
+  padding-block: var(--space-2) var(--space-half);
 }
 
-/* The period compared with: an open dashed edge as wide as the stack, over it and never under,
-   so it reads where it is higher and where it is lower without a hue of its own. Drawn in the
-   text's colour, it takes the forced palette's ink with the text. */
+/* The period compared with: a short line at the height it reached, as wide as the stack and
+   over it, never under, ringed in the ground where it crosses the stack. It says higher or lower
+   without a hue of its own, and without a box up the plot that outweighs this period's columns
+   when the period before was the larger. Drawn as an edge in the text's colour, it takes the
+   forced palette's ink with the text. */
 .period-before {
   position: absolute;
-  inset: auto 0 0;
+  inset-inline: 0;
   inline-size: min(100%, var(--period-column));
   margin-inline: auto;
-  border: var(--space-hair) dashed currentcolor;
-  border-block-end: 0;
+  border-block-start: var(--space-half) solid currentcolor;
   color: var(--color-text-muted);
-  border-radius: var(--radius-status) var(--radius-status) 0 0;
+  box-shadow: 0 0 0 var(--space-hair) var(--color-canvas);
+  transform: translateY(50%);
   pointer-events: none;
 }
 
