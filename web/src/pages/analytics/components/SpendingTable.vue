@@ -22,7 +22,7 @@ import { useI18n } from 'vue-i18n'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
+import { tableCounts, useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
 
@@ -105,15 +105,23 @@ const headings = computed(() => [
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
-/** What the heading row says of the rows: how many, and their order. */
+/**
+ * What the heading row says of the rows, and their order: the values of this period, counted as
+ * the rail's tile counts them; those that spent only before; and the rows of no value that spent
+ * now, by name, so the parts add up to the rows shown.
+ */
 const summary = computed(() => {
   const column = headings.value.find(({ key }) => key === sort.value.column)?.text ?? ''
   const way = t(`analytics.panel.table.direction.${direction.value}`)
-  const all = model.value.lines.length
-  return [
-    t('analytics.panel.table.rows', { shown: lines.value.length, all }),
-    t('analytics.panel.table.sorted', { column, direction: way }),
-  ].join(', ')
+  const { now, before, apart } = tableCounts(model.value.lines)
+  const names = apart.map((name) => `«${name}»`).join(', ')
+  const parts = [
+    t('analytics.panel.table.counts.now', { count: now }),
+    before ? t('analytics.panel.table.counts.before', { count: before }) : '',
+    names ? t('analytics.panel.table.counts.apart', { names }) : '',
+  ]
+  const sorted = t('analytics.panel.table.sorted', { column, direction: way })
+  return `${parts.filter(Boolean).join(' · ')}, ${sorted}`
 })
 
 const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)

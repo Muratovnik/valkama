@@ -295,6 +295,28 @@ test('work on no task, the largest share, is ranked first with a bar and a small
   await expect(page.locator('.spending-multiples .multiple-name').first()).toHaveText('No task')
 })
 
+test('the table counts the values of the period as the rail’s tile does', async ({ page }) => {
+  await serve(page, [
+    ...THIRTY_TASKS,
+    {
+      at: new Date(2026, 10, 9, 12),
+      group: { work_item: noTask, account: value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f') },
+      spend: { seconds: 3600, tokens: 1000, cost: 1 },
+    },
+  ])
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  const line = page.locator('.spending-table-summary')
+  await expect(line).toHaveText(/^30 in the period · and «No task», sorted by /u)
+  const tile = page.locator('.analytics-page-rail').getByRole('button', { name: /^Task\b/u })
+  const tileText = (await tile.textContent()) ?? ''
+  const lineText = (await line.textContent()) ?? ''
+  const values = /(\d+) values?/u.exec(tileText)?.[1]
+  const first = /^(\d+) in the period/u.exec(lineText.trim())?.[1]
+  expect(values).toBe('30')
+  expect(first).toBe(values)
+})
+
 test('a section that is not held has no button for the whole panel', async ({ page }, info) => {
   await serve(page, THIRTY_TASKS)
   await page.setViewportSize({ width: 1024, height: 768 })

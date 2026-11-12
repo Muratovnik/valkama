@@ -26,7 +26,11 @@ export const analyticsPanelMessages = {
         cost: 'Est. cost, API prices',
         before: 'Before, {period}',
       },
-      rows: 'Rows: {shown} of {all}',
+      counts: {
+        now: '{count} in the period',
+        before: '{count} only before',
+        apart: 'and {names}',
+      },
       sorted: 'sorted by «{column}», {direction}',
       sortBy: 'Sort by «{column}»',
       direction: {
@@ -70,7 +74,11 @@ export const analyticsPanelMessages = {
         cost: 'Оценка по ценам API',
         before: 'Ранее, {period}',
       },
-      rows: 'Строк: {shown} из {all}',
+      counts: {
+        now: '{count} в периоде',
+        before: '{count} только в прошлом',
+        apart: 'и {names}',
+      },
       sorted: 'по столбцу «{column}», {direction}',
       sortBy: 'Упорядочить по столбцу «{column}»',
       direction: {

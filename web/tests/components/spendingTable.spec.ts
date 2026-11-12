@@ -203,14 +203,20 @@ describe('the breakdown beside the period before', () => {
     const wrapper = table('time')
     const summary = () => words(wrapper.get('.spending-table-summary').text())
     const names = () => rows(wrapper).map((row) => row[0])
-    expect(summary()).toBe('Rows: 5 of 5, sorted by «Agent time», largest first')
+    // Alpha and Beta spent now, Gamma only before; work on no task and unknown work spent now.
+    expect(summary()).toBe(
+      '2 in the period · 1 only before · and «No task», «Unknown», sorted by «Agent time», largest first',
+    )
     expect(wrapper.get('thead th:nth-child(2)').attributes('aria-sort')).toBe('descending')
+    expect(words(table('time', BEFORE, 'ru').get('.spending-table-summary').text())).toMatch(
+      /^2 в периоде · 1 только в прошлом · и «Без задачи», «Неизвестно», по /u,
+    )
 
     // The time before: Alpha, no task, Gamma, then the two that spent nothing before, in the
     // order the table had them.
     await wrapper.get('thead th:nth-child(5) button').trigger('click')
     expect(names()).toEqual(['MAIN-1 Alpha', 'No task', 'MAIN-3 Gamma', 'MAIN-2 Beta', 'Unknown'])
-    expect(summary()).toBe('Rows: 5 of 5, sorted by «Before, Nov 6 – 8», largest first')
+    expect(summary()).toMatch(/, sorted by «Before, Nov 6 – 8», largest first$/u)
     await wrapper.get('thead th:nth-child(5) button').trigger('click')
     expect(names()).toEqual(['MAIN-2 Beta', 'Unknown', 'MAIN-3 Gamma', 'MAIN-1 Alpha', 'No task'])
     expect(wrapper.get('thead th:nth-child(5)').attributes('aria-sort')).toBe('ascending')
@@ -225,7 +231,7 @@ describe('the breakdown beside the period before', () => {
     // The names from A, then from Z.
     await wrapper.get('thead th:nth-child(1) button').trigger('click')
     expect(names()).toEqual(['MAIN-1 Alpha', 'MAIN-2 Beta', 'MAIN-3 Gamma', 'No task', 'Unknown'])
-    expect(summary()).toBe('Rows: 5 of 5, sorted by «Task», A to Z')
+    expect(summary()).toMatch(/^2 in the period · 1 only before · .*, sorted by «Task», A to Z$/u)
   })
 
   it('sorts by cost, with the values that have no price last and in the order of their names', () => {

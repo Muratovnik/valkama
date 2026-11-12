@@ -1,0 +1,43 @@
+/**
+ * How a dimension's table counts its rows (`tableCounts`): the values of the dimension that spent
+ * in this period, as the rail's tile counts them; the rows that spent only in the period before;
+ * and, by name, the rows of no value that spent in this period. A row that spent in neither period
+ * is none of them.
+ */
+import assert from 'node:assert/strict'
+
+import { describe, test } from 'vitest'
+
+import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
+import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
+
+const line = (name: string, when: TableLine['when'], rest = false): TableLine => ({
+  cells: [],
+  key: name,
+  name,
+  rest,
+  value: { id: name, unknown: false },
+  when,
+})
+
+describe('the count of a dimension’s table', () => {
+  test('counts the values of the period apart from those only before and the rows of no value', () => {
+    const lines = [
+      line('MAIN-1', 'now'),
+      line('MAIN-2', 'now'),
+      line('MAIN-3', 'before'),
+      line('MAIN-4', 'neither'),
+      line('No task', 'now', true),
+      line('Unknown', 'before', true),
+    ]
+    assert.deepEqual(tableCounts(lines), { now: 2, before: 2, apart: ['No task'] })
+  })
+
+  test('counts nothing only before where every row spent in this period', () => {
+    assert.deepEqual(tableCounts([line('MAIN-1', 'now'), line('Unknown', 'now', true)]), {
+      now: 1,
+      before: 0,
+      apart: ['Unknown'],
+    })
+  })
+})
