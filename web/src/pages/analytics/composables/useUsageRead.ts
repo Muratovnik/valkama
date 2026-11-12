@@ -5,16 +5,25 @@
  *
  * A new view asks again and drops the answer to the one it replaced, so a slow read never
  * draws over a later one. While it asks, the last answer stays on screen as a refresh in flight
- * rather than blanking into a wait; only the first read waits with nothing to show.
+ * rather than blanking into a wait; only the first read waits with nothing to show. A refresh of
+ * the view on show replaces its answer once what is drawn with it is in hand too — its accounts
+ * and, on the overview, the steps of its period before — so nothing the page draws blanks,
+ * flashes or moves between the two.
+ *
+ * Every read goes through the page's shared reads (`useSharedUsage`), as of the moment they keep
+ * for the view: another section asks only what no other part of the page has asked already.
  */
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
-import { periodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import { beforeStepsQuery } from '@/pages/analytics/composables/usePeriodBefore.ts'
+import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
+import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
+import { comparedBounds, comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
 
+import { breakdownOf, OVERVIEW } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
-import { fetchUsage, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type {
   Usage,
   UsageDimension,
@@ -69,6 +78,24 @@ export type FilterValues = UsageRow[] | 'loading' | 'failed'
  */
 export type AccountsRead = Usage | 'failed' | 'loading'
 
+/**
+ * What an answer on show answers: what was asked (`asked`), the period it was read for and the
+ * moment as of which, the filters it was read with and the period its figures are compared with.
+ */
+interface ShownAnswer {
+  at: Date
+  compared: PeriodBounds | null
+  filters: UsageFilters
+  key: string
+  period: PeriodBounds
+}
+
+/** Where an answer is shown and the read it belongs to, which a later read stops. */
+interface ShowingWith {
+  overview: boolean
+  signal: AbortSignal
+}
+
 /** A read that may fail without failing the page: its answer, or null. */
 const orNull = <T>(reading: Promise<T>) => reading.catch(() => null)
 
@@ -91,12 +118,12 @@ function compared(usage: Usage, before: Usage | null | undefined): Usage {
 }
 
 export function useUsageRead(options: {
-  now?: () => Date
+  shared: SharedUsage
   /** The project the page is scoped to, which every read is filtered to; null at the top. */
   projectId: () => string | null
   view: () => AnalyticsView
 }) {
-  const now = options.now ?? (() => new Date())
+  const { now, read: ask } = options.shared
   const state = shallowRef<PlatformUiState<Usage>>(uiLoading())
   /** The period the shown answer was read for; null while a custom period is unfinished. */
   const bounds = shallowRef<PeriodBounds | null>(null)
@@ -106,6 +133,11 @@ export function useUsageRead(options: {
   const accounts = shallowRef<AccountsRead>('loading')
   /** The filters the shown answer was read with, its scope's project among them. */
   const readWith = shallowRef<UsageFilters>({})
+  /**
+   * The period the shown answer's figures are compared with (`comparedBounds`), for whatever else
+   * stands for the period before; null when it was not read.
+   */
+  const comparedWith = shallowRef<PeriodBounds | null>(null)
 
   /** The scope's own filter: its project, or nothing at the top. */
   const scope = computed<UsageFilters>(() => {
@@ -116,10 +148,14 @@ export function useUsageRead(options: {
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => ({ ...options.view().filters, ...scope.value }))
 
-  /** What a view asks; the moment of a preset is taken when it is asked, not here. */
+  /**
+   * What a view asks; the moment of a preset is taken when it is asked, not here. The overview is
+   * read as the breakdown it borrows, so moving between the two asks nothing again.
+   */
   const asked = computed(() => {
-    const { period, from, to, by } = options.view()
-    return JSON.stringify({ period, from, to, by, filters: filters.value })
+    const view = options.view()
+    const { period, from, to } = view
+    return JSON.stringify({ period, from, to, by: breakdownOf(view), filters: filters.value })
   })
 
   /**
@@ -134,16 +170,20 @@ export function useUsageRead(options: {
   let reading: AbortController | null = null
   let offering: AbortController | null = null
   let offered = ''
+  /** What the answer on show was asked for (`asked`); a read of the same is a refresh of it. */
+  let shownFor: string | null = null
 
   function query(at: PeriodBounds, groupBy: UsageDimension[], compare: boolean): UsageQuery {
-    return { ...at, groupBy, filters: filters.value, compare }
+    return { ...at, groupBy, filters: filters.value, compare, step: stepOf(options.view()) }
   }
 
   /**
    * The view's reads, asked together: the period by its dimension beside the period it is
    * compared with — the server's own preceding period, or the one `comparedPeriod` names, read on
    * its own — and the period by account. The answer is shown when the first two land; the
-   * accounts follow it, and the last answer's accounts go with the last answer.
+   * accounts follow it, and the last answer's accounts go with the last answer. A refresh shows
+   * its answer with its accounts and, on the overview, with the steps of the period before, which
+   * it asks first through the shared reads for the part that draws them to take at once.
    */
   async function read() {
     reading?.abort()
@@ -153,21 +193,26 @@ export function useUsageRead(options: {
     const at = now()
     const view = options.view()
     const period = periodBounds(view, at)
-    bounds.value = period
-    askedAt.value = at
+    const shown = state.value
+    const key = asked.value
+    const refresh = period !== null && 'payload' in shown && shownFor === key
+    // A refresh moves the period and its moment with its answer, not ahead of it.
+    if (!refresh) {
+      bounds.value = period
+      askedAt.value = at
+    }
     if (!period) {
       state.value = uiEmpty('analytics.period.choose')
       return
     }
-    const shown = state.value
     state.value = 'payload' in shown ? refreshing(shown.payload) : uiLoading()
-    const { by } = view
+    const by = breakdownOf(view)
     const askedWith = filters.value
     const before = comparedPeriod(view, at)
-    const asking = fetchUsage(query(period, [by], !before), signal)
-    const askingBefore = before ? orNull(fetchUsage(query(before, [by], false), signal)) : null
+    const asking = ask(query(period, [by], !before), signal)
+    const askingBefore = before ? orNull(ask(query(before, [by], false), signal)) : null
     const askingAccounts =
-      by === 'account' ? null : orNull(fetchUsage(query(period, ['account'], false), signal))
+      by === 'account' ? null : orNull(ask(query(period, ['account'], false), signal))
     let usage: Usage
     try {
       usage = compared(await asking, askingBefore ? await askingBefore : undefined)
@@ -176,12 +221,58 @@ export function useUsageRead(options: {
       return
     }
     if (signal.aborted) return
-    accounts.value = askingAccounts ? 'loading' : usage
-    readWith.value = askedWith
+    const answer = {
+      at,
+      compared: comparedBounds(usage, period, before),
+      filters: askedWith,
+      key,
+      period,
+    }
+    const showing = refresh ? showRefreshed : showNew
+    await showing(usage, askingAccounts, answer, { overview: view.by === OVERVIEW, signal })
+  }
+
+  /** Shows `usage` as the answer `answer` names, beside the accounts read with it. */
+  function show(usage: Usage, byAccount: AccountsRead, answer: ShownAnswer) {
+    accounts.value = byAccount
+    readWith.value = answer.filters
+    comparedWith.value = answer.compared
+    shownFor = answer.key
+    bounds.value = answer.period
+    askedAt.value = answer.at
     state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
+  }
+
+  /** Shows a new view's answer as it lands, and its accounts as they follow it. */
+  async function showNew(
+    usage: Usage,
+    askingAccounts: Promise<Usage | null> | null,
+    answer: ShownAnswer,
+    { signal }: ShowingWith,
+  ) {
+    show(usage, askingAccounts ? 'loading' : usage, answer)
     if (!askingAccounts) return
     const byAccount = await askingAccounts
     if (!signal.aborted) accounts.value = byAccount ?? 'failed'
+  }
+
+  /**
+   * Shows a refreshed answer once what is drawn with it is in hand too: its accounts and, on the
+   * overview, the steps of the period before, asked through the shared reads for the part that
+   * draws them to take at once.
+   */
+  async function showRefreshed(
+    usage: Usage,
+    askingAccounts: Promise<Usage | null> | null,
+    answer: ShownAnswer,
+    { overview, signal }: ShowingWith,
+  ) {
+    const byAccount = askingAccounts ? await askingAccounts : usage
+    if (overview && answer.compared) {
+      const steps = beforeStepsQuery(answer.compared, answer.filters, usage.period.step)
+      await orNull(ask(steps, signal))
+    }
+    if (!signal.aborted) show(usage, byAccount ?? 'failed', answer)
   }
 
   /**
@@ -208,7 +299,7 @@ export function useUsageRead(options: {
     await Promise.all(
       missing.map(async (dimension) => {
         try {
-          const usage = await fetchUsage(
+          const usage = await ask(
             { ...period, groupBy: [dimension], filters: scope.value, compare: false },
             signal,
           )
@@ -231,5 +322,15 @@ export function useUsageRead(options: {
     offering?.abort()
   })
 
-  return { accounts, askedAt, bounds, filterValues, offer, readWith, retry: read, state }
+  return {
+    accounts,
+    askedAt,
+    bounds,
+    comparedWith,
+    filterValues,
+    offer,
+    readWith,
+    retry: read,
+    state,
+  }
 }

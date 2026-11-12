@@ -25,6 +25,25 @@ function byCodePoint(left: string, right: string) {
   return left < right ? -1 : 1
 }
 
+/**
+ * The slot each name takes by its rank: the first `count` of `ranked`, in order, take the palette's
+ * hues in sequence, the rest the neutral. For a page whose charts all read one ranking — a value
+ * is the colour of its place, so every chart of the page that is handed the same ranking agrees,
+ * and a new ranking (another measure) may repaint.
+ */
+export function rankSlots(
+  ranked: Iterable<string>,
+  count = SERIES_SLOT_COUNT,
+): Map<string, SeriesSlot> {
+  const named = Math.min(count, SERIES_SLOT_COUNT)
+  return new Map(
+    [...new Set(ranked)].map((name, index) => [
+      name,
+      index < named ? ((index + 1) as SeriesSlot) : 'other',
+    ]),
+  )
+}
+
 /** The slot each distinct name takes, in the palette's order. */
 export function seriesSlots(names: Iterable<string>): Map<string, SeriesSlot> {
   const ordered = [...new Set(names)].sort(byCodePoint)

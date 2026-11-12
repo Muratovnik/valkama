@@ -26,6 +26,7 @@ import {
   expectNamesInView,
   expectWhole,
   measure,
+  NARROW_FRAME,
   openReport,
   pageAt,
   record,
@@ -278,7 +279,10 @@ for (const width of WIDTHS)
   }, info) => {
     await serve(page, WORLD)
     const uses = await serveTask(page)
-    const byModel = pageAt({ by: 'model' })
+    // A phone shows the section, not the list of sections, at each address of this walk.
+    const at = (state: Record<string, string>) =>
+      pageAt(width < NARROW_FRAME ? { ...state, open: 'section' } : state)
+    const byModel = at({ by: 'model' })
     const analytics = await openReport(page, width, byModel)
     const bars = analytics.locator('.spending-bars')
 
@@ -298,7 +302,8 @@ for (const width of WIDTHS)
     // By pointer: model-a, then its one task. A bar is named by its action, and a row of the
     // table a narrow page shows first by the value it heads.
     await bars.getByRole('button', { name: /^(Show the tasks of )?model-a$/u }).click()
-    const narrowed = pageAt({ filters: '{"model":["model-a"]}' })
+    // A narrowing breaks the view down by task, which the address names.
+    const narrowed = at({ by: 'work_item', filters: '{"model":["model-a"]}' })
     await expect.poll(() => path(page)).toBe(narrowed)
     await page.goBack()
     await expect.poll(() => path(page)).toBe(byModel)
@@ -331,7 +336,12 @@ for (const width of WIDTHS)
     )
     expect(landsOn).toBe(true)
     await page.mouse.click(point.x, point.y)
-    const tuesdayAlone = pageAt({ period: 'custom', from: '2026-11-10', to: '2026-11-10' })
+    const tuesdayAlone = at({
+      period: 'custom',
+      from: '2026-11-10',
+      to: '2026-11-10',
+      by: 'work_item',
+    })
     await expect.poll(() => path(page)).toBe(tuesdayAlone)
 
     // By keyboard: Tuesday, then its one task from the table. A day is named by its action in
@@ -343,9 +353,7 @@ for (const width of WIDTHS)
     const dayPresses = await tabTo(page, tuesday)
     const dayRing = await focusRing(tuesday)
     await page.keyboard.press('Enter')
-    await expect
-      .poll(() => path(page))
-      .toBe(pageAt({ period: 'custom', from: '2026-11-10', to: '2026-11-10' }))
+    await expect.poll(() => path(page)).toBe(tuesdayAlone)
     const row = analytics
       .locator('.spending-table')
       .getByRole('link', { name: 'MAIN-264 Import the planning documents' })

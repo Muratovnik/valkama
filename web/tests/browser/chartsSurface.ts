@@ -1,13 +1,16 @@
 /**
- * The harness page for the two chart primitives and their tables, drawn with the product
+ * The harness page for the chart primitives and their tables, drawn with the product
  * stylesheet at whatever width the test sets: names long enough to wrap, a month of days with a
- * change and a day still running, a day of hours that opens by the hour, and an empty chart.
+ * change and a day still running, a day of hours that opens by the hour, an empty chart, and a
+ * week of small multiples whose longest name is cut to one line; and the two small charts a tile
+ * draws, a trend and a share bar, at a tile's width on its ground.
  * What a press sent is written into one line, so a test reads the event the way a page would
  * receive it.
  */
 import { h, ref } from 'vue'
 
 import { seriesSlots } from '@/shared/lib/seriesColors.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type {
   PeriodColumn,
   PeriodSelection,
@@ -16,10 +19,19 @@ import type {
   RankedRow,
   RankedWords,
 } from '@/shared/ui/chartGeometry.ts'
+import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
+import MiniTrend from '@/shared/ui/MiniTrend.vue'
+import type {
+  MultiplePeriod,
+  MultiplesWords,
+  SmallMultiple,
+} from '@/shared/ui/multiplesGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
+import SmallMultiples from '@/shared/ui/SmallMultiples.vue'
+import SmallMultiplesTable from '@/shared/ui/SmallMultiplesTable.vue'
 
 const minutes = (value: number) =>
   value >= 60
@@ -80,10 +92,19 @@ const days: PeriodColumn[] = Array.from({ length: 30 }, (_, index) => {
   }
 })
 
+/** The hours stack work nobody can place too, in the neutral a ranked chart no longer draws. */
+const hourSeries: PeriodSeries[] = [
+  ...series.slice(1),
+  { key: 'unknown', label: 'Unknown', slot: 'other' },
+]
+
 const hours: PeriodColumn[] = Array.from({ length: 24 }, (_, hour) => ({
   key: `h${hour}`,
   label: `${String(hour).padStart(2, '0')}:00`,
-  values: hour < 8 || hour > 21 ? {} : { work: (hour * 7) % 45, ci: (hour * 11) % 15 },
+  values:
+    hour < 8 || hour > 21
+      ? {}
+      : { work: (hour * 7) % 45, ci: (hour * 11) % 15, unknown: hour % 3 ? 0 : 6 },
   ...(hour === 23 ? { incomplete: true } : {}),
 }))
 
@@ -96,6 +117,67 @@ const periodWords: PeriodWords = {
 }
 
 const marks = [{ at: '2026-10-12', label: 'Switched to the work account' }]
+
+/** The month's days as a trend: what each day's stack adds up to, a day with no figure among them. */
+const trend = days.map((day, index) => ({
+  key: day.key,
+  value:
+    index === 3 ? null : Object.values(day.values).reduce<number>((sum, one = 0) => sum + one, 0),
+  ...(day.incomplete ? { incomplete: true } : {}),
+}))
+
+/** Three projects' shares of a whole and what they leave out, which the neutral draws. */
+const shares = [
+  { key: 'core', share: 0.5 },
+  { key: 'web', share: 0.26 },
+  { key: 'docs', share: 0.04 },
+].map((part) => ({ ...part, slot: slots.get(part.key) ?? ('other' as SeriesSlot) }))
+const parts = [...shares, { key: 'rest', share: 0.2, slot: 'other' as const }]
+
+/** A week of days, for the small multiples. */
+const week: MultiplePeriod[] = Array.from({ length: 7 }, (_, index) => ({
+  key: `2026-10-${String(index + 24).padStart(2, '0')}`,
+  label: `Oct ${index + 24}`,
+}))
+
+/**
+ * Small multiples of the projects over the week: core's 240 minutes on the fourth day is the
+ * largest period on the shared scale, docs has a day with no figure, the folded tail shares the
+ * scale, and work with no task and unknown work stand apart, with 600 minutes that set nothing.
+ */
+/** A multiple's figure for the week: its days added up, a day with no figure adding nothing. */
+function weekTotal(values: readonly (number | null)[]) {
+  let total = 0
+  for (const value of values) if (value !== null) total += value
+  return total
+}
+
+const projectWeeks: (Pick<SmallMultiple, 'key' | 'kind' | 'values'> & { label?: string })[] = [
+  { key: 'core', values: [60, 120, 90, 240, 30, 0, 0] },
+  { key: 'web', values: [30, 45, 60, 20, 10, 0, 5] },
+  {
+    key: 'example-project-with-a-rather-long-repository-identifier',
+    values: [10, 0, 20, 40, 60, 0, 0],
+  },
+  { key: 'docs', values: [5, null, 15, 0, 10, 0, 0] },
+  { key: 'other', label: 'Other (5 projects)', values: [20, 10, 30, 10, 20, 5, 0], kind: 'other' },
+  { key: 'none', label: 'No task', values: [600, 0, 0, 0, 0, 0, 0], kind: 'none' },
+  { key: 'unknown', label: 'Unknown', values: [0, 4, 0, 0, 0, 0, 0], kind: 'unknown' },
+]
+const multiples: SmallMultiple[] = projectWeeks.map((one) => ({
+  ...one,
+  label: one.label ?? one.key,
+  valueText: minutes(weekTotal(one.values)),
+  slot: slots.get(one.key) ?? 'other',
+}))
+
+const multiplesWords: MultiplesWords = {
+  category: 'Project',
+  empty: 'No time recorded in this range.',
+  scale: 'Every chart from 0 to',
+  total: 'Week',
+  absent: 'No figure',
+}
 
 const section = (name: string, children: ReturnType<typeof h>[]) =>
   h('section', { 'class': 'charts-harness-section', 'data-harness': name }, children)
@@ -139,7 +221,7 @@ export function chartsSurface() {
           ...periodProps,
           label: 'Time per hour',
           columns: hours,
-          series: series.slice(1),
+          series: hourSeries,
           actionable: 'column',
           onSelect: onPeriod,
         }),
@@ -147,6 +229,19 @@ export function chartsSurface() {
       section('empty', [
         h(PeriodColumns, { ...periodProps, label: 'Nothing yet', columns: [] }),
         h(RankedBars, { label: 'Nothing ranked', rows: [], words: rankedWords }),
+      ]),
+      section('mini', [
+        h('div', { class: 'charts-harness-mini' }, [
+          h(MiniTrend, {
+            label: 'Time per day in October, the last day so far',
+            points: trend,
+          }),
+          h(MiniShareBar, {
+            label: 'Shares of time: core 50%, web 26%, docs 4%, the rest 20%',
+            parts,
+          }),
+          h(MiniShareBar, { label: 'Shares of time: no data', parts: [] }),
+        ]),
       ]),
       section('ranked-table', [
         h(RankedBarsTable, {
@@ -164,6 +259,23 @@ export function chartsSurface() {
           marks,
           actionable: 'segment',
           onSelect: onPeriod,
+        }),
+      ]),
+      section('multiples', [
+        h(SmallMultiples, {
+          label: 'Time per day of each project',
+          multiples,
+          words: multiplesWords,
+          formatValue: minutes,
+        }),
+      ]),
+      section('multiples-table', [
+        h(SmallMultiplesTable, {
+          label: 'Time per day of each project',
+          multiples,
+          periods: week,
+          words: multiplesWords,
+          formatValue: minutes,
         }),
       ]),
     ])

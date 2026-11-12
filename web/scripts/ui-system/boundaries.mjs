@@ -41,12 +41,17 @@ import { styleBlocks } from './sfc.mjs'
  * template. `GraphField` styles Vue Flow's pane, background, nodes and edges,
  * which the library renders and names.
  *
+ * `OverviewPanel` gives its chart's plot the room a tall window leaves under the
+ * cards: the plot is drawn by the shared period chart two components down, whose
+ * height is its own everywhere else, so the one panel that grows it says so here.
+ *
  * `ImprovementProfileDialog` uses `:global()` rather than `:deep()`: the overlay
  * host mounts its panel at the end of `<body>`, outside the subtree the scope
  * attribute reaches, so a scoped rule cannot land on it at all.
  */
 const scopeEscapeOwners = new Set([
   'app/components/AppContextBar.vue',
+  'pages/analytics/components/OverviewPanel.vue',
   'widgets/work-item-graph/components/GraphField.vue',
 ])
 

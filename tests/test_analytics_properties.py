@@ -25,7 +25,7 @@ from hypothesis import strategies as st
 
 from server.analytics import usage
 from server.planning import usage as item_usage
-from tests.analytics_fixtures import DAY, START, UsageStore, day
+from tests.analytics_fixtures import DAY, HOUR, START, UsageStore, day, stamp
 from tests.property_settings import use_gate_profile
 
 use_gate_profile()
@@ -82,18 +82,24 @@ def at(local_day: str, offset: int) -> Fraction:
 
 
 def cuts(begin: Fraction, end: Fraction, step: str, offset: int) -> list[Fraction]:
-    """The period's edges and every one of the caller's full hours or midnights inside it."""
+    """The period's edges and each of the caller's full minutes, hours or midnights inside it."""
 
     zone = dt.timezone(dt.timedelta(minutes=offset))
     moment = (START + dt.timedelta(seconds=float(begin))).astimezone(zone)
     if step == "day":
-        moment = moment.replace(hour=0, minute=0, second=0, microsecond=0) + dt.timedelta(days=1)
+        length = dt.timedelta(days=1)
+        moment = moment.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif step == "hour":
+        length = dt.timedelta(hours=1)
+        moment = moment.replace(minute=0, second=0, microsecond=0)
     else:
-        moment = moment.replace(minute=0, second=0, microsecond=0) + dt.timedelta(hours=1)
+        length = dt.timedelta(minutes=1)
+        moment = moment.replace(second=0, microsecond=0)
+    moment += length
     found = [begin]
     while (edge := Fraction((moment - START) // dt.timedelta(microseconds=1), 1_000_000)) < end:
         found.append(edge)
-        moment += dt.timedelta(days=1) if step == "day" else dt.timedelta(hours=1)
+        moment += length
     return [*found, end]
 
 
@@ -249,15 +255,22 @@ class ReferenceTests(UsageStore):
         @given(
             stretches=STRETCHES,
             offset=st.sampled_from([0, 180, -330, 840]),
-            step=st.sampled_from(["hour", "day"]),
+            step=st.sampled_from(["minute", "hour", "day"]),
+            early=st.integers(min_value=0, max_value=59_999),
         )
-        def check(stretches: list[dict], offset: int, step: str) -> None:
+        def check(stretches: list[dict], offset: int, step: str, early: int) -> None:
             self.write(stretches)
             begin, end = at(day(0), offset), at(day(3), offset)
+            if step == "minute":
+                # Three days by the minute are more steps than a period may hold, and the
+                # reference below would walk each: two hours, from the middle of a minute.
+                begin = at(day(1), offset) + Fraction(early, 1000)
+                end = begin + 2 * HOUR
             edges = cuts(begin, end, step, offset)
+            period = {"from": stamp(float(begin)), "to": stamp(float(end))}
             for grouping in GROUPINGS:
                 read = self.read(
-                    **{"from": day(0), "to": day(3), "step": step, "utc_offset": str(offset)},
+                    **{**period, "step": step, "utc_offset": str(offset)},
                     **({"group_by": ",".join(grouping)} if grouping else {}),
                 )
                 total, rows = Figures(), dict[tuple, Figures]()
@@ -332,5 +345,11 @@ class ReferenceTests(UsageStore):
             )
             hours = [Figures.of(read(0, 2, step="hour")["series"][index]) for index in range(48)]
             self.assertEqual(whole, Figures.summed(hours))
+            # A day by the minute: every hour is the sum of its sixty minutes.
+            minutes = [Figures.of(point) for point in read(0, 1, step="minute")["series"]]
+            self.assertEqual(
+                hours[:24],
+                [Figures.summed(minutes[hour * 60 : hour * 60 + 60]) for hour in range(24)],
+            )
 
         check()

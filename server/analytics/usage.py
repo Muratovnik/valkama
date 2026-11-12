@@ -78,11 +78,11 @@ DIMENSIONS = (
 ROLES = item_usage.ROLES
 
 #: The length of each step, in seconds. A day is always 24 hours at one offset.
-STEPS = {"hour": 3600, "day": 86400}
+STEPS = {"minute": 60, "hour": 3600, "day": 86400}
 _SECOND = 1_000_000
 _MILLISECOND = 1000
 MAX_GROUPS = 2
-#: A hundred days by the hour, or six and a half years by the day.
+#: Forty hours by the minute, a hundred days by the hour, or six and a half years by the day.
 MAX_STEPS = 2400
 #: The furthest any zone is from UTC.
 MAX_OFFSET_MINUTES = 14 * 60
@@ -229,7 +229,7 @@ def query(
     """A request checked whole, or a refusal naming the first thing wrong in it."""
 
     if step not in STEPS:
-        raise UsageQueryError("step must be hour or day")
+        raise UsageQueryError("step must be minute, hour or day")
     zone = caller_zone(utc_offset)
     begins, ends = _moment(start, "from", zone), _moment(end, "to", zone)
     if ends <= begins:

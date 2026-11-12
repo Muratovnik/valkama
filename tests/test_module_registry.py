@@ -197,6 +197,36 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertLessEqual(set(written), set(allowed))
         self.assertEqual(len(allowed), len(set(allowed)))
 
+    def test_analytics_state_admits_every_key_the_page_address_writes(self) -> None:
+        """A reload keeps the Analytics view only if the manifest admits its keys.
+
+        The browser drops a whole route state that names a key the manifest does
+        not list, so a section or a filter written into the address would come
+        back as the plain page. The keys are read from the one writer of that
+        address.
+        """
+
+        source = (
+            pathlib.Path(__file__).parents[1]
+            / "web"
+            / "src"
+            / "shared"
+            / "api"
+            / "analyticsAddress.ts"
+        ).read_text(encoding="utf-8")
+        writer = re.search(r"export function writeAddress\(.*?\n\}", source, flags=re.DOTALL)
+        self.assertIsNotNone(writer)
+        written = re.findall(r"\bstate\.(\w+) =", writer.group(0))
+        self.assertEqual(
+            ["period", "from", "to", "by", "measure", "filters", "open", "across"], written
+        )
+        analytics = next(
+            item for item in platform_modules.module_manifests() if item["module_id"] == "analytics"
+        )
+        allowed = analytics["state_schema"]["allowed_keys"]
+        self.assertLessEqual(set(written), set(allowed))
+        self.assertEqual(len(allowed), len(set(allowed)))
+
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
         """The four modules, enabled and fixed, the same from every door."""
 

@@ -2,11 +2,17 @@
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
+import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
+import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
+import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
+import { analyticsTimeMessages } from '@/shared/i18n/analyticsTimeMessages.ts'
+
 export const analyticsMessages = {
   en: {
     analytics: {
       title: 'Usage of agent work',
       failed: 'The usage of agent work could not be read.',
+      rail: analyticsRailMessages.en,
       unread: 'The period before could not be read, so no change is shown.',
       empty: {
         title: 'Nothing was spent in this period',
@@ -15,6 +21,7 @@ export const analyticsMessages = {
       },
       period: {
         label: 'Period',
+        now: 'Now',
         week: 'This week',
         weeks4: 'Past 4 weeks',
         custom: 'Custom',
@@ -24,7 +31,6 @@ export const analyticsMessages = {
         incomplete: 'Choose the first and the last day of the period.',
         choose: 'Choose the days of the period',
       },
-      by: 'Break down by',
       dimensions: {
         account: 'Account',
         project: 'Project',
@@ -67,14 +73,14 @@ export const analyticsMessages = {
         empty: 'This period spent nothing to break down.',
       },
       days: {
-        title: '{measure} per day, {by}',
+        title: '{measure} {per}, {by}',
         soFar: 'so far',
         note: 'Note',
-        day: 'Day',
         total: 'total',
         empty: 'No day in this period spent anything.',
         other: 'Other',
         accounts: 'Accounts: {before} → {after}',
+        changes: 'Account changes: {count}',
         accountsFailed:
           'The accounts that worked could not be read, so their changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
@@ -124,8 +130,6 @@ export const analyticsMessages = {
       },
       table: {
         title: 'Spending {by}',
-        beside: 'Spending {by}, beside {period}',
-        before: '{measure}, {period}',
         change: 'Change',
         unread: 'The period before was not read, so this table shows this period alone.',
         download: 'Download CSV',
@@ -155,8 +159,6 @@ export const analyticsMessages = {
         full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
       },
       filters: {
-        title: 'Filters',
-        titleCount: 'Filters · {count}',
         any: 'Any',
         clear: 'Clear filters',
         remove: 'Remove {label}',
@@ -165,12 +167,26 @@ export const analyticsMessages = {
         noMatches: 'No matches',
         full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
       },
+      frame: {
+        sections: 'Sections of the usage',
+        overview: 'Overview',
+        back: 'All sections',
+        addFilter: 'Add a filter',
+        filter: '{dimension}: {value}',
+        fresh: 'Newest record {at} · {ago}',
+        freshNone: 'Nothing recorded yet',
+        refresh: 'Refresh',
+      },
+      overview: analyticsOverviewMessages.en,
+      panel: analyticsPanelMessages.en,
+      time: analyticsTimeMessages.en,
     },
   },
   ru: {
     analytics: {
       title: 'Расход работы агентов',
       failed: 'Не удалось прочитать расход работы агентов.',
+      rail: analyticsRailMessages.ru,
       unread: 'Предыдущий период не удалось прочитать, поэтому изменение не показано.',
       empty: {
         title: 'За этот период ничего не потрачено',
@@ -179,6 +195,7 @@ export const analyticsMessages = {
       },
       period: {
         label: 'Период',
+        now: 'Сейчас',
         week: 'Эта неделя',
         weeks4: 'Последние 4 недели',
         custom: 'Свой',
@@ -188,7 +205,6 @@ export const analyticsMessages = {
         incomplete: 'Выберите первый и последний день периода.',
         choose: 'Выберите дни периода',
       },
-      by: 'В разрезе',
       dimensions: {
         account: 'Аккаунт',
         project: 'Проект',
@@ -231,14 +247,14 @@ export const analyticsMessages = {
         empty: 'В этом периоде нечего разбивать: ничего не потрачено.',
       },
       days: {
-        title: '{measure} по дням, {by}',
+        title: '{measure} {per}, {by}',
         soFar: 'пока',
         note: 'Примечание',
-        day: 'День',
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
         accounts: 'Аккаунты: {before} → {after}',
+        changes: 'Смен аккаунта: {count}',
         accountsFailed:
           'Не удалось прочитать, какие аккаунты работали, поэтому их смены не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
@@ -289,8 +305,6 @@ export const analyticsMessages = {
       },
       table: {
         title: 'Расход {by}',
-        beside: 'Расход {by} в сравнении с периодом {period}',
-        before: '{measure}, {period}',
         change: 'Изменение',
         unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
         download: 'Скачать CSV',
@@ -320,8 +334,6 @@ export const analyticsMessages = {
         full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',
       },
       filters: {
-        title: 'Фильтры',
-        titleCount: 'Фильтры · {count}',
         any: 'Любое',
         clear: 'Снять фильтры',
         remove: 'Убрать {label}',
@@ -330,6 +342,19 @@ export const analyticsMessages = {
         noMatches: 'Ничего не найдено',
         full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
       },
+      frame: {
+        sections: 'Разделы расхода',
+        overview: 'Обзор',
+        back: 'Все разделы',
+        addFilter: 'Добавить фильтр',
+        filter: '{dimension}: {value}',
+        fresh: 'Последняя запись {at} · {ago}',
+        freshNone: 'Записей ещё нет',
+        refresh: 'Обновить',
+      },
+      overview: analyticsOverviewMessages.ru,
+      panel: analyticsPanelMessages.ru,
+      time: analyticsTimeMessages.ru,
     },
   },
 } as const

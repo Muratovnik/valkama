@@ -6,6 +6,9 @@
  * address holds only so much: when those items do not fit in it, the link filters to the item
  * alone and says that it opens the item's own work, since the page will then show less than the
  * tab.
+ *
+ * The link names its section, the breakdown by task, rather than leaving it to the page's
+ * default: the page opens on its overview, and the tab's work is read task by task.
  */
 import {
   addressFits,
@@ -39,7 +42,7 @@ export function itemAnalyticsLink(
       ...usage.by_item.flatMap((line) => (line.work_item_id === null ? [] : [line.work_item_id])),
     ]),
   ]
-  const period = { ...DEFAULT_VIEW, ...spanned(usage.account_stretches) }
+  const period = { ...DEFAULT_VIEW, by: 'work_item' as const, ...spanned(usage.account_stretches) }
   const whole = { ...period, filters: { work_item: covered } }
   if (addressFits(whole)) return { href: analyticsPageAddress(whole), ownOnly: false }
   return {

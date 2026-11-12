@@ -28,6 +28,9 @@ import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
+// What the panel asks is counted and ordered here; the rail's own reads are held elsewhere.
+vi.mock('@/pages/analytics/composables/useRailReads.ts', () => import('../support/quietRail.ts'))
+
 function i18n(locale: 'en' | 'ru' = 'en') {
   return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages, pluralRules })
 }
@@ -216,12 +219,15 @@ describe('the Analytics page', () => {
     const link = writeAddress({ ...DEFAULT_VIEW, filters: { work_item: [ITEM.id ?? ''] } })
     const page = await mountAnalytics({ routeState: link })
     expect(reads.grouped('work_item')[0]?.get('work_item')).toBe(ITEM.id)
-    expect(page.get('.disclosure-toggle').text()).toBe('Filters · 1')
     // Only the task's own hour: the other project's two hours are not admitted.
     expect(time(page)).toBe('1 h')
-    // The chosen task is named, from the values its filter offers.
-    const chip = page.get('[data-dimension="work_item"]')
-    expect(chip.text()).toContain('MAIN-12 Answer a review in one form')
+    // The chosen task is named, from the values its filter offers: on the bar as a chip with
+    // its dimension, and in its field.
+    expect(page.findAll('.analytics-bar-filters .combo-chip').map((chip) => chip.text())).toEqual([
+      'Task: MAIN-12 Answer a review in one form',
+    ])
+    const field = page.get('[data-dimension="work_item"]')
+    expect(field.text()).toContain('MAIN-12 Answer a review in one form')
   })
 
   it('writes a change of the period into its address and reads it again from there', async () => {
@@ -248,8 +254,9 @@ describe('the Analytics page', () => {
 
   it("offers each filter's values from the scope's project alone", async () => {
     const reads = serve()
-    const page = await mountAnalytics({ projectId: 'sample' })
-    await page.get('.disclosure-toggle').trigger('click')
+    // The task section, whose reads are by task alone: the overview's cards read by model too.
+    const page = await mountAnalytics({ projectId: 'sample', routeState: { by: 'work_item' } })
+    await page.get('.analytics-filter-add').trigger('click')
     await flushPromises()
     const offers = reads.grouped('model')
     expect(offers).toHaveLength(1)
@@ -265,9 +272,12 @@ describe('the Analytics page', () => {
     const page = await mountAnalytics()
     expect(page.findAll('.period-mark')).toHaveLength(1)
 
-    // The new view's answer lands before its accounts: no mark until they do.
+    // The new view's answer lands before its accounts: no mark until they do. A filter that keeps
+    // both accounts makes it a new view, whose accounts are read anew; another section of the same
+    // view would take the accounts it has.
+    const main = JSON.stringify({ role: ['main'] })
     holding = true
-    await page.setProps({ routeState: { by: 'model' } })
+    await page.setProps({ routeState: { by: 'model', filters: main } })
     await flushPromises()
     expect(page.get('.spending-days h2').text()).toContain('by model')
     expect(page.findAll('.period-mark')).toHaveLength(0)
@@ -278,7 +288,7 @@ describe('the Analytics page', () => {
     expect(page.find('.spending-days-note').exists()).toBe(false)
 
     // An account read that fails says the marks are not there.
-    await page.setProps({ routeState: { by: 'role' } })
+    await page.setProps({ routeState: { by: 'role', period: 'weeks4', filters: main } })
     await flushPromises()
     reads.held[1]?.release({ status: 500 })
     await flushPromises()
@@ -288,13 +298,39 @@ describe('the Analytics page', () => {
     )
   })
 
+  it('swaps a refreshed answer in whole: its figures and account marks land together', async () => {
+    let world = WORLD
+    let holding = false
+    const reads = stubAnalyticsReads((query) =>
+      holding && query.get('group_by') === 'account' ? 'hold' : serveUsage(world, query),
+    )
+    const page = await mountAnalytics()
+    expect(time(page)).toBe('3 h')
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+
+    // The refresh's answer lands before its accounts: the last answer stays whole, marks and all.
+    const more = { at: on(10, 10), group: { ...sample, work_item: ITEM }, spend: { seconds: 3600 } }
+    world = [...WORLD, more]
+    holding = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(reads.held.length).toBeGreaterThan(0)
+    expect(time(page)).toBe('3 h')
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+
+    for (const held of reads.held) held.release(serveUsage(world, held.query))
+    await flushPromises()
+    expect(time(page)).toBe('4 h')
+    expect(page.findAll('.period-mark')).toHaveLength(1)
+  })
+
   it('asks only what a view change changes, with the filters open', async () => {
     const reads = serve()
-    const page = await mountAnalytics({ routeState: { period: 'weeks4' } })
+    const page = await mountAnalytics({ routeState: { period: 'weeks4', by: 'work_item' } })
     const asks = async (routeState?: Record<string, string>) => {
       const before = reads.asked.length
       if (routeState) await page.setProps({ routeState })
-      else await page.get('.disclosure-toggle').trigger('click')
+      else await page.get('.analytics-filter-add').trigger('click')
       await flushPromises()
       return reads.asked.length - before
     }
@@ -312,14 +348,17 @@ describe('the Analytics page', () => {
       week: await asks({ by: 'model', measure: 'cost' }),
     }
     // A view: its answer and its accounts, and for this week the same days of the week before;
-    // the values offered only when the period changes; nothing for the measure alone.
+    // the values offered only when the period changes; nothing for the measure alone. A read the
+    // view already asked is not asked again: the values offered for accounts are the page's own
+    // read of them, which another section takes as well, and with no filter set this week's read
+    // by model and by account are the values offered for those two.
     expect(counts).toEqual({
       opened: 2,
-      filtersOpened: 9,
-      by: 2,
+      filtersOpened: 8,
+      by: 1,
       measure: 0,
       filter: 2,
-      week: 3 + 9,
+      week: 3 + 9 - 2,
     })
   })
 
@@ -359,7 +398,8 @@ describe('the Analytics page', () => {
     const reads = stubAnalyticsReads((query) =>
       failing && weekBefore(query) ? { status: 500 } : serveUsage(world, query),
     )
-    const page = await mountAnalytics()
+    // The report of a section, whose banner says what is missing.
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } })
     // Not the empty state: that would say both periods spent nothing, and one was not read.
     expect(page.text()).not.toContain('Nothing was spent in this period')
     expect(time(page)).toBe('0 min')
@@ -380,7 +420,7 @@ describe('the Analytics page', () => {
 
   it('shows the figures of a week whose week before was not read, beside the words that say so', async () => {
     stubAnalyticsReads((query) => (weekBefore(query) ? { status: 500 } : serveUsage(WORLD, query)))
-    const page = await mountAnalytics({}, 'ru')
+    const page = await mountAnalytics({ routeState: { by: 'work_item' } }, 'ru')
     expect(time(page)).toBe('3 ч')
     expect(page.get('.spending-unread [role="status"]').text()).toBe(
       'Предыдущий период не удалось прочитать, поэтому изменение не показано.',

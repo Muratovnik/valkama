@@ -1,8 +1,9 @@
 /*
  * The plot of a chart of periods, read by `PeriodColumns` as its own scoped style: the frame it
  * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
- * beside them, the change numbers over them and the periods' names under — and what keeps the
- * scale in view while the periods scroll.
+ * beside them, the change numbers over them and the periods' names under — what keeps the
+ * scale in view while the periods scroll, and what a period's slot holds besides its stack: the
+ * outline of the period before, the ground of a period with no data yet and the line of a change.
  */
 
 /* A plot wider than the chart scrolls here, and the page never does. A period scrolled to
@@ -24,6 +25,7 @@
 
 .period-plot {
   --period-count: 1;
+  --period-column: var(--space-6);
 
   display: grid;
   grid-template-areas:
@@ -75,6 +77,7 @@
 
 .period-markers {
   grid-area: markers;
+  min-block-size: calc(1lh + var(--space-1));
   padding-block-end: var(--space-1);
 }
 
@@ -91,4 +94,94 @@
 .period-axis {
   grid-area: axis;
   padding-block-start: var(--space-2);
+}
+
+/* The period compared with: an open dashed edge as wide as the stack, over it and never under,
+   so it reads where it is higher and where it is lower without a hue of its own. Drawn in the
+   text's colour, it takes the forced palette's ink with the text. */
+.period-before {
+  position: absolute;
+  inset: auto 0 0;
+  inline-size: min(100%, var(--period-column));
+  margin-inline: auto;
+  border: var(--space-hair) dashed currentcolor;
+  border-block-end: 0;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-status) var(--radius-status) 0 0;
+  pointer-events: none;
+}
+
+/* A period with no data yet: a hatched ground as high as the plot and as wide as a stack, a
+   texture of the rule's tone and not a hue, so it never reads as a fall to zero; the mask cuts
+   the hatch. A forced palette keeps its lines in the quiet ink. */
+.period-pending {
+  position: absolute;
+  inset: 0;
+  inline-size: min(100%, var(--period-column));
+  margin-inline: auto;
+  background: var(--color-rule-strong);
+  mask-image: repeating-linear-gradient(
+    135deg,
+    black 0 var(--space-hair),
+    transparent var(--space-hair) var(--space-1)
+  );
+  pointer-events: none;
+
+  @media (forced-colors: active) {
+    background: GrayText;
+    forced-color-adjust: none;
+  }
+}
+
+/* A change at the start of a period: a line up the plot in the gap before the period. */
+.period-mark {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--space-hair) - var(--space-half));
+  inline-size: var(--space-hair);
+  background: var(--color-text-tertiary);
+  pointer-events: none;
+
+  /* A change is part of what the chart says, so it keeps its line in a forced palette. */
+  @media (forced-colors: active) {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
+/* Two lines whatever the period under the pointer holds, reserved from the start, so nothing
+   under it moves as the pointer passes: each line ends in an ellipsis and the readout's hint
+   says it whole (`usePeriodReadout`). */
+.period-readout {
+  display: grid;
+  grid-template-rows: 1lh 1lh;
+  block-size: 2lh;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hairlines at the scale's steps, recessive; the line at zero is the baseline the columns
+   stand on, one step stronger. */
+.period-grid {
+  position: absolute;
+  inset-inline: 0;
+  block-size: var(--space-hair);
+  background: var(--color-rule);
+  transform: translateY(50%);
+  pointer-events: none;
+
+  &.period-baseline {
+    background: var(--color-rule-strong);
+  }
+
+  /* A forced palette drops a painted background; the scale keeps its lines in the quiet ink. */
+  @media (forced-colors: active) {
+    &,
+    &.period-baseline {
+      background: GrayText;
+      forced-color-adjust: none;
+    }
+  }
 }

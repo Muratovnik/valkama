@@ -1,11 +1,20 @@
 /**
- * What the Analytics page shows, as its address holds it: the period, the dimension the charts
- * break work down by, the measure they draw and a filter per dimension. A reload or a pasted
- * link reads the same view back; a part the address does not hold is the default, and a part
- * it holds that this build cannot read is dropped rather than refusing the whole link.
+ * What the Analytics page shows, as its address holds it: the period, the section of the page on
+ * show — the overview or the dimension the charts break work down by — the measure they draw, a
+ * filter per dimension, whether a narrow screen shows that section in place of the list of
+ * sections, and the second dimension a section's table is crossed with. A reload or a pasted link reads the same view back; a part the address does not hold
+ * is the default, and a part it holds that this build cannot read is dropped rather than refusing
+ * the whole link.
+ *
+ * The section is written under `by`, the key that held the breakdown before the page had
+ * sections, so an address written then with a breakdown named opens the section of it. The
+ * overview is the one section that is no dimension, and the page opens on it: the plain address
+ * is the overview, and every dimension is named, the breakdown by task too. A plain address the
+ * page wrote before it had sections, when the plain page was the breakdown by task, therefore
+ * opens the overview, the period's figures with that breakdown's first values among them.
  *
  * A preset is kept as its name, not as its dates: «this week» in a link opened next week is
- * next week's week, as the words say.
+ * next week's week, as the words say, and «now» is the hour up to whenever it is opened.
  *
  * The one reader and the one writer of that address. The page reads its view here and writes
  * every change here; a way to the page from elsewhere, such as an item's Agents tab, writes its
@@ -15,33 +24,58 @@ import { isUsageDimension, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-export const PERIODS = ['week', 'weeks4', 'custom'] as const
+export const PERIODS = ['now', 'week', 'weeks4', 'custom'] as const
 export type PeriodPreset = (typeof PERIODS)[number]
 
 export const MEASURES = ['time', 'tokens', 'cost'] as const
 export type Measure = (typeof MEASURES)[number]
 
+/** The section of the page that is no dimension: the period's figures and its days. */
+export const OVERVIEW = 'overview'
+
+/** A section of the page: the overview, or a dimension the charts break work down by. */
+export type AnalyticsSection = UsageDimension | typeof OVERVIEW
+
 export interface AnalyticsView {
-  /** The dimension the bars and the stacks break work down by. */
-  by: UsageDimension
+  /** The second dimension a section's table crosses its own with; null for none. */
+  across: UsageDimension | null
+  /** The section on show: the overview, or the dimension the bars and the stacks break work down by. */
+  by: AnalyticsSection
   filters: UsageFilters
   /** The first and last day of a custom period, both included: `2030-03-04`. Empty otherwise. */
   from: string
   measure: Measure
+  /** Whether a screen too narrow for the list of sections beside a section shows the section. */
+  open: boolean
   period: PeriodPreset
   to: string
 }
+
+/** The dimension the overview's own read breaks work down by: its tasks, which it ranks. */
+const OVERVIEW_BREAKDOWN: UsageDimension = 'work_item'
 
 export const DEFAULT_VIEW: AnalyticsView = {
   period: 'week',
   from: '',
   to: '',
-  by: 'work_item',
+  by: OVERVIEW,
   measure: 'time',
   filters: {},
+  open: false,
+  across: null,
 }
 
+const isSection = (value: unknown): value is AnalyticsSection =>
+  value === OVERVIEW || isUsageDimension(value)
+
+/** The dimension a view's reads break work down by: its section's, or the overview's tasks. */
+export const breakdownOf = (view: AnalyticsView): UsageDimension =>
+  view.by === OVERVIEW ? OVERVIEW_BREAKDOWN : view.by
+
 type RouteState = Readonly<Record<string, string | number | boolean>>
+
+/** How the address says a narrow screen shows the section rather than the list of sections. */
+const OPEN = 'section'
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/u
 
@@ -107,9 +141,11 @@ export function readAddress(state: RouteState | undefined): AnalyticsView {
     period,
     from: date(state?.from),
     to: date(state?.to),
-    by: isUsageDimension(state?.by) ? state.by : DEFAULT_VIEW.by,
+    by: isSection(state?.by) ? state.by : DEFAULT_VIEW.by,
     measure: oneOf(MEASURES, state?.measure, DEFAULT_VIEW.measure),
     filters: readFilters(state?.filters),
+    open: state?.open === OPEN,
+    across: isUsageDimension(state?.across) ? state.across : null,
   }
 }
 
@@ -125,6 +161,8 @@ export function writeAddress(view: AnalyticsView): Record<string, string> {
   if (view.measure !== DEFAULT_VIEW.measure) state.measure = view.measure
   const filters = orderFilters(view.filters)
   if (Object.keys(filters).length) state.filters = JSON.stringify(filters)
+  if (view.open) state.open = OPEN
+  if (view.across) state.across = view.across
   return state
 }
 

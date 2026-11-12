@@ -183,6 +183,26 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
+    'shared/ui/PeriodNotes.vue <span> v-tooltip.detail="folded.whole"',
+    'each change of a chart with too many for a line each, where the line under it only counts them',
+  ],
+  [
+    'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="{ text: fresh.full, words: fresh.words }"',
+    'the day and the time of the newest record, where the bar says only how long ago it was; while its own words are cut, they come first, whole',
+  ],
+  [
+    'pages/analytics/components/AnalyticsBar.vue <p> v-tooltip.detail="liveWords"',
+    'that the period is live, where the bar shows only its mark and how often it reads itself again',
+  ],
+  [
+    'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: tile.leadDetail, words: tile.lead }"',
+    'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
+  ],
+  [
+    'pages/analytics/components/RailTile.vue <MiniShareBar> v-tooltip.detail="tile.shares.label"',
+    'every part of the share bar with its share, work on no value and the rest among them, where the tile says only the first',
+  ],
+  [
     `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
     'that a notification comes with the window closed too, and that a click on it opens the card; it stood as a paragraph over the group',
   ],
@@ -209,6 +229,10 @@ export const DETAIL_TOOLTIPS = new Map([
   [
     'shared/ui/OverlayResizer.vue <div> v-tooltip.detail="{ text: folded?.state, words: folded?.name }"',
     'that a folded edge holds a pane and how to bring it back; the edge is a line; while the pane’s name on it is cut, the name comes first, whole',
+  ],
+  [
+    'shared/ui/RankedBars.vue <span> v-tooltip.detail="{ text: row.detail, words: row.label }"',
+    'the whole id of a value its row names by the start of it, an account; while the name is cut, it comes first, whole',
   ],
   [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',

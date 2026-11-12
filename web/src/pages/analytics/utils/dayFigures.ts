@@ -1,6 +1,5 @@
 import {
   figureOf,
-  measureOf,
   spendingLines,
   spentAnything,
   spentOf,
@@ -15,17 +14,46 @@ import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
  * Words come in from the caller; this holds the numbers and which day is which.
  */
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
-import { SERIES_SLOT_COUNT, seriesSlots } from '@/shared/lib/seriesColors.ts'
+import type {
+  Usage,
+  UsageDimension,
+  UsageGroupValue,
+  UsageRow,
+  UsageStep,
+} from '@/shared/api/analyticsApi.ts'
+import { rankSlots } from '@/shared/lib/seriesColors.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type { PeriodColumn, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 
 /** How many values a day's stack names; the rest of the period's values stack as «other». */
 const STACKED = 5
 
-const DAY = 86_400_000
+const MINUTE = 60_000
+/** How long each step of a series is, in ms. */
+const STEP_LENGTH: Record<UsageStep, number> = {
+  minute: MINUTE,
+  hour: 60 * MINUTE,
+  day: 24 * 60 * MINUTE,
+}
 
-/** A day whose end has not come at the moment it was read holds what it spent so far. */
-const unfinished = (start: string, readAt: Date) => Date.parse(start) + DAY > readAt.getTime()
+/**
+ * A step running at the moment it was read holds what it spent so far: begun, and not over. One
+ * still to come holds nothing yet, and is no fall either.
+ */
+export function unfinished(start: string, step: UsageStep, readAt: Date) {
+  const begun = Date.parse(start)
+  const now = readAt.getTime()
+  return begun <= now && now < begun + STEP_LENGTH[step]
+}
+
+/**
+ * Whether a step has no data yet: it starts after the newest record the store read
+ * (`last_event_at`), so what it holds is not in yet, which is not nothing. The step that record
+ * falls in has data, and with no record read at all no step has any.
+ */
+export function notYet(start: string, lastEventAt: string | null) {
+  return lastEventAt === null || Date.parse(start) > Date.parse(lastEventAt)
+}
 
 /** A series of the stack: the line it draws, or «other» for the values it does not name. */
 export interface StackLine extends PeriodSeries {
@@ -33,30 +61,50 @@ export interface StackLine extends PeriodSeries {
 }
 
 /**
- * The values a stack names: work with no value there and unknown work, each its own series as
- * in the bars and never folded, and the period's largest categories in the measure, as many as
- * the palette has hues left for, up to `STACKED`; only values with anything to draw. Their hues
- * come from `seriesSlots` over that set, so a value keeps its hue whatever its rank; the rest of
- * the period is one «other» series in the neutral, on top.
+ * The page's one colour key of a dimension: its categories ranked by the measure over the rows
+ * (`spendingLines`), the first `STACKED` of them each a hue by rank. Work with no value there,
+ * unknown work and the folded rest are the neutral, never a hue. The rail's tile, the section's
+ * bars, small charts and day chart and the overview's chart all read this one key, so a value has
+ * one colour on the page; another measure ranks again and may repaint.
+ */
+export function rankedSlots(
+  rows: readonly UsageRow[],
+  dimension: UsageDimension,
+  measure: Measure,
+): Map<string, SeriesSlot> {
+  return rankSlots(
+    rankedCategories(rows, dimension, measure).map((line) => line.key),
+    STACKED,
+  )
+}
+
+/** The categories with a figure in the measure, largest first. */
+function rankedCategories(rows: readonly UsageRow[], dimension: UsageDimension, measure: Measure) {
+  return spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
+    (line) => line.kind === 'category' && figureOf(measure, line.spent) !== 0,
+  )
+}
+
+/**
+ * The values a stack names: the period's largest categories in the measure, up to `STACKED`, each
+ * in its hue of the page's key (`rankedSlots`), then work with no value there and unknown work,
+ * each its own series in the neutral and never folded; only values with anything to draw. The
+ * rest of the period is one «other» series in the neutral, on top.
  */
 export function stackLines({ usage, by: dimension, measure }: StackSource) {
-  const amount = (line: SpendingLine) => measureOf(measure, line.spent) ?? 0
   // A value with no figure in the measure stays, so its days can say it has none.
   const lines = spendingLines(usage.rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
     (line) => figureOf(measure, line.spent) !== 0,
   )
   const apart = lines.filter((line) => line.kind !== 'category')
-  const categories = lines
-    .filter((line) => line.kind === 'category')
-    .sort((left, right) => amount(right) - amount(left))
-  const room = Math.min(STACKED, SERIES_SLOT_COUNT - apart.length)
-  const named = [...apart, ...categories.slice(0, room)]
-  const slots = seriesSlots(named.map((line) => line.key))
-  const series: StackLine[] = [...slots].map(([key, slot]) => ({
-    key,
+  const categories = lines.filter((line) => line.kind === 'category')
+  const slots = rankedSlots(usage.rows, dimension, measure)
+  const named = [...categories.slice(0, STACKED), ...apart]
+  const series: StackLine[] = named.map((line) => ({
+    key: line.key,
     label: '',
-    slot,
-    line: named.find((line) => line.key === key) ?? null,
+    slot: slots.get(line.key) ?? 'other',
+    line,
   }))
   if (lines.length > named.length)
     series.push({ key: 'other', label: '', slot: 'other', line: null })
@@ -72,7 +120,8 @@ export interface StackSource {
 
 /**
  * Each day of the answer as a column of the measure, by the series of the stack. A value that
- * spent in a day with no figure in the measure is absent there, not a zero.
+ * spent in a day with no figure in the measure is absent there, not a zero, and a minute with no
+ * data yet (`notYet`) is pending, not a zero either.
  */
 export function dayColumns(
   { usage, by: dimension, measure }: StackSource,
@@ -91,11 +140,13 @@ export function dayColumns(
       if (figure === null) absent.add(into)
       else values[into] = (values[into] ?? 0) + figure
     }
+    const pending = usage.period.step === 'minute' && notYet(point.start, usage.last_event_at)
     return {
       key: point.start,
       values,
       absent: [...absent],
-      incomplete: unfinished(point.start, readAt),
+      incomplete: unfinished(point.start, usage.period.step, readAt),
+      ...(pending ? { pending } : {}),
     }
   })
 }

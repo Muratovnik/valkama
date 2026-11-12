@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import RankedBarsTable from '@/shared/ui/RankedBarsTable.vue'
+import { tooltipOf } from '@/shared/ui/tooltipAnchors.ts'
 
 const words: RankedWords = {
   category: 'Project',
@@ -59,13 +60,52 @@ describe('ranked bars', () => {
     )
   })
 
-  it('paints the categories in their slot and the rows that are not categories in the neutral', () => {
+  it('paints the categories in their slot, and gives the rows that are not categories their figure and no bar', () => {
     const chart = mountBars()
 
     expect(chart.get('[data-key="docs"] .ranked-bar').attributes('data-slot')).toBe('2')
     expect(chart.get('[data-key="web"] .ranked-bar').attributes('data-slot')).toBe('1')
-    for (const key of ['other', 'none', 'unknown'])
-      expect(chart.get(`[data-key="${key}"] .ranked-bar`).attributes('data-slot')).toBe('other')
+    for (const key of ['other', 'none', 'unknown']) {
+      expect(chart.find(`[data-key="${key}"] .ranked-bar`).exists()).toBe(false)
+      expect(chart.get(`[data-key="${key}"] .ranked-value`).text()).not.toBe('')
+    }
+  })
+
+  it('scales the categories by the largest of them, however large a row that is not one', () => {
+    const chart = mountBars([
+      ...rows,
+      { key: 'tail', label: 'Other (40)', value: 4000, valueText: '66 h', kind: 'other' },
+    ])
+
+    expect(chart.get('[data-key="core"] .ranked-bar').attributes('style')).toContain(
+      'inline-size: 100%',
+    )
+    expect(chart.get('[data-key="docs"] .ranked-bar').attributes('style')).toContain(
+      'inline-size: 25%',
+    )
+  })
+
+  it('keeps a name to one line with its whole words, and what it leaves out, in its hint', () => {
+    const chart = mountBars([
+      {
+        key: 'acct',
+        label: 'a1b2c3d4',
+        detail: 'a1b2c3d4-0000-4000-8000-00000000abcd',
+        value: 3,
+        valueText: '3 h',
+      },
+      { key: 'web', label: 'Web', value: 1, valueText: '1 h' },
+    ])
+    const account = chart.get('[data-key="acct"] .ranked-label')
+    const web = chart.get('[data-key="web"] .ranked-label')
+
+    expect(account.classes()).toContain('one-line')
+    expect(account.attributes('data-tooltip-kind')).toBe('detail')
+    expect(account.attributes('data-tooltip')).toBe('a1b2c3d4-0000-4000-8000-00000000abcd')
+    expect(tooltipOf(account.element)?.clipped).toBe(false)
+    // With nothing to add, the hint is the name itself, shown only while it is cut.
+    expect(web.attributes('data-tooltip')).toBe('Web')
+    expect(tooltipOf(web.element)?.clipped).toBe(true)
   })
 
   it('makes a row that opens something a button that says which row, and leaves the others inert', async () => {

@@ -5,14 +5,24 @@
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched and says so under its name, so a short last column does not read as a drop; a
  * change at the start of a period (the account switched) is a numbered line up the plot, and
- * the note under the chart says what changed. A series with no figure in a period (`absent`, such
- * as work with no price) draws nothing there, and the readout and the period's name say so
- * rather than a zero. `PeriodColumnsTable` is the same periods as a table.
+ * the note under the chart says what changed. A period compared with this one (`before`) stands
+ * on the same scale as a dashed outline over each column, an edge and not a hue, named in the
+ * legend, and the readout says its figure in words. A series with no figure in a period
+ * (`absent`, such as work with no price) draws nothing there, and the readout and the period's
+ * name say so rather than a zero. A period whose figures are not in yet (`pending`) stands as a
+ * hatched ground the plot's height, never a column of zero, and the readout and its name say it
+ * has no data yet. `PeriodColumnsTable` is the same periods as a table.
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
- * or the keyboard, each series by name. Presentational: data and words come in, a press on a
- * period (`actionable: 'column'`) or on one series in it (`'segment'`) goes out as `select`. A
+ * or the keyboard, each series by name, and the last period when neither stands on one. That
+ * readout is two lines high whatever it says (`usePeriodReadout`), and each note under the
+ * chart one (`PeriodNotes`): a longer line ends in an ellipsis and is whole in its hint, in the
+ * period's name and in the table, so pointing at a period, leaving it or a new answer moves
+ * nothing on the page.
+ *
+ * Presentational: data and words come in, a press on a period (`actionable: 'column'`) or on
+ * one series in it (`'segment'`) goes out as `select`. A
  * period that acts is named by what it does where the caller says (`action`), and what it holds
  * then describes it.
  * The periods are one stop for Tab (`useChartCursor`); the arrows move between them, and up
@@ -24,6 +34,7 @@
  */
 import { computed, ref, useId } from 'vue'
 
+import { pressedLast } from '@/shared/lib/pressFocus.ts'
 import type {
   PeriodChartProps,
   PeriodSelection,
@@ -34,7 +45,10 @@ import {
   changeMarkers,
   changeNotes,
   columnSummary,
+  columnWidth,
   dayTicks,
+  foldChanges,
+  roundAxis,
   segmentPlace,
   segmentSummary,
   stackColumns,
@@ -42,7 +56,10 @@ import {
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import PeriodNotes from '@/shared/ui/PeriodNotes.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
+import { usePeriodReadout } from '@/shared/ui/usePeriodReadout.ts'
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
 const props = withDefaults(defineProps<PeriodChartProps>(), {
@@ -52,7 +69,12 @@ const props = withDefaults(defineProps<PeriodChartProps>(), {
 
 const emit = defineEmits<{ select: [selection: PeriodSelection] }>()
 
-const chart = computed(() => stackColumns(props.columns, props.series, props.marks))
+const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
+const chart = computed(() => stackColumns(props.columns, props.series, props.marks, axis.value))
+/** The name of the outline of a period compared with, where the chart draws one. */
+const outline = computed(() =>
+  props.columns.some((column) => column.before) ? props.words.before : undefined,
+)
 const empty = computed(() => !props.columns.length || !props.series.length)
 const bySegment = computed(() => props.actionable === 'segment')
 
@@ -60,7 +82,7 @@ const acting = computed(() => props.actionable !== null)
 const frame = ref<HTMLElement | null>(null)
 const plot = ref<HTMLElement | null>(null)
 const field = ref<HTMLElement | null>(null)
-const { gutter, width } = usePlotFrame(
+const { gutter, reveal, width } = usePlotFrame(
   frame,
   plot,
   field,
@@ -68,26 +90,26 @@ const { gutter, width } = usePlotFrame(
 )
 
 const scale = computed<PlacedTick[]>(() =>
-  chart.value.ticks.map((tick) => ({
-    key: tick,
-    text: props.formatValue(tick),
-    offset: tick / chart.value.top,
+  chart.value.steps.map((step) => ({
+    key: step.value,
+    text: step.text,
+    offset: step.value / chart.value.top,
     edge: 'middle',
   })),
 )
 const days = computed(() => dayTicks(props.columns, width.value, props.words.incomplete))
 
 const notes = computed(() => changeNotes(chart.value.columns))
-const markers = computed(() => changeMarkers(notes.value, props.columns.length))
+const folded = computed(() => foldChanges(notes.value, props.words))
+const markers = computed(() =>
+  changeMarkers(notes.value, props.columns.length, folded.value === null),
+)
 
-const hovered = ref<number | null>(null)
-const focused = ref<number | null>(null)
-const shownIndex = computed(() => hovered.value ?? focused.value ?? chart.value.columns.length - 1)
-const readout = computed(() => {
-  const shown = chart.value.columns[shownIndex.value]
-  return shown ? columnSummary(shown, props.words, props.formatValue) : ''
-})
-const isShown = (index: number) => index === shownIndex.value
+const { focused, readout, isShown, point, hold } = usePeriodReadout(
+  () => chart.value.columns,
+  () => props.words,
+  () => props.formatValue,
+)
 
 const { move, standOn, tabStop } = useChartCursor(
   () => chart.value.columns,
@@ -138,9 +160,8 @@ function segmentAttrs(one: StackedColumn, index: number, at: number) {
   }
 }
 
-const stackStyle = (one: StackedColumn) => ({
-  blockSize: `${(one.total / chart.value.top) * 100}%`,
-})
+/** A figure's height on the chart's scale: a stack's total, or the outline of the period before. */
+const heightOf = (figure: number) => ({ blockSize: `${(figure / chart.value.top) * 100}%` })
 const gridClass = (tick: number) => ({ 'period-baseline': tick === 0 })
 const gridStyle = (tick: number) => ({ insetBlockEnd: `${(tick / chart.value.top) * 100}%` })
 
@@ -152,10 +173,15 @@ function press(one: StackedColumn, at: number | null) {
   if (acts(at) && (at === null || series)) emit('select', { column: one.column.key, series })
 }
 
-function focus(index: number, at: number | null) {
+/**
+ * A period or segment that takes focus is stood on; one the keyboard reached is brought clear of
+ * the scale too, while a press leaves the plot where the pointer found it.
+ */
+function focus(event: FocusEvent, index: number, at: number | null) {
   if (!acts(at)) return
   standOn(index, at)
   focused.value = index
+  if (!pressedLast() && event.currentTarget instanceof HTMLElement) reveal(event.currentTarget)
 }
 
 function key(event: KeyboardEvent, at: number | null) {
@@ -176,14 +202,19 @@ function key(event: KeyboardEvent, at: number | null) {
     />
     <template v-else>
       <ChartLegend
-        v-if="series.length > 1"
+        v-if="series.length > 1 || outline"
         :series="series"
+        :outline="outline"
       />
       <p
+        v-tooltip.clipped="readout.whole"
         class="period-readout"
         aria-hidden="true"
+        @pointerenter="hold(true)"
+        @pointerleave="hold(false)"
       >
-        {{ readout }}
+        <span class="one-line">{{ readout.head }}</span>
+        <span class="one-line">{{ readout.series }}</span>
       </p>
       <div
         ref="frame"
@@ -194,7 +225,10 @@ function key(event: KeyboardEvent, at: number | null) {
         <div
           ref="plot"
           class="period-plot"
-          :style="{ '--period-count': columns.length }"
+          :style="{
+            '--period-count': columns.length,
+            '--period-column': `${columnWidth(columns.length, width)}px`,
+          }"
         >
           <span
             v-if="acting"
@@ -231,15 +265,20 @@ function key(event: KeyboardEvent, at: number | null) {
                 class="period-slot"
                 :data-key="one.column.key"
                 :data-shown="isShown(index)"
-                @pointerenter="hovered = index"
-                @pointerleave="hovered = null"
+                @pointerenter="point(index)"
+                @pointerleave="point(null)"
               >
+                <span
+                  v-if="one.column.pending"
+                  class="period-pending"
+                  aria-hidden="true"
+                />
                 <component
                   :is="columnTag"
                   class="period-column"
                   v-bind="columnAttrs(one, index)"
                   @click="press(one, null)"
-                  @focus="focus(index, null)"
+                  @focus="(event: FocusEvent) => focus(event, index, null)"
                   @blur="focused = null"
                   @keydown="(event: KeyboardEvent) => key(event, null)"
                 >
@@ -252,7 +291,7 @@ function key(event: KeyboardEvent, at: number | null) {
                   <span
                     class="period-stack"
                     :class="{ 'period-incomplete': one.column.incomplete }"
-                    :style="stackStyle(one)"
+                    :style="heightOf(one.total)"
                   >
                     <component
                       :is="segmentTag"
@@ -264,12 +303,18 @@ function key(event: KeyboardEvent, at: number | null) {
                       :style="segmentStyle(one, at)"
                       v-bind="segmentAttrs(one, index, at)"
                       @click="press(one, at)"
-                      @focus="focus(index, at)"
+                      @focus="(event: FocusEvent) => focus(event, index, at)"
                       @blur="focused = null"
                       @keydown="(event: KeyboardEvent) => key(event, at)"
                     />
                   </span>
                 </component>
+                <span
+                  v-if="one.column.before"
+                  class="period-before"
+                  aria-hidden="true"
+                  :style="heightOf(one.column.before ?? 0)"
+                />
                 <span
                   v-if="one.marks.length"
                   class="period-mark"
@@ -285,20 +330,11 @@ function key(event: KeyboardEvent, at: number | null) {
           />
         </div>
       </div>
-      <ol
+      <PeriodNotes
         v-if="notes.length"
-        class="period-notes"
-      >
-        <li
-          v-for="note in notes"
-          :key="note.number"
-          class="period-note"
-        >
-          <span class="period-note-number">{{ note.number }}</span>
-          <span>{{ note.period }}</span>
-          <span>{{ note.text }}</span>
-        </li>
-      </ol>
+        :notes="notes"
+        :folded="folded"
+      />
     </template>
   </figure>
 </template>
@@ -315,44 +351,10 @@ function key(event: KeyboardEvent, at: number | null) {
   margin: 0;
 }
 
-/* Two lines held for it, so a period that reads out longer than the last does not move the
-   plot under the pointer. */
-.period-readout {
-  min-block-size: 2lh;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  font-variant-numeric: tabular-nums;
-}
-
 .period-field {
   position: relative;
   grid-area: field;
   block-size: 160px;
-}
-
-/* Hairlines at the scale's steps, recessive; the line at zero is the baseline the columns
-   stand on, one step stronger. */
-.period-grid {
-  position: absolute;
-  inset-inline: 0;
-  block-size: var(--space-hair);
-  background: var(--color-rule);
-  transform: translateY(50%);
-  pointer-events: none;
-
-  &.period-baseline {
-    background: var(--color-rule-strong);
-  }
-
-  /* A forced palette drops a painted background; the scale keeps its lines in the quiet ink. */
-  @media (forced-colors: active) {
-    &,
-    &.period-baseline {
-      background: GrayText;
-      forced-color-adjust: none;
-    }
-  }
 }
 
 .period-bars {
@@ -396,7 +398,7 @@ function key(event: KeyboardEvent, at: number | null) {
 /* The period under the pointer or the keyboard lifts, and the readout says what it holds. */
 .period-stack {
   position: relative;
-  inline-size: min(100%, var(--space-6));
+  inline-size: min(100%, var(--period-column));
 
   .period-slot[data-shown='true'] & {
     filter: brightness(1.2);
@@ -430,42 +432,5 @@ function key(event: KeyboardEvent, at: number | null) {
       rgb(0 0 0 / 40%) var(--space-half) var(--space-1)
     );
   }
-}
-
-/* A change at the start of a period: a line up the plot in the gap before the period. */
-.period-mark {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: calc(var(--space-hair) - var(--space-half));
-  inline-size: var(--space-hair);
-  background: var(--color-text-tertiary);
-  pointer-events: none;
-
-  /* A change is part of what the chart says, so it keeps its line in a forced palette. */
-  @media (forced-colors: active) {
-    background: CanvasText;
-    forced-color-adjust: none;
-  }
-}
-
-.period-notes {
-  display: grid;
-  gap: var(--space-1);
-  padding: 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  list-style: none;
-}
-
-.period-note {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-}
-
-.period-note-number {
-  color: var(--color-text-tertiary);
-  font-variant-numeric: tabular-nums;
 }
 </style>

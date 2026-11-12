@@ -40,17 +40,21 @@ const props = defineProps<{ label: string; module: ModuleFrameModule }>()
   min-height: 100%;
   padding: var(--space-6) var(--size-page-gutter) var(--space-12);
   margin: 0 auto;
-
-  &.module-sessions {
-    width: 100%;
-    height: 100%;
-    padding: 0;
-  }
 }
 
 @container workspace (width <= 696px) {
   .module-frame-content {
     padding-bottom: var(--space-24);
   }
+}
+
+/* A module that lays out the whole of the frame itself, scrolling its own parts: Analytics is
+   a bar over a rail and a panel, each of which scrolls, so the frame holds it at its own size
+   and has nothing of it to scroll. It stands after the narrow frame's room at the foot and
+   takes that room away: such a module keeps its own, inside the part that scrolls. */
+.module-frame-content:is(.module-sessions, .module-analytics) {
+  width: 100%;
+  height: 100%;
+  padding: 0;
 }
 </style>

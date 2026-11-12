@@ -386,7 +386,7 @@ test('in a forced palette the series, the neutral, the floor, a change and the r
       canvasText: system('CanvasText'),
       grayText: system('GrayText'),
       segment: style('[data-harness="days"] .period-segment').backgroundColor,
-      neutral: style('[data-harness="ranked"] .ranked-rest .ranked-bar').backgroundColor,
+      neutral: style('[data-harness="hours"] .period-segment[data-slot="other"]').backgroundColor,
       floor: style('[data-harness="days"] .period-baseline').backgroundColor,
       change: style('[data-harness="days"] .period-mark').backgroundColor,
       hatch: style('[data-harness="days"] .period-incomplete > .period-segment').maskImage,

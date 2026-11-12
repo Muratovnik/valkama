@@ -59,12 +59,18 @@ table {
 
 /* One owner for text that only assistive technology should reach. Five
    components had grown their own copy of this, three of them still using the
-   deprecated clip property. */
+   deprecated clip property.
+
+   The margin takes its pixel back. Placed where its text would have stood, the
+   box still has one, and the status line the shell keeps after everything else
+   stood a pixel under a window-high shell, so the document scrolled by it on
+   every screen. */
 .visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
   padding: 0;
+  margin: calc(-1 * 1px);
   white-space: nowrap;
   overflow: hidden;
   clip-path: inset(50%);

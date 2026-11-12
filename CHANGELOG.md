@@ -10,6 +10,44 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **The Analytics page is rebuilt as a monitor.** A rail down the side holds a tile for
+  the overview and one for each of the nine dimensions — account, project, task,
+  executor, role, launch class, model, effort and environment — each with its leading
+  value, its share and a small bar of the split, so every breakdown is in view before any
+  is opened. The overview shows the period's agent time, tokens and cost estimate as
+  cells that choose the measure, the period chart with the period before as a dashed
+  outline, the tasks that grew and fell the most, and the first five tasks, models, roles
+  and projects. A dimension's section shows its values as ranked bars, as small charts on
+  one scale and as a table that scrolls in its own frame with its heading, names and
+  total held in view; the table sorts by any column, takes a second dimension, downloads
+  as CSV and can take the whole panel. The page fills the window instead of one narrow
+  column, and on a narrow screen the rail and a section take turns.
+- **Nothing on the Analytics page moves under the pointer.** The line that says the
+  period under the pointer keeps one line whatever it says, and so do the notes under a
+  chart; a longer text ends in an ellipsis and is whole in its hint and in the chart's
+  table. Tiles, cells and charts keep their size while figures arrive.
+- **A chart's time axis counts in one round unit.** Agent time on an axis reads in
+  minutes, hours or days, whichever fits the largest value, instead of mixing days and
+  hours in one tick.
+
+### Added
+
+- **A live period, «Now».** The Analytics page shows the last hour by the minute and
+  reads it again every 30 seconds while the tab is visible; a hidden tab asks nothing. A
+  refresh moves nothing and keeps the scroll, the section and the sort. The bar says how
+  old the newest record is, in seconds, and the minutes after it are hatched as «no data
+  yet» rather than drawn as a drop: on a working machine records arrive in batches up to
+  a minute and a half apart.
+
+- **The usage read answers by the minute.** `GET /api/analytics/usage` takes
+  `step=minute` beside `hour` and `day`, so a client can draw the last hour as it is
+  spent. A minute starts on the caller's full minute, and a period still holds at most
+  2,400 steps, which is forty hours by the minute. A stretch of work is split between its
+  minutes in proportion to its time, as it is between hours, so a minute's tokens and
+  cost are a share of the stretch, not a count of what was sent in that minute.
+
 ## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
 
 ### Added

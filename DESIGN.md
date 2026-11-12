@@ -853,10 +853,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   card wins over it. A hint is words; anything with a control in it is `InfoTip`.
   `check:ui-system` refuses a `title` an element or a component's root would get, a hint
   that states no kind and a `detail` its register does not hold.
-- **Charts:** two primitives answer "how much, and of what". `RankedBars` breaks one
-  measure down by one dimension, largest first: a name, the value as it reads and a bar as
-  long as its share of the longest. `PeriodColumns` stands a column per day or hour, stacked
-  by a few series. Each has a table twin (`RankedBarsTable`, `PeriodColumnsTable`) that holds
+- **Charts:** three primitives answer "how much, and of what". `RankedBars` breaks one
+  measure down by one dimension, largest first: a name on one line (cut with an ellipsis, whole
+  in its hint), the value as it reads and a bar as long as its share of the longest category.
+  `PeriodColumns` stands a column per day or hour, stacked by a few series. `SmallMultiples`
+  draws one small chart of the span per leading value, all on one scale whose top is written
+  once over them, each with its name on one line and its figure; the folded tail shares the
+  scale, while «no task» and «unknown» close the charts by name and figure and set nothing. Each
+  has a table twin (`RankedBarsTable`, `PeriodColumnsTable`, `SmallMultiplesTable`) that holds
   every number its chart draws and opens what the chart opens; a page shows it beside the
   chart or instead of it, and a twin wider than its column scrolls in its own frame
   (`ChartTable`, `keyScroll`) rather than widening the page. They are boxes of HTML on the tokens, not a chart library, which the
@@ -865,12 +869,20 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
   order, never by rank, so a filter repaints nothing — out of six `--color-series-*` hues
   ordered so that neighbours in a stack stay apart under protanopia and deuteranopia. A
-  seventh series folds into `--color-series-other`, the neutral that also draws the rows that
-  are not categories — the folded tail, «no task», «unknown» — which close a ranked chart in
-  a list of their own, unranked, their names in the quiet ink. A hue never speaks alone: a
-  chart of two series or more carries a legend, and the readout over the plot and every
-  accessible name say each series by name. A period still running is hatched (a mask, which
-  adds no colour) and says «so far» under its name, so it does not read as a drop; a change
+  seventh series folds into `--color-series-other`, the neutral that also draws, in a stack,
+  the rows that are not categories — the folded tail, «no task», «unknown». In a section's
+  ranked chart and small charts «no task» and «unknown» stand where their figures put them,
+  drawn on the same scale in that neutral with their names in the quiet ink, since the largest
+  share of a period can be work on no task; only the folded tail closes the chart, apart and
+  unranked, and sets no scale. Elsewhere, as in a card of first values, all three close the
+  chart in a list of their own, set apart by air, draw no bar and are read by their figures.
+  A hue
+  never speaks alone: a chart of two series or more carries a legend, and the readout over the
+  plot and every accessible name say each series by name. The readout says the period under the
+  pointer or the keyboard, the last one when neither stands on one, and keeps one line whatever
+  it says, as each note under the chart does: a longer text ends in an ellipsis and is whole in
+  its hint and in the table, so pointing, leaving and a new answer move nothing on the page. A
+  period still running is hatched (a mask, which adds no colour) and says «so far» under its name, so it does not read as a drop; a change
   at a period's start, such as the account the work ran under, is a numbered line up the
   plot with its words under the chart. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own. A period that acts when pressed is never
@@ -878,7 +890,28 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   than the chart scrolls sideways inside the plot and never moves the page, opens on its
   last periods, keeps the value axis in view over the plot's start, and brings a period the
   keyboard reaches clear of that axis with its focus ring whole. Periods that only show
-  keep sharing the chart's width, however narrow that makes them.
+  keep sharing the chart's width, however narrow that makes them. A period compared with the
+  one shown stands on the same scale as an open dashed outline over each column, an edge and
+  not a hue: the legend names it beside a short dashed edge, the readout says its figure beside
+  the sum, and the table gives it a column after the sum. A single day stands by the hour, and
+  an hour only shows. Where a ranked chart shares a row with others, as a card of first values
+  does, it is `dense`: the name and the value on one line and a thin bar under them.
+  Two small charts stand beside a figure rather than in a section of their own, as the
+  Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
+  scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,
+  largest first, with what they leave out last in the neutral. Each is one image whose words say
+  what it draws — the highest and the last period, every part with its share — so neither is read
+  by its shape or its hue alone: columns and parts stand apart by a gap of ground, a period still
+  running is hatched, and a forced palette draws the marks in its ink and the floor, the rest and
+  an empty track in its quiet ink. Neither acts or moves under the pointer, and each keeps its
+  height with nothing to draw, so the tile around it never moves when its figures arrive.
+  A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
+  day — and its name beside it.
+  A table that is the subject of its panel, as a dimension's breakdown, takes the height the
+  charts above it leave and scrolls in its own frame, which keeps the wheel to itself: its
+  heading row, its names and its total row stay in view however far it scrolls. Each heading
+  sorts by its column, and a line under the frame that never scrolls away says how many rows
+  it shows of how many, how they are sorted, and downloads what it shows in that order.
 - **Empty and error states:** one shared state component (`DataEmptyState`)
   explains what is absent, why it matters, and the next valid action when one
   exists. It stands in the middle of the space the data would fill when a whole
@@ -1999,6 +2032,50 @@ The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there. The card's Execution
 tab is off by default, and a switch in Settings turns it on.
+
+### Analytics
+
+Analytics is a monitor of what agent work spent, and it fills the window: a bar, a rail
+and a panel. Nothing in it moves under the pointer or when an answer arrives; a part that
+has nothing to say yet keeps the room it will need.
+
+The bar holds what every part reads by: the period, the filters, how old the newest
+record is and the refresh. A period is «Now», this week, the past four weeks or a span
+of days. «Now» is the last hour by the minute; it reads again every 30 seconds while the
+tab is visible and says so in the bar, a hidden tab asks nothing, and a refresh shows its
+answer whole or not at all, so the scroll, the section, the sort and the place under the
+pointer stay. Records reach the store in batches, so the bar says the newest record's
+age in seconds and the minutes after it are hatched as «no data yet» rather than drawn
+as a drop; the minute chart says under itself that its figures are an estimate.
+
+The rail holds a tile for the overview and one for each dimension of the read: account,
+project, task, executor, role, launch class, model, effort and environment. A tile is a
+summary of its own — the leading value, its share, how many values there are and one bar
+of the split — so every breakdown is in view before any is opened, and choosing a tile
+opens its section in the panel. The rail and the panel stand side by side only while the
+panel keeps 640 pixels; narrower, a section takes the rail's place and a way back stands
+over it. A plain address opens the overview.
+
+The overview answers «how much, and is that more than before»: three cells — agent time,
+tokens and the cost estimate at API prices — each with its change against the period
+before, and the chosen cell sets the measure of everything else on the page; the period
+chart with the period before as a dashed outline; the tasks that grew and fell the most;
+and the first five tasks, models, roles and projects, each card opening its section.
+
+A dimension's section answers «of what»: the same cells, then its values three ways. The
+ranked bars list the first twelve and say how many more the table holds; the small charts
+draw each leading value's days on one scale; the table lists every value with the figures
+of the period and of the period before. Work with no value in the dimension — on no task,
+of an unknown model — is ranked where its figure puts it, in the neutral colour. A value
+keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
+a day. Beside the rail the section is held to the window: the cells stay in view, the
+charts take what they hold up to a share of the rest and scroll inside it, and the table
+takes what is left and scrolls in its own frame, its heading, names and total held; a
+button gives the table the whole panel and gives it back. The table sorts by any column,
+crosses with a second dimension and downloads what it shows.
+
+A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
+are counted apart from the tokens processed anew and never summed into them.
 
 ### Settings
 

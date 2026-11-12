@@ -11,15 +11,28 @@
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
  * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
+ *
+ * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
+ * each named by its clock time. A minute after the newest record read has no data yet, which it
+ * shows and says rather than a zero, and a note under the minutes says their figures are an
+ * estimate: each stretch of work shared out by its time in each. Given the steps of the period
+ * before (`before`), each column carries the figure of the step it is compared with, drawn as a
+ * dashed outline on the same scale, named in the legend and said in the readout and the table;
+ * while those steps are read there is no outline, and when they could not be read a note under
+ * the chart says so. A `brief` chart, standing beside the titles of its tasks, names
+ * each task by its number alone.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
+import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
 import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
+import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
@@ -36,6 +49,10 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
+  /** The steps of the period before, to outline behind each column; none outlined without. */
+  before?: BeforeSteps | null
+  /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
+  brief?: boolean
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
@@ -45,25 +62,45 @@ const emit = defineEmits<{ day: [day: string, label: string] }>()
 const { t } = useI18n()
 const words = useSpendingWords()
 
-const title = computed(() => words.dayChartTitle(props.measure, props.by))
+/** How the period is cut: by days, which narrow the view, or by hours or minutes, which do not. */
+const step = computed(() => props.usage.period.step)
+const byDay = computed(() => step.value === 'day')
+
+const title = computed(() => words.stepChartTitle(props.measure, props.by, step.value))
+
+/** The steps of the period before, when they were read. */
+const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
+
+/** What the step compared with the column at `index` holds; nothing when none is compared. */
+function beforeOf(index: number) {
+  const step = beforeSteps.value?.[index]
+  return step ? { before: figureOf(props.measure, spentOf(step)) } : {}
+}
+
+/** A series' name: its value's, or by its task's number alone where the chart is `brief`. */
+function seriesName(line: StackLine['line']) {
+  if (!line) return t('analytics.days.other')
+  const reference = props.brief && props.by === 'work_item' ? line.value?.reference : null
+  return reference ?? words.lineLabel(props.by, line)
+}
 
 const series = computed(() =>
-  stackLines(props).map((one) => ({
-    ...one,
-    label: one.line ? words.lineLabel(props.by, one.line) : t('analytics.days.other'),
-  })),
+  stackLines(props).map((one) => ({ ...one, label: seriesName(one.line) })),
 )
 
 const chart = computed<PeriodChartProps>(() => ({
   label: title.value,
   series: series.value,
-  columns: dayColumns(props, series.value, props.readAt).map((column) => ({
+  columns: dayColumns(props, series.value, props.readAt).map((column, index) => ({
     ...column,
-    label: words.day(column.key),
-    fullLabel: words.fullDay(column.key),
-    action: t('analytics.drill.day', { day: words.fullDay(column.key) }),
+    ...words.stepName(column.key, step.value),
+    ...beforeOf(index),
+    ...(byDay.value
+      ? { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }
+      : {}),
   })),
-  actionable: 'column',
+  // An hour or a minute narrows to the day it is already of, so only a day acts.
+  actionable: byDay.value ? 'column' : null,
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts).map((change) => ({
@@ -74,13 +111,17 @@ const chart = computed<PeriodChartProps>(() => ({
   words: {
     // Time is always counted; tokens and a price can be absent from a day that spent.
     absent: props.measure === 'time' ? undefined : t(`analytics.days.absent.${props.measure}`),
+    before: t('analytics.overview.before.word'),
+    changes: (count: number) => t('analytics.days.changes', { count }),
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
     note: t('analytics.days.note'),
-    period: t('analytics.days.day'),
+    pending: t('analytics.time.notYet'),
+    period: t(`analytics.time.steps.${step.value}.name`),
     total: t('analytics.days.total'),
   },
   formatValue: (amount: number) => words.scale(props.measure, amount),
+  valueAxis: words.axis(props.measure),
 }))
 
 function select({ column }: PeriodSelection) {
@@ -101,10 +142,22 @@ function select({ column }: PeriodSelection) {
         @select="select"
       />
       <p
+        v-if="before === 'failed'"
+        class="spending-days-note"
+      >
+        {{ t('analytics.overview.before.failed') }}
+      </p>
+      <p
         v-if="accounts === 'failed'"
         class="spending-days-note"
       >
         {{ t('analytics.days.accountsFailed') }}
+      </p>
+      <p
+        v-if="step === 'minute'"
+        class="spending-days-note spending-days-estimate"
+      >
+        {{ t('analytics.time.estimate') }}
       </p>
     </template>
     <template #table>
@@ -117,6 +170,12 @@ function select({ column }: PeriodSelection) {
         class="spending-days-note"
       >
         {{ t('analytics.days.accountsFailed') }}
+      </p>
+      <p
+        v-if="step === 'minute'"
+        class="spending-days-note spending-days-estimate"
+      >
+        {{ t('analytics.time.estimate') }}
       </p>
     </template>
   </ChartSection>

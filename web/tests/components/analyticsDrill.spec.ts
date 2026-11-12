@@ -32,15 +32,15 @@ const MONDAY = new Date(2026, 10, 9, 10)
 const model = (number: number) => `model-${String(number).padStart(2, '0')}`
 
 /**
- * Twelve tasks on Monday, each under its own model and each an hour shorter than the one
- * before, so by model ten values stand and two fold into «Other». Work with no task and work no
- * one can place go under the first model, and Tuesday has work of no known model.
+ * Ten tasks on Monday, each under its own model and each an hour shorter than the one before,
+ * so a ranked list names every value by task and by model. Work with no task and work no one can
+ * place go under the first model, and Tuesday has work of no known model.
  */
 const WORLD: TimedStretch[] = [
-  ...Array.from({ length: 12 }, (_, index) => ({
+  ...Array.from({ length: 10 }, (_, index) => ({
     at: MONDAY,
     group: { work_item: task(index + 1, `Task ${index + 1}`), model: value(model(index + 1)) },
-    spend: { seconds: (13 - index) * 3600 },
+    spend: { seconds: (11 - index) * 3600 },
   })),
   { at: MONDAY, group: { work_item: noTask, model: value(model(1)) }, spend: { seconds: 1800 } },
   {
@@ -122,7 +122,9 @@ describe('a value pressed on the Analytics page', () => {
     const host = await mountPage({ by: 'model' })
 
     await host.get('.spending-bars [aria-label="Show the tasks of model-02"]').trigger('click')
-    expect(written(host)).toEqual([[{ filters: '{"model":["model-02"]}' }, 'push']])
+    expect(written(host)).toEqual([
+      [{ by: 'work_item', filters: '{"model":["model-02"]}' }, 'push'],
+    ])
 
     await follow(host)
     const read = reads.grouped('work_item').at(-1)
@@ -145,7 +147,9 @@ describe('a value pressed on the Analytics page', () => {
     const row = host.get('.spending-table th button[aria-description="Show the tasks of model-03"]')
     expect(row.text()).toBe('model-03')
     await row.trigger('click')
-    expect(written(host)).toEqual([[{ filters: '{"model":["model-03"]}' }, 'push']])
+    expect(written(host)).toEqual([
+      [{ by: 'work_item', filters: '{"model":["model-03"]}' }, 'push'],
+    ])
   })
 
   it('narrows the view to a day pressed in the chart of days, then opens a task of it', async () => {
@@ -157,7 +161,7 @@ describe('a value pressed on the Analytics page', () => {
 
     await days[1]?.trigger('click')
     expect(written(host)).toEqual([
-      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10' }, 'push'],
+      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }, 'push'],
     ])
 
     await follow(host)
@@ -181,7 +185,7 @@ describe('a value pressed on the Analytics page', () => {
     vi.setSystemTime(Date.now() + 1000)
     await segment?.trigger('click')
     expect(written(host)).toEqual([
-      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10' }, 'push'],
+      [{ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }, 'push'],
     ])
   })
 
@@ -198,22 +202,21 @@ describe('a value pressed on the Analytics page', () => {
     const own = host.findAll('.spending-bars button.ranked-line')
     expect(own).toHaveLength(1)
     await own[0]?.trigger('click')
-    expect(written(host)).toEqual([[{ filters: '{"launch_class":[null]}' }, 'push']])
+    expect(written(host)).toEqual([
+      [{ by: 'work_item', filters: '{"launch_class":[null]}' }, 'push'],
+    ])
     await follow(host)
     expect(reads.grouped('work_item').at(-1)?.get('none')).toBe('launch_class')
   })
 })
 
 describe('what is not a control', () => {
-  it('leaves unknown work and the folded tail as lines, by model and by task', async () => {
+  it('leaves unknown work and work on no task as lines, by model and by task', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const byModel = await mountPage({ by: 'model' })
     const lines = byModel.findAll('.spending-bars .ranked-line')
     const plain = lines.filter((line) => line.element.tagName === 'DIV')
-    expect(plain.map((line) => line.get('.ranked-label').text())).toEqual([
-      'Other, 2 more',
-      'Unknown',
-    ])
+    expect(plain.map((line) => line.get('.ranked-label').text())).toEqual(['Unknown'])
     for (const line of plain) {
       expect(line.attributes('tabindex')).toBeUndefined()
       expect(line.attributes('role')).toBeUndefined()
@@ -225,15 +228,11 @@ describe('what is not a control', () => {
     expect(tableUnknown?.find('button, a').exists()).toBe(false)
     byModel.unmount()
 
-    const byTask = await mountPage({})
+    const byTask = await mountPage({ by: 'work_item' })
     const taskLines = byTask.findAll('.spending-bars .ranked-line')
     const notLinks = taskLines.filter((line) => line.element.tagName !== 'A')
-    expect(notLinks.map((line) => line.element.tagName)).toEqual(['DIV', 'DIV', 'DIV'])
-    expect(notLinks.map((line) => line.get('.ranked-label').text())).toEqual([
-      'Other, 2 more',
-      'No task',
-      'Unknown',
-    ])
+    expect(notLinks.map((line) => line.element.tagName)).toEqual(['DIV', 'DIV'])
+    expect(notLinks.map((line) => line.get('.ranked-label').text())).toEqual(['No task', 'Unknown'])
     expect(byTask.findAll('.spending-bars button.ranked-line')).toHaveLength(0)
   })
 })
@@ -266,15 +265,16 @@ describe('the row headings of the page’s tables', () => {
       narrows('model-02'),
       plain('Unknown'),
     ])
-    expect(headingsOf(byModel, '.spending-bars', ['model-02', 'Other, 2 more', 'Unknown'])).toEqual(
-      [narrows('model-02'), plain('Other, 2 more'), plain('Unknown')],
-    )
+    expect(headingsOf(byModel, '.spending-bars', ['model-02', 'Unknown'])).toEqual([
+      narrows('model-02'),
+      plain('Unknown'),
+    ])
     expect(headingsOf(byModel, '.spending-days', ['Tuesday, November 10'])).toEqual([
       narrows('Tuesday, November 10'),
     ])
     byModel.unmount()
 
-    const byTask = await mountPage({})
+    const byTask = await mountPage({ by: 'work_item' })
     await showTable(byTask, '.spending-bars')
     for (const section of ['.spending-table', '.spending-bars'])
       expect(headingsOf(byTask, section, ['MAIN-1 Task 1', 'No task', 'Unknown'])).toEqual([
@@ -316,7 +316,7 @@ describe('a narrowing the address cannot hold', () => {
     // The same press in the table says it there, in Russian.
     host.unmount()
     const ru = await mountPage({ by: 'model', filters }, 'ru')
-    await ru.get(`.spending-table th button`).trigger('click')
+    await ru.get(`.spending-table tbody th button`).trigger('click')
     expect(written(ru)).toEqual([])
     expect(ru.get('.spending-table [role="alert"]').text()).toBe(
       `Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «${LONG}» не показаны. Снимите фильтр, чтобы освободить место.`,

@@ -19,8 +19,9 @@ export const pageAt = (state: Record<string, string> = {}) =>
 const NOW = new Date(2026, 10, 11, 14, 30)
 const on = (day: number) => new Date(2026, 10, day, 10)
 
-const WORK = value('work@example.test')
-const NIGHT = value('night@example.test')
+/** Two accounts, each an organization's id as the store holds it; the page names it by its start. */
+const WORK = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
+const NIGHT = value('d4e8a1f0-7c2b-4e5d-8f36-a1b2c3d4e5f6')
 
 /** Twelve tasks with long titles, work on no task and work nobody can place, over three days. */
 const STRETCHES: Stretch[] = [
@@ -127,11 +128,29 @@ export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore =
   })
 }
 
-/** Opens the page at `width` and waits for the report: its tiles and its days. */
-export async function openReport(page: Page, width: number, address = pageAt()) {
+/**
+ * Under this window width the page shows its list of sections or one section, not both. The page
+ * decides on its own box, which leaves the panel beside the rail at least 640 pixels or takes
+ * turns: in the app's frame a window of 1200 pixels does the first and one of 1024 the second.
+ */
+export const NARROW_FRAME = 1200
+
+/** The task section's report, which the page showed at its plain address before it opened on its overview. */
+export const TASK_REPORT = pageAt({ by: 'work_item' })
+
+/**
+ * Opens the page at `width` and waits for the report: its tiles and its days; the report of the
+ * task section unless an address is given. A window too narrow for the rail beside the panel
+ * opens on the list of sections unless the address says otherwise, and the section the address
+ * names is chosen there, as a reader would.
+ */
+export async function openReport(page: Page, width: number, address = TASK_REPORT) {
   await page.setViewportSize({ width, height: 1000 })
   await page.goto(address)
   const analytics = page.locator('.analytics-page')
+  await analytics.locator('.analytics-rail:visible, .analytics-panel:visible').first().waitFor()
+  if (!(await analytics.locator('.analytics-panel').isVisible()))
+    await analytics.locator('.analytics-rail [aria-current="page"]').click()
   await expect(analytics.locator('.tile-figure[data-measure="time"]')).toBeVisible()
   await expect(analytics.locator('.spending-days')).toBeVisible()
   return analytics
@@ -201,24 +220,36 @@ export async function measure(page: Page) {
         height: Math.round(height),
       }
     }
+    /** Where an element's content starts: its box, moved in by its padding at the start. */
+    const contentStart = (element: Element | null) => {
+      const found = box(element)
+      if (!element || !found) return null
+      return {
+        ...found,
+        x: Math.round(found.x + Number.parseFloat(getComputedStyle(element).paddingLeft)),
+      }
+    }
     const root = document.documentElement
     // The charts and the table beside the period before, in the page's order.
     const sections = [...document.querySelectorAll<HTMLElement>('.chart-section, .spending-table')]
     return {
       viewport: root.clientWidth,
       pageScroll: root.scrollWidth - root.clientWidth,
-      page: box(document.querySelector('.analytics-page')),
-      // Where each part starts: the controls, the filters' chevron (its button reaches out by
-      // its fill's inset, by design), the tiles' box and the charts' headings, which stand on
-      // one edge of the page.
+      // The panel's content, which every part of the report starts at.
+      page: contentStart(document.querySelector('.analytics-panel')),
+      // Where each part starts: the tiles' box and the charts' headings, which stand on one
+      // edge of the panel.
       edges: [
-        '.analytics-controls',
-        '.disclosure-toggle svg',
         '.spending-tiles',
         '.spending-bars h2',
         '.spending-days h2',
         '.spending-table h2',
       ].map((selector) => box(document.querySelector(selector))?.x ?? null),
+      // The bar's content and its first control, the period, which starts it.
+      bar: [
+        contentStart(document.querySelector('.analytics-page-bar'))?.x ?? null,
+        box(document.querySelector('.analytics-period'))?.x ?? null,
+      ],
       tiles: [...document.querySelectorAll('.spending-tiles .segmented-option')].map((tile) =>
         box(tile),
       ),
@@ -249,6 +280,8 @@ export function expectWhole(measured: Awaited<ReturnType<typeof measure>>) {
     expect((section.box?.x ?? 0) + (section.box?.width ?? 0)).toBeLessThanOrEqual(measured.viewport)
   for (const edge of measured.edges)
     expect(Math.abs((edge ?? Number.NaN) - (measured.page?.x ?? 0))).toBeLessThanOrEqual(1)
+  const [barStart = null, period = null] = measured.bar
+  expect(Math.abs((period ?? Number.NaN) - (barStart ?? 0))).toBeLessThanOrEqual(1)
   // A table wider than its frame scrolls in it, and still leaves each row's name its words:
   // a day squeezed to a letter a line is not readable as a table.
   for (const section of measured.sections)

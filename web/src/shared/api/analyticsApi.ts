@@ -38,6 +38,10 @@ const VALUE = /^[^\u{0}]{1,512}$/u
 const MOMENT = /^\d{4}-\d{2}-\d{2}T[^\s]{1,80}$/u
 const RUN_TEXT = /^[^\u{0}]{1,200}$/u
 
+/** How a period's series is cut: by the minute, by the hour, or by the day, the default. */
+const USAGE_STEPS = ['minute', 'hour', 'day'] as const
+export type UsageStep = (typeof USAGE_STEPS)[number]
+
 const seconds = () => z.number().nonnegative()
 const moment = () => boundedText(MOMENT, 96)
 const onTheSide = () => z.string().max(200)
@@ -80,7 +84,7 @@ const usageSchema = strictObject({
   period: strictObject({
     from: moment(),
     to: moment(),
-    step: enumField(['day', 'hour'] as const),
+    step: enumField(USAGE_STEPS),
     utc_offset: z.number().int().min(-840).max(840),
   }),
   group_by: z.array(z.enum(USAGE_DIMENSIONS)).max(2),
@@ -122,6 +126,8 @@ export interface UsageQuery {
   /** Not included; a date or a time, as `from`. */
   to: string
   utcOffset: number
+  /** How the series is cut: by day, the default, by hour or by minute. */
+  step?: UsageStep
 }
 
 /** The query string of a read: each filter by its dimension's name, and `none` for the rest. */
@@ -129,7 +135,7 @@ export function usageParameters(query: UsageQuery): URLSearchParams {
   const parameters = new URLSearchParams({
     from: query.from,
     to: query.to,
-    step: 'day',
+    step: query.step ?? 'day',
     utc_offset: String(query.utcOffset),
   })
   if (query.groupBy.length) parameters.set('group_by', query.groupBy.join(','))

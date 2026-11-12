@@ -1,7 +1,8 @@
 /**
  * How the Analytics page names what it shows: a dimension, and a value of one as a card or the
  * rail already names it — a task by its number and title, a project by its name, a session by
- * its client and the start of its id. Work with no value — no task, a session's own run — and a
+ * its client and the start of its id, an account by the start of its id as an item's card does
+ * (`valueDetail` is the whole id). Work with no value — no task, a session's own run — and a
  * value nobody can place say so in words of their own, per dimension: «unknown» is said only of
  * what nobody can place.
  */
@@ -12,14 +13,26 @@ import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
+import { agentIdStart } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
-import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
+import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { durationAxis } from '@/shared/ui/durationAxis.ts'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
+
+/** A period shorter than this is named by its clock times, a longer one by its days. */
+const DAY = 24 * 3_600_000
+
+/** A time of the clock, «09:05», «21:25»: the clock the minutes of a chart read on. */
+const CLOCK: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+
+/** The charts count time in hours (`scale`). */
+const HOUR_SECONDS = 3600
 
 /**
  * The dimensions where work with no value is a value of its own (`id` null, not unknown): work
@@ -27,6 +40,18 @@ const SESSION_PREFIX = 8
  * value, and a filter's «none» admits an unknown one instead.
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
+
+/**
+ * What a value's name leaves out, for its hint and its table: the whole id of an account, which
+ * the page names by the start of it; nothing where the name is the whole of what it says.
+ */
+function valueDetail(name: UsageDimension, value: UsageGroupValue | null) {
+  const id = value?.id
+  return name === 'account' && id && agentIdStart(id) !== id ? id : undefined
+}
+
+/** The space no line breaks at. */
+const NO_BREAK = '\u{A0}'
 
 export function useSpendingWords() {
   const i18n = useI18n()
@@ -50,6 +75,17 @@ export function useSpendingWords() {
     new Intl.DateTimeFormat(i18n.locale.value, { ...options, timeZone: 'UTC' })
 
   /**
+   * A span of agent time, one wording wherever the page says one: exactly nothing «0 min», more
+   * than nothing and under a minute «under a minute», more in its two largest units. Seconds
+   * come from hours on a chart's scale, so they are taken to the millisecond first: a minute
+   * read back from its hours is a minute, not a hair under one.
+   */
+  function duration(seconds: number) {
+    const held = Math.round(seconds * 1000) / 1000
+    return held > 0 ? usage.time(held) : t('time.minutes', { count: 0 })
+  }
+
+  /**
    * A measure's figure as a line reads it (`figureOf`): a zero in its unit for one that spent
    * nothing there, and words for one the read does not hold — no price, no tokens counted —
    * never a zero.
@@ -58,7 +94,7 @@ export function useSpendingWords() {
     const amount = figureOf(name, spent)
     if (amount === null)
       return t(name === 'tokens' ? 'analytics.figures.noTokens' : 'analytics.figures.noPrice')
-    if (name === 'time') return usage.time(spent.seconds) || t('time.minutes', { count: 0 })
+    if (name === 'time') return duration(spent.seconds)
     return name === 'tokens' ? compact(amount) : usage.cost(amount)
   }
 
@@ -97,9 +133,18 @@ export function useSpendingWords() {
     return [t('analytics.figures.anew', { kinds: counted.join(', ') }), ...apart]
   }
 
-  /** A period by its first and last day, as its moments name them: «2 – 8 Nov». */
-  function days(from: string, to: string) {
-    return dayFormat({ day: 'numeric', month: 'short' }).formatRange(named(from), named(to, -1))
+  /**
+   * A period as its moments name it: by its first and last day, «2 – 8 Nov», or, shorter than a
+   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds. A line
+   * breaks only after the dash: never inside a date, and never with the dash starting a line.
+   */
+  function period(from: string, to: string) {
+    const short = Date.parse(to) - Date.parse(from) < DAY
+    const options: Intl.DateTimeFormatOptions = short ? CLOCK : { day: 'numeric', month: 'short' }
+    return dayFormat(options)
+      .formatRange(named(from), named(to, -1))
+      .replaceAll(/\s/gu, NO_BREAK)
+      .replace(`–${NO_BREAK}`, '– ')
   }
 
   /**
@@ -155,6 +200,7 @@ export function useSpendingWords() {
       return [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
+    if (name === 'account') return agentIdStart(value.id)
     return value.id
   }
 
@@ -203,15 +249,36 @@ export function useSpendingWords() {
   const fullDay = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(named(start))
 
+  /** An hour or a minute as the time axis names it, «14:05», and in full with its day. */
+  const clock = (start: string) => dayFormat(CLOCK).format(named(start))
+  const fullClock = (start: string) =>
+    dayFormat({ weekday: 'long', day: 'numeric', month: 'long', ...CLOCK }).format(named(start))
+
+  /** A step of a period by its start, short and in full: a day by its date, else its time. */
+  const stepName = (start: string, step: UsageStep) =>
+    step === 'day'
+      ? { label: day(start), fullLabel: fullDay(start) }
+      : { label: clock(start), fullLabel: fullClock(start) }
+
+  /** How a chart is cut by its steps: «per day», «per minute». */
+  const per = (step: UsageStep) => t(`analytics.time.steps.${step}.per`)
+
   /** A step of the value axis in the measure's units: hours as a span, tokens, dollars. */
   function scale(name: Measure, amount: number) {
+    if (name === 'time') return duration(amount * HOUR_SECONDS)
     if (amount <= 0) return '0'
-    if (name === 'time') return usage.time(amount * 3600)
     if (name === 'tokens') return compact(amount)
     return new Intl.NumberFormat(i18n.locale.value, { style: 'currency', currency: 'USD' }).format(
       amount,
     )
   }
+
+  /**
+   * The value axis of a measure that needs its own: time in one unit chosen by the largest
+   * value, minutes, hours or days, where a figure says «3 d 23 h»; none for the others.
+   */
+  const axis = (name: Measure) =>
+    name === 'time' ? durationAxis(spanWordsOf(t), HOUR_SECONDS) : undefined
 
   /** What changed in the accounts that worked: «Accounts: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
@@ -220,18 +287,26 @@ export function useSpendingWords() {
       after: after.map((value) => valueLabel('account', value)).join(', '),
     })
 
-  const dayChartTitle = (name: Measure, by: UsageDimension) =>
-    t('analytics.days.title', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
+  /** The chart of a period step by step: «Agent time per minute, by task». */
+  const stepChartTitle = (name: Measure, by: UsageDimension, step: UsageStep) =>
+    t('analytics.days.title', {
+      measure: measure(name),
+      per: per(step),
+      by: t(`analytics.byDimension.${by}`),
+    })
 
   return {
     accounts,
+    axis,
     change,
     chartTitle,
     day,
-    dayChartTitle,
     fullDay,
     scale,
-    days,
+    period,
+    per,
+    stepChartTitle,
+    stepName,
     dimension,
     figure,
     lineChange,
@@ -241,6 +316,7 @@ export function useSpendingWords() {
     noneLabel,
     tokenKinds,
     unpriced,
+    valueDetail,
     valueLabel,
   }
 }

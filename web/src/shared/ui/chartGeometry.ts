@@ -38,19 +38,32 @@ export interface RankedRow {
   /** Whether pressing the row opens what it names. */
   actionable?: boolean
   /**
+   * What the label leaves out, said in its hint: the whole id of a value the label names by
+   * the start of it.
+   */
+  detail?: string
+  /**
    * Where the row leads, on this origin: the row is then a link, which a press hands out as
    * `follow` and a modified or middle press takes elsewhere as any link is taken.
    */
   href?: string
   kind?: RankedRowKind
+  /**
+   * Whether a row ranked among the categories names no value, such as work on no task in a list
+   * that ranks it by its figure: its name is then in the quiet ink, slanted, as a note is.
+   */
+  quiet?: boolean
   /** The hue of a row that names a series drawn elsewhere on the page; slot 1 otherwise. */
   slot?: SeriesSlot
 }
 
 export interface PlacedRow extends RankedRow {
   kind: RankedRowKind
-  /** The bar's length as a share of the longest bar, from 0 to 1. */
-  length: number
+  /**
+   * The bar's length as a share of the longest category's, from 0 to 1; null for a row that is
+   * not a category, which is not drawn on the categories' scale.
+   */
+  length: number | null
 }
 
 export interface RankedWords {
@@ -67,19 +80,28 @@ const REST_ORDER: readonly RankedRowKind[] = ['other', 'none', 'unknown']
 
 /**
  * The categories largest first, then the rows that are not categories in a fixed order. A tie
- * keeps one order whatever order the rows came in. Every bar is measured against the longest of
- * all of them, the folded tail included, so a tail larger than any one category is not cut.
+ * keeps one order whatever order the rows came in. A bar is measured against the longest
+ * category: the folded tail, work with no task and unknown work sum many values or none, so one
+ * of them would set a scale that leaves every category short. They draw no bar (`length` null)
+ * and are read by their figures. With `rankAll`, as a section of the Analytics page asks, work
+ * with no value and unknown work are ranked and drawn on the categories' scale, and only the
+ * folded tail closes the chart.
  */
-export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; rest: PlacedRow[] } {
-  const longest = Math.max(0, ...rows.map((row) => drawable(row.value)))
-  const place = (row: RankedRow): PlacedRow => ({
-    ...row,
-    kind: row.kind ?? 'category',
-    length: longest ? drawable(row.value) / longest : 0,
-  })
-  const ranked = rows
-    .filter((row) => (row.kind ?? 'category') === 'category')
-    .map((row) => place(row))
+export function rankRows(
+  rows: readonly RankedRow[],
+  /** Rank work with no value and unknown work among the categories, by their figures. */
+  rankAll = false,
+): { ranked: PlacedRow[]; rest: PlacedRow[] } {
+  const ranks = (row: RankedRow) =>
+    (row.kind ?? 'category') === 'category' || (rankAll && row.kind !== 'other')
+  const categories = rows.filter((row) => ranks(row))
+  const longest = Math.max(0, ...categories.map((row) => drawable(row.value)))
+  const ranked = categories
+    .map((row) => ({
+      ...row,
+      kind: row.kind ?? 'category',
+      length: longest ? drawable(row.value) / longest : 0,
+    }))
     .sort(
       (left, right) =>
         drawable(right.value) - drawable(left.value) ||
@@ -87,7 +109,9 @@ export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; res
         byCodePoint(left.key, right.key),
     )
   const rest = REST_ORDER.flatMap((kind) =>
-    rows.filter((row) => row.kind === kind).map((row) => place(row)),
+    rows
+      .filter((row) => row.kind === kind && !ranks(row))
+      .map((row) => ({ ...row, kind, length: null })),
   )
   return { ranked, rest }
 }
@@ -115,10 +139,20 @@ export interface PeriodColumn {
    * Monday, 9 November". What the period holds then describes it.
    */
   action?: string
+  /**
+   * What the period it is compared with held at this place, drawn as a dashed outline on the same
+   * scale; null where that period has no figure, and undefined where nothing is compared.
+   */
+  before?: number | null
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
   incomplete?: boolean
+  /**
+   * A period whose figures are not in yet, such as one after the newest record read: no data,
+   * which is not zero. It is drawn as a hatched ground with no sum, and says so in words.
+   */
+  pending?: boolean
 }
 
 /** Something that changed at the start of a period, such as the account the work ran under. */
@@ -140,7 +174,16 @@ export interface PeriodWords {
   total: string
   /** What a series with no figure in a period says before its names: "No price". */
   absent?: string
+  /** The words before the figure of the period compared with, and the heading over them. */
+  before?: string
   emptyDescription?: string
+  /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
+  pending?: string
+  /**
+   * The one line under the chart that counts its changes where there are too many for a line
+   * each (`foldChanges`): "Account changes: 12". Without it every change has its line.
+   */
+  changes?: (count: number) => string
 }
 
 /** What a press in a period chart opens: a period, or one series in it. */
@@ -155,9 +198,23 @@ export interface PeriodChartProps {
   /** What a press opens, if anything: a whole period, or one series in it. */
   actionable?: 'column' | 'segment' | null
   marks?: readonly PeriodMark[]
+  /**
+   * The value axis, where its steps are other than round steps said as `formatValue` says a
+   * value: a span of time in one unit (`durationAxis`).
+   */
+  valueAxis?: ValueAxis
   /** A value as the reader reads it, for the scale, the readout, the names and the table. */
   formatValue: (value: number) => string
 }
+
+/** A step of a value axis: where it stands, in the chart's units, and what it says. */
+export interface AxisStep {
+  text: string
+  value: number
+}
+
+/** The steps of a value axis from zero up to the first one at or past `largest`. */
+export type ValueAxis = (largest: number) => AxisStep[]
 
 export interface PeriodSelection {
   column: string
@@ -190,24 +247,33 @@ export const hasSum = (stacked: StackedColumn) =>
 /**
  * Round steps from zero up to the first one at or past the largest value: 1, 2, 2.5 or 5 times
  * a power of ten, about four of them. The axis always starts at zero, because a column's height
- * is its amount.
+ * is its amount. Counting `whole` units, a step is a whole number of them, never less than one.
  */
-export function valueTicks(largest: number, target = 4): number[] {
+export function valueTicks(largest: number, target = 4, whole = false): number[] {
   if (largest <= 0 || !Number.isFinite(largest)) return [0]
-  const rough = largest / target
+  const rough = whole ? Math.max(1, largest / target) : largest / target
   const power = 10 ** Math.floor(Math.log10(rough))
-  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * power).find((size) => size >= rough)
+  const step = [1, 2, 2.5, 5, 10]
+    .map((factor) => factor * power)
+    .find((size) => size >= rough && (!whole || Number.isInteger(size)))
   const size = step ?? 10 * power
   const count = Math.ceil(largest / size - 1e-9)
   return Array.from({ length: count + 1 }, (_, index) => Number((index * size).toPrecision(12)))
 }
 
-/** Each period's stack, and the scale they stand on. */
+/** Round steps of a value axis, each said as `format` says a value. */
+export const roundAxis =
+  (format: (value: number) => string): ValueAxis =>
+  (largest) =>
+    valueTicks(largest).map((value) => ({ value, text: format(value) }))
+
+/** Each period's stack, and the scale they stand on: round steps unless an axis is given. */
 export function stackColumns(
   columns: readonly PeriodColumn[],
   series: readonly PeriodSeries[],
   marks: readonly PeriodMark[] = [],
-): { columns: StackedColumn[]; ticks: number[]; top: number } {
+  axis: ValueAxis = roundAxis(String),
+): { columns: StackedColumn[]; steps: AxisStep[]; ticks: number[]; top: number } {
   const stacked = columns.map((column) => {
     const segments: StackSegment[] = []
     let reached = 0
@@ -221,8 +287,11 @@ export function stackColumns(
     const absent = series.filter((one) => column.absent?.includes(one.key))
     return { column, total: reached, segments, marks: notes, absent }
   })
-  const ticks = valueTicks(Math.max(0, ...stacked.map((one) => one.total)))
-  return { columns: stacked, ticks, top: ticks.at(-1) || 1 }
+  // The period compared with stands on the same scale, so its outline is never cut off.
+  const before = columns.map((column) => drawable(column.before ?? 0))
+  const steps = axis(Math.max(0, ...stacked.map((one) => one.total), ...before))
+  const ticks = steps.map((step) => step.value)
+  return { columns: stacked, steps, ticks, top: ticks.at(-1) || 1 }
 }
 
 /**
@@ -278,6 +347,20 @@ function edgeOf(index: number, count: number): PlacedTick['edge'] {
   return 'middle'
 }
 
+/** The narrowest a period's column is drawn, and the widest it grows where its period has room. */
+const COLUMN = { least: 24, most: 56 }
+
+/**
+ * How wide each period's column is drawn, in pixels, among `count` periods across `width`: half
+ * the room of its period, from 24px up to 56px. A few periods across a wide plot stand as broad
+ * columns rather than a row of thin lines, and many periods or a narrow plot keep 24px, which the
+ * plot draws no wider than the period's room.
+ */
+export function columnWidth(count: number, width: number): number {
+  const half = count && width ? Math.floor(width / count / 2) : 0
+  return Math.min(COLUMN.most, Math.max(COLUMN.least, half))
+}
+
 /** The time axis: each period it has room to name under its column, and any still running. */
 export function dayTicks(
   columns: readonly PeriodColumn[],
@@ -305,15 +388,36 @@ const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stack
 
 /** What a period holds, in words: its sum, each series in it, and what is said of it. */
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
-  const parts = stacked.segments.map(
-    (segment) => `${segment.series.label} ${format(segment.value)}`,
-  )
-  const head = hasSum(stacked)
-    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}`
-    : periodName(stacked)
+  const parts = seriesParts(stacked.segments, format)
+  const head = columnHead(stacked, words, format)
   return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
     .filter(Boolean)
     .join('. ')
+}
+
+/** A period's name and sum, and the period compared with beside the sum. */
+function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const before = stacked.column.before
+  const compared =
+    words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
+  return hasSum(stacked) && !stacked.column.pending
+    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+    : `${periodName(stacked)}${compared}`
+}
+
+const seriesParts = (segments: readonly StackSegment[], format: Format) =>
+  segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
+
+/**
+ * A period as the two lines of the readout over its chart: its name, sum, the period compared
+ * with and what is said of it; then each series in it, the largest first.
+ */
+export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
+  return {
+    head: [columnHead(stacked, words, format), ...columnNotes(stacked, words)].join('. '),
+    series: seriesParts(largest, format).join(', '),
+  }
 }
 
 /** One segment in words, with the sum of the period it stands in. */
@@ -343,27 +447,51 @@ export function changeNotes(columns: readonly StackedColumn[]): ChangeNote[] {
     .map((note, at) => ({ ...note, number: at + 1 }))
 }
 
-/** The numbers over the plot, one label per period that changed, at that period's start. */
-export function changeMarkers(notes: readonly ChangeNote[], count: number): PlacedTick[] {
+/** Up to this many changes are noted a line each under the chart; more fold into one line. */
+const NOTED_CHANGES = 2
+
+/**
+ * The changes under the chart as one line that counts them, with every change in its whole
+ * text, where there are more than `NOTED_CHANGES` and the chart has words for it; null where
+ * each change keeps its own line.
+ */
+export function foldChanges(notes: readonly ChangeNote[], words: PeriodWords) {
+  if (!words.changes || notes.length <= NOTED_CHANGES) return null
+  const whole = notes.map((note) => `${note.period}: ${note.text}`).join('; ')
+  return { text: words.changes(notes.length), whole }
+}
+
+/**
+ * The numbers over the plot, one label per period that changed, at that period's start; with
+ * the changes folded into one line (`numbered` false) the lines stand there with no number.
+ */
+export function changeMarkers(
+  notes: readonly ChangeNote[],
+  count: number,
+  numbered = true,
+): PlacedTick[] {
   const byColumn = new Map<number, number[]>()
   for (const note of notes)
     byColumn.set(note.index, [...(byColumn.get(note.index) ?? []), note.number])
   return [...byColumn].map(([index, numbers]) => ({
     key: index,
-    text: numbers.join(', '),
+    text: numbered ? numbers.join(', ') : '',
     offset: index / count,
     edge: 'middle',
   }))
 }
 
 /**
- * What is said of a period besides its numbers: that it is still running, which series have no
- * figure in it, what changed.
+ * What is said of a period besides its numbers: that it is still running, that it has no data
+ * yet, which series have no figure in it, what changed.
  */
 export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[] {
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
-  return [...(stacked.column.incomplete ? [words.incomplete] : []), ...absent, ...stacked.marks]
+  const pending = stacked.column.pending && words.pending ? [words.pending] : []
+  // A period with no data yet holds nothing «so far»: it says only that it has none.
+  const running = stacked.column.incomplete && !pending.length ? [words.incomplete] : []
+  return [...running, ...pending, ...absent, ...stacked.marks]
 }
 
 /** A place the keyboard can stand on: a column, and in it a segment when segments act. */

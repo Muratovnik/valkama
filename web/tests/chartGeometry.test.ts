@@ -17,11 +17,15 @@ import type {
 import {
   changeMarkers,
   changeNotes,
+  columnNotes,
   columnSummary,
+  columnWidth,
   dayTicks,
+  foldChanges,
   labelledColumns,
   nextCursor,
   rankRows,
+  readoutLines,
   segmentPlace,
   stackColumns,
   valueTicks,
@@ -64,9 +68,28 @@ describe('ranked rows', () => {
       rest.map((one) => one.key),
       ['other', 'none', 'unknown'],
     )
-    // A tail larger than any category is measured with the rest, and is the longest bar.
-    assert.equal(rest[0]?.length, 1)
-    assert.equal(ranked[0]?.length, 20 / 400)
+    // A tail larger than any category sets no scale: the longest category is the whole bar,
+    // and the rows that are not categories draw none.
+    assert.deepEqual(
+      ranked.map((one) => one.length),
+      [1, 0.5],
+    )
+    assert.deepEqual(
+      rest.map((one) => one.length),
+      [null, null, null],
+    )
+  })
+
+  test('rows that are not categories alone draw nothing and scale nothing', () => {
+    const { ranked, rest } = rankRows([row('none', 7, 'none'), row('other', 3, 'other')])
+    assert.deepEqual(ranked, [])
+    assert.deepEqual(
+      rest.map((one) => [one.key, one.length]),
+      [
+        ['other', null],
+        ['none', null],
+      ],
+    )
   })
 
   test('a tie keeps one order whatever order the rows came in', () => {
@@ -148,10 +171,33 @@ describe('stacked columns', () => {
   })
 
   test('no periods, or periods of nothing, stand on a scale of zero alone', () => {
-    assert.deepEqual(stackColumns([], series), { columns: [], ticks: [0], top: 1 })
+    const none = stackColumns([], series)
+    assert.deepEqual(none, { columns: [], steps: [{ value: 0, text: '0' }], ticks: [0], top: 1 })
     const empty = stackColumns([column('d1', {})], series)
     assert.deepEqual(empty.ticks, [0])
     assert.equal(empty.top, 1)
+  })
+
+  test('the period compared with stands on the same scale and is said beside the sum', () => {
+    const { columns, top } = stackColumns(
+      [
+        { ...column('d1', { a: 2 }), before: 7 },
+        { ...column('d2', {}), before: 3 },
+        { ...column('d3', { a: 1 }), before: null },
+      ],
+      series,
+    )
+    // The tallest outline, 7, is past the tallest column, 2: the scale reaches past it.
+    assert.equal(top, 8)
+    const said = { ...words, before: 'period before' }
+    const [first, second, third] = columns
+    assert.ok(first && second && third)
+    assert.equal(columnSummary(first, said, String), 'd1: total 2, period before 7; Account A 2')
+    // Nothing spent and nothing absent is a real zero, said beside what the period before held.
+    assert.equal(columnSummary(second, said, String), 'd2: total 0, period before 3')
+    assert.equal(columnSummary(third, said, String), 'd3: total 1; Account A 1')
+    // With no words for it the readout stays as it was.
+    assert.equal(columnSummary(first, words, String), 'd1: total 2; Account A 2')
   })
 
   test('a segment above the lowest leaves a gap of ground under it', () => {
@@ -163,6 +209,41 @@ describe('stacked columns', () => {
       insetBlockEnd: 'calc(25% + var(--space-half))',
       blockSize: 'max(0px, calc(75% - var(--space-half)))',
     })
+  })
+})
+
+describe('the width of a column', () => {
+  test('grows to 56px where a few periods have room, and stays 24px where many or narrow', () => {
+    // A week of four days across an 850px plot: broad columns, not thin lines.
+    assert.equal(columnWidth(4, 850), 56)
+    // Four weeks of days in 560px, and the sixty minutes of an hour: as before.
+    assert.equal(columnWidth(28, 560), 24)
+    assert.equal(columnWidth(60, 850), 24)
+    // Between the two, half a period's room; unmeasured, as before.
+    assert.equal(columnWidth(10, 800), 40)
+    assert.equal(columnWidth(4, 0), 24)
+  })
+})
+
+describe('the readout over the chart', () => {
+  test('says the period and what is said of it, then the series largest first', () => {
+    const said = { ...words, before: 'period before' }
+    const { columns } = stackColumns(
+      [{ ...column('d1', { a: 1, b: 4, c: 2 }, true), before: 9 }],
+      series,
+      [{ at: 'd1', label: 'Switched to B' }],
+    )
+    const [one] = columns
+    assert.ok(one)
+    assert.deepEqual(readoutLines(one, said, String), {
+      head: 'd1: total 7, period before 9. so far. Switched to B',
+      series: 'Account B 4, Account C 2, Account A 1',
+    })
+    // The whole text keeps the stack's order: it is the period's name for assistive technology.
+    assert.equal(
+      columnSummary(one, said, String),
+      'd1: total 7, period before 9; Account A 1, Account B 4, Account C 2. so far. Switched to B',
+    )
   })
 })
 
@@ -196,6 +277,27 @@ describe('a period still running', () => {
   })
 })
 
+describe('a period with no data yet', () => {
+  test('says so instead of a sum and never reads as a zero, nor as running «so far»', () => {
+    const said = { ...words, pending: 'no data yet' }
+    const { columns } = stackColumns(
+      [
+        column('m1', { a: 2 }),
+        { ...column('m2', {}), pending: true },
+        { ...column('m3', {}, true), pending: true },
+      ],
+      series,
+    )
+    const [first, second, third] = columns
+    assert.ok(first && second && third)
+    assert.equal(columnSummary(first, said, String), 'm1: total 2; Account A 2')
+    assert.equal(columnSummary(second, said, String), 'm2. no data yet')
+    // A running period with no data yet holds nothing so far: one clean sentence, no fragment.
+    assert.equal(columnSummary(third, said, String), 'm3. no data yet')
+    assert.deepEqual(columnNotes(second, said), ['no data yet'])
+  })
+})
+
 describe('the time axis', () => {
   test('names the last period always and steps evenly back from it, a few labels at most', () => {
     assert.deepEqual(labelledColumns(30, 330), [5, 13, 21, 29])
@@ -224,6 +326,16 @@ describe('the time axis', () => {
     )
   })
 })
+
+/** The changes of fourteen days whose first `count` after the first start with a change. */
+const changed = (count: number) => {
+  const columns = Array.from({ length: 14 }, (_, index) => column(`d${index}`, { a: 1 }))
+  const marks = Array.from({ length: count }, (_, index) => ({
+    at: `d${index + 1}`,
+    label: `to ${index}`,
+  }))
+  return changeNotes(stackColumns(columns, series, marks).columns)
+}
 
 describe('changes marked on the time axis', () => {
   test('are numbered in time order, named in the period they start, and placed at its start', () => {
@@ -258,6 +370,27 @@ describe('changes marked on the time axis', () => {
       columnSummary(third, words, String),
       'd3: total 1; Account A 1. Switched to B. Limit reset',
     )
+  })
+
+  test('fold into one line that counts them from three on, the marks keeping no number', () => {
+    const said = { ...words, changes: (count: number) => `Changes: ${count}` }
+    for (const count of [0, 2]) {
+      assert.equal(foldChanges(changed(count), said), null)
+      assert.ok(changeMarkers(changed(count), 14).every((marker) => marker.text !== ''))
+    }
+    assert.deepEqual(foldChanges(changed(3), said), {
+      text: 'Changes: 3',
+      whole: 'd1: to 0; d2: to 1; d3: to 2',
+    })
+    const twelve = foldChanges(changed(12), said)
+    assert.equal(twelve?.text, 'Changes: 12')
+    assert.equal(twelve?.whole.split('; ').length, 12)
+    assert.ok(twelve?.whole.endsWith('d12: to 11'))
+    const marks = changeMarkers(changed(12), 14, false)
+    assert.equal(marks.length, 12)
+    assert.ok(marks.every((marker) => marker.text === ''))
+    // A chart with no words for the count keeps a line for each change.
+    assert.equal(foldChanges(changed(12), words), null)
   })
 })
 

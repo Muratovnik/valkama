@@ -1,0 +1,113 @@
+<script setup lang="ts">
+/**
+ * `SmallMultiples` as a table: a row per multiple in the chart's order — the ones on the scale,
+ * then the ones apart in the quiet ink — with its amount in each period and its figure for the
+ * whole span. A period with no figure says so with a dash, and with `words.absent` to a screen
+ * reader. It is the chart's accessible equivalent and may stand beside it or instead of it; wider
+ * than its column, it scrolls in its own frame with each row's name in view (`ChartTable`).
+ */
+import { computed } from 'vue'
+
+import ChartTable from '@/shared/ui/ChartTable.vue'
+import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
+import type {
+  MultiplePeriod,
+  MultiplesWords,
+  SmallMultiple,
+} from '@/shared/ui/multiplesGeometry.ts'
+
+const props = defineProps<{
+  /** What the table shows, as its caption. */
+  label: string
+  multiples: readonly SmallMultiple[]
+  periods: readonly MultiplePeriod[]
+  words: MultiplesWords
+  /** A value as the reader reads it, for each period's amount. */
+  formatValue: (value: number) => string
+}>()
+
+/** What an absent figure reads as: a dash, with the words beside it for a screen reader. */
+const ABSENT = '—'
+
+const rows = computed(() => {
+  const { shared, apart } = placeMultiples(props.multiples)
+  return [...shared, ...apart].map((one) => ({
+    ...one,
+    rest: one.kind === 'none' || one.kind === 'unknown',
+    cells: props.periods.map((period, index) => {
+      const value = one.values[index]
+      return { key: period.key, text: value === null ? null : props.formatValue(value ?? 0) }
+    }),
+  }))
+})
+</script>
+
+<template>
+  <ChartTable
+    :label="label"
+    :empty="!multiples.length"
+    :words="words"
+  >
+    <thead>
+      <tr>
+        <th
+          scope="col"
+          class="chart-cell chart-heading"
+        >
+          {{ words.category }}
+        </th>
+        <th
+          v-for="period in periods"
+          :key="period.key"
+          scope="col"
+          class="chart-cell chart-heading"
+          data-numeric="true"
+        >
+          {{ period.label }}
+        </th>
+        <th
+          scope="col"
+          class="chart-cell chart-heading"
+          data-numeric="true"
+        >
+          {{ words.total }}
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr
+        v-for="row in rows"
+        :key="row.key"
+        :class="{ 'chart-rest': row.rest }"
+        :data-kind="row.kind"
+      >
+        <th
+          scope="row"
+          class="chart-cell chart-name"
+        >
+          {{ row.label }}
+        </th>
+        <td
+          v-for="cell in row.cells"
+          :key="cell.key"
+          class="chart-cell"
+          data-numeric="true"
+        >
+          <template v-if="cell.text !== null">{{ cell.text }}</template>
+          <template v-else>
+            <span aria-hidden="true">{{ ABSENT }}</span>
+            <span class="visually-hidden">{{ words.absent }}</span>
+          </template>
+        </td>
+        <td
+          class="chart-cell"
+          data-numeric="true"
+        >
+          {{ row.valueText }}
+        </td>
+      </tr>
+    </tbody>
+  </ChartTable>
+</template>
+
+<style scoped src="@/shared/ui/chartTable.css"></style>
