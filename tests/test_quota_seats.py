@@ -188,7 +188,11 @@ class SeatOfSegmentTests(_Seats):
 
     def test_a_sample_during_the_segment_names_its_seat(self) -> None:
         self.sample("2030-03-04T10:20:00Z", SEAT_A)
-        self.assertEqual(seats.Seat(SEAT_A, "session", "2030-03-04T10:20:00.000Z"), self.seat())
+        found = self.seat()
+        self.assertEqual(
+            (SEAT_A, "session", "2030-03-04T10:20:00.000Z", None),
+            (found.seat, found.basis, found.sample_at, found.account_uuid),
+        )
 
     def test_the_own_session_comes_before_a_more_recent_sample_of_the_organization(
         self,
