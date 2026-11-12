@@ -11,9 +11,10 @@
  * It lists the first twelve values; past them one line says how many more there are and, pressed,
  * asks for the whole table, sent out as `more`, since the table lists them all.
  *
- * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; by any
- * other dimension, a value the read can filter by is a control that narrows the view to it, sent
- * out as `narrow`. The rows that are neither stay lines of the chart.
+ * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; a value
+ * the read can filter by — work with no task, or any value of another dimension it can — is a
+ * control that narrows the view to it, sent out as `narrow`. The rows that are neither stay lines
+ * of the chart.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -157,6 +157,8 @@ export const analyticsMessages = {
       },
       drill: {
         value: 'Show the tasks of {value}',
+        noTask: 'Break down the work with no task by project and launch class',
+        noTaskByLaunch: 'Break down the work with no task by launch class',
         day: 'Show the tasks of {day}',
         dayName: '{weekdayLong}, {date}',
         full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
@@ -349,6 +351,8 @@ export const analyticsMessages = {
       },
       drill: {
         value: 'Показать задачи: {value}',
+        noTask: 'Разобрать работу без задачи по проектам и способам запуска',
+        noTaskByLaunch: 'Разобрать работу без задачи по способам запуска',
         day: 'Показать задачи за {day}',
         dayName: '{date}, {weekday}',
         full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',

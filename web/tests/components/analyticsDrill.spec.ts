@@ -3,8 +3,11 @@
  * requirement: a bar or a table row of any dimension but the task narrows the view to its value
  * and breaks it down by task, and a day column narrows it to that day alone, each as a new place
  * in the history (`push`) so Back returns; a task's bar is a link the app opens as any reference
- * to the task, and each opening is counted once as `task_open`. Unknown work and the folded tail
- * are not controls, and a narrowing the address cannot hold says why instead of happening.
+ * to the task, and each opening is counted once as `task_open`. Work with no task, which has no
+ * card, narrows the view to itself and breaks it down by project crossed with launch class, or by
+ * launch class alone at a project's scope, where the page has no section of projects. Unknown
+ * work, a deleted task and the folded tail are not controls, and a narrowing the address cannot
+ * hold says why instead of happening.
  */
 import { defineComponent, h } from 'vue'
 import type { PropType } from 'vue'
@@ -60,7 +63,10 @@ const opened: string[] = []
 
 /** The page inside a layer that resolves task references, as the app shell provides one. */
 const Host = defineComponent({
-  props: { routeState: { type: Object as PropType<Record<string, string>>, default: undefined } },
+  props: {
+    routeState: { type: Object as PropType<Record<string, string>>, default: undefined },
+    projectId: { type: String, default: undefined },
+  },
   setup(props) {
     provideReferenceLinks((reference, parent) =>
       reference.kind === 'work-item'
@@ -71,13 +77,17 @@ const Host = defineComponent({
           }
         : parent(reference),
     )
-    return () => h(AnalyticsView, { routeState: props.routeState })
+    return () => h(AnalyticsView, { routeState: props.routeState, projectId: props.projectId })
   },
 })
 
-async function mountPage(routeState: Record<string, string>, locale: 'en' | 'ru' = 'en') {
+async function mountPage(
+  routeState: Record<string, string>,
+  locale: 'en' | 'ru' = 'en',
+  projectId?: string,
+) {
   const host = mount(Host, {
-    props: { routeState },
+    props: { routeState, projectId },
     attachTo: document.body,
     global: { plugins: [analyticsI18n(locale)] },
   })
@@ -223,7 +233,7 @@ describe('a value pressed on the Analytics page', () => {
 })
 
 describe('what is not a control', () => {
-  it('leaves unknown work and work on no task as lines, by model and by task', async () => {
+  it('leaves unknown work as a line by model and by task, and a deleted task by task', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const byModel = await mountPage({ by: 'model' })
     const lines = byModel.findAll('.spending-bars .ranked-line')
@@ -243,9 +253,22 @@ describe('what is not a control', () => {
     const byTask = await mountPage({ by: 'work_item' })
     const taskLines = byTask.findAll('.spending-bars .ranked-line')
     const notLinks = taskLines.filter((line) => line.element.tagName !== 'A')
-    expect(notLinks.map((line) => line.element.tagName)).toEqual(['DIV', 'DIV'])
+    // Work with no task is the one control by task that is not a link (`work with no task`).
+    expect(notLinks.map((line) => line.element.tagName)).toEqual(['BUTTON', 'DIV'])
     expect(notLinks.map((line) => line.get('.ranked-label').text())).toEqual(['No task', 'Unknown'])
-    expect(byTask.findAll('.spending-bars button.ranked-line')).toHaveLength(0)
+    byTask.unmount()
+
+    const deleted = { ...task(11, ''), reference: null, title: null }
+    stubAnalyticsReads((query) =>
+      serveUsage([{ at: MONDAY, group: { work_item: deleted }, spend: { seconds: 300 } }], query),
+    )
+    const gone = await mountPage({ by: 'work_item' })
+    const line = gone.get('.spending-bars .ranked-line')
+    expect([line.element.tagName, line.get('.ranked-label').text()]).toEqual([
+      'DIV',
+      'Deleted task',
+    ])
+    expect(line.attributes('tabindex')).toBeUndefined()
   })
 })
 
@@ -291,9 +314,131 @@ describe('the row headings of the page’s tables', () => {
     for (const section of ['.spending-table', '.spending-bars'])
       expect(headingsOf(byTask, section, ['MAIN-1 Task 1', 'No task', 'Unknown'])).toEqual([
         links('MAIN-1 Task 1'),
-        plain('No task'),
+        {
+          name: 'No task',
+          control: { role: 'button', name: 'No task', description: BREAK_DOWN },
+        },
         plain('Unknown'),
       ])
+  })
+})
+
+/** What pressing work with no task does, as its control says it. */
+const BREAK_DOWN = 'Break down the work with no task by project and launch class'
+
+describe('work with no task', () => {
+  it('breaks the view down by project and launch class from its bar, as a new place', async () => {
+    const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'work_item', filters: '{"model":["model-01"]}' })
+    const bar = host.get(`.spending-bars button.ranked-line[aria-label="${BREAK_DOWN}"]`)
+    expect(bar.get('.ranked-label').text()).toBe('No task')
+
+    await bar.trigger('click')
+    // The filter of no task joins the filters the view had.
+    expect(written(host)).toEqual([
+      [
+        {
+          by: 'project',
+          across: 'launch_class',
+          filters: '{"work_item":[null],"model":["model-01"]}',
+        },
+        'push',
+      ],
+    ])
+    await follow(host)
+    const read = reads.grouped('project').at(-1)
+    expect(read?.get('none')).toBe('work_item')
+    expect(read?.get('model')).toBe('model-01')
+    expect(reads.grouped('project,launch_class').at(-1)?.get('none')).toBe('work_item')
+  })
+
+  it('does the same from its row of the table and from the overview’s card of tasks', async () => {
+    const expected = [
+      [{ by: 'project', across: 'launch_class', filters: '{"work_item":[null]}' }, 'push'],
+    ]
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const section = await mountPage({ by: 'work_item' })
+    const row = section.get(`.spending-table th button[aria-description="${BREAK_DOWN}"]`)
+    expect(row.text()).toBe('No task')
+    await row.trigger('click')
+    expect(written(section)).toEqual(expected)
+    section.unmount()
+
+    // On the overview the card of tasks names the first five, so here work with no task leads.
+    stubAnalyticsReads((query) =>
+      serveUsage(
+        [
+          {
+            at: MONDAY,
+            group: { work_item: noTask, model: value('model-01') },
+            spend: { seconds: 60 },
+          },
+        ],
+        query,
+      ),
+    )
+    const overview = await mountPage({})
+    const card = overview.get('[data-card="work_item"]')
+    await card.get(`button.ranked-line[aria-label="${BREAK_DOWN}"]`).trigger('click')
+    expect(written(overview)).toEqual(expected)
+  })
+
+  it('breaks it down by launch class alone at a project’s scope, which has no section of projects', async () => {
+    const alpha = value('alpha')
+    const world: TimedStretch[] = [
+      {
+        at: MONDAY,
+        group: { work_item: task(1, 'Task 1'), project: alpha },
+        spend: { seconds: 3600 },
+      },
+      { at: MONDAY, group: { work_item: noTask, project: alpha }, spend: { seconds: 1800 } },
+    ]
+    stubAnalyticsReads((query) => serveUsage(world, query))
+    const host = await mountPage({ by: 'work_item', across: 'model' }, 'en', 'alpha')
+    const bar = host.get('.spending-bars button.ranked-line')
+    expect(bar.attributes('aria-label')).toBe('Break down the work with no task by launch class')
+    await bar.trigger('click')
+    // The crossing by model the view had would cross launch classes with models: it is dropped.
+    expect(written(host)).toEqual([
+      [{ by: 'launch_class', filters: '{"work_item":[null]}' }, 'push'],
+    ])
+  })
+
+  it('says what it does in Russian, in the bars and in the table', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'work_item' }, 'ru')
+    const words = 'Разобрать работу без задачи по проектам и способам запуска'
+    expect(
+      host.get(`.spending-bars button.ranked-line[aria-label="${words}"] .ranked-label`).text(),
+    ).toBe('Без задачи')
+    expect(host.get(`.spending-table th button[aria-description="${words}"]`).text()).toBe(
+      'Без задачи',
+    )
+  })
+
+  it('is refused with the reason where its filter would not fit the address', async () => {
+    const models = [1, 2, 3, 4].map((one) => `${'a-model-with-a-long-name-'.repeat(2)}${one}`)
+    const filters = JSON.stringify({ model: models })
+    // The precondition: the view's filters fit the 240 characters a state holds, and with the
+    // filter of no task they do not.
+    expect(filters.length).toBeLessThanOrEqual(240)
+    expect(JSON.stringify({ work_item: [null], model: models }).length).toBeGreaterThan(240)
+    const world: TimedStretch[] = models.map((one) => ({
+      at: MONDAY,
+      group: { work_item: noTask, model: value(one) },
+      spend: { seconds: 3600 },
+    }))
+    const reads = stubAnalyticsReads((query) => serveUsage(world, query))
+    const host = await mountPage({ by: 'work_item', filters })
+    const asked = reads.asked.length
+
+    await host.get(`.spending-bars button.ranked-line[aria-label="${BREAK_DOWN}"]`).trigger('click')
+    await flushPromises()
+    expect(written(host)).toEqual([])
+    expect(reads.asked).toHaveLength(asked)
+    expect(host.get('.spending-bars [role="alert"]').text()).toBe(
+      'The link to this view cannot hold one more filter, so the tasks of No task are not shown. Clear a filter to make room.',
+    )
   })
 })
 
