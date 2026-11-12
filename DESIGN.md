@@ -590,6 +590,15 @@ and only fades the end of a strip that scrolls on past it.
   its box and its busy mark and paints nothing, and a line keeps a line's height, so the
   place does not collapse and grow back. A switch of space on a two-megabyte board reads
   in about 170–200 ms, which is why the delay is not shorter.
+- Before the application mounts, `web/index.html` draws the shell's chrome and nothing
+  else: the rail with its mark and the outline of its first entries, the context bar and
+  the empty workspace panel, each where the shell draws it, so the shell takes its place
+  without a jump and a slow bundle never leaves the bare ground on screen. The desktop
+  window's starting page draws the same chrome while it finds the server. Neither ever
+  draws a row of content, a count or a word of what the workspace will show: loading the
+  code is not a read, and the board's own read wait is the rule above, unchanged.
+  `web/tests/startupSkeleton.test.ts` holds the two pages to one set of rules, and
+  `production-first-launch.spec.ts` holds each part to the shell's box within half a pixel.
 - A read wait has one word, the panel's: «Загрузка», "Loading". The surfaces that each
   said what they were reading — «Читаем цепочку…», «Ищу коммит…», «Поиск…» — gave one
   state five names. «Строим граф…» is not a read but the layout of what was read: it keeps

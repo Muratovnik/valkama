@@ -19,6 +19,16 @@ checkouts are therefore distinguishable even at the same version.
   again, so the server no longer builds it twice at once and the page no longer parses it
   twice. A change between the read and the stream still comes as the first frame, and a
   browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
+- **The first launch opens on the shell itself.** The desktop window used to show a small
+  line of text on a black ground and then cut to the whole shell. It now draws the shell's
+  chrome from its first frame — the rail with the mark and its first entries, the context
+  bar and the empty workspace panel — and `index.html` draws the same chrome until the
+  application mounts, each part where the shell draws it, so the handoff moves nothing and
+  a slow bundle no longer shows a bare ground, in the window or in a browser. What the
+  window waits for is said in the panel once a start lasts a second, and with reduced
+  motion nothing in it moves. The window remembers the rail's width beside the language
+  whenever the reader changes either and as the window closes, so the next start draws
+  the rail where it was left; a window that has never heard a width draws the default.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
