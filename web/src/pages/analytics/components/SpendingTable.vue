@@ -11,14 +11,16 @@
  * measure, or the total of a crossed table. A row is one line: its name is cut where the column is
  * narrower (`SpendingTableName`), and the figures take what they need, the name the rest.
  *
- * The heading row over the frame says how many rows it shows and how they are sorted, and holds the
- * controls: one its panel may set (`actions`), the second dimension, and the download of what it
- * shows, in that order, as a CSV file (`tableFile`); with no value to list that is disabled, and
- * words say why. A row's name pressed to narrow the view goes out as `narrow`.
+ * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
+ * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
+ * and order in its hint, and holds the controls; the download it asks for is what the table shows,
+ * in its order, as a CSV file (`tableFile`). A row's name pressed to narrow the view goes out as
+ * `narrow`.
  */
-import { computed, useId } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -35,10 +37,7 @@ import type {
 } from '@/shared/api/analyticsApi.ts'
 import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -85,18 +84,6 @@ const model = useTableModel(() => ({
   cross: crossed.value,
 }))
 
-const NONE = 'none'
-const acrossOptions = computed(() => [
-  { value: NONE, label: t('analytics.panel.table.acrossNone') },
-  ...props.dimensions
-    .filter((dimension) => dimension !== props.by)
-    .map((dimension) => ({ value: dimension, label: words.dimension(dimension) })),
-])
-function chooseAcross(value: string) {
-  const chosen = props.dimensions.find((dimension) => dimension === value)
-  emit('update:across', chosen ?? null)
-}
-
 const { sort, sortBy, lines, direction, marks } = useTableSort(model, () => locale.value)
 
 /** Every column's heading, the names' first; each sorts the rows by its column. */
@@ -105,7 +92,7 @@ const headings = computed(() => [
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
-/** What the heading row says of the rows (`counts`), and their order. */
+/** The whole account of the rows (`counts` of the model), and their order. */
 const summary = computed(() => {
   const column = headings.value.find(({ key }) => key === sort.value.column)?.text ?? ''
   const way = t(`analytics.panel.table.direction.${direction.value}`)
@@ -113,11 +100,6 @@ const summary = computed(() => {
 })
 
 const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)
-
-/** Nothing to download: no value to list, or a crossed table not read yet. */
-const nothing = computed(() => !model.value.lines.length)
-const nothingId = useId()
-const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
 
 function download() {
   const { by, filters, measure, usage } = props
@@ -131,48 +113,24 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 
 <template>
   <section class="spending-table">
-    <div class="spending-table-head">
-      <SectionHeader
-        class="spending-table-title"
-        as="h2"
-        level="page"
-        :title="model.title"
-      />
-      <p
-        v-if="!waiting && model.lines.length"
-        v-tooltip.clipped="summary"
-        class="spending-table-summary one-line"
+    <SpendingTableHead
+      :across="across"
+      :by="by"
+      :dimensions="dimensions"
+      :lines="model.lines"
+      :summary="summary"
+      :title="model.title"
+      :waiting="waiting"
+      @download="download"
+      @update:across="(next) => emit('update:across', next)"
+    >
+      <template
+        v-if="$slots.actions"
+        #actions
       >
-        {{ summary }}
-      </p>
-      <div class="spending-table-controls">
         <slot name="actions" />
-        <ChoiceSelect
-          class="spending-table-across"
-          size="compact"
-          :label="t('analytics.panel.table.across')"
-          :model-value="across ?? NONE"
-          :options="acrossOptions"
-          @update:model-value="chooseAcross"
-        />
-        <span
-          v-if="nothing"
-          :id="nothingId"
-          class="spending-table-note"
-        >
-          {{ t('analytics.table.nothingToDownload') }}
-        </span>
-        <VButton
-          class="spending-download"
-          size="compact"
-          :disabled="nothing || waiting"
-          :aria-describedby="downloadNote"
-          @click="download"
-        >
-          {{ t('analytics.table.download') }}
-        </VButton>
-      </div>
-    </div>
+      </template>
+    </SpendingTableHead>
     <FieldError
       v-if="notice"
       role="alert"
@@ -392,38 +350,16 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   }
 }
 
+/* The column the rows are sorted by: its heading in the ink of the figures, with its arrow and a
+   rule under it, so the order reads without the hint. */
+.table-head .chart-heading[aria-sort] {
+  color: var(--color-text);
+  box-shadow: inset 0 -2px var(--color-text-muted);
+}
+
 /* The chosen measure, now and before, in the ink the figures of a chart are read in. */
 .chart-cell[data-chosen='true'] {
   color: var(--color-text);
-}
-
-/* The heading row: the title, what the rows are and their order, and the controls, on one line;
-   the words about the rows give way first, down to nothing, and are whole in their hint. Only a
-   narrow table lets the row wrap. */
-.spending-table-head {
-  display: flex;
-  gap: var(--space-2) var(--space-4);
-  align-items: center;
-}
-
-.spending-table-summary {
-  flex: 1 1 0;
-  min-inline-size: 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.spending-table-controls {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-  margin-inline-start: auto;
-}
-
-.spending-table-title,
-.spending-table-controls {
-  flex: none;
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
@@ -447,17 +383,6 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 }
 
 @container (width < 50rem) {
-  .spending-table-head,
-  .spending-table-controls {
-    flex-wrap: wrap;
-  }
-
-  /* Wrapped, the controls may be narrower than the three side by side: held to that width they
-     would reach past a phone's edge. */
-  .spending-table-controls {
-    flex: 0 1 auto;
-  }
-
   .chart-heading[data-numeric='true'] {
     min-inline-size: 7em;
     white-space: normal;

@@ -6,7 +6,9 @@
  * while the table scrolls sideways. A second dimension chosen over the table crosses it, is the
  * address and outlives a reload, and the file downloaded is the table crossed; with the measure
  * tokens, the table and the file split the tokens by kind. At 1440 pixels the ranked list and the
- * small charts beside it are titled in one line each. Each run prints what it measured.
+ * small charts beside it are titled in one line each, and so is the line over the table that
+ * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
+ * word. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -14,6 +16,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { openReport, pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
+import { brokenWords } from './brokenWords.ts'
 import { test } from './test.ts'
 
 /** Whether each part of the charts and of the table stands whole, above the next one. */
@@ -182,6 +185,102 @@ test('on a phone the names stay in view while the table scrolls sideways', async
   const now = await scrolled(page)
   await record(info, 'analytics panel table sideways 390', { left: now.tableLeft, fixed })
   expect(fixed.name).toEqual({ inside: true, onTop: true })
+})
+
+/** Each heading of the table: its words, whether it is marked sorted, its ink and its rule. */
+const sortMarks = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.spending-table-frame thead th')].map((one) => {
+      const style = getComputedStyle(one)
+      return {
+        text: one.textContent.trim(),
+        sorted: one.hasAttribute('aria-sort'),
+        arrow: one.querySelector('.table-sort-icon') !== null,
+        ink: style.color,
+        rule: style.boxShadow,
+      }
+    }),
+  )
+
+test('the column the table is sorted by is marked on its heading, and the mark follows a sort', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  const first = await sortMarks(page)
+  const body = await page
+    .locator('.spending-table-frame tbody td[data-chosen="true"]')
+    .first()
+    .evaluate((one) => getComputedStyle(one).color)
+  await record(info, 'analytics table sort marks', { first, body })
+  const sorted = first.filter((one) => one.sorted)
+  expect(sorted.map((one) => one.text)).toEqual(['Agent time'])
+  const [mark] = sorted
+  const tokens = first.find((one) => one.text === 'Tokens')
+  expect(mark?.arrow).toBe(true)
+  expect(mark?.ink, 'the sorted heading in the ink of the figures').toBe(body)
+  expect(mark?.ink).not.toBe(tokens?.ink)
+  expect(mark?.rule).not.toBe(tokens?.rule)
+
+  await page.locator('.spending-table-frame thead').getByRole('button', { name: 'Tokens' }).click()
+  const next = await sortMarks(page)
+  expect(next.filter((one) => one.sorted).map((one) => one.text)).toEqual(['Tokens'])
+  expect(next.find((one) => one.text === 'Tokens')?.rule).toBe(mark?.rule)
+})
+
+test.describe('in Russian', () => {
+  test.use({ locale: 'ru-RU' })
+
+  test('at 1440 pixels the small charts’ title and the table’s count each keep to one line', async ({
+    page,
+  }, info) => {
+    await serve(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(TASK_REPORT)
+    await expect(page.locator('.spending-table-summary')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const seen = await page.evaluate(() => {
+      // This body runs in the page, so a helper at the module's own scope would not be there.
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+      const fit = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector)
+        if (!element) throw new Error(`${selector} is missing`)
+        return {
+          text: element.textContent.trim(),
+          height: Math.round(element.getBoundingClientRect().height),
+          cut: element.scrollWidth > element.clientWidth,
+        }
+      }
+      return {
+        bars: fit('.spending-bars h2'),
+        multiples: fit('.spending-multiples h2'),
+        count: fit('.spending-table-summary'),
+      }
+    })
+    await record(info, 'analytics panel one line ru 1440x900', seen)
+    expect(seen.multiples.text).toBe('По дням, по задачам')
+    expect(seen.multiples.cut).toBe(false)
+    expect(seen.multiples.height).toBe(seen.bars.height)
+    // Twelve tasks spent this week, and none only in the week before.
+    expect(seen.count.text).toBe('12 задач')
+    expect(seen.count.cut).toBe(false)
+  })
+
+  test('on a phone no name or heading in a chart’s table breaks inside a word', async ({
+    page,
+  }, info) => {
+    await serve(page)
+    const analytics = await openReport(page, 390)
+    await expect(analytics.locator('.spending-days table')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const broken = await brokenWords(page, '.analytics-panel .chart-cell')
+    const days = await analytics.locator('.spending-days tbody th').allInnerTexts()
+    await record(info, 'analytics panel words 390 ru', { broken, days })
+    expect(days.some((day) => day.startsWith('понедельник'))).toBe(true)
+    expect(broken).toEqual([])
+  })
 })
 
 /** The text of the CSV file the table's button downloads, and its name. */

@@ -6,6 +6,9 @@
  * neutral hue (`dayMultiples`, `SmallMultiples`). Each chart is in its
  * value's hue on the page (`slots`) and says its name, so the hue never speaks alone. Drawn, or as
  * its table, as every chart of the page is (`ChartSection`).
+ *
+ * Its heading is short, «Per day, by task», since the ranked list beside it already names the
+ * measure and the dimension and the two stand on one line; the charts themselves are named whole.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -33,6 +36,11 @@ const props = defineProps<{
 const { t } = useI18n()
 const words = useSpendingWords()
 
+const heading = computed(() =>
+  t(`analytics.panel.multiples.heading.${props.usage.period.step}`, {
+    by: t(`analytics.byDimension.${props.by}`),
+  }),
+)
 const title = computed(() =>
   t('analytics.panel.multiples.title', {
     measure: words.measure(props.measure),
@@ -76,7 +84,7 @@ const valueAxis = computed(() => words.axis(props.measure))
 <template>
   <ChartSection
     class="spending-multiples"
-    :title="title"
+    :title="heading"
     :narrow="narrow"
   >
     <template #chart>

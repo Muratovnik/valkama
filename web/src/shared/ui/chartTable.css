@@ -46,13 +46,15 @@
   white-space: normal;
 }
 
-/* A name breaks between words before it breaks inside one: in a table wider than its frame,
-   «Wednesday, November 11» otherwise falls apart a letter to a line. */
+/* A name breaks between words and never inside one: its column is at least as wide as its
+   longest word, and a table wider than its frame scrolls in it. Broken anywhere, the column kept
+   to its least 8em on a phone and «понедельник» lost its last letter to the next line. A name
+   of one long run, an id, wraps at its hyphens. */
 .chart-name {
   min-inline-size: 8em;
   color: var(--color-text);
   font: inherit;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* In a table wider than its frame the name heading each row, and the heading over the names,
