@@ -28,7 +28,9 @@ const actions = useLineActions()
 const link = computed(() => actions.taskLink(props.by, props.line.value))
 const narrowsTo = computed(() => actions.narrowsTo(props.by, props.line.value))
 const narrows = computed(() => !link.value && narrowsTo.value !== undefined)
-const narrowDescription = computed(() => actions.narrowName(props.line.name))
+const narrowDescription = computed(() =>
+  actions.narrowName(props.by, props.line.value, props.line.name),
+)
 /** The name and what it leaves out, as the hint says them while the line is cut. */
 const whole = computed(() =>
   props.line.detail ? `${props.line.name} ${props.line.detail}` : props.line.name,

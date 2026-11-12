@@ -23,7 +23,8 @@
  * page never shows a view its link would not give back.
  *
  * A value or a day pressed in the report narrows the view to it and breaks it down by task, as a
- * new place in the history, so Back returns to the view it was pressed in.
+ * new place in the history, so Back returns to the view it was pressed in. Work with no task is
+ * broken down instead by where it came from (`useLineActions`).
  *
  * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
  * is its whole report.
@@ -38,6 +39,7 @@ import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
+import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
@@ -105,10 +107,10 @@ function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace' = 'replac
   return true
 }
 
-/** The view narrowed to one value of a dimension, broken down by task. */
+/** The view narrowed to one value of a dimension, broken down as that value is (`narrowedBy`). */
 function narrow(dimension: UsageDimension, value: string | null, label: string, part: ReportPart) {
   const filters = orderFilters({ ...view.value.filters, [dimension]: [value] })
-  if (change({ filters, by: 'work_item' }, 'push')) return
+  if (change({ filters, ...lines.narrowedBy(dimension, value) }, 'push')) return
   refused.value = { part, words: t('analytics.drill.full', { value: label }) }
 }
 
@@ -134,6 +136,7 @@ const lastEventAt = computed(() => {
 const filterDimensions = computed<UsageDimension[]>(() =>
   USAGE_DIMENSIONS.filter((dimension) => !(props.projectId && dimension === 'project')),
 )
+const lines = provideLineActions(() => filterDimensions.value)
 
 /** The page's sections, in the rail's order: the overview, then each dimension filtered on. */
 const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
