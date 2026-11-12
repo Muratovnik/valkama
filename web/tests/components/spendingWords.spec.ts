@@ -134,6 +134,12 @@ describe('a day in a sentence', () => {
     })
     expect(wordsIn('en').stepName('2026-11-11T14:00:00+03:00', 'hour')).not.toHaveProperty('dated')
   })
+
+  // The bar's newest record of an earlier day: as short as a period names that day's hours.
+  it('names a moment of another day by its date with the month and its clock time', () => {
+    expect(wordsIn('en').datedClock('2026-11-10T20:05:00+03:00')).toBe('Nov 10, 20:05')
+    expect(wordsIn('ru').datedClock('2026-11-10T20:05:00+03:00')).toBe('10 нояб., 20:05')
+  })
 })
 
 describe('a share of the whole', () => {

@@ -14,9 +14,10 @@
  * How fresh the figures are is the newest record the store holds, of any session: its time and
  * how old it is now, in seconds under a minute, counted on each second without a read, so a page
  * left open says its figures grow old. Its clock time is the browser's own, as the time axis
- * under it reads. The freshness keeps at least the room of a short age, with figures of one
- * width, so its count going up moves nothing beside it; a longer one takes the width of its
- * words, and only a bar with no room left cuts it, its hint saying it whole; a short bar says
+ * under it reads, and on an earlier day its date before it, «Nov 10, 14:05». The freshness keeps
+ * at least the room of a short age, with figures of one width, so its count going up moves
+ * nothing beside it; a longer one takes the width of its words, and only a bar with no room left
+ * cuts the record and its moment, never the age, its hint saying them whole; a short bar says
  * the age alone, and the read again by its icon. A live period says beside it, by a mark and how
  * often, that it reads itself again; its hint says it in full. A read again that failed says so
  * beside it (`RefreshFailed`).
@@ -121,21 +122,37 @@ const liveWords = computed(() => t('analytics.time.live', { interval: liveInterv
 const liveShort = computed(() => t('analytics.time.liveShort', { interval: liveInterval.value }))
 
 const now = useNow({ scheduler: (tick) => useIntervalFn(tick, 1000) })
-/** How fresh the figures are, as words and, where there is one, the moment they stand for. */
+
+/** Where the newest record's moment ends in the sentence: what follows it is its age. */
+const MOMENT_END = '\u{0}'
+
+/**
+ * How fresh the figures are, as words and, where there is one, the moment they stand for. The
+ * sentence is drawn in two parts, the record with its moment (`record`) and the age after it
+ * (`age`), so a line short of room cuts the first and never the age.
+ */
 const fresh = computed(() => {
   if (props.lastEventAt === undefined) return null
-  if (props.lastEventAt === null) return { at: '', words: t('analytics.frame.freshNone'), full: '' }
+  if (props.lastEventAt === null) {
+    const none = t('analytics.frame.freshNone')
+    return { at: '', ago: '', record: '', age: '', words: none, full: '' }
+  }
   const at = Date.parse(props.lastEventAt)
   const shownAt = Math.max(now.value.getTime(), at)
   const seconds = (count: number) => t('analytics.time.seconds', { count })
   const ago = agoWords(at, shownAt, { ...spanWordsOf(t), seconds })
-  // The clock time alone on the day it is seen, with its day before that.
+  // The clock time alone on the day it is seen, with its date before it on another day.
   const today = new Date(at).toDateString() === new Date(shownAt).toDateString()
-  const named = words.stepName(momentAtOffset(at), 'minute')
+  const moment = momentAtOffset(at)
+  const named = today ? words.stepName(moment, 'minute').label : words.datedClock(moment)
+  const sentence = t('analytics.frame.fresh', { at: `${named}${MOMENT_END}`, ago })
+  const [record = '', age = ''] = sentence.split(MOMENT_END)
   return {
     at: props.lastEventAt,
     ago,
-    words: t('analytics.frame.fresh', { at: today ? named.label : named.fullLabel, ago }),
+    record,
+    age,
+    words: record + age,
     full: new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(
       at,
     ),
@@ -215,10 +232,13 @@ const fresh = computed(() => {
             <time
               v-if="fresh.at"
               v-tooltip.detail="{ text: fresh.full, words: fresh.words }"
-              class="analytics-bar-fresh-time one-line"
+              class="analytics-bar-fresh-time"
               :datetime="fresh.at"
               :data-age="fresh.ago"
-              ><span class="analytics-bar-fresh-words">{{ fresh.words }}</span></time
+              ><span class="analytics-bar-fresh-words"
+                ><span class="analytics-bar-fresh-record one-line">{{ fresh.record }}</span
+                ><span class="analytics-bar-fresh-age">{{ fresh.age }}</span></span
+              ></time
             >
             <span
               v-else
@@ -329,13 +349,14 @@ const fresh = computed(() => {
 
 /* The freshness keeps at least the room of a short age, «9 s» or «12 min», held by an empty
    item under its words, and its figures one width, so a tick of its count moves and resizes
-   nothing beside it. A longer age takes the width of its words; a line with no room left cuts
-   them at the end, and the hint says them whole. */
+   nothing beside it. A longer age takes the width of its words. A line with no room left cuts the
+   record and its moment at their end, and the hint says them whole; the age is never cut. So the
+   freshness is never narrower than its age: its column's least is the least of its words, which
+   is the age, and the empty item, a grid of one track from nothing to 21em, asks for no least. */
 .analytics-bar-fresh {
   display: grid;
   flex: 0 1 auto;
-  grid-template-columns: minmax(0, 1fr);
-  min-inline-size: 0;
+  grid-template-columns: minmax(min-content, 1fr);
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
@@ -344,15 +365,27 @@ const fresh = computed(() => {
 
   &::before {
     content: '';
+    display: grid;
     grid-area: 1 / 1;
-    inline-size: 21em;
-    max-inline-size: 100%;
+    grid-template-columns: minmax(0, 21em);
   }
 }
 
 .analytics-bar-fresh-time,
 .analytics-bar-fresh-none {
   grid-area: 1 / 1;
+}
+
+/* The record with its moment takes what the age leaves it, up to its own width. */
+.analytics-bar-fresh-words {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) max-content;
+  justify-content: end;
+}
+
+/* Whole, on one line, with the space before its separator. */
+.analytics-bar-fresh-age {
+  white-space: pre;
 }
 
 /* A phone: the periods one row that scrolls sideways, and the filter, the freshness and the

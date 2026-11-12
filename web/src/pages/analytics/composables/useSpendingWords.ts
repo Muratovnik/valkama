@@ -43,6 +43,9 @@ const DATE: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
 /** A time of the clock, «09:05», «21:25»: the clock the minutes of a chart read on. */
 const CLOCK: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
 
+/** A time of the clock on a day not today, with its date: «Nov 10, 09:05», «10 нояб., 09:05». */
+const DATED_CLOCK: Intl.DateTimeFormatOptions = { ...DATE, ...CLOCK }
+
 /** The charts count time in hours (`scale`). */
 const HOUR_SECONDS = 3600
 
@@ -180,7 +183,7 @@ export function useSpendingWords() {
   function period(from: string, to: string) {
     let options = DATE
     if (Date.parse(to) - Date.parse(from) < DAY)
-      options = withinToday(from, to) ? CLOCK : { ...DATE, ...CLOCK }
+      options = withinToday(from, to) ? CLOCK : DATED_CLOCK
     return dayFormat(options)
       .formatRange(named(from), named(to, -1))
       .replaceAll(/\s/gu, NO_BREAK)
@@ -303,6 +306,11 @@ export function useSpendingWords() {
   const clock = (start: string) => dayFormat(CLOCK).format(named(start))
   const fullClock = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long', ...CLOCK }).format(named(start))
+  /**
+   * A moment of another day as short as a period's hours of that day are named (`period`), its
+   * date and its clock time, «Nov 10, 14:05»: the clock time alone would read as today's.
+   */
+  const datedClock = (start: string) => dayFormat(DATED_CLOCK).format(named(start))
 
   /**
    * A step of a period by its start, short and in full: a day by its weekday and date, else its
@@ -424,6 +432,7 @@ export function useSpendingWords() {
     axis,
     change,
     chartTitle,
+    datedClock,
     day,
     fullDay,
     scale,
