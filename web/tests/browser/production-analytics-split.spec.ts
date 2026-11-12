@@ -106,6 +106,33 @@ function split(page: Page) {
       // The heading row over the frame, and the controls in it: one row is as tall as they are.
       headRow: Math.round(boxOf('.spending-table-head')?.height ?? 0),
       controls: Math.round(boxOf('.spending-table-controls')?.height ?? 0),
+      // The name's column, and the table it stands in.
+      name: Math.round(boxOf('.spending-table-frame tbody th')?.width ?? 0),
+      figures: Math.round(
+        [...document.querySelectorAll('.spending-table-frame thead th[data-numeric="true"]')]
+          .map((one) => one.getBoundingClientRect().width)
+          .reduce((sum, width) => sum + width, 0),
+      ),
+      tableWidth: Math.round(boxOf('.spending-table-frame table')?.width ?? 0),
+      // How much wider each figure's column stands than the widest thing in it, padding and all.
+      slack: [
+        ...document.querySelectorAll<HTMLTableCellElement>(
+          '.spending-table-frame thead th[data-numeric="true"]',
+        ),
+      ].map((heading) => {
+        const cells = document.querySelectorAll(
+          `.spending-table-frame tr > :nth-child(${heading.cellIndex + 1})`,
+        )
+        const needs = [...cells].map((cell) => {
+          const range = document.createRange()
+          range.selectNodeContents(cell)
+          const style = getComputedStyle(cell)
+          const padding =
+            Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+          return range.getBoundingClientRect().width + padding
+        })
+        return Math.round(heading.getBoundingClientRect().width - Math.max(...needs))
+      }),
       lines: linesOf(),
       multiples: wholeIn('.spending-multiples .multiple'),
       scrollers: scrollers.map((one) => one.className),
@@ -171,6 +198,10 @@ for (const [width, height] of [
     expect(measured.headRow, 'the heading row on one line').toBeLessThanOrEqual(
       measured.controls + 2,
     )
+    expect(measured.headRow).toBeLessThanOrEqual(36)
+    // The figures' columns are as narrow as what they hold, so the name's column has the rest.
+    expect(Math.max(...measured.slack), 'room left in a figure column').toBeLessThanOrEqual(2)
+    expect(measured.name + 2).toBeGreaterThanOrEqual(measured.tableWidth - measured.figures)
     expect(measured.multiples, 'small charts in view, title and plot').toBeGreaterThanOrEqual(1)
 
     // The day chart's value axis and the small charts' scale count agent time in one unit each.
@@ -293,6 +324,28 @@ test('work on no task, the largest share, is ranked first with a bar and a small
   await expect(first.locator('.ranked-label')).toHaveText('No task')
   await expect(first.locator('.ranked-bar')).toHaveAttribute('data-slot', 'other')
   await expect(page.locator('.spending-multiples .multiple-name').first()).toHaveText('No task')
+})
+
+test('the table counts the values of the period as the rail’s tile does', async ({ page }) => {
+  await serve(page, [
+    ...THIRTY_TASKS,
+    {
+      at: new Date(2026, 10, 9, 12),
+      group: { work_item: noTask, account: value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f') },
+      spend: { seconds: 3600, tokens: 1000, cost: 1 },
+    },
+  ])
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  const line = page.locator('.spending-table-summary')
+  await expect(line).toHaveText(/^30 in the period · and «No task», sorted by /u)
+  const tile = page.locator('.analytics-page-rail').getByRole('button', { name: /^Task\b/u })
+  const tileText = (await tile.textContent()) ?? ''
+  const lineText = (await line.textContent()) ?? ''
+  const values = /(\d+) values?/u.exec(tileText)?.[1]
+  const first = /^(\d+) in the period/u.exec(lineText.trim())?.[1]
+  expect(values).toBe('30')
+  expect(first).toBe(values)
 })
 
 test('a section that is not held has no button for the whole panel', async ({ page }, info) => {

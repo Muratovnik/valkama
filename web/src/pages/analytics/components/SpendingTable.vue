@@ -105,15 +105,11 @@ const headings = computed(() => [
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
-/** What the heading row says of the rows: how many, and their order. */
+/** What the heading row says of the rows (`counts`), and their order. */
 const summary = computed(() => {
   const column = headings.value.find(({ key }) => key === sort.value.column)?.text ?? ''
   const way = t(`analytics.panel.table.direction.${direction.value}`)
-  const all = model.value.lines.length
-  return [
-    t('analytics.panel.table.rows', { shown: lines.value.length, all }),
-    t('analytics.panel.table.sorted', { column, direction: way }),
-  ].join(', ')
+  return `${model.value.counts}, ${t('analytics.panel.table.sorted', { column, direction: way })}`
 })
 
 const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)
@@ -401,22 +397,18 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   color: var(--color-text);
 }
 
-/* The heading row: the title, what the rows are and their order, and the controls, on one line
-   where it has room and wrapping where it has not; the words about the rows give way first. */
+/* The heading row: the title, what the rows are and their order, and the controls, on one line;
+   the words about the rows give way first, down to nothing, and are whole in their hint. Only a
+   narrow table lets the row wrap. */
 .spending-table-head {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   align-items: center;
 }
 
-.spending-table-title {
-  flex: 0 1 auto;
-}
-
 .spending-table-summary {
   flex: 1 1 0;
-  min-inline-size: 6rem;
+  min-inline-size: 0;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
@@ -424,10 +416,14 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 
 .spending-table-controls {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-1);
   align-items: center;
   margin-inline-start: auto;
+}
+
+.spending-table-title,
+.spending-table-controls {
+  flex: none;
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
@@ -442,12 +438,20 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   white-space: nowrap;
 }
 
+/* The name's column takes all the width the figures leave: as wide as the table, less what the
+   figures' columns need, and never wider than its frame because of a long name. */
 .chart-name {
+  inline-size: 100%;
   min-inline-size: 12rem;
   max-inline-size: 0;
 }
 
 @container (width < 50rem) {
+  .spending-table-head,
+  .spending-table-controls {
+    flex-wrap: wrap;
+  }
+
   .chart-heading[data-numeric='true'] {
     min-inline-size: 7em;
     white-space: normal;

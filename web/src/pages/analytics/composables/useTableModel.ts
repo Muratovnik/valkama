@@ -19,7 +19,13 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { crossOf } from '@/pages/analytics/utils/crossFigures.ts'
 import { kindsByValue, kindsOf, TOKEN_KINDS } from '@/pages/analytics/utils/tokenKinds.ts'
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
-import { changeOf, comparedLines, figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import {
+  changeOf,
+  comparedLines,
+  figureOf,
+  spentAnything,
+  spentOf,
+} from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
@@ -43,7 +49,38 @@ export interface TableLine {
   /** Whether the line is no value of the dimension: work with no value there, or unknown. */
   rest: boolean
   value: UsageGroupValue
+  /** When the line spent: in this period, only in the period before, or in neither. */
+  when: 'before' | 'neither' | 'now'
   detail?: string
+}
+
+/** What the rows of a table are, as its heading row counts them. */
+export interface TableCounts {
+  /** The names of the rows of no value of the dimension that spent in this period. */
+  apart: string[]
+  /** Rows that spent only in the period before. */
+  before: number
+  /** Values of the dimension that spent anything in this period, as the rail's tile counts them. */
+  now: number
+}
+
+/**
+ * How many rows of a table are values of this period and how many spent only before, and which
+ * rows of no value spent in this period: together, every row that spent anything.
+ */
+export function tableCounts(lines: readonly TableLine[]): TableCounts {
+  const now = lines.filter((line) => line.when === 'now')
+  return {
+    now: now.filter((line) => !line.rest).length,
+    before: lines.filter((line) => line.when === 'before').length,
+    apart: now.filter((line) => line.rest).map((line) => line.name),
+  }
+}
+
+/** When a line spent, from what it spent now and, where read, before. */
+function whenOf(now: Spent, before: Spent | null): TableLine['when'] {
+  if (spentAnything(now)) return 'now'
+  return before && spentAnything(before) ? 'before' : 'neither'
 }
 
 /** Where the table's figures come from: the answer on show, and the crossed read when there is one. */
@@ -98,12 +135,19 @@ export function useTableModel(source: () => TableSource) {
         }))
       : []
 
-  const lineOf = (value: UsageGroupValue, key: string, kind: string, cells: TableCell[]) => {
+  /** A line of the table, and when it spent (`whenOf`). */
+  const lineOf = (
+    value: UsageGroupValue,
+    key: string,
+    kind: string,
+    [cells, when]: [TableCell[], TableLine['when']],
+  ): TableLine => {
     const { by } = source()
     return {
       key,
       value,
       cells,
+      when,
       rest: kind !== 'category',
       name: words.valueLabel(by, value),
       detail: words.valueDetail(by, value),
@@ -159,22 +203,18 @@ export function useTableModel(source: () => TableSource) {
       measure,
       name: (value) => words.valueLabel(by, value),
     }).map((line) =>
-      lineOf(
-        line.value,
-        line.key,
-        line.kind,
+      lineOf(line.value, line.key, line.kind, [
         cellsOf(line.now, line.before, kindsOf(kinds, line.key)),
-      ),
+        whenOf(line.now, line.before),
+      ]),
     )
     const total = cellsOf(
       spentOf(usage.total),
       comparison ? spentOf(comparison.total) : null,
       usage.total.tokens,
     )
-    const title = t(period ? 'analytics.table.beside' : 'analytics.table.title', {
-      by: t(`analytics.byDimension.${by}`),
-      period,
-    })
+    // The period compared with is named in its column's heading, so the title need not say it.
+    const title = t('analytics.table.title', { by: t(`analytics.byDimension.${by}`) })
     return { title, columns, lines, total, firstSort: measure as string }
   }
 
@@ -190,12 +230,10 @@ export function useTableModel(source: () => TableSource) {
       ...kindCells(tokens),
     ]
     const lines = rows.map((row) =>
-      lineOf(
-        row.value,
-        row.key,
-        row.kind,
+      lineOf(row.value, row.key, row.kind, [
         cellsOf((key) => row.cells.get(key) ?? nothing, row.total, kindsOf(kinds, row.key)),
-      ),
+        whenOf(row.total, null),
+      ]),
     )
     const byColumn = new Map(columns.map((column) => [column.key, column.spent]))
     return {
@@ -219,9 +257,27 @@ export function useTableModel(source: () => TableSource) {
     }
   }
 
+  /**
+   * What the heading row says of the rows (`tableCounts`): the values of this period, counted as
+   * the rail's tile counts them; those that spent only before; and the rows of no value that
+   * spent now, by name, so the parts add up to the rows shown.
+   */
+  function countWords(lines: readonly TableLine[]) {
+    const { now, before, apart } = tableCounts(lines)
+    const names = apart.map((name) => `«${name}»`).join(', ')
+    return [
+      t('analytics.panel.table.counts.now', { count: now }),
+      before ? t('analytics.panel.table.counts.before', { count: before }) : '',
+      names ? t('analytics.panel.table.counts.apart', { names }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+
   return computed(() => {
     const { cross } = source()
-    return cross ? crossed(cross.across, cross.usage) : besideBefore()
+    const model = cross ? crossed(cross.across, cross.usage) : besideBefore()
+    return { ...model, counts: countWords(model.lines) }
   })
 }
 
