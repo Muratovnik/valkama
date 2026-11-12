@@ -41,6 +41,7 @@ import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage } from '@/shared/api/analyticsApi.ts'
+import { sentences } from '@/shared/lib/sentences.ts'
 import MiniTrend from '@/shared/ui/MiniTrend.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
@@ -108,7 +109,7 @@ const tiles = computed(() =>
       direction: change.direction,
       rate,
       notes,
-      whole: [label, figure, change.words, rateWhole, ...notes].filter(Boolean).join('. '),
+      whole: sentences([label, figure, change.words, rateWhole, ...notes]),
     }
   }),
 )

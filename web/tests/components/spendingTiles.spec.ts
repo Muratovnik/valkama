@@ -140,6 +140,25 @@ describe('the tiles', () => {
     )
   })
 
+  // The month cut short ends the change with a stop of its own, and the hint that says the tile
+  // whole, sentence by sentence, adds none after it: «2–8 нояб..» read as a typing slip.
+  it('say the tile whole in its hint with one stop after a period named in Russian', () => {
+    const moved = mountTiles(
+      NOW,
+      { seconds: 3600, tokens: 2_400_000, cost: 12.5, unpriced: 0 },
+      'time',
+      'ru',
+    )
+    for (const measure of ['time', 'tokens', 'cost'] as const) {
+      const hint = moved
+        .get(`.tile-figure[data-measure="${measure}"]`)
+        .element.closest('.tile-body')
+      const said = (hint as HTMLElement | null)?.dataset.tooltip?.replaceAll(/\s/gu, ' ') ?? ''
+      expect(said).toContain('2–8 нояб.')
+      expect(said).not.toContain('..')
+    }
+  })
+
   // What a token figure counts is not obvious: the tile says it, kind by kind.
   it('say what the tokens count, by kind, and the cache reads they leave apart', () => {
     const tokens = tile(mountTiles(NOW, NOW), 'tokens')
