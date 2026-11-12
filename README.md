@@ -956,7 +956,9 @@ Agent call's short description, or assistant text.
 The same hooks tell a working agent what a person did in the interface on the
 work its session holds. `post-tool-use`, `user-prompt-submit` and `stop` answer
 with a short notice when there is news: a comment, an answer, a status change, a
-cancel. The orchestrator hears about everything its session holds, a subagent
+cancel. The notice goes to the model; in Claude Code the person also sees one
+line per item, saying the agent was told what they did or what another agent
+wrote there. The orchestrator hears about everything its session holds, a subagent
 about the items where it holds the claim or a step and about replies in its own
 threads and answers to its own questions, each event once. `claude watch`,
 registered with Claude Code's `asyncRewake`, wakes an orchestrator that is idle,

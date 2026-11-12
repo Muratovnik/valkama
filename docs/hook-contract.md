@@ -512,8 +512,39 @@ by the rule the lease does, in the two queries it makes anyway.
 The answer is the client's own:
 
 ```json
-{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "Valkama notice: …"}}
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "Valkama notice: …"}, "systemMessage": "Valkama told the agent what you did on MAIN-12 «Pick the route»"}
 ```
+
+`additionalContext` goes to the model, and the person never sees it. Alone, it
+lets the agent say in the person's chat that the owner answered or another agent
+wrote, with nothing on screen to show where that came from. So the same answer
+to a Claude Code orchestrator also carries `systemMessage`, a common field of
+Claude Code's hook output that the client shows the person, as
+`PostToolUse says: …` (or `UserPromptSubmit`, `Stop`), and does not send to the
+model. It has one line per item the notice tells, with the item's reference and
+its title on one line, cut to 80 characters with `…`, and says whose news it
+was:
+
+```text
+Valkama told the agent what you did on MAIN-12 «Pick the route»
+Valkama told the agent what another agent wrote on MAIN-14 «Drop the old route»
+Valkama told the agent what you did and what another agent wrote on MAIN-15 «Ship it»
+```
+
+The language is the one owner alerts are written in: `locale` in the alert
+settings, which falls back to the system language, as it does on a store too old
+to hold alert settings. In Russian a line reads `Valkama передала
+агенту ваши действия по задаче MAIN-12 «Pick the route»`, `… запись другого
+агента …` for another agent's news, and `… ваши действия и запись другого агента
+…` for both. An item the notice leaves out for its bound (see
+[what a notice says](#what-a-notice-says)) gets no line, because the agent was
+not told it. Control characters in a title are dropped, since the client prints
+the line to a terminal. The settings are read on the connection the hook already
+has open, and only when there is news to tell.
+
+A subagent's answer has no `systemMessage`, because nothing a subagent's hook
+returns reaches the person's chat, and a Codex answer has none either. The
+watcher's wake carries none: it exits 2 with the notice on stderr.
 
 Codex reads `additionalContext` from `PostToolUse` and `UserPromptSubmit` the same
 way, so `valkama hook codex post-tool-use` and `valkama hook codex
@@ -792,6 +823,13 @@ So register these hooks in exec form: `command` the launcher's own `python.exe`
 also keeps the hook inside the client's process tree: a hook started through
 `cmd.exe` outlives a client killed with `taskkill /F`. The shim starts a hook
 without `runpy` and `pathlib`, which alone cost as much as the rest.
+
+A notice to a Claude Code orchestrator also reads the alert settings, for the
+language of [the line the person sees](#when-it-is-told), and loading them brings
+`json` and `re` with them. Only a call with news pays for it: measured on Windows
+against a small store, from process start to exit, 40 calls each in two runs, a
+call with a notice to print took a median of 55 and 53 ms without the line and 74
+and 71 ms with it. A call with nothing new loads none of it.
 
 On a call with nothing new, threads add no query and no join: a place is kept for
 every item the recipient wrote to, and those items were already read. Who wrote a
