@@ -5,16 +5,20 @@
  * and a role offers no such choice at all.
  */
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import type { VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
+import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 import { task, usageAnswer, value } from '../fixtures/analytics.ts'
 import { analyticsI18n } from '../support/analyticsReads.ts'
+import { saidBy } from '../support/liveRegion.ts'
 
 const DIMENSIONS: UsageDimension[] = ['work_item', 'launch_class', 'role', 'model']
 
@@ -79,5 +83,72 @@ describe('the filters', () => {
     },
   ] as const)('offer «none» by what it admits, and none for a role, in $locale', (example) => {
     expect(offered(example.locale)).toEqual(example.expected)
+  })
+})
+
+/** Every dimension read as the fixture reads it: a list of values for each. */
+const allRead = (): Record<UsageDimension, FilterValues> =>
+  Object.fromEntries(DIMENSIONS.map((dimension) => [dimension, read(dimension)])) as Record<
+    UsageDimension,
+    FilterValues
+  >
+
+function mountFilters(values: Partial<Record<UsageDimension, FilterValues>>) {
+  return mount(AnalyticsFilters, {
+    props: { dimensions: DIMENSIONS, filters: {}, values },
+    global: { plugins: [analyticsI18n()] },
+  })
+}
+
+/** Each field's region that says a wait, in the fields' order. */
+const regionWords = (filters: VueWrapper) =>
+  filters.findAll('[role="status"]').map((region) => region.text())
+/** The empty label each field would show in its list, in the fields' order. */
+const emptyLabels = (filters: VueWrapper) =>
+  filters
+    .findAllComponents(SearchCombobox)
+    .map((field) => (field.props() as { emptyLabel: string }).emptyLabel)
+
+describe('a field whose values are being read', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('says the word at once, and shows nothing for a read that answers inside the delay', async () => {
+    const filters = mountFilters({ ...allRead(), work_item: 'loading' })
+    expect(regionWords(filters)).toEqual(['Loading', '', '', ''])
+    expect(emptyLabels(filters)[0]).toBe('')
+    vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
+    await filters.vm.$nextTick()
+    expect(emptyLabels(filters)[0]).toBe('')
+
+    await filters.setProps({ values: allRead() })
+    expect(regionWords(filters)).toEqual(['', '', '', ''])
+    expect(emptyLabels(filters)[0]).toBe('No matches')
+  })
+
+  it('shows its word once the wait has lasted, holds it for the minimum, and says it once', async () => {
+    const filters = mountFilters({ ...allRead(), work_item: 'loading', model: 'failed' })
+    const said = saidBy(filters.findAll('[role="status"]')[0].element)
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await filters.vm.$nextTick()
+    expect(emptyLabels(filters)[0]).toBe('Loading')
+    // Another field keeps its own answer, and a failed read says so.
+    expect(emptyLabels(filters)[3]).toBe('The values could not be read.')
+
+    await filters.setProps({ values: allRead() })
+    // Held for the minimum after the wait was shown, while the region is already clear.
+    expect(emptyLabels(filters)[0]).toBe('Loading')
+    expect(regionWords(filters)[0]).toBe('')
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await filters.vm.$nextTick()
+    expect(emptyLabels(filters)[0]).toBe('Loading')
+    vi.advanceTimersByTime(1)
+    await filters.vm.$nextTick()
+    expect(emptyLabels(filters)[0]).toBe('No matches')
+    expect(said).toEqual(['Loading', ''])
   })
 })

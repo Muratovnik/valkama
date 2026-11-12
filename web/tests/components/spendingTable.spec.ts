@@ -450,11 +450,13 @@ describe('the breakdown crossed with a second dimension', () => {
   it('says it is reading, or that the read failed with a way to ask again, in place of the table', async () => {
     const reading = crossedTable({ status: 'reading', usage: null })
     expect(reading.find('table').exists()).toBe(false)
-    expect(reading.get('[role="status"]').text()).toBe('Reading the breakdown by model…')
+    expect(reading.get('[role="status"]').text()).toBe('Loading')
     expect(reading.get('.spending-download').attributes('disabled')).toBeDefined()
 
+    // A failed read says so in the alert, and announces no wait.
     const failed = crossedTable({ status: 'failed' })
     expect(failed.get('[role="alert"]').text()).toBe('The breakdown by model could not be read.')
+    expect(failed.get('[role="status"]').text()).toBe('')
     await failed.get('.spending-table-waiting button').trigger('click')
     expect(failed.emitted('reread')).toHaveLength(1)
   })

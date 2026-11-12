@@ -38,6 +38,7 @@ import type {
 import { offerDownload } from '@/shared/lib/fileDownload.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -75,6 +76,16 @@ const crossed = computed(() => {
 })
 /** A second dimension is chosen and its read has not landed: it is being read, or failed. */
 const waiting = computed(() => Boolean(props.across) && !crossed.value)
+/** The crossed read is under way: a wait, unlike a failure, which says so in its place. */
+const reading = computed(() => waiting.value && props.cross.status !== 'failed')
+/** The wait's words, shown once it has lasted and held for the minimum (`useLoadingPresence`). */
+const { shown } = useLoadingPresence(() => reading.value)
+/** Said to assistive technology at once, from the region in the markup before the wait starts. */
+const said = computed(() => (reading.value ? t('platform.states.loading') : ''))
+/** The same word on screen, once the wait has lasted. */
+const waitWord = computed(() => (shown.value ? t('platform.states.loading') : ''))
+/** The table stays away while the wait is under way or shown, so the minimum keeps its words. */
+const held = computed(() => waiting.value || shown.value)
 const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${props.across}`) : ''))
 
 const model = useTableModel(() => ({
@@ -156,8 +167,13 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
     >
       {{ t('analytics.panel.table.kinds.note') }}
     </p>
+    <span
+      class="visually-hidden"
+      role="status"
+      >{{ said }}</span
+    >
     <div
-      v-if="waiting"
+      v-if="held"
       class="spending-table-waiting"
     >
       <p
@@ -170,9 +186,8 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
       <p
         v-else
         class="spending-table-reading"
-        role="status"
       >
-        {{ t('analytics.panel.table.reading', { across: acrossWords }) }}
+        {{ waitWord }}
       </p>
       <VButton
         v-if="cross.status === 'failed'"
@@ -293,6 +308,11 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* The read's wait keeps its line while it is not yet shown, when its words are still empty. */
+.spending-table-reading {
+  min-block-size: 1lh;
 }
 
 .spending-table-waiting {

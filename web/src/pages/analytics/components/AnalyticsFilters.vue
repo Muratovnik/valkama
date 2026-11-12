@@ -16,7 +16,9 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { filterKey, filterValue } from '@/pages/analytics/utils/usageValues.ts'
 
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 const props = defineProps<{
@@ -35,10 +37,24 @@ const chosen = (dimension: UsageDimension) =>
 
 const removeLabel = (label: string) => t('analytics.filters.remove', { label })
 
-function emptyLabel(dimension: UsageDimension) {
+/** A dimension's values are waited for while they are read for the first time, or not yet asked. */
+const waiting = (dimension: UsageDimension) => {
   const read = props.values[dimension]
-  if (read === 'loading' || read === undefined) return t('analytics.filters.reading')
-  if (read === 'failed') return t('analytics.filters.failed')
+  return read === 'loading' || read === undefined
+}
+
+/**
+ * Each dimension's wait, shown by its field once it has lasted (`useLoadingPresence`). Made for
+ * every dimension at once, because a field may be drawn for any of them.
+ */
+const waits = Object.fromEntries(
+  USAGE_DIMENSIONS.map((dimension) => [dimension, useLoadingPresence(() => waiting(dimension))]),
+) as Record<UsageDimension, ReturnType<typeof useLoadingPresence>>
+
+function emptyLabel(dimension: UsageDimension) {
+  if (waits[dimension].shown.value) return t('platform.states.loading')
+  if (waiting(dimension)) return ''
+  if (props.values[dimension] === 'failed') return t('analytics.filters.failed')
   return t('analytics.filters.noMatches')
 }
 
@@ -50,6 +66,8 @@ const fields = computed(() =>
     chosen: chosen(dimension),
     options: options(dimension, props.values[dimension], chosen(dimension)),
     emptyLabel: emptyLabel(dimension),
+    // Said to assistive technology at once, from the region the field keeps in the markup.
+    said: waiting(dimension) ? t('platform.states.loading') : '',
   })),
 )
 
@@ -64,18 +82,26 @@ function choose(dimension: UsageDimension, keys: string[]) {
 
 <template>
   <div class="analytics-filters">
-    <SearchCombobox
+    <template
       v-for="field in fields"
       :key="field.dimension"
-      :data-dimension="field.dimension"
-      :label="field.label"
-      :model-value="field.chosen"
-      :options="field.options"
-      :empty-label="field.emptyLabel"
-      :placeholder="t('analytics.filters.any')"
-      :remove-label="removeLabel"
-      @update:model-value="(keys) => choose(field.dimension, keys)"
-    />
+    >
+      <span
+        class="visually-hidden"
+        role="status"
+        >{{ field.said }}</span
+      >
+      <SearchCombobox
+        :data-dimension="field.dimension"
+        :label="field.label"
+        :model-value="field.chosen"
+        :options="field.options"
+        :empty-label="field.emptyLabel"
+        :placeholder="t('analytics.filters.any')"
+        :remove-label="removeLabel"
+        @update:model-value="(keys) => choose(field.dimension, keys)"
+      />
+    </template>
   </div>
 </template>
 

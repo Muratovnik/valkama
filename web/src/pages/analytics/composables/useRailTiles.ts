@@ -8,8 +8,9 @@
  * kind reads the page's own answer too: the largest kind the tokens figure counts, its share of
  * that figure, and the counted kinds' shares, whatever the page's measure, since it is of tokens.
  *
- * A tile always says something in the same place. Before its first answer it says it is reading;
- * a read that failed says so; a period that spent nothing says there is no data, never a zero.
+ * A tile always says something in the same place. Before its first answer it has no words of its
+ * own: the wait is said by the tile (`RailTile`), once it has lasted; a read that failed says so;
+ * a period that spent nothing says there is no data, never a zero.
  * A new answer replaces the words where they stand, and the last ones stay while it is read.
  */
 import { computed } from 'vue'
@@ -64,6 +65,9 @@ const standing = (state: RailTileModel['state'], lead: string): RailTileModel =>
   shares: null,
 })
 
+/** A first read's tile: no words of its own, the wait is said by the tile once it has lasted. */
+const reading = () => standing('loading', '')
+
 export function useRailTiles(options: {
   /** The page's shared reads, which the dimensions' reads go through. */
   shared: SharedUsage
@@ -84,7 +88,6 @@ export function useRailTiles(options: {
   // A share is said in whole percents, by the page's one rule.
   const { share } = words
 
-  const reading = () => standing('loading', t('analytics.rail.reading'))
   const failed = () => standing('failed', t('analytics.rail.failed'))
   const noData = () => standing('empty', t('analytics.rail.noData'))
 
