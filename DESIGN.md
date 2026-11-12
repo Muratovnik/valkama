@@ -2059,21 +2059,27 @@ and a panel. Nothing in it moves under the pointer or when an answer arrives; a 
 has nothing to say yet keeps the room it will need.
 
 The bar holds what every part reads by: the period, the filters, how old the newest
-record is and the refresh. A period is «Now», this week, the past four weeks or a span
-of days. «Now» is the last hour by the minute; it reads again every 30 seconds while the
-tab is visible and says so in the bar, a hidden tab asks nothing, and a refresh shows its
-answer whole or not at all, so the scroll, the section, the sort and the place under the
-pointer stay. Records reach the store in batches, so the bar says the newest record's
+record is and the refresh. A period is «Now», «Today», this week, the past four weeks or a
+span of days. «Now» is the last hour by the minute and «Today» the day so far by the hour,
+against the same hours of yesterday; both read again every 30 seconds while the tab is
+visible and say so in the bar, a hidden tab asks nothing, and a refresh shows its answer
+whole or not at all, so the scroll, the section, the sort and the place under the pointer
+stay. A refresh that fails keeps what is shown and says so in the bar, «Could not refresh»
+with a retry. Reading another period or filter dims what is shown until its answer comes, after
+a moment so that a quick answer does not flicker; a refresh of the same view dims nothing.
+Records reach the store in batches, so the bar says the newest record's
 age in seconds and the minutes after it are hatched as «no data yet» rather than drawn
 as a drop; the minute chart says under itself that its figures are an estimate.
 
-The rail holds a tile for the overview and one for each dimension of the read: account,
-project, task, executor, role, launch class, model, effort and environment. A tile is a
-summary of its own — the leading value, its share, how many values there are and one bar
-of the split — so every breakdown is in view before any is opened, and choosing a tile
-opens its section in the panel. The rail and the panel stand side by side only while the
-panel keeps 640 pixels; narrower, a section takes the rail's place and a way back stands
-over it. A plain address opens the overview.
+The rail holds a tile for the overview, one for the token kinds and one for each dimension
+of the read: account, project, task, executor, role, launch class, model, effort and
+environment. A tile is a summary of its own — the leading value, its share, how many values
+have a figure in the chosen measure and one bar of the split — so every breakdown is in view
+before any is opened, and choosing a tile opens its section in the panel. Opening a section,
+from its tile or a card's heading, is a step of the history, so Back returns to where it was;
+a period, a measure or a second dimension replaces the step. The rail and the panel stand
+side by side only while the panel keeps 640 pixels; narrower, a section takes the rail's
+place and a way back stands over it. A plain address opens the overview.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
@@ -2102,8 +2108,16 @@ keeps one colour on the whole page: in its tile, its bar, its small chart and it
 a day. Beside the rail the section is held to the window: the cells stay in view, the
 charts take what they hold up to a share of the rest and scroll inside it, and the table
 takes what is left and scrolls in its own frame, its heading, names and total held; a
-button gives the table the whole panel and gives it back. The table sorts by any column,
-crosses with a second dimension and downloads what it shows.
+button gives the table the whole panel and gives it back. Where the window is too low for
+that, the panel scrolls as one and the table stays at its foot: the wheel over the table
+scrolls the table, and what focus or a press brings into view stops above it. The table
+sorts by any column, crosses with a second dimension and downloads what it shows. Its
+heading row counts the values of the period that have a figure in the measure, as their tile
+does, and says apart those that spent in the period only in another measure — the adviser has
+tokens and no agent time — and those that spent only before it.
+
+The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
+figure counts add up to it, cache reads stand beside them and reasoning is part of output.
 
 A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
 are counted apart from the tokens processed anew and never summed into them.
