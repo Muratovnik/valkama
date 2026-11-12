@@ -383,11 +383,13 @@ const emptyDescription = computed(() =>
 }
 
 /* One column while the list and a section take turns; beside each other, the rail's width is
-   set where the room for them is measured (`usePanelRoom`). */
+   set where the room for them is measured (`usePanelRoom`). What the panel raises over itself —
+   a table's held heading — stays inside it, under the list of filters the bar opens over it. */
 .analytics-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
+  isolation: isolate;
 }
 
 /* Each of the two holds what it scrolls, a copy for a reader placed out of sight among it too:

@@ -302,14 +302,17 @@ for (const width of [1440, 390])
     await serve(page)
     const filters = { model: ['model-a'], work_item: [task(1, '').id, task(2, '').id] }
     const analytics = await openReport(page, width, pageAt({ filters: JSON.stringify(filters) }))
-    await analytics.locator('.analytics-filter-add').click()
-    // Each value chosen is a chip twice: on the bar with its dimension, and in its field.
+    // Three long chips have no room on the bar at either width: the first that fit stand there,
+    // and all three are counted on the button that opens the list.
+    const folded = analytics.locator('.analytics-filter-folded')
+    await expect(folded).toHaveText('Filters: 3')
+    await folded.click()
+    // Each value chosen is a chip in its field, and on the bar with its dimension where it fits.
     const named = analytics.locator('.analytics-bar-filters .combo-chip')
-    await expect(named).toHaveText([
-      /^Task: MAIN-1 Rework /u,
-      /^Task: MAIN-2 Rework /u,
-      'Model: model-a',
-    ])
+    const onBar = await named.allTextContents()
+    expect(onBar.length).toBeLessThan(3)
+    const all = [/^Task: MAIN-1 Rework /u, /^Task: MAIN-2 Rework /u, /^Model: model-a$/u]
+    for (const [index, words] of onBar.entries()) expect(words).toMatch(all[index] ?? /^$/u)
     const chips = analytics.locator('.analytics-filter-body .combo-chip')
     await expect(chips).toHaveCount(3)
     await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)
