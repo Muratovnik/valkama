@@ -120,3 +120,31 @@ test('the page travels as one data URL the window can load without a server', ()
   assert.ok(url.startsWith('data:text/html;charset=utf-8,'))
   assert.match(decodeURIComponent(url.slice(url.indexOf(',') + 1)), /Запускаем Valkama…/)
 })
+
+test('while it waits the page draws the shell at the rail width the reader last chose', () => {
+  const chosen = renderStartupPage({ phase: 'starting', locale: 'en', navWidth: 319.6 })
+  assert.match(chosen, /--sk-chosen: 320px;/)
+  assert.match(chosen, /class="sk-rail"/)
+  assert.match(chosen, /aria-busy="true"/)
+  // Nothing remembered, or nothing usable: the rail falls back to the shell's default.
+  for (const navWidth of [undefined, null, 'wide', 0, -40]) {
+    const fallback = renderStartupPage({ phase: 'starting', locale: 'en', navWidth })
+    assert.doesNotMatch(fallback, /--sk-chosen:/, String(navWidth))
+    assert.match(fallback, /var\(--sk-chosen, 260px\)/)
+  }
+  // A failure is no wait: it is the plain page with its remedy, and no skeleton.
+  const failed = renderStartupPage({ phase: 'failed', kind: 'launcher', locale: 'en', navWidth: 320 })
+  assert.doesNotMatch(failed, /sk-rail/)
+})
+
+test('a start says what it waits for only once the wait is long enough to read; a restart at once', () => {
+  const starting = renderStartupPage({ phase: 'starting', locale: 'ru' })
+  assert.match(starting, /\.sk-status \{[^}]*animation: appear 160ms ease-out 1000ms both;/)
+  const restarting = renderStartupPage({ phase: 'restarting', locale: 'ru' })
+  assert.match(restarting, /\.sk-status \{[^}]*animation: appear 160ms ease-out 0ms both;/)
+  assert.match(restarting, /Перезапускаем сервер…/)
+  for (const html of [starting, restarting]) {
+    assert.match(html, /@media \(prefers-reduced-motion: reduce\)/)
+    assert.doesNotMatch(html, new RegExp(ACTION_ORIGIN))
+  }
+})
