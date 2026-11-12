@@ -14,6 +14,11 @@ export function usePlanningSubscription(
   /** `returning` is true for the first frame after the connection dropped. */
   snapshot: (model: PlanningReadModel, returning: boolean) => void,
   agents: () => void,
+  /**
+   * The revision of the model the page holds for the target, read when the stream
+   * opens: the stream does not send that model again.
+   */
+  since: () => string | undefined,
 ) {
   const connection = ref<PlanningConnectionState>('connecting')
   const attempt = ref(0)
@@ -25,21 +30,25 @@ export function usePlanningSubscription(
       if (selected === null) return
       const current = () => key === JSON.stringify(target.value)
       cleanup(
-        subscribePlanning(selected, {
-          agents: () => {
-            if (current()) agents()
+        subscribePlanning(
+          selected,
+          {
+            agents: () => {
+              if (current()) agents()
+            },
+            connection: (state) => {
+              if (current()) connection.value = state
+            },
+            // The tab's one stream carries the side panel's frame too, so the shell opens none.
+            live: (frame) => {
+              if (current()) useLiveWorkStore().accept(frame)
+            },
+            snapshot: (model) => {
+              if (current()) snapshot(model, connection.value === 'reconnecting')
+            },
           },
-          connection: (state) => {
-            if (current()) connection.value = state
-          },
-          // The tab's one stream carries the side panel's frame too, so the shell opens none.
-          live: (frame) => {
-            if (current()) useLiveWorkStore().accept(frame)
-          },
-          snapshot: (model) => {
-            if (current()) snapshot(model, connection.value === 'reconnecting')
-          },
-        }),
+          since(),
+        ),
       )
     },
     { immediate: true },
