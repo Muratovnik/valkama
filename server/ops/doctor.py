@@ -40,6 +40,8 @@ from ..hooks import ingest, spool
 from ..memory import service as memory_service
 from ..platform import installed
 from ..projects import project_registry
+from ..quota import poll as quota_poll
+from ..quota import settings as quota_settings
 from ..telemetry import journal as telemetry_journal
 from ..telemetry import usage_store
 from ..telemetry.projections import JOURNAL_ADAPTERS
@@ -96,7 +98,7 @@ def _check(
 LEVELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("installation", "Installation", ("configuration", "store", "runtime", "skills")),
     ("projects", "Projects", ("projects",)),
-    ("capabilities", "Capabilities", ("drivers",)),
+    ("capabilities", "Capabilities", ("drivers", "quota-poll")),
     ("connections", "Connections", ("adapters",)),
 )
 
@@ -114,6 +116,7 @@ def diagnose(*, port: int = 8642, probe: bool = True) -> dict:
         "runtime": _guarded("runtime", "Runtime", lambda: _runtime_checks(port, probe=probe)),
         "skills": _guarded("skills", "Valkama skill", _skill_checks),
         "drivers": _guarded("drivers", "Execution drivers", _driver_checks),
+        "quota-poll": _guarded("quota-poll", "Quota poll", _quota_poll_checks),
         "adapters": _guarded("adapters", "Adapters", _adapter_checks),
         "projects": _guarded("projects", "Projects", _project_checks),
     }
@@ -1116,6 +1119,116 @@ def _listener_check(port: int, identity: Mapping[str, object]) -> dict:
         presentation_code="listener-stale",
         parameters={"port": port},
     )
+
+
+#: What `valkama doctor` says for each state the quota poll writes, and what to do about it.
+_QUOTA_POLL_STATES: dict[str, tuple[str, str, str]] = {
+    quota_poll.WAITING: ("ok", "switched on, waiting for its first request", ""),
+    quota_poll.OK: ("ok", "working", ""),
+    quota_poll.RATE_LIMITED: (
+        "warn",
+        "paused after HTTP 429 from the usage endpoint",
+        "Nothing to do: it asks again by itself, waiting longer after each refusal.",
+    ),
+    quota_poll.REFUSED: (
+        "warn",
+        "sign-in refused: the usage endpoint turned the Claude Code sign-in away",
+        "Sign in to Claude Code again (/login); the poll tries a new sign-in within a minute.",
+    ),
+    quota_poll.EXPIRED: (
+        "warn",
+        "sign-in refused: the Claude Code sign-in has expired",
+        "Use Claude Code once so it renews its sign-in; the poll picks it up within a minute.",
+    ),
+    quota_poll.NO_LOGIN: (
+        "warn",
+        "no Claude Code sign-in on this machine",
+        "Sign in to Claude Code (/login), or switch the poll off in Settings.",
+    ),
+    quota_poll.FAILING: (
+        "warn",
+        "the usage endpoint did not answer with a reading",
+        "It retries by itself. If this lasts, the undocumented endpoint may have changed:"
+        " switch the poll off in Settings.",
+    ),
+}
+
+
+def _quota_poll_checks() -> list[dict]:
+    """Whether the quota poll is off, working, paused or refused, from its setting and status.
+
+    The setting is read from the store and the state from the file the listener's poll
+    writes beside it; neither holds a token or names the account.
+    """
+
+    path = store.db_path()
+    title = "Quota poll"
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            on = quota_settings.read(conn)["poll"]
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return [
+            _check(
+                "quota-poll",
+                title,
+                "unknown",
+                f"its setting could not be read: {failure}",
+                "Open the store once with the current build; it adds the settings table.",
+                presentation_code="quota-poll-unreadable",
+            )
+        ]
+    if not on:
+        return [
+            _check(
+                "quota-poll",
+                title,
+                "ok",
+                "off: the usage endpoint is not asked",
+                "To read the quota from the usage endpoint, switch the poll on in Settings."
+                " The endpoint is undocumented, and Anthropic's terms do not explicitly"
+                " permit this use.",
+                presentation_code="quota-poll-off",
+            )
+        ]
+    status = quota_poll.read_status(path)
+    if status is None or status.state == quota_poll.STOPPED:
+        return [
+            _check(
+                "quota-poll",
+                title,
+                "unknown",
+                "switched on, but no listener is polling",
+                "Start the listener (valkama serve); it starts the poll when it starts.",
+                presentation_code="quota-poll-not-running",
+            )
+        ]
+    level, said, fix = _QUOTA_POLL_STATES[status.state]
+    facts = [said, f"since {status.at}"]
+    if status.last_reading_at is not None:
+        facts.append(f"last reading {status.last_reading_at}")
+    if status.next_at is not None:
+        facts.append(f"next request {status.next_at}")
+    if status.http_status is not None and status.state != quota_poll.OK:
+        facts.append(f"HTTP {status.http_status}")
+    return [
+        _check(
+            "quota-poll",
+            title,
+            level,
+            "; ".join(facts),
+            fix,
+            presentation_code=f"quota-poll-{status.state.replace('_', '-')}",
+            parameters={
+                "state": status.state,
+                "since": status.at,
+                "next": status.next_at or "",
+                "last": status.last_reading_at or "",
+            },
+        )
+    ]
 
 
 def _driver_checks() -> list[dict]:

@@ -1254,6 +1254,47 @@ prints the lines read, how many were added, how many matched the sample before t
 (`unchanged`) or were older than a year (`expired`), and each organization's first and
 last time.
 
+### The poll of the usage endpoint
+
+The `poll` source asks the usage endpoint Claude Code's `/usage` reads, for the account
+Claude Code is signed in to on this machine. It is off on a clean install and runs only
+after the owner of the installation switches it on in Settings: the endpoint is
+undocumented, and Anthropic's terms do not explicitly permit this use of it. Only the
+listener runs it, and switching it on or off there takes effect at once, with no restart.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/quota/settings` | the owner's quota settings: `{"poll": false}` until switched on |
+| `PUT /api/quota/settings` | replaces them and starts or stops the poll in the listener; an unknown key is refused and a missing one takes its default |
+
+The read answers under the `Host` rule alone; the write takes the browser's credential,
+as the notification settings do.
+
+- **The sign-in.** The token is read from Claude Code's `.credentials.json` in its home
+  (`CLAUDE_CONFIG_DIR`, else `~/.claude`) for each request and held only for that
+  request. It is sent in one header to `api.anthropic.com` over HTTPS, no redirect is
+  followed, and it is written nowhere: not to the store, a log, the doctor's answer or an
+  error's text. The poll never refreshes a sign-in. The Claude desktop app's sign-in is
+  not read.
+- **What is kept.** A reading is recorded as the `poll` source, by the organization the
+  profile names, with the account's UUID and the plan. The profile's e-mail address and
+  name are never read out of the answer.
+- **The pace.** Five minutes while a usage segment of the organization ended in the last
+  ten minutes, fifteen otherwise, each lengthened by up to a tenth at random. After a 429,
+  ten minutes, doubled for each one in a row up to thirty, or the server's `Retry-After`
+  when that is longer; after any other failure the same from one minute. A sign-in that
+  was refused (401 or 403), has expired, or is missing is looked at again each minute,
+  and a refused one is tried again only once the file has changed.
+- **Beside the session readings.** While a `statusline` or `mod` reading of a session of
+  the organization is under ten minutes old, the poll waits out the fifteen minutes from
+  its last request.
+
+`valkama doctor` reports the poll under Capabilities as `quota-poll`: off, working,
+paused after a 429, sign-in refused (a 401 or 403, or an expired sign-in), no sign-in, a
+failing endpoint, or switched on with no listener polling, each with what to do. It reads
+the setting from the store and the poll's state from `<store>.quota-poll.json`, which the
+listener writes and which names no account.
+
 ### The live-work frame
 
 One small read says where work is going on now, across every space of the primary

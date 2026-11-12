@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     # How often each analytics surface was opened, added with schema 16. Additive
     # and empty in an upgraded store, so this script is the whole of its migration.
     + analytics_store.SCHEMA
-    # The quota accounts and samples, added with schema 17. Additive and empty in an
+    # The quota accounts, samples and settings, added with schema 17. Additive and empty in an
     # upgraded store, so this script is the whole of its migration.
     + quota_store.SCHEMA
 )
@@ -286,9 +286,9 @@ MIGRATIONS = {
 # read again), a segment the columns its later dimensions fill, and Analytics the counts of
 # how often each of its surfaces was opened (`analytics_surface_uses`, empty).
 #
-# 17 added the subscription quota's accounts, samples and the alerts given about them
-# (`quota_accounts`, `quota_samples`, `quota_alerts`), empty in an upgraded store, and no
-# existing row changed its meaning.
+# 17 added the subscription quota's accounts, samples, the alerts given about them and
+# the owner's settings for its sources (`quota_accounts`, `quota_samples`, `quota_alerts`,
+# `quota_settings`), empty in an upgraded store, and no existing row changed its meaning.
 # It is raised so the upgrade takes a recovery point of its own, and because what opens
 # a store without bringing it up -- a hook's `ingest.open_light`, the listener's reader,
 # `open_read_only` -- takes the stamp for the catalog: a quota source of this build would

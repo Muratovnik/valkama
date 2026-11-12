@@ -7,6 +7,7 @@ import SettingsAlerts from '@/pages/settings/components/SettingsAlerts.vue'
 import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
 import SettingsKindColors from '@/pages/settings/components/SettingsKindColors.vue'
 import SettingsOpening from '@/pages/settings/components/SettingsOpening.vue'
+import SettingsQuota from '@/pages/settings/components/SettingsQuota.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 
 import { STATE_NAMINGS } from '@/shared/lib/stateNames.ts'
@@ -98,6 +99,8 @@ function emitLocale(value: string) {
       />
 
       <SettingsOpening class="settings-general-group" />
+
+      <SettingsQuota class="settings-general-group" />
     </div>
   </section>
 </template>

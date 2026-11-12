@@ -101,6 +101,7 @@ SCHEMA10_TABLES = {
     "quota_accounts",
     "quota_samples",
     "quota_alerts",
+    "quota_settings",
 }
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",

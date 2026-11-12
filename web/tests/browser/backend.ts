@@ -216,6 +216,8 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/alerts/status': () => fulfill(ALERT_STATUS_READY),
         '/api/alerts/test': () => fulfill(TRIAL_SHOWN),
         '/api/alerts/presence': () => fulfill({ ok: true }),
+        '/api/quota/settings': () =>
+          fulfill(request.method() === 'PUT' ? request.postDataJSON() : { poll: false }),
         '/api/doctor': () => fulfill(structuredClone(doctorReport)),
         '/api/execution/history': () => {
           const requested = url.searchParams.get('work_item')

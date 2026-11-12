@@ -57,6 +57,7 @@ ADDED = {
         "sample_at",
         "raised_at",
     ],
+    "quota_settings": ["key", "record_json", "updated_at"],
 }
 SOURCES: dict[int, Callable[[str], None]] = {15: schema15.build, 16: schema16.build}
 LABELS = ("preschema16", "preschema17", "pretables", "preupgrade", "preidentity")
