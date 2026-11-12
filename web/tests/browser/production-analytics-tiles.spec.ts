@@ -34,6 +34,11 @@ test('the summary tiles stand one height at every width, each cut line whole in 
         ),
       )
     for (const line of lines) expect(line).toBeLessThan(1.5)
+    // The trend beside a figure gives way first: no figure is cut for it.
+    const cut = await tiles
+      .locator('.tile-figure')
+      .evaluateAll((all) => all.map((figure) => figure.scrollWidth > figure.clientWidth))
+    expect(cut, `the figures at ${width}px`).toEqual([false, false, false])
   }
   await record(info, 'tiles-heights', heights)
   const widest = heights[1920] ?? []

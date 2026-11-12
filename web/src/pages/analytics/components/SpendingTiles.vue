@@ -203,7 +203,9 @@ const tileOf = (value: Measure) => byValue.value.get(value)
 
 /* The figure and its trend on one line: the figure as wide as itself, the trend after it at the
    tile's end, as wide as it may be up to its own measure and never so narrow it says nothing.
-   The trend is about as tall as the figure's line, and keeps its place with nothing to draw. */
+   A narrow tile takes its room from the trend first — it shrinks a hundred times faster — so the
+   figure is cut only once the trend is at its narrowest. The trend is about as tall as the
+   figure's line, and keeps its place with nothing to draw. */
 .tile-lead {
   display: flex;
   gap: var(--space-3);
@@ -214,7 +216,7 @@ const tileOf = (value: Measure) => byValue.value.get(value)
 
 .tile-trend {
   display: grid;
-  flex: 0 1 8rem;
+  flex: 0 100 8rem;
   min-inline-size: var(--space-12);
 }
 
