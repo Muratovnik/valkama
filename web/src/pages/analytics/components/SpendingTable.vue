@@ -452,6 +452,12 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
     flex-wrap: wrap;
   }
 
+  /* Wrapped, the controls may be narrower than the three side by side: held to that width they
+     would reach past a phone's edge. */
+  .spending-table-controls {
+    flex: 0 1 auto;
+  }
+
   .chart-heading[data-numeric='true'] {
     min-inline-size: 7em;
     white-space: normal;
