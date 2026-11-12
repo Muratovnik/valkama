@@ -469,7 +469,10 @@ def _start(command: str) -> subprocess.Popen[bytes]:
         # reads them, as they did before this command replaced it.
         stderr=None,
         shell=False,
-        start_new_session=sys.platform != "win32",
+        # Left in this command's process group: Claude Code cancels a run still going
+        # when the next refresh comes, far more often than the time limit below
+        # stops one, and a stop it sends to the group then reaches this child too.
+        start_new_session=False,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
@@ -488,6 +491,7 @@ def _finish(child: subprocess.Popen[bytes], raw: bytes) -> bytes:
     except subprocess.TimeoutExpired:
         from .. import processes
 
+        # The whole tree on Windows; on POSIX the child alone, its group being ours.
         processes.stop_process_tree(child)
         _note(f"the previous command ran past {PREVIOUS_SECONDS:g} seconds and was stopped")
         return b""

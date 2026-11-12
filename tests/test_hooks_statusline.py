@@ -467,7 +467,13 @@ class ChainTests(StoreCase):
         self.assertIn("ran past", errors)
         with open(marker, encoding="utf-8") as handle:
             grandchild = int(handle.read())
-        self.assertFalse(wait_gone(grandchild), "the previous command's own child was stopped")
+        if sys.platform == "win32":
+            self.assertFalse(wait_gone(grandchild), "the previous command's own child was stopped")
+        else:
+            # On POSIX the previous command shares this command's process group, so only
+            # the command itself is stopped; the client's stop of the group reaches the rest.
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(grandchild, 9)
 
     def test_a_previous_command_that_cannot_start_leaves_the_reading_and_a_blank_line(
         self,

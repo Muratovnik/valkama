@@ -1216,8 +1216,10 @@ string, as the settings file holds it once its JSON is read. When it is given,
 4. prints exactly what that command wrote to stdout, when it exits 0. When it
    exits otherwise it prints nothing, which Claude Code shows the same way. The
    command's stderr stays on stderr, where `claude --debug` reads it;
-5. stops the command and every process it started when it has run for 10
-   seconds, and prints nothing.
+5. stops the command when it has run for 10 seconds, and prints nothing. On
+   Windows every process the command started is stopped with it. On POSIX the
+   command stays in this command's process group, so a stop Claude Code sends
+   to the group when it cancels a run reaches it too.
 
 Without `--previous` the command prints nothing.
 
@@ -1259,9 +1261,10 @@ be compared with what was kept before it is overwritten.
 
 The command runs on every refresh, so it imports only what writing a reading
 needs: the light open, the C JSON scanner and `quota.samples`, which keeps its
-shape checks free of `dataclasses` and `re` for this reason. It does not import
-the store module, `json`, `subprocess` or `ctypes` unless it chains. It holds
-`store.STORE_SCHEMA_VERSION` in a copy of its own, which a test keeps equal.
+shape checks free of `dataclasses` and `re` for this reason. It never imports
+the store module or `json`, and it imports `subprocess` and `ctypes` only to run
+a previous command. It holds `store.STORE_SCHEMA_VERSION` in a copy of its own,
+which a test keeps equal.
 
 ## What a client update can change
 
