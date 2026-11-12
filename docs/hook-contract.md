@@ -1253,6 +1253,13 @@ settings bytes to restore:
   `command` changes.
 - A command that already runs `valkama statusline` is not wrapped again.
 
+Before writing it, read `valkama capabilities`: a release that has this command
+names it as `interfaces.statusline`, `{"command": "statusline", "version": 1}`.
+Without that entry do not write the setting, since a release without the
+command would take the user's status line and show nothing in its place. The
+version changes when the command line, `--previous` or what the command prints
+changes.
+
 To restore, write back the bytes that were kept. Nothing else holds state:
 `--previous` decodes to the original command exactly, so the live setting can
 be compared with what was kept before it is overwritten.

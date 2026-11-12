@@ -45,6 +45,7 @@ from . import (
 )
 from .federation import federated_spaces
 from .hooks import ingest
+from .hooks.statusline import INTERFACE as STATUSLINE_INTERFACE
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup, skills
@@ -195,6 +196,10 @@ def capabilities_main() -> None:
                 },
             },
             "desktop": {"platform": "windows"},
+            # `valkama statusline`, dispatched before the parser like `hook`. What registers
+            # it as Claude Code's status line checks this first: a release without the
+            # receiver would take the user's status line and show nothing in its place.
+            "statusline": {"command": "statusline", "version": STATUSLINE_INTERFACE},
         },
         "commands": [
             "capabilities",

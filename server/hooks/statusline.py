@@ -53,6 +53,9 @@ PREVIOUS_SECONDS = 10.0
 #: The longest previous command taken, decoded.
 MAX_PREVIOUS_BYTES = 64 * 1024
 PREVIOUS_OPTION = "--previous="
+#: The version of this command's interface, named by `valkama capabilities`: the command
+#: line, `--previous` and what it prints. Whatever registers the command reads it first.
+INTERFACE = 1
 SOURCE_OPTION = "--source="
 #: The sources this command records for: the status line, its default, and the mod.
 LIVE_SOURCES = ("statusline", "mod")

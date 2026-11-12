@@ -42,7 +42,8 @@ checkouts are therefore distinguishable even at the same version.
   hook spool, and prints nothing of its own. A status line the user had is passed with
   `--previous=<base64>` and still shows: it runs with the same input through the same
   shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
-  working.
+  working. `valkama capabilities` names the command and its interface version under
+  `interfaces.statusline`, so whatever registers it can tell a release that has it.
 - **The quota source `mod`: Valkama's Claude Code mod `valkama-quota`.** It reads the
   five-hour window and the week inside every Claude Code session, the VS Code
   extension's included, which runs no status line: at a session's start, when a window
