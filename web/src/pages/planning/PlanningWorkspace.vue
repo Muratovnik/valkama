@@ -35,9 +35,9 @@ import { filterTokens } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
-import { uiLoading } from '@/shared/api/platformUiState.ts'
+import { uiLoading, uiReady } from '@/shared/api/platformUiState.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { LOADING_DELAY_MS, useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
+import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -215,15 +215,19 @@ const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping
 const barExclusion = computed(() => census.exclusion.value)
 
 /**
- * The stage stays the read's for as long as the read is shown: a read that answered just
- * after it said so keeps saying it long enough to be read, and only then gives way.
- * Taken straight from `reading`, the panel went the moment the read answered, however
- * recently it had appeared.
+ * What the stage stands for: a read under way, or the views. The panel holds the stage for
+ * the whole life of the workspace and draws the views in its slot, so the rule of a wait
+ * is its to keep — a read that answered just after it said so keeps saying it long enough
+ * to be read — and its status region stands before a switch of space starts a read again.
+ *
+ * A chain the route names is part of the same read: a view takes the stage once its space
+ * is read and that chain is too. It used to say «Reading the chain…» in a line of its own
+ * from the first frame, so a chain that answered in a tenth of a second flashed it.
  */
-const { held: stageReading } = useLoadingPresence(() => props.reading === true)
-/** A view takes the stage once its space is read and a chain the route names is too. */
-const staged = computed(() => !stageReading.value && !props.chainPending)
 const READING = uiLoading()
+const STAGED = uiReady(true)
+const stageReading = computed(() => props.reading === true || props.chainPending === true)
+const stageState = computed(() => (stageReading.value ? READING : STAGED))
 
 /** A mark pressed outside the views — the card beside them — reaches the same filter. */
 defineExpose({ toggleFilter })
@@ -267,78 +271,70 @@ defineExpose({ toggleFilter })
     />
     <div class="workspace-stage">
       <PlatformStatePanel
-        v-if="stageReading"
-        class="workspace-reading"
-        :state="READING"
+        :state="stageState"
         compact
-      />
-      <p
-        v-else-if="chainPending"
-        class="workspace-note"
-        role="status"
       >
-        {{ t('workItem.chain.loading') }}
-      </p>
-      <DataEmptyState
-        v-else-if="!matchedItems.length && filtered"
-        :title="t('workItem.filter.empty')"
-        :description="t('workItem.filter.emptyHint')"
-      >
-        <template #action
-          ><VButton @click="resetFilter">{{ t('workItem.filter.resetAll') }}</VButton></template
+        <DataEmptyState
+          v-if="!matchedItems.length && filtered"
+          :title="t('workItem.filter.empty')"
+          :description="t('workItem.filter.emptyHint')"
         >
-      </DataEmptyState>
-      <WorkItemBoard
-        v-if="staged && stageView === 'kanban' && model.workflow"
-        v-show="matchedItems.length || !filtered"
-        :workflow="model.workflow"
-        :items="visibleItems"
-        :scope-items="scopeItems"
-        :space-items="model.work_items"
-        :space-id="model.planning_space?.planning_space_id ?? ''"
-        :links="model.links"
-        :filter="filter"
-        :filtered="filtered"
-        :grouping="boardGrouping"
-        :live="model.live_work"
-        :writable="writable"
-        @chain="(reference) => emit('show-chain', reference)"
-        @filter="toggleFilter"
-        @open="(reference) => emit('open', reference)"
-        @place="(move) => emit('place', move)"
-      />
-      <WorkItemList
-        v-else-if="staged && stageView === 'list'"
-        v-show="matchedItems.length || !filtered"
-        :items="visibleItems"
-        :links="model.links"
-        :filter="filter"
-        @filter="toggleFilter"
-        @open="(reference) => emit('open', reference)"
-      />
-      <WorkItemGraph
-        v-else-if="staged && stageView === 'graph'"
-        v-show="matchedItems.length || !filtered"
-        :scope-kind="graphScopeKind"
-        :space="model.planning_space?.planning_space_id ?? ''"
-        :items="visibleItems"
-        :space-items="model.work_items"
-        :live="model.live_work"
-        :selected-id="selectedId"
-        :edges="graphEdges"
-        :epic-id="chain?.root.work_item_id ?? null"
-        :chain="graphChain"
-        :filter="graphFilter"
-        :branch="graphBranch"
-        :focus-request="graphFocus"
-        :show-closed="chainClosed"
-        :open="true"
-        :version="version"
-        @exit-chain="emit('exit-chain')"
-        @exit-branch="emit('exit-branch')"
-        @open="(reference) => emit('open', reference)"
-        @update:show-closed="(closed) => emit('chain-closed', closed)"
-      />
+          <template #action
+            ><VButton @click="resetFilter">{{ t('workItem.filter.resetAll') }}</VButton></template
+          >
+        </DataEmptyState>
+        <WorkItemBoard
+          v-if="stageView === 'kanban' && model.workflow"
+          v-show="matchedItems.length || !filtered"
+          :workflow="model.workflow"
+          :items="visibleItems"
+          :scope-items="scopeItems"
+          :space-items="model.work_items"
+          :space-id="model.planning_space?.planning_space_id ?? ''"
+          :links="model.links"
+          :filter="filter"
+          :filtered="filtered"
+          :grouping="boardGrouping"
+          :live="model.live_work"
+          :writable="writable"
+          @chain="(reference) => emit('show-chain', reference)"
+          @filter="toggleFilter"
+          @open="(reference) => emit('open', reference)"
+          @place="(move) => emit('place', move)"
+        />
+        <WorkItemList
+          v-else-if="stageView === 'list'"
+          v-show="matchedItems.length || !filtered"
+          :items="visibleItems"
+          :links="model.links"
+          :filter="filter"
+          @filter="toggleFilter"
+          @open="(reference) => emit('open', reference)"
+        />
+        <WorkItemGraph
+          v-else-if="stageView === 'graph'"
+          v-show="matchedItems.length || !filtered"
+          :scope-kind="graphScopeKind"
+          :space="model.planning_space?.planning_space_id ?? ''"
+          :items="visibleItems"
+          :space-items="model.work_items"
+          :live="model.live_work"
+          :selected-id="selectedId"
+          :edges="graphEdges"
+          :epic-id="chain?.root.work_item_id ?? null"
+          :chain="graphChain"
+          :filter="graphFilter"
+          :branch="graphBranch"
+          :focus-request="graphFocus"
+          :show-closed="chainClosed"
+          :open="true"
+          :version="version"
+          @exit-chain="emit('exit-chain')"
+          @exit-branch="emit('exit-branch')"
+          @open="(reference) => emit('open', reference)"
+          @update:show-closed="(closed) => emit('chain-closed', closed)"
+        />
+      </PlatformStatePanel>
     </div>
   </main>
 </template>
@@ -363,17 +359,10 @@ defineExpose({ toggleFilter })
   min-height: 0;
 }
 
-/* The space being read says so where its work will start, not in the middle of the stage. */
-.workspace-reading {
-  align-self: start;
-}
-
-/* A line of text about the stage: the chain still being read. */
-.workspace-note {
-  max-width: 54ch;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
+/* The space being read says so where its work will start, not in the middle of the stage,
+   for as long as the panel holds its wait. */
+.workspace-stage:has(> .platform-state-panel) {
+  align-items: start;
 }
 
 @container workspace (width <= 624px) {

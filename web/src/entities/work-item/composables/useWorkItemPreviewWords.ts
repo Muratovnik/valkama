@@ -27,6 +27,11 @@ export interface WorkItemPreviewSubject {
   failure?: PreviewFailure | null
   /** The project's name, for an item from somewhere other than the open space. */
   project?: string | null
+  /**
+   * When the read the card waits on began (`Date.now()`): the card opens a moment after
+   * it, and the delay before the wait is said is the read's, not the card's.
+   */
+  since?: number | null
   /** The reference of an open item this one waits on, where the caller knows it. */
   waitingOn?: string | null
 }
@@ -68,7 +73,7 @@ export function useWorkItemPreviewWords() {
       return t('textLinks.notFound', { reference: subject.reference })
     if (subject.failure === 'unavailable') return t('workItem.preview.unavailable')
     if (subject.failure === 'failed') return t('workItem.preview.failed')
-    return t('workItem.preview.loading')
+    return t('platform.states.loading')
   }
 
   const said = (mark: FacetMark) => words.say(mark.text)

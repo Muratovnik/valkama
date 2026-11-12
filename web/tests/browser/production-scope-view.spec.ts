@@ -109,7 +109,9 @@ for (const [view, width] of [
     await serveTwoProjects(page, () => held)
     await page.goto(firstProject({ view, group: 'epic' }))
     const bar = page.locator('.workspace-head')
-    await expect(page.locator('.workspace-stage > :not(.workspace-reading)').first()).toBeVisible()
+    await expect(
+      page.locator('.workspace-stage > :not(.platform-state-panel, [role="status"])').first(),
+    ).toBeVisible()
     const before = await bar.boundingBox()
 
     await chooseScope(page, SECOND_TITLE)
@@ -117,7 +119,7 @@ for (const [view, width] of [
     // The same bar, where it was, with the view, the grouping on the board and the filter.
     await expect(bar).toBeVisible()
     expect(await bar.boundingBox()).toEqual(before)
-    const reading = page.locator('.workspace-stage .workspace-reading')
+    const reading = page.locator('.workspace-stage > .platform-state-panel')
     await expect(reading).toHaveAttribute('aria-busy', 'true')
     await expect(viewShown(page)).toContainText(
       { kanban: 'Kanban', list: 'List', graph: 'Graph' }[view],

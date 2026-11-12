@@ -138,7 +138,7 @@ function openGraph(props: Record<string, unknown> = {}) {
 }
 
 async function drawn(graph: ReturnType<typeof openGraph>) {
-  await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+  await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBeUndefined())
   await flushPromises()
   return graph
     .findAllComponents(GraphNodeCard)

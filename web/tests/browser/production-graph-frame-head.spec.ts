@@ -170,7 +170,7 @@ async function toggleAndSettle(page: Page, n: number) {
   await fold.focus()
   await page.keyboard.press('Enter')
   await expect(fold).not.toHaveAttribute('aria-expanded', before ?? '')
-  await expect(page.locator('.graph').first()).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.graph:not([aria-busy])').first()).toBeAttached()
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
 }
 

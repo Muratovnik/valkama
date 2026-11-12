@@ -27,6 +27,7 @@ import type { Execution } from '@/shared/api/executionModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { sessionFamilyOf } from '@/shared/lib/settings.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -48,6 +49,19 @@ const emit = defineEmits<{
 }>()
 
 const { t, d, locale } = useI18n()
+/**
+ * The first read of the attempts, shown as every wait is (`loadingPresence`): nothing for a
+ * read that answers quickly, and once shown, long enough to be read, with what it read held
+ * back meanwhile. A read again keeps the attempts on screen and is no wait.
+ *
+ * The section is a block of the card, so its wait is no announcement of its own: it says
+ * the wait by its busy mark and its word on screen.
+ */
+const { shown: waitShown, held: waitHeld } = useLoadingPresence(() => props.loading)
+/** The word the held line shows: the panel's, once the wait is shown, and nothing before. */
+const waitWord = computed(() => (waitShown.value ? t('platform.states.loading') : ''))
+/** Busy only while the first read runs; absent otherwise rather than a claim of `false`. */
+const busyMark = computed(() => props.loading || undefined)
 const query = ref('')
 const selected = ref<Record<string, string>>({ status: '', client: '' })
 function reset() {
@@ -136,7 +150,10 @@ function evidence(attempt: Execution): string {
 </script>
 
 <template>
-  <section class="executions">
+  <section
+    class="executions"
+    :aria-busy="busyMark"
+  >
     <SectionHeading
       as="h3"
       level="panel"
@@ -164,11 +181,10 @@ function evidence(attempt: Execution): string {
     </div>
 
     <p
-      v-if="loading"
+      v-if="waitHeld"
       class="quiet"
-      role="status"
     >
-      {{ t('execution.loading') }}
+      {{ waitWord }}
     </p>
     <p
       v-else-if="error"
@@ -327,7 +343,9 @@ function evidence(attempt: Execution): string {
   font: var(--font-detail);
 }
 
+/* One line tall before its word arrives, so the word moves nothing when it does. */
 .quiet {
+  min-height: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

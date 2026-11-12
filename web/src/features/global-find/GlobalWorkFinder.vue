@@ -24,6 +24,7 @@ import { projectTitle } from '@/shared/lib/projectTitles.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -109,9 +110,21 @@ const missingReference = computed(() => {
 /** The row Enter opens with none highlighted: the first, unless a typed number was not found. */
 const opensOnEnter = (response: GlobalPlanningSearch | null) =>
   missingReference.value ? undefined : response?.items[0]
+/**
+ * The search said as every wait is (`loadingPresence`): nothing for one that answers
+ * quickly, and once said, long enough to be read, with its rows held back meanwhile. It
+ * counts from the keystroke, the pause before the request included, because that is the
+ * wait the reader has.
+ */
+const { shown: waitShown, held: waitHeld } = useLoadingPresence(() => loading.value)
+/** What the search says while its wait is held: nothing before the delay, then the word. */
+function waitFeedback() {
+  if (!waitShown.value) return ''
+  return t(pendingOpen.value ? 'finder.opening' : 'platform.states.loading')
+}
 /** The one sentence that says where the search stands, or nothing once rows speak for it. */
 const feedback = computed(() => {
-  if (loading.value) return t(pendingOpen.value ? 'finder.opening' : 'finder.loading')
+  if (waitHeld.value) return waitFeedback()
   if (failure.value !== null) {
     const known = FAILURES.has(failure.value) ? failure.value : 'request_failed'
     return t(`finder.failures.${known}`)
@@ -127,7 +140,7 @@ const feedback = computed(() => {
     return t(skipped.value.length ? 'finder.partialEmpty' : 'finder.empty')
   return ''
 })
-const truncated = computed(() => !loading.value && Boolean(result.value?.has_more))
+const truncated = computed(() => !waitHeld.value && Boolean(result.value?.has_more))
 const hasQuery = computed(() => Boolean(query.value.trim()))
 type Found = GlobalPlanningSearch['items'][number]
 
@@ -140,7 +153,7 @@ function subjectOf({ item }: Found): FacetSubject | null {
 }
 
 const choices = computed(() =>
-  (result.value?.items ?? []).map((entry) => {
+  (waitHeld.value ? [] : (result.value?.items ?? [])).map((entry) => {
     const subject = subjectOf(entry)
     const project = projectTitle(props.projects, entry.target.project_id)
     const readonly = entry.target.writable ? [] : [t('finder.readonly')]
@@ -277,7 +290,7 @@ function select(target: PlanningTarget) {
         >
           <p v-if="feedback">{{ feedback }}</p>
           <div
-            v-if="!loading && skipped.length"
+            v-if="!waitHeld && skipped.length"
             class="finder-skipped"
           >
             <SemanticState
