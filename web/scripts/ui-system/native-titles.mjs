@@ -211,6 +211,10 @@ export const DETAIL_TOOLTIPS = new Map([
     'where a chosen colour is kept, which the swatch does not say; it stood as a paragraph over the group',
   ],
   [
+    `pages/settings/components/SettingsAccounts.vue <VTextInput> v-tooltip.detail="t('settings.accountAliases.kept')"`,
+    'where an account name is said and where it is kept, which the field does not say',
+  ],
+  [
     `pages/settings/components/SettingsOpening.vue <small> v-tooltip.detail="t('open.settings.lastPlaceHint')"`,
     'which place «the place» is, the last one a session was open in; it stood as a paragraph over the group',
   ],

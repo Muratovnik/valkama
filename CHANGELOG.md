@@ -10,6 +10,22 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **Analytics names sessions and accounts instead of showing hex ids.** An executor is
+  labelled by the title its client gave the session, the same one the live work list
+  shows, wherever Analytics names it: the rail, the cards, the bars, the table, the
+  crossed table's headings, the filters and the chart readout. The client and the start of
+  the session id move to the label's hint, beside the name in the table and under the
+  choice in a filter's list. A session with no title, such as a Codex session, keeps its
+  old label. `GET /api/analytics/usage` now gives an executor a `title`, read from the
+  tail of its transcript and kept nowhere. Each transcript is read once per answer and
+  again only after it changes.
+- **Names for accounts.** The usage records hold only an organization id, so Settings →
+  General → Accounts lists each account the past year saw, with its id and its share of
+  agent time, and lets you name it or clear the name. Analytics labels the account by
+  that name, with the id in the hint. Names are kept on the device, like task type colours.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

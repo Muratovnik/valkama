@@ -2095,7 +2095,12 @@ a real notification; turning the switch off keeps the events chosen. Task type c
 holds a row per type: its glyph and word in the colour they have now, the platform's
 colour field, the value in words and a reset, with one reset for all under them. A
 colour under 3:1 on the hover card is said beside its field in a quiet line and stays
-chosen. A plain task has no glyph anywhere, so its row is its word.
+chosen. A plain task has no glyph anywhere, so its row is its word. Accounts holds a
+row per account the past year's work was billed to, the most agent time first: its
+whole id with its share of that time, a name field whose placeholder says what Analytics
+shows without one, and a clear; an account named before that the year did not see keeps
+its row, so its name can still be taken away. Analytics says an account by that name and
+a session by the title its client gave it, with the id in the hint.
 
 ## Accessibility
 
