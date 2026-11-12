@@ -17,7 +17,9 @@
  *
  * The first line is a row of one line, whatever follows it: the sign, the number, the title
  * and the controls at the end stand where they stand on a row that has no second line. The
- * row's hint and its accessible name say the whole row in a sentence (`rowSentence`).
+ * row's accessible name says the whole row in a sentence (`rowSentence`). Its hint shows the
+ * title, when the row cuts it, over short lines: the epic or folder, the state with how long,
+ * and the agents (`rowHintParts`).
  *
  * The sign is the session's (`SessionSign`). An item pinned with no work, or gone from the
  * frame, has none. Quiet, pinned idle and gone rows are muted; a pinned item that has closed
@@ -40,7 +42,12 @@ import { useMinuteClock } from '@/widgets/app-nav/composables/useMinuteClock.ts'
 import { useRowOpen } from '@/widgets/app-nav/composables/useRowOpen.ts'
 import { rowNumber } from '@/widgets/app-nav/utils/liveList.ts'
 import type { ItemEntry, LiveEntry } from '@/widgets/app-nav/utils/liveList.ts'
-import { rowSentence, secondLine, sessionTitle } from '@/widgets/app-nav/utils/liveWords.ts'
+import {
+  rowHintParts,
+  rowSentence,
+  rowTitle,
+  secondLine,
+} from '@/widgets/app-nav/utils/liveWords.ts'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -96,16 +103,17 @@ const sign = computed(() => {
   return live === null || row.value?.fading ? null : liveSign(live.state, live.asks)
 })
 
-const title = computed(() =>
-  props.entry.kind === 'item' ? props.entry.row.title : sessionTitle(t, props.entry),
-)
+const title = computed(() => rowTitle(t, props.entry))
 const epic = computed(() =>
   props.entry.kind === 'item' && props.lines === 1 ? props.entry.epic : null,
 )
 const detail = computed(() => (props.lines === 2 ? secondLine(t, props.entry, now.value) : ''))
 const sentence = computed(() => rowSentence(words, props.entry, now.value))
-/** The whole row in a sentence beside it, on the rail; a phone has no room beside it. */
-const rowHint = computed(() => (props.size === 'touch' ? null : sentence.value))
+const parts = computed(() => rowHintParts(words, props.entry, now.value))
+/** The hint beside the rail: the title when the row cuts it, over its short lines. */
+const rowHint = computed(() =>
+  props.size === 'touch' ? null : { text: parts.value.lines, words: parts.value.title },
+)
 
 const href = computed(() =>
   props.route === null ? undefined : serializePlatformRoute(props.route),

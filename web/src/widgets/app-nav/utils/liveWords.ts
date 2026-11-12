@@ -1,6 +1,6 @@
 /**
- * What a row of the side panel's list says in words: its second line, under the title, and
- * the sentence its hint and its accessible name say whole.
+ * What a row of the side panel's list says in words: its second line, under the title, the
+ * hint's title and short lines (`rowHintParts`), and the sentence its accessible name says whole.
  *
  * The second line is what the session is doing, `working`, `asking` or `waiting`, then how
  * long, then after « · » where it belongs: the epic of an item, the folder of a session that
@@ -75,7 +75,7 @@ export function secondLine(t: Words['t'], entry: LiveEntry, now: number): string
 }
 
 /** A session's name on its row: its title, else its folder, else that it has none. */
-export function sessionTitle(t: Words['t'], entry: SessionEntry): string {
+function sessionTitle(t: Words['t'], entry: SessionEntry): string {
   return entry.session.title ?? (entry.session.folder || t('liveWork.unnamed'))
 }
 
@@ -101,30 +101,73 @@ function stillState({ stateName, t }: Words, entry: ItemEntry): string {
   return row.pinned ? t('liveWork.idle', { state: stateName(row) }) : ''
 }
 
+/**
+ * What an item says in place of a live state: its words when it has no work moving, or is quiet
+ * since a date. Null for a row whose state is its session's own.
+ */
+function standingWords(words: Words, entry: LiveEntry): string | null {
+  const { d, t } = words
+  if (entry.kind !== 'item') return null
+  const { row } = entry
+  if (row.fading || row.state === null) return stillState(words, entry)
+  if (row.state === 'quiet' && row.quiet_since)
+    return t('liveWork.quiet', { since: d(new Date(row.quiet_since), QUIET_DAY) })
+  return null
+}
+
 /** The state in words with what it means, and how long. */
 function stateSentence(words: Words, entry: LiveEntry, now: number): string {
-  const { d, t } = words
+  const standing = standingWords(words, entry)
+  if (standing !== null) return standing
+  const { t } = words
   const live = liveOf(entry)
-  if (entry.kind === 'item' && (entry.row.fading || live.state === null))
-    return stillState(words, entry)
-  if (entry.kind === 'item' && entry.row.state === 'quiet' && entry.row.quiet_since)
-    return t('liveWork.quiet', { since: d(new Date(entry.row.quiet_since), QUIET_DAY) })
   const sign = liveSign(live.state, live.asks)
   const span = spanSince(t, live.since, now)
   const state = span ? t('liveWork.during', { state: t(`liveWork.doing.${sign}`), span }) : ''
   return t(`liveWork.means.${sign}`, { state: state || t(`liveWork.doing.${sign}`) })
 }
 
-/**
- * The whole row in a sentence: what it is and where it belongs, then the state with what it
- * means and how long, then the agents on it.
- */
-export function rowSentence(words: Words, entry: LiveEntry, now: number): string {
+/** The state in a short line: its word and how long, or what stands for it. */
+function stateLine(words: Words, entry: LiveEntry, now: number): string {
+  const standing = standingWords(words, entry)
+  if (standing !== null) return standing
   const { t } = words
   const live = liveOf(entry)
+  return [doing(t, live), spanSince(t, live.since, now)].filter(Boolean).join(' · ')
+}
+
+/** How many agents are on a row, in words; none for a row the frame dropped. */
+function agentsOf(t: Words['t'], entry: LiveEntry): string {
+  const live = liveOf(entry)
   const fading = entry.kind === 'item' && entry.row.fading
-  const agents =
-    live.agents > 0 && !fading ? t('liveWork.agents', { count: live.agents }, live.agents) : ''
-  const state = [stateSentence(words, entry, now), agents].filter(Boolean).join(', ')
+  return live.agents > 0 && !fading ? t('liveWork.agents', { count: live.agents }, live.agents) : ''
+}
+
+/** A row's title: an item's own, or a session's name. */
+export function rowTitle(t: Words['t'], entry: LiveEntry): string {
+  return entry.kind === 'item' ? entry.row.title : sessionTitle(t, entry)
+}
+
+/**
+ * A row's hint: its title, which the hint shows first while the row cuts it, and the short lines
+ * under it, one fact each: the epic or the folder, the state with how long, and the agents.
+ */
+export function rowHintParts(
+  words: Words,
+  entry: LiveEntry,
+  now: number,
+): { lines: string; title: string } {
+  const lines = [context(entry), stateLine(words, entry, now), agentsOf(words.t, entry)]
+  return { lines: lines.filter(Boolean).join('\n'), title: rowTitle(words.t, entry) }
+}
+
+/**
+ * The whole row in a sentence: what it is and where it belongs, then the state with what it
+ * means and how long, then the agents on it. It is the row's accessible name.
+ */
+export function rowSentence(words: Words, entry: LiveEntry, now: number): string {
+  const state = [stateSentence(words, entry, now), agentsOf(words.t, entry)]
+    .filter(Boolean)
+    .join(', ')
   return state ? `${subject(words, entry)}: ${state}` : subject(words, entry)
 }

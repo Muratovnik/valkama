@@ -240,7 +240,7 @@ describe('a row the frame no longer has', () => {
     expect(row(wrapper, 'MAIN-5').querySelector('.session-sign')).toBeNull()
     // Its second line says what its hint says, and no state or time that no longer runs.
     expect(row(wrapper, 'MAIN-5').querySelector('.nav-row-detail')?.textContent).toBe('work ended')
-    expect(hintOf(row(wrapper, 'MAIN-5'))).toBe('MAIN-5 Work MAIN-5: work ended')
+    expect(hintOf(row(wrapper, 'MAIN-5'))).toBe('work ended')
     vi.advanceTimersByTime(FADING_MS - 1)
     await flushPromises()
     expect(drawn(wrapper)).toContain('MAIN-5')
