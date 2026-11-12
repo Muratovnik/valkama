@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 import SpendingTableHead from '@/pages/analytics/components/SpendingTableHead.vue'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
+import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
@@ -80,9 +81,8 @@ const waiting = computed(() => Boolean(props.across) && !crossed.value)
 const reading = computed(() => waiting.value && props.cross.status !== 'failed')
 /** The wait's words, shown once it has lasted and held for the minimum (`useLoadingPresence`). */
 const { shown } = useLoadingPresence(() => reading.value)
-/** Said to assistive technology at once, from the region in the markup before the wait starts. */
-const said = computed(() => (reading.value ? t('platform.states.loading') : ''))
-/** The same word on screen, once the wait has lasted. */
+useReadWaitReport(shown)
+/** The word on screen, once the wait has lasted. */
 const waitWord = computed(() => (shown.value ? t('platform.states.loading') : ''))
 /** The table stays away while the wait is under way or shown, so the minimum keeps its words. */
 const held = computed(() => waiting.value || shown.value)
@@ -167,11 +167,6 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
     >
       {{ t('analytics.panel.table.kinds.note') }}
     </p>
-    <span
-      class="visually-hidden"
-      role="status"
-      >{{ said }}</span
-    >
     <div
       v-if="held"
       class="spending-table-waiting"

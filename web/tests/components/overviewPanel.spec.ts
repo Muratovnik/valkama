@@ -192,9 +192,9 @@ describe('the overview on the page', () => {
       holding && query.get('group_by') === 'model' ? 'hold' : serveUsage(WORLD, query),
     )
     const page = await mountAnalytics()
-    const said = saidBy(card(page, 'model').get('[role="status"]').element)
+    const said = saidBy(page.get('.analytics-read-wait').element)
     const shownWord = () => card(page, 'model').get('.overview-top-wait').text()
-    expect(said).toEqual(['Loading'])
+    expect(said).toEqual([''])
     expect(shownWord()).toBe('')
     vi.advanceTimersByTime(LOADING_DELAY_MS)
     await page.vm.$nextTick()
@@ -210,7 +210,7 @@ describe('the overview on the page', () => {
     vi.advanceTimersByTime(1)
     await page.vm.$nextTick()
     expect(card(page, 'model').findAll('.ranked-row').length).toBeGreaterThan(0)
-    expect(said).toEqual(['Loading', ''])
+    expect(said).toEqual(['', 'Loading', ''])
   })
 
   it('says the week before was not read where the changes stand, and reads it again', async () => {

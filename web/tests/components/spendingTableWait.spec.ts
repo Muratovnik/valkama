@@ -1,8 +1,8 @@
 /**
  * The wait of a breakdown crossed with a second dimension, while that read lands. The oracle is
  * the rule every read wait keeps: nothing on screen for the first 300 ms, then the shared word for
- * at least 400 ms, and the table held away for that minimum; the word is said once, at the start,
- * through the region the table keeps in its markup, and a read that fails says so in its alert.
+ * at least 400 ms, and the table held away for that minimum. The page says the word once for all of
+ * its waits (`analytics-read-wait`, see the view's spec); a read that fails says so in its alert.
  */
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,6 @@ import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPrese
 
 import { task, usageAnswer, value } from '../fixtures/analytics.ts'
 import { analyticsI18n } from '../support/analyticsReads.ts'
-import { saidBy } from '../support/liveRegion.ts'
 
 /** Two values of work in one period, by task and by model: what the table is crossed from. */
 const read = usageAnswer({
@@ -58,11 +57,9 @@ describe("the crossed read's wait", () => {
     vi.useRealTimers()
   })
 
-  it('shows its words once it has lasted, holds the table away for the minimum, and says it once', async () => {
+  it('shows its words once it has lasted, and holds the table away for the minimum', async () => {
     const wrapper = crossedTable({ status: 'reading', usage: null })
-    const said = saidBy(wrapper.get('[role="status"]').element)
     const words = () => wrapper.get('.spending-table-reading').text()
-    expect(said).toEqual(['Loading'])
     expect(words()).toBe('')
     vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
     await wrapper.vm.$nextTick()
@@ -81,7 +78,6 @@ describe("the crossed read's wait", () => {
     vi.advanceTimersByTime(1)
     await wrapper.vm.$nextTick()
     expect(wrapper.find('table').exists()).toBe(true)
-    expect(said).toEqual(['Loading', ''])
   })
 
   it('shows nothing for a read that answers inside the delay', async () => {

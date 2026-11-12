@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
+import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TopRead } from '@/pages/analytics/composables/useTopValues.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
@@ -51,9 +52,8 @@ const heading = computed(() => overviewWords.cardTitle(props.dimension))
 const values = computed(() => (Array.isArray(props.read) ? props.read : null))
 /** The first read's wait, shown once it has lasted and held for the minimum (`useLoadingPresence`). */
 const { shown } = useLoadingPresence(() => props.read === 'loading')
-/** Said to assistive technology at once, from the region in the markup before the wait starts. */
-const said = computed(() => (props.read === 'loading' ? t('platform.states.loading') : ''))
-/** The same word on screen, once the wait has lasted. */
+useReadWaitReport(shown)
+/** The word on screen, once the wait has lasted. */
 const waitWord = computed(() => (shown.value ? t('platform.states.loading') : ''))
 
 const weight = (line: SpendingLine) => measureOf(props.measure, line.spent) ?? 0
@@ -110,11 +110,6 @@ const barWords = computed(() => ({
         />
       </button>
     </h3>
-    <span
-      class="visually-hidden"
-      role="status"
-      >{{ said }}</span
-    >
     <!-- A wait shown keeps the card's wait for its minimum, whatever arrives meanwhile. -->
     <RankedBars
       v-if="values && !shown"

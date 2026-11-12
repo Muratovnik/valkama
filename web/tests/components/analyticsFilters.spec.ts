@@ -18,7 +18,6 @@ import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 import { task, usageAnswer, value } from '../fixtures/analytics.ts'
 import { analyticsI18n } from '../support/analyticsReads.ts'
-import { saidBy } from '../support/liveRegion.ts'
 
 const DIMENSIONS: UsageDimension[] = ['work_item', 'launch_class', 'role', 'model']
 
@@ -100,9 +99,6 @@ function mountFilters(values: Partial<Record<UsageDimension, FilterValues>>) {
   })
 }
 
-/** Each field's region that says a wait, in the fields' order. */
-const regionWords = (filters: VueWrapper) =>
-  filters.findAll('[role="status"]').map((region) => region.text())
 /** The empty label each field would show in its list, in the fields' order. */
 const emptyLabels = (filters: VueWrapper) =>
   filters
@@ -117,22 +113,19 @@ describe('a field whose values are being read', () => {
     vi.useRealTimers()
   })
 
-  it('says the word at once, and shows nothing for a read that answers inside the delay', async () => {
+  it('shows nothing for a read that answers inside the delay', async () => {
     const filters = mountFilters({ ...allRead(), work_item: 'loading' })
-    expect(regionWords(filters)).toEqual(['Loading', '', '', ''])
     expect(emptyLabels(filters)[0]).toBe('')
     vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
     await filters.vm.$nextTick()
     expect(emptyLabels(filters)[0]).toBe('')
 
     await filters.setProps({ values: allRead() })
-    expect(regionWords(filters)).toEqual(['', '', '', ''])
     expect(emptyLabels(filters)[0]).toBe('No matches')
   })
 
-  it('shows its word once the wait has lasted, holds it for the minimum, and says it once', async () => {
+  it('shows its word once the wait has lasted, and holds it for the minimum', async () => {
     const filters = mountFilters({ ...allRead(), work_item: 'loading', model: 'failed' })
-    const said = saidBy(filters.findAll('[role="status"]')[0].element)
     vi.advanceTimersByTime(LOADING_DELAY_MS)
     await filters.vm.$nextTick()
     expect(emptyLabels(filters)[0]).toBe('Loading')
@@ -140,15 +133,13 @@ describe('a field whose values are being read', () => {
     expect(emptyLabels(filters)[3]).toBe('The values could not be read.')
 
     await filters.setProps({ values: allRead() })
-    // Held for the minimum after the wait was shown, while the region is already clear.
+    // Held for the minimum after the wait was shown, whatever arrived meanwhile.
     expect(emptyLabels(filters)[0]).toBe('Loading')
-    expect(regionWords(filters)[0]).toBe('')
     vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
     await filters.vm.$nextTick()
     expect(emptyLabels(filters)[0]).toBe('Loading')
     vi.advanceTimersByTime(1)
     await filters.vm.$nextTick()
     expect(emptyLabels(filters)[0]).toBe('No matches')
-    expect(said).toEqual(['Loading', ''])
   })
 })

@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.ts'
 import { useAnewDimmed, usePageStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
@@ -37,14 +38,13 @@ const busy = computed(() =>
 
 /**
  * The wait's words are shown once it has lasted and stay for the minimum after it, while the
- * tile keeps its place and paints nothing before that. Assistive technology hears the word at
- * once, through `status`, which is in the markup before the wait starts.
+ * tile keeps its place and paints nothing before that. The page says it once for all its waits
+ * (`useReadWaits`), from the sign this reports.
  */
 const { shown } = useLoadingPresence(() => props.tile.state === 'loading')
+useReadWaitReport(shown)
 const lead = computed(() => (shown.value ? t('platform.states.loading') : props.tile.lead))
 const leadDetail = computed(() => (shown.value ? undefined : props.tile.leadDetail))
-/** Said to assistive technology at once, from the region in the markup before the wait starts. */
-const said = computed(() => (props.tile.state === 'loading' ? t('platform.states.loading') : ''))
 
 /** Dimmed while its figures are the last view's and a new view is read. */
 const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
@@ -57,11 +57,6 @@ const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
     :data-state="tile.state"
     :aria-busy="busy"
   >
-    <span
-      class="visually-hidden"
-      role="status"
-      >{{ said }}</span
-    >
     <span class="rail-tile-line">
       <span
         v-tooltip.detail="{ text: leadDetail, words: lead }"
