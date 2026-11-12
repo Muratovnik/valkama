@@ -275,12 +275,13 @@ onBeforeUnmount(stopHearing)
           <span
             v-if="whole && hint.words"
             class="tooltip-words"
-            >{{ hint.words }}</span
+            >{{ hint.words }} </span
           >{{ hint.text
           }}<span
             v-if="hint.note"
             class="tooltip-note"
-            >{{ hint.note }}</span
+          >
+            {{ hint.note }}</span
           >
         </TooltipContent>
       </TooltipPortal>
