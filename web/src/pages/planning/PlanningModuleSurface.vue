@@ -19,6 +19,10 @@
  * The panel lives as long as any item is open and only the card inside it is
  * keyed by the item: going from a card to a card closes nothing, so it opens
  * nothing either.
+ * Nor does the panel wait for the space: a card its address names opens and
+ * reads its own record beside the space's first read, which carries every item
+ * of the space, and what the card takes from the space — its parent's
+ * reference, the states it may move to — comes in when the space does.
  * The route also holds how the space is looked at: the view, the chain every
  * view is narrowed to, whether the board is grouped by epic, and the filter,
  * which the workspace owns and writes back within the manifest's bound. A saved
@@ -167,6 +171,17 @@ const planning = ref<PlatformUiState>(uiLoading())
 /** A space the route cannot bind is not loaded by asking again. */
 const planningRetryable = computed(() => routeSelection.value.status !== 'unavailable')
 const version = ref(0)
+/**
+ * Moves with `version` once the space has been drawn, and is what the open card reads again on.
+ * A card its address opens reads beside the space's first read rather than after it, so that
+ * read answers nothing the card has not just read itself, and the card is not asked twice.
+ */
+const cardVersion = ref(0)
+/** The space answered again; the card hears it only when it is news to what was drawn. */
+function spaceAnswered(drawn: boolean) {
+  version.value += 1
+  if (drawn) cardVersion.value += 1
+}
 /** Moves when an agent changed: an open card reads again, and nothing else does. */
 const agentsVersion = ref(0)
 
@@ -243,9 +258,10 @@ const { connection: liveConnection, reconnect } = usePlanningSubscription(
     // Back from a dropped connection it is news whatever it says: what the space does
     // not carry, a question or a history, may have moved while the page was away.
     if (!returning && holdsResource(resource.value, key, next)) return
+    const drawn = returning || model.value !== null
     resource.value = beginResource(resource.value, key)
     resource.value = resolveResource(resource.value, resource.value.generation, key, next)
-    version.value += 1
+    spaceAnswered(drawn)
   },
   () => {
     agentsVersion.value += 1
@@ -276,7 +292,7 @@ async function loadPlanning() {
   try {
     const next = await fetchPlanning({ project, ...space })
     if (generation !== resource.value.generation) return
-    version.value += 1
+    spaceAnswered(model.value !== null)
     if (next.planning_space === null) {
       resource.value = { ...cancelResource(resource.value), data: null }
       planning.value = uiUnavailable(t('workItem.noSpace'))
@@ -451,12 +467,12 @@ defineExpose({ refresh, selectedId })
 
     <PlanningCardDrawer
       :content-key="openIdentity"
-      :open="Boolean(open && boundSpaceResourceRef && model)"
+      :open="Boolean(open && boundSpaceResourceRef)"
       :label="openRecord?.title || open || ''"
       @close="closePanel"
     >
       <WorkItemInspector
-        v-if="open && boundSpaceResourceRef && model"
+        v-if="open && boundSpaceResourceRef"
         ref="card"
         :key="openIdentity"
         :reference="open"
@@ -464,9 +480,10 @@ defineExpose({ refresh, selectedId })
         :project-id="inspectorProjectId"
         :can-go-back="canGoBack"
         :return-to="returning"
-        :refresh-token="version"
+        :refresh-token="cardVersion"
         :agents-token="agentsVersion"
-        :workflow="model.workflow"
+        :workflow="model?.workflow ?? null"
+        :space-reading="reading"
         :writable="writable"
         :parent="parent"
         :own-chain="ownChain"

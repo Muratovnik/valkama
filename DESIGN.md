@@ -828,7 +828,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   and to the close, and focus moves to the new content's first control as it
   does on an open. A panel opened by no input, from an address or a reload, holds
   focus on what it is read with until a Tab, so that no control stands ringed for
-  something nobody pressed and the keys that scroll work at once.
+  something nobody pressed and the keys that scroll work at once. A card an
+  address opens does not wait for its space: it reads its own record beside the
+  space's read, and what it takes from the space — the states it may move to,
+  its parent's reference — comes in later into places already held for it, the
+  state as its menu and the parent's row with its label.
 - **Hints:** a hint is `vTooltip` and its one host, `TooltipHost`, never the
   `title` attribute, which the browser draws late, in its own font and colours, and
   never for text cut short. It shows after a short rest of the pointer and at once on

@@ -105,6 +105,11 @@ const props = defineProps<{
   questionAsked?: boolean
   /** Where this card was left, when Back is what opened it again. */
   returnTo?: InspectorReturn | null
+  /**
+   * The card's space is still being read. What the card takes from it, the workflow and the
+   * parent, comes in afterwards into places the facts already hold for it.
+   */
+  spaceReading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -339,6 +344,7 @@ defineExpose({ close, openFrom })
         :busy="busy"
         :writable="writable"
         :parent="parent"
+        :space-reading="spaceReading"
         :asking="questionWaits"
         @question="revealQuestion"
         @claim="claim"
