@@ -154,6 +154,7 @@
    says it whole (`usePeriodReadout`). */
 .period-readout {
   display: grid;
+  grid-template-rows: 1lh 1lh;
   block-size: 2lh;
   margin: 0;
   color: var(--color-text-muted);

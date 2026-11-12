@@ -234,7 +234,7 @@ test('the minutes after the newest record say they have no data yet, and the min
   await pending.first().hover()
   // Its sum is not said: the minute holds no data yet, which is not a total of zero.
   const readout = days.locator('.period-readout')
-  await expect(readout).toHaveText(/ 14:28, period before 0\. No data yet$/u)
+  await expect(readout).toHaveText(/ 14:28, period before 0\smin\. No data yet$/u)
   await days.getByRole('radio', { name: 'Table' }).click()
   const headingTexts = await days.locator('thead th').allTextContents()
   const headings = headingTexts.map((text) => text.trim())
@@ -242,7 +242,7 @@ test('the minutes after the newest record say they have no data yet, and the min
   await expect(cells(57).first()).toContainText('14:28')
   await expect(cells(57).nth(headings.indexOf('total'))).toHaveText('—No data yet')
   await expect(cells(57).last()).toHaveText('No data yet')
-  await expect(cells(56).nth(headings.indexOf('total'))).toHaveText('0')
+  await expect(cells(56).nth(headings.indexOf('total'))).toHaveText(/^0\smin$/u)
   await expect(cells(56).last()).toHaveText('')
   await expect(days.locator('.spending-days-estimate')).toBeVisible()
 
