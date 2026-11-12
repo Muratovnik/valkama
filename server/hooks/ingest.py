@@ -6,7 +6,7 @@ One event is one `execution_events` row plus what it says about its session.
 The row's `event_uid` is the emitter's, so delivering the same event twice --
 a drain that committed and then died before deleting its file -- inserts
 nothing the second time and changes no session. A spool file may also hold a
-quota reading the status line command could not write (`statusline`); it is
+quota reading the status line command could not write (`statusline` or `mod`); it is
 delivered through `quota.samples.record`, which keeps nothing of a reading
 given twice.
 """

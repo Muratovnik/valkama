@@ -410,6 +410,135 @@ class SpoolTests(StoreCase):
         self.assertEqual([], self.samples())
 
 
+#: What Valkama's Claude Code mod sends: the status line's own fields, nothing else.
+#: A gateway's spend limit comes without its dollars, which the mod does not see.
+MOD_INPUT = {
+    "session_id": SESSION,
+    "rate_limits": {
+        "five_hour": {"used_percentage": 23.5, "resets_at": FIVE_HOUR_RESET},
+        "seven_day": {"used_percentage": 41.2, "resets_at": WEEK_RESET},
+        "spend_limit": {"used_percentage": 80},
+    },
+}
+
+
+class ModSourceTests(StoreCase):
+    """`--source=mod`: the mod's reading, through the status line's parser, write path and spool."""
+
+    def test_a_mod_reading_is_recorded_as_the_mod_s_with_its_session_time_and_windows(
+        self,
+    ) -> None:
+        before = time.time()
+        printed, errors = self.run_command(encoded(MOD_INPUT), "--source=mod")
+        after = time.time()
+        self.assertEqual((b"", ""), (printed, errors))
+        seat = "week:2025-02-06T16:00Z"
+        # The mod's windows are the five hours and the week (`SOURCE_WINDOWS["mod"]`):
+        # a spend limit without its dollars is not one of them.
+        self.assertEqual(
+            [
+                ("mod", SESSION, None, seat, "five_hour", 23.5, "2025-02-01T16:00:00.000Z"),
+                ("mod", SESSION, None, seat, "week", 41.2, "2025-02-06T16:00:00.000Z"),
+            ],
+            [row[:7] for row in self.samples()],
+        )
+        import datetime as dt
+
+        # The reading's time is when the command ran, as for the status line.
+        [at] = {row[0] for row in self.conn.execute("SELECT at FROM quota_samples")}
+        moment = dt.datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp()
+        self.assertLessEqual(before - 0.001, moment)
+        self.assertLessEqual(moment, after + 0.001)
+        self.assertEqual([], self.spooled())
+
+    def test_the_entry_point_takes_the_source_flag(self) -> None:
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-X",
+                "utf8",
+                os.path.join(ROOT, "valkama.py"),
+                "statusline",
+                "--source=mod",
+            ],
+            input=encoded(MOD_INPUT),
+            capture_output=True,
+            env={**os.environ, "VALKAMA_DB": self.path},
+            timeout=60,
+            check=False,
+        )
+        self.assertEqual((0, b""), (done.returncode, done.stdout), done.stderr[:400])
+        self.assertEqual(
+            [("mod", "five_hour"), ("mod", "week")], [(row[0], row[4]) for row in self.samples()]
+        )
+
+    def test_a_mod_reading_the_store_cannot_take_now_is_spooled_and_delivered_as_the_mod_s(
+        self,
+    ) -> None:
+        holder = sqlite3.connect(self.path, isolation_level=None)
+        self.addCleanup(holder.close)
+        holder.execute("BEGIN IMMEDIATE")
+        printed, _errors = self.run_command(encoded(MOD_INPUT), "--source=mod")
+        holder.rollback()
+        self.assertEqual(b"", printed)
+        self.assertEqual([], self.samples())
+        [name] = self.spooled()
+        with open(os.path.join(self.spool, name), "rb") as handle:
+            line = json.loads(handle.read())
+        self.assertEqual(
+            ("mod", SESSION, "busy"), (line["source"], line["session_id"], line["spool_reason"])
+        )
+        conn = ingest.open_light(self.path, store.STORE_SCHEMA_VERSION)
+        try:
+            result = ingest.drain(conn, self.spool)
+        finally:
+            conn.close()
+        self.assertEqual((1, 0), (result.files, result.rejected))
+        self.assertEqual(
+            [("mod", SESSION, "five_hour"), ("mod", SESSION, "week")],
+            [(row[0], row[1], row[4]) for row in self.samples()],
+        )
+        self.assertEqual([], self.spooled())
+
+    def test_a_spooled_mod_reading_reads_back_as_the_reading_it_was(self) -> None:
+        import datetime as dt
+
+        found = statusline.reading(MOD_INPUT, dt.datetime.now(dt.UTC), "mod")
+        assert found is not None
+        self.assertEqual("mod", found.source)
+        line = statusline.spool_line(found, spooled_at=found.at, reason="schema")
+        self.assertEqual((found, found.at), statusline.read_spool_line(json.loads(line)))
+
+    def test_a_refused_mod_reading_writes_nothing_and_prints_nothing(self) -> None:
+        for name, stdin, arguments in (
+            ("malformed", b'{"session_id": "S", "rate_limits": {', ["--source=mod"]),
+            ("not an object", encoded([MOD_INPUT]), ["--source=mod"]),
+            ("no reading yet", encoded({"session_id": SESSION}), ["--source=mod"]),
+            ("no session", encoded({"rate_limits": MOD_INPUT["rate_limits"]}), ["--source=mod"]),
+            (
+                "a session id the store refuses",
+                encoded({**MOD_INPUT, "session_id": "a b"}),
+                ["--source=mod"],
+            ),
+            ("a source that is not a live one", encoded(MOD_INPUT), ["--source=poll"]),
+            ("the source named twice", encoded(MOD_INPUT), ["--source=mod", "--source=mod"]),
+        ):
+            with self.subTest(input=name):
+                printed, _errors = self.run_command(stdin, *arguments)
+                self.assertEqual(b"", printed)
+                self.assertEqual([], self.samples())
+                self.assertEqual([], self.spooled())
+
+    def test_without_the_flag_the_reading_stays_the_status_line_s(self) -> None:
+        self.run_command(encoded(MOD_INPUT), "--source=statusline")
+        self.run_command(encoded({**MOD_INPUT, "session_id": "another-session"}))
+        self.assertEqual({"statusline"}, {row[0] for row in self.samples()})
+        self.assertIn(
+            "spend_limit", {row[4] for row in self.samples()}, "the status line keeps its own"
+        )
+
+
 class ChainTests(StoreCase):
     """The status line the user had keeps showing, through this command."""
 

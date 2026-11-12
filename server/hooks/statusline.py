@@ -1,4 +1,4 @@
-"""`valkama statusline`: Claude Code's status line command, and the `statusline` quota source.
+"""`valkama statusline`: Claude Code's status line command, and the live quota receiver.
 
 Claude Code runs its status line command with a JSON object on stdin, on every
 refresh of the status line. Once a session has had a response on a subscription
@@ -8,6 +8,11 @@ records them as a `statusline` reading of that session, through `quota.samples.r
 straight into the store; when the store cannot take it now (missing, busy, at another
 schema), the reading goes to the spool beside it and is delivered with the hook events
 there.
+
+Valkama's Claude Code mod (`server/mod/valkama-quota`) reads the same windows inside
+the session, where the VS Code extension runs no status line, and hands them to this
+command as the same JSON fields with `--source=mod`. One parser, one write path and
+one spool serve both sources; only the source the reading is recorded under differs.
 
 When it replaced a status line command the user already had, it runs that command with
 the same stdin through the same shell and prints exactly what that command printed;
@@ -48,6 +53,9 @@ PREVIOUS_SECONDS = 10.0
 #: The longest previous command taken, decoded.
 MAX_PREVIOUS_BYTES = 64 * 1024
 PREVIOUS_OPTION = "--previous="
+SOURCE_OPTION = "--source="
+#: The sources this command records for: the status line, its default, and the mod.
+LIVE_SOURCES = ("statusline", "mod")
 
 #: What marks a spool line as a quota reading, and its version.
 SPOOL_KEY = "quota"
@@ -64,13 +72,16 @@ _BASH = frozenset({"bash.exe", "sh.exe", "bash", "sh"})
 _POWERSHELL = frozenset({"pwsh.exe", "powershell.exe"})
 
 HELP = """\
-usage: valkama statusline [--previous=<base64>]
+usage: valkama statusline [--source=statusline|mod] [--previous=<base64>]
 
 Claude Code's status line command. It reads the status line JSON on stdin and,
 when it carries `rate_limits`, records a `statusline` quota reading of that
 session into the store, or into the spool beside the store when the store cannot
 take it now. It prints nothing of its own and always exits 0.
 
+  --source=<source>    the quota source the reading is recorded under:
+                       `statusline`, the default, or `mod`, which Valkama's
+                       Claude Code mod passes with the same JSON fields.
   --previous=<base64>  the status line command this one replaced: the standard
                        base64 (RFC 4648, with padding) of its UTF-8 bytes. It runs
                        with the same stdin through the shell that runs this
@@ -110,7 +121,8 @@ def _note(message: str) -> None:
 
 
 def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> None:
-    previous = previous_command(arguments)
+    source, rest = source_of(arguments)
+    previous = previous_command(rest)
     raw = stdin.read(MAX_INPUT_BYTES + 1)
     child = None
     if previous is not None:
@@ -119,10 +131,11 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> None:
         except Exception as error:  # noqa: BLE001 -- the reading is still recorded
             _note(f"the previous command did not start: {type(error).__name__}: {error}")
     if len(raw) <= MAX_INPUT_BYTES:
-        try:
-            _record(raw)
-        except Exception as error:  # noqa: BLE001 -- the previous command still shows
-            _note(f"{type(error).__name__}: {error}")
+        if source is not None:
+            try:
+                _record(raw, source)
+            except Exception as error:  # noqa: BLE001 -- the previous command still shows
+                _note(f"{type(error).__name__}: {error}")
     elif child is not None:
         raw += stdin.read()
     if child is not None:
@@ -130,6 +143,24 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> None:
         if printed:
             stdout.write(printed)
             stdout.flush()
+
+
+def source_of(arguments: list[str]) -> tuple[str | None, list[str]]:
+    """The source `--source` names, `statusline` without it, and the other arguments.
+
+    A `--source` given twice or naming no live source is reported and records nothing,
+    so a reading is never kept under a source its sender did not mean.
+    """
+
+    named = [argument for argument in arguments if argument.startswith(SOURCE_OPTION)]
+    rest = [argument for argument in arguments if not argument.startswith(SOURCE_OPTION)]
+    if not named:
+        return "statusline", rest
+    source = named[0][len(SOURCE_OPTION) :]
+    if len(named) > 1 or source not in LIVE_SOURCES:
+        _note(f"--source names one of {', '.join(LIVE_SOURCES)}; nothing recorded")
+        return None, rest
+    return source, rest
 
 
 def previous_command(arguments: list[str]) -> str | None:
@@ -158,12 +189,13 @@ def previous_command(arguments: list[str]) -> str | None:
 # --- the reading -------------------------------------------------------------
 
 
-def reading(payload: object, now: dt.datetime) -> Reading | None:
+def reading(payload: object, now: dt.datetime, source: str = "statusline") -> Reading | None:
     """The reading a status line input carries, as the store keeps it, or None.
 
-    A window that is absent or does not carry its share as a number is left out, as
-    Claude Code leaves out a window whose reset has passed. A reading the store refuses
-    raises `samples.SampleError`.
+    `source` is the live source it is recorded under, and names which windows it keeps
+    (`samples.SOURCE_WINDOWS`). A window that is absent or does not carry its share as a
+    number is left out, as Claude Code leaves out a window whose reset has passed. A
+    reading the store refuses raises `samples.SampleError`.
     """
 
     from ..quota import samples
@@ -175,14 +207,14 @@ def reading(payload: object, now: dt.datetime) -> Reading | None:
     if not isinstance(limits, dict) or not isinstance(session, str):
         return None
     windows = []
-    for name, kind in samples.SOURCE_WINDOWS["statusline"].items():
+    for name, kind in samples.SOURCE_WINDOWS[source].items():
         window = _window(kind, limits.get(name))
         if window is not None:
             windows.append(window)
     if not windows:
         return None
     found = samples.Reading(
-        "statusline",
+        source,
         now.isoformat(),
         tuple(windows),
         samples.seat_of(windows),
@@ -222,8 +254,8 @@ def _window(kind: str, value: object) -> Window | None:
     return samples.Window(kind, percent, resets_at, amount=amount, currency=currency)
 
 
-def _record(raw: bytes) -> str:
-    """Write the reading `raw` carries, or spool it; returns where it went."""
+def _record(raw: bytes, source: str) -> str:
+    """Write the reading `raw` carries as one of `source`, or spool it; where it went."""
 
     import datetime as dt
     import time
@@ -233,7 +265,7 @@ def _record(raw: bytes) -> str:
     payload = notify.parse(raw)
     now_ns = time.time_ns()
     now = dt.datetime.fromtimestamp(now_ns / 1_000_000_000, dt.UTC)
-    found = reading(payload, now)
+    found = reading(payload, now, source)
     if found is None:
         return "nothing"
     path = notify.settings()[0]
@@ -328,7 +360,8 @@ def read_spool_line(line: dict) -> tuple[Reading, str] | None:
 
     if line.get(SPOOL_KEY) != SPOOL_VERSION or type(line.get(SPOOL_KEY)) is not int:
         return None
-    if not set(line) <= _SPOOL_FIELDS or line.get("source") != "statusline":
+    source = line.get("source")
+    if not set(line) <= _SPOOL_FIELDS or source not in LIVE_SOURCES:
         return None
     texts = (line.get("at"), line.get("session_id"), line.get("spooled_at"))
     if not all(isinstance(text, str) for text in texts):
@@ -361,7 +394,7 @@ def read_spool_line(line: dict) -> tuple[Reading, str] | None:
     import datetime as dt
 
     found = samples.Reading(
-        "statusline", str(line["at"]), tuple(windows), seat, session_id=str(line["session_id"])
+        str(source), str(line["at"]), tuple(windows), seat, session_id=str(line["session_id"])
     )
     try:
         kept = samples.validated(found, dt.datetime.now(dt.UTC))
