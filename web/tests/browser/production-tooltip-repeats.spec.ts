@@ -3,7 +3,7 @@
  * Every hint states its kind; a `clipped` one shows only while its words are cut, so it is the
  * one hint allowed to say them, and the sweep leaves it out. The rest are swept by pointing at
  * every anchor on the board, the navigation with its quiet work unfolded, an opened card, its
- * «…» menu, its Relations with the chain and its `@` list, and a card no fixture shows
+ * «…» menu, its Relations, its Chain and its `@` list, and a card no fixture shows
  * otherwise, which asks a question, has a parent and holds a pasted picture, in both languages.
  */
 import { expect } from '@playwright/test'
@@ -207,7 +207,7 @@ for (const locale of ['en', 'ru'] as const) {
     expect(said).toEqual([])
   })
 
-  test(`no hint in a card's «…» menu or its Relations with the chain says what its anchor shows, ${locale}`, async ({
+  test(`no hint in a card's «…» menu, its Relations or its Chain says what its anchor shows, ${locale}`, async ({
     page,
   }) => {
     const small = smallChain()
@@ -225,11 +225,15 @@ for (const locale of ['en', 'ru'] as const) {
     const inMenu = await sweep(page, menu)
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
-    await drawer.getByRole('tab', { name: /Relations|Связи/u }).click()
-    await expect(drawer.locator('section.chain .chain-row').first()).toBeVisible()
+    await drawer.getByRole('tab', { name: /^(Relations|Связи)$/u }).click()
+    await expect(drawer.locator('.relations .link-row').first()).toBeVisible()
     const inRelations = await sweep(page, drawer)
+    await drawer.getByRole('tab', { name: /^(Chain|Цепочка)$/u }).click()
+    await expect(drawer.locator('section.chain .chain-row').first()).toBeVisible()
+    const inChain = await sweep(page, drawer)
     expect(inRelations.pointed).toBeGreaterThan(2)
-    expect([...inMenu.said, ...inRelations.said]).toEqual([])
+    expect(inChain.pointed).toBeGreaterThan(2)
+    expect([...inMenu.said, ...inRelations.said, ...inChain.said]).toEqual([])
   })
 
   test(`no hint in the \`@\` list says what its anchor shows, and a cut path says itself whole, ${locale}`, async ({

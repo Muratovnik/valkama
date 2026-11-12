@@ -225,13 +225,14 @@ export async function serve(
 }
 
 /**
- * Open the card's Relations, where its chain stands, from the keys: a press would leave
- * the pointer's modality behind for a check of what keyboard focus draws.
+ * Open the card's Chain tab from the keys: a press would leave the pointer's modality behind
+ * for a check of what keyboard focus draws. The card offers the tab once it knows the item has
+ * a chain, which for an item with no children is once its chain has been read.
  */
-export async function showRelations(page: Page) {
-  await page.locator('.drawer').getByRole('tab', { name: 'Relations', exact: true }).focus()
+export async function showChain(page: Page) {
+  await page.locator('.drawer').getByRole('tab', { name: 'Chain', exact: true }).focus()
   await page.keyboard.press('Enter')
-  await expect(page.locator('.drawer .relations')).toBeVisible()
+  await expect(page.locator('.drawer section.chain')).toBeVisible()
 }
 
 /** What the address's module state says, decoded. */

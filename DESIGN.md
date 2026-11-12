@@ -1412,17 +1412,30 @@ never in heavier ink, and reads high or urgent after its reference; its glyphs a
 not pressed, since the card is one button. A search result leads with the
 same glyphs, then its state's dot and name and its project; results share
 their columns so every reference and title start at one edge.
-A link's row in «Связи» says the other end's state in one place whatever the length of its
-title: in a column the whole list shares, on the title's first line with every dot on one
-edge, and under the title, at its edge, where the list is a phone's. The state followed its
-title in a row that wrapped, so down a list it jumped between the end of a short title's line
-and a line of its own under a long one.
-A card's chain section stands in «Связи», after the item's links and references: what
-the work grew into is a relation of the item, and the map and its hundreds of rows held
-Overview's first screen between the next step and the description. Its «Эпик | Цепочка»
-switch stands only where the two answer differently, by the counts the chain read gives
-for both scopes: where the work grew nothing past the root's children the two are one
-list, and a root with no children has no epic scope to read.
+«Связи» holds the item's related work, then its evidence. A group of related work longer than
+five rows opens folded to its heading, which counts its rows by state — «Привело к 14 ·
+11 выполнено · 2 бэклог · 1 отменено» — and a shorter group opens; what the reader opened
+or folded holds while the card is open and comes back with it by Back. An epic's fourteen
+rows of «Привело к» put everything under them a long scroll away. A link's row says the
+other end's state in one place whatever the length of its title: in a column every group
+of the list shares, on the title's first line with every dot on one edge, and under the
+title, at its edge, where the list is a phone's. The state followed its title in a row that
+wrapped, so down a list it jumped between the end of a short title's line and a line of its
+own under a long one, and groups that sized their own columns put it at another edge in each.
+A card's chain is a tab of its own, «Цепочка», in the order Обзор · Агенты · Цепочка ·
+Исполнение · Память · Связи · Системные события, of which a card shows those it offers.
+The card offers it only where there is a chain — an item with children, or one work was
+discovered from — and for an item with no children only once the chain read has said so;
+a card on the tab whose next read finds no chain steps back to «Обзор». The chain stood in
+«Связи» before, after the links and references, as a relation of the item, which put it
+under every link of an epic; the map and its hundreds of rows had held Overview's first
+screen between the next step and the description before that. The tab names it, so it has
+no heading of its own: it opens on its «Эпик | Цепочка» switch and «На графе», and Back from
+the graph opens the card on this tab. The switch stands only where the two answer
+differently, by the counts the chain read gives for both scopes: where the work grew nothing
+past the root's children the two are one list, and a root with no children has no epic scope
+to read. An item of an attached store has the tab only where it has children, and there it
+says that its chain is read in the primary store.
 The section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the

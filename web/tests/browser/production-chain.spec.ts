@@ -26,12 +26,12 @@ import {
   rootFramed,
   routeState,
   serve,
-  showRelations,
+  showChain,
   smallChain,
 } from './chainFixtures.ts'
 import { drawnColours } from './contrast.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { attachedWorkItemRef, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 async function openCard(page: Page, view?: 'graph') {
@@ -43,7 +43,7 @@ async function openCard(page: Page, view?: 'graph') {
       ...(view ? { state: { view } } : {}),
     }),
   )
-  await showRelations(page)
+  await showChain(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   return section
@@ -257,32 +257,6 @@ test('the branch map gives a small chain a segment, a dot and a name per task', 
   await section.locator('.branch-map').screenshot(shot(info, 'chain-map-small-1440.png'))
 })
 
-test('an attached store item says where a chain is read, and asks for none', async ({
-  page,
-}, info) => {
-  await page.setViewportSize({ width: 390, height: 1000 })
-  await installBackend(page, { includeAttachedDuplicate: true })
-  const asked: string[] = []
-  page.on('request', (request) => {
-    if (request.url().includes('/api/planning/work-item/chain')) asked.push(request.url())
-  })
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: projectScope,
-      entity: planningWorkItemEntity(attachedWorkItemRef),
-    }),
-  )
-  await showRelations(page)
-  const section = page.locator('.drawer section.chain')
-  await expect(section).toBeVisible()
-  await expect(section.locator('.data-empty')).toHaveText(
-    'The chain is available only for work items of the primary store.',
-  )
-  await page.locator('.drawer').screenshot(shot(info, 'chain-attached-390.png'))
-  expect(asked).toEqual([])
-})
-
 test('Show on graph draws the open part of the chain, its root marked, and the rest on request', async ({
   page,
 }, info) => {
@@ -417,7 +391,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await expect(chip).toBeVisible()
 
   await page.goBack()
-  await showRelations(page)
+  await showChain(page)
   await expect(page.locator('.drawer section.chain')).toBeVisible()
   await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await page.goForward()
@@ -429,7 +403,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await chip.click()
   await expect(chip).toHaveCount(0)
   await page.goBack()
-  await showRelations(page)
+  await showChain(page)
   await expect(page.locator('.drawer section.chain')).toBeVisible()
   await expect(chip).toHaveText('Chain MAIN-264 · 17')
 })

@@ -269,7 +269,7 @@ describe('grouped related tasks', () => {
     })
     const groups = wrapper.findAll('.relation-group')
     expect(groups).toHaveLength(1)
-    expect(groups[0].get('.group-heading').text()).toBe('Relates to 2')
+    expect(groups[0].get('h4').text()).toBe('Relates to 2')
     expect(groups[0].findAll('.link-row')).toHaveLength(2)
     // The count stands apart from the words it counts, in the accessible text too.
     expect(wrapper.get('h3').text()).toBe('Related work 2')

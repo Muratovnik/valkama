@@ -30,6 +30,14 @@ export function useWorkItemChain(
   const answered = computed(
     () => !loading.value && (toValue(root) === '' || chain.value !== null || failed.value),
   )
+  /**
+   * The read found work grown from the root; null until the first answer for it. A refresh
+   * keeps the last answer, so the card's Chain tab does not leave and come back on each one.
+   */
+  const grown = computed(() => {
+    if (chain.value) return chain.value.total > 0
+    return answered.value ? false : null
+  })
   let identity = ''
   let generation = 0
   let controller: AbortController | undefined
@@ -79,5 +87,5 @@ export function useWorkItemChain(
   )
 
   onBeforeUnmount(cancel)
-  return { answered, chain, failed, load, loading, scope, setScope }
+  return { answered, chain, failed, grown, load, loading, scope, setScope }
 }

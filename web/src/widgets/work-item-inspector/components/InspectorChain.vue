@@ -4,15 +4,17 @@
  * how much of it is closed, where the rest stands, and whether the scope is
  * still growing.
  *
- * The section exists only where there is a chain. A leaf with nothing
- * discovered from it says nothing here, and a leaf whose chain is still loading
- * says nothing either — only an item known to have children holds the place
- * while it loads, so opening an ordinary task does not flash an empty section.
+ * It is the card's Chain tab, which the card offers only where a chain is
+ * certain: an item with children, one whose read found work discovered from it,
+ * or a card Back returned to this tab. So the section holds its place while the
+ * chain loads, and an ordinary task, offered no tab, flashes no empty section.
+ * The tab names the section, so it opens on its actions, not on a heading that
+ * would say «Chain» a second time under «Chain».
  *
  * An item of an attached store is the exception. The chain read answers for
  * the primary store alone, so the card asks it nothing for one, and the section
- * says where a chain can be read instead of leaving the reader to wonder why
- * there is none.
+ * of an item with children says where its chain can be read instead of leaving
+ * the reader to wonder why there is none.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,15 +32,12 @@ import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   chain: WorkItemChain | null
-  /** The item has children, so a chain is certain before it has loaded. */
-  container: boolean
   failed: boolean
   loading: boolean
   /** The chain read reaches this item: it is in the primary store, not an attached one. */
@@ -73,9 +72,8 @@ const { shown: firstShown, held: firstHeld } = useLoadingPresence(
 const firstWord = computed(() => (firstShown.value ? t('platform.states.loading') : ''))
 
 const visible = computed(() => {
-  if (!props.readable) return true
-  if (props.container && firstHeld.value) return true
-  return props.chain ? props.chain.total > 0 : props.container && (props.loading || props.failed)
+  if (!props.readable || firstHeld.value) return true
+  return props.chain ? props.chain.total > 0 : props.loading || props.failed
 })
 
 /** Busy only while a read runs; absent otherwise rather than a claim of `false`. */
@@ -235,34 +233,32 @@ defineExpose({ restore, reveal, view })
     :aria-busy="busy"
     :aria-label="t('workItem.chain.title')"
   >
-    <!-- No count beside the heading: the line under the map is the card's one
-         number for the chain and says what it counts, the work under the root.
-         A bare 306 here stood beside the board's «Chain MAIN-1 · 307», which
-         counts the root as well, and in Epic scope it named a third population. -->
-    <SectionHeader :title="t('workItem.chain.title')">
-      <template
-        v-if="chain && !firstHeld"
-        #actions="{ size }"
+    <!-- No count here: the line under the map is the card's one number for the
+         chain and says what it counts, the work under the root. A bare 306 stood
+         beside the board's «Chain MAIN-1 · 307», which counts the root as well,
+         and in Epic scope it named a third population. -->
+    <div
+      v-if="chain && !firstHeld"
+      class="chain-actions"
+    >
+      <SegmentedControl
+        v-if="twoScopes"
+        class="chain-scope"
+        size="compact"
+        :label="t('workItem.chain.scopeLabel')"
+        :model-value="scope"
+        :options="scopes"
+        @update:model-value="(next) => emit('scope', next)"
+      />
+      <VButton
+        variant="ghost"
+        size="compact"
+        :aria-label="t('workItem.chain.showOnGraph')"
+        @click="emit('graph', chain, lane)"
       >
-        <SegmentedControl
-          v-if="twoScopes"
-          class="chain-scope"
-          :size="size"
-          :label="t('workItem.chain.scopeLabel')"
-          :model-value="scope"
-          :options="scopes"
-          @update:model-value="(next) => emit('scope', next)"
-        />
-        <VButton
-          variant="ghost"
-          :size="size"
-          :aria-label="t('workItem.chain.showOnGraph')"
-          @click="emit('graph', chain, lane)"
-        >
-          {{ t('workItem.chain.onGraph') }}
-        </VButton>
-      </template>
-    </SectionHeader>
+        {{ t('workItem.chain.onGraph') }}
+      </VButton>
+    </div>
 
     <DataEmptyState
       v-if="!readable"
@@ -388,6 +384,15 @@ defineExpose({ restore, reveal, view })
   display: grid;
   gap: var(--space-heading-content);
   min-width: 0;
+}
+
+/* The section's actions, the size a section heading gives its own, on the line a heading
+   would take. */
+.chain-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
 }
 
 /* Three parts, the map, its figures and the list, stand further apart than the rows inside

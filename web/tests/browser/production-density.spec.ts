@@ -17,7 +17,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { lane, openBoard, openList, serve } from './boardPage.ts'
-import { largeChainHere, serve as serveChain, showRelations } from './chainFixtures.ts'
+import { largeChainHere, serve as serveChain, showChain } from './chainFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -345,7 +345,7 @@ test('a chain’s section reaches its list with no chart in the way', async ({ p
       entity: planningWorkItemEntity(workItemRef),
     }),
   )
-  await showRelations(page)
+  await showChain(page)
   const section = page.locator('.drawer section.chain')
   await expect(section).toBeVisible()
   // Between the map and the list: the figures, a verdict, one action and a heading.
@@ -355,12 +355,14 @@ test('a chain’s section reaches its list with no chart in the way', async ({ p
   const firstRow = await topOf(section.locator('.chain-row').first())
   expect(firstRow - mapEnd).toBeLessThanOrEqual(140)
   await expect(section.locator('.chain-chart')).toHaveCount(0)
-  // The scope and the way to the graph ride the heading's row.
-  const heading = await section.locator('.section-header').boundingBox()
+  // The scope and the way to the graph ride one row, the tab's first, above the map.
   const scope = await section.locator('.chain-scope').boundingBox()
-  expect((scope?.y ?? 0) + (scope?.height ?? 0)).toBeLessThanOrEqual(
-    (heading?.y ?? 0) + (heading?.height ?? 0),
-  )
+  const graph = await section.getByRole('button', { name: 'Show on graph' }).boundingBox()
+  const mapTop = await section
+    .locator('.branch-map')
+    .evaluate((map) => map.getBoundingClientRect().top)
+  expect(Math.abs((scope?.y ?? 0) - (graph?.y ?? Number.NaN))).toBeLessThanOrEqual(6)
+  expect((scope?.y ?? 0) + (scope?.height ?? 0)).toBeLessThanOrEqual(mapTop)
   // One action away, and opened by the keyboard as by the pointer.
   const details = section.getByRole('button', { name: 'Chart and pace' })
   await details.focus()
