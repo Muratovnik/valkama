@@ -23,7 +23,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests import isolated
+from tests import isolated, machine_lock
+from tests.test_machine_lock import DEADLINE_SECONDS, HELD_SECONDS, held_elsewhere
 from tests.test_mcp_front import alive, wait_until
 from tests.test_release import link_directory
 
@@ -410,6 +411,75 @@ class GateTests(Workspace):
         self.assertEqual(1, code)
         self.assertIn("run stop first", said)
         self.assertTrue(self.home.exists())
+
+
+class HeavyLockTests(Workspace):
+    """The unittest step waits for the machine's heavy-test lock; no other step takes it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.lock = self.root / "heavy.lock"
+
+    def gate_runs(self, *only: str) -> list[isolated.Run]:
+        """The runs `gates --only ...` would hand to `run_gates`."""
+
+        tools = {name: (name,) for name in ("typos", "vulture", "mypy", "lint-imports", "semgrep")}
+        with (
+            mock.patch.object(isolated.release, "require_toolchain", return_value=tools),
+            mock.patch.object(isolated, "run_gates", return_value=0) as run_gates,
+        ):
+            quietly(isolated.main, ["gates", "--out", str(self.out), "--only", *only])
+        return run_gates.call_args.args[0]
+
+    def test_of_the_whole_list_only_the_unittest_step_takes_the_lock(self) -> None:
+        exclusive = [
+            run.name for run in self.gate_runs("python", "web", "desktop") if run.exclusive
+        ]
+        self.assertEqual(["unittest"], exclusive)
+
+    def test_a_selection_without_the_unittest_step_takes_no_lock(self) -> None:
+        self.assertEqual(
+            [], [run.name for run in self.gate_runs("coverage", "web") if run.exclusive]
+        )
+
+    def test_the_exclusive_step_waits_for_the_holder_and_a_light_one_does_not(self) -> None:
+        marker = self.root / "ran"
+        heavy = isolated.Run(
+            "unittest",
+            [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"],
+            ROOT,
+            exclusive=True,
+        )
+        result: list[tuple[int, str]] = []
+        with held_elsewhere(self.lock, "another checkout's suite") as release:
+            code, _ = quietly(
+                lambda: isolated.run_gates(
+                    [self.run_python("light", "print(1)")], self.out, os.environ, lock=self.lock
+                )
+            )
+            self.assertEqual(0, code, "a light step waited for the lock")
+
+            waiting = threading.Thread(
+                target=lambda: result.append(
+                    quietly(
+                        lambda: isolated.run_gates([heavy], self.out, os.environ, lock=self.lock)
+                    )
+                ),
+                daemon=True,
+            )
+            waiting.start()
+            waiting.join(HELD_SECONDS)
+            self.assertFalse(marker.exists(), "the unittest step ran beside the holder")
+            release.set()
+            waiting.join(DEADLINE_SECONDS)
+
+        self.assertTrue(marker.exists())
+        self.assertEqual(0, result[0][0])
+        summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
+        self.assertIn("it is held by another checkout's suite", summary)
+        self.assertIn("took the heavy-test lock after", summary)
+        with machine_lock.held("after", path=self.lock, say=self.fail):
+            pass
 
 
 def locked_entry(name: str, version: str, **flags: object) -> dict:

@@ -276,7 +276,13 @@ forbidden_modules = [
 [tool.mypy]
 python_version = "3.11"
 cache_dir = ".cache/mypy"
-files = ["server", "valkama.py", "tests/isolated.py", "tests/commit_subjects.py"]
+files = [
+  "server",
+  "valkama.py",
+  "tests/isolated.py",
+  "tests/commit_subjects.py",
+  "tests/machine_lock.py",
+]
 check_untyped_defs = true
 strict_equality = true
 warn_redundant_casts = true
@@ -308,10 +314,10 @@ warn_unused_configs = true
 # measured figure rises; never lower it to make a run green.
 [tool.coverage.run]
 branch = true
-# `tests.isolated` and `tests.commit_subjects` are tools that happen to live
-# beside the tests rather than tests, so they are measured like the code they
-# run beside.
-source = ["server", "tests.isolated", "tests.commit_subjects"]
+# `tests.isolated`, `tests.commit_subjects` and `tests.machine_lock` are tools
+# that happen to live beside the tests rather than tests, so they are measured
+# like the code they run beside.
+source = ["server", "tests.isolated", "tests.commit_subjects", "tests.machine_lock"]
 data_file = ".cache/coverage/data"
 
 [tool.coverage.report]
