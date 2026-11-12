@@ -4,7 +4,7 @@
  * there too.
  */
 import { expect } from '@playwright/test'
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 
 import { readAddress } from '@/shared/api/analyticsAddress.ts'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -331,11 +331,36 @@ function standsInView(element: Element) {
   )
 }
 
+/**
+ * Where the text of each line of the head starts: the first figure, the link, the line under them
+ * when there is one, the caption and the first row's name. One column: they start at one edge.
+ */
+const starts = (head: Element) =>
+  [
+    '.work-usage-figures button',
+    '.work-usage-analytics',
+    '.work-usage-note',
+    '.work-usage-caption',
+    '.work-usage-name',
+  ].flatMap((selector) => {
+    const element = head.querySelector(selector)
+    if (!element) return []
+    const text = document.createRange()
+    text.selectNodeContents(element)
+    return [Math.round(text.getBoundingClientRect().left * 10) / 10]
+  })
+
+async function expectOneEdge(head: Locator, count: number) {
+  const lefts = await head.evaluate(starts)
+  expect(lefts, `the head's lines start at ${lefts.join(', ')}`).toHaveLength(count)
+  expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThanOrEqual(1)
+}
+
 test('at 1440×900 the tab shows the figures and the way to Analytics without a scroll', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  const usage = threeAgents()
+  const usage = { ...threeAgents(), unpriced_models: ['model-with-no-price'] }
   await serveAgents(page, usage)
   await page.goto(CARD)
   const section = await openAgents(page)
@@ -376,6 +401,11 @@ test('at 1440×900 the tab shows the figures and the way to Analytics without a 
   await expect(rows.nth(0)).toContainText('Subagent · bero')
   await expect(rows.nth(0)).toContainText('8\u{A0}h\u{A0}20\u{A0}min')
   await expect(rows.nth(0)).toContainText('≈\u{A0}$180.00')
+  // The one line of notes stands under the link, and every line starts at one edge.
+  await expect(head.locator('.work-usage-note')).toHaveText(
+    'The cost is incomplete: no price for model-with-no-price.',
+  )
+  await expectOneEdge(head, 5)
   await page.screenshot(shot(info, 'agents-tab-1440.png'))
 })
 
@@ -397,6 +427,7 @@ test.describe('under a finger', () => {
     ])
     // No line of notes under figures that need none: each says its why on a press.
     await expect(section.locator('.work-usage-note')).toHaveCount(0)
+    await expectOneEdge(section.locator('.work-usage'), 4)
     await figures.getByRole('button', { name: /^Cost/u }).tap()
     await expect(page.getByRole('tooltip')).toContainText('not a bill')
     await expectNoSilentClipping(page, 'the agents tab at 390px')
