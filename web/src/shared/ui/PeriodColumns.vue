@@ -28,9 +28,11 @@
  * The periods are one stop for Tab (`useChartCursor`); the arrows move between them, and up
  * and down between the segments of one where segments act.
  *
- * A period that acts is never narrower than a pointer can hit. A span of such periods wider
- * than the chart scrolls sideways inside it, the scale staying in view, and opens on its last
- * periods, the ones nearest now; where nothing acts the periods share the width they are given.
+ * A period that acts is never narrower than a pointer can hit, and no wider than that forces a
+ * span to be: one that fits the chart at that width never scrolls. A span wider than the chart
+ * scrolls sideways inside it, the scale staying in view, opens on its first periods and fades
+ * toward an edge past which periods are hidden; where nothing acts the periods share the width
+ * they are given.
  */
 import { computed, ref, useId } from 'vue'
 
@@ -82,12 +84,21 @@ const acting = computed(() => props.actionable !== null)
 const frame = ref<HTMLElement | null>(null)
 const plot = ref<HTMLElement | null>(null)
 const field = ref<HTMLElement | null>(null)
-const { gutter, reveal, width } = usePlotFrame(
+const { gutter, hidden, reveal, width } = usePlotFrame(
   frame,
   plot,
   field,
   () => `${props.columns.length}:${props.columns[0]?.key ?? ''}:${props.columns.at(-1)?.key ?? ''}`,
 )
+
+/**
+ * The edges of the frame periods are hidden past, as attributes its fade is drawn by: one stands
+ * only where periods are hidden, because the style asks whether it is there, not what it says.
+ */
+const hiddenEdges = computed(() => ({
+  'data-hidden-start': hidden.value.start ? '' : undefined,
+  'data-hidden-end': hidden.value.end ? '' : undefined,
+}))
 
 const scale = computed<PlacedTick[]>(() =>
   chart.value.steps.map((step) => ({
@@ -221,6 +232,7 @@ function key(event: KeyboardEvent, at: number | null) {
         class="period-frame"
         :class="{ 'period-acting': acting }"
         :style="{ '--period-gutter': gutter }"
+        v-bind="hiddenEdges"
       >
         <div
           ref="plot"

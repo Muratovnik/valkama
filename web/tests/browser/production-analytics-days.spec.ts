@@ -3,13 +3,14 @@
  * is used at, over spans of three days, four weeks and sixty days, in both panels that draw one:
  * the overview and a dimension's section.
  *
- * A day a pointer presses is never narrower than an inline action. A span
- * of such days wider than the chart scrolls sideways inside the chart and never moves the page:
- * it opens on its last days, the scale stays at the chart's start with nothing showing under
- * it, the days' names stay under their columns, and the keyboard reaches the first day and the
- * last with the focused column whole in view. Each run prints what it measured.
+ * A day a pointer presses is never narrower than the 24px target WCAG 2.5.8 asks, and a span
+ * whose days all fit at that width does not scroll. A span of such days wider than the chart
+ * scrolls sideways inside the chart and never moves the page: it opens on its first days, fades
+ * toward the edge past which days are hidden, the scale stays at the chart's start with nothing
+ * showing under it, the days' names stay under their columns, and the keyboard reaches the first
+ * day and the last with the focused column whole in view. Each run prints what it measured.
  *
- * Such a span keeps what it shows when the chart around it changes: its last days when the
+ * Such a span keeps what it shows when the chart around it changes: its first days when the
  * window is made narrower, the reader's place when they had scrolled away, and the room it
  * keeps clear of the scale when another measure makes the scale wider or narrower. The ground
  * under the scale takes a press, so none reaches a day scrolled under it.
@@ -26,8 +27,8 @@ import { test } from './test.ts'
 
 const WIDTHS = [1440, 1024, 390]
 
-/** `--size-control-inline`: the least width of a day that acts, in pixels. */
-const FLOOR = 28
+/** `--period-reach`: the least width of a day that acts, WCAG 2.5.8's target, in pixels. */
+const FLOOR = 24
 
 /** Half a pixel: what a box's edge may stray from another's by rounding alone. */
 const HALF_PIXEL = 0.5
@@ -77,6 +78,13 @@ const chartPlace = (page: Page) =>
       narrowest: Math.min(...columns.map((column) => column.right - column.left)),
       scrolled: frame?.scrollLeft ?? 0,
       room: (frame?.scrollWidth ?? 0) - (frame?.clientWidth ?? 0),
+      frameWidth: frame?.clientWidth ?? 0,
+      // Which edges say days are hidden past them, and whether the frame draws that.
+      hint: {
+        start: frame?.dataset.hiddenStart !== undefined,
+        end: frame?.dataset.hiddenEnd !== undefined,
+        drawn: frame instanceof HTMLElement && getComputedStyle(frame).maskImage !== 'none',
+      },
     }
   })
 
@@ -133,10 +141,18 @@ for (const panel of PANELS)
         )
         expect(await pageScroll(page), 'the page scrolls sideways').toBe(0)
         expect(opened.frame.right, 'the chart leaves the screen').toBeLessThanOrEqual(width)
-        // A span wider than the chart opens on its end: the last day stands whole inside it.
-        expect(Math.abs(opened.scrolled - opened.room), 'opened off its end').toBeLessThanOrEqual(1)
-        const last = opened.columns.at(-1)
-        expect(last?.right ?? 0, 'the last day').toBeLessThanOrEqual(opened.frame.right + 1)
+        // A span wider than the chart opens on its start, its first day beside the scale, and
+        // says at the frame's end that more days are there; one that fits says nothing.
+        expect(opened.scrolled, 'opened off its start').toBeLessThanOrEqual(1)
+        expect(opened.columns[0]?.left ?? 0, 'the first day').toBeGreaterThanOrEqual(
+          opened.scale.right - 1,
+        )
+        const scrolls = opened.room > 0
+        expect(opened.hint, 'the hint of hidden days').toEqual({
+          start: false,
+          end: scrolls,
+          drawn: scrolls,
+        })
         // The scale stays at the chart's start, and the days' names stand under their columns.
         expect(Math.abs(opened.scale.left - opened.frame.left), 'the scale').toBeLessThanOrEqual(1)
         expect(Math.abs(opened.axis.left - opened.field.left), 'the names').toBeLessThanOrEqual(1)
@@ -179,8 +195,36 @@ for (const panel of PANELS)
           scale: Math.round(opened.scale.right - opened.scale.left),
           firstDay: Math.round(first.left),
           scaleEnd: Math.round(atStart.scale.right),
+          frame: opened.frameWidth,
         })
       })
+
+// The task section's day chart spans its panel; four weeks fit there at both desktop sizes.
+for (const [width, height] of [
+  [1440, 900],
+  [1920, 1080],
+] as const)
+  test(`four weeks fit the task section's day chart at ${width}×${height}, every day hit at 24px or more`, async ({
+    page,
+  }, info) => {
+    await serve(page, SIXTY_DAYS)
+    await openReport(page, width, pageAt({ by: 'work_item', ...SPANS[1]?.state }))
+    await page.setViewportSize({ width, height })
+    const days = page.locator('.spending-days')
+    await days.locator('.segmented-option', { hasText: 'Chart' }).click()
+    await expect(days.locator('.period-column')).toHaveCount(28)
+    await page.evaluate(() => document.fonts.ready)
+    const fit = await chartPlace(page)
+    await record(info, `analytics four weeks fit ${width}`, {
+      frame: fit.frameWidth,
+      room: fit.room,
+      narrowest: Math.round(fit.narrowest * 10) / 10,
+      scale: Math.round(fit.scale.right - fit.scale.left),
+    })
+    expect(fit.room, 'the frame scrolls sideways').toBe(0)
+    expect(Math.round(fit.narrowest * 10) / 10, 'the narrowest day').toBeGreaterThanOrEqual(FLOOR)
+    expect(fit.hint, 'a hint of hidden days').toEqual({ start: false, end: false, drawn: false })
+  })
 
 /** What stands on top a little past the scale's end, at the middle of the plot's height. */
 const pastScale = (page: Page) =>
@@ -196,7 +240,7 @@ const pastScale = (page: Page) =>
     }
   })
 
-test('a span wider than the chart keeps its end, the reader’s place and the scale’s room as the chart changes', async ({
+test('a span wider than the chart keeps its start, the reader’s place and the scale’s room as the chart changes', async ({
   page,
 }) => {
   await serve(page, SIXTY_DAYS)
@@ -205,9 +249,9 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
   const days = analytics.locator('.spending-days')
   await days.locator('.segmented-option', { hasText: 'Chart' }).click()
   await expect(days.locator('.period-column')).toHaveCount(60)
-  const offEnd = async () => {
+  const scrolled = async () => {
     const place = await chartPlace(page)
-    return Math.abs(place.scrolled - place.room)
+    return place.scrolled
   }
   const frameEnd = async () => {
     const place = await chartPlace(page)
@@ -217,21 +261,21 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
     const place = await chartPlace(page)
     return Math.abs(place.gutter - (place.field.left - place.plot.left))
   }
-  await expect.poll(offEnd, { message: 'opened off its end' }).toBeLessThanOrEqual(1)
+  await expect.poll(scrolled, { message: 'opened off its start' }).toBe(0)
 
-  // The window made narrower: the plot is as wide as it was, and the last days stay in view.
+  // The window made narrower: the plot is as wide as it was, and the first days stay in view.
   // Narrower, not narrow: beside the rail, a window of 1200px leaves the report wide enough to
   // keep its charts, where 1024px would open each as its table.
   await page.setViewportSize({ width: 1200, height: 900 })
   await expect(days).toHaveAttribute('data-shown', 'chart')
-  await expect
-    .poll(offEnd, { message: 'left its end as the window narrowed' })
-    .toBeLessThanOrEqual(1)
   const narrowed = await chartPlace(page)
   expect(narrowed.room, 'the span no longer scrolls').toBeGreaterThan(0)
-  expect(narrowed.columns.at(-1)?.right ?? 0, 'the last day').toBeLessThanOrEqual(
-    narrowed.frame.right + 1,
-  )
+  expect(narrowed.scrolled, 'left its start as the window narrowed').toBe(0)
+  expect(narrowed.hint, 'the hint of hidden days').toEqual({
+    start: false,
+    end: true,
+    drawn: true,
+  })
 
   // A reader who scrolled away keeps their place when the window changes again.
   await days.locator('.period-frame').evaluate((frame) => {
@@ -241,6 +285,8 @@ test('a span wider than the chart keeps its end, the reader’s place and the sc
   await expect.poll(frameEnd).toBeGreaterThan(narrowed.frame.right)
   const widened = await chartPlace(page)
   expect(widened.scrolled, 'the reader’s place').toBe(200)
+  // Scrolled into the span, days are hidden at both edges, and both say so.
+  expect(widened.hint, 'the hint of hidden days').toEqual({ start: true, end: true, drawn: true })
   // Held beside the rail, the charts scroll on their own and the day chart stands below their
   // fold: brought into view, as a reader scrolls to it, before a press is aimed at it. Scrolling
   // the charts down moves nothing sideways, so the reader's place still holds.

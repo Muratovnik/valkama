@@ -890,10 +890,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   at a period's start, such as the account the work ran under, is a numbered line up the
   plot with its words under the chart. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own. A period that acts when pressed is never
-  narrower than an inline action (`--size-control-inline`, 28px): a span that takes more room
-  than the chart scrolls sideways inside the plot and never moves the page, opens on its
-  last periods, keeps the value axis in view over the plot's start, and brings a period the
-  keyboard reaches clear of that axis with its focus ring whole. Periods that only show
+  narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
+  all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
+  beside the rail by a few pixels. A span that takes more room than the chart scrolls sideways
+  inside the plot and never moves the page, opens on its first periods, fades out toward an
+  edge past which periods are hidden (a mask, which paints no colour and drops while the
+  keyboard stands in the plot), keeps the value axis in view over the plot's start, and brings
+  a period the keyboard reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
   one shown stands on the same scale as a short line at its height over each column, an edge
   and not a hue, so a period before that was larger never outweighs the columns shown: the

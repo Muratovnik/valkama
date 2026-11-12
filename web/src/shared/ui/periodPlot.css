@@ -11,6 +11,11 @@
 .period-frame {
   --period-gutter: 0px;
 
+  /* How far the plot fades toward an edge periods are hidden past, and to what at each edge. */
+  --period-fade: var(--space-6);
+  --period-fade-start: black;
+  --period-fade-end: black;
+
   min-width: 0;
   scroll-padding-inline-start: var(--period-gutter);
   overflow-x: auto;
@@ -21,11 +26,43 @@
   &.period-acting {
     margin-inline-end: calc(-1 * var(--space-2));
   }
+
+  /* Periods hidden past an edge (`usePlotFrame`): the plot fades out toward that edge over the
+     room of a period, so a span that opens on its first days says that more lie past the frame's
+     end, and one scrolled on says it at the scale too; the scale and its ground never fade. A mask
+     paints no colour and moves nothing. The keyboard's period keeps its ring whole: while one has
+     it, nothing fades, and the period it walks to is brought into view anyway. */
+  &[data-hidden-start] {
+    --period-fade-start: transparent;
+  }
+
+  &[data-hidden-end] {
+    --period-fade-end: transparent;
+  }
+
+  &[data-hidden-start],
+  &[data-hidden-end] {
+    mask-image: linear-gradient(
+      to right,
+      black var(--period-gutter),
+      var(--period-fade-start) var(--period-gutter),
+      black calc(var(--period-gutter) + var(--period-fade)),
+      black calc(100% - var(--period-fade)),
+      var(--period-fade-end)
+    );
+  }
+
+  &:has(:focus-visible) {
+    mask-image: none;
+  }
 }
 
 .period-plot {
   --period-count: 1;
   --period-column: var(--space-6);
+
+  /* The least width of a period that acts: the target a pointer is asked to hit, WCAG 2.5.8's. */
+  --period-reach: 24px;
 
   display: grid;
   grid-template-areas:
@@ -36,11 +73,13 @@
   column-gap: var(--space-2);
   padding-block-start: var(--space-2);
 
-  /* Periods that act: each at least the smallest control a pointer hits, with the gap the
-     periods keep between them, so the plot is as wide as that takes and no narrower than its
-     chart; an empty track after them leaves a gap, so the periods still end on the chart's own
-     edge. The plot's box grows with its tracks: the scale can stay in view only inside the box
-     that holds it, and keeps its width only in a track that does not give it up. */
+  /* Periods that act: each at least `--period-reach`, with the gap the periods keep between
+     them, so the plot is as wide as that takes and no narrower than its chart; an empty track
+     after them leaves a gap, so the periods still end on the chart's own edge. A floor any wider
+     would scroll a span the chart has room for: four weeks beside the rail at 1440px stand at
+     27px each, and an inline action's 28px scrolled them by a few pixels. The plot's box grows
+     with its tracks: the scale can stay in view only inside the box that holds it, and keeps its
+     width only in a track that does not give it up. */
   .period-acting > & {
     grid-template-areas:
       '. markers .'
@@ -50,8 +89,7 @@
       max-content
       minmax(
         calc(
-          var(--period-count) * var(--size-control-inline) + (var(--period-count) - 1) *
-            var(--space-half)
+          var(--period-count) * var(--period-reach) + (var(--period-count) - 1) * var(--space-half)
         ),
         1fr
       )
