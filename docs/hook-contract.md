@@ -1334,7 +1334,8 @@ from it. Everything else is the status line command's: a reading the store canno
 take now goes to the spool, input that carries no reading writes nothing and
 prints nothing, and a reading the store would refuse is reported on stderr and
 written nowhere. A `--source` that names neither `statusline` nor `mod`, or is
-given twice, records nothing.
+given twice, records nothing. The flag is an addition: a status line command
+without it behaves as before, and `interfaces.statusline` stays at version 1.
 
 ### What it never does
 
