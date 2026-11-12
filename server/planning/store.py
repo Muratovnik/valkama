@@ -452,6 +452,85 @@ def assert_threads_postconditions(conn: sqlite3.Connection) -> None:
         raise RuntimeError("post-migration work_item_events does not hold every action")
 
 
+_SYMMETRIC_LINK_SQL = ",".join(f"'{kind}'" for kind in sorted(model.SYMMETRIC_LINK_KINDS))
+#: A symmetric link is one record whichever end wrote it, held by the store rather
+#: than by the writer that looks first: two ends linking each other at once, or a
+#: build that looked in one direction only, leave one record and not its mirror.
+SYMMETRIC_ONCE_INDEX = "work_item_links_symmetric_once"
+_SYMMETRIC_ONCE = (
+    f"CREATE UNIQUE INDEX IF NOT EXISTS {SYMMETRIC_ONCE_INDEX}"
+    " ON work_item_links(min(from_id, to_id), max(from_id, to_id), kind)"
+    f" WHERE kind IN ({_SYMMETRIC_LINK_SQL})"
+)
+#: Whether a link of one symmetric kind is stored from both ends.
+_MIRROR_FOUND = (
+    "SELECT 1 FROM work_item_links link JOIN work_item_links mirror"
+    " ON mirror.kind = link.kind AND mirror.from_id = link.to_id AND mirror.to_id = link.from_id"
+    " WHERE link.kind = ? LIMIT 1"
+)
+#: The later record of each link of one symmetric kind stored from both ends: the
+#: earlier by `created_at`, then by `id`, is the one kept. `UNIQUE(from_id, to_id,
+#: kind)` leaves a record at most one mirror.
+_LATER_MIRRORS_DELETE = (
+    "DELETE FROM work_item_links WHERE kind = ? AND EXISTS ("
+    "SELECT 1 FROM work_item_links kept WHERE kept.kind = work_item_links.kind"
+    " AND kept.from_id = work_item_links.to_id AND kept.to_id = work_item_links.from_id"
+    " AND (kept.created_at < work_item_links.created_at"
+    " OR (kept.created_at = work_item_links.created_at AND kept.id < work_item_links.id)))"
+)
+
+
+def _symmetric_once_present(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (SYMMETRIC_ONCE_INDEX,)
+        ).fetchone()
+        is not None
+    )
+
+
+def symmetric_mirrors_present(conn: sqlite3.Connection) -> bool:
+    """Whether `migrate_symmetric_links` has records to delete, which needs a recovery point.
+
+    A store that holds the index holds no mirror, so it is not read further.
+    """
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "work_item_links" not in tables or _symmetric_once_present(conn):
+        return False
+    return any(
+        conn.execute(_MIRROR_FOUND, (kind,)).fetchone() is not None
+        for kind in sorted(model.SYMMETRIC_LINK_KINDS)
+    )
+
+
+def migrate_symmetric_links(conn: sqlite3.Connection) -> int:
+    """Keep one record of each symmetric link, then make the store refuse a second, once.
+
+    Builds before this looked for an existing link in the direction they were
+    asked for, so a relation linked from both ends lay twice and each card listed
+    it twice. The later record goes and the earlier stays, with its direction,
+    its id and its time; the history of both writes stays on both items. Every
+    other kind is left as it is. Answers how many records went.
+    """
+
+    if _symmetric_once_present(conn):
+        return 0
+    removed = sum(
+        conn.execute(_LATER_MIRRORS_DELETE, (kind,)).rowcount
+        for kind in sorted(model.SYMMETRIC_LINK_KINDS)
+    )
+    conn.execute(_SYMMETRIC_ONCE)
+    return removed
+
+
+def assert_links_postconditions(conn: sqlite3.Connection) -> None:
+    """Refuse to stamp a store that would take a symmetric link's mirror."""
+
+    if not _symmetric_once_present(conn):
+        raise RuntimeError(f"post-migration store lacks the index {SYMMETRIC_ONCE_INDEX}")
+
+
 def migrate_discussion(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(work_item_comments)")}
     if "report" not in columns:

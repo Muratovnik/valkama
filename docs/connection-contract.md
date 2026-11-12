@@ -753,6 +753,16 @@ after 150 ms, which reads as nothing being visible. An on-demand listener answer
 
 ### What a link says about its other end
 
+A `relates-to` link is one link whichever end names it. `link_work_items` from
+the other end, or again from the same one, adds nothing and writes no history;
+`remove: true` from either end takes it away, and the history of both items says
+so. The store refuses a second record of it. A store in which an earlier build
+recorded one relation twice, once from each end, keeps the earlier record when
+it is opened, after a verified recovery point labelled `prerelatesonce`. Every
+reader therefore sees the link once: `outgoing` from the item that wrote it and
+`incoming` from the other. `blocks`, `discovered-from` and `duplicates` stay
+directed, and only the end that wrote one removes it.
+
 A reader judges a link by the item at its far end: a `blocks` link holds only
 while its blocker is unfinished, and that blocker may live in another space,
 under another workflow. So a link names that end's state itself, and nobody has

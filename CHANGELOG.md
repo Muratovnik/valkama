@@ -10,6 +10,16 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A relation linked from both ends is one link.** `relates-to` written from the
+  other end used to add a second record, so a card listed the relation twice, and
+  removing it from that end left the first record in place. It is now one link
+  whichever end writes it, either end removes it, and a repeated link writes no
+  history. A store that holds such pairs keeps the earlier record of each when it
+  is opened, after a verified recovery point; `blocks`, `discovered-from` and
+  `duplicates` are left as they are.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

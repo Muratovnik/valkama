@@ -60,10 +60,12 @@ def updated_fields(arguments: Mapping[str, object]) -> list[str]:
     return [name for name in UPDATABLE_FIELDS if arguments.get(name) is not None]
 
 
-# `blocks` and `discovered-from` are directed and carry the graph. `relates-to`
-# and `duplicates` are symmetric in meaning but stored once, from the item the
-# author was looking at.
+# `blocks` and `discovered-from` are directed and carry the graph. `duplicates`
+# is written by a merge from the duplicate to the item that survives it.
+# `relates-to` reads the same from either end, so it is one record whichever end
+# wrote it, and either end removes it; the store refuses the record's mirror.
 LINK_KINDS = frozenset({"blocks", "relates-to", "discovered-from", "duplicates"})
+SYMMETRIC_LINK_KINDS = frozenset({"relates-to"})
 
 REF_KINDS = frozenset({"session", "commit", "memory", "url"})
 
