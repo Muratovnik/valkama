@@ -28,6 +28,7 @@ import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.t
 import { OVERVIEW_CARDS } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
+import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -94,6 +95,9 @@ const narrow = useNarrowCharts(chartColumn)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
+/** Dimmed while a new view is read in place of this answer (`readPending.css`). */
+const pending = useAnewDimmed(usePanelStanding())
+
 /**
  * The chart's plot takes up what the panel's box leaves over or lacks: a tall window's room
  * under the cards makes it higher, and a short one takes from it, down to `FLOOR`, before the
@@ -136,6 +140,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   <div
     ref="panel"
     class="overview-panel"
+    :class="{ 'read-pending': pending }"
     :style="{ '--overview-plot-grow': `${grow}px` }"
   >
     <SpendingTiles
@@ -231,3 +236,5 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   }
 }
 </style>
+
+<style scoped src="@/pages/analytics/components/readPending.css"></style>

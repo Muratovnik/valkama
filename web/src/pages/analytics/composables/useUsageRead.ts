@@ -5,10 +5,15 @@
  *
  * A new view asks again and drops the answer to the one it replaced, so a slow read never
  * draws over a later one. While it asks, the last answer stays on screen as a refresh in flight
- * rather than blanking into a wait; only the first read waits with nothing to show. A refresh of
- * the view on show replaces its answer once what is drawn with it is in hand too — its accounts
- * and, on the overview, the steps of its period before — so nothing the page draws blanks,
- * flashes or moves between the two.
+ * rather than blanking into a wait, and the page says a new view is being read (`anew`); only the
+ * first read waits with nothing to show. A refresh of the view on show replaces its answer once
+ * what is drawn with it is in hand too — its accounts and, on the overview, the steps of its
+ * period before — so nothing the page draws blanks, flashes or moves between the two.
+ *
+ * A refresh that fails leaves what is on show as it stood, an empty period too, and says so
+ * (`refreshFailed`) until an answer replaces it; the next refresh — the bar's, its retry or the
+ * live period's own — asks again. A new view whose read fails says it failed: the last view's
+ * answer is not its own.
  *
  * Every read goes through the page's shared reads (`useSharedUsage`), as of the moment they keep
  * for the view: another section asks only what no other part of the page has asked already.
@@ -16,6 +21,7 @@
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
 import { beforeStepsQuery } from '@/pages/analytics/composables/usePeriodBefore.ts'
+import { providePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -138,6 +144,11 @@ export function useUsageRead(options: {
    * stands for the period before; null when it was not read.
    */
   const comparedWith = shallowRef<PeriodBounds | null>(null)
+  /** Whether a new view is read while the last view's answer stays on show. */
+  const anew = shallowRef(false)
+  /** Whether the last refresh of the view on show failed, what it showed kept on show. */
+  const refreshFailed = shallowRef(false)
+  providePanelStanding({ anew, failed: refreshFailed })
 
   /** The scope's own filter: its project, or nothing at the top. */
   const scope = computed<UsageFilters>(() => {
@@ -170,11 +181,43 @@ export function useUsageRead(options: {
   let reading: AbortController | null = null
   let offering: AbortController | null = null
   let offered = ''
-  /** What the answer on show was asked for (`asked`); a read of the same is a refresh of it. */
+  /**
+   * What the answer on show was asked for (`asked`), an empty period's too; a read of the same is
+   * a refresh of it. Null while no answer read stands on show.
+   */
   let shownFor: string | null = null
 
   function query(at: PeriodBounds, groupBy: UsageDimension[], compare: boolean): UsageQuery {
     return { ...at, groupBy, filters: filters.value, compare, step: stepOf(options.view()) }
+  }
+
+  /**
+   * What stays on show if a read of `key` fails, when that read is a refresh of what is on show —
+   * an answer or an empty period read for the same view: what is on show, settled. Null for a
+   * new view.
+   */
+  function keptFor(shown: PlatformUiState<Usage>, key: string): PlatformUiState<Usage> | null {
+    if (shownFor !== key) return null
+    if ('payload' in shown) return ready(shown.payload)
+    return shown.status === 'empty' ? shown : null
+  }
+
+  /**
+   * What stands while a read is under way: the last answer, as a refresh in flight, and for a new
+   * view said to be the last view's (`anew`); the empty period a refresh reads again; else a wait.
+   */
+  function standWhileRead(shown: PlatformUiState<Usage>, refresh: boolean) {
+    const drawn = 'payload' in shown
+    anew.value = !refresh && drawn
+    if (drawn) state.value = refreshing(shown.payload)
+    else if (!refresh) state.value = uiLoading()
+  }
+
+  /** A read that failed: a refresh leaves `kept` on show and says it failed; a new view fails. */
+  function fail(kept: PlatformUiState<Usage> | null) {
+    anew.value = false
+    refreshFailed.value = kept !== null
+    state.value = kept ?? uiError('analytics.failed')
   }
 
   /**
@@ -195,17 +238,21 @@ export function useUsageRead(options: {
     const period = periodBounds(view, at)
     const shown = state.value
     const key = asked.value
-    const refresh = period !== null && 'payload' in shown && shownFor === key
+    const kept = period ? keptFor(shown, key) : null
+    const refresh = kept !== null
     // A refresh moves the period and its moment with its answer, not ahead of it.
     if (!refresh) {
       bounds.value = period
       askedAt.value = at
+      refreshFailed.value = false
     }
     if (!period) {
+      shownFor = null
+      anew.value = false
       state.value = uiEmpty('analytics.period.choose')
       return
     }
-    state.value = 'payload' in shown ? refreshing(shown.payload) : uiLoading()
+    standWhileRead(shown, refresh)
     const by = breakdownOf(view)
     const askedWith = filters.value
     const before = comparedPeriod(view, at)
@@ -217,7 +264,7 @@ export function useUsageRead(options: {
     try {
       usage = compared(await asking, askingBefore ? await askingBefore : undefined)
     } catch {
-      if (!signal.aborted) state.value = uiError('analytics.failed')
+      if (!signal.aborted) fail(kept)
       return
     }
     if (signal.aborted) return
@@ -240,6 +287,8 @@ export function useUsageRead(options: {
     shownFor = answer.key
     bounds.value = answer.period
     askedAt.value = answer.at
+    anew.value = false
+    refreshFailed.value = false
     state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
   }
 

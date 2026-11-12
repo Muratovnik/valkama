@@ -9,11 +9,17 @@
  * with nothing yet waits. Each read stands alone: one that fails is that tile's, and the others
  * are read and shown as they land.
  *
+ * A tile whose read again of the view it shows fails keeps its figures, and the rail says a read
+ * again failed until a later round of every tile lands (`useReadStanding`); a tile with no figures
+ * of that view says its read failed. While a new view is read the rail says so too, until every
+ * tile has its answer.
+ *
  * They go through the page's shared reads (`useSharedUsage`) as of the moment the page's own read
  * takes, so a tile that asks what the page or a card asks already takes that answer.
  */
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
+import { provideRailStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
@@ -42,6 +48,13 @@ export function useRailReads(options: {
   const reads = shallowRef<Partial<Record<UsageDimension, RailRead>>>({})
   /** The moment the reads on show were asked at, which says which day is not over yet. */
   const askedAt = shallowRef<Date>(now())
+  /** Whether a new view is read while tiles still show the last view's figures. */
+  const anew = shallowRef(false)
+  /** Whether a tile's read again failed in the last round, its figures kept. */
+  const failed = shallowRef(false)
+  provideRailStanding({ anew, failed })
+  /** What each tile's figures on show were asked for (`asked`). */
+  let shownFor: Partial<Record<UsageDimension, string>> = {}
 
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => {
@@ -64,7 +77,10 @@ export function useRailReads(options: {
   const waiting = (held: RailRead | undefined): RailRead =>
     held?.status === 'ready' ? { ...held, refreshing: true } : { status: 'loading' }
 
-  /** Every dimension's read, asked together; each tile takes its answer as it lands. */
+  /**
+   * Every dimension's read, asked together; each tile takes its answer as it lands. A tile whose
+   * read fails keeps the figures it shows of the same view, or says the read failed.
+   */
   async function read() {
     reading?.abort()
     const controller = new AbortController()
@@ -74,27 +90,47 @@ export function useRailReads(options: {
     const dimensions = options.dimensions()
     const period = periodBounds(options.view(), at)
     const step = stepOf(options.view())
+    const key = asked.value
     askedAt.value = at
     if (!period) {
       reads.value = Object.fromEntries(dimensions.map((one) => [one, { status: 'unasked' }]))
+      shownFor = {}
+      anew.value = false
+      failed.value = false
       return
     }
     const held = reads.value
+    /** The figures a tile keeps if its read fails: those it shows of this same view. */
+    const keeps = (one: UsageDimension) => {
+      const shown = held[one]
+      return shown?.status === 'ready' && shownFor[one] === key ? shown : null
+    }
+    if (dimensions.some((one) => held[one]?.status === 'ready' && !keeps(one))) anew.value = true
+    if (!dimensions.some((one) => keeps(one))) failed.value = false
     reads.value = Object.fromEntries(dimensions.map((one) => [one, waiting(held[one])]))
     const asking = filters.value
+    let kept = false
     await Promise.all(
       dimensions.map(async (dimension) => {
+        const keeping = keeps(dimension)
         try {
           const usage = await options.shared.read(
             { ...period, groupBy: [dimension], filters: asking, compare: false, step },
             signal,
           )
-          if (!signal.aborted) settle(dimension, { status: 'ready', usage, refreshing: false })
+          if (signal.aborted) return
+          shownFor[dimension] = key
+          settle(dimension, { status: 'ready', usage, refreshing: false })
         } catch {
-          if (!signal.aborted) settle(dimension, { status: 'failed' })
+          if (signal.aborted) return
+          kept ||= Boolean(keeping)
+          settle(dimension, keeping ? { ...keeping, refreshing: false } : { status: 'failed' })
         }
       }),
     )
+    if (signal.aborted) return
+    anew.value = false
+    failed.value = kept
   }
 
   watch(asked, () => void read(), { immediate: true })

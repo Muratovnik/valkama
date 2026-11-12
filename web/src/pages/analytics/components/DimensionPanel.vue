@@ -36,6 +36,7 @@ import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
+import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
 import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
@@ -131,6 +132,9 @@ function uncover(event: FocusEvent) {
   })
 }
 
+/** Dimmed while a new view is read in place of this answer (`readPending.css`). */
+const pending = useAnewDimmed(usePanelStanding())
+
 /**
  * The values the ranked list leaves out asked for: the table takes the whole panel, as its own
  * button gives it, and the focus moves to it — to its frame where that scrolls, else its first
@@ -150,6 +154,7 @@ async function showTable() {
   <div
     ref="root"
     class="dimension-panel"
+    :class="{ 'read-pending': pending }"
     :data-fills="fills"
     :data-whole="whole"
     @focusin="uncover"
@@ -336,3 +341,5 @@ async function showTable() {
   }
 }
 </style>
+
+<style scoped src="@/pages/analytics/components/readPending.css"></style>

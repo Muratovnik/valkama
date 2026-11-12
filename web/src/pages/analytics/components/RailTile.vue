@@ -7,11 +7,14 @@
  * Every state takes the same box: the line is one line, cut with an ellipsis and whole in its
  * hint, and the chart's place is kept at its height while there is no chart to draw, so a tile
  * never moves its neighbours when its figures arrive, change or say they could not be read.
- * Words that name no real value, and the words of a state, are in the quiet ink.
+ * Words that name no real value, and the words of a state, are in the quiet ink. While a new view
+ * is read, figures of the last one are dimmed until the tile's own answer lands
+ * (`readPending.css`).
  */
 import { computed } from 'vue'
 
 import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.ts'
+import { useAnewDimmed, usePageStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 
 import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
 import MiniTrend from '@/shared/ui/MiniTrend.vue'
@@ -27,11 +30,15 @@ const props = defineProps<{
 const busy = computed(() =>
   props.tile.busy || props.tile.state === 'loading' ? 'true' : undefined,
 )
+
+/** Dimmed while its figures are the last view's and a new view is read. */
+const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
 </script>
 
 <template>
   <span
     class="rail-tile"
+    :class="{ 'read-pending': pending }"
     :data-state="tile.state"
     :aria-busy="busy"
   >
@@ -116,3 +123,5 @@ const busy = computed(() =>
   }
 }
 </style>
+
+<style scoped src="@/pages/analytics/components/readPending.css"></style>
