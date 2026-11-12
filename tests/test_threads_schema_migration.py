@@ -56,6 +56,7 @@ ADDED_TABLES = {
     "analytics_surface_uses",
     "quota_accounts",
     "quota_samples",
+    "quota_settings",
 }
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {

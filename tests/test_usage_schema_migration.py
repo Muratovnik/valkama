@@ -32,6 +32,7 @@ LATER_TABLES = {
     "analytics_surface_uses",
     "quota_accounts",
     "quota_samples",
+    "quota_settings",
 }
 LATER_COLUMNS = {"work_item_requests": {"comment_id"}, "work_item_comments": {"awaits_reply"}}
 ADDED_INDEXES = {
