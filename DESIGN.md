@@ -2073,7 +2073,11 @@ panel under them, the period chart with the period before as a short line at its
 chart one row of cards: the four tasks that grew or fell the most, each its name over its
 change, then the first five tasks, models and projects, each card opening its section. The
 roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
-hovered ground under the pointer, and nothing moves.
+hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's
+drawing field, where its columns stand without the scale and the steps' names, is never lower
+than 200 pixels, however many account changes it marks; where the panel lacks the room the
+panel scrolls rather than the chart shrinking, and a tall window's room under the cards goes
+to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
 ranked bars list the first twelve and say how many more the table holds; the small charts

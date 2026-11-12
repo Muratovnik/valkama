@@ -2,8 +2,9 @@
 import { computed, ref } from 'vue'
 
 /**
- * The overview of the Analytics page, where the page opens: the period at a glance, laid out to be
- * taken in without scrolling on a desktop screen.
+ * The overview of the Analytics page, where the page opens: the period at a glance. Its chart
+ * keeps a field tall enough to read (`fit`), and where the window has no room for it the panel
+ * scrolls rather than the chart shrinking.
  *
  * - The period's three figures, which also choose the page's measure (`SpendingTiles`).
  * - The period's chart by day, or by hour for a single day, across the panel's whole width,
@@ -98,15 +99,15 @@ const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 const pending = useAnewDimmed(usePanelStanding())
 
 /**
- * The chart's plot takes up what the panel's box leaves over or lacks: a tall window's room
- * under the cards makes it higher, and a short one takes from it, down to `FLOOR`, before the
- * panel scrolls. Where even the floor would not spare the scroll the plot keeps its own height,
- * since giving it up would buy nothing. The change is what the plot adds to its own height (or
- * takes from it), worked out from the room the content leaves with that change in place, so a
- * second look at the same box finds the same answer and changes nothing.
+ * The chart's drawing field — where its columns stand, without the scale's figures and the
+ * steps' names — is never lower than `FLOOR`, whatever else the overview holds: the figures,
+ * the marks and notes of where the accounts changed, the cards. Over the floor it takes the room
+ * the panel's box leaves under the cards, so a tall window gives that room to the chart; a box
+ * that lacks the room for the floor scrolls, and the chart keeps it. `grow` is what the field
+ * adds to the floor, worked out from the room the content leaves with that addition in place,
+ * so a second look at the same box finds the same answer and changes nothing.
  */
-const OWN = 160
-const FLOOR = 100
+const FLOOR = 200
 const panel = ref<HTMLElement | null>(null)
 const grow = ref(0)
 
@@ -127,8 +128,7 @@ function fit() {
   const bottom = frame.getBoundingClientRect().bottom + frame.scrollTop
   const padding = Number.parseFloat(getComputedStyle(frame).paddingBlockEnd) || 0
   const room = bottom - padding - own.getBoundingClientRect().bottom
-  const fits = Math.floor(grow.value + room)
-  grow.value = fits < FLOOR - OWN ? 0 : fits
+  grow.value = Math.max(0, Math.floor(grow.value + room))
 }
 
 useResizeObserver(panel, fit)
@@ -140,7 +140,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
     ref="panel"
     class="overview-panel"
     :class="{ 'read-pending': pending }"
-    :style="{ '--overview-plot-grow': `${grow}px` }"
+    :style="{ '--overview-field-height': `${FLOOR + grow}px` }"
   >
     <SpendingTiles
       v-model:measure="measure"
@@ -194,8 +194,8 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
    first — in one row under the chart while they fit, as many to a line as fit otherwise, and
    one to a line on a phone. */
 .overview-panel {
-  /* What the plot adds to its height, or takes from it, to fill the panel's box; set by `fit`. */
-  --overview-plot-grow: 0px;
+  /* The chart's drawing field: its floor, and what it adds to fill the panel's box (`fit`). */
+  --overview-field-height: 200px;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -207,9 +207,9 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
 .overview-chart {
   min-width: 0;
 
-  /* The plot's own height, and what the panel's box leaves over or lacks (`fit`). */
+  /* The field's floor, and the room the panel's box leaves over it (`fit`). */
   & :deep(.period-field) {
-    block-size: calc(160px + var(--overview-plot-grow, 0px));
+    block-size: var(--overview-field-height, 200px);
   }
 }
 

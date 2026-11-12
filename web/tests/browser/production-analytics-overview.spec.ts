@@ -1,9 +1,8 @@
 /**
  * The overview of the Analytics page in the real app, where the page opens. The oracle is the
- * requirement: on a desktop window of 1440 by 900 its three figures, the period's chart across the
- * panel and, in one row under it, what changed and the three cards of first values all stand in
- * the panel without scrolling it, the plot at least 200 pixels high; a
- * figure is the control that chooses the page's measure, pressed by more than a colour and from
+ * requirement: its three figures, the period's chart across the panel and, in one row under it,
+ * what changed and the three cards of first values, in that order; how high the chart stands is
+ * `production-analytics-overview-field`'s; a figure is the control that chooses the page's measure, pressed by more than a colour and from
  * the keyboard, and the address keeps it; the chart outlines the period before on its own scale;
  * what changed names the tasks that moved most by the measure's own units; a card's heading opens
  * its section and a row narrows the view; a single day stands as its hours. Each run prints what
@@ -12,76 +11,13 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { noTask, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
+import { openOverview, TASKS, worked, WORLD } from './overviewPage.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
-
-/** Ten in the morning of a day of November 2026, in the browser's own time. */
-const on = (day: number, hour = 10) => new Date(2026, 10, day, hour)
-const HOUR = 3600
-
-const ACCOUNT = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
-
-/** A stretch of work on a day: its task, model, role and project, and its hours. */
-function worked(
-  day: number,
-  workItem: TimedStretch['group']['work_item'],
-  [model, role, project]: [string, string, string],
-  hours: number,
-): TimedStretch {
-  return {
-    at: on(day),
-    group: {
-      work_item: workItem,
-      model: value(model),
-      role: value(role),
-      project: value(project),
-      account: ACCOUNT,
-    },
-    spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
-  }
-}
-
-const TASKS = Array.from({ length: 6 }, (_, index) =>
-  task(index + 1, `Rework the import of planning documents, part ${index + 1}`),
-)
-
-/**
- * This week to Wednesday afternoon, and the same days of the week before. From the week before:
- * MAIN-1 and work on no task fall by four hours each; MAIN-2 rises from a quarter of an hour,
- * MAIN-3 by two hours, MAIN-5 from nothing.
- */
-const WORLD: TimedStretch[] = [
-  worked(9, TASKS[0], ['model-a', 'main', 'alpha'], 5),
-  worked(9, TASKS[1], ['model-b', 'subagent', 'alpha'], 3),
-  worked(10, TASKS[2], ['model-a', 'main', 'beta'], 4),
-  worked(10, TASKS[3], ['model-c', 'advisor', 'beta'], 1),
-  worked(10, noTask, ['model-a', 'main', 'alpha'], 2),
-  worked(11, TASKS[4], ['model-b', 'main', 'gamma'], 2),
-  worked(11, TASKS[5], ['model-a', 'subagent', 'gamma'], 1),
-  worked(11, TASKS[0], ['model-a', 'main', 'alpha'], 1),
-  worked(2, TASKS[0], ['model-a', 'main', 'alpha'], 10),
-  worked(2, TASKS[2], ['model-a', 'main', 'beta'], 2),
-  worked(3, noTask, ['model-a', 'main', 'alpha'], 6),
-  worked(4, TASKS[1], ['model-b', 'subagent', 'alpha'], 0.25),
-]
-
-/** Opens the page at an address and waits until the overview's reads have all landed. */
-async function openOverview(page: Page, width: number, height: number, address = pageAt()) {
-  await page.setViewportSize({ width, height })
-  await page.goto(address)
-  const panel = page.locator('.analytics-panel')
-  await expect(panel.locator('.overview-panel')).toBeVisible()
-  await expect(panel.locator('.overview-top')).not.toHaveCount(0)
-  for (const card of await panel.locator('.overview-top').all())
-    await expect(card.locator('.ranked-row').first()).toBeVisible()
-  await expect(panel.locator('.period-before').first()).toBeAttached()
-  return panel
-}
 
 /** Where each part of the overview stands against the panel that holds it, and how it scrolls. */
 async function overviewLayout(page: Page) {
@@ -118,7 +54,7 @@ async function overviewLayout(page: Page) {
   })
 }
 
-test('opens a plain address on the overview, every part in sight at 1440×900', async ({
+test('opens a plain address on the overview, its parts in order at 1440×900', async ({
   page,
 }, info) => {
   const asked: string[] = []
@@ -132,9 +68,8 @@ test('opens a plain address on the overview, every part in sight at 1440×900', 
   const layout = await overviewLayout(page)
   await record(info, 'analytics overview 1440x900', { layout, reads: asked.length })
   await page.screenshot(shot(info, 'analytics-overview-1440x900.png'))
+  // The document stands still: whatever the overview lacks room for, its panel scrolls.
   expect(layout.document.scrollHeight).toBe(layout.document.clientHeight)
-  // Nothing of the panel lies under its edge: it has nothing to scroll, and nothing was.
-  expect(layout.panel.scrollHeight).toBe(layout.panel.clientHeight)
   expect(layout.panel.scrollTop).toBe(0)
   const count = (selector: string) => layout.parts.filter((part) => part.selector === selector)
   expect(count('.spending-tiles')).toHaveLength(1)
@@ -143,7 +78,6 @@ test('opens a plain address on the overview, every part in sight at 1440×900', 
   expect(count('.overview-top')).toHaveLength(3)
   for (const part of layout.parts) {
     expect(part.top, part.selector).toBeGreaterThanOrEqual(layout.panel.top)
-    expect(part.bottom, part.selector).toBeLessThanOrEqual(layout.panel.bottom)
     expect(part.right, part.selector).toBeLessThanOrEqual(layout.panel.right)
   }
   // The chart spans the panel as the figures do; what changed and the three cards stand in one
@@ -302,102 +236,6 @@ test('a single day stands as its hours beside the day before', async ({ page }, 
   await expect(days.locator('.period-slot[data-key*="T10:00"] .period-before')).toHaveCount(1)
   await expect(days.locator('.period-before')).toHaveCount(1)
   await page.screenshot(shot(info, 'analytics-overview-day-1440x900.png'))
-})
-
-/** The chart's plot and the room the panel leaves under the cards, inside its padding. */
-async function plotAndRoom(page: Page) {
-  return page.evaluate(() => {
-    const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const plot = document.querySelector('.overview-chart .period-field')
-    const cards = document.querySelector('.overview-cards')
-    if (!panel || !plot || !cards) throw new Error('no overview')
-    const { x, y, width, height } = plot.getBoundingClientRect()
-    const padding = Number.parseFloat(getComputedStyle(panel).paddingBlockEnd)
-    const room =
-      panel.getBoundingClientRect().bottom - padding - cards.getBoundingClientRect().bottom
-    const scrolls = panel.scrollHeight > panel.clientHeight
-    return { plot: { x, y, width, height }, room: Math.round(room), scrolls }
-  })
-}
-
-test('a tall window gives the room under the cards to the plot, and 1440 by 900 fits 200 pixels of it', async ({
-  page,
-}, info) => {
-  await serve(page, WORLD)
-  await openOverview(page, 1440, 900)
-  const usual = await plotAndRoom(page)
-  await record(info, 'usual', usual)
-  await page.setViewportSize({ width: 1920, height: 1080 })
-  const plotHeight = async () => {
-    const measured = await plotAndRoom(page)
-    return measured.plot.height
-  }
-  await expect.poll(plotHeight).toBeGreaterThanOrEqual(280)
-  const tall = await plotAndRoom(page)
-  await record(info, 'tall', tall)
-  expect(tall.room).toBeGreaterThanOrEqual(0)
-  expect(tall.room).toBeLessThan(40)
-  expect(tall.scrolls).toBe(false)
-  const page1920 = await page.evaluate(() => [
-    document.documentElement.scrollHeight,
-    document.documentElement.clientHeight,
-  ])
-  expect(page1920[0]).toBe(page1920[1])
-  // At 1440 by 900 the plot, across the panel, takes what the panel leaves: at least 200 pixels,
-  // and nothing scrolls.
-  expect(usual.scrolls).toBe(false)
-  expect(Math.round(usual.plot.height)).toBeGreaterThanOrEqual(200)
-  expect(Math.round(usual.plot.width)).toBeGreaterThanOrEqual(800)
-})
-
-const OTHER_ACCOUNT = value('0d6f1c3a-8b2e-4f5a-9e7d-3c1b2a4f6e8d')
-
-/**
- * A full week: five tasks, models, roles and projects in each card, no task and a sixth task
- * in the chart's legend, and accounts that change twice: one on Monday, both on Tuesday, the
- * other on Wednesday.
- */
-const FULL: TimedStretch[] = [
-  ...[0, 1, 2, 3, 4, 5].map((index): TimedStretch => {
-    const day = [9, 10, 10, 11, 11, 9][index] ?? 9
-    const stretch = worked(
-      day,
-      TASKS[index],
-      [`model-${(index % 5) + 1}`, `role-${(index % 5) + 1}`, `project-${(index % 5) + 1}`],
-      6 - index,
-    )
-    const account = day === 11 || index === 2 ? OTHER_ACCOUNT : ACCOUNT
-    return { ...stretch, group: { ...stretch.group, account } }
-  }),
-  worked(10, noTask, ['model-1', 'role-1', 'project-1'], 2),
-  worked(2, TASKS[0], ['model-1', 'role-1', 'project-1'], 4),
-]
-
-test('at 1440 by 900 a full overview fits its panel: the plot gives up height before it scrolls', async ({
-  page,
-}, info) => {
-  await serve(page, FULL)
-  const panel = await openOverview(page, 1440, 900)
-  for (const card of await panel.locator('.overview-top').all())
-    await expect(card.locator('.ranked-row')).toHaveCount(5)
-  await expect(panel.locator('.period-mark')).toHaveCount(2)
-  // Across the panel the legend takes one line.
-  const legendLines = await panel
-    .locator('.overview-chart .chart-key')
-    .evaluateAll(
-      (keys) => new Set(keys.map((key) => Math.round(key.getBoundingClientRect().top))).size,
-    )
-  expect(legendLines).toBe(1)
-  const fitted = async () => {
-    const measured = await plotAndRoom(page)
-    return measured.scrolls
-  }
-  await expect.poll(fitted).toBe(false)
-  const full = await plotAndRoom(page)
-  const box = await panel.evaluate((element) => [element.scrollHeight, element.clientHeight])
-  await record(info, 'full', { ...full, box, legendLines })
-  expect(box[0]).toBe(box[1])
-  expect(full.plot.height).toBeGreaterThanOrEqual(100)
 })
 
 /**
