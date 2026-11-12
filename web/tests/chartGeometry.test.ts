@@ -20,9 +20,11 @@ import {
   columnNotes,
   columnSummary,
   dayTicks,
+  foldChanges,
   labelledColumns,
   nextCursor,
   rankRows,
+  readoutLines,
   segmentPlace,
   stackColumns,
   valueTicks,
@@ -209,6 +211,28 @@ describe('stacked columns', () => {
   })
 })
 
+describe('the readout over the chart', () => {
+  test('says the period and what is said of it, then the series largest first', () => {
+    const said = { ...words, before: 'period before' }
+    const { columns } = stackColumns(
+      [{ ...column('d1', { a: 1, b: 4, c: 2 }, true), before: 9 }],
+      series,
+      [{ at: 'd1', label: 'Switched to B' }],
+    )
+    const [one] = columns
+    assert.ok(one)
+    assert.deepEqual(readoutLines(one, said, String), {
+      head: 'd1: total 7, period before 9. so far. Switched to B',
+      series: 'Account B 4, Account C 2, Account A 1',
+    })
+    // The whole text keeps the stack's order: it is the period's name for assistive technology.
+    assert.equal(
+      columnSummary(one, said, String),
+      'd1: total 7, period before 9; Account A 1, Account B 4, Account C 2. so far. Switched to B',
+    )
+  })
+})
+
 describe('a period still running', () => {
   test('is drawn at what it holds so far, and says so in its name and under its column', () => {
     const columns = [column('d1', { a: 4 }), column('d2', { a: 6 }), column('d3', { a: 1 }, true)]
@@ -240,7 +264,7 @@ describe('a period still running', () => {
 })
 
 describe('a period with no data yet', () => {
-  test('says so instead of a sum, beside that it is running, and never reads as a zero', () => {
+  test('says so instead of a sum and never reads as a zero, nor as running «so far»', () => {
     const said = { ...words, pending: 'no data yet' }
     const { columns } = stackColumns(
       [
@@ -254,7 +278,8 @@ describe('a period with no data yet', () => {
     assert.ok(first && second && third)
     assert.equal(columnSummary(first, said, String), 'm1: total 2; Account A 2')
     assert.equal(columnSummary(second, said, String), 'm2. no data yet')
-    assert.equal(columnSummary(third, said, String), 'm3. so far. no data yet')
+    // A running period with no data yet holds nothing so far: one clean sentence, no fragment.
+    assert.equal(columnSummary(third, said, String), 'm3. no data yet')
     assert.deepEqual(columnNotes(second, said), ['no data yet'])
   })
 })
@@ -287,6 +312,16 @@ describe('the time axis', () => {
     )
   })
 })
+
+/** The changes of fourteen days whose first `count` after the first start with a change. */
+const changed = (count: number) => {
+  const columns = Array.from({ length: 14 }, (_, index) => column(`d${index}`, { a: 1 }))
+  const marks = Array.from({ length: count }, (_, index) => ({
+    at: `d${index + 1}`,
+    label: `to ${index}`,
+  }))
+  return changeNotes(stackColumns(columns, series, marks).columns)
+}
 
 describe('changes marked on the time axis', () => {
   test('are numbered in time order, named in the period they start, and placed at its start', () => {
@@ -321,6 +356,27 @@ describe('changes marked on the time axis', () => {
       columnSummary(third, words, String),
       'd3: total 1; Account A 1. Switched to B. Limit reset',
     )
+  })
+
+  test('fold into one line that counts them from three on, the marks keeping no number', () => {
+    const said = { ...words, changes: (count: number) => `Changes: ${count}` }
+    for (const count of [0, 2]) {
+      assert.equal(foldChanges(changed(count), said), null)
+      assert.ok(changeMarkers(changed(count), 14).every((marker) => marker.text !== ''))
+    }
+    assert.deepEqual(foldChanges(changed(3), said), {
+      text: 'Changes: 3',
+      whole: 'd1: to 0; d2: to 1; d3: to 2',
+    })
+    const twelve = foldChanges(changed(12), said)
+    assert.equal(twelve?.text, 'Changes: 12')
+    assert.equal(twelve?.whole.split('; ').length, 12)
+    assert.ok(twelve?.whole.endsWith('d12: to 11'))
+    const marks = changeMarkers(changed(12), 14, false)
+    assert.equal(marks.length, 12)
+    assert.ok(marks.every((marker) => marker.text === ''))
+    // A chart with no words for the count keeps a line for each change.
+    assert.equal(foldChanges(changed(12), words), null)
   })
 })
 

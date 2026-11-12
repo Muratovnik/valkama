@@ -121,6 +121,11 @@ export interface SpendingLine {
 
 const UNPLACED: UsageGroupValue = { id: null, unknown: true }
 
+const byCodePoint = (left: string, right: string) => {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
 /** How much a line weighs in a measure, for its rank: no data weighs nothing. */
 const weight = (measure: Measure, line: SpendingLine) => measureOf(measure, line.spent) ?? 0
 
@@ -161,6 +166,32 @@ export function spendingLines(
   return [...categories.slice(0, keep), ...other, ...apart('none'), ...apart('unknown')]
 }
 
+/**
+ * The lines of a section's ranked chart by `dimension`: every value ranked by its figure in
+ * `measure` — work with no value there and work nobody can place among them, where their figures
+ * put them — the first `shown` kept and the rest folded into one «other» line, which comes last.
+ * A tie keeps the order of the keys. Nothing is dropped.
+ */
+export function rankedLines(
+  rows: readonly UsageRow[],
+  dimension: UsageDimension,
+  measure: Measure,
+  shown = SHOWN_CATEGORIES,
+): SpendingLine[] {
+  const lines = spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).sort(
+    (left: SpendingLine, right: SpendingLine) =>
+      weight(measure, right) - weight(measure, left) || byCodePoint(left.key, right.key),
+  )
+  const keep = NEVER_FOLDED.has(dimension) ? lines.length : shown
+  const tail = lines.slice(keep)
+  let folded = NOTHING
+  for (const line of tail) folded = addSpent(folded, line.spent)
+  const other: SpendingLine[] = tail.length
+    ? [{ key: 'other', kind: 'other', spent: folded, value: null, folded: tail.length }]
+    : []
+  return [...lines.slice(0, keep), ...other]
+}
+
 /** A value of a breakdown in this period beside the period it is compared with. */
 export interface ComparedLine {
   /** What the value spent in the period before; null when that period was not read. */
@@ -171,11 +202,6 @@ export interface ComparedLine {
   kind: ValueKind
   now: Spent
   value: UsageGroupValue
-}
-
-const byCodePoint = (left: string, right: string) => {
-  if (left === right) return 0
-  return left < right ? -1 : 1
 }
 
 /**

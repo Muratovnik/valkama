@@ -17,6 +17,8 @@ const props = defineProps<{
   label: string
   rows: readonly RankedRow[]
   words: RankedWords
+  /** Rank work with no value and unknown work by their figures (`rankRows`). */
+  rankAll?: boolean
 }>()
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
@@ -27,7 +29,7 @@ function pressAside(key: string, event: MouseEvent) {
 }
 
 const ordered = computed(() => {
-  const { ranked, rest } = rankRows(props.rows)
+  const { ranked, rest } = rankRows(props.rows, props.rankAll)
   return [...ranked, ...rest].map((row) => ({ ...row, rest: row.kind !== 'category' }))
 })
 

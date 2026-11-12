@@ -8,25 +8,21 @@
  * It takes the height its panel leaves it and scrolls in its own frame, which keeps a wheel to
  * itself: the heading row, the names and the total row stay in view however far it scrolls. Each
  * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
- * measure, or the total of a crossed table. Under the frame a line that never scrolls away says how
- * many rows it shows and how they are sorted, and downloads what it shows, in that order, as a CSV
- * file (`tableFile`); with no value to list it is disabled, and words say why.
+ * measure, or the total of a crossed table. A row is one line: its name is cut where the column is
+ * narrower (`SpendingTableName`), and the figures take what they need, the name the rest.
  *
- * Its panel may set a control of its own before the second dimension's (`actions`).
- *
- * A row's name acts as its value does in the bars (`useLineActions`): a link to a task, or a
- * control that narrows the view to the value, sent out as `narrow`. Either is named by the value,
- * since it heads its row's cells; what pressing it does is its description. A value the page
- * names by the start of its id, an account, has the whole id under its name.
+ * The heading row over the frame says how many rows it shows and how they are sorted, and holds the
+ * controls: one its panel may set (`actions`), the second dimension, and the download of what it
+ * shows, in that order, as a CSV file (`tableFile`); with no value to list that is disabled, and
+ * words say why. A row's name pressed to narrow the view goes out as `narrow`.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
-import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
-import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
 
@@ -42,6 +38,7 @@ import ChartTable from '@/shared/ui/ChartTable.vue'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import FieldError from '@/shared/ui/FieldError.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -69,7 +66,6 @@ const emit = defineEmits<{
 
 const { locale, t } = useI18n()
 const words = useSpendingWords()
-const actions = useLineActions()
 
 /** The crossed answer on show, once there is one for the second dimension chosen. */
 const crossed = computed(() => {
@@ -109,7 +105,7 @@ const headings = computed(() => [
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
-/** The line under the table: how many rows of how many, and their order. */
+/** What the heading row says of the rows: how many, and their order. */
 const summary = computed(() => {
   const column = headings.value.find(({ key }) => key === sort.value.column)?.text ?? ''
   const way = t(`analytics.panel.table.direction.${direction.value}`)
@@ -121,27 +117,6 @@ const summary = computed(() => {
 })
 
 const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)
-
-const linkOf = (line: TableLine) => actions.taskLink(props.by, line.value)
-const narrowsTo = (line: TableLine) => actions.narrowsTo(props.by, line.value)
-
-function follow(line: TableLine, event: MouseEvent) {
-  const link = linkOf(line)
-  if (link) actions.follow(link, event)
-}
-
-/** A middle press on a link opens it elsewhere, and is a press on it all the same. */
-function followAside(line: TableLine, event: MouseEvent) {
-  if (event.button === 1) follow(line, event)
-}
-
-const narrows = (line: TableLine) => !linkOf(line) && narrowsTo(line) !== undefined
-const narrowDescription = (line: TableLine) => actions.narrowName(line.name)
-
-function narrowTo(line: TableLine) {
-  const value = narrowsTo(line)
-  if (value !== undefined) emit('narrow', value, line.name)
-}
 
 /** Nothing to download: no value to list, or a crossed table not read yet. */
 const nothing = computed(() => !model.value.lines.length)
@@ -160,23 +135,48 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 
 <template>
   <section class="spending-table">
-    <SectionHeader
-      as="h2"
-      level="page"
-      :title="model.title"
-    >
-      <template #actions="{ size }">
+    <div class="spending-table-head">
+      <SectionHeader
+        class="spending-table-title"
+        as="h2"
+        level="page"
+        :title="model.title"
+      />
+      <p
+        v-if="!waiting && model.lines.length"
+        v-tooltip.clipped="summary"
+        class="spending-table-summary one-line"
+      >
+        {{ summary }}
+      </p>
+      <div class="spending-table-controls">
         <slot name="actions" />
         <ChoiceSelect
           class="spending-table-across"
-          :size="size"
+          size="compact"
           :label="t('analytics.panel.table.across')"
           :model-value="across ?? NONE"
           :options="acrossOptions"
           @update:model-value="chooseAcross"
         />
-      </template>
-    </SectionHeader>
+        <span
+          v-if="nothing"
+          :id="nothingId"
+          class="spending-table-note"
+        >
+          {{ t('analytics.table.nothingToDownload') }}
+        </span>
+        <VButton
+          class="spending-download"
+          size="compact"
+          :disabled="nothing || waiting"
+          :aria-describedby="downloadNote"
+          @click="download"
+        >
+          {{ t('analytics.table.download') }}
+        </VButton>
+      </div>
+    </div>
     <FieldError
       v-if="notice"
       role="alert"
@@ -263,35 +263,11 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
           :class="{ 'chart-rest': line.rest }"
           :data-key="line.key"
         >
-          <th
-            scope="row"
-            class="chart-cell chart-name"
-          >
-            <a
-              v-if="linkOf(line)"
-              class="chart-press"
-              :href="linkOf(line)?.href"
-              @click="(event: MouseEvent) => follow(line, event)"
-              @auxclick="(event: MouseEvent) => followAside(line, event)"
-            >
-              {{ line.name }}
-            </a>
-            <button
-              v-else-if="narrows(line)"
-              type="button"
-              class="chart-press"
-              :aria-description="narrowDescription(line)"
-              @click="narrowTo(line)"
-            >
-              {{ line.name }}
-            </button>
-            <template v-else>{{ line.name }}</template>
-            <span
-              v-if="line.detail"
-              class="chart-detail"
-              >{{ line.detail }}</span
-            >
-          </th>
+          <SpendingTableName
+            :by="by"
+            :line="line"
+            @narrow="(value, label) => emit('narrow', value, label)"
+          />
           <td
             v-for="cell in line.cells"
             :key="cell.key"
@@ -325,44 +301,21 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
         </tr>
       </tfoot>
     </ChartTable>
-    <div class="spending-table-foot">
-      <p
-        v-if="!waiting && model.lines.length"
-        class="spending-table-summary"
-      >
-        {{ summary }}
-      </p>
-      <span
-        v-if="nothing"
-        :id="nothingId"
-        class="spending-table-note"
-      >
-        {{ t('analytics.table.nothingToDownload') }}
-      </span>
-      <VButton
-        class="spending-download"
-        size="compact"
-        :disabled="nothing || waiting"
-        :aria-describedby="downloadNote"
-        @click="download"
-      >
-        {{ t('analytics.table.download') }}
-      </VButton>
-    </div>
   </section>
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
 
 <style scoped>
-/* The heading, the notes, the frame and the line under it, top to bottom: the frame takes what
-   the panel leaves, and scrolls; the rest keep their size. */
+/* The heading row, the notes and the frame, top to bottom: the frame takes what the panel
+   leaves, and scrolls; the rest keep their size. Its headings ask it how wide it is. */
 .spending-table {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
   min-block-size: 0;
+  container-type: inline-size;
 
   /* Held to a height, only the frame gives way: a part with a declared least height (a
      control's) would otherwise shrink to it and spill onto the next. */
@@ -429,6 +382,7 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   display: inline-flex;
   gap: var(--space-1);
   align-items: center;
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: inherit;
@@ -447,19 +401,56 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   color: var(--color-text);
 }
 
-.spending-table-foot {
+/* The heading row: the title, what the rows are and their order, and the controls, on one line
+   where it has room and wrapping where it has not; the words about the rows give way first. */
+.spending-table-head {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
-  justify-content: flex-end;
   align-items: center;
 }
 
+.spending-table-title {
+  flex: 0 1 auto;
+}
+
 .spending-table-summary {
-  flex: 1 1 16rem;
-  min-width: 0;
+  flex: 1 1 0;
+  min-inline-size: 6rem;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+.spending-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+/* A row is one line: each figure and its heading take what they need, the name the rest, cut
+   where it is longer (`SpendingTableName`). In a narrower table a heading may take a second line
+   rather than widen its column past its figures. */
+.chart-cell[data-numeric='true'] {
+  inline-size: 1px;
+}
+
+.chart-heading[data-numeric='true'] {
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+
+.chart-name {
+  min-inline-size: 12rem;
+  max-inline-size: 0;
+}
+
+@container (width < 50rem) {
+  .chart-heading[data-numeric='true'] {
+    min-inline-size: 7em;
+    white-space: normal;
+  }
 }
 </style>

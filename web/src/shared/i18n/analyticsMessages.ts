@@ -80,6 +80,7 @@ export const analyticsMessages = {
         empty: 'No day in this period spent anything.',
         other: 'Other',
         accounts: 'Accounts: {before} → {after}',
+        changes: 'Account changes: {count}',
         accountsFailed:
           'The accounts that worked could not be read, so their changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
@@ -130,7 +131,6 @@ export const analyticsMessages = {
       table: {
         title: 'Spending {by}',
         beside: 'Spending {by}, beside {period}',
-        before: '{measure}, {period}',
         change: 'Change',
         unread: 'The period before was not read, so this table shows this period alone.',
         download: 'Download CSV',
@@ -255,6 +255,7 @@ export const analyticsMessages = {
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
         accounts: 'Аккаунты: {before} → {after}',
+        changes: 'Смен аккаунта: {count}',
         accountsFailed:
           'Не удалось прочитать, какие аккаунты работали, поэтому их смены не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
@@ -306,7 +307,6 @@ export const analyticsMessages = {
       table: {
         title: 'Расход {by}',
         beside: 'Расход {by} в сравнении с периодом {period}',
-        before: '{measure}, {period}',
         change: 'Изменение',
         unread: 'Предыдущий период не прочитан, поэтому таблица показывает только этот период.',
         download: 'Скачать CSV',

@@ -4,7 +4,7 @@
  */
 import { stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 import type { StackSource } from '@/pages/analytics/utils/dayFigures.ts'
-import { figureOf, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
+import { figureOf, rankedLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
 
@@ -29,12 +29,13 @@ export interface DayMultiple {
 }
 
 /**
- * The lines of the small charts: the largest categories in the measure, the rest folded into one
- * «other», then work with no value there and work nobody can place (`spendingLines`), each with
- * its figure day by day. A day a line spent in without a figure in the measure is null, not zero.
+ * The lines of the small charts: the largest values in the measure, work with no value there and
+ * work nobody can place among them by their figures, the rest folded into one «other»
+ * (`rankedLines`), each with its figure day by day. A day a line spent in without a figure in the
+ * measure is null, not zero.
  */
 export function dayMultiples({ usage, by, measure }: StackSource): DayMultiple[] {
-  const lines = spendingLines(usage.rows, by, measure, CHARTED)
+  const lines = rankedLines(usage.rows, by, measure, CHARTED)
   const named = new Set(lines.map((line) => line.key))
   const days = usage.series.map((point) => {
     const sums = new Map<string, number | null>()

@@ -83,15 +83,23 @@ const REST_ORDER: readonly RankedRowKind[] = ['other', 'none', 'unknown']
  * keeps one order whatever order the rows came in. A bar is measured against the longest
  * category: the folded tail, work with no task and unknown work sum many values or none, so one
  * of them would set a scale that leaves every category short. They draw no bar (`length` null)
- * and are read by their figures.
+ * and are read by their figures. With `rankAll`, as a section of the Analytics page asks, work
+ * with no value and unknown work are ranked and drawn on the categories' scale, and only the
+ * folded tail closes the chart.
  */
-export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; rest: PlacedRow[] } {
-  const categories = rows.filter((row) => (row.kind ?? 'category') === 'category')
+export function rankRows(
+  rows: readonly RankedRow[],
+  /** Rank work with no value and unknown work among the categories, by their figures. */
+  rankAll = false,
+): { ranked: PlacedRow[]; rest: PlacedRow[] } {
+  const ranks = (row: RankedRow) =>
+    (row.kind ?? 'category') === 'category' || (rankAll && row.kind !== 'other')
+  const categories = rows.filter((row) => ranks(row))
   const longest = Math.max(0, ...categories.map((row) => drawable(row.value)))
   const ranked = categories
     .map((row) => ({
       ...row,
-      kind: 'category' as const,
+      kind: row.kind ?? 'category',
       length: longest ? drawable(row.value) / longest : 0,
     }))
     .sort(
@@ -101,7 +109,9 @@ export function rankRows(rows: readonly RankedRow[]): { ranked: PlacedRow[]; res
         byCodePoint(left.key, right.key),
     )
   const rest = REST_ORDER.flatMap((kind) =>
-    rows.filter((row) => row.kind === kind).map((row) => ({ ...row, kind, length: null })),
+    rows
+      .filter((row) => row.kind === kind && !ranks(row))
+      .map((row) => ({ ...row, kind, length: null })),
   )
   return { ranked, rest }
 }
@@ -169,6 +179,11 @@ export interface PeriodWords {
   emptyDescription?: string
   /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
   pending?: string
+  /**
+   * The one line under the chart that counts its changes where there are too many for a line
+   * each (`foldChanges`): "Account changes: 12". Without it every change has its line.
+   */
+  changes?: (count: number) => string
 }
 
 /** What a press in a period chart opens: a period, or one series in it. */
@@ -359,20 +374,36 @@ const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stack
 
 /** What a period holds, in words: its sum, each series in it, and what is said of it. */
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
-  const parts = stacked.segments.map(
-    (segment) => `${segment.series.label} ${format(segment.value)}`,
-  )
-  const before = stacked.column.before
-  // The period compared with is said beside the sum, ahead of the series that may be cut off.
-  const compared =
-    words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
-  const head =
-    hasSum(stacked) && !stacked.column.pending
-      ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
-      : `${periodName(stacked)}${compared}`
+  const parts = seriesParts(stacked.segments, format)
+  const head = columnHead(stacked, words, format)
   return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
     .filter(Boolean)
     .join('. ')
+}
+
+/** A period's name and sum, and the period compared with beside the sum. */
+function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const before = stacked.column.before
+  const compared =
+    words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
+  return hasSum(stacked) && !stacked.column.pending
+    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+    : `${periodName(stacked)}${compared}`
+}
+
+const seriesParts = (segments: readonly StackSegment[], format: Format) =>
+  segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
+
+/**
+ * A period as the two lines of the readout over its chart: its name, sum, the period compared
+ * with and what is said of it; then each series in it, the largest first.
+ */
+export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
+  return {
+    head: [columnHead(stacked, words, format), ...columnNotes(stacked, words)].join('. '),
+    series: seriesParts(largest, format).join(', '),
+  }
 }
 
 /** One segment in words, with the sum of the period it stands in. */
@@ -402,14 +433,35 @@ export function changeNotes(columns: readonly StackedColumn[]): ChangeNote[] {
     .map((note, at) => ({ ...note, number: at + 1 }))
 }
 
-/** The numbers over the plot, one label per period that changed, at that period's start. */
-export function changeMarkers(notes: readonly ChangeNote[], count: number): PlacedTick[] {
+/** Up to this many changes are noted a line each under the chart; more fold into one line. */
+const NOTED_CHANGES = 2
+
+/**
+ * The changes under the chart as one line that counts them, with every change in its whole
+ * text, where there are more than `NOTED_CHANGES` and the chart has words for it; null where
+ * each change keeps its own line.
+ */
+export function foldChanges(notes: readonly ChangeNote[], words: PeriodWords) {
+  if (!words.changes || notes.length <= NOTED_CHANGES) return null
+  const whole = notes.map((note) => `${note.period}: ${note.text}`).join('; ')
+  return { text: words.changes(notes.length), whole }
+}
+
+/**
+ * The numbers over the plot, one label per period that changed, at that period's start; with
+ * the changes folded into one line (`numbered` false) the lines stand there with no number.
+ */
+export function changeMarkers(
+  notes: readonly ChangeNote[],
+  count: number,
+  numbered = true,
+): PlacedTick[] {
   const byColumn = new Map<number, number[]>()
   for (const note of notes)
     byColumn.set(note.index, [...(byColumn.get(note.index) ?? []), note.number])
   return [...byColumn].map(([index, numbers]) => ({
     key: index,
-    text: numbers.join(', '),
+    text: numbered ? numbers.join(', ') : '',
     offset: index / count,
     edge: 'middle',
   }))
@@ -423,7 +475,8 @@ export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
   const pending = stacked.column.pending && words.pending ? [words.pending] : []
-  const running = stacked.column.incomplete ? [words.incomplete] : []
+  // A period with no data yet holds nothing «so far»: it says only that it has none.
+  const running = stacked.column.incomplete && !pending.length ? [words.incomplete] : []
   return [...running, ...pending, ...absent, ...stacked.marks]
 }
 

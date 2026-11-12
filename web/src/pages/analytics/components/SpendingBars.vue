@@ -1,11 +1,15 @@
 <script setup lang="ts">
 /**
- * The period's measure broken down by the chosen dimension, largest first: every category, none
- * folded, then work with no task and work nobody can place — rows that are never one. Each bar is
- * passed its amount in the measure's own units, hours and not a share, and the rows add up to the
- * figure on the tile above. A bar takes its value's hue on the page (`slots`), the neutral for a
- * value the day chart folds away. A value named by the start of its id, an account, carries the
+ * The period's measure broken down by the chosen dimension, largest first (`rankedLines`): work
+ * with no task and work nobody can place stand among the values where their figures put them, with
+ * a bar on the same scale in the neutral hue and their names in the quiet ink, since work on no
+ * task can be the largest share of a period. Each bar is passed its amount in the measure's own
+ * units, hours and not a share. A bar takes its value's hue on the page (`slots`), the neutral for
+ * a value the day chart folds away. A value named by the start of its id, an account, carries the
  * whole id as its detail.
+ *
+ * It lists the first twelve values; past them one line says how many more there are and, pressed,
+ * asks for the whole table, sent out as `more`, since the table lists them all.
  *
  * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; by any
  * other dimension, a value the read can filter by is a control that narrows the view to it, sent
@@ -17,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { spendingLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -35,16 +39,25 @@ const props = defineProps<{
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
-/** A value pressed to narrow the view to it: its filter value, and its name. */
-const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
+/** A value pressed to narrow the view to it: its filter value, and its name; the table asked for. */
+const emit = defineEmits<{ more: []; narrow: [value: string | null, label: string] }>()
+
+/** How many values the list names before it leaves the rest to the table. */
+const LISTED = 12
 
 const { t } = useI18n()
 const words = useSpendingWords()
 
 const title = computed(() => words.chartTitle(props.measure, props.by))
 
-const lines = computed(() =>
-  spendingLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
+const all = computed(() =>
+  rankedLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
+)
+const lines = computed(() => all.value.slice(0, LISTED))
+/** How many values the list leaves to the table; none while it lists them all. */
+const unlisted = computed(() => all.value.length - lines.value.length)
+const moreWords = computed(() =>
+  t('analytics.panel.bars.more', { count: unlisted.value }, unlisted.value),
 )
 const {
   rows: bars,
@@ -55,7 +68,10 @@ const {
   lines: () => lines.value,
   measure: () => props.measure,
   narrow: (value, label) => emit('narrow', value, label),
-  more: (line) => ({ kind: line.kind, slot: props.slots.get(line.key) ?? 'other' }),
+  more: (line) => ({
+    kind: line.kind,
+    slot: line.kind === 'category' ? (props.slots.get(line.key) ?? 'other') : 'other',
+  }),
 })
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
@@ -78,18 +94,61 @@ const barWords = computed(() => ({
         :label="title"
         :rows="bars"
         :words="barWords"
+        rank-all
         @follow="follow"
         @select="select"
       />
+      <button
+        v-if="unlisted"
+        type="button"
+        class="spending-bars-more"
+        @click="emit('more')"
+      >
+        {{ moreWords }}
+      </button>
     </template>
     <template #table>
       <RankedBarsTable
         :label="title"
         :rows="bars"
         :words="barWords"
+        rank-all
         @follow="follow"
         @select="select"
       />
+      <button
+        v-if="unlisted"
+        type="button"
+        class="spending-bars-more"
+        @click="emit('more')"
+      >
+        {{ moreWords }}
+      </button>
     </template>
   </ChartSection>
 </template>
+
+<style scoped>
+/* The values past the first twelve, as one line under the list in the quiet ink of what a list
+   leaves out, pressed as a link to the table that holds them. */
+.spending-bars-more {
+  display: block;
+  min-block-size: var(--size-control-inline);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: var(--color-rule-strong);
+  text-underline-offset: var(--space-half);
+  background: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+    text-decoration-color: currentcolor;
+  }
+}
+</style>
