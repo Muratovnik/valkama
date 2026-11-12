@@ -50,6 +50,9 @@ function valueDetail(name: UsageDimension, value: UsageGroupValue | null) {
   return name === 'account' && id && agentIdStart(id) !== id ? id : undefined
 }
 
+/** The space no line breaks at. */
+const NO_BREAK = '\u{A0}'
+
 export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
@@ -72,6 +75,17 @@ export function useSpendingWords() {
     new Intl.DateTimeFormat(i18n.locale.value, { ...options, timeZone: 'UTC' })
 
   /**
+   * A span of agent time, one wording wherever the page says one: exactly nothing «0 min», more
+   * than nothing and under a minute «under a minute», more in its two largest units. Seconds
+   * come from hours on a chart's scale, so they are taken to the millisecond first: a minute
+   * read back from its hours is a minute, not a hair under one.
+   */
+  function duration(seconds: number) {
+    const held = Math.round(seconds * 1000) / 1000
+    return held > 0 ? usage.time(held) : t('time.minutes', { count: 0 })
+  }
+
+  /**
    * A measure's figure as a line reads it (`figureOf`): a zero in its unit for one that spent
    * nothing there, and words for one the read does not hold — no price, no tokens counted —
    * never a zero.
@@ -80,7 +94,7 @@ export function useSpendingWords() {
     const amount = figureOf(name, spent)
     if (amount === null)
       return t(name === 'tokens' ? 'analytics.figures.noTokens' : 'analytics.figures.noPrice')
-    if (name === 'time') return usage.time(spent.seconds) || t('time.minutes', { count: 0 })
+    if (name === 'time') return duration(spent.seconds)
     return name === 'tokens' ? compact(amount) : usage.cost(amount)
   }
 
@@ -121,12 +135,16 @@ export function useSpendingWords() {
 
   /**
    * A period as its moments name it: by its first and last day, «2 – 8 Nov», or, shorter than a
-   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds.
+   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds. A line
+   * breaks only after the dash: never inside a date, and never with the dash starting a line.
    */
   function period(from: string, to: string) {
     const short = Date.parse(to) - Date.parse(from) < DAY
     const options: Intl.DateTimeFormatOptions = short ? CLOCK : { day: 'numeric', month: 'short' }
-    return dayFormat(options).formatRange(named(from), named(to, -1))
+    return dayFormat(options)
+      .formatRange(named(from), named(to, -1))
+      .replaceAll(/\s/gu, NO_BREAK)
+      .replace(`–${NO_BREAK}`, '– ')
   }
 
   /**
@@ -247,8 +265,8 @@ export function useSpendingWords() {
 
   /** A step of the value axis in the measure's units: hours as a span, tokens, dollars. */
   function scale(name: Measure, amount: number) {
+    if (name === 'time') return duration(amount * HOUR_SECONDS)
     if (amount <= 0) return '0'
-    if (name === 'time') return usage.time(amount * HOUR_SECONDS)
     if (name === 'tokens') return compact(amount)
     return new Intl.NumberFormat(i18n.locale.value, { style: 'currency', currency: 'USD' }).format(
       amount,

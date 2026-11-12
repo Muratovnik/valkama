@@ -293,7 +293,7 @@ async function plotAndRoom(page: Page) {
   })
 }
 
-test('a tall window gives the room under the cards to the plot, a window of 900 keeps it', async ({
+test('a tall window gives the room under the cards to the plot, and 1440 by 900 fits it', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -311,7 +311,8 @@ test('a tall window gives the room under the cards to the plot, a window of 900 
   expect(tall.room).toBeGreaterThanOrEqual(0)
   expect(tall.room).toBeLessThan(40)
   expect(tall.scrolls).toBe(false)
-  // At 1440 by 900 the plot stands where it stood before the plot could grow, measured then.
+  // At 1440 by 900 the plot takes the few pixels the panel leaves, and nothing scrolls.
+  expect(usual.scrolls).toBe(false)
   const { x, y, width, height } = usual.plot
-  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 426, 532, 160])
+  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 443, 532, 165])
 })

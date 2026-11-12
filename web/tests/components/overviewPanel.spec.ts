@@ -295,8 +295,8 @@ describe('the overview’s chart', () => {
     const column = days
       .findAll('tbody tr')
       .map((row) => words(row.element.children.item(at)?.textContent ?? ''))
-    // A zero reads as the table's other zeros do.
-    expect(column).toEqual(['2 h', '30 min', '0'])
+    // A zero reads as every zero of agent time on the page does, in its unit.
+    expect(column).toEqual(['2 h', '30 min', '0 min'])
   })
 
   it('stands a single day by the hour, and an hour is not a day to narrow the view to', () => {
