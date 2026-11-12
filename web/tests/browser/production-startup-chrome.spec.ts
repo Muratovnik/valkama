@@ -8,6 +8,10 @@
  * «Analytics» under «Work» and dropped it by the height of the list when the first frame came.
  * Each read here is held for longer than a real one takes, and the page is sampled on every
  * frame and every mutation from its first script, so a value that stood for one frame is seen.
+ *
+ * The list's first frame came on the space's stream, which opens after the space's read: on a
+ * large space «Analytics» stood hidden for two seconds. The shell now opens a stream of its own
+ * as it starts, and the last two scenarios hold the space's read that long.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -24,6 +28,8 @@ import { test } from './test.ts'
 interface Sample {
   /** The context bar is on the page. */
   bar: boolean
+  /** The space's board is drawn. */
+  board: boolean
   /** Each entry of the rail that is drawn, by its kind and words, at its top-left corner. */
   rail: Record<string, [number, number]>
   scope: string
@@ -53,6 +59,7 @@ function sampleChrome() {
     }
     const next = {
       bar: document.querySelector('.context-bar') !== null,
+      board: document.querySelector('.work-item-board') !== null,
       rail,
       scope: words(document.querySelector('.operating-scope [role="combobox"]')),
       title: words(document.querySelector('.context-bar .module-title')),
@@ -84,7 +91,25 @@ interface Holds {
   /** After the stream opens, before its first frame. */
   frame: number
   modules: number
+  /** The space's own read, which the space's stream waits for. */
+  board?: number
 }
+
+/** The space's read, which a large space takes seconds over. */
+async function holdSpaceRead(page: Page, ms: number) {
+  await page.route(
+    (url) => url.pathname === '/api/planning',
+    async (route) => {
+      await pause(ms)
+      await route.fallback()
+    },
+  )
+}
+
+const samplesOf = (page: Page) =>
+  page.evaluate(() =>
+    structuredClone((window as unknown as { __chromeSamples: Sample[] }).__chromeSamples),
+  )
 
 async function launch(page: Page, address: string, holds: Holds): Promise<Sample[]> {
   await page.setViewportSize({ width: 1500, height: 950 })
@@ -98,6 +123,7 @@ async function launch(page: Page, address: string, holds: Holds): Promise<Sample
     await pause(holds.context)
     await route.fallback()
   })
+  await holdSpaceRead(page, holds.board ?? 0)
   await page.addInitScript(sampleChrome)
   await page.goto(address)
   await expect.poll(() => streams.open()).not.toHaveLength(0)
@@ -107,9 +133,7 @@ async function launch(page: Page, address: string, holds: Holds): Promise<Sample
   await page.evaluate(
     () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
   )
-  return page.evaluate(() =>
-    structuredClone((window as unknown as { __chromeSamples: Sample[] }).__chromeSamples),
-  )
+  return samplesOf(page)
 }
 
 /** The values a place took, in order, each once, leaving out the frames it stood empty. */
@@ -197,3 +221,41 @@ for (const { name, address, holds, title, scope } of launches) {
     expect(Object.keys(samples.at(-1)?.rail ?? {}), record).toContain('nav-item:Analytics')
   })
 }
+
+test('a space read late: the groups under the list are drawn long before the board, and stay put', async ({
+  page,
+}) => {
+  await launch(page, BOARD, { board: 2000, context: 300, frame: 400, modules: 300 })
+  await expect(page.locator('.work-item-board')).toBeVisible()
+  const samples = await samplesOf(page)
+  const record = JSON.stringify(samples)
+  const groupsAt =
+    samples.find((sample) => 'nav-item:Analytics' in sample.rail)?.t ?? Number.POSITIVE_INFINITY
+  const boardAt = samples.find((sample) => sample.board)?.t ?? Number.NEGATIVE_INFINITY
+  // The list's frame did not wait for the space's read, so the groups under it did not either.
+  expect(boardAt - groupsAt, record).toBeGreaterThan(1000)
+  expect(moved(samples), 'the rail').toEqual({})
+})
+
+test('the stream the shell starts with closes once the space’s stream has delivered', async ({
+  page,
+}) => {
+  await installBackend(page)
+  // The space's stream gets its frame only when this test sends it, so the moment between
+  // its opening and its frame can be looked at.
+  const streams = await installLiveStreams(page, { sendOnOpen: false })
+  await holdSpaceRead(page, 1000)
+  await page.goto(BOARD)
+  await expect.poll(() => streams.open()).toEqual(['/api/events?view=live'])
+  await streams.live(busyFrame())
+  await expect(page.locator('.nav-work-list .nav-row').first()).toBeVisible()
+  // The space's stream opens after the read; until it delivers, the start's stream stays.
+  await expect.poll(() => streams.open()).toHaveLength(2)
+  await streams.live(busyFrame())
+  await expect.poll(() => streams.open()).toEqual([expect.stringContaining('view=planning')])
+  await expect(page.locator('.nav-work-list .nav-row').first()).toBeVisible()
+  expect(await streams.made()).toEqual([
+    '/api/events?view=live',
+    expect.stringContaining('view=planning'),
+  ])
+})

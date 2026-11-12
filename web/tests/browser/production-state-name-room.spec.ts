@@ -389,7 +389,6 @@ async function readSurface(page: Page, surface: Surface, naming: Naming, locale:
   await installBackend(page)
   const streams = await installLiveStreams(page)
   await page.goto(boardRoute())
-  await expect.poll(() => streams.open()).toHaveLength(1)
   const name = naming === 'long' ? LONG : 'Dev'
   await streams.live(
     liveFrame([
@@ -410,6 +409,8 @@ async function readSurface(page: Page, surface: Surface, naming: Naming, locale:
       ]),
     ]),
   )
+  // Sent first: a space's stream is sent it as it opens, and the shell's own closes then.
+  await expect.poll(() => streams.open()).toHaveLength(1)
   return check(await railRows(page), naming, locale, where)
 }
 

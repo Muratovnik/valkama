@@ -742,7 +742,9 @@ The groups under the list of work going on now are drawn once the list has its f
 frame, or once the connection is lost: they used to stand under «Work» at once and drop
 by the list's height a second later. They keep their place in the flow while they wait,
 so no room is held for rows that may not come; a folded list and a rail of icons hold
-nothing back.
+nothing back. The wait is short because the list's frame does not wait for the space:
+the shell opens a stream of its own for the frame as it starts, and closes it once the
+space's stream has delivered its own, so a tab holds two streams only for that moment.
 
 The rail's width is the reader's. Its right edge is a window splitter, the same edge a
 drawer is resized by: dragged, or stepped 16px by the arrow keys, Home and End taking it to

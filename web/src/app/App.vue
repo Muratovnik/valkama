@@ -159,13 +159,12 @@ const routeRecoveryFailure = computed(
   () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
 )
 // A space's stream carries the live-work frame, so the shell opens its own only without one,
-// and only once it knows: the space a project shows is known once the context has been read.
+// and at the start until the space's stream has delivered: see the composable. The space a
+// project shows is known once the context has been read.
 const { connection: liveConnection } = useLiveWorkFeed({
-  shell: () =>
-    documentPage.value === null &&
-    modulesSettled.value &&
-    !entryRestorePending.value &&
-    contextState.value.status !== 'loading',
+  shell: () => documentPage.value === null,
+  known: () =>
+    modulesSettled.value && !entryRestorePending.value && contextState.value.status !== 'loading',
   spaceStream: () =>
     activeModule.value === 'planning' &&
     planningConnection.value !== null &&

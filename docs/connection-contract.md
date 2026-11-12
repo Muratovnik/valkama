@@ -1319,6 +1319,14 @@ seconds have passed. `view=live` takes no scope: with one it is refused as any v
 other than `planning` is. A page whose space stream is open takes the frame from
 that stream, and a page with none opens `view=live`, so a tab holds one stream.
 
+The start is the one exception, and it is bounded. A space stream opens only after
+the space has been read, which on a large space takes seconds, so the shell opens
+`view=live` as it starts, before it knows what it shows. That stream lives only
+until a space stream has delivered its own `live` event, and then closes; the list
+is never without a source between the two. When the shell turns out to show a page
+with no space stream, the same stream stays open as that page's. The start happens
+once per tab: a space stream that drops and reconnects does not open it again.
+
 ### Pins
 
 A person pins an item to keep it in the side panel whether or not anyone is
