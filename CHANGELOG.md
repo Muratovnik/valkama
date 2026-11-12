@@ -48,7 +48,10 @@ checkouts are therefore distinguishable even at the same version.
   to. The title and the scope selector now keep their place empty until they can say the
   final value, and the rail marks no entry until the route is known. The groups under the
   list of work going on now are drawn once its first frame has come, so «Analytics» no
-  longer drops by the list's height a second after launch.
+  longer drops by the list's height a second after launch. That frame no longer waits for
+  the space's read: the shell opens `GET /api/events?view=live` as it starts and closes it
+  once the space's stream has delivered its own frame, so on a large space the groups no
+  longer stay hidden for the seconds its read takes.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

@@ -73,8 +73,10 @@ async function narrowest(page: Page, width: Width) {
 async function withLiveWork(page: Page, open: () => Promise<void>) {
   const streams = await installLiveStreams(page)
   await open()
-  await expect.poll(() => streams.open()).toHaveLength(1)
+  // The frame first: a space's stream is sent it as it opens, and the stream the
+  // shell started with closes then.
   await streams.live(busyFrame())
+  await expect.poll(() => streams.open()).toHaveLength(1)
   // A phone keeps the navigation behind its menu; the frame is in it all the same.
   if ((page.viewportSize()?.width ?? 0) > VIEWPORTS.phone)
     await expect(page.locator('.nav-work-list')).toBeVisible()
@@ -144,8 +146,10 @@ async function menu(page: Page) {
   await card(page, async () => {
     live.streams = await installLiveStreams(page)
   })
-  await expect.poll(() => live.streams?.open()).toHaveLength(1)
+  // The frame first: a space's stream is sent it as it opens, and the stream the
+  // shell started with closes then.
   await live.streams?.live(busyFrame())
+  await expect.poll(() => live.streams?.open()).toHaveLength(1)
   await page.locator('.drawer .menu-trigger').click()
   await expect(page.locator('.menu-popup .menu-item').first()).toBeVisible()
 }

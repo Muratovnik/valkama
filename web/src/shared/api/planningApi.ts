@@ -224,9 +224,10 @@ export function subscribePlanning(
 
 /**
  * The live-work frame alone, for a page with no space stream: a tab holds one stream,
- * so the shell opens this only while no space's stream is open. It is the whole of
- * what this stream says, so a frame that does not read closes it as a bad model
- * closes a space's stream, and the connection says it is reconnecting.
+ * so the shell opens this only while no space's stream is open, and at its start until
+ * a space's stream has delivered its own frame. It is the whole of what this stream
+ * says, so a frame that does not read closes it as a bad model closes a space's
+ * stream, and the connection says it is reconnecting.
  */
 export function subscribeLive(callbacks: {
   connection: (state: PlanningConnectionState) => void
