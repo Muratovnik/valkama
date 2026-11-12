@@ -64,6 +64,24 @@ const standing = (state: RailTileModel['state'], lead: string): RailTileModel =>
   shares: null,
 })
 
+/** A share is said in whole percents: what rounds away at either end is said as more or less. */
+const SHARE_STEP = 0.01
+
+/**
+ * A share of a whole in whole percents, never claiming more or less than it holds: «100 %» only
+ * for all of it and «0 %» only for none, so a share a hair under the whole reads «>99 %» and one
+ * a hair over nothing «<1 %». The page's words say shares by the same rule (`words.share`).
+ */
+function wholeShare(locale: string, ratio: number) {
+  const percent = (part: number) =>
+    new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
+      Math.abs(part),
+    )
+  if (ratio > 0 && ratio < SHARE_STEP / 2) return `<${percent(SHARE_STEP)}`
+  if (ratio < 1 && ratio >= 1 - SHARE_STEP / 2) return `>${percent(1 - SHARE_STEP)}`
+  return percent(ratio)
+}
+
 export function useRailTiles(options: {
   /** The page's shared reads, which the dimensions' reads go through. */
   shared: SharedUsage
@@ -81,10 +99,9 @@ export function useRailTiles(options: {
   const kindWords = useKindWords()
   const rail = useRailReads(options)
 
-  const percent = (share: number) =>
-    new Intl.NumberFormat(locale.value, { style: 'percent', maximumFractionDigits: 0 }).format(
-      share,
-    )
+  // When `useSpendingWords` says shares (`words.share`), this line becomes
+  // `const { share } = words` and `wholeShare` goes.
+  const share = (ratio: number) => wholeShare(locale.value, ratio)
 
   const reading = () => standing('loading', t('analytics.rail.reading'))
   const failed = () => standing('failed', t('analytics.rail.failed'))
@@ -172,14 +189,18 @@ export function useRailTiles(options: {
     }))
     const said = figures.parts.map(
       (part) =>
-        `${part.line ? words.lineLabel(dimension, part.line) : t('analytics.rail.rest')} ${percent(part.share)}`,
+        `${part.line ? words.lineLabel(dimension, part.line) : t('analytics.rail.rest')} ${share(part.share)}`,
     )
     return {
       ...standing('ready', words.lineLabel(dimension, first.line)),
       leadDetail: first.line.value ? words.valueDetail(dimension, first.line.value) : undefined,
       quiet: first.line.kind !== 'category',
-      aside: first.share === null ? words.figure(measure, first.line.spent) : percent(first.share),
-      count: t('analytics.rail.values', { count: figures.count }, figures.count),
+      aside: first.share === null ? words.figure(measure, first.line.spent) : share(first.share),
+      // A count of none beside work with no value, the session itself in «Now», says nothing.
+      count:
+        figures.count === 0 && first.line.kind === 'none'
+          ? ''
+          : t('analytics.rail.values', { count: figures.count }, figures.count),
       busy: read.refreshing,
       shares: {
         label: t('analytics.rail.shares', {
@@ -209,14 +230,14 @@ export function useRailTiles(options: {
     return {
       ...standing('ready', kindWords.name(first)),
       quiet: false,
-      aside: percent(shareOf(first.count)),
+      aside: share(shareOf(first.count)),
       count: t('analytics.kinds.count', { count: counted.length }, counted.length),
       busy: shown.status === 'degraded',
       shares: {
         label: t('analytics.rail.shares', {
           measure: words.measure('tokens'),
           parts: counted
-            .map((line) => `${kindWords.name(line)} ${percent(shareOf(line.count))}`)
+            .map((line) => `${kindWords.name(line)} ${share(shareOf(line.count))}`)
             .join(', '),
         }),
         parts,
