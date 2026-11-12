@@ -82,6 +82,19 @@ describe('a day in a sentence', () => {
   it('leaves the readout and the table their day in full', () => {
     expect(wordsIn('ru').stepName(WEDNESDAY, 'day').fullLabel).toBe('среда, 11 ноября')
   })
+
+  // Every chart that names its days by `stepName` can say on its axis where a month starts.
+  it('gives a day its date with the month and which month that is; an hour none', () => {
+    expect(wordsIn('en').stepName(WEDNESDAY, 'day').dated).toEqual({
+      label: 'Nov 11',
+      month: '2026-11',
+    })
+    expect(wordsIn('ru').stepName(WEDNESDAY, 'day').dated).toEqual({
+      label: '11 нояб.',
+      month: '2026-11',
+    })
+    expect(wordsIn('en').stepName('2026-11-11T14:00:00+03:00', 'hour')).not.toHaveProperty('dated')
+  })
 })
 
 describe('a share of the whole', () => {
@@ -136,8 +149,8 @@ describe('the name of an executor and an account', () => {
     useSettingsStore().settings.accountAliases = { [account.id]: 'Основной' }
     expect(words.valueLabel('account', account)).toBe('Основной')
     expect(words.valueDetail('account', account)).toBe(account.id)
-    expect(words.accounts([account], [account, { id: 'b7', unknown: false }])).toContain(
-      'Основной → Основной, b7',
+    expect(words.accounts([account], [account, { id: 'b7', unknown: false }])).toBe(
+      'Смена аккаунта: Основной → Основной, b7',
     )
   })
 

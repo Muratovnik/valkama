@@ -1,7 +1,7 @@
 /*
  * The plot of a chart of periods, read by `PeriodColumns` as its own scoped style: the frame it
  * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
- * beside them, the change numbers over them and the periods' names under — what keeps the
+ * beside them and the periods' names under — what keeps the
  * scale in view while the periods scroll, and what a period's slot holds besides its stack: the
  * mark of the period before, the ground of a period with no data yet and the line of a change.
  */
@@ -66,7 +66,6 @@
 
   display: grid;
   grid-template-areas:
-    '. markers'
     'scale field'
     '. axis';
   grid-template-columns: auto minmax(0, 1fr);
@@ -82,7 +81,6 @@
      width only in a track that does not give it up. */
   .period-acting > & {
     grid-template-areas:
-      '. markers .'
       'scale field .'
       '. axis .';
     grid-template-columns:
@@ -101,7 +99,7 @@
 
 /* Under a scrolled plot the scale stays at the chart's start. This ground stands behind it,
    the height of the plot and as wide as the scale and the gap after it, and covers the
-   periods, their names and the change numbers that pass under. It takes the pointer too: a
+   periods and their names that pass under. It takes the pointer too: a
    press on it must not reach a period nobody can see. */
 .period-gutter {
   position: sticky;
@@ -111,12 +109,6 @@
   grid-column: 1;
   margin-inline-end: calc(-1 * var(--space-2));
   background: var(--color-canvas);
-}
-
-.period-markers {
-  grid-area: markers;
-  min-block-size: calc(1lh + var(--space-1));
-  padding-block-end: var(--space-1);
 }
 
 .period-scale {
@@ -176,7 +168,8 @@
   }
 }
 
-/* A change at the start of a period: a line up the plot in the gap before the period. */
+/* A change at the start of a period: a line up the plot in the gap before the period, a shape
+   and not a hue, which takes no row of its own; the period's readout and name say what changed. */
 .period-mark {
   position: absolute;
   inset-block: 0;
@@ -192,13 +185,11 @@
   }
 }
 
-/* Two lines whatever the period under the pointer holds, reserved from the start, so nothing
-   under it moves as the pointer passes: each line ends in an ellipsis and the readout's hint
-   says it whole (`usePeriodReadout`). */
+/* One line whatever the period under the pointer holds, reserved from the start, so nothing
+   under it moves as the pointer passes: a longer line ends in an ellipsis (`.one-line`) and the
+   readout's hint says it whole (`usePeriodReadout`). */
 .period-readout {
-  display: grid;
-  grid-template-rows: 1lh 1lh;
-  block-size: 2lh;
+  block-size: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

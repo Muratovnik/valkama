@@ -1,16 +1,116 @@
 /**
- * Twelve changes of account over four weeks take one line under the day chart, which counts
- * them and whose hint says each; the lines up the plot stay, with no numbers.
+ * A change of account is said where its day is read — the readout over the chart, the day's name
+ * and its row of the table — and marked by a line up the plot in its column: no footnote under
+ * the chart and no row of numbers over it, so two changes, or twelve, leave the plot the height
+ * it has with none. The readout is one line in either language at 1440 and 1920 pixels, cut and
+ * whole in its hint, and nothing moves as the pointer walks the days. «Today», read by its hours
+ * at 15:30, says the running hour and not 23:00, and its hours' names never touch: the axis
+ * stepping back from 23:00 by three names 14:00, which used to run into the running 15:00.
  */
 import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
-const FIRST = value('3f9a1b2c-5d6e-4f70-8a9b-0c1d2e3f4a5b')
-const SECOND = value('77de0a1c-1111-4222-8333-444455556666')
+const FIRST = value('f0f0f0f0-5d6e-4f70-8a9b-0c1d2e3f4a5b')
+const SECOND = value('2a2a2a2a-1111-4222-8333-444455556666')
+const HOUR = 3600
+
+/** An hour of `hours` at ten on a day of November 2026, on a task, under an account. */
+const worked = (
+  day: number,
+  account: typeof FIRST,
+  hours: number,
+  number: number,
+): TimedStretch => ({
+  at: new Date(2026, 10, day, 10),
+  group: {
+    work_item: task(number, `Rework the import of very long planning documents, part ${number}`),
+    account,
+  },
+  spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
+})
+
+/**
+ * The week to Wednesday afternoon and the Monday a week before, the second account joining on
+ * Tuesday and alone on Wednesday: two changes. Tuesday holds five tasks and the change, so at
+ * 1440 its readout is longer than its line.
+ */
+const TWO: TimedStretch[] = [
+  worked(9, FIRST, 5, 1),
+  worked(10, FIRST, 4, 2),
+  ...[3, 4, 5, 6].map((number) => worked(10, SECOND, 1, number)),
+  worked(11, SECOND, 2, 3),
+  worked(2, FIRST, 6, 1),
+]
+
+/** The same work under the first account alone: no change, and every other part the same. */
+const NONE: TimedStretch[] = TWO.map((stretch) => ({
+  ...stretch,
+  group: { ...stretch.group, account: FIRST },
+}))
+
+/** Opens the overview at a window size and waits for its chart of days to stand. */
+async function openOverview(page: Page, width: number, height: number, address = pageAt()) {
+  await page.setViewportSize({ width, height })
+  await page.goto(address)
+  const chart = page.locator('.analytics-panel .overview-chart')
+  await expect(chart.locator('.period-slot').first()).toBeVisible()
+  await expect(page.locator('.overview-top .ranked-row').first()).toBeVisible()
+  return chart
+}
+
+/** The overview chart's plot field, readout and frame, and whatever stands under the chart. */
+const plotParts = (page: Page) =>
+  page.evaluate(() => {
+    const chart = document.querySelector('.overview-chart')
+    const box = (selector: string) => {
+      const found = chart?.querySelector(selector)?.getBoundingClientRect()
+      return found && { top: found.top, height: found.height, width: found.width }
+    }
+    return {
+      field: box('.period-field'),
+      readout: box('.period-readout'),
+      frame: box('.period-frame'),
+      notes: chart?.querySelectorAll('.period-notes, .period-markers').length ?? -1,
+      marks: chart?.querySelectorAll('.period-mark').length ?? -1,
+    }
+  })
+
+test('two account changes leave the overview plot as tall as none at 1440×900, said in the readout', async ({
+  page,
+}, info) => {
+  await serve(page, NONE)
+  await openOverview(page, 1440, 900)
+  const none = await plotParts(page)
+
+  await serve(page, TWO)
+  const chart = await openOverview(page, 1440, 900)
+  const two = await plotParts(page)
+  await record(info, 'changes-plot', { none, two })
+
+  expect(none.marks).toBe(0)
+  expect(two.marks).toBe(2)
+  expect(two.notes).toBe(0)
+  expect(two.field?.height).toBe(none.field?.height)
+  expect(two.frame?.height).toBe(none.frame?.height)
+
+  // Wednesday, read with no day pointed at, says its change; Tuesday says its own when pointed at.
+  const readout = chart.locator('.period-readout')
+  await expect(readout).toContainText('Account change: f0f0f0f0, 2a2a2a2a → 2a2a2a2a')
+  await chart.locator('.period-slot').nth(1).hover()
+  await expect(readout).toContainText('Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a')
+  await expect(chart.locator('.period-slot').nth(1).locator('.period-mark')).toHaveCount(1)
+
+  // The table keeps saying each change in its day's row.
+  await chart.getByRole('radio', { name: 'Table' }).click()
+  await expect(chart.locator('tbody tr').nth(1)).toContainText(
+    'Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a',
+  )
+})
 
 /** An hour on each of the thirteen days that end on Wednesday 11 November, the account switching daily. */
 const SWITCHING: TimedStretch[] = Array.from({ length: 13 }, (_, back) => ({
@@ -22,34 +122,145 @@ const SWITCHING: TimedStretch[] = Array.from({ length: 13 }, (_, back) => ({
   spend: { seconds: 3600 },
 }))
 
-test('twelve account changes are one line under the chart, each whole in its hint', async ({
+test('twelve account changes are twelve lines up the plot and no line under it', async ({
   page,
-}, info) => {
+}) => {
   await serve(page, SWITCHING)
   const analytics = await openReport(page, 1440, pageAt({ by: 'work_item', period: 'weeks4' }))
   const days = analytics.locator('.spending-days')
   await days.getByRole('radio', { name: 'Chart' }).click()
-  const notes = days.locator('.period-notes')
-  await expect(notes.locator('.period-note')).toHaveCount(1)
-  await expect(notes).toHaveText('Account changes: 12')
-
-  const block = await notes.evaluate((element) => ({
-    block: element.getBoundingClientRect().height,
-    line: element.querySelector('.period-note')?.getBoundingClientRect().height ?? 0,
-  }))
-  await record(info, 'changes-folded', block)
-  expect(block.block).toBeCloseTo(block.line, 0)
-
-  // The lines up the plot stay, one per change, and carry no number.
   await expect(days.locator('.period-mark')).toHaveCount(12)
-  const numbers = await days.locator('.period-markers .chart-tick').allTextContents()
-  expect(numbers).toHaveLength(12)
-  for (const number of numbers) expect(number.trim()).toBe('')
+  await expect(days.locator('.period-notes, .period-markers')).toHaveCount(0)
+  await days.locator('.period-slot:has(.period-mark)').first().hover()
+  await expect(days.locator('.period-readout')).toContainText('Account change:')
+})
 
-  await notes.locator('.period-note-text').hover()
-  const hint = page.getByRole('tooltip')
-  await expect(hint).toBeVisible()
-  const said = (await hint.textContent()) ?? ''
-  expect(said.split('; ')).toHaveLength(12)
-  expect(said).toContain('Accounts:')
+for (const lang of ['en', 'ru'] as const)
+  test.describe(`the readout in ${lang === 'ru' ? 'Russian' : 'English'}`, () => {
+    test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
+    for (const width of [1440, 1920])
+      test(`is one line at ${width}px, never wrapped, and moves nothing`, async ({
+        page,
+      }, info) => {
+        await serve(page, TWO)
+        const chart = await openOverview(page, width, 900)
+        const readout = chart.locator('.period-readout')
+        const slots = chart.locator('.period-slot')
+        await page.mouse.move(0, 0)
+        const still = await plotParts(page)
+        const seen: { cut: boolean; lines: number; text: string }[] = []
+        for (let index = 0; index < (await slots.count()); index += 1) {
+          await slots.nth(index).hover()
+          const parts = await plotParts(page)
+          expect(parts.readout, `day ${index + 1}`).toEqual(still.readout)
+          expect(parts.field, `day ${index + 1}`).toEqual(still.field)
+          seen.push(
+            await readout.evaluate((element) => ({
+              text: element.textContent?.trim() ?? '',
+              lines:
+                element.getBoundingClientRect().height /
+                Number.parseFloat(getComputedStyle(element).lineHeight),
+              cut: element.scrollWidth > element.clientWidth,
+            })),
+          )
+        }
+        await record(info, `readout-${lang}-${width}`, seen)
+        for (const one of seen) expect(one.lines).toBeCloseTo(1, 1)
+        await expect(readout).toHaveCSS('white-space', 'nowrap')
+      })
+
+    // Tuesday, five tasks and a change, is longer than its line at 1440: cut, and whole in its
+    // hint, which the pointer reaches from the day.
+    test('cuts a longer line at 1440px and says it whole in its hint', async ({ page }) => {
+      await serve(page, TWO)
+      const chart = await openOverview(page, 1440, 900)
+      const readout = chart.locator('.period-readout')
+      await chart.locator('.period-slot').nth(1).hover()
+      const said = await readout.evaluate((element) => ({
+        cut: element.scrollWidth > element.clientWidth,
+        text: element.textContent?.trim() ?? '',
+      }))
+      expect(said.cut).toBe(true)
+      await readout.hover()
+      await expect(page.getByRole('tooltip')).toHaveText(said.text)
+    })
+  })
+
+/** The names of the hours of the day chart under `chart`, left to right, with their edges. */
+const hourNames = (page: Page, chart: string) =>
+  page.evaluate(
+    (selector) =>
+      [...document.querySelectorAll(`${selector} .period-axis .chart-tick`)].map((tick) => {
+        const { left, right } = tick.getBoundingClientRect()
+        return { text: tick.textContent?.trim() ?? '', left, right }
+      }),
+    chart,
+  )
+
+/** How far apart each name of the hours stands from the one before it, at each window width. */
+async function hourGaps(page: Page, chart: string, from: number) {
+  const measured: Record<number, { gap: number; text: string }[]> = {}
+  for (let width = from; width <= 1920; width += 32) {
+    await page.setViewportSize({ width, height: 900 })
+    // The running hour is always named; its name stands once the axis is measured again.
+    await expect
+      .poll(async () => {
+        const names = await hourNames(page, chart)
+        return names.some((name) => name.text === '15:00so far')
+      })
+      .toBe(true)
+    const names = await hourNames(page, chart)
+    measured[width] = names.slice(1).map((name, at) => ({
+      text: name.text,
+      gap: Math.round(name.left - (names[at]?.right ?? 0)),
+    }))
+  }
+  return measured
+}
+
+/** Every gap of every width: more than a space, 4px in the axis's 12px type. */
+function expectApart(measured: Record<number, { gap: number; text: string }[]>) {
+  for (const [width, gaps] of Object.entries(measured))
+    for (const { text, gap } of gaps) expect(gap, `${text} at ${width}px`).toBeGreaterThanOrEqual(4)
+}
+
+/** A Wednesday afternoon an hour after the double's own, when the axis names the hour before. */
+const HALF_PAST_THREE = new Date(2026, 10, 11, 15, 30)
+
+test('«Today» says the running hour, and its hours’ names keep apart at every width', async ({
+  page,
+}, info) => {
+  await serve(page, TWO)
+  await page.clock.setSystemTime(HALF_PAST_THREE)
+  const chart = await openOverview(page, 1440, 900, pageAt({ period: 'today' }))
+  await expect(chart.locator('.period-slot')).toHaveCount(24)
+  // 15:30 on Wednesday: 15:00 is under way and 16:00 to 23:00 are still to come.
+  await expect(chart.locator('.period-readout')).toHaveText(
+    /^Wednesday, November 11 at 15:00: total 0\smin so far/u,
+  )
+  await expect(chart.locator('.period-slot[data-shown="true"]')).toHaveAttribute(
+    'data-key',
+    /T15:00/u,
+  )
+  // The axis steps back from 23:00 by three and so names 14:00, beside the running 15:00: the
+  // neighbour gives way rather than touch it.
+  const placed = await hourNames(page, '.overview-chart')
+  const names = placed.map((name) => name.text)
+  expect(names).toContain('15:00so far')
+  expect(names).toContain('17:00')
+  expect(names).not.toContain('14:00')
+
+  const overview = await hourGaps(page, '.overview-chart', 1200)
+
+  // The task section's day chart, narrower beside its breakdown, steps its names further apart.
+  await openReport(page, 1440, pageAt({ by: 'work_item', period: 'today' }))
+  const days = page.locator('.analytics-panel .spending-days')
+  await days.getByRole('radio', { name: 'Chart' }).click()
+  await expect(days.locator('.period-readout')).toHaveText(/^Wednesday, November 11 at 15:00/u)
+  // From 1200 up: under it the page takes turns between its list of sections and one section.
+  const section = await hourGaps(page, '.analytics-panel .spending-days', 1200)
+
+  await record(info, 'today-hour-gaps', { overview, section })
+  expectApart(overview)
+  expectApart(section)
 })
