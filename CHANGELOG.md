@@ -24,6 +24,16 @@ checkouts are therefore distinguishable even at the same version.
   at or before it holds until its window resets, its own session's feeds first. The
   upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
   after it.
+- **The quota source `poll`, off until the owner switches it on.** Settings carries the
+  switch, with the warning that the usage endpoint is undocumented and that Anthropic's
+  terms do not explicitly permit this use; `GET` and `PUT /api/quota/settings` read and
+  write it, and the listener starts or stops the poll at once. The poll reads Claude
+  Code's sign-in for each request, sends it only to `api.anthropic.com` over HTTPS and
+  keeps it nowhere, and keeps no e-mail address or name from the profile. It asks every
+  five minutes while the organization works and every fifteen otherwise, backs off after
+  a 429, leaves a refused or expired sign-in alone until it changes, and waits while
+  status line or mod readings of the organization are fresh. `valkama doctor` says
+  whether it is off, working, paused or refused, and what to do.
 - **`valkama quota import --source FILE`** imports quota history from JSON lines, one
   sample a line, all or nothing. Importing the same file again adds nothing.
 

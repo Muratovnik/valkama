@@ -1,4 +1,5 @@
-"""Quota's own tables: the accounts the owner names, and the samples every source records.
+"""Quota's own tables: the accounts the owner names, the samples every source records, and
+the owner's quota settings.
 
 Added with schema 17, and additive: `store.connect()` runs this script against an
 upgraded store exactly as against a fresh one, and an upgraded store holds no account
@@ -28,6 +29,10 @@ model, the model. Rows older than a year are deleted by the start-up housekeepin
 - `percent` is the share of the window spent, 0 to 100 and past 100 only where a source
   reports an overrun; `amount` and `currency` are money spent, for the two kinds that
   carry money, and a currency the source did not state is NULL, never a guess.
+
+`quota_settings`: the owner's settings for the quota sources, one row a key; no row means
+the defaults `quota.settings` keeps. `poll` holds whether the poll of the usage endpoint
+runs, which it does not until the owner switches it on.
 """
 
 from __future__ import annotations
@@ -87,9 +92,14 @@ CREATE INDEX IF NOT EXISTS quota_samples_session
 CREATE INDEX IF NOT EXISTS quota_samples_at ON quota_samples(at);
 CREATE INDEX IF NOT EXISTS quota_samples_account_seat
     ON quota_samples(organization, seat) WHERE account_uuid IS NOT NULL;
+CREATE TABLE IF NOT EXISTS quota_settings(
+    key TEXT PRIMARY KEY CHECK(key IN ('poll')),
+    record_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) WITHOUT ROWID;
 """
 
-SCHEMA_TABLES = ("quota_accounts", "quota_samples")
+SCHEMA_TABLES = ("quota_accounts", "quota_samples", "quota_settings")
 
 __all__ = [
     "BY_ORGANIZATION",
