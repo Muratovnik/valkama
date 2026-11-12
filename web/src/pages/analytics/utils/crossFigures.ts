@@ -7,8 +7,9 @@
  *
  * Nothing that is zero in the measure takes a place: a column of the second dimension whose
  * figure there is zero — a model that ran only as the adviser, under agent time — is no column,
- * and a pair whose figure there is zero is no cell, which the table says as empty, not as a zero.
- * A figure absent there, work with no price, is not zero and keeps its place.
+ * a value whose figure there is zero is no row, and a pair whose figure there is zero is no cell,
+ * which the table says as empty, not as a zero. A figure absent there, work with no price, is not
+ * zero and keeps its place.
  */
 import { addSpent, figureOf, spendingLines, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
@@ -23,6 +24,9 @@ const ACROSS_SHOWN = 5
 
 const NOTHING: Spent = { seconds: 0, tokens: null, cost: null, unpriced: 0 }
 const UNPLACED: UsageGroupValue = { id: null, unknown: true }
+
+/** Whether a line has anything in the measure: a figure that is not zero, or one absent, not zero. */
+const holdsIn = (measure: Measure, spent: Spent) => figureOf(measure, spent) !== 0
 
 interface CrossRow {
   /**
@@ -55,7 +59,7 @@ export function crossOf(
   const shown = spendingLines(usage.rows, across, measure, ACROSS_SHOWN)
   // A column is named before the zero ones go, so the work of one that goes is in no other.
   const named = new Set(shown.map((column) => column.key))
-  const columns = shown.filter((column) => figureOf(measure, column.spent) !== 0)
+  const columns = shown.filter((column) => holdsIn(measure, column.spent))
   const rows: CrossRow[] = spendingLines(usage.rows, by, measure, Number.POSITIVE_INFINITY).map(
     (line) => {
       const value = line.value ?? UNPLACED
@@ -70,6 +74,11 @@ export function crossOf(
     cells?.set(column, addSpent(cells.get(column) ?? NOTHING, spentOf(row)))
   }
   for (const row of rows)
-    for (const [key, spent] of row.cells) if (figureOf(measure, spent) === 0) row.cells.delete(key)
-  return { columns, rows, total: spentOf(usage.total) }
+    for (const [key, spent] of row.cells) if (!holdsIn(measure, spent)) row.cells.delete(key)
+  // A value with nothing in the measure is no row, as a column with nothing is no column.
+  return {
+    columns,
+    rows: rows.filter((row) => holdsIn(measure, row.total)),
+    total: spentOf(usage.total),
+  }
 }
