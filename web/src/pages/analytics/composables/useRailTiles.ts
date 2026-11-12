@@ -4,7 +4,9 @@
  * The overview's tile reads the page's own answer, the one its panel shows, so it adds no read:
  * the period's total, how it moved from the period before, and its days as a small trend. A
  * dimension's tile reads its own breakdown (`useRailReads`): how many values worked, the first of
- * them with its share, and the shares of the first few as a small bar.
+ * them with its share, and the shares of the first few as a small bar. The tile of the tokens by
+ * kind reads the page's own answer too: the largest kind the tokens figure counts, its share of
+ * that figure, and the counted kinds' shares, whatever the page's measure, since it is of tokens.
  *
  * A tile always says something in the same place. Before its first answer it says it is reading;
  * a read that failed says so; a period that spent nothing says there is no data, never a zero.
@@ -13,6 +15,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useRailReads } from '@/pages/analytics/composables/useRailReads.ts'
 import type { RailRead } from '@/pages/analytics/composables/useRailReads.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
@@ -20,9 +23,10 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import { dimensionFigures, overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
+import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tokenKinds.ts'
 import { spentAnything, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
-import { OVERVIEW } from '@/shared/api/analyticsAddress.ts'
+import { OVERVIEW, TOKEN_KINDS_SECTION } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView, Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
@@ -74,6 +78,7 @@ export function useRailTiles(options: {
 }) {
   const { t, locale } = useI18n()
   const words = useSpendingWords()
+  const kindWords = useKindWords()
   const rail = useRailReads(options)
 
   const percent = (share: number) =>
@@ -186,11 +191,45 @@ export function useRailTiles(options: {
     }
   }
 
+  /** The counted kinds of the page's answer: the first with its share, all with theirs. */
+  function kindsTile(): RailTileModel {
+    const shown = options.overview()
+    if (shown.status === 'loading') return reading()
+    if (!('payload' in shown)) return shown.status === 'empty' ? noData() : failed()
+    const counted = kindLines(shown.payload).filter((line) => line.counted)
+    const whole = countedTotal(counted) ?? 0
+    const [first] = counted
+    if (!first || whole <= 0) return { ...noData(), busy: shown.status === 'degraded' }
+    const shareOf = (count: number | null) => (count === null ? 0 : count / whole)
+    const parts = counted.map((line) => ({
+      key: line.kind,
+      share: shareOf(line.count),
+      slot: KIND_SLOTS.get(line.kind) ?? ('other' as const),
+    }))
+    return {
+      ...standing('ready', kindWords.name(first)),
+      quiet: false,
+      aside: percent(shareOf(first.count)),
+      count: t('analytics.kinds.count', { count: counted.length }, counted.length),
+      busy: shown.status === 'degraded',
+      shares: {
+        label: t('analytics.rail.shares', {
+          measure: words.measure('tokens'),
+          parts: counted
+            .map((line) => `${kindWords.name(line)} ${percent(shareOf(line.count))}`)
+            .join(', '),
+        }),
+        parts,
+      },
+    }
+  }
+
   const tiles = computed(() => {
     const { measure } = options.view()
     const reads = rail.reads.value
     const all: Partial<Record<AnalyticsSection, RailTileModel>> = {
       [OVERVIEW]: overviewTile(measure),
+      [TOKEN_KINDS_SECTION]: kindsTile(),
     }
     for (const dimension of options.dimensions())
       all[dimension] = dimensionTile(dimension, reads[dimension], measure)

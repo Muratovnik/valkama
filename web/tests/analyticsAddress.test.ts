@@ -167,6 +167,14 @@ describe('the Analytics address', () => {
     expect(breakdownOf({ ...DEFAULT_VIEW, by: 'model' })).toBe('model')
   })
 
+  it('names the section of the tokens by kind, read as the overview is', () => {
+    const kinds = { ...DEFAULT_VIEW, by: 'token_kind' } as const
+    expect(writeAddress(kinds)).toEqual({ by: 'token_kind' })
+    expect(throughTheAddress(kinds)).toEqual(kinds)
+    // The overview's own read: moving between the two asks nothing again.
+    expect(breakdownOf(kinds)).toBe('work_item')
+  })
+
   it('drops what this build cannot read and keeps the rest of the link', () => {
     expect(
       readAddress({

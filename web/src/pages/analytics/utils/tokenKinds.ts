@@ -1,13 +1,15 @@
 /**
- * Tokens by the kinds a read reports them in, per value of a dimension. The tokens figure the
- * page draws is what was processed anew — input, cache writes and output — and leaves the cache
- * reads apart; reasoning is a part of output. Split by kind, nothing of that is lost, and a kind
- * no request reported stays absent rather than a zero.
+ * Tokens by the kinds a read reports them in, per value of a dimension and for the period as a
+ * whole. The tokens figure the page draws is what was processed anew — input, cache writes and
+ * output — and leaves the cache reads apart; reasoning is a part of output. Split by kind, nothing
+ * of that is lost, and a kind no request reported stays absent rather than a zero.
  */
 import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
 
-import type { UsageDimension, UsageGroupValue, UsageRow } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageDimension, UsageGroupValue, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { rankSlots } from '@/shared/lib/seriesColors.ts'
+import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 
 /** The kinds, in the order a table names them: what goes in, the cache, what comes out. */
 export const TOKEN_KINDS = [
@@ -57,3 +59,61 @@ export function kindsByValue(
 /** A value's tokens by kind; none reported for a value the rows do not name. */
 export const kindsOf = (kinds: ReadonlyMap<string, UsageTokens>, key: string) =>
   kinds.get(key) ?? NONE
+
+/** The kinds the tokens figure adds up, as the summary counts them: input, cache writes, output. */
+const COUNTED_KINDS = [
+  'input',
+  'cache_write_5m',
+  'cache_write_1h',
+  'output',
+] as const satisfies readonly TokenKind[]
+
+/** The kinds said beside the figure and never in it: cache reads, and reasoning, part of output. */
+const APART_KINDS = ['cached_read', 'reasoning'] as const satisfies readonly TokenKind[]
+
+/**
+ * The hue of each counted kind, wherever the page draws it: by the kind and not by its rank, so a
+ * kind keeps its hue from one period to the next. A kind apart has none.
+ */
+export const KIND_SLOTS: ReadonlyMap<string, SeriesSlot> = rankSlots(COUNTED_KINDS)
+
+/** A kind of the period: its tokens, in the period before and step by step, null where none. */
+export interface KindLine {
+  count: number | null
+  /** Whether the tokens figure counts it (`COUNTED_KINDS`), or it stands apart. */
+  counted: boolean
+  kind: TokenKind
+  steps: (number | null)[]
+  /** In the period compared with; null when it reported none or was not read. */
+  before?: number | null
+}
+
+/**
+ * The period's kinds: the counted ones largest first, then the cache reads and the reasoning in
+ * that order. A kind reported neither in the period nor in the period before is left out, so the
+ * kinds a client never reports do not stand as zeros.
+ */
+export function kindLines(usage: Usage): KindLine[] {
+  const before = usage.comparison?.total.tokens
+  const line = (kind: TokenKind, counted: boolean): KindLine => ({
+    kind,
+    counted,
+    count: usage.total.tokens[kind],
+    before: before ? before[kind] : undefined,
+    steps: usage.series.map((point) => point.tokens[kind]),
+  })
+  const reported = (one: KindLine) => one.count !== null || (one.before ?? null) !== null
+  const counted = COUNTED_KINDS.map((kind) => line(kind, true))
+    .filter((one) => reported(one))
+    .sort((left, right) => (right.count ?? 0) - (left.count ?? 0))
+  return [
+    ...counted,
+    ...APART_KINDS.map((kind) => line(kind, false)).filter((one) => reported(one)),
+  ]
+}
+
+/** What the counted kinds add up to: the tokens figure; null when none was reported. */
+export function countedTotal(lines: readonly KindLine[]): number | null {
+  const counts = lines.filter((one) => one.counted && one.count !== null)
+  return counts.length ? counts.reduce((sum, one) => sum + (one.count ?? 0), 0) : null
+}

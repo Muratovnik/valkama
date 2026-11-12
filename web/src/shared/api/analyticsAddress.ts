@@ -8,8 +8,10 @@
  *
  * The section is written under `by`, the key that held the breakdown before the page had
  * sections, so an address written then with a breakdown named opens the section of it. The
- * overview is the one section that is no dimension, and the page opens on it: the plain address
- * is the overview, and every dimension is named, the breakdown by task too. A plain address the
+ * overview and the tokens by kind are the sections that are no dimension, and the page opens on
+ * the overview: the plain address is the overview, and every other section is named, the
+ * breakdown by task too. A build that knows no section by kind opens such a link on the
+ * overview, as it does any part it cannot read. A plain address the
  * page wrote before it had sections, when the plain page was the breakdown by task, therefore
  * opens the overview, the period's figures with that breakdown's first values among them.
  *
@@ -34,13 +36,23 @@ export type Measure = (typeof MEASURES)[number]
 /** The section of the page that is no dimension: the period's figures and its days. */
 export const OVERVIEW = 'overview'
 
-/** A section of the page: the overview, or a dimension the charts break work down by. */
-export type AnalyticsSection = UsageDimension | typeof OVERVIEW
+/**
+ * The section of the period's tokens by kind: no dimension either, read from the overview's own
+ * answer. Spelled as a dimension is, since a breakdown of tokens by kind is what it shows, and
+ * no dimension of the read takes the name.
+ */
+export const TOKEN_KINDS_SECTION = 'token_kind'
+
+/** A section of the page: the overview, the tokens by kind, or a dimension of the work. */
+export type AnalyticsSection = UsageDimension | typeof OVERVIEW | typeof TOKEN_KINDS_SECTION
 
 export interface AnalyticsView {
   /** The second dimension a section's table crosses its own with; null for none. */
   across: UsageDimension | null
-  /** The section on show: the overview, or the dimension the bars and the stacks break work down by. */
+  /**
+   * The section on show: the overview, the tokens by kind, or the dimension the bars and the
+   * stacks break work down by.
+   */
   by: AnalyticsSection
   filters: UsageFilters
   /** The first and last day of a custom period, both included: `2030-03-04`. Empty otherwise. */
@@ -67,11 +79,14 @@ export const DEFAULT_VIEW: AnalyticsView = {
 }
 
 const isSection = (value: unknown): value is AnalyticsSection =>
-  value === OVERVIEW || isUsageDimension(value)
+  value === OVERVIEW || value === TOKEN_KINDS_SECTION || isUsageDimension(value)
 
-/** The dimension a view's reads break work down by: its section's, or the overview's tasks. */
+/**
+ * The dimension a view's reads break work down by: its section's, or the overview's tasks, which
+ * the tokens by kind read too, so moving between those two asks nothing again.
+ */
 export const breakdownOf = (view: AnalyticsView): UsageDimension =>
-  view.by === OVERVIEW ? OVERVIEW_BREAKDOWN : view.by
+  view.by === OVERVIEW || view.by === TOKEN_KINDS_SECTION ? OVERVIEW_BREAKDOWN : view.by
 
 type RouteState = Readonly<Record<string, string | number | boolean>>
 
