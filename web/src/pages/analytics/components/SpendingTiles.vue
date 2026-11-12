@@ -203,9 +203,11 @@ const tileOf = (value: Measure) => byValue.value.get(value)
 
 /* The figure and its trend on one line: the figure as wide as itself, the trend after it at the
    tile's end, as wide as it may be up to its own measure and never so narrow it says nothing.
-   A narrow tile takes its room from the trend first — it shrinks a hundred times faster — so the
-   figure is cut only once the trend is at its narrowest. The trend is about as tall as the
-   figure's line, and keeps its place with nothing to draw. */
+   A narrow tile takes its room from the trend alone: the figure does not shrink, so it is cut
+   only where even the trend at its narrowest leaves it too little, which its largest width says.
+   A share of the shrink however small, a third of a pixel of a hundred, cost the figure its last
+   characters to the ellipsis. The trend is about as tall as the figure's line, and keeps its
+   place with nothing to draw. */
 .tile-lead {
   display: flex;
   gap: var(--space-3);
@@ -221,8 +223,8 @@ const tileOf = (value: Measure) => byValue.value.get(value)
 }
 
 .tile-figure {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: none;
+  max-inline-size: calc(100% - var(--space-12) - var(--space-3));
   color: var(--color-text);
   font: var(--font-drawer-title);
   font-variant-numeric: tabular-nums;
