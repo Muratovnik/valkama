@@ -96,7 +96,7 @@ const props = defineProps<{
   kind?: string
   /**
    * The address names this card's own chain, in this scope: the graph was opened from the
-   * card's Relations, and the card opens there, its chain in that scope and in view.
+   * card's Chain, and the card opens there, its chain in that scope and in view.
    */
   ownChain?: ChainScope | null
   /** The parent, which the record names only by id; the host's model knows it. */
@@ -150,12 +150,22 @@ const {
   state,
 } = useInspectorRecord(props, (failure) => failureText(failure, 'workItem.loadFailed'))
 
-const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections(
-  () => props.writable,
-  () => frame.value?.scrollToContent(),
-  () => props.projectId,
-  () => (pending.value ? null : agentCount(item.value?.agents ?? [], spent.value)),
-)
+// The chain is keyed by the item's own id, which only the loaded record carries,
+// and re-read whenever the inspector itself refreshes: once per open, once per
+// refresh, never twice for one answer. Like executions, the chain endpoint reads
+// the primary store only, so an attached store's item asks it nothing. It is read
+// ahead of the sections, which offer its tab only where there is a chain.
+const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
+const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
+
+const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections({
+  writable: () => props.writable,
+  scrollToStart: () => frame.value?.scrollToContent(),
+  projectId: () => props.projectId,
+  agents: () => (pending.value ? null : agentCount(item.value?.agents ?? [], spent.value)),
+  // An item with children has a chain before it is read; another, once the read says so.
+  chained: () => (item.value ? item.value.container || chain.grown.value : null),
+})
 
 async function load() {
   writeError.value = ''
@@ -221,19 +231,12 @@ watch(
   () => void loadResource(),
 )
 
-// The chain is keyed by the item's own id, which only the loaded record carries,
-// and re-read whenever the inspector itself refreshes: once per open, once per
-// refresh, never twice for one answer. Like executions, the chain endpoint reads
-// the primary store only, so an attached store's item asks it nothing.
-const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
-const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
-
 /** The item and its chain have both answered, so the body is as tall as it will be. */
 const settled = () => item.value !== null && chain.answered.value
 
 const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
 
-const { capture, holding } = useInspectorReturn({
+const { capture, holding, relationsOpened } = useInspectorReturn({
   card: props,
   chain: chainSection,
   frame,
@@ -437,29 +440,27 @@ defineExpose({ close, openFrom })
               @resume="(state) => changeFacts({ state })"
               @tick="tick"
             />
+            <InspectorChain
+              v-if="section === 'chain'"
+              ref="chainSection"
+              :chain="chain.chain.value"
+              :failed="chain.failed.value"
+              :loading="chain.loading.value"
+              :readable="writable"
+              :scope="chain.scope.value"
+              @scope="chain.setScope"
+              @retry="chain.load"
+              @graph="(shown, branch) => emit('chain', shown, branch)"
+              @open="openFrom"
+            />
             <InspectorRelations
-              v-if="section === 'relations'"
+              v-else-if="section === 'relations'"
+              v-model:opened="relationsOpened"
               :item="payload"
               :writable="writable && !busy"
               @changed="reloaded"
               @open="openFrom"
-            >
-              <template #chain>
-                <InspectorChain
-                  ref="chainSection"
-                  :chain="chain.chain.value"
-                  :container="payload.container"
-                  :failed="chain.failed.value"
-                  :loading="chain.loading.value"
-                  :readable="writable"
-                  :scope="chain.scope.value"
-                  @scope="chain.setScope"
-                  @retry="chain.load"
-                  @graph="(shown, branch) => emit('chain', shown, branch)"
-                  @open="openFrom"
-                />
-              </template>
-            </InspectorRelations>
+            />
             <InspectorAgents
               v-else-if="section === 'agents'"
               :agents="payload.agents ?? []"

@@ -2,25 +2,20 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorEvidence from '@/widgets/work-item-inspector/components/InspectorEvidence.vue'
 import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
-
-import OpenAction from '@/features/session-open/OpenAction.vue'
 
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { actorName } from '@/shared/lib/actor.ts'
-import type { RichInline } from '@/shared/lib/richText.ts'
-import { sourceDocument } from '@/shared/lib/textReferences.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import RichInlines from '@/shared/ui/RichInlines.vue'
-import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import VDisclosure from '@/shared/ui/VDisclosure.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -31,8 +26,11 @@ const emit = defineEmits<{
   changed: []
   open: [reference: string]
 }>()
-const { t, d } = useI18n()
+/** The groups the reader opened or folded, by key; a group not named keeps its first state. */
+const opened = defineModel<Record<string, boolean>>('opened', { default: () => ({}) })
+const { t } = useI18n()
 type Link = WorkItem['links'][number]
+type Group = { key: string; links: Link[] }
 
 const stateName = useStateName()
 /** The other end's state as the owner has states named; drawn only where the server named it. */
@@ -69,6 +67,30 @@ const groups = computed(() =>
       .filter((group) => group.links.length)
   }),
 )
+
+/**
+ * A group of more than five links opens folded to its heading, which counts them by state,
+ * so the groups after it and the references stand within reach; a shorter group opens. An
+ * epic's fourteen «Led to» rows held everything under them a long scroll away.
+ */
+const FOLD_PAST = 5
+const isOpen = (group: Group) => opened.value[group.key] ?? group.links.length <= FOLD_PAST
+function setOpen(group: Group, open: boolean) {
+  opened.value = { ...opened.value, [group.key]: open }
+}
+/** How many of a group's links stand in each state the server named, the most common first. */
+function stateCounts(group: Group): string {
+  const counts = new Map<string, number>()
+  for (const link of group.links) {
+    if (!link.state_category || !link.state_name) continue
+    const name = linkState(link)
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return [...counts]
+    .sort((one, other) => other[1] - one[1])
+    .map(([name, count]) => `${count} ${name.toLocaleLowerCase()}`)
+    .join(' · ')
+}
 function add() {
   if (!props.writable || busy.value) return
   pickerOpen.value = true
@@ -92,23 +114,6 @@ async function remove(link: Link) {
   } finally {
     busy.value = false
   }
-}
-/**
- * The plan anchor is one of the item's references, so its whole path stands
- * here with them, a link of the card's own layer; the head offers it only as an
- * icon. It is drawn as written rather than parsed, because Markdown would read a
- * backslash or an underscore in a path as its own. A value that holds no path is text.
- */
-const sourceNodes = computed<RichInline[]>(() => {
-  const reference = sourceDocument(props.item.source)
-  return reference
-    ? [{ kind: 'reference', code: false, reference }]
-    : [{ kind: 'text', text: props.item.source }]
-})
-
-function when(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
 }
 </script>
 
@@ -143,28 +148,41 @@ function when(value: string): string {
       >
         {{ error }}
       </p>
-      <section
-        v-for="group in groups"
-        :key="group.key"
-        class="relation-group"
+      <div
+        v-if="groups.length"
+        class="link-groups"
       >
-        <h4 class="group-heading">
-          {{ group.label }}
-          <span class="group-count">{{ group.links.length }}</span>
-        </h4>
-        <ul class="link-list">
-          <li
-            v-for="link in group.links"
-            :key="`${link.direction}-${link.work_item_id}`"
-            class="link-row"
-          >
-            <button
-              class="link-open"
-              type="button"
-              @click="emit('open', link.reference)"
+        <VDisclosure
+          v-for="group in groups"
+          :key="group.key"
+          class="relation-group"
+          heading="h4"
+          :open="isOpen(group)"
+          subgrid
+          @update:open="(open) => setOpen(group, open)"
+        >
+          <template #summary>
+            {{ group.label }}
+            <span class="group-count">{{ group.links.length }}</span>
+            <!-- The space is the toggle's name's, which the row's gap does not give it. -->
+            <span
+              v-if="!isOpen(group) && stateCounts(group)"
+              class="group-states"
+              >{{ ` · ${stateCounts(group)}` }}</span
             >
-              <span class="link-reference">{{ link.reference }}</span>
-              <span class="link-body">
+          </template>
+          <ul class="link-list">
+            <li
+              v-for="link in group.links"
+              :key="`${link.direction}-${link.work_item_id}`"
+              class="link-row"
+            >
+              <button
+                class="link-open"
+                type="button"
+                @click="emit('open', link.reference)"
+              >
+                <span class="link-reference">{{ link.reference }}</span>
                 <span
                   v-slash-breaks="link.title"
                   class="link-title"
@@ -172,32 +190,33 @@ function when(value: string): string {
                 <!-- The other end's state, when the server could say it: a finished blocker reads as finished. -->
                 <SemanticState
                   v-if="link.state_category && link.state_name"
+                  class="link-state"
                   variant="inline"
                   dimension="work-item-state"
                   :state="link.state_category"
                   :label="linkState(link)"
                 />
-              </span>
-            </button>
-            <VButton
-              v-if="writable"
-              v-tooltip.name="t('workItem.unlink')"
-              class="link-remove"
-              variant="ghost"
-              size="inline"
-              :disabled="busy"
-              :aria-label="t('workItem.related.remove', { reference: link.reference })"
-              icon
-              @click="remove(link)"
-            >
-              <VIcon
-                name="close"
-                :size="16"
-              />
-            </VButton>
-          </li>
-        </ul>
-      </section>
+              </button>
+              <VButton
+                v-if="writable"
+                v-tooltip.name="t('workItem.unlink')"
+                class="link-remove"
+                variant="ghost"
+                size="inline"
+                :disabled="busy"
+                :aria-label="t('workItem.related.remove', { reference: link.reference })"
+                icon
+                @click="remove(link)"
+              >
+                <VIcon
+                  name="close"
+                  :size="16"
+                />
+              </VButton>
+            </li>
+          </ul>
+        </VDisclosure>
+      </div>
       <DataEmptyState
         v-if="!groups.length"
         :title="t('workItem.noLinks')"
@@ -216,59 +235,7 @@ function when(value: string): string {
       />
     </section>
 
-    <section class="relation-section">
-      <SectionHeader
-        :title="t('workItem.refs')"
-        :count="item.refs.length || ''"
-      />
-      <ul
-        v-if="item.refs.length || item.source"
-        class="ref-list"
-      >
-        <li
-          v-if="item.source"
-          class="ref-row"
-        >
-          <span class="ref-kind">{{ t('workItem.source') }}</span>
-          <span class="ref-value"><RichInlines :nodes="sourceNodes" /></span>
-        </li>
-        <li
-          v-for="reference in item.refs"
-          :key="`${reference.kind}-${reference.value}-${reference.at}`"
-          class="ref-row"
-        >
-          <span class="ref-kind">{{ t(`reference.${reference.kind}`) }}</span>
-          <OpenAction
-            v-if="reference.kind === 'session'"
-            class="ref-session"
-            :session="reference.value"
-            :name="reference.label || reference.value"
-            :detail="reference.value"
-          /><RichText
-            v-else
-            class="ref-value"
-            :source="reference.label || reference.value"
-            inline
-          />
-          <span class="ref-meta">{{
-            t('workItem.refAttached', {
-              author: actorName(reference.author),
-              at: when(reference.at),
-            })
-          }}</span>
-        </li>
-      </ul>
-      <DataEmptyState
-        v-else
-        :title="t('workItem.noRefs')"
-        :description="t('workItem.refsIntro')"
-        inline
-      />
-    </section>
-
-    <!-- What the item's work grew into, which the card reads and owns. It comes after
-         the item's own links and references, because it can run to hundreds of rows. -->
-    <slot name="chain" />
+    <InspectorEvidence :item="item" />
   </div>
 </template>
 <style scoped>
@@ -282,20 +249,31 @@ function when(value: string): string {
   gap: var(--space-heading-content);
 }
 
-/* A group is a caption over its rows, and the rows hang directly under it:
-   the caption and its count are one line of the same quiet type. */
-.relation-group {
+/* One column set for every group of links, which the groups, their rows and each row's
+   button subgrid: the reference, the title, the other end's state and the remove. An
+   ordinary reference fills its column, so titles start on one line down the list, and a
+   longer key widens the column for every row rather than moving its own title alone. A
+   group folds, so it is a disclosure, and it passes the columns on to the rows it opens:
+   with columns of its own each group put the state at another edge, 9 to 20px apart. */
+.link-groups {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr) auto auto;
+  gap: var(--space-heading-content) var(--space-2);
+  min-width: 0;
+  container: link-groups / inline-size;
 }
 
-.group-heading {
-  display: flex;
-  gap: var(--space-2);
-  align-items: baseline;
-  margin: 0;
+/* A group is a caption over its rows, and the rows hang directly under it: the caption
+   and its count are one line of the group heading's type, in the ink every disclosure's
+   words wear, and a folded group's states follow in the quieter detail. */
+.relation-group {
+  --font-disclosure: var(--font-group-heading);
+  --space-disclosure-gap: var(--space-1);
+}
+
+.group-states {
   color: var(--color-text-tertiary);
-  font: var(--font-group-heading);
+  font: var(--font-detail);
 }
 
 .group-count {
@@ -310,26 +288,27 @@ function when(value: string): string {
 
 .link-list {
   display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-/* The row and its one action in two columns, so every remove stands at the
-   same edge instead of wherever the title happened to end. */
+/* The row's one action has the last column, so every remove stands at the same edge
+   instead of wherever the title happened to end. */
 .link-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: start;
 }
 
-/* The reference column holds an ordinary reference at full width, so titles
-   start on one line down the list; a longer key widens only its own row. */
 .link-open {
   display: grid;
-  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: subgrid;
+  grid-column: 1 / 4;
+  row-gap: var(--space-half);
   align-items: baseline;
   min-width: 0;
   padding: var(--space-1) 0;
@@ -347,14 +326,6 @@ function when(value: string): string {
   white-space: nowrap;
 }
 
-.link-body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  align-items: baseline;
-  min-width: 0;
-}
-
 .link-title {
   color: var(--color-text);
   font: var(--font-note);
@@ -365,37 +336,27 @@ function when(value: string): string {
   }
 }
 
-.ref-list {
-  display: grid;
-  gap: var(--space-3);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.ref-row {
-  display: grid;
-  gap: var(--space-label-value);
-  min-width: 0;
-}
-
-.ref-kind {
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-}
-
-.ref-session {
+/* The other end's state stands in one place on every row, whatever the title's length: in
+   its own column on the title's first line, every dot on one edge. It followed the title in
+   a row that wrapped, so it ended a short title's line and stood under a long one, and down
+   a list it jumped between the two. A name longer than the column's room ends in an ellipsis
+   and says itself whole in a hint, so one renamed state does not take every title's room. */
+.link-open .link-state {
   justify-self: start;
+  max-inline-size: 18ch;
 }
 
-.ref-value {
-  color: var(--color-text);
-  font: var(--font-line);
-  overflow-wrap: anywhere;
-}
+/* A phone's list has no room for that column beside a title: it left titles 128px of 341.
+   There the state stands under every title, at its edge. */
+@container link-groups (width < 480px) {
+  .link-title {
+    grid-column: 2 / 4;
+  }
 
-.ref-meta {
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
+  .link-open .link-state {
+    grid-row: 2;
+    grid-column: 2 / 4;
+    max-inline-size: 100%;
+  }
 }
 </style>

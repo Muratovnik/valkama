@@ -7,7 +7,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { branchedChain } from '../fixtures/chainMap.ts'
 import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
-import { largeChainHere, serve, showRelations } from './chainFixtures.ts'
+import { largeChainHere, serve, showChain } from './chainFixtures.ts'
 import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -40,7 +40,7 @@ async function leftFromDepth(page: Page, comments?: unknown[]) {
   await installBackend(page, { comments })
   await serve(page, largeChainHere())
   await page.goto(CARD)
-  await showRelations(page)
+  await showChain(page)
   const drawer = page.locator('.drawer')
   const body = drawer.locator('.drawer-frame-body')
   const group = drawer.locator('section.chain-group[aria-label="Backlog"]')
@@ -161,8 +161,12 @@ test('Back when the chain never answers shows the card for good, as far down as 
     .toBe(true)
   const room = await body.evaluate((node) => node.scrollHeight - node.clientHeight)
   await expect.poll(() => placeOf(body)).toBe(Math.min(place, room))
-  // The section it was left in: Relations, where the chain stands.
-  await expect(drawer.locator('.relations')).toBeVisible()
+  // The section it was left in, Chain, its tab chosen and its place held for the chain.
+  await expect(drawer.getByRole('tab', { name: 'Chain', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(drawer.locator('section.chain')).toBeVisible()
   await expect(drawer.locator('.drawer-frame-close')).toBeEnabled()
 })
 
@@ -201,7 +205,7 @@ test('Back at normal speed lands once, exactly where the card was left', async (
     ),
   )
   await page.goto(CARD)
-  await showRelations(page)
+  await showChain(page)
   const drawer = page.locator('.drawer')
   const body = drawer.locator('.drawer-frame-body')
   await expect(drawer.locator('.branch-map-canvas')).toBeVisible()

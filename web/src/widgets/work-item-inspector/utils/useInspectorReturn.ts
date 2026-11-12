@@ -54,10 +54,11 @@ interface ReturnOptions {
  * Leaving a card for another opened from it, and coming back to it by Back.
  *
  * Leaving reads where the card stands — the section, how far it was read, the
- * chain's scope, lane and open groups, and which card was opened. Coming back
- * puts all of it back once the card's answers are in, then focuses the row that
- * was opened. The parent used to reopen at its top, so walking a chain member
- * by member cost a scroll back down after every step.
+ * groups of Relations opened or folded, the chain's scope, lane and open groups,
+ * and which card was opened. Coming back puts all of it back once the card's
+ * answers are in, then focuses the row that was opened. The parent used to reopen
+ * at its top, so walking a chain member by member cost a scroll back down after
+ * every step.
  *
  * Until it has, `holding` says so: the card has a place to go to, and whatever it would
  * show before that stands somewhere else and jumps. That holds for a moment and no more.
@@ -68,6 +69,12 @@ interface ReturnOptions {
 export function useInspectorReturn(options: ReturnOptions) {
   const { card } = options
   const point = card.returnTo?.reference === card.reference ? card.returnTo : null
+  /**
+   * The groups of Relations the reader opened or folded. They hold while the card is open, so
+   * a tab away and back finds them as they were, and come back with it by Back, where a group
+   * opened to reach a row would otherwise fold again and the scroll would land past it.
+   */
+  const relationsOpened = ref<Record<string, boolean>>({ ...point?.relations })
   if (point) {
     options.section.value = point.section
     if (point.chain) options.scope.value = point.chain.scope
@@ -77,11 +84,11 @@ export function useInspectorReturn(options: ReturnOptions) {
 
   /**
    * Back after «Show on graph» is the card again, over the graph of its own chain, and it opens
-   * where that graph was asked for: its Relations, the chain in the scope the graph drew and in
-   * view once the card's answers are in. It reopened on Overview, a tab away from the chain.
+   * where that graph was asked for: its Chain, in the scope the graph drew and in view once the
+   * card's answers are in. It reopened on Overview, a tab away from the chain.
    */
   function openOnChain(scope: ChainScope) {
-    options.section.value = 'relations'
+    options.section.value = 'chain'
     options.scope.value = scope
     const stop = watch(
       options.settled,
@@ -104,6 +111,7 @@ export function useInspectorReturn(options: ReturnOptions) {
       reference: card.reference,
       section: options.section.value,
       scroll: options.frame.value?.position() ?? 0,
+      relations: { ...relationsOpened.value },
       opened,
       chain: chain ? { ...chain.view(), scope: options.scope.value } : null,
     }
@@ -166,5 +174,5 @@ export function useInspectorReturn(options: ReturnOptions) {
     )
   }
 
-  return { capture, holding }
+  return { capture, holding, relationsOpened }
 }
