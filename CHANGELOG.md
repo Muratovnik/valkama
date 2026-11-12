@@ -10,6 +10,17 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **You see when Valkama tells the agent your news.** The notice a hook hands the agent
+  about its work items reaches the model only, so the agent could say in your chat that
+  you answered, or that another agent wrote, with nothing on screen to show why. In Claude
+  Code the orchestrator's hook answer now also carries a `systemMessage`, which the client
+  shows you and does not send to the model: one line per item the notice tells, with the
+  item's reference and title, saying whether it was what you did, what another agent
+  wrote, or both. It is written in the language of owner alerts, Russian or English. A
+  subagent's hook and Codex answer as before, without it.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

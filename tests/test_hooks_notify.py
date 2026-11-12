@@ -14,6 +14,8 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -24,6 +26,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, store
+from server.alerts import settings as alert_settings
 from server.hooks import entry, notify
 from server.planning import api, calls, service
 
@@ -103,15 +106,29 @@ class Harness(unittest.TestCase):
     ) -> str | None:
         """The notice one hook call answers with, or None."""
 
+        answer = self.answer(agent_id, event, client, session_id, **extra)
+        return None if answer is None else str(answer["hookSpecificOutput"]["additionalContext"])
+
+    def answer(
+        self,
+        agent_id: str | None = None,
+        event: str = "post-tool-use",
+        client: str = "claude",
+        session_id: str = SESSION,
+        **extra: object,
+    ) -> dict | None:
+        """The whole answer of one hook call, parsed, or None."""
+
         payload: dict = {"session_id": session_id, **extra}
         if agent_id:
             payload["agent_id"] = agent_id
         answer = notify.deliver(client, event, payload, self.environ)
         if answer is None:
             return None
-        output = json.loads(answer)["hookSpecificOutput"]
+        parsed = json.loads(answer)
+        output = parsed["hookSpecificOutput"]
         self.assertEqual(notify.DELIVERY_EVENTS[client][event], output["hookEventName"])
-        return str(output["additionalContext"])
+        return parsed
 
     def state(self) -> str:
         return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY)
@@ -578,6 +595,213 @@ class TextTests(Harness):
                     "hookEventName": "PostToolUse",
                     "additionalContext": 'Кириллица «и» "кавычки"\n',
                 }
+            },
+            json.loads(raw.decode("ascii")),
+        )
+
+
+class ShownToThePersonTests(Harness):
+    """The line Claude Code shows the person when the agent was handed Valkama news.
+
+    `additionalContext` reaches the model only, so without this line the agent says
+    "the owner answered" in the person's chat with no visible reason. The line is a
+    top-level `systemMessage`, which Claude Code shows the user and does not send to
+    the model; it is in the owner's alert language.
+    """
+
+    def language(self, locale: str) -> None:
+        alert_settings.write(self.conn, {"locale": locale})
+
+    def test_a_persons_news_is_one_line_in_russian(self) -> None:
+        self.language("ru")
+        self.claim_with_a_step_for_the_subagent()
+        self.assertIsNone(self.answer(), "no news, no answer")
+        self.says("Use the other library")
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            f"Valkama передала агенту ваши действия по задаче {self.ref} «Do the work»",
+            answer["systemMessage"],
+        )
+        self.assertIn("Use the other library", answer["hookSpecificOutput"]["additionalContext"])
+        self.assertIsNone(self.answer(), "told once, shown once")
+
+    def test_a_persons_news_is_one_line_in_english(self) -> None:
+        self.language("en")
+        self.claim_with_a_step_for_the_subagent()
+        self.says("Use the other library")
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            f"Valkama told the agent what you did on {self.ref} «Do the work»",
+            answer["systemMessage"],
+        )
+
+    def test_without_stored_settings_it_speaks_the_system_language(self) -> None:
+        self.claim_with_a_step_for_the_subagent()
+        for spoken, expected in (
+            ("ru", "Valkama передала агенту"),
+            ("en", "Valkama told the agent"),
+        ):
+            with self.subTest(spoken=spoken):
+                self.says(f"In {spoken}")
+                with mock.patch.object(alert_settings, "system_language", return_value=spoken):
+                    answer = self.answer()
+                assert answer is not None
+                self.assertTrue(answer["systemMessage"].startswith(expected), answer)
+
+    def test_the_stop_that_tells_shows_it_too(self) -> None:
+        self.language("en")
+        self.claim_with_a_step_for_the_subagent()
+        self.says("Before you stop")
+        answer = self.answer(event="stop")
+        assert answer is not None
+        self.assertEqual("Stop", answer["hookSpecificOutput"]["hookEventName"])
+        self.assertIn(self.ref, answer["systemMessage"])
+
+    def held_items(self, count: int) -> list[str]:
+        references = []
+        for number in range(count):
+            item = service.create_work_item(
+                self.conn, space=self.space["key"], title=f"Item {number}", author="filer"
+            )
+            self.conn.commit()
+            references.append(str(item["reference"]))
+            self.agent("claim_work_item", id=references[-1])
+        return references
+
+    def test_several_items_are_a_line_each(self) -> None:
+        self.language("ru")
+        references = self.held_items(3)
+        for reference in references:
+            self.says("Look here", ref=reference)
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            {
+                f"Valkama передала агенту ваши действия по задаче {reference} «Item {number}»"
+                for number, reference in enumerate(references)
+            },
+            set(answer["systemMessage"].splitlines()),
+        )
+
+    def test_the_lines_name_the_items_the_notice_tells_and_no_other(self) -> None:
+        """A notice shows `MOST_EVENTS` events; an item it left out was not handed over."""
+
+        self.language("en")
+        references = self.held_items(notify.MOST_EVENTS + 3)
+        for reference in references:
+            self.says("Look here", ref=reference)
+        answer = self.answer()
+        assert answer is not None
+        context = answer["hookSpecificOutput"]["additionalContext"]
+        told = set(re.findall(r"^(\S+) «Item \d+»:$", context, re.MULTILINE))
+        self.assertEqual(notify.MOST_EVENTS, len(told), context)
+        lines = answer["systemMessage"].splitlines()
+        self.assertEqual(len(told), len(lines), lines)
+        shown = set()
+        for line in lines:
+            match = re.fullmatch(r"Valkama told the agent what you did on (\S+) «Item \d+»", line)
+            assert match is not None, line
+            shown.add(match.group(1))
+        self.assertEqual(told, shown)
+
+    def test_codex_answers_carry_no_line_for_the_person(self) -> None:
+        self.claim_with_a_step_for_the_subagent()
+        for event in ("post-tool-use", "user-prompt-submit"):
+            with self.subTest(event=event):
+                self.says(f"For Codex at {event}")
+                answer = self.answer(event=event, client="codex")
+                assert answer is not None
+                self.assertEqual({"hookSpecificOutput"}, set(answer))
+                self.assertIn(event, answer["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_subagents_answer_carries_no_line_for_the_person(self) -> None:
+        self.claim_with_a_step_for_the_subagent()
+        self.says("For the step holder")
+        answer = self.answer(CHILD)
+        assert answer is not None
+        self.assertEqual({"hookSpecificOutput"}, set(answer))
+        self.assertIn("For the step holder", answer["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("systemMessage", self.answer() or {}, "positive control: the orchestrator")
+
+
+class ShownTextTests(unittest.TestCase):
+    """What the line says for news built here, where every case is cheap to name."""
+
+    @staticmethod
+    def news(*items: tuple[str, str, tuple[str, ...]]) -> list:
+        """The events a notice shows, as `notice` gives them: one per `via` of each item."""
+
+        return [
+            (reference, title, {"kind": "comment", "at": "t", "via": via})
+            for reference, title, vias in items
+            for via in vias
+        ]
+
+    def test_whose_news_each_line_names(self) -> None:
+        news = self.news(
+            ("MAIN-12", "Person", ("interface",)),
+            ("MAIN-14", "Agent", ("agent",)),
+            ("MAIN-1", "Both", ("agent", "interface")),
+        )
+        self.assertEqual(
+            "Valkama передала агенту ваши действия по задаче MAIN-12 «Person»\n"
+            "Valkama передала агенту запись другого агента по задаче MAIN-14 «Agent»\n"
+            "Valkama передала агенту ваши действия и запись другого агента по задаче MAIN-1 «Both»",
+            notify.shown(news, "ru"),
+        )
+        self.assertEqual(
+            "Valkama told the agent what you did on MAIN-12 «Person»\n"
+            "Valkama told the agent what another agent wrote on MAIN-14 «Agent»\n"
+            "Valkama told the agent what you did and what another agent wrote on MAIN-1 «Both»",
+            notify.shown(news, "en"),
+        )
+
+    def test_a_title_is_folded_to_one_line_and_cut_with_an_ellipsis(self) -> None:
+        title = "First\nsecond\x1b[31m " + "x" * 120
+        line = notify.shown(self.news(("MAIN-2", title, ("interface",))), "en")
+        name = line.split("«", 1)[1].rstrip("»")
+        self.assertEqual(notify.MOST_TITLE, len(name))
+        self.assertTrue(name.startswith("First second[31m x"), name)
+        self.assertTrue(name.endswith("…"))
+        self.assertNotIn("\x1b", line, "a control character never reaches the terminal")
+
+    def test_the_rest_is_counted_in_each_language(self) -> None:
+        for rest, russian, english in (
+            (1, "ещё по 1 задаче", "about 1 more item"),
+            (2, "ещё по 2 задачам", "about 2 more items"),
+            (11, "ещё по 11 задачам", "about 11 more items"),
+            (21, "ещё по 21 задаче", "about 21 more items"),
+        ):
+            with self.subTest(rest=rest):
+                news = self.news(
+                    *((f"MAIN-{n}", "T", ("interface",)) for n in range(notify.MOST_SHOWN + rest))
+                )
+                self.assertTrue(
+                    notify.shown(news, "ru").endswith(
+                        f"\nValkama передала агенту новости {russian}"
+                    )
+                )
+                self.assertTrue(
+                    notify.shown(news, "en").endswith(f"\nValkama told the agent {english}")
+                )
+
+    def test_a_store_without_alert_settings_speaks_the_system_language(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        self.addCleanup(conn.close)
+        with mock.patch.object(alert_settings, "system_language", lambda: "ru"):
+            self.assertEqual("ru", notify.shown_language(conn))
+
+    def test_the_answer_with_the_line_is_one_json_object_in_ascii(self) -> None:
+        raw = notify.output("PostToolUse", "context", "Valkama передала «MAIN-1»")
+        self.assertEqual(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": "context",
+                },
+                "systemMessage": "Valkama передала «MAIN-1»",
             },
             json.loads(raw.decode("ascii")),
         )

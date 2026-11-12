@@ -28,6 +28,7 @@ import unittest
 from unittest import mock
 
 from server import housekeeping, mcp_surface, store
+from server.alerts import settings as alert_settings
 from server.hooks import notify
 from server.planning import api, calls, service
 
@@ -97,13 +98,19 @@ class Harness(unittest.TestCase):
     def hook(
         self, agent_id: str | None = None, event: str = "post-tool-use", session: str = B
     ) -> str | None:
+        answer = self.answer(agent_id, event, session)
+        return None if answer is None else str(answer["hookSpecificOutput"]["additionalContext"])
+
+    def answer(
+        self, agent_id: str | None = None, event: str = "post-tool-use", session: str = B
+    ) -> dict | None:
+        """The whole answer of one Claude Code hook call, parsed, or None."""
+
         payload: dict = {"session_id": session}
         if agent_id:
             payload["agent_id"] = agent_id
         answer = notify.deliver("claude", event, payload, self.environ)
-        if answer is None:
-            return None
-        return str(json.loads(answer)["hookSpecificOutput"]["additionalContext"])
+        return None if answer is None else json.loads(answer)
 
     def set_up_b(self) -> None:
         """B claims one item and follows the other; A has read both; nothing is news yet."""
@@ -587,6 +594,52 @@ class CostTests(Harness):
         self.assertIn("work_item_subscriptions_session", scope, "and the session's rows by its")
         self.assertNotIn("SCAN work_item_subscriptions", scope)
         self.assertNotIn("SCAN execution_events", scope)
+
+
+class ShownToThePersonTests(Harness):
+    """The line the person sees names another agent's news apart from their own."""
+
+    def test_another_agents_news_is_a_line_per_item_naming_whose_it_is(self) -> None:
+        alert_settings.write(self.conn, {"locale": "ru"})
+        self.set_up_b()
+        self.comment(AS_A, self.held, "On your item")
+        self.comment(AS_A, self.followed, "On the one you follow")
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            {
+                f"Valkama передала агенту запись другого агента по задаче {self.held} «Held by B»",
+                f"Valkama передала агенту запись другого агента по задаче {self.followed}"
+                " «Followed by B»",
+            },
+            set(answer["systemMessage"].splitlines()),
+        )
+        self.assertTrue(answer["hookSpecificOutput"]["additionalContext"].startswith(FROM_AGENTS))
+
+    def test_a_person_and_another_agent_on_one_item_are_one_line_naming_both(self) -> None:
+        alert_settings.write(self.conn, {"locale": "en"})
+        self.set_up_b()
+        self.person(COMMENT, id=self.held, body="A person")
+        self.comment(AS_A, self.held, "And an agent")
+        answer = self.answer()
+        assert answer is not None
+        self.assertEqual(
+            f"Valkama told the agent what you did and what another agent wrote on {self.held}"
+            " «Held by B»",
+            answer["systemMessage"],
+        )
+
+    def test_a_subagent_told_another_agents_news_shows_the_person_nothing(self) -> None:
+        self.set_up_b()
+        self.agent("set_work_item_checklist", AS_B, id=self.held, items=["one"])
+        step = service.get_work_item(self.conn, self.held)["checklist"][0]["id"]
+        self.agent("claim_work_item_checklist_item", AS_CHILD, id=self.held, item_id=step)
+        self.assertIsNone(self.answer(CHILD), "its own claim is no news")
+        self.comment(AS_A, self.held, "For the step holder")
+        answer = self.answer(CHILD)
+        assert answer is not None
+        self.assertEqual({"hookSpecificOutput"}, set(answer))
+        self.assertIn("For the step holder", answer["hookSpecificOutput"]["additionalContext"])
 
 
 if __name__ == "__main__":
