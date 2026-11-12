@@ -213,10 +213,8 @@ export function useTableModel(source: () => TableSource) {
       comparison ? spentOf(comparison.total) : null,
       usage.total.tokens,
     )
-    const title = t(period ? 'analytics.table.beside' : 'analytics.table.title', {
-      by: t(`analytics.byDimension.${by}`),
-      period,
-    })
+    // The period compared with is named in its column's heading, so the title need not say it.
+    const title = t('analytics.table.title', { by: t(`analytics.byDimension.${by}`) })
     return { title, columns, lines, total, firstSort: measure as string }
   }
 
@@ -259,9 +257,27 @@ export function useTableModel(source: () => TableSource) {
     }
   }
 
+  /**
+   * What the heading row says of the rows (`tableCounts`): the values of this period, counted as
+   * the rail's tile counts them; those that spent only before; and the rows of no value that
+   * spent now, by name, so the parts add up to the rows shown.
+   */
+  function countWords(lines: readonly TableLine[]) {
+    const { now, before, apart } = tableCounts(lines)
+    const names = apart.map((name) => `«${name}»`).join(', ')
+    return [
+      t('analytics.panel.table.counts.now', { count: now }),
+      before ? t('analytics.panel.table.counts.before', { count: before }) : '',
+      names ? t('analytics.panel.table.counts.apart', { names }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+
   return computed(() => {
     const { cross } = source()
-    return cross ? crossed(cross.across, cross.usage) : besideBefore()
+    const model = cross ? crossed(cross.across, cross.usage) : besideBefore()
+    return { ...model, counts: countWords(model.lines) }
   })
 }
 

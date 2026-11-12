@@ -82,8 +82,8 @@ const headings = (wrapper: ReturnType<typeof table>) =>
 describe('the breakdown beside the period before', () => {
   it('lists every value of both periods by time, each beside its time before', () => {
     const wrapper = table('time')
-    expect(words(wrapper.get('h2').text())).toBe('Spending by task, beside Nov 6 – 8')
-    expect(words(wrapper.get('caption').text())).toBe('Spending by task, beside Nov 6 – 8')
+    expect(words(wrapper.get('h2').text())).toBe('Spending by task')
+    expect(words(wrapper.get('caption').text())).toBe('Spending by task')
     expect(headings(wrapper)).toEqual([
       'Task',
       'Agent time',

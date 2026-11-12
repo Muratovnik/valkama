@@ -22,7 +22,7 @@ import { useI18n } from 'vue-i18n'
 import SpendingTableName from '@/pages/analytics/components/SpendingTableName.vue'
 import type { CrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { tableCounts, useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
+import { useTableModel } from '@/pages/analytics/composables/useTableModel.ts'
 import { NAME_COLUMN, useTableSort } from '@/pages/analytics/composables/useTableSort.ts'
 import { tableFile } from '@/pages/analytics/utils/spendingCsv.ts'
 
@@ -105,23 +105,11 @@ const headings = computed(() => [
   ...model.value.columns.map((column) => ({ ...column, numeric: true })),
 ])
 
-/**
- * What the heading row says of the rows, and their order: the values of this period, counted as
- * the rail's tile counts them; those that spent only before; and the rows of no value that spent
- * now, by name, so the parts add up to the rows shown.
- */
+/** What the heading row says of the rows (`counts`), and their order. */
 const summary = computed(() => {
   const column = headings.value.find(({ key }) => key === sort.value.column)?.text ?? ''
   const way = t(`analytics.panel.table.direction.${direction.value}`)
-  const { now, before, apart } = tableCounts(model.value.lines)
-  const names = apart.map((name) => `«${name}»`).join(', ')
-  const parts = [
-    t('analytics.panel.table.counts.now', { count: now }),
-    before ? t('analytics.panel.table.counts.before', { count: before }) : '',
-    names ? t('analytics.panel.table.counts.apart', { names }) : '',
-  ]
-  const sorted = t('analytics.panel.table.sorted', { column, direction: way })
-  return `${parts.filter(Boolean).join(' · ')}, ${sorted}`
+  return `${model.value.counts}, ${t('analytics.panel.table.sorted', { column, direction: way })}`
 })
 
 const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)
@@ -409,22 +397,18 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   color: var(--color-text);
 }
 
-/* The heading row: the title, what the rows are and their order, and the controls, on one line
-   where it has room and wrapping where it has not; the words about the rows give way first. */
+/* The heading row: the title, what the rows are and their order, and the controls, on one line;
+   the words about the rows give way first, down to nothing, and are whole in their hint. Only a
+   narrow table lets the row wrap. */
 .spending-table-head {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   align-items: center;
 }
 
-.spending-table-title {
-  flex: 0 1 auto;
-}
-
 .spending-table-summary {
   flex: 1 1 0;
-  min-inline-size: 6rem;
+  min-inline-size: 0;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
@@ -432,10 +416,14 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
 
 .spending-table-controls {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-1);
   align-items: center;
   margin-inline-start: auto;
+}
+
+.spending-table-title,
+.spending-table-controls {
+  flex: none;
 }
 
 /* A row is one line: each figure and its heading take what they need, the name the rest, cut
@@ -450,12 +438,20 @@ const emptyWords = computed(() => ({ empty: t('analytics.bars.empty') }))
   white-space: nowrap;
 }
 
+/* The name's column takes all the width the figures leave: as wide as the table, less what the
+   figures' columns need, and never wider than its frame because of a long name. */
 .chart-name {
+  inline-size: 100%;
   min-inline-size: 12rem;
   max-inline-size: 0;
 }
 
 @container (width < 50rem) {
+  .spending-table-head,
+  .spending-table-controls {
+    flex-wrap: wrap;
+  }
+
   .chart-heading[data-numeric='true'] {
     min-inline-size: 7em;
     white-space: normal;

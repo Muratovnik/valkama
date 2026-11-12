@@ -106,6 +106,33 @@ function split(page: Page) {
       // The heading row over the frame, and the controls in it: one row is as tall as they are.
       headRow: Math.round(boxOf('.spending-table-head')?.height ?? 0),
       controls: Math.round(boxOf('.spending-table-controls')?.height ?? 0),
+      // The name's column, and the table it stands in.
+      name: Math.round(boxOf('.spending-table-frame tbody th')?.width ?? 0),
+      figures: Math.round(
+        [...document.querySelectorAll('.spending-table-frame thead th[data-numeric="true"]')]
+          .map((one) => one.getBoundingClientRect().width)
+          .reduce((sum, width) => sum + width, 0),
+      ),
+      tableWidth: Math.round(boxOf('.spending-table-frame table')?.width ?? 0),
+      // How much wider each figure's column stands than the widest thing in it, padding and all.
+      slack: [
+        ...document.querySelectorAll<HTMLTableCellElement>(
+          '.spending-table-frame thead th[data-numeric="true"]',
+        ),
+      ].map((heading) => {
+        const cells = document.querySelectorAll(
+          `.spending-table-frame tr > :nth-child(${heading.cellIndex + 1})`,
+        )
+        const needs = [...cells].map((cell) => {
+          const range = document.createRange()
+          range.selectNodeContents(cell)
+          const style = getComputedStyle(cell)
+          const padding =
+            Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+          return range.getBoundingClientRect().width + padding
+        })
+        return Math.round(heading.getBoundingClientRect().width - Math.max(...needs))
+      }),
       lines: linesOf(),
       multiples: wholeIn('.spending-multiples .multiple'),
       scrollers: scrollers.map((one) => one.className),
@@ -171,6 +198,10 @@ for (const [width, height] of [
     expect(measured.headRow, 'the heading row on one line').toBeLessThanOrEqual(
       measured.controls + 2,
     )
+    expect(measured.headRow).toBeLessThanOrEqual(36)
+    // The figures' columns are as narrow as what they hold, so the name's column has the rest.
+    expect(Math.max(...measured.slack), 'room left in a figure column').toBeLessThanOrEqual(2)
+    expect(measured.name + 2).toBeGreaterThanOrEqual(measured.tableWidth - measured.figures)
     expect(measured.multiples, 'small charts in view, title and plot').toBeGreaterThanOrEqual(1)
 
     // The day chart's value axis and the small charts' scale count agent time in one unit each.
