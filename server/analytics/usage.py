@@ -46,6 +46,7 @@ import json
 import operator
 import re
 import sqlite3
+import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -133,6 +134,13 @@ _COLUMN_OF = {
     ENVIRONMENT: _ENVIRONMENT,
 }
 
+
+#: One read is worked out at a time in a process. The work is Python under one interpreter
+#: lock, so reads side by side cannot finish sooner than one after another; what they did
+#: instead was trade that lock on every row the store handed back, each read costing several
+#: times its own work, and every one of a page's reads answered only at the end of all of
+#: them. In turn, the first is answered in its own time.
+_ONE_AT_A_TIME = threading.Lock()
 
 #: Where `None` is a group of its own and not unknown: work on no item, a session's own run.
 #: Outside these `None` is a value the store does not hold; inside them that is `UNKNOWN`.
@@ -580,6 +588,11 @@ def _total(window: _Window) -> dict:
 def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     """What agent work spent in the period, in total, by group and by step, in one pass."""
 
+    with _ONE_AT_A_TIME:
+        return _read(conn, request)
+
+
+def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     bounds, first = _bounds(request)
     cursor = conn.cursor()
     cursor.row_factory = None

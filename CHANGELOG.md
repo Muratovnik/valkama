@@ -44,6 +44,17 @@ checkouts are therefore distinguishable even at the same version.
   figure counts is said when you point at it, focus it or tap it, and only a cost missing a
   price keeps a line of its own under the figures.
 
+### Fixed
+
+- **Reads a page sends at once no longer queue for the store, and Analytics opens in about
+  half the time.** Every read opened the store through its whole bring-up under the lock
+  that serialises migrations, so the reads a page sends at once each waited out the lock
+  for all the ones before it, and the page's wait mark stayed up until the last. A read of a store already
+  at this build's schema now opens it without that lock; any other store is still brought
+  up, migrated or refused first. The usage reads themselves are worked out one at a time,
+  because side by side they only traded the interpreter lock on every row and all finished
+  late; in turn, the first is answered in its own time.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

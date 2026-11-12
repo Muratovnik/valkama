@@ -8,7 +8,7 @@ import sqlite3
 import threading
 from urllib.parse import urlencode
 
-from server import http_surface, store
+from server import http_surface, store, store_lock
 from server.analytics import api
 from tests.analytics_fixtures import HOUR, UsageStore, day
 
@@ -136,6 +136,31 @@ class AnalyticsHttpTests(UsageStore):
         self.assertEqual(200, self.get(path)[0])
         self.assertEqual(400, self.get(self.usage_path(**{"from": day(0)}))[0])
         self.assertEqual(before, state())
+
+    def test_a_read_waits_for_no_other_open_of_the_store(self) -> None:
+        """The page sends its reads at once. Each used to open the store through the
+        whole bring-up under the migration lock, so they were answered one after
+        another; a read of a current store now answers while that lock is held."""
+
+        entered, release = threading.Event(), threading.Event()
+
+        def bring_up() -> None:
+            with store_lock.migration_lock(store.db_path()):
+                entered.set()
+                release.wait(10)
+
+        holder = threading.Thread(target=bring_up)
+        holder.start()
+        try:
+            self.assertTrue(entered.wait(5))
+            usage = self.get(self.usage_path(**{"from": day(0), "to": day(1)}), self.browser())
+            item = self.get(f"{ITEM_USAGE}?{urlencode({'id': self.reference})}")
+        finally:
+            release.set()
+            holder.join(10)
+        self.assertEqual(200, usage[0])
+        self.assertEqual(2 * HOUR, usage[2]["usage"]["total"]["agent_seconds"])
+        self.assertEqual(200, item[0])
 
     def test_another_path_under_it_is_not_found(self) -> None:
         self.assertEqual(404, self.get("/api/analytics/usage/extra")[0])

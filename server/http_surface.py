@@ -60,7 +60,7 @@ from .projects import scopes
 from .refs import resolve_ref
 from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
-from .store import connect, db_path, open_read_only
+from .store import connect, connect_for_read, db_path, open_read_only
 from .store_identity.primitives import ContractError
 
 CLIENT_DISCONNECT_ERRORS = (
@@ -880,7 +880,7 @@ class Handler(BaseHTTPRequestHandler):
         # the same security seam while real HTTP requests validate only once.
         return bool(getattr(self, "_host_validated", False)) or self._require_host()
 
-    def _open_store(self) -> sqlite3.Connection | None:
+    def _open_store(self, *, read: bool = False) -> sqlite3.Connection | None:
         """The store, or None once its failure has been answered.
 
         Every route that reads the store opens it here, so a store that cannot
@@ -888,10 +888,14 @@ class Handler(BaseHTTPRequestHandler):
         everywhere. Without it the error escaped the handler: a `ValueError`
         subclass was swallowed as a client disconnect and the connection
         dropped with no answer, which an event stream retries forever.
+
+        A `read` commits nothing, and opens the store without the bring-up's lock
+        (`store.connect_for_read`), so reads sent together do not wait out one
+        another's bring-up.
         """
 
         try:
-            return connect()
+            return connect_for_read() if read else connect()
         except Exception as error:  # rendered as the stable envelope below
             status, body = ui_state.error_response(error)
             if self.command in {"POST", "PUT"} and status == 500:
@@ -932,7 +936,7 @@ class Handler(BaseHTTPRequestHandler):
 
         conn = None
         if boundary.commit is not _Commit.NO_STORE:
-            conn = self._open_store()
+            conn = self._open_store(read=boundary.commit is _Commit.READ_ONLY)
             if conn is None:
                 return
         try:

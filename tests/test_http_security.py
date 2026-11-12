@@ -524,9 +524,10 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
             json.loads(body),
         )
         self.assertNotIn(b"registry secret", body)
-        # A read says the same in the read envelope, without the reason either.
+        # A read says the same in the read envelope, without the reason either. It opens
+        # the store through the read opener, which is where its failure comes from.
         with mock.patch.object(
-            http_surface, "connect", side_effect=RuntimeError("registry secret leaked")
+            http_surface, "connect_for_read", side_effect=RuntimeError("registry secret leaked")
         ):
             status, response_headers, body = self.request(
                 "GET", "/api/planning/spaces", host=self.authority
