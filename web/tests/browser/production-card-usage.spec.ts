@@ -6,12 +6,15 @@
 import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
 
+import { readAddress } from '@/shared/api/analyticsAddress.ts'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { noUsage, richUsage, usageAnswer } from '../fixtures/usage.ts'
+import { NO_TOKENS, noUsage, richUsage, usageAnswer, whoUsage } from '../fixtures/usage.ts'
 import { deferred } from '../fixtures/workItem.ts'
+import { openAgents, serve as serveAgents } from './agentsUsagePage.ts'
 import { installBackend } from './backend.ts'
+import { shot } from './boardPage.ts'
 import { largeChainHere, serve, showRelations } from './chainFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { attachedWorkItemRef, projectScope, workItemRef } from './planningFixtures.ts'
@@ -259,4 +262,144 @@ test('an epic reads its whole scope, and each member of its chain says its share
   )
   // A member nobody worked on says nothing, not a zero.
   await expect(page.locator('.drawer .chain-row-usage')).toHaveCount(1)
+})
+
+/**
+ * The Agents tab of an item three agents worked on, said the way the read says the owner's epic:
+ * the work split by effort into rows of one role and class, and rows of under a minute with no
+ * tokens. The figures are synthetic.
+ */
+function threeAgents() {
+  const usage = whoUsage()
+  const [subagent, main, advisor] = usage.roles
+  const half = (line: typeof subagent) => ({
+    ...line,
+    seconds: line.seconds / 2,
+    tokens: { ...NO_TOKENS, input: (line.tokens.input ?? 0) / 2 },
+    estimated_api_cost_usd: (line.estimated_api_cost_usd ?? 0) / 2,
+  })
+  const nothing = { tokens: NO_TOKENS, estimated_api_cost_usd: null, unpriced_tokens: 0 }
+  return whoUsage({
+    agents: [
+      ...usage.agents,
+      { ...usage.agents[0], agent_id: 'agent00000000001', seconds: 0, ...nothing },
+    ],
+    roles: [
+      { ...half(subagent), effort: { id: 'high', unknown: false } },
+      { ...half(subagent), effort: { id: 'low', unknown: false } },
+      main,
+      advisor,
+      // Under a minute and nothing counted: what the tab used to list as «no data no data».
+      {
+        role: 'subagent',
+        launch_class: { id: null, unknown: true },
+        effort: { id: null, unknown: true },
+        seconds: 20,
+        ...nothing,
+      },
+      { ...main, effort: { id: 'high', unknown: false }, seconds: 0, ...nothing },
+    ],
+  })
+}
+
+const two = (value: number) => String(value).padStart(2, '0')
+
+/** The day a moment falls on in the browser's calendar, which is this machine's: `2026-08-13`. */
+function dayOf(moment: string) {
+  const at = new Date(moment)
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`
+}
+
+/**
+ * Whether an element stands whole in the window and in every box that scrolls around it, and
+ * nothing held over it, such as the card's head, covers its first and last line.
+ */
+function standsInView(element: Element) {
+  const box = element.getBoundingClientRect()
+  const bounds = [{ top: 0, bottom: window.innerHeight }]
+  for (let up = element.parentElement; up; up = up.parentElement) {
+    const { overflowY } = getComputedStyle(up)
+    if (overflowY !== 'auto' && overflowY !== 'scroll') continue
+    const frame = up.getBoundingClientRect()
+    bounds.push({ top: frame.top, bottom: frame.bottom })
+  }
+  const seen = (y: number) => element.contains(document.elementFromPoint(box.left + 2, y))
+  return (
+    bounds.every((bound) => box.top >= bound.top && box.bottom <= bound.bottom) &&
+    seen(box.top + 2) &&
+    seen(box.bottom - 2)
+  )
+}
+
+test('at 1440×900 the tab shows the figures and the way to Analytics without a scroll', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const usage = threeAgents()
+  await serveAgents(page, usage)
+  await page.goto(CARD)
+  const section = await openAgents(page)
+  await expect(page.locator('.drawer .inspector-tabs').getByRole('tab').nth(1)).toHaveText(
+    'Agents 3',
+  )
+  const head = section.locator('.work-usage')
+  const figures = head.locator('.work-usage-figures')
+  const link = head.getByRole('link', { name: 'Open in Analytics' })
+  await expect(figures).toBeVisible()
+  await expect(link).toBeVisible()
+  expect(await figures.evaluate(standsInView), 'the figures stand in view').toBe(true)
+  expect(await link.evaluate(standsInView), 'the link stands in view').toBe(true)
+  // The link stands straight under the figures, and nothing else stands between them.
+  const [over, under] = await Promise.all([figures.boundingBox(), link.boundingBox()])
+  expect((under?.y ?? 0) - ((over?.y ?? 0) + (over?.height ?? 0))).toBeLessThanOrEqual(16)
+  // The address carries the card's task and the days its work spans.
+  const state = new URL((await link.getAttribute('href')) ?? '', 'http://localhost').searchParams
+  const view = readAddress(
+    JSON.parse(Buffer.from(state.get('state') ?? '', 'base64url').toString('utf8')),
+  )
+  expect(view.filters).toEqual({ work_item: [usage.work_item_id] })
+  const [first, last] = [usage.account_stretches[0], usage.account_stretches.at(-1)]
+  expect(view).toMatchObject({
+    period: 'custom',
+    from: dayOf(first.started_at),
+    to: dayOf(last?.ended_at ?? ''),
+  })
+  // One breakdown: who did the work, no effort, and no row with no minute and no tokens.
+  await expect(head.locator('.work-usage-caption').first()).toHaveText('Who did the work')
+  await expect(head).not.toContainText('Tokens by kind')
+  await expect(head).not.toContainText('Models')
+  await expect(head).not.toContainText('effort')
+  const rows = head.locator('[data-breakdown="roles"] .work-usage-row')
+  await expect(rows).toHaveCount(3)
+  await expect(head).not.toContainText(/under a minute\s*no data/u)
+  // The two halves of the subagent's work are one row again, as much as the read's whole row.
+  await expect(rows.nth(0)).toContainText('Subagent · bero')
+  await expect(rows.nth(0)).toContainText('8\u{A0}h\u{A0}20\u{A0}min')
+  await expect(rows.nth(0)).toContainText('≈\u{A0}$180.00')
+  await page.screenshot(shot(info, 'agents-tab-1440.png'))
+})
+
+test.describe('under a finger', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 900 } })
+
+  test('at 390 the head stands whole, and a figure says what it counts to a finger', async ({
+    page,
+  }, info) => {
+    await serveAgents(page, threeAgents())
+    await page.goto(CARD)
+    const section = await openAgents(page)
+    const figures = section.locator('.work-usage-figures')
+    await expect(figures.getByRole('button')).toHaveText([
+      'Work ≈\u{A0}7\u{A0}h\u{A0}38\u{A0}min',
+      'All agents ≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min',
+      'Cost ≈\u{A0}$240.67',
+      /^Tokens /u,
+    ])
+    // No line of notes under figures that need none: each says its why on a press.
+    await expect(section.locator('.work-usage-note')).toHaveCount(0)
+    await figures.getByRole('button', { name: /^Cost/u }).tap()
+    await expect(page.getByRole('tooltip')).toContainText('not a bill')
+    await expectNoSilentClipping(page, 'the agents tab at 390px')
+    await page.screenshot(shot(info, 'agents-tab-390.png'))
+  })
 })

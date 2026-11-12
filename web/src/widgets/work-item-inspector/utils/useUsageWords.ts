@@ -48,7 +48,6 @@ export const isEstimated = (usage: Pick<ItemUsage, 'quality'>) =>
 export function useUsageWords() {
   const { locale, t } = useI18n()
 
-  const count = (value: number) => new Intl.NumberFormat(locale.value).format(value)
   const compact = (value: number) =>
     new Intl.NumberFormat(locale.value, { notation: 'compact', maximumFractionDigits: 1 }).format(
       value,
@@ -97,27 +96,36 @@ export function useUsageWords() {
     ]
   }
 
-  /** What the numbers of a read are, one sentence each, and only those that apply. */
-  function notes(usage: ItemUsage): string[] {
+  /**
+   * What the figures of a read are, one sentence each and only those that apply, by the figure
+   * each explains, and apart from them what a missing price does to the cost, or nothing.
+   */
+  function explanations(usage: ItemUsage) {
     const models = usage.unpriced_models.join(', ')
-    const lines: string[] = []
-    if (span(usage.elapsed_seconds) !== span(usage.agent_seconds))
-      lines.push(t('workItem.usage.parallel'))
-    if (usage.estimated_api_cost_usd !== null) lines.push(t('workItem.usage.costNote'))
-    if (usage.quality === 'estimated') lines.push(t('workItem.usage.estimated'))
+    const parallel = span(usage.elapsed_seconds) !== span(usage.agent_seconds)
+    const work: string[] = []
+    if (usage.quality === 'estimated') work.push(t('workItem.usage.estimated'))
     if (usage.quality === 'mixed')
-      lines.push(
+      work.push(
         t('workItem.usage.mixed', {
           part: span(usage.estimated_seconds),
           whole: span(usage.agent_seconds),
         }),
       )
-    if (models) {
-      const key = usage.estimated_api_cost_usd === null ? 'unknownCost' : 'unpriced'
-      lines.push(t(`workItem.usage.${key}`, { models }))
+    const key = usage.estimated_api_cost_usd === null ? 'unknownCost' : 'unpriced'
+    return {
+      work,
+      agents: parallel ? [t('workItem.usage.parallel')] : [],
+      cost: usage.estimated_api_cost_usd === null ? [] : [t('workItem.usage.costNote')],
+      unpriced: models ? t(`workItem.usage.${key}`, { models }) : '',
     }
-    return lines
   }
 
-  return { cost, count, figures, notes, span, time, tokenFigure, tokens }
+  /** What the numbers of a read are, one sentence each, and only those that apply. */
+  function notes(usage: ItemUsage): string[] {
+    const { work, agents, cost, unpriced } = explanations(usage)
+    return [...agents, ...cost, ...work, ...(unpriced ? [unpriced] : [])]
+  }
+
+  return { cost, explanations, figures, notes, span, time, tokenFigure, tokens }
 }

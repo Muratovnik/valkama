@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * What a row of options says: its label, a quiet word on the recommended one, which shows
- * why when the asker said (`RequestAdvice`), as much of its description as
+ * why when the asker said (`WhyWords`), as much of its description as
  * `optionDescriptions` leaves, and in an answered question whether it was the one chosen.
  *
  * A label is markdown as a description is: an agent writes `code` in both, and a label drawn
@@ -19,7 +19,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import RequestAdvice from '@/features/input-requests/components/RequestAdvice.vue'
 import type { DescriptionView } from '@/features/input-requests/utils/optionDescriptions.ts'
 
 import type { InputRequestOption } from '@/shared/api/inputRequestModel.ts'
@@ -28,6 +27,7 @@ import { parseRichInline, plainText, unlinked } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import WhyWords from '@/shared/ui/WhyWords.vue'
 
 const props = defineProps<{
   chosen: boolean
@@ -67,7 +67,7 @@ const label = computed(() => {
         class="request-option-label"
         ><RichInlines :nodes="label"
       /></span>
-      <RequestAdvice
+      <WhyWords
         v-if="option.recommended"
         :id="noteId"
         class="request-option-note"

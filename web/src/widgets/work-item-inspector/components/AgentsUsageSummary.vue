@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
  * How much work the item took, whole, at the head of its agents: the time on the clock and what
- * the agents spent together, the cost, the tokens processed anew, and in words what each of them
- * is, since a finger has no tooltip. Under them everything by kind, by model and by who did the
- * work — the session's own agent, a subagent by the class it was launched with, an adviser — with
- * the effort it ran at, then under which organization the work ran, and a way to the same work on
- * the Analytics page.
+ * the agents spent together, the cost and the tokens processed anew, and right under them the
+ * way to the same work on the Analytics page, which breaks it down by model, effort and kind of
+ * token. What a figure counts is its why: pointing at it, focusing it or pressing it says so,
+ * since a finger has no hover hint. One line under them says what a missing price does to the
+ * cost, and only when one is missing. Then who did the work — the session's own agent, a
+ * subagent by the class it was launched with, an adviser — and under which organization.
  *
- * A kind or a cost nobody reported says so and is never a zero. A read that failed says that it
- * failed, because not knowing is not the same as there being nothing, and offers to read again.
+ * A cost nobody reported says so and is never a zero. A read that failed says that it failed,
+ * because not knowing is not the same as there being nothing, and offers to read again.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,17 +21,17 @@ import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useIns
 import {
   isEstimated,
   saysAnything,
-  tokensAnew,
   useUsageWords,
 } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
+import { whoWorked } from '@/widgets/work-item-inspector/utils/whoWorked.ts'
+import type { WhoWorked } from '@/widgets/work-item-inspector/utils/whoWorked.ts'
 
-import type { UsageRole, UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import ScreenLink from '@/shared/ui/ScreenLink.vue'
-import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
+import WhyWords from '@/shared/ui/WhyWords.vue'
 
 const { t } = useI18n()
-const { cost, count, figures: rowFigures, notes, span, time, tokenFigure } = useUsageWords()
+const { cost, explanations, figures: rowFigures, span, time, tokenFigure } = useUsageWords()
 const inspector = injectInspectorUsage()
 const read = inspector?.read
 const runs = inspector?.runs
@@ -58,11 +59,13 @@ const analytics = computed(() => {
 })
 
 const noData = computed(() => t('workItem.usage.noData'))
-const explained = computed(() => (usage.value ? notes(usage.value) : []))
+const explained = computed(() => (usage.value ? explanations(usage.value) : null))
 
+/** Each figure with its word and what it counts, its why; a figure with no data has none. */
 const figures = computed(() => {
   const shown = usage.value
-  if (!shown) return []
+  const why = explained.value
+  if (!shown || !why) return []
   const estimated = isEstimated(shown)
   const parallel = span(shown.elapsed_seconds) !== span(shown.agent_seconds)
   const incomplete = shown.unpriced_models.length > 0
@@ -70,7 +73,8 @@ const figures = computed(() => {
     {
       key: 'work',
       label: t('workItem.usage.work'),
-      value: time(shown.elapsed_seconds, estimated) || noData.value,
+      value: time(shown.elapsed_seconds, estimated),
+      why: [t('workItem.usage.lineMeaning'), ...why.work],
     },
     ...(parallel
       ? [
@@ -78,99 +82,48 @@ const figures = computed(() => {
             key: 'agents',
             label: t('workItem.usage.allAgents'),
             value: time(shown.agent_seconds, estimated),
+            why: why.agents,
           },
         ]
       : []),
     {
       key: 'cost',
       label: t('workItem.usage.cost'),
-      value: cost(shown.estimated_api_cost_usd, incomplete) || noData.value,
+      value: cost(shown.estimated_api_cost_usd, incomplete),
+      why: why.cost,
     },
     {
       key: 'tokens',
       label: t('workItem.usage.tokensLabel'),
-      value: tokenFigure(shown.tokens) || noData.value,
+      value: tokenFigure(shown.tokens),
+      why: [t('workItem.usage.processedNote')],
     },
-  ]
+  ].map((figure) => {
+    const value = figure.value || noData.value
+    return {
+      key: figure.key,
+      label: figure.label,
+      value,
+      words: `${figure.label} ${value}`,
+      why: figure.value ? figure.why.join(' ') || undefined : undefined,
+    }
+  })
 })
 
-const KINDS: readonly (keyof UsageTokens)[] = [
-  'input',
-  'cached_read',
-  'cache_write_5m',
-  'cache_write_1h',
-  'output',
-  'reasoning',
-]
-
-/** Each kind, then what was processed anew: the sum the card's line says. */
-const kinds = computed(() => {
-  const tokens = usage.value?.tokens
-  if (!tokens) return []
-  const anew = tokensAnew(tokens)
-  return [
-    ...KINDS.map((kind) => ({
-      key: kind,
-      label: t(`workItem.usage.kind.${kind}`),
-      value: tokens[kind] === null ? noData.value : count(tokens[kind]),
-      known: tokens[kind] !== null,
-      part: kind === 'reasoning',
-      total: false,
-      title: undefined as string | undefined,
-    })),
-    {
-      key: 'anew',
-      label: t('workItem.usage.processed'),
-      value: anew === null ? noData.value : count(anew),
-      known: anew !== null,
-      part: false,
-      total: true,
-      title: t('workItem.usage.processedNote'),
-    },
-  ]
-})
-
-/**
- * Who did the work: the role, then the class its run was launched with and its effort. An adviser
- * keeps the run's, so two advisers in different runs are two rows that say whose each was.
- */
-function roleName(line: UsageRole) {
+/** Who did the work: the role, then the class its run was launched with, or an adviser's run's. */
+function roleName(line: WhoWorked) {
   let launch = t('workItem.usage.classNone')
   if (line.launch_class.unknown) launch = t('workItem.usage.classUnknown')
   else if (line.launch_class.id !== null) launch = line.launch_class.id
-  const effort = line.effort.unknown
-    ? t('workItem.usage.effortUnknown')
-    : t('workItem.usage.effortName', { name: line.effort.id ?? '' })
-  return [t(`workItem.usage.role.${line.role}`), launch, effort].join(' · ')
+  return [t(`workItem.usage.role.${line.role}`), launch].join(' · ')
 }
 
-/**
- * The breakdowns in one shape, a name and its figures in the columns they share: by model, and by
- * who did the work, each in the order the read ranks it.
- */
-const breakdowns = computed(() =>
-  [
-    {
-      key: 'models',
-      label: t('workItem.usage.models'),
-      ids: true,
-      rows: (usage.value?.models ?? []).map((line, index) => ({
-        key: line.model ?? String(index),
-        name: line.model ?? t('workItem.usage.unknownModel'),
-        facts: rowFigures(line),
-      })),
-    },
-    {
-      key: 'roles',
-      label: t('workItem.usage.roles'),
-      ids: false,
-      rows: (usage.value?.roles ?? []).map((line, index) => ({
-        key: `${index}:${line.role}`,
-        name: roleName(line),
-        facts: rowFigures(line),
-      })),
-    },
-  ].filter((breakdown) => breakdown.rows.length),
+const who = computed(() =>
+  whoWorked(usage.value?.roles ?? []).map((line) => ({
+    key: `${line.role}:${line.launch_class.unknown ? '?' : (line.launch_class.id ?? '')}`,
+    name: roleName(line),
+    facts: rowFigures(line),
+  })),
 )
 </script>
 
@@ -181,64 +134,43 @@ const breakdowns = computed(() =>
     :aria-label="t('workItem.usage.work')"
   >
     <p class="work-usage-figures">
-      <span
+      <WhyWords
         v-for="figure in figures"
         :key="figure.key"
         class="work-usage-figure"
-        >{{ figure.label }} <span class="work-usage-value">{{ figure.value }}</span></span
+        :text="figure.words"
+        :why="figure.why"
+        >{{ figure.label }} <span class="work-usage-value">{{ figure.value }}</span></WhyWords
       >
     </p>
-    <ul class="work-usage-notes">
-      <li
-        v-for="note in explained"
-        :key="note"
-      >
-        {{ note }}
-      </li>
-    </ul>
-    <div class="work-usage-part">
-      <span class="work-usage-caption">{{ t('workItem.usage.tokensByKind') }}</span>
-      <ul
-        class="work-usage-grid"
-        :aria-label="t('workItem.usage.tokensByKind')"
-      >
-        <li
-          v-for="row in kinds"
-          :key="row.key"
-          v-tooltip.detail="row.title"
-          class="work-usage-row"
-          :class="{ 'is-part': row.part, 'is-total': row.total }"
-        >
-          <span class="work-usage-name">{{ row.label }}</span>
-          <span
-            class="work-usage-count"
-            :class="{ 'is-unknown': !row.known }"
-            >{{ row.value }}</span
-          >
-        </li>
-      </ul>
-    </div>
+    <ScreenLink
+      v-if="analytics"
+      class="work-usage-analytics"
+      :href="analytics.href"
+      >{{ analytics.words }}</ScreenLink
+    >
+    <p
+      v-if="explained?.unpriced"
+      class="work-usage-note"
+    >
+      {{ explained.unpriced }}
+    </p>
     <div
-      v-for="breakdown in breakdowns"
-      :key="breakdown.key"
+      v-if="who.length"
       class="work-usage-part"
     >
-      <span class="work-usage-caption">{{ breakdown.label }}</span>
+      <span class="work-usage-caption">{{ t('workItem.usage.roles') }}</span>
       <ul
-        class="work-usage-grid has-columns"
-        :aria-label="breakdown.label"
-        :data-breakdown="breakdown.key"
+        class="work-usage-grid"
+        data-breakdown="roles"
+        :aria-label="t('workItem.usage.roles')"
       >
         <li
-          v-for="row in breakdown.rows"
+          v-for="row in who"
           :key="row.key"
           class="work-usage-row"
         >
-          <span
-            class="work-usage-name work-usage-line"
-            :class="{ 'is-id': breakdown.ids }"
-            >{{ row.name }}</span
-          >
+          <span class="work-usage-name">{{ row.name }}</span>
           <UsageFacts
             class="work-usage-facts"
             :facts="row.facts"
@@ -257,12 +189,6 @@ const breakdowns = computed(() =>
         :estimated="isEstimated(usage)"
       />
     </div>
-    <ScreenLink
-      v-if="analytics"
-      class="work-usage-analytics"
-      :href="analytics.href"
-      >{{ analytics.words }}</ScreenLink
-    >
   </section>
   <p
     v-if="failed || runsFailed"
@@ -300,8 +226,6 @@ const breakdowns = computed(() =>
 }
 
 .work-usage-figure {
-  display: inline-flex;
-  gap: var(--space-1);
   white-space: nowrap;
 }
 
@@ -310,15 +234,16 @@ const breakdowns = computed(() =>
   font-weight: 500;
 }
 
-.work-usage-notes {
-  display: grid;
-  gap: var(--space-1);
-  padding: 0;
+/* The way to the same work on the Analytics page, as long as its words and no wider. */
+.work-usage-analytics {
+  justify-self: start;
+}
+
+.work-usage-note {
   margin: 0;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
   overflow-wrap: anywhere;
-  list-style: none;
 }
 
 .work-usage-part {
@@ -332,10 +257,11 @@ const breakdowns = computed(() =>
   font: var(--font-group-heading);
 }
 
-/* A name and its figure on one line, the figures at the end, where they compare down the list. */
+/* A name and its three figures: where the drawer has room the figures stand in columns at the
+   end, where they compare down the list, and otherwise on a line of their own under the name. */
 .work-usage-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
   gap: var(--space-half) var(--space-3);
   padding: 0;
   margin: 0;
@@ -343,10 +269,6 @@ const breakdowns = computed(() =>
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
   list-style: none;
-
-  &.has-columns {
-    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
-  }
 }
 
 .work-usage-row {
@@ -355,38 +277,12 @@ const breakdowns = computed(() =>
   grid-column: 1 / -1;
   align-items: baseline;
   min-width: 0;
-
-  &.is-total {
-    font-weight: 500;
-  }
 }
 
 .work-usage-name {
+  grid-column: 1 / -1;
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
-
-  /* What is already inside the row above it, set in under that row. */
-  .is-part & {
-    padding-inline-start: var(--space-3);
-  }
-}
-
-.work-usage-count {
-  text-align: end;
-  white-space: nowrap;
-
-  &.is-unknown {
-    color: var(--color-text-tertiary);
-  }
-}
-
-/* A model is named by its id, in the face ids take; who did the work, in words. */
-.work-usage-line {
-  grid-column: 1 / -1;
-
-  &.is-id {
-    font-family: var(--font-family-mono);
-  }
 }
 
 .work-usage-facts {
@@ -395,14 +291,9 @@ const breakdowns = computed(() =>
 }
 
 @container drawer (width >= 560px) {
-  .work-usage-line {
+  .work-usage-name {
     grid-column: 1;
   }
-}
-
-/* The way to the same work on the Analytics page, as long as its words and no wider. */
-.work-usage-analytics {
-  justify-self: start;
 }
 
 .work-usage-failed {
