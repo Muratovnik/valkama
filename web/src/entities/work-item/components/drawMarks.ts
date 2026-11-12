@@ -53,7 +53,6 @@ import { iconGlyph } from '@/shared/ui/iconGlyph.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import SessionSign from '@/shared/ui/SessionSign.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
-import type { TooltipKind } from '@/shared/ui/tooltipAnchors.ts'
 
 /** How a surface places one run. */
 export interface MarkRun {
@@ -85,19 +84,13 @@ export interface MarkRun {
 
 /** What a mark says on hover, and which kind of hint that is (`tooltipAnchors.ts`). */
 interface MarkHint {
-  kind: TooltipKind
+  kind: 'name' | 'clipped'
   text: string
-  /** A detail's element's own words, said whole first while they are cut. */
-  words?: string
 }
 
 /** The element with its hover text in the window's one tooltip, when it has one. */
 function hinted(node: VNode, hint: MarkHint | undefined): VNode {
   if (!hint) return node
-  if (hint.kind === 'detail')
-    return withDirectives(node, [
-      [vTooltip, { text: hint.text, words: hint.words }, undefined, { detail: true }],
-    ])
   if (hint.kind === 'clipped')
     return withDirectives(node, [[vTooltip, hint.text, undefined, { clipped: true }]])
   return withDirectives(node, [[vTooltip, hint.text, undefined, { name: true }]])
@@ -194,10 +187,9 @@ const isActive = (mark: FacetMark, run: MarkRun) =>
 /**
  * What a mark says on hover, never the words it shows: a glyph alone is named by its word
  * (or by what its press does), a word that is cut short of room, folds out of sight or stands
- * shortened says its whole words while it is cut, and what a value means — a priority's — is
- * said beside the word on screen, after the word itself while that is cut. A mark whose word
- * stands whole has nothing to say. A preview is the tooltip's own content, where words wrap
- * rather than end in an ellipsis, and brings no hover text of its own.
+ * shortened says its whole words while it is cut. A mark whose word stands whole has nothing
+ * to say. A preview is the tooltip's own content, where words wrap rather than end in an
+ * ellipsis, and brings no hover text of its own.
  *
  * `ownLine` is false for a word in a table cell, which the cell cuts rather than the word, so
  * the cell carries the hint.
@@ -211,15 +203,6 @@ function markHint(
   const name = filters ? run.words.filterName(mark.facet, isActive(mark, run), whole) : whole
   // A word on screen that its own line can end in an ellipsis.
   const cuttable = ownLine && !glyphOnly && run.surface !== 'preview'
-  if (mark.hint !== undefined && run.surface !== 'preview') {
-    const meaning = run.words.say(mark.hint)
-    return glyphOnly
-      ? {
-          kind: 'detail',
-          text: run.words.say({ key: 'priorityMeaning.hint', params: { priority: name, meaning } }),
-        }
-      : { kind: 'detail', text: meaning, words: cuttable ? whole : undefined }
-  }
   if (glyphOnly) return { kind: 'name', text: name }
   // A glyph whose word may fold out of sight tells the pointer its word once it has.
   const foldable = run.fold === true && mark.glyph !== null

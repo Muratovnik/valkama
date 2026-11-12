@@ -163,10 +163,6 @@ export function scanNativeTitles(sources, register = NATIVE_TITLES) {
 /** `file <tag> v-tooltip.detail="…"` or `file script [vTooltip, …]` → what it says that the screen does not. */
 export const DETAIL_TOOLTIPS = new Map([
   [
-    'entities/work-item/components/drawMarks.ts script [vTooltip, { text: hint.text, words: hint.words }, undefined, { detail: true }]',
-    'what a priority means; no surface prints it, and beside a glyph alone it says the priority too; while the word beside it is cut, the word comes first, whole',
-  ],
-  [
     `entities/work-item/components/WorkItemCopyButtons.vue <button> v-tooltip.detail="t('workItem.head.copyReferenceHint')"`,
     'that a press copies the number, which reads as a number and not as a control',
   ],

@@ -293,11 +293,6 @@ export interface FacetMark {
   tone: SemanticStatePair
   /** The facet's value: a kind, a priority, a category, `ready`/`waiting`, a label. */
   value: string
-  /**
-   * What the value means, which the hover says after the mark's name; absent
-   * where a value has no meaning to state.
-   */
-  hint?: FacetText
   /** The kind whose own colour this mark's glyph and word are drawn in. */
   ink?: WorkItemBrief['kind']
   /**
