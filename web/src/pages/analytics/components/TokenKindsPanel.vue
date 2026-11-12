@@ -63,9 +63,11 @@ const barWords = computed<RankedWords>(() => ({
   empty: t('analytics.bars.empty'),
 }))
 
+/** The chart's full name; its section heading is the short form of the same, as the sibling's is. */
 const multiplesTitle = computed(() =>
   t('analytics.kinds.multiples', { per: words.per(props.usage.period.step) }),
 )
+const multiplesHeading = computed(() => t(`analytics.kinds.heading.${props.usage.period.step}`))
 /**
  * A chart of each counted kind on one scale; the cache reads stand apart, by their figure alone,
  * since they would dwarf the rest. The reasoning is already drawn inside output.
@@ -139,7 +141,7 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
       </ChartSection>
       <ChartSection
         class="kinds-multiples"
-        :title="multiplesTitle"
+        :title="multiplesHeading"
         :narrow="narrow"
       >
         <template #chart>

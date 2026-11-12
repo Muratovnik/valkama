@@ -441,7 +441,7 @@ test('the tokens by kind are a panel whose counted kinds add up to the Â«TokensÂ
   await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
   await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
-  await expect(panel.locator('.kinds-multiples h2')).toHaveText('Tokens per day of each kind')
+  await expect(panel.locator('.kinds-multiples h2')).toHaveText('Per day, by kind')
   expect(await parts(page), 'parts that spill or overlap').toEqual([])
 
   // The address gives the section back.

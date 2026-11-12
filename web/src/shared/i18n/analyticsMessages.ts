@@ -176,6 +176,11 @@ export const analyticsMessages = {
         section: 'Token kinds',
         bars: 'Tokens by kind',
         multiples: 'Tokens {per} of each kind',
+        heading: {
+          day: 'Per day, by kind',
+          hour: 'Per hour, by kind',
+          minute: 'Per minute, by kind',
+        },
         table: 'Tokens by kind beside the period before',
         kind: 'Kind',
         total: 'Tokens',
@@ -357,6 +362,11 @@ export const analyticsMessages = {
         section: 'Виды токенов',
         bars: 'Токены по видам',
         multiples: 'Токены {per} у каждого вида',
+        heading: {
+          day: 'По дням, по видам',
+          hour: 'По часам, по видам',
+          minute: 'По минутам, по видам',
+        },
         table: 'Токены по видам рядом с прошлым периодом',
         kind: 'Вид',
         total: 'Токены',
