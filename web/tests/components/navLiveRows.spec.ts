@@ -204,6 +204,14 @@ describe('the hint a row shows', () => {
     expect(title && tooltipOf(title)).toMatchObject({ clipped: true, text: 'Work MAIN-1' })
   })
 
+  it('says a two-line row’s second line whole on its own hint, which says it only while cut', () => {
+    const { wrapper } = rail(states())
+    const detail = row(wrapper, 'MAIN-1').querySelector('.nav-row-detail')
+    const whole = detail?.textContent?.trim()
+    expect(whole).toBeTruthy()
+    expect(detail && tooltipOf(detail)).toMatchObject({ clipped: true, text: whole })
+  })
+
   it('says a one-line row’s state in Russian, which the row does not draw', () => {
     const waiting = liveSession(SESSION, {
       title: 'Compare two exports',
