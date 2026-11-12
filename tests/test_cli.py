@@ -237,6 +237,10 @@ class RoutingTests(CliTestCase):
             http["hooks"]["claude"]["MessageDisplay"],
         )
 
+    def test_capabilities_names_the_status_line_command_and_its_interface(self) -> None:
+        named = json.loads(self.invoke("capabilities"))["interfaces"]["statusline"]
+        self.assertEqual({"command": "statusline", "version": 1}, named)
+
     def test_runtime_prints_the_identity_a_new_server_would_expose(self) -> None:
         identity = json.loads(self.invoke("runtime"))
         self.assertIn("backend", identity)

@@ -42,7 +42,8 @@ checkouts are therefore distinguishable even at the same version.
   hook spool, and prints nothing of its own. A status line the user had is passed with
   `--previous=<base64>` and still shows: it runs with the same input through the same
   shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
-  working.
+  working. `valkama capabilities` names the command and its interface version under
+  `interfaces.statusline`, so whatever registers it can tell a release that has it.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

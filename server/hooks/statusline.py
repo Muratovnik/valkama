@@ -48,6 +48,9 @@ PREVIOUS_SECONDS = 10.0
 #: The longest previous command taken, decoded.
 MAX_PREVIOUS_BYTES = 64 * 1024
 PREVIOUS_OPTION = "--previous="
+#: The version of this command's interface, named by `valkama capabilities`: the command
+#: line, `--previous` and what it prints. Whatever registers the command reads it first.
+INTERFACE = 1
 
 #: What marks a spool line as a quota reading, and its version.
 SPOOL_KEY = "quota"
