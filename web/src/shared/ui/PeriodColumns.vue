@@ -6,8 +6,8 @@
  * is hatched and says so under its name, so a short last column does not read as a drop; a
  * change at the start of a period (the account switched) is a numbered line up the plot, and
  * the note under the chart says what changed. A period compared with this one (`before`) stands
- * on the same scale as a dashed outline over each column, an edge and not a hue, named in the
- * legend, and the readout says its figure in words. A series with no figure in a period
+ * on the same scale as a short mark at its height over each column, an edge and not a hue, named
+ * in the legend, and the readout says its figure in words. A series with no figure in a period
  * (`absent`, such as work with no price) draws nothing there, and the readout and the period's
  * name say so rather than a zero. A period whose figures are not in yet (`pending`) stands as a
  * hatched ground the plot's height, never a column of zero, and the readout and its name say it
@@ -71,7 +71,7 @@ const emit = defineEmits<{ select: [selection: PeriodSelection] }>()
 
 const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
 const chart = computed(() => stackColumns(props.columns, props.series, props.marks, axis.value))
-/** The name of the outline of a period compared with, where the chart draws one. */
+/** The name of the mark of a period compared with, where the chart draws one. */
 const outline = computed(() =>
   props.columns.some((column) => column.before) ? props.words.before : undefined,
 )
@@ -160,10 +160,10 @@ function segmentAttrs(one: StackedColumn, index: number, at: number) {
   }
 }
 
-/** A figure's height on the chart's scale: a stack's total, or the outline of the period before. */
+/** A figure on the chart's scale: a stack's height, or the level a line stands at. */
 const heightOf = (figure: number) => ({ blockSize: `${(figure / chart.value.top) * 100}%` })
+const levelOf = (figure: number) => ({ insetBlockEnd: `${(figure / chart.value.top) * 100}%` })
 const gridClass = (tick: number) => ({ 'period-baseline': tick === 0 })
-const gridStyle = (tick: number) => ({ insetBlockEnd: `${(tick / chart.value.top) * 100}%` })
 
 /** Whether a press acts on what it lands on: a period (`at` null), or a segment of one. */
 const acts = (at: number | null) => (at === null ? props.actionable === 'column' : bySegment.value)
@@ -256,7 +256,7 @@ function key(event: KeyboardEvent, at: number | null) {
               class="period-grid"
               aria-hidden="true"
               :class="gridClass(tick)"
-              :style="gridStyle(tick)"
+              :style="levelOf(tick)"
             />
             <div class="period-bars">
               <div
@@ -313,7 +313,7 @@ function key(event: KeyboardEvent, at: number | null) {
                   v-if="one.column.before"
                   class="period-before"
                   aria-hidden="true"
-                  :style="heightOf(one.column.before ?? 0)"
+                  :style="levelOf(one.column.before ?? 0)"
                 />
                 <span
                   v-if="one.marks.length"

@@ -11,7 +11,7 @@ import type { Page } from '@playwright/test'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
-const WIDTHS = [1440, 1024, 390] as const
+const WIDTHS = [1920, 1440, 1024, 390] as const
 
 /** `--size-control-inline`: the least width of a period's column that acts, in pixels. */
 const ACTING_COLUMN = 28
@@ -129,6 +129,29 @@ function measure(page: Page) {
           (element) => element.getBoundingClientRect().width,
         ),
       },
+      // Each chart of periods: what its frame has to scroll up and down, and each name on its
+      // time axis against the middle of the column it names and the ends of its plot.
+      plots: [days, hours].map((chart) => {
+        const frame = chart.querySelector('.period-frame')
+        const plotField = chart.querySelector('.period-field')
+        const middles = new Map(
+          [...chart.querySelectorAll<HTMLElement>('.period-slot')].map((slot) => {
+            const { left, right } = slot.getBoundingClientRect()
+            return [slot.dataset.key, (left + right) / 2]
+          }),
+        )
+        return {
+          rise: (frame?.scrollHeight ?? 0) - (frame?.clientHeight ?? 0),
+          field: box(plotField ?? chart),
+          names: [...chart.querySelectorAll<HTMLElement>('.period-axis .chart-tick')].map(
+            (tick) => ({
+              ...box(tick),
+              key: tick.dataset.key,
+              column: middles.get(tick.dataset.key),
+            }),
+          ),
+        }
+      }),
       tables: all('[data-harness$="-table"] table').map((table) => ({
         frame: box(table.parentElement ?? table),
         table: box(table),
@@ -201,6 +224,28 @@ for (const width of WIDTHS) {
     for (const stack of seen.days.stacks) {
       expect(stack.bottom).toBeCloseTo(seen.days.field.bottom, 0)
       expect(stack.top).toBeGreaterThanOrEqual(seen.days.field.top - HALF_PIXEL)
+    }
+
+    // A chart of periods has nothing to scroll up and down, and names each period under the
+    // middle of its column, moved off it only by what would hang past an end of the plot.
+    for (const [index, plot] of seen.plots.entries()) {
+      expect(plot.rise, `chart ${index} scrolls up and down`).toBeLessThanOrEqual(0)
+      for (const name of plot.names) {
+        const middle = name.column ?? Number.NaN
+        expect(name.left, `${name.key} past the plot`).toBeGreaterThanOrEqual(
+          plot.field.left - HALF_PIXEL,
+        )
+        expect(name.right, `${name.key} past the plot`).toBeLessThanOrEqual(
+          plot.field.right + HALF_PIXEL,
+        )
+        // The middle of its column, kept inside the plot by half the name's width.
+        const half = (name.right - name.left) / 2
+        const held = Math.min(Math.max(middle, plot.field.left + half), plot.field.right - half)
+        expect(
+          Math.abs((name.left + name.right) / 2 - held),
+          `${name.key} off its column`,
+        ).toBeLessThanOrEqual(1)
+      }
     }
 
     // A table wider than its column scrolls inside its own frame instead of the page.

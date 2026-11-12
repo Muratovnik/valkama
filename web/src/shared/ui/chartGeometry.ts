@@ -140,8 +140,9 @@ export interface PeriodColumn {
    */
   action?: string
   /**
-   * What the period it is compared with held at this place, drawn as a dashed outline on the same
-   * scale; null where that period has no figure, and undefined where nothing is compared.
+   * What the period it is compared with held at this place, drawn as a short mark at that height
+   * on the same scale; null where that period has no figure, and undefined where nothing is
+   * compared.
    */
   before?: number | null
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
@@ -287,7 +288,7 @@ export function stackColumns(
     const absent = series.filter((one) => column.absent?.includes(one.key))
     return { column, total: reached, segments, marks: notes, absent }
   })
-  // The period compared with stands on the same scale, so its outline is never cut off.
+  // The period compared with stands on the same scale, so its mark is never cut off.
   const before = columns.map((column) => drawable(column.before ?? 0))
   const steps = axis(Math.max(0, ...stacked.map((one) => one.total), ...before))
   const ticks = steps.map((step) => step.value)
@@ -331,7 +332,10 @@ export function labelledColumns(count: number, width: number): number[] {
 
 /** A label set along one edge of a plot, at a share of its length. */
 export interface PlacedTick {
-  /** Which point of the label stands there; the first and the last keep inside the edge. */
+  /**
+   * Which point of the label stands there. Wherever it stands, a label along an edge keeps inside
+   * it, moved in by no more than it would hang past (`ChartTicks`).
+   */
   edge: 'end' | 'middle' | 'start'
   key: number | string
   /** Where along the edge, from 0 at its start (or the baseline) to 1 at its end. */
@@ -339,12 +343,6 @@ export interface PlacedTick {
   text: string
   /** A second line under the first: "so far" under a period still running. */
   note?: string
-}
-
-function edgeOf(index: number, count: number): PlacedTick['edge'] {
-  if (index === 0) return 'start'
-  if (index === count - 1) return 'end'
-  return 'middle'
 }
 
 /** The narrowest a period's column is drawn, and the widest it grows where its period has room. */
@@ -361,7 +359,11 @@ export function columnWidth(count: number, width: number): number {
   return Math.min(COLUMN.most, Math.max(COLUMN.least, half))
 }
 
-/** The time axis: each period it has room to name under its column, and any still running. */
+/**
+ * The time axis: each period it has room to name under the middle of its column, and any still
+ * running; the first and the last too, which the axis moves in only as far as their names would
+ * hang past the plot.
+ */
 export function dayTicks(
   columns: readonly PeriodColumn[],
   width: number,
@@ -375,10 +377,9 @@ export function dayTicks(
     .flatMap((index) => {
       const column = columns[index]
       if (!column) return []
-      const edge = edgeOf(index, count)
-      const offset = { start: 0, end: 1, middle: (index + 0.5) / count }[edge]
       const note = column.incomplete ? { note: incomplete } : {}
-      return [{ key: column.key, text: column.label, offset, edge, ...note }]
+      const offset = (index + 0.5) / count
+      return [{ key: column.key, text: column.label, offset, edge: 'middle' as const, ...note }]
     })
 }
 
