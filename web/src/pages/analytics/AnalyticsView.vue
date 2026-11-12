@@ -64,6 +64,8 @@ import type { AnalyticsSection, AnalyticsView } from '@/shared/api/analyticsAddr
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
+import { focusOnNothing } from '@/shared/lib/focusRight.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -194,6 +196,43 @@ function chooseSection(by: AnalyticsSection) {
   else if (by !== view.value.by) change({ by }, 'push')
 }
 
+/** The panel that shows the section on show, which a section opened from a card takes focus to. */
+const panelBox = ref<HTMLElement | null>(null)
+
+/** The overview card whose heading opened the section on show, given focus back on return. */
+let openedFrom: UsageDimension | null = null
+
+/**
+ * A section opened from a card's heading. The heading goes with the overview, and the focus with
+ * it to the page, so beside the rail it moves to the section's panel, which the section names; in
+ * place of the list it moves to the way back, as any section chosen there does.
+ */
+function openFromCard(dimension: UsageDimension) {
+  openedFrom = dimension
+  chooseSection(dimension)
+  if (!narrowScreen.value) moveFocus(panelBox.value)
+}
+
+/**
+ * Back on the overview the focus returns to the heading of the card that opened the section,
+ * once it is drawn, unless the reader has taken it out of the panel since: to a tile of the rail,
+ * say, which the overview was chosen from.
+ */
+watch(
+  [overview, () => read.state.value],
+  () => {
+    const card = openedFrom
+    if (!overview.value || !card) return
+    const heading = panelBox.value?.querySelector<HTMLElement>(
+      `[data-card="${card}"] .overview-top-open`,
+    )
+    if (!heading) return
+    openedFrom = null
+    if (focusOnNothing() || panelBox.value?.contains(document.activeElement)) heading.focus()
+  },
+  { flush: 'post' },
+)
+
 /**
  * Where focus goes as the list and a section take turns: the way back, or the section left. Only
  * a move between them does that; the page found too narrow on opening or on a resize moves none.
@@ -310,7 +349,9 @@ const emptyDescription = computed(() => {
       />
       <section
         v-show="showsPanel"
+        ref="panelBox"
         class="analytics-panel"
+        tabindex="-1"
         :class="{ 'analytics-panel-held': holdsSection }"
         :style="panelPadding"
         :aria-label="sectionName"
@@ -356,7 +397,7 @@ const emptyDescription = computed(() => {
               @update:measure="(measure) => change({ measure }, 'replace')"
               @narrow="narrow"
               @day="narrowToDay"
-              @open="chooseSection"
+              @open="openFromCard"
               @retry="read.retry"
             />
             <TokenKindsPanel
@@ -445,6 +486,12 @@ const emptyDescription = computed(() => {
   padding: var(--space-3) var(--size-page-gutter) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
+
+  /* Focus taken to the section after a key rings the panel inside its edge, which the window
+     and the rail would cut outside it. */
+  &:focus-visible {
+    outline-offset: calc(-1 * (var(--size-focus-ring) + 2px));
+  }
 }
 
 /* A dimension's section stands in the panel's whole height and scrolls its own parts, so the

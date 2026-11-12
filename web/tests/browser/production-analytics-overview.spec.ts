@@ -9,7 +9,7 @@
  * it measured.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
@@ -221,6 +221,60 @@ test('a card’s heading opens its section, and a row narrows the view as a bar 
     'href',
     /MAIN-1/u,
   )
+})
+
+/** What holds focus: its tag, its name, whether its ring is drawn, and where it stands. */
+const focused = (page: Page) =>
+  page.evaluate(() => {
+    const active = document.activeElement
+    return {
+      tag: active?.tagName,
+      name: active?.getAttribute('aria-label') ?? active?.textContent?.trim(),
+      ringed: active?.matches(':focus-visible') ?? false,
+      panel: active?.matches('.analytics-panel') ?? false,
+      card: active?.closest<HTMLElement>('[data-card]')?.dataset.card ?? null,
+    }
+  })
+
+/** A card's heading pressed by the pointer or by a key. */
+const OPEN_BY = {
+  click: (heading: Locator) => heading.click(),
+  Enter: (heading: Locator) => heading.press('Enter'),
+}
+
+for (const key of ['click', 'Enter'] as const)
+  test(`a card’s heading opened by ${key} takes focus to the section, and Back brings it to the heading`, async ({
+    page,
+  }, info) => {
+    await serve(page, WORLD)
+    const panel = await openOverview(page, 1440, 900)
+    const heading = panel.locator('[data-card="model"]').getByRole('button', { name: 'Models' })
+    await OPEN_BY[key](heading)
+    await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
+    await expect(panel.locator('.dimension-panel')).toBeVisible()
+    const opened = await focused(page)
+    await page.goBack()
+    await expect(panel.locator('[data-card="model"]')).toBeVisible()
+    const back = await focused(page)
+    await record(info, `card-focus ${key}`, { opened, back })
+    // The section's panel, named as the rail names the section, ringed only after a key.
+    expect(opened).toEqual({
+      tag: 'SECTION',
+      name: 'Model',
+      ringed: key === 'Enter',
+      panel: true,
+      card: null,
+    })
+    expect(back).toMatchObject({ tag: 'BUTTON', name: 'Models', card: 'model' })
+  })
+
+test('a section chosen on the rail keeps the focus on its tile', async ({ page }) => {
+  await serve(page, WORLD)
+  await openOverview(page, 1440, 900)
+  const tile = page.locator('.analytics-rail [data-section="model"]')
+  await tile.click()
+  await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
+  await expect(tile).toBeFocused()
 })
 
 test('a single day stands as its hours beside the day before', async ({ page }, info) => {

@@ -5,7 +5,8 @@
  * figures stay on show (`useReadStanding`); the words go when an answer replaces them. Nothing is
  * drawn while every read stands, so the bar keeps its line until there is news. On a phone, where
  * the bar says its age and its refresh by sign alone, the words are left to the status a screen
- * reader hears, and the disc and the retry stand.
+ * reader hears, and the disc and the retry stand; so too on a line that has nothing else left to
+ * give up for them (`brief`).
  */
 import { useI18n } from 'vue-i18n'
 
@@ -13,6 +14,10 @@ import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.t
 
 import VButton from '@/shared/ui/VButton.vue'
 
+defineProps<{
+  /** The bar's line has no room for the words: the disc and the retry say it, as on a phone. */
+  brief?: boolean
+}>()
 /** Read the view again. */
 const emit = defineEmits<{ retry: [] }>()
 
@@ -30,7 +35,11 @@ const { failed } = usePageStanding()
       class="refresh-failed-mark"
       aria-hidden="true"
     />
-    <span class="refresh-failed-words">{{ t('analytics.frame.refreshFailed') }} · </span>
+    <span
+      class="refresh-failed-words"
+      :class="{ 'visually-hidden': brief }"
+      >{{ t('analytics.frame.refreshFailed') }} ·
+    </span>
     <VButton
       class="refresh-failed-retry"
       variant="text"
@@ -44,7 +53,8 @@ const { failed } = usePageStanding()
 
 <style scoped>
 /* A danger disc and words, as a failure is marked in the product, on one line that gives way to
-   nothing beside it. */
+   nothing beside it: the bar's line makes room for it by giving up its other parts
+   (`useBarRoom`). */
 .refresh-failed {
   position: relative;
   display: flex;
