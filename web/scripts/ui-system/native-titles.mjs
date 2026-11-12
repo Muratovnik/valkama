@@ -248,7 +248,7 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',
-    'the whole row in a sentence: what its state means, which its second line says in a word and a row on one line not at all, how long, and its epic or folder whole',
+    'the epic or folder, the state with how long and the agents, in short lines under the title: the row’s second line says the state in a word, and the count of agents is a figure; while its title is cut, the title comes first, whole',
   ],
   [
     `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,
