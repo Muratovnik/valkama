@@ -151,7 +151,7 @@ describe('the tiles', () => {
     expect(tokens.text).toContain('Cache reads, not counted: 12M')
     const ru = tile(mountTiles(NOW, NOW, 'time', 'ru'), 'tokens')
     expect(ru.text).toContain(
-      'Обработано заново: ввод 600 тыс., вывод 360 тыс., запись в кэш 240 тыс.',
+      'Обработано заново: вход 600 тыс., выход 360 тыс., запись в кэш 240 тыс.',
     )
     expect(ru.text).toContain('Чтение из кэша, не учтено: 12 млн')
   })

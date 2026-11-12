@@ -64,3 +64,40 @@ describe('a period', () => {
     expect(english.split(' ')[0]).toMatch(/–$/u)
   })
 })
+
+describe('a day in a sentence', () => {
+  // A day said in a sentence: Wednesday, 11 November, at the read's own offset.
+  const WEDNESDAY = '2026-11-11T00:00:00+03:00'
+
+  it('is its date first in Russian, so «за» takes no weekday in the nominative', () => {
+    expect(wordsIn('ru').fullDay(WEDNESDAY)).toBe('11 ноября, ср')
+  })
+
+  it('reads in full in English', () => {
+    expect(wordsIn('en').fullDay(WEDNESDAY)).toBe('Wednesday, November 11')
+  })
+
+  it('leaves the readout and the table their day in full', () => {
+    expect(wordsIn('ru').stepName(WEDNESDAY, 'day').fullLabel).toBe('среда, 11 ноября')
+  })
+})
+
+describe('a share of the whole', () => {
+  for (const [locale, space] of [
+    ['en', ''],
+    ['ru', NBSP],
+  ] as const)
+    it(`says «100 %» for all of it only, and «0 %» for none only (${locale})`, () => {
+      const words = wordsIn(locale)
+      const said = (ratio: number) => words.share(ratio)
+      expect(said(1)).toBe(`100${space}%`)
+      // A share just short of the whole must not read «100 %».
+      expect(said(0.997)).toBe(`>99${space}%`)
+      expect(said(0.995)).toBe(`>99${space}%`)
+      expect(said(0.994)).toBe(`99${space}%`)
+      expect(said(0.5)).toBe(`50${space}%`)
+      expect(said(0.005)).toBe(`1${space}%`)
+      expect(said(0.003)).toBe(`<1${space}%`)
+      expect(said(0)).toBe(`0${space}%`)
+    })
+})

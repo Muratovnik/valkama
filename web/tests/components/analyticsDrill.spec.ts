@@ -157,7 +157,7 @@ describe('a value pressed on the Analytics page', () => {
     const host = await mountPage({ by: 'model' })
     const days = host.findAll('.spending-days button.period-column')
     expect(days).toHaveLength(3)
-    expect(days[1]?.attributes('aria-label')).toMatch(/^Show the tasks of .*10/u)
+    expect(days[1]?.attributes('aria-label')).toBe('Show the tasks of Tuesday, November 10')
 
     await days[1]?.trigger('click')
     expect(written(host)).toEqual([
@@ -171,6 +171,18 @@ describe('a value pressed on the Analytics page', () => {
     await openFirstTask(host)
     expect(opened).toEqual(['MAIN-1'])
     expect(taskOpenings()).toBe(1)
+  })
+
+  it('names a day of the chart in Russian by its date, so «за» takes no weekday', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const host = await mountPage({ by: 'model' }, 'ru')
+    const days = host.findAll('.spending-days button.period-column')
+    // Named by its weekday, a day would read «Показать задачи за среда».
+    expect(days.map((day) => day.attributes('aria-label'))).toEqual([
+      'Показать задачи за 9 ноября, пн',
+      'Показать задачи за 10 ноября, вт',
+      'Показать задачи за 11 ноября, ср',
+    ])
   })
 
   it('narrows the view to a day pressed on its coloured stack, not on the column around it', async () => {

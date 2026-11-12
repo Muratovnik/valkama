@@ -229,7 +229,7 @@ test('what changed names the tasks that moved most, in the measure’s own units
     /^\+\s2\sh$/u,
     /^\+\s2\sh$/u,
   ])
-  await expect(up.nth(2).locator('.overview-changes-note')).toHaveText('nothing before')
+  await expect(up.nth(2).locator('.overview-changes-note')).toHaveText('Nothing before')
   await expect(down.locator('.overview-changes-name')).toHaveText(['No task', /^MAIN-1 /u])
   await expect(down.locator('.overview-changes-amount')).toHaveText([/^−\s4\sh$/u, /^−\s4\sh$/u])
   // A task is a link to its card; work on no task leads nowhere.
