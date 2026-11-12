@@ -70,7 +70,7 @@ describe('period columns that open nothing', () => {
       'May 1: total 3 h; ci 2 h, work 1 h',
       'May 2: total 0 h',
       'May 3: total 3 h; work 3 h. Switched to work',
-      'May 4: total 1 h; ci 1 h. so far',
+      'May 4: total 1 h so far; ci 1 h',
     ])
     expect(chart.findAll('button')).toHaveLength(0)
     expect(chart.findAll('[tabindex]')).toHaveLength(0)
@@ -119,7 +119,7 @@ describe('period columns that open nothing', () => {
     const chart = mountColumns()
 
     const lines = () => chart.findAll('.period-readout > span').map((line) => line.text())
-    expect(lines()).toEqual(['May 4: total 1 h. so far', 'ci 1 h'])
+    expect(lines()).toEqual(['May 4: total 1 h so far', 'ci 1 h'])
     await chart.get('[data-key="d1"]').trigger('pointerenter')
     expect(lines()).toEqual(['May 1: total 3 h', 'ci 2 h, work 1 h'])
   })
@@ -133,7 +133,7 @@ describe('period columns that open nothing', () => {
     await readout.trigger('pointerenter')
     expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
     await readout.trigger('pointerleave')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far; ci 1 h')
   })
 
   // The browser spec measures that nothing moves; this holds the means: lines cut with an
@@ -144,11 +144,11 @@ describe('period columns that open nothing', () => {
 
     for (const line of readout.findAll('span')) expect(line.classes()).toContain('one-line')
     expect(readout.attributes('data-tooltip-kind')).toBe('clipped')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far; ci 1 h')
     await chart.get('[data-key="d1"]').trigger('pointerenter')
     expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
     await chart.get('[data-key="d1"]').trigger('pointerleave')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far; ci 1 h')
 
     const note = chart.get('.period-note-text')
     expect(note.classes()).toContain('one-line')

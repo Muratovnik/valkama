@@ -4,22 +4,24 @@
  * of the dimension and «other» for the rest; work with no value there and unknown work stack
  * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
  * «so far», so its short column does not read as a fall; a numbered line stands where the known
- * accounts that worked changed from the last day a known account worked, with what changed under
- * the chart (`accountChanges`): work whose organization nobody recorded is no account and marks
- * nothing. The marks are the ones read with the answer shown, and a read of the accounts that
+ * accounts with a figure in the measure shown changed from the last day a known account had one,
+ * with what changed under the chart (`accountChanges`): work whose organization nobody recorded
+ * is no account and marks nothing. The marks are the ones read with the answer shown, and a read of the accounts that
  * failed says the marks are not there rather than leaving them out without a word.
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
- * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
+ * and breaks it down by task: it goes out as `day`, with the day as a custom period names it. The
+ * axis names a day by its weekday, «27 Tue», and the first day it names and the first of each
+ * later month by the date with its month, «Oct 27» (`dayTicks`); the table names each in full.
  *
  * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
  * each named by its clock time. A minute after the newest record read has no data yet, which it
  * shows and says rather than a zero, and a note under the minutes says their figures are an
  * estimate: each stretch of work shared out by its time in each. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
- * dashed outline on the same scale, named in the legend and said in the readout and the table;
- * while those steps are read there is no outline, and when they could not be read a note under
- * the chart says so. A `brief` chart, standing beside the titles of its tasks, names
+ * short mark at its height on the same scale, named in the legend and said in the readout and the
+ * table; while those steps are read there is no mark, and when they could not be read a note
+ * under the chart says so. A `brief` chart, standing beside the titles of its tasks, names
  * each task by its number alone.
  */
 import { computed } from 'vue'
@@ -31,7 +33,7 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
-import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
+import { dayOf, named } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -49,7 +51,7 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
-  /** The steps of the period before, to outline behind each column; none outlined without. */
+  /** The steps of the period before, to mark over each column; none marked without. */
   before?: BeforeSteps | null
   /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
   brief?: boolean
@@ -59,7 +61,7 @@ const props = defineProps<{
 /** A day pressed to narrow the view to it: `2030-03-04`, and its name in full. */
 const emit = defineEmits<{ day: [day: string, label: string] }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const words = useSpendingWords()
 
 /** How the period is cut: by days, which narrow the view, or by hours or minutes, which do not. */
@@ -67,6 +69,16 @@ const step = computed(() => props.usage.period.step)
 const byDay = computed(() => step.value === 'day')
 
 const title = computed(() => words.stepChartTitle(props.measure, props.by, step.value))
+
+/** A day by its date and month, «Oct 27», and the month it is in, for the time axis. */
+function dated(start: string) {
+  const format = new Intl.DateTimeFormat(locale.value, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+  return { dated: { label: format.format(named(start)), month: dayOf(start).slice(0, 7) } }
+}
 
 /** The steps of the period before, when they were read. */
 const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
@@ -96,14 +108,17 @@ const chart = computed<PeriodChartProps>(() => ({
     ...words.stepName(column.key, step.value),
     ...beforeOf(index),
     ...(byDay.value
-      ? { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }
+      ? {
+          action: t('analytics.drill.day', { day: words.fullDay(column.key) }),
+          ...dated(column.key),
+        }
       : {}),
   })),
   // An hour or a minute narrows to the day it is already of, so only a day acts.
   actionable: byDay.value ? 'column' : null,
   marks:
     typeof props.accounts === 'object'
-      ? accountChanges(props.accounts).map((change) => ({
+      ? accountChanges(props.accounts, props.measure).map((change) => ({
           at: change.at,
           label: words.accounts(change.before, change.after),
         }))

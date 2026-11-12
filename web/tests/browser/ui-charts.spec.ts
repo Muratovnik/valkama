@@ -13,9 +13,7 @@ import { test } from './test.ts'
 
 const WIDTHS = [1920, 1440, 1024, 390] as const
 
-/** `--size-control-inline`: the least width of a period's column that acts, in pixels. */
-const ACTING_COLUMN = 28
-/** The smallest target a pointer is asked to hit, in pixels. */
+/** The smallest target a pointer is asked to hit, WCAG 2.5.8's, in pixels (`--period-reach`). */
 const SMALLEST_TARGET = 24
 
 interface Box {
@@ -251,11 +249,11 @@ for (const width of WIDTHS) {
     // A table wider than its column scrolls inside its own frame instead of the page.
     for (const table of seen.tables) expect(table.frame.right).toBeLessThanOrEqual(seen.viewport)
     // A period that acts keeps a width a pointer can hit, however many the chart holds: its
-    // column the width of an inline action, and a segment the stack drawn inside that column,
-    // which is the smallest target the product allows.
+    // column, and a segment the stack drawn inside that column, at least the smallest target the
+    // product allows.
     const narrowest = (widths: number[]) => Math.round(Math.min(...widths) * 10) / 10
     expect(narrowest(seen.pressed.columns), 'the narrowest pressed column').toBeGreaterThanOrEqual(
-      ACTING_COLUMN,
+      SMALLEST_TARGET,
     )
     expect(
       narrowest(seen.pressed.segments),

@@ -195,7 +195,7 @@ describe('the days', () => {
   })
 
   it('mark where the accounts that worked change, past a day nobody worked', () => {
-    expect(accountChanges(byAccount()).map((change) => change.at)).toEqual([
+    expect(accountChanges(byAccount(), 'time').map((change) => change.at)).toEqual([
       momentAt(new Date(2026, 10, 12)),
       momentAt(new Date(2026, 10, 13)),
     ])
@@ -222,6 +222,29 @@ describe('the days', () => {
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
     expect(notes).toEqual(['', '', '', 'Accounts: acc-a → acc-b', 'Accounts: acc-b → acc-a, acc-b'])
+  })
+
+  it('name the month on the axis at its first day and where a new month starts', () => {
+    // 27 October to 2 November; unmeasured, the axis names the first day and the last.
+    const usage = usageAnswer({
+      first: new Date(2026, 9, 27),
+      days: 7,
+      groupBy: ['work_item'],
+      stretches: [{ day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600 } }],
+    }).usage
+    const names = (locale: 'en' | 'ru') =>
+      mountDays(usage, { readAt: AFTER }, locale)
+        .findAll('.period-axis .chart-tick')
+        .map((tick) => tick.text())
+    expect(names('en')).toEqual(['Oct 27', 'Nov 2'])
+    expect(names('ru')).toEqual(['27 окт.', '2 нояб.'])
+    // The table names every day in full, its month included.
+    const rows = mountDays(usage, { readAt: AFTER, narrow: true })
+      .getComponent(PeriodColumnsTable)
+      .findAll('tbody th')
+      .map((name) => name.text())
+    expect(rows[0]).toBe('Tuesday, October 27')
+    expect(rows[5]).toBe('Sunday, November 1')
   })
 
   it('say the same in Russian', () => {
@@ -252,7 +275,7 @@ function daysOf(...days: readonly (readonly string[])[]): Usage {
 
 /** The days a change stands on, by their index, with the known accounts before and after. */
 const changesOf = (byAccount: Usage) =>
-  accountChanges(byAccount).map((change) => ({
+  accountChanges(byAccount, 'time').map((change) => ({
     day: byAccount.series.findIndex((point) => point.start === change.at),
     before: change.before.map((account) => account.id),
     after: change.after.map((account) => account.id),
@@ -285,6 +308,35 @@ describe('the account marks', () => {
     expect(changesOf(daysOf(['acc-a'], [UNRECORDED], ['acc-b']))).toEqual([
       { day: 2, before: ['acc-a'], after: ['acc-b'] },
     ])
+  })
+
+  it('mark the accounts with a figure above zero in the measure shown, and only those', () => {
+    // acc-b joins on the second day with an hour of work, no token counted and no price.
+    const usage = usageAnswer({
+      first: MONDAY,
+      days: 2,
+      groupBy: ['account'],
+      stretches: [
+        {
+          day: 0,
+          group: { account: value('acc-a') },
+          spend: { seconds: 3600, tokens: 9, cost: 1 },
+        },
+        {
+          day: 1,
+          group: { account: value('acc-a') },
+          spend: { seconds: 3600, tokens: 9, cost: 1 },
+        },
+        { day: 1, group: { account: value('acc-b') }, spend: { seconds: 3600, unpriced: 5 } },
+      ],
+    }).usage
+    const at = (measure: Measure) => accountChanges(usage, measure).map((change) => change.at)
+    expect(at('time')).toEqual([usage.series[1]?.start])
+    expect(at('tokens')).toEqual([])
+    expect(at('cost')).toEqual([])
+    // The chart reads the marks in the measure it draws.
+    const days = mountDays(everyDay(2), { accounts: usage, measure: 'cost', readAt: AFTER })
+    expect(days.findAll('.period-mark')).toHaveLength(0)
   })
 
   it('mark a change where a known account joins', () => {
@@ -382,7 +434,7 @@ describe('the days across the spring change of time', () => {
       'Monday, March 30',
     ])
     const axis = mountDays(acrossTheChange(), { readAt }).get('.period-axis').text()
-    expect(axis).toContain('27 Fri')
+    expect(axis).toContain('Mar 27')
     expect(axis).toContain('30 Mon')
   })
 })

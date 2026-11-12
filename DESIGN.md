@@ -890,17 +890,22 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   at a period's start, such as the account the work ran under, is a numbered line up the
   plot with its words under the chart. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own. A period that acts when pressed is never
-  narrower than an inline action (`--size-control-inline`, 28px): a span that takes more room
-  than the chart scrolls sideways inside the plot and never moves the page, opens on its
-  last periods, keeps the value axis in view over the plot's start, and brings a period the
-  keyboard reaches clear of that axis with its focus ring whole. Periods that only show
+  narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
+  all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
+  beside the rail by a few pixels. A span that takes more room than the chart scrolls sideways
+  inside the plot and never moves the page, opens on its first periods, fades out toward an
+  edge past which periods are hidden (a mask, which paints no colour and drops while the
+  keyboard stands in the plot), keeps the value axis in view over the plot's start, and brings
+  a period the keyboard reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
   one shown stands on the same scale as a short line at its height over each column, an edge
   and not a hue, so a period before that was larger never outweighs the columns shown: the
   legend names it beside the same short line, the readout says its figure beside the sum, and
   the table gives it a column after the sum. The time axis names each period under the middle
   of its column, the first and the last too, moved in only as far as a name would hang past the
-  plot; the plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
+  plot. A day is named by its weekday, and the first name the axis prints and the first it prints
+  of each later month by the date with the month, «Oct 27», «Nov 1», so a span across months
+  says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
   an hour only shows. Where a ranked chart shares a row with others, as a card of first values
   does, it is `dense`: the name and the value on one line and a thin bar under them, each value
   as wide as its own figure and its name taking the rest of the row.

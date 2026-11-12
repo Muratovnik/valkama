@@ -145,6 +145,13 @@ export interface PeriodColumn {
    * compared.
    */
   before?: number | null
+  /**
+   * The period's short name with its month, «Oct 27», and which month that is: the time axis
+   * prints it instead of `label` under the first period it names and under the first it names of
+   * each later month, so a span across months says which. None where a name needs no month, as
+   * an hour's.
+   */
+  dated?: { label: string; month: string }
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
@@ -362,7 +369,8 @@ export function columnWidth(count: number, width: number): number {
 /**
  * The time axis: each period it has room to name under the middle of its column, and any still
  * running; the first and the last too, which the axis moves in only as far as their names would
- * hang past the plot.
+ * hang past the plot. The first name printed, and the first printed of each later month, carry
+ * their month (`PeriodColumn.dated`).
  */
 export function dayTicks(
   columns: readonly PeriodColumn[],
@@ -372,14 +380,18 @@ export function dayTicks(
   const count = columns.length
   const named = new Set(labelledColumns(count, width))
   for (const [index, column] of columns.entries()) if (column.incomplete) named.add(index)
+  let month: string | undefined
   return [...named]
     .sort((left, right) => left - right)
     .flatMap((index) => {
       const column = columns[index]
       if (!column) return []
+      const { dated } = column
+      const text = dated && dated.month !== month ? dated.label : column.label
+      month = dated?.month
       const note = column.incomplete ? { note: incomplete } : {}
       const offset = (index + 0.5) / count
-      return [{ key: column.key, text: column.label, offset, edge: 'middle' as const, ...note }]
+      return [{ key: column.key, text, offset, edge: 'middle' as const, ...note }]
     })
 }
 
@@ -391,7 +403,10 @@ const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stack
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
   const parts = seriesParts(stacked.segments, format)
   const head = columnHead(stacked, words, format)
-  return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
+  return [
+    parts.length ? `${head}; ${parts.join(', ')}` : head,
+    ...columnNotes(stacked, words, { withSum: true }),
+  ]
     .filter(Boolean)
     .join('. ')
 }
@@ -401,9 +416,18 @@ function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) 
   const before = stacked.column.before
   const compared =
     words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
-  return hasSum(stacked) && !stacked.column.pending
-    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+  return saysSum(stacked)
+    ? `${periodName(stacked)}: ${sumWords(stacked, words, format)}${compared}`
     : `${periodName(stacked)}${compared}`
+}
+
+/** Whether words about a period say its sum: it has one, and its figures are in. */
+const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
+
+/** A period's sum, «total 3 h», and «so far» after it while the period is still running. */
+function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const running = stacked.column.incomplete ? ` ${words.incomplete}` : ''
+  return `${words.total} ${format(stacked.total)}${running}`
 }
 
 const seriesParts = (segments: readonly StackSegment[], format: Format) =>
@@ -416,7 +440,10 @@ const seriesParts = (segments: readonly StackSegment[], format: Format) =>
 export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
   const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
   return {
-    head: [columnHead(stacked, words, format), ...columnNotes(stacked, words)].join('. '),
+    head: [
+      columnHead(stacked, words, format),
+      ...columnNotes(stacked, words, { withSum: true }),
+    ].join('. '),
     series: seriesParts(largest, format).join(', '),
   }
 }
@@ -428,8 +455,8 @@ export function segmentSummary(
   words: PeriodWords,
   format: Format,
 ): string {
-  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${words.total} ${format(stacked.total)}`
-  return [head, ...columnNotes(stacked, words)].join('. ')
+  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${sumWords(stacked, words, format)}`
+  return [head, ...columnNotes(stacked, words, { withSum: true })].join('. ')
 }
 
 /** A change the chart marks, numbered in time order: the plot shows the number, a note the words. */
@@ -484,14 +511,21 @@ export function changeMarkers(
 
 /**
  * What is said of a period besides its numbers: that it is still running, that it has no data
- * yet, which series have no figure in it, what changed.
+ * yet, which series have no figure in it, what changed. Said `withSum`, after words that say the
+ * period's sum (`columnHead`), «so far» stands after that sum and is no note of its own; the
+ * table, whose sum has a cell of its own, keeps it among the notes.
  */
-export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[] {
+export function columnNotes(
+  stacked: StackedColumn,
+  words: PeriodWords,
+  { withSum = false }: { withSum?: boolean } = {},
+): string[] {
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
   const pending = stacked.column.pending && words.pending ? [words.pending] : []
   // A period with no data yet holds nothing «so far»: it says only that it has none.
-  const running = stacked.column.incomplete && !pending.length ? [words.incomplete] : []
+  const said = withSum && saysSum(stacked)
+  const running = stacked.column.incomplete && !pending.length && !said ? [words.incomplete] : []
   return [...running, ...pending, ...absent, ...stacked.marks]
 }
 
