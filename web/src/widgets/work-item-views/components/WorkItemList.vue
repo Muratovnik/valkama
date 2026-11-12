@@ -16,6 +16,11 @@
  * Enter on it or a click anywhere in a row opens the card, and closing the
  * card brings focus back to the row it was opened from (`useListKeys.ts`).
  *
+ * A long list draws only the rows in and about its window, with gap rows for
+ * the rest, and keeps the Tab stop and the row focus is in drawn wherever it
+ * scrolls (`useWindowRows.ts`); a shorter one draws every row
+ * (`useStagedRows.ts`).
+ *
  * Every facet a row prints comes from the facet registry, in its words, and in
  * the order every surface reads an item in: the kind leads the reference as a
  * glyph, in a slot of its own so a reference stands where the one above it does;
@@ -35,18 +40,14 @@ import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListH
 import { useListKeys } from '@/widgets/work-item-views/composables/useListKeys.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
-import { useStagedRows } from '@/widgets/work-item-views/composables/useStagedRows.ts'
+import { useWindowRows } from '@/widgets/work-item-views/composables/useWindowRows.ts'
+import type { ListEntry } from '@/widgets/work-item-views/composables/useWindowRows.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
-import {
-  facetMarks,
-  holderRef,
-  leadMarks,
-  surfaceMarks,
-} from '@/entities/work-item/utils/facets.ts'
+import { holderRef, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
@@ -88,34 +89,31 @@ const fit = computed(() => fitFor(width.value))
 const wide = computed(() => fit.value === 'wide')
 const narrow = computed(() => fit.value === 'narrow')
 
-const { holderOf, updatedOf } = useListWords(() => props.items)
+const { holderOf, updatedOf, widths } = useListWords(() => props.items)
 
 const words = useMarkWords()
-/** The first word a row's facet prints, as a width in its column. */
-const facetWord = (item: WorkItemBrief, facet: FacetId) => {
-  const [mark] = facetMarks(facet, 'list', item)
-  return mark ? words.say(mark.text) : ''
-}
-const staged = useStagedRows<WorkItemBrief>({
-  columns: [
-    { font: '--font-line', word: (item) => item.reference },
-    { font: '--font-line', word: (item) => item.title },
-    { font: '--font-field-label', word: (item) => facetWord(item, 'state') },
-    { font: '--font-detail', word: (item) => facetWord(item, 'priority') },
-    { font: '--font-detail', word: holderOf },
-    { font: '--font-detail', word: (item) => facetWord(item, 'steps') },
-    { font: '--font-line', word: updatedOf },
-  ],
-  root: () => root.value,
+// One listener each for the whole list rather than three on every row: a
+// space of a thousand rows paid for three thousand of them on every opening.
+const keys = useListKeys(
+  root,
+  () => list,
+  (reference) => emit('open', reference),
+)
+const tabStop = (item: WorkItemBrief) => keys.tabStop(item.work_item_id)
+const list = useWindowRows<WorkItemBrief>({
+  columns: widths,
+  key: (item) => item.work_item_id,
+  // The Tab stop, whichever of these it is, and the row focus is in.
+  pinned: () => [...keys.kept(), rows.value[0]?.work_item_id],
+  root,
   rows: () => rows.value,
 })
 onMounted(() => {
   width.value = root.value?.clientWidth ?? 0
   measured.value = true
-  staged.stage()
 })
-const drawnRows = computed(() => (measured.value ? staged.rows.value : []))
-const heldForWidths = (item: WorkItemBrief) => staged.held(item)
+const entries = computed(() => (measured.value ? list.entries.value : []))
+const { rowCount } = list
 
 const waiting = computed(() => waitingOn(props.links, props.items))
 /**
@@ -145,32 +143,27 @@ const factFacets = computed(() =>
 )
 
 /**
- * The row that is the list's Tab stop: the one last focused while it is still
- * listed, otherwise the first. Held by item, so it follows a row a sort moved.
+ * What a row depends on; walking a thousand rows redraws only the two focus moved
+ * between. A row in a window is drawn again when its place moves.
  */
-const active = ref<string | null>(null)
-const stop = computed(() => {
-  const held = rows.value.some((item) => item.work_item_id === active.value)
-  return held ? active.value : (rows.value[0]?.work_item_id ?? null)
-})
-
-function tabStop(item: WorkItemBrief): 0 | -1 {
-  return item.work_item_id === stop.value ? 0 : -1
-}
-
-/** What a row depends on; walking a thousand rows redraws only the two focus moved between. */
-function memo(item: WorkItemBrief): unknown[] {
+function memo(entry: ListEntry<WorkItemBrief>): unknown[] {
+  if (entry.kind === 'gap') return [entry.height]
+  const item = entry.row
   return [
     item,
-    staged.held(item),
+    list.held(item),
     tabStop(item),
     waiting.value.get(item.work_item_id),
     fit.value,
     width.value >= 900,
     props.filter,
     locale.value,
+    entry.index,
   ]
 }
+const rowClass = (entry: ListEntry<WorkItemBrief>) =>
+  entry.kind === 'gap' ? 'list-gap' : ['list-row', { 'list-row-held': list.held(entry.row) }]
+const gapOf = (gap: { height: number }) => `${gap.height}px`
 
 const pass = (token: WorkFilterToken) => emit('filter', token)
 
@@ -209,15 +202,6 @@ const priorityWord = (item: WorkItemBrief) =>
 /** The glyph before a reference, in its fixed slot. */
 const lead = (item: WorkItemBrief, facet: FacetId) =>
   filtering(leadMarks(facet, 'list', item), glyphsFilter.value)
-
-// One listener each for the whole list rather than three on every row: a
-// space of a thousand rows paid for three thousand of them on every opening.
-useListKeys(root, {
-  focus: (id) => {
-    active.value = id
-  },
-  open: (reference) => emit('open', reference),
-})
 </script>
 
 <template>
@@ -226,7 +210,10 @@ useListKeys(root, {
     class="work-item-list"
     :data-fit="fit"
   >
-    <table class="list-table">
+    <table
+      class="list-table"
+      :aria-rowcount="rowCount"
+    >
       <caption class="visually-hidden">
         {{
           t('workItem.list.caption')
@@ -243,98 +230,109 @@ useListKeys(root, {
       />
       <tbody>
         <tr
-          v-for="item in drawnRows"
-          :key="item.work_item_id"
-          v-memo="memo(item)"
-          class="list-row"
-          :class="{ 'list-row-held': heldForWidths(item) }"
+          v-for="entry in entries"
+          :key="entry.key"
+          :ref="list.measure"
+          v-memo="memo(entry)"
+          :aria-hidden="entry.hidden"
+          :aria-rowindex="entry.rowIndex"
+          :data-index="entry.index"
+          :class="rowClass(entry)"
         >
-          <td class="list-cell list-ref-cell">
-            <component
-              :is="lead(item, 'kind')"
-              class="list-slot"
-            />
-            <button
-              type="button"
-              class="list-open"
-              :tabindex="tabStop(item)"
-              :data-id="item.work_item_id"
-              :data-reference="item.reference"
-            >
-              {{ item.reference }}
-            </button>
-            <component
-              :is="lead(item, 'priority')"
-              v-if="folded('priority')"
-              class="list-after"
-            />
-          </td>
-          <td class="list-cell list-title">
-            <span
-              v-slash-breaks="item.title"
-              class="list-name"
-            />
-            <span
-              v-if="wide"
-              class="list-under"
-              ><component :is="filtering(surfaceMarks('list', item, context(item), UNDER))"
-            /></span>
-            <span
-              v-else
-              class="list-facts"
-            >
-              <component :is="facts(item, factFacets, context(item))" />
-              <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
+          <td
+            v-if="entry.kind === 'gap'"
+            class="list-gap-cell"
+            :style="{ height: gapOf(entry) }"
+          />
+          <template v-else>
+            <td class="list-cell list-ref-cell">
               <component
-                :is="facts(item, HOLDER)"
-                v-if="holderRef(item)"
+                :is="lead(entry.row, 'kind')"
+                class="list-slot"
               />
+              <button
+                type="button"
+                class="list-open"
+                :tabindex="tabStop(entry.row)"
+                :data-id="entry.row.work_item_id"
+                :data-reference="entry.row.reference"
+              >
+                {{ entry.row.reference }}
+              </button>
               <component
-                :is="facts(item, STEPS)"
-                v-if="folded('checklist') && item.checklist.length"
+                :is="lead(entry.row, 'priority')"
+                v-if="folded('priority')"
+                class="list-after"
+              />
+            </td>
+            <td class="list-cell list-title">
+              <span
+                v-slash-breaks="entry.row.title"
+                class="list-name"
               />
               <span
-                v-if="folded('updated')"
-                class="list-fact"
-                >{{ updatedOf(item) }}</span
+                v-if="wide"
+                class="list-under"
+                ><component
+                  :is="filtering(surfaceMarks('list', entry.row, context(entry.row), UNDER))"
+              /></span>
+              <span
+                v-else
+                class="list-facts"
               >
-            </span>
-          </td>
-          <td
-            v-if="!folded('state')"
-            class="list-cell"
-          >
-            <component :is="fact(item, STATE)" />
-          </td>
-          <td
-            v-if="!folded('priority')"
-            class="list-cell"
-          >
-            <component :is="priorityWord(item)" />
-          </td>
-          <td
-            v-if="!folded('claim')"
-            v-tooltip.clipped="holderOf(item)"
-            class="list-cell list-holder one-line"
-          >
-            <component
-              :is="word(item, HOLDER)"
-              class="list-claim"
-            />
-          </td>
-          <td
-            v-if="!folded('checklist')"
-            class="list-cell"
-            data-numeric="true"
-          >
-            <component :is="word(item, STEPS)" />
-          </td>
-          <td
-            v-if="!folded('updated')"
-            class="list-cell"
-          >
-            {{ updatedOf(item) }}
-          </td>
+                <component :is="facts(entry.row, factFacets, context(entry.row))" />
+                <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
+                <component
+                  :is="facts(entry.row, HOLDER)"
+                  v-if="holderRef(entry.row)"
+                />
+                <component
+                  :is="facts(entry.row, STEPS)"
+                  v-if="folded('checklist') && entry.row.checklist.length"
+                />
+                <span
+                  v-if="folded('updated')"
+                  class="list-fact"
+                  >{{ updatedOf(entry.row) }}</span
+                >
+              </span>
+            </td>
+            <td
+              v-if="!folded('state')"
+              class="list-cell"
+            >
+              <component :is="fact(entry.row, STATE)" />
+            </td>
+            <td
+              v-if="!folded('priority')"
+              class="list-cell"
+            >
+              <component :is="priorityWord(entry.row)" />
+            </td>
+            <td
+              v-if="!folded('claim')"
+              v-tooltip.clipped="holderOf(entry.row)"
+              class="list-cell list-holder one-line"
+            >
+              <component
+                :is="word(entry.row, HOLDER)"
+                class="list-claim"
+              />
+            </td>
+            <td
+              v-if="!folded('checklist')"
+              class="list-cell"
+              data-numeric="true"
+            >
+              <component :is="word(entry.row, STEPS)" />
+            </td>
+            <td
+              v-if="!folded('updated')"
+              class="list-cell"
+            >
+              {{ updatedOf(entry.row) }}
+            </td>
+          </template>
         </tr>
       </tbody>
     </table>
@@ -396,9 +394,15 @@ useListKeys(root, {
   }
 }
 
-/* In the first frame only for the widths it gives its columns. */
+/* Drawn only for the widths it gives its columns: in a short list's first frame,
+   and outside a long list's window. */
 .list-row-held {
   visibility: collapse;
+}
+
+/* A gap stands for the rows a long list does not draw, as tall as they are. */
+.list-gap-cell {
+  padding: 0;
 }
 
 .list-cell {

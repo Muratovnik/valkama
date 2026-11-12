@@ -1371,10 +1371,18 @@ on Done from another column still closes, wherever the drop lands, and stands
 on top.
 Graph nodes allocate separate rows for status, title, and relationship
 metadata so labels cannot collide.
-A long list paints what fills its height first and draws every other row right
-after, with its columns already as wide as all the rows need; no row is ever
-taken out of the page again, so a sort, a filter, the keyboard and find in page
-reach all of them once it has settled.
+A list of fewer than 300 rows paints what fills its height first and draws every
+other row right after, with its columns already as wide as all the rows need, and
+keeps every row in the page. From 300 rows a list keeps in the page only the rows
+in and about its scrolled window, and gaps hidden from a reader hold the height
+of the rest, so the scroll bar is as long as the whole list. Its columns are as
+wide as all the rows need wherever it scrolls; a sort and a filter act on every
+row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
+and bring the row into view; the Tab stop and the row focus is in stay in the
+page wherever the list scrolls; the table tells a reader how many rows it has
+and each row where it stands; and a printed list prints every row. The cost, for
+now: on a list that long, find in page and a screen reader's browse mode reach
+only the rows in the page.
 A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
 row leads its reference with the kind (but a task) in one fixed glyph slot, so
