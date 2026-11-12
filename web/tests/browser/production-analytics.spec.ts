@@ -125,6 +125,14 @@ test.describe('in Russian', () => {
       await expectNoSilentClipping(page, `analytics ru at ${width}px`, '.analytics-page')
       await page.screenshot(shot(info, `analytics-ru-${width}.png`))
     })
+
+  // Named by its weekday, a day would read «Показать задачи за среда»: it is named by its date.
+  test('a day of the chart is named by its date, so «за» takes no weekday', async ({ page }) => {
+    await serve(page)
+    const analytics = await openReport(page, 1440)
+    const days = analytics.locator('.spending-days button.period-column')
+    await expect(days.last()).toHaveAccessibleName('Показать задачи за 11 ноября, ср')
+  })
 })
 
 /**
