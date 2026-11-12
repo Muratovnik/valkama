@@ -4,9 +4,9 @@
  * of the dimension and «other» for the rest; work with no value there and unknown work stack
  * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
  * «so far», so its short column does not read as a fall; a numbered line stands where the known
- * accounts that worked changed from the last day a known account worked, with what changed under
- * the chart (`accountChanges`): work whose organization nobody recorded is no account and marks
- * nothing. The marks are the ones read with the answer shown, and a read of the accounts that
+ * accounts with a figure in the measure shown changed from the last day a known account had one,
+ * with what changed under the chart (`accountChanges`): work whose organization nobody recorded
+ * is no account and marks nothing. The marks are the ones read with the answer shown, and a read of the accounts that
  * failed says the marks are not there rather than leaving them out without a word.
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
@@ -17,9 +17,9 @@
  * shows and says rather than a zero, and a note under the minutes says their figures are an
  * estimate: each stretch of work shared out by its time in each. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
- * dashed outline on the same scale, named in the legend and said in the readout and the table;
- * while those steps are read there is no outline, and when they could not be read a note under
- * the chart says so. A `brief` chart, standing beside the titles of its tasks, names
+ * short mark at its height on the same scale, named in the legend and said in the readout and the
+ * table; while those steps are read there is no mark, and when they could not be read a note
+ * under the chart says so. A `brief` chart, standing beside the titles of its tasks, names
  * each task by its number alone.
  */
 import { computed } from 'vue'
@@ -49,7 +49,7 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
-  /** The steps of the period before, to outline behind each column; none outlined without. */
+  /** The steps of the period before, to mark over each column; none marked without. */
   before?: BeforeSteps | null
   /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
   brief?: boolean
@@ -103,7 +103,7 @@ const chart = computed<PeriodChartProps>(() => ({
   actionable: byDay.value ? 'column' : null,
   marks:
     typeof props.accounts === 'object'
-      ? accountChanges(props.accounts).map((change) => ({
+      ? accountChanges(props.accounts, props.measure).map((change) => ({
           at: change.at,
           label: words.accounts(change.before, change.after),
         }))

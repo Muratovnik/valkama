@@ -1,7 +1,7 @@
 import {
   figureOf,
+  measureOf,
   spendingLines,
-  spentAnything,
   spentOf,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
@@ -169,12 +169,13 @@ export interface AccountChange {
 }
 
 /**
- * The known accounts that spent anything in a day. Work whose organization nobody recorded is
- * not an account, so it is not one of them.
+ * The known accounts with a figure above zero in a day, in the measure the chart shows: any
+ * figure counts, however small, and none, or no price or token counted, does not. Work whose
+ * organization nobody recorded is not an account, so it is not one of them.
  */
-const accountsOf = (point: Usage['series'][number]) =>
+const accountsOf = (point: Usage['series'][number], measure: Measure) =>
   point.groups
-    .filter((group) => spentAnything(spentOf(group)))
+    .filter((group) => (measureOf(measure, spentOf(group)) ?? 0) > 0)
     .flatMap((group) => {
       const account = group.group.account
       return account && valueKind(account) === 'category' ? [account] : []
@@ -187,16 +188,16 @@ const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupVa
 
 /**
  * Where the set of known accounts that worked differs from that of the last day a known account
- * worked, read from an answer by account. A day with no known account changes nothing, whether
+ * worked, read from an answer by account in the measure the chart shows (`accountsOf`). A day with no known account changes nothing, whether
  * nobody worked or only work nobody recorded the organization of: the next day is compared with
  * the last one that had a known account, so a quiet weekend is not two changes, and unrecorded
  * work beside the same accounts, or between them, is no change at all.
  */
-export function accountChanges(byAccount: Usage): AccountChange[] {
+export function accountChanges(byAccount: Usage, measure: Measure): AccountChange[] {
   const changes: AccountChange[] = []
   let last: UsageGroupValue[] | null = null
   for (const point of byAccount.series) {
-    const now = accountsOf(point)
+    const now = accountsOf(point, measure)
     if (!now.length) continue
     if (last && !sameKeys(last, now)) changes.push({ at: point.start, before: last, after: now })
     last = now
