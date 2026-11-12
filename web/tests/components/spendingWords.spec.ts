@@ -7,7 +7,7 @@ import { defineComponent, h } from 'vue'
  * languages; a period breaks only after its dash, never inside a date.
  */
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 
@@ -64,6 +64,45 @@ describe('a period', () => {
     expect(english.split(' ')).toHaveLength(2)
     expect(english).toMatch(/–$|– /u)
     expect(english.split(' ')[0]).toMatch(/–$/u)
+  })
+})
+
+/** Holds the clock at a moment, for what the words say of today. */
+function at(moment: string) {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(moment))
+}
+
+describe('a period shorter than a day', () => {
+  // «Today» at 15:59 on 11 November at +03:00, and the same hours of yesterday it is compared with.
+  const TODAY = ['2026-11-11T00:00:00+03:00', '2026-11-11T16:00:00+03:00'] as const
+  const YESTERDAY = ['2026-11-10T00:00:00+03:00', '2026-11-10T16:00:00+03:00'] as const
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  for (const [locale, today, yesterday] of [
+    ['en', `00:00${NBSP}– 15:59`, `Nov${NBSP}10,${NBSP}00:00${NBSP}– 15:59`],
+    ['ru', '00:00–15:59', `10${NBSP}нояб.,${NBSP}00:00–15:59`],
+  ] as const)
+    it(`is named by its clock times today, and by its day too on another (${locale})`, () => {
+      at('2026-11-11T15:59:30+03:00')
+      const words = wordsIn(locale)
+      expect(words.period(...TODAY)).toBe(today)
+      expect(words.period(...YESTERDAY)).toBe(yesterday)
+    })
+
+  it('takes today at its own offset, not the browser’s day in UTC', () => {
+    // Half past midnight at +03:00 is still the evening before in UTC.
+    at('2026-11-11T00:30:00+03:00')
+    expect(wordsIn('en').period(TODAY[0], '2026-11-11T00:31:00+03:00')).toBe(`00:00${NBSP}– 00:30`)
+  })
+
+  it('names both days of an hour across midnight', () => {
+    at('2026-11-11T00:30:00+03:00')
+    expect(wordsIn('ru').period('2026-11-10T23:30:00+03:00', '2026-11-11T00:30:00+03:00')).toBe(
+      `10${NBSP}нояб.,${NBSP}23:30${NBSP}– 11${NBSP}нояб.,${NBSP}00:29`,
+    )
   })
 })
 

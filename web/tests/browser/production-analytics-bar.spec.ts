@@ -199,6 +199,8 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
   await expect(page.locator('.tile-figure[data-measure="time"]')).toHaveText('40 min')
   const change = page.locator('.spending-tiles .tile-change').first()
   await expect(change).toContainText('↑ 167%')
+  // Yesterday's hours are named by their day, which the clock times alone would leave as today's.
+  await expect(change).toContainText(/Nov\s10,\s00:00\s– 14:30/u)
   const against = await change.textContent()
 
   await page.locator('.spending-days').screenshot(shot(info, 'analytics-today-1440.png'))
