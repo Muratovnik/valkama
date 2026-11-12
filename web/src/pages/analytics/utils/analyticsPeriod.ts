@@ -28,9 +28,10 @@ export interface PeriodBounds {
 
 /**
  * The period a view names at a moment, in the browser's own time: the last hour as sixty minutes
- * to now, the minute now running the last of them; this week from Monday's midnight to now, the
- * past four weeks from the midnight 27 days ago to now, or the custom days whole. Null for a
- * custom period with a day missing or its end before its start.
+ * to now, the minute now running the last of them; today whole, from its midnight to the next, so
+ * its hours still to come stand empty after the one running; this week from Monday's midnight to
+ * now, the past four weeks from the midnight 27 days ago to now, or the custom days whole. Null
+ * for a custom period with a day missing or its end before its start.
  */
 export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | null {
   const utcOffset = -now.getTimezoneOffset()
@@ -44,6 +45,8 @@ export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | nul
       to: untilNow,
       utcOffset,
     }
+  if (view.period === 'today')
+    return { from: localDay(today), to: localDay(shiftDays(today, 1)), utcOffset }
   if (view.period === 'week')
     return {
       from: localDay(shiftDays(today, -((today.getDay() + 6) % 7))),
@@ -57,11 +60,12 @@ export function periodBounds(view: AnalyticsView, now: Date): PeriodBounds | nul
 }
 
 /**
- * How a view's period is cut into columns: the live hour by its minutes, a single day by its
- * hours, any longer one by days.
+ * How a view's period is cut into columns: the live hour by its minutes, today and any other
+ * single day by its hours, any longer one by days.
  */
 export function stepOf(view: AnalyticsView): UsageStep {
   if (view.period === 'now') return 'minute'
+  if (view.period === 'today') return 'hour'
   return view.period === 'custom' && Boolean(view.from) && view.from === view.to ? 'hour' : 'day'
 }
 

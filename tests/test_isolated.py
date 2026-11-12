@@ -23,7 +23,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests import isolated
+from tests import isolated, machine_lock
+from tests.test_machine_lock import DEADLINE_SECONDS, HELD_SECONDS, held_elsewhere
 from tests.test_mcp_front import alive, wait_until
 from tests.test_release import link_directory
 
@@ -410,6 +411,75 @@ class GateTests(Workspace):
         self.assertEqual(1, code)
         self.assertIn("run stop first", said)
         self.assertTrue(self.home.exists())
+
+
+class HeavyLockTests(Workspace):
+    """The unittest step waits for the machine's heavy-test lock; no other step takes it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.lock = self.root / "heavy.lock"
+
+    def gate_runs(self, *only: str) -> list[isolated.Run]:
+        """The runs `gates --only ...` would hand to `run_gates`."""
+
+        tools = {name: (name,) for name in ("typos", "vulture", "mypy", "lint-imports", "semgrep")}
+        with (
+            mock.patch.object(isolated.release, "require_toolchain", return_value=tools),
+            mock.patch.object(isolated, "run_gates", return_value=0) as run_gates,
+        ):
+            quietly(isolated.main, ["gates", "--out", str(self.out), "--only", *only])
+        return run_gates.call_args.args[0]
+
+    def test_of_the_whole_list_only_the_unittest_step_takes_the_lock(self) -> None:
+        exclusive = [
+            run.name for run in self.gate_runs("python", "web", "desktop") if run.exclusive
+        ]
+        self.assertEqual(["unittest"], exclusive)
+
+    def test_a_selection_without_the_unittest_step_takes_no_lock(self) -> None:
+        self.assertEqual(
+            [], [run.name for run in self.gate_runs("coverage", "web") if run.exclusive]
+        )
+
+    def test_the_exclusive_step_waits_for_the_holder_and_a_light_one_does_not(self) -> None:
+        marker = self.root / "ran"
+        heavy = isolated.Run(
+            "unittest",
+            [sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"],
+            ROOT,
+            exclusive=True,
+        )
+        result: list[tuple[int, str]] = []
+        with held_elsewhere(self.lock, "another checkout's suite") as release:
+            code, _ = quietly(
+                lambda: isolated.run_gates(
+                    [self.run_python("light", "print(1)")], self.out, os.environ, lock=self.lock
+                )
+            )
+            self.assertEqual(0, code, "a light step waited for the lock")
+
+            waiting = threading.Thread(
+                target=lambda: result.append(
+                    quietly(
+                        lambda: isolated.run_gates([heavy], self.out, os.environ, lock=self.lock)
+                    )
+                ),
+                daemon=True,
+            )
+            waiting.start()
+            waiting.join(HELD_SECONDS)
+            self.assertFalse(marker.exists(), "the unittest step ran beside the holder")
+            release.set()
+            waiting.join(DEADLINE_SECONDS)
+
+        self.assertTrue(marker.exists())
+        self.assertEqual(0, result[0][0])
+        summary = (self.out / isolated.SUMMARY).read_text(encoding="utf-8")
+        self.assertIn("it is held by another checkout's suite", summary)
+        self.assertIn("took the heavy-test lock after", summary)
+        with machine_lock.held("after", path=self.lock, say=self.fail):
+            pass
 
 
 def locked_entry(name: str, version: str, **flags: object) -> dict:
@@ -944,17 +1014,21 @@ class SupervisorTests(Workspace):
 class ThroughTheCommandTests(Workspace):
     """The command as a caller runs it, against the real server."""
 
-    def source_store(self) -> Path:
-        source = self.root / "source.sqlite3"
+    def make_store(self, path: Path) -> Path:
+        """A store the product creates at `path`, through its own connection."""
+
         subprocess.run(
             [sys.executable, "-c", "from server import store; store.connect().close()"],
             cwd=ROOT,
-            env={**os.environ, "VALKAMA_DB": str(source)},
+            env={**os.environ, "VALKAMA_DB": str(path)},
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=True,
         )
-        return source
+        return path
+
+    def source_store(self) -> Path:
+        return self.make_store(self.root / "source.sqlite3")
 
     def command(self, *arguments: str) -> tuple[int, str]:
         """Run it with pipes, and wait on them as `execFileSync` and a pipeline do.
@@ -1036,6 +1110,38 @@ class ThroughTheCommandTests(Workspace):
         self.assertFalse(self.home.exists())
         self.assertEqual([], [p for p in files_under(self.out) if "sqlite3" in p.name])
         self.assertEqual(before, source.read_bytes())
+
+    def test_the_default_copy_serves_the_profile_store_when_valkama_db_is_unset(self) -> None:
+        # The command as a caller runs it, with no VALKAMA_DB. In this process the
+        # suite has already set one, which is why the in-process test cannot see
+        # the default going wrong.
+        profile_store = self.real / ".valkama" / "valkama.sqlite3"
+        profile_store.parent.mkdir()
+        self.make_store(profile_store)
+        with contextlib.closing(sqlite3.connect(profile_store)) as writer:
+            writer.execute("CREATE TABLE synthetic_marker (note TEXT NOT NULL)")
+            writer.execute("INSERT INTO synthetic_marker VALUES ('from the profile')")
+            writer.commit()
+        before = profile_store.read_bytes()
+
+        with mock.patch.dict(os.environ):
+            os.environ.pop("VALKAMA_DB", None)
+            self.assertNotIn("VALKAMA_DB", os.environ)
+            code, said = self.command("serve", "--out", str(self.out), "--store-copy")
+        served = self.served(code, said)
+
+        self.assertEqual(200, self.get(served["port"], "/api/modules"))
+        copy = isolated.store_path(self.home)
+        with contextlib.closing(sqlite3.connect(f"{copy.as_uri()}?mode=ro", uri=True)) as held:
+            notes = [row[0] for row in held.execute("SELECT note FROM synthetic_marker")]
+        self.assertEqual(["from the profile"], notes)
+        self.assertEqual(before, profile_store.read_bytes())
+
+        code, said = self.stop()
+
+        self.assertEqual(0, code, said)
+        self.assertFalse(self.home.exists())
+        self.assertEqual(before, profile_store.read_bytes())
 
     def test_a_store_copy_brings_the_callers_project_registry_and_leaves_it_alone(self) -> None:
         caller = self.root / "caller"

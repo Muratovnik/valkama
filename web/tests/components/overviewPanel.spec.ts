@@ -13,9 +13,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 
-import { momentAt, noTask, serveUsage, task, usageAnswer, value } from '../fixtures/analytics.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
+
+import {
+  figuresAnswer,
+  momentAt,
+  noTask,
+  serveUsage,
+  task,
+  usageAnswer,
+  value,
+} from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { saidBy } from '../support/liveRegion.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -85,11 +96,13 @@ describe('the overview on the page', () => {
   it('asks each card its own read, but the tasks, which are the overview’s own answer', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics()
-    expect(cards(page)).toEqual(['work_item', 'model', 'role', 'project'])
+    // The roles have no card: the rail's tile says both.
+    expect(cards(page)).toEqual(['work_item', 'model', 'project'])
     // This week and the same days of the week before, by task, the first shared with the rail's
     // tile of tasks; nothing more for the tasks' card.
     expect(reads.grouped('work_item')).toHaveLength(2)
-    // Each card's read, the same as the rail's tile of that dimension and read once for both.
+    // Each card's read, the same as the rail's tile of that dimension and read once for both;
+    // the roles' read is the rail's tile's alone.
     for (const dimension of ['model', 'role', 'project'])
       expect(reads.grouped(dimension), dimension).toHaveLength(1)
     expect(reads.asked.filter((query) => outline(query))).toHaveLength(1)
@@ -128,7 +141,7 @@ describe('the overview on the page', () => {
     const [none, two, one] = rows
     expect(none?.attributes('href')).toBeUndefined()
     expect(none?.get('.ranked-label').classes()).toContain('ranked-quiet')
-    expect(none?.get('.ranked-bar').attributes('data-slot')).toBe('other')
+    expect(none?.get('.ranked-bar').attributes('data-slot')).toBe('apart')
     // The tasks in their hues of the page, by their rank among the tasks.
     expect(two?.get('.ranked-bar').attributes('data-slot')).toBe('1')
     expect(one?.get('.ranked-bar').attributes('data-slot')).toBe('2')
@@ -137,7 +150,7 @@ describe('the overview on the page', () => {
   it('leaves the projects out at a project’s scope, where every figure is that project’s', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ projectId: 'alpha' })
-    expect(cards(page)).toEqual(['work_item', 'model', 'role'])
+    expect(cards(page)).toEqual(['work_item', 'model'])
     expect(reads.grouped('project')).toHaveLength(0)
   })
 
@@ -158,7 +171,7 @@ describe('the overview on the page', () => {
         part(one, 'note'),
       ]),
     ).toEqual([
-      ['up', 'MAIN-2 Two', '+ 2 h', 'nothing before'],
+      ['up', 'MAIN-2 Two', '+ 2 h', 'Nothing before'],
       ['down', 'MAIN-1 One', '− 1 h', ''],
     ])
   })
@@ -169,7 +182,35 @@ describe('the overview on the page', () => {
     )
     const page = await mountAnalytics()
     expect(words(card(page, 'model').text())).toContain('The values could not be read.')
-    expect(card(page, 'role').findAll('.ranked-row')).toHaveLength(2)
+    expect(card(page, 'project').findAll('.ranked-row')).toHaveLength(2)
+  })
+
+  it("holds a card's first read as its wait: said at once, shown after the delay, held for the minimum", async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = true
+    const reads = stubAnalyticsReads((query) =>
+      holding && query.get('group_by') === 'model' ? 'hold' : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    const shownWord = () => card(page, 'model').get('.overview-top-wait').text()
+    expect(said).toEqual([''])
+    expect(shownWord()).toBe('')
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await page.vm.$nextTick()
+    expect(shownWord()).toBe('Loading')
+
+    holding = false
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    expect(shownWord()).toBe('Loading')
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(shownWord()).toBe('Loading')
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
+    expect(card(page, 'model').findAll('.ranked-row').length).toBeGreaterThan(0)
+    expect(said).toEqual(['', 'Loading', ''])
   })
 
   it('says the week before was not read where the changes stand, and reads it again', async () => {
@@ -239,9 +280,8 @@ describe('the period before on the overview', () => {
       })
       const page = await mountAnalytics({ routeState })
       // What the figures are compared with, as the tiles hold it.
-      const cells = page.findComponent(SpendingTiles).props('before')
-      expect(cells).not.toBeNull()
-      if (!cells) return
+      const cells = page.findComponent(SpendingTiles).props('usage').comparison
+      if (!cells) throw new Error('the tiles compare with nothing')
       const shown = served[0]?.period
       if (!shown) throw new Error('the page read nothing')
       // Every read of a period before the one shown is of the period the figures compare with.
@@ -249,13 +289,13 @@ describe('the period before on the overview', () => {
         (usage) => Date.parse(usage.period.to) <= Date.parse(shown.from),
       )
       expect(earlier.length).toBeGreaterThan(0)
-      for (const usage of earlier) expect(span(usage.period)).toEqual(span(cells))
+      for (const usage of earlier) expect(span(usage.period)).toEqual(span(cells.period))
       // And the outline adds up to the figure the tiles compare with.
       const outlined = page.findComponent(SpendingDays).props('before')
       expect(Array.isArray(outlined), `the outline stands at ${String(outlined)}`).toBe(true)
       const steps = Array.isArray(outlined) ? outlined : []
       const seconds = steps.reduce((sum, step) => sum + step.agent_seconds, 0)
-      expect(seconds).toBe(cells.spent.seconds)
+      expect(seconds).toBe(cells.total.agent_seconds)
     })
 })
 
@@ -333,16 +373,8 @@ describe('the figures of the overview', () => {
   const mountTiles = (seconds: number, was: number) =>
     mount(SpendingTiles, {
       props: {
-        total: { seconds, tokens: null, cost: null, unpriced: 0 },
-        split: {
-          input: null,
-          output: null,
-          reasoning: null,
-          cache_write_5m: null,
-          cache_write_1h: null,
-          cached_read: null,
-        },
-        before: { ...before, spent: { seconds: was, tokens: null, cost: null, unpriced: 0 } },
+        usage: figuresAnswer({ seconds }, { ...before, spent: { seconds: was } }),
+        readAt: new Date(2026, 10, 11, 14, 30),
         measure: 'time',
       },
       global: { plugins: [analyticsI18n()] },

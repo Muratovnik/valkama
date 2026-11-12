@@ -3,7 +3,9 @@
 Ninety days of 25,000 stretches of work: two hundred sessions with their subagents, three
 hundred items, four models. The budget is set from a measurement on the machine this was
 written on, with a margin of more than three times, so it fails on a read that went from
-one pass to a query per row, not on a slow afternoon.
+one pass to a query per row, not on a slow afternoon. A machine busy with other work can still
+stretch one read past it, so the budget holds the quickest of a few reads: a read that is slow
+by design is slow every time.
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ DAYS = 90
 #: and executor, the slowest of five reads each, and at 0.68 s and 1.17 s under coverage,
 #: which is how the gate runs the suite: more than three times the slower of those.
 BUDGET = 4.0
+#: Reads of each grouping at most: the first one under the budget ends the measurement.
+READS = 3
 #: The period's stretches, the folders of the sessions on no item, one read of labels
 #: per labelled dimension and the freshness: the same however many stretches there are.
 MAX_STATEMENTS = 6
@@ -89,11 +93,14 @@ class CostTests(CostCase):
         self.addCleanup(self.conn.set_trace_callback, None)
         for grouping in ("project,model", "work_item,executor"):
             with self.subTest(grouping):
-                statements.clear()
-                began = time.perf_counter()
-                read = self.read(**self.period(grouping))
-                spent = time.perf_counter() - began
-                self.assertLess(spent, BUDGET, f"{grouping} took {spent:.3f} s")
+                spent: list[float] = []
+                while len(spent) < READS and (not spent or min(spent) >= BUDGET):
+                    statements.clear()
+                    began = time.perf_counter()
+                    read = self.read(**self.period(grouping))
+                    spent.append(time.perf_counter() - began)
+                took = ", ".join(f"{one:.3f}" for one in spent)
+                self.assertLess(min(spent), BUDGET, f"{grouping} took {took} s")
                 self.assertEqual(DAYS, len(read["series"]))
                 self.assertGreater(len(read["rows"]), 3)
                 # SQLite answers a lookup by key in microseconds, so a query per row would

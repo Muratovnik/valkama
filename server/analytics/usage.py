@@ -46,10 +46,11 @@ import json
 import operator
 import re
 import sqlite3
+import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from ..planning import executors
+from ..planning import executors, live_sessions
 from ..planning import usage as item_usage
 from ..planning.usage import Value
 from ..projects import project_registry
@@ -133,6 +134,13 @@ _COLUMN_OF = {
     ENVIRONMENT: _ENVIRONMENT,
 }
 
+
+#: One read is worked out at a time in a process. The work is Python under one interpreter
+#: lock, so reads side by side cannot finish sooner than one after another; what they did
+#: instead was trade that lock on every row the store handed back, each read costing several
+#: times its own work, and every one of a page's reads answered only at the end of all of
+#: them. In turn, the first is answered in its own time.
+_ONE_AT_A_TIME = threading.Lock()
 
 #: Where `None` is a group of its own and not unknown: work on no item, a session's own run.
 #: Outside these `None` is a value the store does not hold; inside them that is `UNKNOWN`.
@@ -487,16 +495,21 @@ def _role(row: Sequence) -> Value:
 _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
     PROJECT: {"name": None},
-    EXECUTOR: {"family": "", "opened_in": "", "opened_host": ""},
+    EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
 }
+
+#: What a session's executor says of it that the answer carries: where it was opened.
+_PLACE = ("family", "opened_in", "opened_host")
 
 
 def _labels(
     conn: sqlite3.Connection, dimension: str, ids: set[str], projects: Sequence[Mapping]
 ) -> dict[str, dict]:
     """What a person already sees for each of these values: an item's number and title,
-    a project's name, where a session was opened. Nothing that changes while it is read,
-    so two reads of the same rows give the same answer."""
+    a project's name, where a session was opened and the name its client gave it, as
+    the live work beside the board names it (`planning.live_sessions.titles`). Only that
+    name can change while the figures do not, when a person renames the session; each
+    transcript is read once per read, and again only once it has changed."""
 
     if dimension == WORK_ITEM:
         return item_usage.item_names(conn, ids)
@@ -507,9 +520,14 @@ def _labels(
             if project["project_id"] in ids
         }
     if dimension == EXECUTOR:
+        named = sorted(ids)
+        titles = live_sessions.titles(conn, named)
         return {
-            session: {name: executor[name] for name in _UNNAMED[EXECUTOR]}
-            for session, executor in executors.session_executors(conn, sorted(ids)).items()
+            session: {
+                **{name: executor[name] for name in _PLACE},
+                "title": titles.get(session),
+            }
+            for session, executor in executors.session_executors(conn, named).items()
         }
     return {}
 
@@ -570,6 +588,11 @@ def _total(window: _Window) -> dict:
 def read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     """What agent work spent in the period, in total, by group and by step, in one pass."""
 
+    with _ONE_AT_A_TIME:
+        return _read(conn, request)
+
+
+def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     bounds, first = _bounds(request)
     cursor = conn.cursor()
     cursor.row_factory = None

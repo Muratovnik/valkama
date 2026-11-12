@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 import { harnessPort } from './browserRun.ts'
 import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
+import { python } from './serverStore.ts'
 
 /**
  * `npm run test:browser:allowed`: every browser spec but the ones that write the system
@@ -17,6 +18,10 @@ import { clipboardOptIn, clipboardSpecs } from './clipboardSpecs.ts'
  * list that is empty, a list file that is missing, a name that is no spec, and a clipboard
  * spec that `--with-clipboard=<file>` does not name. Playwright runs with `clipboardOptIn`
  * set when `--with-clipboard` names a spec, and without it otherwise.
+ *
+ * A run holds the machine's heavy-test lock, `tests/machine_lock.py`, for as long as Playwright
+ * runs, so a second heavy run of any checkout waits for it and says whose run it waits for. A
+ * run under `--list` runs no test, and takes no lock.
  *
  *   npm run test:browser:allowed -- --list                 what would run, and the total
  *   npm run test:browser:allowed -- --specs=<file>         the specs a file names, one a line
@@ -40,9 +45,10 @@ interface Request {
 export interface RunnerIo {
   /**
    * Runs Playwright with these arguments and resolves with its exit code; `clipboard` says
-   * whether its configuration may select the clipboard specs.
+   * whether its configuration may select the clipboard specs, and `lock` names the run that
+   * holds the heavy-test lock while Playwright runs, or is null for no lock.
    */
-  playwright: (args: readonly string[], clipboard: boolean) => Promise<number>
+  playwright: (args: readonly string[], clipboard: boolean, lock: string | null) => Promise<number>
   /** A list file's text, or null when there is no such file. */
   readList: (file: string) => string | null
   say: (line: string) => void
@@ -124,6 +130,11 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
   const left = clipboardSpecs.filter((name) => !specs.includes(name))
   io.say(`${specs.length} spec files; clipboard specs left out: ${left.join(', ') || 'none'}`)
   const summary = fileURLToPath(new URL('runSummary.ts', import.meta.url))
+  const batch =
+    request.listFile === undefined ? 'the whole suite' : `the specs ${request.listFile} names`
+  const lock = request.playwright.includes('--list')
+    ? null
+    : `npm run test:browser:allowed, ${batch}, harness port ${harnessPort}`
   return io.playwright(
     [
       'test',
@@ -132,7 +143,33 @@ export async function runAllowed(argv: readonly string[], io: RunnerIo): Promise
       ...request.playwright,
     ],
     request.withClipboard.length > 0,
+    lock,
   )
+}
+
+const lockScript = fileURLToPath(new URL('../../../tests/machine_lock.py', import.meta.url))
+
+/**
+ * `command` as run holding the heavy-test lock for `run`: the Python side owns the lock and the
+ * one protocol, waits, says for whom, runs the command and gives the lock back when it ends.
+ * `lockFile` stands in for the machine's lock, for a test.
+ */
+export function lockedCommand(
+  run: string,
+  command: readonly string[],
+  lockFile?: string,
+): string[] {
+  const path = lockFile === undefined ? [] : [`--path=${lockFile}`]
+  return [
+    python,
+    lockScript,
+    'run',
+    `--run=${run}`,
+    `--pid=${process.pid}`,
+    ...path,
+    '--',
+    ...command,
+  ]
 }
 
 /**
@@ -153,10 +190,11 @@ const suiteDirectory = join(web, 'tests/browser')
 
 /** The real file system and Playwright, run from `web/` with this process's Node. */
 export const realIo: RunnerIo = {
-  playwright: (args, clipboard) =>
+  playwright: (args, clipboard, lock) =>
     new Promise((resolve, reject) => {
-      const cli = join(web, 'node_modules/@playwright/test/cli.js')
-      const child = spawn(process.execPath, [cli, ...args], {
+      const command = [process.execPath, join(web, 'node_modules/@playwright/test/cli.js'), ...args]
+      const [program = '', ...rest] = lock === null ? command : lockedCommand(lock, command)
+      const child = spawn(program, rest, {
         cwd: web,
         env: playwrightEnvironment(process.env, clipboard),
         stdio: 'inherit',

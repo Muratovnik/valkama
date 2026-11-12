@@ -2,11 +2,12 @@
  * The chart palette and who gets which of its hues.
  *
  * The palette is held to the checks a categorical chart palette owes (the `dataviz` method):
- * every pair a stack puts side by side — slot n beside slot n+1, and the neutral `other` beside
- * any slot — stays apart under protanopia and deuteranopia by an OKLab distance of 0.08 and under
- * ordinary vision by 0.15; each hue sits in the dark lightness band (OKLCH L 0.48–0.67) with
- * chroma 0.10 or more, and stands at 3:1 on every ground a chart lies on. The assignment is held
- * to its promise: a colour follows the name, whatever the order or the values.
+ * every pair a stack puts side by side — slot n beside slot n+1, either neutral beside any slot,
+ * and the neutral `apart` (no value, unknown) under the neutral `other` (the folded rest) — stays
+ * apart under protanopia and deuteranopia by an OKLab distance of 0.08 and under ordinary vision
+ * by 0.15; each hue sits in the dark lightness band (OKLCH L 0.48–0.67) with chroma 0.10 or more,
+ * each neutral is a grey, and every mark stands at 3:1 on every ground a chart lies on. The
+ * assignment is held to its promise: a colour follows the name, whatever the order or the values.
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,7 +19,8 @@ import { SERIES_SLOT_COUNT, seriesSlots } from '@/shared/lib/seriesColors.ts'
 import { apart, contrast, seen, token } from './paletteColors.ts'
 
 const slots = Array.from({ length: SERIES_SLOT_COUNT }, (_, index) => index + 1)
-const hue = (slot: number | 'other') => token(`--color-series-${slot}`)
+const NEUTRALS = ['apart', 'other'] as const
+const hue = (slot: number | (typeof NEUTRALS)[number]) => token(`--color-series-${slot}`)
 const CHART_GROUNDS = ['--color-surface-recess', '--color-surface', '--color-surface-sheet']
 
 describe('the assignment', () => {
@@ -73,7 +75,7 @@ describe('the palette', () => {
   test('every slot the assignment hands out is a token, and one fill rule draws each', () => {
     const fill = readFileSync(new URL('../src/shared/ui/seriesFill.css', import.meta.url), 'utf8')
     assert.match(fill, /\.series-fill \{\s*background: var\(--color-series-1\);/u)
-    for (const slot of [...slots.slice(1), 'other'] as const) {
+    for (const slot of [...slots.slice(1), ...NEUTRALS] as const) {
       hue(slot)
       const rule = new RegExp(
         String.raw`\[data-slot='${slot}'\] \{\s*background: var\(--color-series-${slot}\);`,
@@ -85,8 +87,10 @@ describe('the palette', () => {
 
   test('neighbours in a stack stay apart for every reader', () => {
     const pairs = slots.slice(1).map((slot) => [slot - 1, slot] as const)
-    const besideOther = slots.map((slot) => [slot, 'other'] as const)
-    for (const [first, second] of [...pairs, ...besideOther]) {
+    const besideNeutral = NEUTRALS.flatMap((neutral) =>
+      slots.map((slot) => [slot, neutral] as const),
+    )
+    for (const [first, second] of [...pairs, ...besideNeutral, NEUTRALS]) {
       for (const vision of ['protanopia', 'deuteranopia'] as const) {
         const distance = apart(hue(first), hue(second), vision)
         assert.ok(distance >= 0.08, `${first} and ${second}: ${distance.toFixed(3)} (${vision})`)
@@ -102,11 +106,19 @@ describe('the palette', () => {
       assert.ok(lightness >= 0.48 && lightness <= 0.67, `slot ${slot} L ${lightness.toFixed(3)}`)
       assert.ok(Math.hypot(a, b) >= 0.1, `slot ${slot} C ${Math.hypot(a, b).toFixed(3)}`)
     }
-    for (const slot of [...slots, 'other'] as const)
+    for (const slot of [...slots, ...NEUTRALS] as const)
       for (const ground of CHART_GROUNDS) {
         const ratio = contrast(hue(slot), token(ground))
         assert.ok(ratio >= 3, `slot ${slot} on ${ground} stands at ${ratio.toFixed(2)}:1`)
       }
+  })
+
+  test('the two neutrals are greys, no hue, and the darker is what is not a value', () => {
+    // When both were one grey, a week's work on no task and its folded rest — its two largest
+    // parts — differed only in the hint.
+    const [apart, other] = NEUTRALS.map((neutral) => seen(hue(neutral), 'ordinary'))
+    for (const [, a, b] of [apart, other]) assert.ok(Math.hypot(a, b) < 0.005)
+    assert.ok(apart[0] < other[0])
   })
 
   test('no series is taken for a state', () => {

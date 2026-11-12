@@ -164,6 +164,31 @@ describe('what the numbers are', () => {
   })
 })
 
+describe('what each figure is', () => {
+  it('says the parallel work under all agents, the estimate under work, the basis under cost', () => {
+    const { explanations } = wordsIn('en')
+    const said = explanations(richUsage({ unpriced_models: ['one'] }))
+    expect(said.agents).toEqual([expect.stringContaining('in parallel')])
+    expect(said.work).toEqual([expect.stringContaining('The time is an estimate')])
+    expect(said.cost).toEqual([expect.stringContaining('not a bill')])
+    // What a missing price does to the cost is a line of its own, not part of the cost's why.
+    expect(said.unpriced).toBe('The cost is incomplete: no price for one.')
+  })
+
+  it('says nothing of a figure the read has no reason to explain', () => {
+    const { explanations } = wordsIn('en')
+    const said = explanations(
+      richUsage({
+        elapsed_seconds: 3600,
+        agent_seconds: 3601,
+        quality: 'observed',
+        estimated_api_cost_usd: null,
+      }),
+    )
+    expect(said).toEqual({ work: [], agents: [], cost: [], unpriced: '' })
+  })
+})
+
 describe('whether a line says anything', () => {
   it('is no when the read has nothing in it', () => {
     expect(saysAnything(line())).toBe(false)

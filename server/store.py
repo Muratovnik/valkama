@@ -1,6 +1,7 @@
 """SQLite storage: the schema, the order a store is brought up in, and the connection.
 
-Everything else in the package reads and writes through `connect()`, and what
+Everything else in the package reads and writes through `connect()`, or reads a
+store that bring-up already finished through `connect_for_read()`, and what
 this module owns above all is the *order* of that bring-up: which check refuses
 before the first write, when the recovery point is taken, what runs inside the
 one transaction, and that the generation stamp is the last statement in it.
@@ -720,10 +721,7 @@ def open_read_only() -> sqlite3.Connection:
     `sqlite3.OperationalError` too, and the short timeout makes a busy one a refusal.
     """
 
-    path = os.path.abspath(db_path()).replace(os.sep, "/")
-    escaped = path.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
-    prefix = "file:" if escaped.startswith("/") else "file:/"
-    conn = sqlite3.connect(f"{prefix}{escaped}?mode=ro", uri=True, timeout=0.25)
+    conn = sqlite3.connect(_uri(db_path(), "ro"), uri=True, timeout=0.25)
     try:
         stored_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
         if stored_version != STORE_SCHEMA_VERSION:
@@ -732,6 +730,49 @@ def open_read_only() -> sqlite3.Connection:
         conn.close()
         raise
     return conn
+
+
+def _uri(path: str, mode: str) -> str:
+    """The store's file as an SQLite URI that opens it in `mode` and never creates it."""
+
+    absolute = os.path.abspath(path).replace(os.sep, "/")
+    escaped = absolute.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
+    prefix = "file:" if escaped.startswith("/") else "file:/"
+    return f"{prefix}{escaped}?mode={mode}"
+
+
+def connect_for_read() -> sqlite3.Connection:
+    """The store for a request that commits nothing: `connect()` without a bring-up it
+    does not need.
+
+    `connect()` holds the migration lock across the whole bring-up, which on a store
+    already at this build's schema still runs every check and the picture sweep, tens
+    of milliseconds of statements. Reads that arrived together therefore went one at a
+    time, each waiting out the lock for all the ones before it. A store at this build's
+    schema is opened here as `connect()` leaves it -- rows by name, foreign keys on, the
+    same busy timeout -- with no lock and no write. Any other store, or none, goes
+    through `connect()`, which adopts, creates, migrates or refuses it as it always has.
+
+    Nothing is lost by the skip: once `connect()` has returned, its connection holds no
+    lock either, so a migration by another process could already commit between any two
+    statements of a read.
+    """
+
+    try:
+        conn = sqlite3.connect(_uri(db_path(), "rw"), uri=True, timeout=5)
+    except sqlite3.OperationalError:
+        return connect()
+    try:
+        current = int(conn.execute("PRAGMA user_version").fetchone()[0]) == STORE_SCHEMA_VERSION
+        if current:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys=ON")
+            return conn
+    except BaseException:
+        conn.close()
+        raise
+    conn.close()
+    return connect()
 
 
 def connect() -> sqlite3.Connection:

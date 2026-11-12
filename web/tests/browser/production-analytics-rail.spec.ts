@@ -5,8 +5,10 @@
  * A tile keeps its size and its place while its figures are read, when they arrive, when a new
  * period or measure changes them, and while the pointer passes over it: every tile's box is the
  * same to the pixel through all of it. What one change of the view asks is counted: a dimension
- * a read, asked again for a new period, never for a new measure or section. Each run prints what
- * it measured.
+ * a read, asked again for a new period, never for a new measure or section. The tile of the tokens
+ * by kind stands after the overview's and reads the page's own answer, so it asks nothing, and with
+ * it the overview still fits the window, the rail scrolling on its own. Each run prints what it
+ * measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -59,7 +61,7 @@ const settled = async (page: Page) => {
   await expect
     .poll(async () => {
       const words = await leads(page)
-      return words.includes('Reading…')
+      return words.includes('Loading')
     })
     .toBe(false)
   await expect(page.locator('.analytics-rail [aria-busy="true"]')).toHaveCount(0)
@@ -73,7 +75,7 @@ for (const width of [1440, 1024, 390])
     const release = await holdReads(page)
     await page.setViewportSize({ width, height: 900 })
     await page.goto(pageAt())
-    await expect(page.locator('.analytics-rail .rail-tile-lead').first()).toHaveText('Reading…')
+    await expect(page.locator('.analytics-rail .rail-tile-lead').first()).toHaveText('Loading')
     await page.evaluate(() => document.fonts.ready)
     const reading = await tiles(page)
 
@@ -82,7 +84,7 @@ for (const width of [1440, 1024, 390])
     const arrived = await tiles(page)
     expect(arrived, 'the figures arrived').toEqual(reading)
     const words = await leads(page)
-    expect(words.filter((lead) => lead === 'Reading…')).toEqual([])
+    expect(words.filter((lead) => lead === 'Loading')).toEqual([])
 
     // A new period: the tiles say other figures in the same boxes.
     await page.getByRole('radio', { name: 'Past 4 weeks' }).click()
@@ -172,3 +174,54 @@ test('one change of the view asks a read a dimension, and none for a measure or 
   // account the page's own.
   expect(period).toHaveLength(10)
 })
+
+for (const [width, height] of [
+  [1440, 900],
+  [1920, 1080],
+] as const)
+  test(`at ${width}×${height} the tile of the tokens by kind follows the overview's and the overview still fits`, async ({
+    page,
+  }, info) => {
+    await serve(page)
+    const asked = countReads(page)
+    await page.setViewportSize({ width, height })
+    await page.goto(pageAt())
+    await settled(page)
+    await page.evaluate(() => document.fonts.ready)
+    // Under load the rail can still be drawing once the reads settle: wait for its first entries.
+    const entries = page.locator('.analytics-rail-entry')
+    await expect(entries.nth(0)).toHaveAttribute('data-section', 'overview')
+    await expect(entries.nth(1)).toHaveAttribute('data-section', 'token_kind')
+    const sections = await entries.evaluateAll((all) =>
+      all.map((entry) => (entry as HTMLElement).dataset.section),
+    )
+
+    // The largest kind the tokens figure counts and its share; the double's input is half of it.
+    const tile = page.locator('.analytics-rail-entry[data-section="token_kind"]')
+    await expect(tile.locator('.rail-tile-lead')).toHaveText('Input')
+    await expect(tile.locator('.rail-tile-aside')).toHaveText('50%')
+    await expect(tile.locator('.analytics-rail-count')).toHaveText('3 kinds')
+    await expect(tile.locator('[role="img"]')).toHaveAttribute(
+      'aria-label',
+      'Shares of Tokens: Input 50%, Output 30%, Cache write, 5 min 20%',
+    )
+
+    const fit = await page.evaluate(() => {
+      const rail = document.querySelector('.analytics-page-rail')
+      return {
+        document: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+        rail: rail ? rail.scrollHeight - rail.clientHeight : -1,
+        railScrolls: rail ? getComputedStyle(rail).overflowY : '',
+      }
+    })
+    await record(info, `analytics rail kinds ${width}x${height}`, { sections, fit })
+    expect(fit.document, 'the document scrolls').toBe(0)
+    expect(fit.railScrolls).toBe('auto')
+
+    // The section reads the page's own answer: choosing it asks nothing.
+    const before = asked.length
+    await tile.click()
+    await expect(page.locator('.kinds-panel')).toBeVisible()
+    await settled(page)
+    expect(asked, 'reads asked for the tokens by kind').toHaveLength(before)
+  })

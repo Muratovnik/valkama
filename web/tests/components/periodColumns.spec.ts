@@ -70,7 +70,7 @@ describe('period columns that open nothing', () => {
       'May 1: total 3 h; ci 2 h, work 1 h',
       'May 2: total 0 h',
       'May 3: total 3 h; work 3 h. Switched to work',
-      'May 4: total 1 h; ci 1 h. so far',
+      'May 4: total 1 h so far; ci 1 h',
     ])
     expect(chart.findAll('button')).toHaveLength(0)
     expect(chart.findAll('[tabindex]')).toHaveLength(0)
@@ -106,22 +106,45 @@ describe('period columns that open nothing', () => {
     expect(chart.get('.period-axis').text()).toContain('so far')
   })
 
-  it('marks a change at the start of its period and says it under the chart', () => {
+  it('marks a change by a line in its period, says it in its readout and keeps no row for it', async () => {
     const chart = mountColumns()
 
     expect(chart.findAll('.period-mark')).toHaveLength(1)
     expect(chart.find('[data-key="d3"] .period-mark').exists()).toBe(true)
-    expect(chart.get('.period-notes').text()).toBe('1May 3Switched to work')
-    expect(chart.get('.period-markers').text()).toBe('1')
+    // No footnote under the chart, and no row of numbers over the plot.
+    expect(chart.find('.period-notes').exists()).toBe(false)
+    expect(chart.find('.period-markers').exists()).toBe(false)
+    expect(chart.findAll('.period-plot > .chart-ticks')).toHaveLength(2)
+    await chart.get('[data-key="d3"]').trigger('pointerenter')
+    expect(chart.get('.period-readout').text()).toBe('May 3: total 3 h. Switched to work. work 3 h')
   })
 
   it('reads out the latest period until the pointer stands on another', async () => {
     const chart = mountColumns()
+    const readout = () => chart.get('.period-readout').text()
 
-    const lines = () => chart.findAll('.period-readout > span').map((line) => line.text())
-    expect(lines()).toEqual(['May 4: total 1 h. so far', 'ci 1 h'])
+    expect(readout()).toBe('May 4: total 1 h so far. ci 1 h')
     await chart.get('[data-key="d1"]').trigger('pointerenter')
-    expect(lines()).toEqual(['May 1: total 3 h', 'ci 2 h, work 1 h'])
+    expect(readout()).toBe('May 1: total 3 h. ci 2 h, work 1 h')
+  })
+
+  it('reads out the period running, not one still to come, when nothing stands on one', async () => {
+    // A day by its hours at 14:30: the hours after the running one are still to come.
+    const day: PeriodColumn[] = Array.from({ length: 24 }, (_, hour) => ({
+      key: `h${hour}`,
+      label: `${hour}:00`,
+      values: hour <= 14 ? { ci: 1 } : {},
+      ...(hour === 14 ? { incomplete: true } : {}),
+    }))
+    const chart = mountColumns({ columns: day, marks: [] })
+    const readout = () => chart.get('.period-readout').text()
+
+    expect(readout()).toBe('14:00: total 1 h so far. ci 1 h')
+    expect(chart.get('[data-key="h14"]').attributes('data-shown')).toBe('true')
+    await chart.get('[data-key="h20"]').trigger('pointerenter')
+    expect(readout()).toBe('20:00: total 0 h')
+    await chart.get('[data-key="h20"]').trigger('pointerleave')
+    expect(readout()).toBe('14:00: total 1 h so far. ci 1 h')
   })
 
   it('keeps saying the period the pointer left for the readout, so its hint can be read', async () => {
@@ -131,29 +154,25 @@ describe('period columns that open nothing', () => {
     await chart.get('[data-key="d1"]').trigger('pointerenter')
     await chart.get('[data-key="d1"]').trigger('pointerleave')
     await readout.trigger('pointerenter')
-    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
+    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h. ci 2 h, work 1 h')
     await readout.trigger('pointerleave')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far. ci 1 h')
   })
 
-  // The browser spec measures that nothing moves; this holds the means: lines cut with an
-  // ellipsis, and the whole words in a hint that follows the period shown.
-  it('keeps each readout line and each note to one line, whole in a hint shown while cut', async () => {
+  // The browser spec measures that nothing moves; this holds the means: one line cut with an
+  // ellipsis, and its whole words in a hint that follows the period shown.
+  it('keeps the readout to one line, whole in a hint shown while cut', async () => {
     const chart = mountColumns()
     const readout = chart.get('.period-readout')
 
-    for (const line of readout.findAll('span')) expect(line.classes()).toContain('one-line')
+    expect(readout.classes()).toContain('one-line')
+    expect(readout.findAll('span')).toHaveLength(0)
     expect(readout.attributes('data-tooltip-kind')).toBe('clipped')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
+    expect(readout.attributes('data-tooltip')).toBe(readout.text())
     await chart.get('[data-key="d1"]').trigger('pointerenter')
-    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
+    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h. ci 2 h, work 1 h')
     await chart.get('[data-key="d1"]').trigger('pointerleave')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h; ci 1 h. so far')
-
-    const note = chart.get('.period-note-text')
-    expect(note.classes()).toContain('one-line')
-    expect(note.attributes('data-tooltip-kind')).toBe('clipped')
-    expect(note.attributes('data-tooltip')).toBe('Switched to work')
+    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far. ci 1 h')
   })
 
   it('starts its scale at zero', () => {

@@ -142,7 +142,10 @@ for (const [width, height] of [
     // holds the rest under its own scroll.
     expect(before.panel?.scrollHeight).toBeGreaterThan(before.panel?.clientHeight ?? 0)
 
-    await wheelOver(page, '.analytics-panel', 600)
+    // Turned over the section's figures, where one scrolling the section reads: where the window
+    // is tall enough, the table stays at the panel's bottom edge, half the window high, and a wheel
+    // over it moves the table alone (`production-analytics-split.spec.ts`).
+    await wheelOver(page, '.spending-tiles', 600)
     await expect.poll(async () => scrolledBy(await scrolling(page), 'panel')).toBeGreaterThan(0)
     const after = await scrolling(page)
     expect(after.document.scrollTop).toBe(0)

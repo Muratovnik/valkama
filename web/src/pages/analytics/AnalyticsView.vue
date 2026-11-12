@@ -8,8 +8,10 @@
  * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
- * history, so Back returns to the list. Each section's entry on the rail carries its figures
- * (`useRailTiles`).
+ * history, so Back returns to the list. Beside the rail a section chosen on it or from a card of
+ * the overview is a new place too, so Back returns to the section it was chosen in; the period,
+ * the measure, the filters and the second dimension change the place in hand. Each section's
+ * entry on the rail carries its figures (`useRailTiles`).
  *
  * The view — the period, the section, the measure, a filter per dimension and whether a narrow
  * screen shows the section — is the page's address: every change is written there, and a reload
@@ -23,13 +25,14 @@
  * page never shows a view its link would not give back.
  *
  * A value or a day pressed in the report narrows the view to it and breaks it down by task, as a
- * new place in the history, so Back returns to the view it was pressed in.
+ * new place in the history, so Back returns to the view it was pressed in. Work with no task is
+ * broken down instead by where it came from (`useLineActions`).
  *
  * The page opens on its overview (`OverviewPanel`), the period at a glance; a dimension's section
  * is its whole report.
  *
- * The live period «Now» reads itself again on an interval while the page is seen
- * (`useLiveRefresh`); no other period does.
+ * The periods still running, «Now» and «Today», read themselves again on an interval while the
+ * page is seen (`useLiveRefresh`); no other period does.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -38,9 +41,12 @@ import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
+import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
+import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
+import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -52,15 +58,19 @@ import {
   orderFilters,
   OVERVIEW,
   readAddress,
+  TOKEN_KINDS_SECTION,
   writeAddress,
 } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
+import { focusOnNothing } from '@/shared/lib/focusRight.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
+import WaitStatus from '@/shared/ui/WaitStatus.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -97,18 +107,23 @@ const reportRefused = computed(() =>
     : null,
 )
 
-/** Writes a change of the view into its address; false, with nothing written, if it does not fit. */
-function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace' = 'replace'): boolean {
+/**
+ * Writes a change of the view into its address; false, with nothing written, if it does not fit.
+ * A section opened — from the rail or a card's heading — and a narrowing are new places Back
+ * returns from (`push`); the period, the measure, the filters and the second dimension change
+ * the place in hand (`replace`). Each caller names which, so none falls to a default.
+ */
+function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace'): boolean {
   const changed = { ...view.value, ...next }
   if (!addressFits(changed)) return false
   emit('state', writeAddress(changed), mode)
   return true
 }
 
-/** The view narrowed to one value of a dimension, broken down by task. */
+/** The view narrowed to one value of a dimension, broken down as that value is (`narrowedBy`). */
 function narrow(dimension: UsageDimension, value: string | null, label: string, part: ReportPart) {
   const filters = orderFilters({ ...view.value.filters, [dimension]: [value] })
-  if (change({ filters, by: 'work_item' }, 'push')) return
+  if (change({ filters, ...lines.narrowedBy(dimension, value) }, 'push')) return
   refused.value = { part, words: t('analytics.drill.full', { value: label }) }
 }
 
@@ -120,6 +135,8 @@ function narrowToDay(day: string, label: string) {
 
 /** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
 const shared = provideSharedUsage({ view: () => view.value, projectId: () => props.projectId })
+/** The page's one status region for its read waits: it says the word while any of them shows. */
+const { shown: readWaitShown } = provideReadWaits()
 const read = useUsageRead({ shared, view: () => view.value, projectId: () => props.projectId })
 
 const today = computed(() => localDay(read.askedAt.value))
@@ -134,10 +151,12 @@ const lastEventAt = computed(() => {
 const filterDimensions = computed<UsageDimension[]>(() =>
   USAGE_DIMENSIONS.filter((dimension) => !(props.projectId && dimension === 'project')),
 )
+const lines = provideLineActions(() => filterDimensions.value)
 
 /** The page's sections, in the rail's order: the overview, then each dimension filtered on. */
 const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
   { value: OVERVIEW, label: t('analytics.frame.overview') },
+  { value: TOKEN_KINDS_SECTION, label: t('analytics.kinds.section') },
   ...filterDimensions.value.map((value) => ({ value, label: words.dimension(value) })),
 ])
 
@@ -162,11 +181,61 @@ const holdsSection = computed(
   () => !overview.value && !narrowScreen.value && 'payload' in read.state.value,
 )
 
-/** A section chosen on the rail: in place beside it, or in place of the list as a new place. */
+/**
+ * How high a section's table stands over the panel's bottom edge where it sticks there
+ * (`DimensionPanel`'s `cover`): the panel's scroll is padded by it, so what the browser brings
+ * into view, a focused part or one scrolled to, stands over the table rather than under it.
+ */
+const tableCover = ref(0)
+const panelPadding = computed(() =>
+  tableCover.value ? { scrollPaddingBlockEnd: `${tableCover.value}px` } : undefined,
+)
+
+/**
+ * A section chosen on the rail or from a card's heading, as a new place in the history, so Back
+ * returns to the section it was chosen in: beside the rail, or in place of the list.
+ */
 function chooseSection(by: AnalyticsSection) {
   if (narrowScreen.value) change({ by, open: true }, 'push')
-  else if (by !== view.value.by) change({ by })
+  else if (by !== view.value.by) change({ by }, 'push')
 }
+
+/** The panel that shows the section on show, which a section opened from a card takes focus to. */
+const panelBox = ref<HTMLElement | null>(null)
+
+/** The overview card whose heading opened the section on show, given focus back on return. */
+let openedFrom: UsageDimension | null = null
+
+/**
+ * A section opened from a card's heading. The heading goes with the overview, and the focus with
+ * it to the page, so beside the rail it moves to the section's panel, which the section names; in
+ * place of the list it moves to the way back, as any section chosen there does.
+ */
+function openFromCard(dimension: UsageDimension) {
+  openedFrom = dimension
+  chooseSection(dimension)
+  if (!narrowScreen.value) moveFocus(panelBox.value)
+}
+
+/**
+ * Back on the overview the focus returns to the heading of the card that opened the section,
+ * once it is drawn, unless the reader has taken it out of the panel since: to a tile of the rail,
+ * say, which the overview was chosen from.
+ */
+watch(
+  [overview, () => read.state.value],
+  () => {
+    const card = openedFrom
+    if (!overview.value || !card) return
+    const heading = panelBox.value?.querySelector<HTMLElement>(
+      `[data-card="${card}"] .overview-top-open`,
+    )
+    if (!heading) return
+    openedFrom = null
+    if (focusOnNothing() || panelBox.value?.contains(document.activeElement)) heading.focus()
+  },
+  { flush: 'post' },
+)
 
 /**
  * Where focus goes as the list and a section take turns: the way back, or the section left. Only
@@ -202,7 +271,8 @@ watch(
 )
 
 function filter(dimension: UsageDimension, values: (string | null)[]) {
-  if (change({ filters: orderFilters({ ...view.value.filters, [dimension]: values }) })) return
+  const filters = orderFilters({ ...view.value.filters, [dimension]: values })
+  if (change({ filters }, 'replace')) return
   refused.value = {
     part: 'filters',
     words: t('analytics.filters.full', { dimension: words.dimension(dimension) }),
@@ -226,19 +296,22 @@ function refresh() {
 }
 
 /**
- * «Now» reads itself again while the page is seen, an interval after the last read of the view,
- * whatever asked it: a refresh, or a new period or filter.
+ * «Now» and «Today» read themselves again while the page is seen, an interval after the last read
+ * of the view, whatever asked it: a refresh, or a new period or filter.
  */
-const live = computed(() => view.value.period === 'now')
+const live = computed(() => view.value.period === 'now' || view.value.period === 'today')
 const liveRefresh = useLiveRefresh({ live: () => live.value, refresh })
 watch(
   () => read.askedAt.value,
   () => liveRefresh.restart(),
 )
 
-const emptyDescription = computed(() =>
-  read.bounds.value ? t('analytics.empty.description') : t('analytics.period.incomplete'),
-)
+/** What an empty answer suggests: a longer period, and a filter taken out only when one is set. */
+const emptyDescription = computed(() => {
+  if (!read.bounds.value) return t('analytics.period.incomplete')
+  const filtered = Object.values(view.value.filters).some((values) => values?.length)
+  return filtered ? t('analytics.empty.description') : t('analytics.empty.unfiltered')
+})
 </script>
 
 <template>
@@ -248,6 +321,11 @@ const emptyDescription = computed(() =>
     :class="{ 'analytics-narrow': narrowScreen }"
     :aria-label="t('analytics.title')"
   >
+    <!-- Always in the markup, empty until a wait has lasted: the page's waits are said here once. -->
+    <WaitStatus
+      class="analytics-read-wait"
+      :shown="readWaitShown"
+    />
     <AnalyticsBar
       v-model:adding="adding"
       class="analytics-page-bar"
@@ -258,7 +336,7 @@ const emptyDescription = computed(() =>
       :today="today"
       :values="read.filterValues.value"
       :view="view"
-      @amend="(next) => change(next)"
+      @amend="(next) => change(next, 'replace')"
       @filter="filter"
       @refresh="refresh"
     />
@@ -280,8 +358,11 @@ const emptyDescription = computed(() =>
       />
       <section
         v-show="showsPanel"
+        ref="panelBox"
         class="analytics-panel"
+        tabindex="-1"
         :class="{ 'analytics-panel-held': holdsSection }"
+        :style="panelPadding"
         :aria-label="sectionName"
       >
         <div
@@ -322,10 +403,15 @@ const emptyDescription = computed(() =>
               :measure="view.measure"
               :project-scoped="Boolean(projectId)"
               :refused="reportRefused"
-              @update:measure="(measure) => change({ measure })"
+              @update:measure="(measure) => change({ measure }, 'replace')"
               @narrow="narrow"
               @day="narrowToDay"
-              @open="chooseSection"
+              @open="openFromCard"
+              @retry="read.retry"
+            />
+            <TokenKindsPanel
+              v-else-if="view.by === TOKEN_KINDS_SECTION"
+              :usage="payload"
               @retry="read.retry"
             />
             <DimensionPanel
@@ -340,8 +426,9 @@ const emptyDescription = computed(() =>
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :refused="reportRefused"
-              @update:measure="(measure) => change({ measure })"
-              @update:across="(across) => change({ across })"
+              @update:measure="(measure) => change({ measure }, 'replace')"
+              @update:across="(across) => change({ across }, 'replace')"
+              @cover="(height) => (tableCover = height)"
               @narrow="narrow"
               @day="narrowToDay"
               @retry="read.retry"
@@ -372,11 +459,13 @@ const emptyDescription = computed(() =>
 }
 
 /* One column while the list and a section take turns; beside each other, the rail's width is
-   set where the room for them is measured (`usePanelRoom`). */
+   set where the room for them is measured (`usePanelRoom`). What the panel raises over itself —
+   a table's held heading — stays inside it, under the list of filters the bar opens over it. */
 .analytics-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
+  isolation: isolate;
 }
 
 /* Each of the two holds what it scrolls, a copy for a reader placed out of sight among it too:
@@ -400,9 +489,18 @@ const emptyDescription = computed(() =>
   align-content: start;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-3) var(--size-page-gutter) var(--space-12);
+
+  /* The air under the content is the one a section's held table sticks past
+     (`DimensionPanel.vue`, `.dimension-table`): change both together. */
+  padding: var(--space-3) var(--size-page-gutter) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
+
+  /* Focus taken to the section after a key rings the panel inside its edge, which the window
+     and the rail would cut outside it. */
+  &:focus-visible {
+    outline-offset: calc(-1 * (var(--size-focus-ring) + 2px));
+  }
 }
 
 /* A dimension's section stands in the panel's whole height and scrolls its own parts, so the

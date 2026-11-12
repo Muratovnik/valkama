@@ -140,10 +140,18 @@ export interface PeriodColumn {
    */
   action?: string
   /**
-   * What the period it is compared with held at this place, drawn as a dashed outline on the same
-   * scale; null where that period has no figure, and undefined where nothing is compared.
+   * What the period it is compared with held at this place, drawn as a short mark at that height
+   * on the same scale; null where that period has no figure, and undefined where nothing is
+   * compared.
    */
   before?: number | null
+  /**
+   * The period's short name with its month, «Oct 27», and which month that is: the time axis
+   * prints it instead of `label` under the first period it names and under the first it names of
+   * each later month, so a span across months says which. None where a name needs no month, as
+   * an hour's.
+   */
+  dated?: { label: string; month: string }
   /** The period named in full, for its accessible name and the table; `label` otherwise. */
   fullLabel?: string
   /** A period still running, whose amount is what it holds so far. */
@@ -179,11 +187,6 @@ export interface PeriodWords {
   emptyDescription?: string
   /** What a period with no data yet says of itself (`PeriodColumn.pending`): "No data yet". */
   pending?: string
-  /**
-   * The one line under the chart that counts its changes where there are too many for a line
-   * each (`foldChanges`): "Account changes: 12". Without it every change has its line.
-   */
-  changes?: (count: number) => string
 }
 
 /** What a press in a period chart opens: a period, or one series in it. */
@@ -287,7 +290,7 @@ export function stackColumns(
     const absent = series.filter((one) => column.absent?.includes(one.key))
     return { column, total: reached, segments, marks: notes, absent }
   })
-  // The period compared with stands on the same scale, so its outline is never cut off.
+  // The period compared with stands on the same scale, so its mark is never cut off.
   const before = columns.map((column) => drawable(column.before ?? 0))
   const steps = axis(Math.max(0, ...stacked.map((one) => one.total), ...before))
   const ticks = steps.map((step) => step.value)
@@ -331,7 +334,10 @@ export function labelledColumns(count: number, width: number): number[] {
 
 /** A label set along one edge of a plot, at a share of its length. */
 export interface PlacedTick {
-  /** Which point of the label stands there; the first and the last keep inside the edge. */
+  /**
+   * Which point of the label stands there. Wherever it stands, a label along an edge keeps inside
+   * it, moved in by no more than it would hang past (`ChartTicks`).
+   */
   edge: 'end' | 'middle' | 'start'
   key: number | string
   /** Where along the edge, from 0 at its start (or the baseline) to 1 at its end. */
@@ -339,12 +345,6 @@ export interface PlacedTick {
   text: string
   /** A second line under the first: "so far" under a period still running. */
   note?: string
-}
-
-function edgeOf(index: number, count: number): PlacedTick['edge'] {
-  if (index === 0) return 'start'
-  if (index === count - 1) return 'end'
-  return 'middle'
 }
 
 /** The narrowest a period's column is drawn, and the widest it grows where its period has room. */
@@ -361,24 +361,69 @@ export function columnWidth(count: number, width: number): number {
   return Math.min(COLUMN.most, Math.max(COLUMN.least, half))
 }
 
-/** The time axis: each period it has room to name under its column, and any still running. */
+/** The least room between two names on the time axis, in pixels: more than a space. */
+const LABEL_GAP = 8
+
+/**
+ * Where a name of the time axis stands, in pixels from the axis's start: under the middle of its
+ * column, moved in only as far as it would hang past either end, as `ChartTicks` places it.
+ */
+function labelSpan(index: number, count: number, width: number, wide: number) {
+  const middle = ((index + 0.5) / count) * width
+  const start = Math.max(0, Math.min(middle - wide / 2, width - wide))
+  return { start, end: start + wide }
+}
+
+/**
+ * The time axis: each period it has room to name under the middle of its column, and any still
+ * running; the first and the last too, which the axis moves in only as far as their names would
+ * hang past the plot. The first name printed, and the first printed of each later month, carry
+ * their month (`PeriodColumn.dated`).
+ *
+ * No two names come closer than `LABEL_GAP`, each as wide as `measure` says its text and its
+ * note are: a period still running keeps its name, and a neighbour that would touch it gives
+ * way, as does any name that would touch one nearer the end. Without a measure (0 for every
+ * text) only names standing in one place would touch.
+ */
 export function dayTicks(
   columns: readonly PeriodColumn[],
   width: number,
   incomplete: string,
+  measure: (text: string) => number = () => 0,
 ): PlacedTick[] {
   const count = columns.length
-  const named = new Set(labelledColumns(count, width))
-  for (const [index, column] of columns.entries()) if (column.incomplete) named.add(index)
-  return [...named]
+  const running = columns.flatMap((column, index) => (column.incomplete ? [index] : []))
+  // The running periods first, then the rest from the end back: who gives way is decided here.
+  const wanted = [...new Set([...running.reverse(), ...labelledColumns(count, width).reverse()])]
+  const kept: { end: number; index: number; start: number }[] = []
+  for (const index of wanted) {
+    const column = columns[index]
+    if (!column) continue
+    // Measured at its widest — dated or not — since which name carries the month is known last.
+    const wide = Math.max(
+      measure(column.label),
+      column.dated ? measure(column.dated.label) : 0,
+      column.incomplete ? measure(incomplete) : 0,
+    )
+    const span = labelSpan(index, count, width, wide)
+    const clear = kept.every(
+      (other) => span.end + LABEL_GAP <= other.start || other.end + LABEL_GAP <= span.start,
+    )
+    if (clear || width <= 0) kept.push({ index, ...span })
+  }
+  let month: string | undefined
+  return kept
+    .map((one) => one.index)
     .sort((left, right) => left - right)
     .flatMap((index) => {
       const column = columns[index]
       if (!column) return []
-      const edge = edgeOf(index, count)
-      const offset = { start: 0, end: 1, middle: (index + 0.5) / count }[edge]
+      const { dated } = column
+      const text = dated && dated.month !== month ? dated.label : column.label
+      month = dated?.month
       const note = column.incomplete ? { note: incomplete } : {}
-      return [{ key: column.key, text: column.label, offset, edge, ...note }]
+      const offset = (index + 0.5) / count
+      return [{ key: column.key, text, offset, edge: 'middle' as const, ...note }]
     })
 }
 
@@ -390,7 +435,10 @@ const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stack
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
   const parts = seriesParts(stacked.segments, format)
   const head = columnHead(stacked, words, format)
-  return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
+  return [
+    parts.length ? `${head}; ${parts.join(', ')}` : head,
+    ...columnNotes(stacked, words, { withSum: true }),
+  ]
     .filter(Boolean)
     .join('. ')
 }
@@ -400,24 +448,47 @@ function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) 
   const before = stacked.column.before
   const compared =
     words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
-  return hasSum(stacked) && !stacked.column.pending
-    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+  return saysSum(stacked)
+    ? `${periodName(stacked)}: ${sumWords(stacked, words, format)}${compared}`
     : `${periodName(stacked)}${compared}`
+}
+
+/** Whether words about a period say its sum: it has one, and its figures are in. */
+const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
+
+/** A period's sum, «total 3 h», and «so far» after it while the period is still running. */
+function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const running = stacked.column.incomplete ? ` ${words.incomplete}` : ''
+  return `${words.total} ${format(stacked.total)}${running}`
 }
 
 const seriesParts = (segments: readonly StackSegment[], format: Format) =>
   segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
 
 /**
- * A period as the two lines of the readout over its chart: its name, sum, the period compared
- * with and what is said of it; then each series in it, the largest first.
+ * A period as the one line of the readout over its chart: its name, sum and the period compared
+ * with, what is said of it — such as a change of account at its start — and then each series in
+ * it, the largest first, so what a narrow line cuts is the tail of the series.
  */
-export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
+export function readoutLine(stacked: StackedColumn, words: PeriodWords, format: Format) {
   const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
-  return {
-    head: [columnHead(stacked, words, format), ...columnNotes(stacked, words)].join('. '),
-    series: seriesParts(largest, format).join(', '),
-  }
+  const series = seriesParts(largest, format).join(', ')
+  return [
+    columnHead(stacked, words, format),
+    ...columnNotes(stacked, words, { withSum: true }),
+    ...(series ? [series] : []),
+  ].join('. ')
+}
+
+/**
+ * The period the readout says while neither the pointer nor the keyboard stands on one: the last
+ * period begun, which is the one still running where one is, so a day read by its hours says the
+ * hour under way rather than the last hour of the day, still to come; the last period otherwise.
+ */
+export function lastBegun(columns: readonly StackedColumn[]): number {
+  for (let index = columns.length - 1; index >= 0; index -= 1)
+    if (columns[index]?.column.incomplete) return index
+  return columns.length - 1
 }
 
 /** One segment in words, with the sum of the period it stands in. */
@@ -427,70 +498,27 @@ export function segmentSummary(
   words: PeriodWords,
   format: Format,
 ): string {
-  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${words.total} ${format(stacked.total)}`
-  return [head, ...columnNotes(stacked, words)].join('. ')
-}
-
-/** A change the chart marks, numbered in time order: the plot shows the number, a note the words. */
-export interface ChangeNote {
-  index: number
-  number: number
-  period: string
-  text: string
-}
-
-export function changeNotes(columns: readonly StackedColumn[]): ChangeNote[] {
-  return columns
-    .flatMap((one, index) =>
-      one.marks.map((text) => ({ index, period: one.column.fullLabel ?? one.column.label, text })),
-    )
-    .map((note, at) => ({ ...note, number: at + 1 }))
-}
-
-/** Up to this many changes are noted a line each under the chart; more fold into one line. */
-const NOTED_CHANGES = 2
-
-/**
- * The changes under the chart as one line that counts them, with every change in its whole
- * text, where there are more than `NOTED_CHANGES` and the chart has words for it; null where
- * each change keeps its own line.
- */
-export function foldChanges(notes: readonly ChangeNote[], words: PeriodWords) {
-  if (!words.changes || notes.length <= NOTED_CHANGES) return null
-  const whole = notes.map((note) => `${note.period}: ${note.text}`).join('; ')
-  return { text: words.changes(notes.length), whole }
-}
-
-/**
- * The numbers over the plot, one label per period that changed, at that period's start; with
- * the changes folded into one line (`numbered` false) the lines stand there with no number.
- */
-export function changeMarkers(
-  notes: readonly ChangeNote[],
-  count: number,
-  numbered = true,
-): PlacedTick[] {
-  const byColumn = new Map<number, number[]>()
-  for (const note of notes)
-    byColumn.set(note.index, [...(byColumn.get(note.index) ?? []), note.number])
-  return [...byColumn].map(([index, numbers]) => ({
-    key: index,
-    text: numbered ? numbers.join(', ') : '',
-    offset: index / count,
-    edge: 'middle',
-  }))
+  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${sumWords(stacked, words, format)}`
+  return [head, ...columnNotes(stacked, words, { withSum: true })].join('. ')
 }
 
 /**
  * What is said of a period besides its numbers: that it is still running, that it has no data
- * yet, which series have no figure in it, what changed.
+ * yet, which series have no figure in it, what changed. Said `withSum`, after words that say the
+ * period's sum (`columnHead`), «so far» stands after that sum and is no note of its own; the
+ * table, whose sum has a cell of its own, keeps it among the notes.
  */
-export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[] {
+export function columnNotes(
+  stacked: StackedColumn,
+  words: PeriodWords,
+  { withSum = false }: { withSum?: boolean } = {},
+): string[] {
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
   const pending = stacked.column.pending && words.pending ? [words.pending] : []
   // A period with no data yet holds nothing «so far»: it says only that it has none.
-  const running = stacked.column.incomplete && !pending.length ? [words.incomplete] : []
+  const said = withSum && saysSum(stacked)
+  const running = stacked.column.incomplete && !pending.length && !said ? [words.incomplete] : []
   return [...running, ...pending, ...absent, ...stacked.marks]
 }
 

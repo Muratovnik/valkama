@@ -12,13 +12,6 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
-- **A space's stream does not send the space the page has just read.** `GET /api/planning`
-  and each frame of `GET /api/events?view=planning` carry `revision`, a digest of the
-  model, and the page opens the stream after its read with `since=<revision>`. While the
-  model is unchanged the stream says `event: current` instead of sending the whole space
-  again, so the server no longer builds it twice at once and the page no longer parses it
-  twice. A change between the read and the stream still comes as the first frame, and a
-  browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context
@@ -29,16 +22,6 @@ checkouts are therefore distinguishable even at the same version.
   motion nothing in it moves. The window remembers the rail's width beside the language
   whenever the reader changes either and as the window closes, so the next start draws
   the rail where it was left; a window that has never heard a width draws the default.
-
-### Fixed
-
-- **A relation linked from both ends is one link.** `relates-to` written from the
-  other end used to add a second record, so a card listed the relation twice, and
-  removing it from that end left the first record in place. It is now one link
-  whichever end writes it, either end removes it, and a repeated link writes no
-  history. A store that holds such pairs keeps the earlier record of each when it
-  is opened, after a verified recovery point; `blocks`, `discovered-from` and
-  `duplicates` are left as they are.
 
 ### Fixed
 
@@ -76,6 +59,20 @@ checkouts are therefore distinguishable even at the same version.
 - **A chart's time axis counts in one round unit.** Agent time on an axis reads in
   minutes, hours or days, whichever fits the largest value, instead of mixing days and
   hours in one tick.
+- **A card's Agents tab says the totals and leads to Analytics.** Under the figures — work,
+  all agents, cost, tokens — now stands the link to the same work on the Analytics page,
+  which breaks it down by kind of token, model and effort; the card no longer repeats those
+  lists. Who did the work is one list by role and launch class, rows that differed only by
+  effort added together, and a row of under a minute with no tokens is left out. What a
+  figure counts is said when you point at it, focus it or tap it, and only a cost missing a
+  price keeps a line of its own under the figures.
+- **A space's stream does not send the space the page has just read.** `GET /api/planning`
+  and each frame of `GET /api/events?view=planning` carry `revision`, a digest of the
+  model, and the page opens the stream after its read with `since=<revision>`. While the
+  model is unchanged the stream says `event: current` instead of sending the whole space
+  again, so the server no longer builds it twice at once and the page no longer parses it
+  twice. A change between the read and the stream still comes as the first frame, and a
+  browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
 
 ### Added
 
@@ -92,6 +89,45 @@ checkouts are therefore distinguishable even at the same version.
   2,400 steps, which is forty hours by the minute. A stretch of work is split between its
   minutes in proportion to its time, as it is between hours, so a minute's tokens and
   cost are a share of the stretch, not a count of what was sent in that minute.
+- **You see when Valkama tells the agent your news.** The notice a hook hands the agent
+  about its work items reaches the model only, so the agent could say in your chat that
+  you answered, or that another agent wrote, with nothing on screen to show why. In Claude
+  Code the orchestrator's hook answer now also carries a `systemMessage`, which the client
+  shows you and does not send to the model: one line per item the notice tells, with the
+  item's reference and title, saying whether it was what you did, what another agent
+  wrote, or both. It is written in the language of owner alerts, Russian or English. A
+  subagent's hook and Codex answer as before, without it.
+- **Analytics names sessions and accounts instead of showing hex ids.** An executor is
+  labelled by the title its client gave the session, the same one the live work list
+  shows, wherever Analytics names it: the rail, the cards, the bars, the table, the
+  crossed table's headings, the filters and the chart readout. The client and the start of
+  the session id move to the label's hint, beside the name in the table and under the
+  choice in a filter's list. A session with no title, such as a Codex session, keeps its
+  old label. `GET /api/analytics/usage` now gives an executor a `title`, read from the
+  tail of its transcript and kept nowhere. Each transcript is read once per answer and
+  again only after it changes.
+- **Names for accounts.** The usage records hold only an organization id, so Settings →
+  General → Accounts lists each account the past year saw, with its id and its share of
+  agent time, and lets you name it or clear the name. Analytics labels the account by
+  that name, with the id in the hint. Names are kept on the device, like task type colours.
+
+### Fixed
+
+- **Reads a page sends at once no longer queue for the store, and Analytics opens in about
+  half the time.** Every read opened the store through its whole bring-up under the lock
+  that serialises migrations, so the reads a page sends at once each waited out the lock
+  for all the ones before it, and the page's wait mark stayed up until the last. A read of a store already
+  at this build's schema now opens it without that lock; any other store is still brought
+  up, migrated or refused first. The usage reads themselves are worked out one at a time,
+  because side by side they only traded the interpreter lock on every row and all finished
+  late; in turn, the first is answered in its own time.
+- **A relation linked from both ends is one link.** `relates-to` written from the
+  other end used to add a second record, so a card listed the relation twice, and
+  removing it from that end left the first record in place. It is now one link
+  whichever end writes it, either end removes it, and a repeated link writes no
+  history. A store that holds such pairs keeps the earlier record of each when it
+  is opened, after a verified recovery point; `blocks`, `discovered-from` and
+  `duplicates` are left as they are.
 
 ## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
 

@@ -35,7 +35,8 @@ colors:
   series-4: "#9085e9"
   series-5: "#c98500"
   series-6: "#d55181"
-  series-other: "#b3b3b3"
+  series-apart: "#b3b3b3"
+  series-other: "#e6e6e6"
 
 typography:
   scale:
@@ -911,35 +912,53 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its hue from `seriesSlots()`, which pins a slot to the name — the whole domain in code-point
   order, never by rank, so a filter repaints nothing — out of six `--color-series-*` hues
   ordered so that neighbours in a stack stay apart under protanopia and deuteranopia. A
-  seventh series folds into `--color-series-other`, the neutral that also draws, in a stack,
-  the rows that are not categories — the folded tail, «no task», «unknown». In a section's
+  seventh series folds into `--color-series-other`, the lighter of two neutrals, which draws
+  the folded tail; the rows that are not categories, «no task» and «unknown», are the darker
+  `--color-series-apart`. Two greys and no hue: in a stack the two can stand on each other and
+  are often a period's two largest parts, so they differ in lightness for every reader, and the
+  legend names them in the stack's order. In a section's
   ranked chart and small charts «no task» and «unknown» stand where their figures put them,
-  drawn on the same scale in that neutral with their names in the quiet ink, since the largest
+  drawn on the same scale in their neutral with their names in the quiet ink, since the largest
   share of a period can be work on no task; only the folded tail closes the chart, apart and
   unranked, and sets no scale. Elsewhere, as in a card of first values, all three close the
   chart in a list of their own, set apart by air, draw no bar and are read by their figures.
   A hue
   never speaks alone: a chart of two series or more carries a legend, and the readout over the
   plot and every accessible name say each series by name. The readout says the period under the
-  pointer or the keyboard, the last one when neither stands on one, and keeps one line whatever
-  it says, as each note under the chart does: a longer text ends in an ellipsis and is whole in
-  its hint and in the table, so pointing, leaving and a new answer move nothing on the page. A
+  pointer or the keyboard, the last period begun when neither stands on one — the hour under way
+  of a day read by its hours, not its last hour still to come — and keeps one line whatever it
+  says: the period, its sum and the period before, what is said of it, then the series largest
+  first; a longer line ends in an ellipsis and is whole in its hint and in the table, never
+  wrapped, so pointing, leaving and a new answer move nothing on the page. A
   period still running is hatched (a mask, which adds no colour) and says «so far» under its name, so it does not read as a drop; a change
-  at a period's start, such as the account the work ran under, is a numbered line up the
-  plot with its words under the chart. The periods are one Tab stop and the arrows walk
+  at a period's start, such as the account the work ran under, is a line up the plot in the gap
+  before its column, a shape and not a hue, and the period's readout, name and table row say it,
+  «Account change: a → a, b», naming each account as Settings does: the chart keeps no row for
+  changes, over the plot or under it, so they cost the plot none of its height. The periods are one Tab stop and the arrows walk
   them; nothing in a chart moves on its own. A period that acts when pressed is never
-  narrower than an inline action (`--size-control-inline`, 28px): a span that takes more room
-  than the chart scrolls sideways inside the plot and never moves the page, opens on its
-  last periods, keeps the value axis in view over the plot's start, and brings a period the
-  keyboard reaches clear of that axis with its focus ring whole. Periods that only show
+  narrower than the 24px target WCAG 2.5.8 asks (`--period-reach`), and a span whose periods
+  all fit the chart at that width never scrolls: an inline action's 28px scrolled four weeks
+  beside the rail by a few pixels. A span that takes more room than the chart scrolls sideways
+  inside the plot and never moves the page, opens on its first periods, fades out toward an
+  edge past which periods are hidden (a mask, which paints no colour and drops while the
+  keyboard stands in the plot), keeps the value axis in view over the plot's start, and brings
+  a period the keyboard reaches clear of that axis with its focus ring whole. Periods that only show
   keep sharing the chart's width, however narrow that makes them. A period compared with the
-  one shown stands on the same scale as an open dashed outline over each column, an edge and
-  not a hue: the legend names it beside a short dashed edge, the readout says its figure beside
-  the sum, and the table gives it a column after the sum. A single day stands by the hour, and
+  one shown stands on the same scale as a short line at its height over each column, an edge
+  and not a hue, so a period before that was larger never outweighs the columns shown: the
+  legend names it beside the same short line, the readout says its figure beside the sum, and
+  the table gives it a column after the sum. The time axis names each period under the middle
+  of its column, the first and the last too, moved in only as far as a name would hang past the
+  plot, and no two names come within 8px of each other, measured in the axis's font: a period
+  still running keeps its name, and a neighbour that would touch it gives way. A day is named by
+  its weekday, and the first name the axis prints and the first it prints of each later month by
+  the date with the month, «Oct 27», «Nov 1» (`stepName` in the page's words, so every chart of
+  days has it), so a span across months says which; the table names every day in full. The plot's frame is as tall as the plot with its names, so it never scrolls up and down. A single day stands by the hour, and
   an hour only shows. Where a ranked chart shares a row with others, as a card of first values
-  does, it is `dense`: the name and the value on one line and a thin bar under them.
+  does, it is `dense`: the name and the value on one line and a thin bar under them, each value
+  as wide as its own figure and its name taking the rest of the row.
   Two small charts stand beside a figure rather than in a section of their own, as the
-  Analytics rail's tiles use them: `MiniTrend`, a column per period on a hairline floor with no
+  Analytics rail's tiles and the page's three figures use them: `MiniTrend`, a column per period on a hairline floor with no
   scale and no names, and `MiniShareBar`, one thin bar of a whole split into its first parts,
   largest first, with what they leave out last in the neutral. Each is one image whose words say
   what it draws — the highest and the last period, every part with its share — so neither is read
@@ -2108,27 +2127,45 @@ and a panel. Nothing in it moves under the pointer or when an answer arrives; a 
 has nothing to say yet keeps the room it will need.
 
 The bar holds what every part reads by: the period, the filters, how old the newest
-record is and the refresh. A period is «Now», this week, the past four weeks or a span
-of days. «Now» is the last hour by the minute; it reads again every 30 seconds while the
-tab is visible and says so in the bar, a hidden tab asks nothing, and a refresh shows its
-answer whole or not at all, so the scroll, the section, the sort and the place under the
-pointer stay. Records reach the store in batches, so the bar says the newest record's
+record is and the refresh. A period is «Now», «Today», this week, the past four weeks or a
+span of days. «Now» is the last hour by the minute and «Today» the day so far by the hour,
+against the same hours of yesterday; both read again every 30 seconds while the tab is
+visible and say so in the bar, a hidden tab asks nothing, and a refresh shows its answer
+whole or not at all, so the scroll, the section, the sort and the place under the pointer
+stay. A refresh that fails keeps what is shown and says so in the bar, «Could not refresh»
+with a retry. Reading another period or filter dims what is shown until its answer comes, after
+a moment so that a quick answer does not flicker; a refresh of the same view dims nothing.
+Records reach the store in batches, so the bar says the newest record's
 age in seconds and the minutes after it are hatched as «no data yet» rather than drawn
 as a drop; the minute chart says under itself that its figures are an estimate.
 
-The rail holds a tile for the overview and one for each dimension of the read: account,
-project, task, executor, role, launch class, model, effort and environment. A tile is a
-summary of its own — the leading value, its share, how many values there are and one bar
-of the split — so every breakdown is in view before any is opened, and choosing a tile
-opens its section in the panel. The rail and the panel stand side by side only while the
-panel keeps 640 pixels; narrower, a section takes the rail's place and a way back stands
-over it. A plain address opens the overview.
+The rail holds a tile for the overview, one for the token kinds and one for each dimension
+of the read: account, project, task, executor, role, launch class, model, effort and
+environment. A tile is a summary of its own — the leading value, its share, how many values
+have a figure in the chosen measure and one bar of the split — so every breakdown is in view
+before any is opened, and choosing a tile opens its section in the panel. Opening a section,
+from its tile or a card's heading, is a step of the history, so Back returns to where it was;
+a period, a measure or a second dimension replaces the step. The rail and the panel stand
+side by side only while the panel keeps 640 pixels; narrower, a section takes the rail's
+place and a way back stands over it. A plain address opens the overview.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
-before, and the chosen cell sets the measure of everything else on the page; the period
-chart with the period before as a dashed outline; the tasks that grew and fell the most;
-and the first five tasks, models, roles and projects, each card opening its section.
+before and, beside its figure, its own measure as a small trend over the steps of the
+period chart (`MiniTrend`, words as the rail's tile says them), and the chosen cell sets the
+measure of everything else on the page. Under its change the tokens cell and the cost cell say
+what an hour of agent time took of them beside the period before's, «$17.9/h, was 8.1», the
+cost's hint naming it an estimate at API prices; a period with no agent time has no such line
+and a period before with none gives no «was», the line's place kept either way, and the chart
+draws no second axis for it. Across the panel under the cells stands the period chart, with the
+period before as a short line at its height, and under the chart one row of cards: the four tasks that grew or fell the most, each its name over its
+change, then the first five tasks, models and projects, each card opening its section. The
+roles have no card: there are two, and their rail tile says both. A cell not chosen takes the
+hovered ground under the pointer, and nothing moves. The overview may scroll: the chart's
+drawing field, where its columns stand without the scale and the steps' names, is never lower
+than 200 pixels, however many account changes it marks; where the panel lacks the room the
+panel scrolls rather than the chart shrinking, and a tall window's room under the cards goes
+to the chart.
 
 A dimension's section answers «of what»: the same cells, then its values three ways. The
 ranked bars list the first twelve and say how many more the table holds; the small charts
@@ -2139,8 +2176,22 @@ keeps one colour on the whole page: in its tile, its bar, its small chart and it
 a day. Beside the rail the section is held to the window: the cells stay in view, the
 charts take what they hold up to a share of the rest and scroll inside it, and the table
 takes what is left and scrolls in its own frame, its heading, names and total held; a
-button gives the table the whole panel and gives it back. The table sorts by any column,
-crosses with a second dimension and downloads what it shows.
+button gives the table the whole panel and gives it back. Where the window is too low for
+that, the panel scrolls as one and the table stays at its foot: the wheel over the table
+scrolls the table, and what focus or a press brings into view stops above it. The table
+sorts by any column, crosses with a second dimension and downloads what it shows. A line
+under its heading row counts the values of the period that have a figure in the measure, as
+their tile does, and says apart those that spent in the period only in another measure — the
+adviser has tokens and no agent time — and those that spent only before it. The line is a row
+of its own, kept while it has nothing to say, so its words are whole whatever the measure adds
+to them and choosing a measure moves nothing under it; where even that row is too narrow it
+breaks between its parts, never inside one. Under the measure «tokens» each value's tokens by
+kind follow its change: the name, the three measures, the period before and the change stand
+in the frame as it opens, their headings taking a second line rather than the frame's room,
+and the kinds are reached by the table's own sideways scroll.
+
+The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
+figure counts add up to it, cache reads stand beside them and reasoning is part of output.
 
 A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
 are counted apart from the tokens processed anew and never summed into them.
@@ -2163,7 +2214,12 @@ a real notification; turning the switch off keeps the events chosen. Task type c
 holds a row per type: its glyph and word in the colour they have now, the platform's
 colour field, the value in words and a reset, with one reset for all under them. A
 colour under 3:1 on the hover card is said beside its field in a quiet line and stays
-chosen. A plain task has no glyph anywhere, so its row is its word.
+chosen. A plain task has no glyph anywhere, so its row is its word. Accounts holds a
+row per account the past year's work was billed to, the most agent time first: its
+whole id with its share of that time, a name field whose placeholder says what Analytics
+shows without one, and a clear; an account named before that the year did not see keeps
+its row, so its name can still be taken away. Analytics says an account by that name and
+a session by the title its client gave it, with the id in the hint.
 
 ## Accessibility
 

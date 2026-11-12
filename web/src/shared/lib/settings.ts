@@ -1,8 +1,8 @@
 /**
  * The owner's local preferences: opening sessions and files, whether a card offers
  * its Execution tab, the colours of the work item kinds, whether the standard workflow
- * states read in the interface's language, and the views saved in each planning space
- * (`savedViews.ts`).
+ * states read in the interface's language, the views saved in each planning space
+ * (`savedViews.ts`) and the names given to accounts (`accountAliases.ts`).
  *
  * A session opens where it was last open; the server decides that. What the owner
  * sets here is only what the rule falls back to, per client family, and an
@@ -15,6 +15,8 @@
 
 import { EDITORS } from '@/shared/api/openPlanModel.ts'
 import type { Editor, OpenPlace } from '@/shared/api/openPlanModel.ts'
+import { readAccountAliases } from '@/shared/lib/accountAliases.ts'
+import type { AccountAliases } from '@/shared/lib/accountAliases.ts'
 import { readKindColors } from '@/shared/lib/kindColors.ts'
 import type { KindColors } from '@/shared/lib/kindColors.ts'
 import { readSavedViews } from '@/shared/lib/savedViews.ts'
@@ -38,6 +40,8 @@ interface SessionOpening {
 }
 
 export interface PlatformSettings {
+  /** The owner's name for an account, by its id; an account with none is not here. */
+  accountAliases: AccountAliases
   editor: Editor
   executionTab: boolean
   /** Only what the owner chose; a kind not here takes the stylesheet's default. */
@@ -63,6 +67,7 @@ const FAMILY_PLACES: Record<SessionFamily, readonly OpenPlace[]> = {
 const DEFAULT_OPENING: SessionOpening = { fallback: 'vscode', always: '', command: '' }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
+  accountAliases: {},
   editor: 'vscode',
   executionTab: false,
   kindColors: {},
@@ -142,6 +147,7 @@ export function mergeSettings(raw: unknown): PlatformSettings {
   const editor = EDITORS.includes(source.editor as Editor) ? (source.editor as Editor) : 'vscode'
   // Only what this setting itself stored turns it on, so every older shape reads as off.
   return {
+    accountAliases: readAccountAliases(source.accountAliases),
     editor,
     executionTab: source.executionTab === true,
     kindColors: readKindColors(source.kindColors),

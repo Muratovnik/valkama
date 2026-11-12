@@ -135,11 +135,11 @@ describe('the days', () => {
     const source = { usage, by: 'work_item' as const, measure: 'time' as const }
     const series = stackLines(source)
     // The five largest tasks take the hues by rank; no task and unknown are their own series in
-    // the neutral, never a hue; task 6 is «other».
+    // one neutral, never a hue; task 6 is «other», in the other neutral on top of them.
     expect(series.map((one) => [one.key, one.slot])).toEqual([
       ...[1, 2, 3, 4, 5].map((number) => [`v:${task(number, '').id}`, number]),
-      ['none', 'other'],
-      ['unknown', 'other'],
+      ['none', 'apart'],
+      ['unknown', 'apart'],
       ['other', 'other'],
     ])
     const columns = dayColumns(source, series, WEDNESDAY)
@@ -194,19 +194,24 @@ describe('the days', () => {
     expect(days.text()).not.toContain('so far')
   })
 
-  it('mark where the accounts that worked change, past a day nobody worked', () => {
-    expect(accountChanges(byAccount()).map((change) => change.at)).toEqual([
+  it('mark where the accounts that worked change, past a day nobody worked', async () => {
+    expect(accountChanges(byAccount(), 'time').map((change) => change.at)).toEqual([
       momentAt(new Date(2026, 10, 12)),
       momentAt(new Date(2026, 10, 13)),
     ])
     const days = mountDays(fiveDays(), { accounts: byAccount(), readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(2)
-    expect(
-      days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
-    ).toEqual([
-      expect.stringContaining('Accounts: acc-a → acc-b'),
-      expect.stringContaining('Accounts: acc-b → acc-a, acc-b'),
-    ])
+    // Said where the day is read, not in a note under the chart.
+    expect(days.find('.period-notes').exists()).toBe(false)
+    // A span of time keeps its figure and unit together with a space no line breaks at.
+    const readout = () => days.get('.period-readout').text().replaceAll(/\s/gu, ' ')
+    expect(readout()).toBe(
+      'Friday, November 13: total 1 h. Account change: acc-b → acc-a, acc-b. MAIN-1 One 1 h',
+    )
+    await days.get('.period-slot:nth-child(4)').trigger('pointerenter')
+    expect(readout()).toBe(
+      'Thursday, November 12: total 1 h. Account change: acc-a → acc-b. MAIN-1 One 1 h',
+    )
   })
 
   it('read as a table on a narrow page, with the same days, so far and the marks', () => {
@@ -221,7 +226,36 @@ describe('the days', () => {
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
-    expect(notes).toEqual(['', '', '', 'Accounts: acc-a → acc-b', 'Accounts: acc-b → acc-a, acc-b'])
+    expect(notes).toEqual([
+      '',
+      '',
+      '',
+      'Account change: acc-a → acc-b',
+      'Account change: acc-b → acc-a, acc-b',
+    ])
+  })
+
+  it('name the month on the axis at its first day and where a new month starts', () => {
+    // 27 October to 2 November; unmeasured, the axis names the first day and the last.
+    const usage = usageAnswer({
+      first: new Date(2026, 9, 27),
+      days: 7,
+      groupBy: ['work_item'],
+      stretches: [{ day: 0, group: { work_item: task(1, 'One') }, spend: { seconds: 3600 } }],
+    }).usage
+    const names = (locale: 'en' | 'ru') =>
+      mountDays(usage, { readAt: AFTER }, locale)
+        .findAll('.period-axis .chart-tick')
+        .map((tick) => tick.text())
+    expect(names('en')).toEqual(['Oct 27', 'Nov 2'])
+    expect(names('ru')).toEqual(['27 окт.', '2 нояб.'])
+    // The table names every day in full, its month included.
+    const rows = mountDays(usage, { readAt: AFTER, narrow: true })
+      .getComponent(PeriodColumnsTable)
+      .findAll('tbody th')
+      .map((name) => name.text())
+    expect(rows[0]).toBe('Tuesday, October 27')
+    expect(rows[5]).toBe('Sunday, November 1')
   })
 
   it('say the same in Russian', () => {
@@ -252,7 +286,7 @@ function daysOf(...days: readonly (readonly string[])[]): Usage {
 
 /** The days a change stands on, by their index, with the known accounts before and after. */
 const changesOf = (byAccount: Usage) =>
-  accountChanges(byAccount).map((change) => ({
+  accountChanges(byAccount, 'time').map((change) => ({
     day: byAccount.series.findIndex((point) => point.start === change.at),
     before: change.before.map((account) => account.id),
     after: change.after.map((account) => account.id),
@@ -287,22 +321,55 @@ describe('the account marks', () => {
     ])
   })
 
+  it('mark the accounts with a figure above zero in the measure shown, and only those', () => {
+    // acc-b joins on the second day with an hour of work, no token counted and no price.
+    const usage = usageAnswer({
+      first: MONDAY,
+      days: 2,
+      groupBy: ['account'],
+      stretches: [
+        {
+          day: 0,
+          group: { account: value('acc-a') },
+          spend: { seconds: 3600, tokens: 9, cost: 1 },
+        },
+        {
+          day: 1,
+          group: { account: value('acc-a') },
+          spend: { seconds: 3600, tokens: 9, cost: 1 },
+        },
+        { day: 1, group: { account: value('acc-b') }, spend: { seconds: 3600, unpriced: 5 } },
+      ],
+    }).usage
+    const at = (measure: Measure) => accountChanges(usage, measure).map((change) => change.at)
+    expect(at('time')).toEqual([usage.series[1]?.start])
+    expect(at('tokens')).toEqual([])
+    expect(at('cost')).toEqual([])
+    // The chart reads the marks in the measure it draws.
+    const days = mountDays(everyDay(2), { accounts: usage, measure: 'cost', readAt: AFTER })
+    expect(days.findAll('.period-mark')).toHaveLength(0)
+  })
+
   it('mark a change where a known account joins', () => {
     expect(changesOf(daysOf(['acc-a'], ['acc-a', 'acc-b']))).toEqual([
       { day: 1, before: ['acc-a'], after: ['acc-a', 'acc-b'] },
     ])
   })
 
-  it('say the change under the chart and to a screen reader by the known accounts alone', () => {
+  it('say the change in the readout and to a screen reader by the known accounts alone', async () => {
     const accounts = daysOf(['acc-a'], [UNRECORDED], ['acc-b', UNRECORDED], ['acc-b'])
     const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(1)
-    expect(
-      days.findAll('.period-note').map((note) => note.text().replaceAll(/\s+/gu, ' ')),
-    ).toEqual([expect.stringContaining('Accounts: acc-a → acc-b')])
+    await days.get('.period-slot:nth-child(3)').trigger('pointerenter')
+    expect(days.get('.period-readout').text()).toContain('Account change: acc-a → acc-b')
     const named = spokenDays(days).map((day) => day.holds)
-    expect(named.map((name) => name.includes('Accounts:'))).toEqual([false, false, true, false])
-    expect(named[2]).toContain('Accounts: acc-a → acc-b')
+    expect(named.map((name) => name.includes('Account change:'))).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ])
+    expect(named[2]).toContain('Account change: acc-a → acc-b')
     expect(named.join(' ')).not.toContain('Unknown')
 
     const table = mountDays(everyDay(4), { narrow: true, accounts, readAt: AFTER })
@@ -310,7 +377,7 @@ describe('the account marks', () => {
       .getComponent(PeriodColumnsTable)
       .findAll('tbody tr')
       .map((row) => row.findAll('td').at(-1)?.text() ?? '')
-    expect(notes).toEqual(['', '', 'Accounts: acc-a → acc-b', ''])
+    expect(notes).toEqual(['', '', 'Account change: acc-a → acc-b', ''])
   })
 })
 
@@ -382,7 +449,7 @@ describe('the days across the spring change of time', () => {
       'Monday, March 30',
     ])
     const axis = mountDays(acrossTheChange(), { readAt }).get('.period-axis').text()
-    expect(axis).toContain('27 Fri')
+    expect(axis).toContain('Mar 27')
     expect(axis).toContain('30 Mon')
   })
 })

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 /**
- * What changed from the period before: the tasks whose figure in the page's measure rose most and
- * fell most (`mostMoved`), each with an arrow and the amount in the measure's own units, «+6 h 11
- * min», and words where a side had nothing at all. Work on no task is among them, by its name, as
- * it is a large part of what a period spends.
+ * What changed from the period before, a card in the overview's row of cards: the tasks whose
+ * figure in the page's measure rose most and fell most (`mostMoved`), the `SHOWN` that moved by
+ * the most of either way, each its name on a line of its own and under it an arrow, the amount in
+ * the measure's own units, «+6 h 11 min», and words where a side had nothing at all. Two lines an
+ * entry and four entries stand as high as a card's five rows, so the row stays one height and the
+ * name has the card's whole width. Work on no task is among them, by its name, as it is a large
+ * part of what a period spends. The arrow says the way; the headings of the ways are for a
+ * screen reader.
  *
  * A task is a link to its card, as a bar of the breakdown by task is; the rest are lines. With no
  * period before read, the block says so with the page's own way to read it again, and with
@@ -22,7 +26,6 @@ import { comparedLines, figureOf } from '@/pages/analytics/utils/usageFigures.ts
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage } from '@/shared/api/analyticsApi.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -47,7 +50,10 @@ const label = computed(() =>
   period.value ? t('analytics.overview.changes.label', { period: period.value }) : undefined,
 )
 
-const moved = computed(() =>
+/** How many lines the card names: as many as stand as high as a card's rows. */
+const SHOWN = 4
+
+const most = computed(() =>
   mostMoved(
     comparedLines({
       before: comparison.value?.rows ?? null,
@@ -59,6 +65,18 @@ const moved = computed(() =>
     props.measure,
   ),
 )
+/** The lines that moved by the most of either way, each way still largest first. */
+const moved = computed(() => {
+  const shown = new Set(
+    [...most.value.up, ...most.value.down]
+      .sort((left, right) => Math.abs(right.by) - Math.abs(left.by))
+      .slice(0, SHOWN),
+  )
+  return {
+    up: most.value.up.filter((one) => shown.has(one)),
+    down: most.value.down.filter((one) => shown.has(one)),
+  }
+})
 
 /** A line as the block says it: its name, the amount, and words for a side that had nothing. */
 function said(one: MovedLine) {
@@ -103,12 +121,9 @@ function follow(key: string, event: MouseEvent) {
     class="overview-changes"
     :aria-label="label"
   >
-    <SectionHeading
-      as="h2"
-      level="page"
-    >
+    <h3 class="overview-changes-head">
       {{ t('analytics.overview.changes.title') }}
-    </SectionHeading>
+    </h3>
     <div
       v-if="!comparison"
       class="overview-changes-unread"
@@ -129,15 +144,17 @@ function follow(key: string, event: MouseEvent) {
       :title="t('analytics.overview.changes.still', { period })"
       inline
     />
-    <template v-else>
+    <div
+      v-else
+      class="overview-changes-ways"
+    >
       <div
         v-for="group in groups"
         :key="group.way"
-        class="overview-changes-group"
       >
-        <h3 class="overview-changes-way">
+        <h4 class="visually-hidden">
           {{ group.heading }}
-        </h3>
+        </h4>
         <ul class="overview-changes-list">
           <li
             v-for="line in group.lines"
@@ -150,32 +167,43 @@ function follow(key: string, event: MouseEvent) {
               :data-way="group.way"
               @click="(event: MouseEvent) => line.href && follow(line.key, event)"
             >
-              <VIcon
-                class="overview-changes-arrow"
-                :name="line.icon"
-                :size="14"
-              />
               <span class="overview-changes-name one-line">{{ line.name }}</span>
-              <span class="overview-changes-amount">{{ line.amount }}</span>
-              <span
-                v-if="line.note"
-                class="overview-changes-note"
-                >{{ line.note }}</span
-              >
+              <span class="overview-changes-by">
+                <VIcon
+                  class="overview-changes-arrow"
+                  :name="line.icon"
+                  :size="14"
+                />
+                <span class="overview-changes-amount">{{ line.amount }}</span>
+                <span
+                  v-if="line.note"
+                  class="overview-changes-note one-line"
+                  >{{ line.note }}</span
+                >
+              </span>
             </component>
           </li>
         </ul>
       </div>
-    </template>
+    </div>
   </section>
 </template>
 
 <style scoped>
+/* A card of the row: its heading stands as a card's does, and its entries under it. */
 .overview-changes {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-content: start;
   min-width: 0;
+}
+
+.overview-changes-head {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--size-control-inline);
+  margin: 0;
+  font: var(--font-field-label);
 }
 
 .overview-changes-unread {
@@ -185,15 +213,8 @@ function follow(key: string, event: MouseEvent) {
   align-items: center;
 }
 
-.overview-changes-group {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.overview-changes-way {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-field-label);
+.overview-changes-ways {
+  min-width: 0;
 }
 
 .overview-changes-list {
@@ -203,15 +224,11 @@ function follow(key: string, event: MouseEvent) {
   list-style: none;
 }
 
-/* A line of the block, as a row of a ranked chart is: the arrow, the name cut to one line, the
-   amount at the end in one column of figures, and the words for a side with nothing under it. */
+/* An entry: the name on its line, cut to it, and under it the arrow, the amount in tabular
+   figures and the words for a side with nothing, which give way before the amount does. */
 .overview-changes-line {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 0 var(--space-2);
-  align-items: center;
-  min-block-size: var(--size-control-inline);
-  padding: var(--space-1) var(--space-2);
+  padding: 0 var(--space-2);
   color: var(--color-text);
   font: var(--font-detail);
   text-decoration: none;
@@ -236,17 +253,27 @@ function follow(key: string, event: MouseEvent) {
   }
 }
 
+.overview-changes-by {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .overview-changes-arrow {
+  flex: none;
   color: var(--color-text-muted);
 }
 
 .overview-changes-amount {
+  flex: none;
+  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .overview-changes-note {
-  grid-column: 2 / -1;
+  min-width: 0;
   color: var(--color-text-tertiary);
 }
 </style>

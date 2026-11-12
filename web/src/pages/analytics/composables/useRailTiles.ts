@@ -4,15 +4,19 @@
  * The overview's tile reads the page's own answer, the one its panel shows, so it adds no read:
  * the period's total, how it moved from the period before, and its days as a small trend. A
  * dimension's tile reads its own breakdown (`useRailReads`): how many values worked, the first of
- * them with its share, and the shares of the first few as a small bar.
+ * them with its share, and the shares of the first few as a small bar. The tile of the tokens by
+ * kind reads the page's own answer too: the largest kind the tokens figure counts, its share of
+ * that figure, and the counted kinds' shares, whatever the page's measure, since it is of tokens.
  *
- * A tile always says something in the same place. Before its first answer it says it is reading;
- * a read that failed says so; a period that spent nothing says there is no data, never a zero.
+ * A tile always says something in the same place. Before its first answer it has no words of its
+ * own: the wait is said by the tile (`RailTile`), once it has lasted; a read that failed says so;
+ * a period that spent nothing says there is no data, never a zero.
  * A new answer replaces the words where they stand, and the last ones stay while it is read.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useRailReads } from '@/pages/analytics/composables/useRailReads.ts'
 import type { RailRead } from '@/pages/analytics/composables/useRailReads.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
@@ -20,11 +24,12 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
 import { dimensionFigures, overviewFigures } from '@/pages/analytics/utils/railFigures.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
+import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tokenKinds.ts'
 import { spentAnything, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
-import { OVERVIEW } from '@/shared/api/analyticsAddress.ts'
+import { OVERVIEW, TOKEN_KINDS_SECTION } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection, AnalyticsView, Measure } from '@/shared/api/analyticsAddress.ts'
-import type { Usage, UsageDimension, UsageStep } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import type { SharePart } from '@/shared/ui/MiniShareBar.vue'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
@@ -60,6 +65,9 @@ const standing = (state: RailTileModel['state'], lead: string): RailTileModel =>
   shares: null,
 })
 
+/** A first read's tile: no words of its own, the wait is said by the tile once it has lasted. */
+const reading = () => standing('loading', '')
+
 export function useRailTiles(options: {
   /** The page's shared reads, which the dimensions' reads go through. */
   shared: SharedUsage
@@ -72,56 +80,16 @@ export function useRailTiles(options: {
   projectId: () => string | null
   view: () => AnalyticsView
 }) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const words = useSpendingWords()
+  const kindWords = useKindWords()
   const rail = useRailReads(options)
 
-  const percent = (share: number) =>
-    new Intl.NumberFormat(locale.value, { style: 'percent', maximumFractionDigits: 0 }).format(
-      share,
-    )
+  // A share is said in whole percents, by the page's one rule.
+  const { share } = words
 
-  const reading = () => standing('loading', t('analytics.rail.reading'))
   const failed = () => standing('failed', t('analytics.rail.failed'))
   const noData = () => standing('empty', t('analytics.rail.noData'))
-
-  /** A day's figure in the measure's units, or the words for a day with none. */
-  function amount(measure: Measure, value: number | null) {
-    if (value === null) return t(`analytics.days.absent.${measure}`)
-    return value === 0 && measure === 'time'
-      ? t('time.minutes', { count: 0 })
-      : words.scale(measure, value)
-  }
-
-  /**
-   * The steps in words — days, or the minutes of the live hour: the first and the last, the
-   * highest, and the last one's figure.
-   */
-  function trendLabel(measure: Measure, figures: OverviewFigures, step: UsageStep) {
-    const name = (key: string) => words.stepName(key, step).label
-    const days = figures.trend
-    let top = days.at(0)
-    for (const day of days) if ((day.value ?? 0) > (top?.value ?? 0)) top = day
-    const first = days.at(0)
-    const last = days.at(-1)
-    if (!first || !last || !top?.value)
-      return t('analytics.rail.trendNone', {
-        measure: words.measure(measure),
-        per: words.per(step),
-        figure: words.figure(measure, figures.total),
-      })
-    return t('analytics.rail.trend', {
-      measure: words.measure(measure),
-      per: words.per(step),
-      from: name(first.key),
-      to: name(last.key),
-      top: amount(measure, top.value),
-      day: name(top.key),
-      last: [amount(measure, last.value), last.incomplete ? t('analytics.days.soFar') : '']
-        .filter(Boolean)
-        .join(' '),
-    })
-  }
 
   /** How the total moved, as words beside it. */
   function moved(measure: Measure, figures: OverviewFigures, usage: Usage) {
@@ -144,10 +112,7 @@ export function useRailTiles(options: {
       quiet: !spent,
       aside: moved(measure, figures, shown.payload),
       busy: shown.status === 'degraded',
-      trend: {
-        label: trendLabel(measure, figures, shown.payload.period.step),
-        points: figures.trend,
-      },
+      trend: words.trend(measure, figures, shown.payload.period.step),
     }
   }
 
@@ -167,14 +132,18 @@ export function useRailTiles(options: {
     }))
     const said = figures.parts.map(
       (part) =>
-        `${part.line ? words.lineLabel(dimension, part.line) : t('analytics.rail.rest')} ${percent(part.share)}`,
+        `${part.line ? words.lineLabel(dimension, part.line) : t('analytics.rail.rest')} ${share(part.share)}`,
     )
     return {
       ...standing('ready', words.lineLabel(dimension, first.line)),
       leadDetail: first.line.value ? words.valueDetail(dimension, first.line.value) : undefined,
       quiet: first.line.kind !== 'category',
-      aside: first.share === null ? words.figure(measure, first.line.spent) : percent(first.share),
-      count: t('analytics.rail.values', { count: figures.count }, figures.count),
+      aside: first.share === null ? words.figure(measure, first.line.spent) : share(first.share),
+      // A count of none beside work with no value, the session itself in «Now», says nothing.
+      count:
+        figures.count === 0 && first.line.kind === 'none'
+          ? ''
+          : t('analytics.rail.values', { count: figures.count }, figures.count),
       busy: read.refreshing,
       shares: {
         label: t('analytics.rail.shares', {
@@ -186,11 +155,45 @@ export function useRailTiles(options: {
     }
   }
 
+  /** The counted kinds of the page's answer: the first with its share, all with theirs. */
+  function kindsTile(): RailTileModel {
+    const shown = options.overview()
+    if (shown.status === 'loading') return reading()
+    if (!('payload' in shown)) return shown.status === 'empty' ? noData() : failed()
+    const counted = kindLines(shown.payload).filter((line) => line.counted)
+    const whole = countedTotal(counted) ?? 0
+    const [first] = counted
+    if (!first || whole <= 0) return { ...noData(), busy: shown.status === 'degraded' }
+    const shareOf = (count: number | null) => (count === null ? 0 : count / whole)
+    const parts = counted.map((line) => ({
+      key: line.kind,
+      share: shareOf(line.count),
+      slot: KIND_SLOTS.get(line.kind) ?? ('other' as const),
+    }))
+    return {
+      ...standing('ready', kindWords.name(first)),
+      quiet: false,
+      aside: share(shareOf(first.count)),
+      count: t('analytics.kinds.count', { count: counted.length }, counted.length),
+      busy: shown.status === 'degraded',
+      shares: {
+        label: t('analytics.rail.shares', {
+          measure: words.measure('tokens'),
+          parts: counted
+            .map((line) => `${kindWords.name(line)} ${share(shareOf(line.count))}`)
+            .join(', '),
+        }),
+        parts,
+      },
+    }
+  }
+
   const tiles = computed(() => {
     const { measure } = options.view()
     const reads = rail.reads.value
     const all: Partial<Record<AnalyticsSection, RailTileModel>> = {
       [OVERVIEW]: overviewTile(measure),
+      [TOKEN_KINDS_SECTION]: kindsTile(),
     }
     for (const dimension of options.dimensions())
       all[dimension] = dimensionTile(dimension, reads[dimension], measure)

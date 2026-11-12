@@ -180,17 +180,21 @@ defineExpose({ focusSelected })
   }
 }
 
-/* The name, the count of values at the far end, and on a list the chevron after it. */
+/* The name, the count of values at the far end, and on a list the chevron after it. What stands
+   between the name and the count is air, which gives way before either: down to the least gap,
+   so «Способ запуска» beside its count keeps its last letter in the rail's width, and only then is
+   the name cut, never the count. */
 .analytics-rail-head {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-1);
   align-items: center;
   min-width: 0;
 }
 
 .analytics-rail-name {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-inline-end: auto;
 }
 
 .analytics-rail-count {
@@ -203,6 +207,7 @@ defineExpose({ focusSelected })
 
 .analytics-rail-chevron {
   flex: none;
+  margin-inline-start: var(--space-1);
   color: var(--color-text-muted);
 }
 </style>

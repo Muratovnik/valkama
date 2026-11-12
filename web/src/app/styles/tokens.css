@@ -102,6 +102,7 @@
   --color-gray-350: #a8a8a8;
   --color-gray-300: #b3b3b3;
   --color-gray-250: #c4c4c4;
+  --color-gray-150: #e6e6e6;
   --color-gray-100: #ececec;
   --color-gray-50: #f2f2f2;
   --color-gray-0: #fff;
@@ -503,17 +504,22 @@
      puts slot n beside slot n+1, and this order keeps every such pair apart under
      protanopia and deuteranopia (OKLab ΔE ≥ 0.094) and under ordinary vision
      (≥ 0.193). `seriesColors.ts` hands out the slots; a series past the sixth
-     folds into the neutral `other`, which is also what a row that is not a
-     category ("no task", "unknown") is drawn in. That grey is a light one because
-     a middle grey is what the magenta becomes under protanopia: it keeps apart
-     from every slot it can follow. tests/seriesColors.test.ts holds all of it. */
+     folds into the neutral `other`. A row that is not a category ("no task",
+     "unknown") is the neutral `apart`, one step darker, so the two greys that
+     can stand on each other in a stack stay told apart for every reader
+     (OKLab ΔE ≥ 0.15): when they were one grey, a week's two largest segments
+     differed only in the hint. Both greys are light ones because a middle grey
+     is what the jade and the magenta become under deuteranopia and protanopia:
+     each keeps apart from every slot it can follow.
+     tests/seriesColors.test.ts holds all of it. */
   --color-series-1: var(--color-blue-600);
   --color-series-2: var(--color-orange-600);
   --color-series-3: var(--color-jade-600);
   --color-series-4: var(--color-iris-500);
   --color-series-5: var(--color-ochre-600);
   --color-series-6: var(--color-magenta-600);
-  --color-series-other: var(--color-gray-300);
+  --color-series-apart: var(--color-gray-300);
+  --color-series-other: var(--color-gray-150);
 
   /* The margin a module keeps from the panel edge, and how wide its content
      column grows before it stops. Five files had written one or the other out

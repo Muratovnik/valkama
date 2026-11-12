@@ -1,0 +1,15 @@
+/*
+ * The last view's answer while a new period or filter is read (`useReadStanding`): drawn as it
+ * stood and dimmed, in its own box, so nothing moves and no mark takes room. This is the one place
+ * that says how, read by each host as its own scoped style — the overview (`OverviewPanel`), a
+ * dimension's section (`DimensionPanel`) and a tile of the rail (`RailTile`) — which writes
+ * `read-pending` on its root while dimmed.
+ *
+ * The dim follows a change the reader made, so it eases in; the answer that ends it is drawn at
+ * once. A read again of the same view never dims: «Now» reads itself every interval, and a page
+ * that dimmed on its own would blink.
+ */
+.read-pending {
+  opacity: 0.5;
+  transition: opacity var(--duration-quick) var(--ease-out);
+}

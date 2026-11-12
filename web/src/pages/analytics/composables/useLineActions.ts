@@ -4,31 +4,81 @@
  *
  * - By task, a task's value is a link to the task, opened the way a reference to it opens
  *   anywhere in the app (`useReferenceLinks`): its address is the task's short one, and a plain
- *   press opens the card in place. A deleted task, work with no task, the folded tail and
- *   unknown work lead nowhere.
+ *   press opens the card in place. Work with no task has no card, so it narrows the view to
+ *   itself and breaks it down by where it came from (`narrowedBy`). A deleted task, the folded
+ *   tail and unknown work lead nowhere.
  * - By any other dimension, a value the read can filter by narrows the view to it and breaks it
  *   down by task: a value with an id, or a session's own run, which the read admits by `none`.
  *   Unknown work and the folded tail narrow to nothing.
  *
+ * Where a narrowing leads depends on the page's sections, which the page gives once
+ * (`provideLineActions`): at a project's scope there is no section of projects to break down by.
+ *
  * Every opening of a task from the page is counted once, as `task_open`, a press the browser
  * takes to another tab included; a count that cannot be written costs nothing.
  */
+import { inject, provide } from 'vue'
+import type { InjectionKey } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
 import { opensInPlace } from '@/shared/lib/linkPress.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { ReferenceLink } from '@/shared/lib/referenceLinks.ts'
 
+/** The breakdown a narrowed view shows: its section, and the dimension its table crosses it with. */
+interface NarrowedBreakdown {
+  by: UsageDimension
+  /** Set where the narrowing chooses the crossing too; absent where the view keeps its own. */
+  across?: UsageDimension | null
+}
+
+/** The dimensions the page has a section of; every one where nothing says otherwise. */
+const SECTIONS: InjectionKey<() => readonly UsageDimension[]> = Symbol('analytics-line-sections')
+
 /** The filter value a value narrows the view to; undefined for one that narrows to nothing. */
 function narrowsTo(by: UsageDimension, value: UsageGroupValue | null): string | null | undefined {
-  if (by === 'work_item' || !value) return undefined
+  if (!value) return undefined
   const kind = valueKind(value)
+  if (by === 'work_item') return kind === 'none' ? null : undefined
   if (kind === 'category') return value.id
   return kind === 'none' && by === 'launch_class' ? null : undefined
+}
+
+/** Whether a narrowing is to work with no task, which has no tasks to break down by. */
+const toNoTask = (dimension: UsageDimension, value: string | null) =>
+  dimension === 'work_item' && value === null
+
+/**
+ * What the view narrowed to a value breaks down by: its tasks; work with no task by the project
+ * crossed with the launch class, or by the launch class alone where the page has no section of
+ * projects.
+ */
+function narrowedBy(
+  dimension: UsageDimension,
+  value: string | null,
+  sections: readonly UsageDimension[],
+): NarrowedBreakdown {
+  if (!toNoTask(dimension, value)) return { by: 'work_item' }
+  return sections.includes('project')
+    ? { by: 'project', across: 'launch_class' }
+    : { by: 'launch_class', across: null }
+}
+
+/**
+ * The page gives its sections to every value pressed under it, and takes where a narrowing leads
+ * from the same rule its values are named by.
+ */
+export function provideLineActions(sections: () => readonly UsageDimension[]) {
+  provide(SECTIONS, sections)
+  return {
+    narrowedBy: (dimension: UsageDimension, value: string | null) =>
+      narrowedBy(dimension, value, sections()),
+  }
 }
 
 /** A press on a task's link: opened in place where the page answers it, and counted. */
@@ -43,6 +93,7 @@ function follow(link: ReferenceLink, event: MouseEvent) {
 export function useLineActions() {
   const { t } = useI18n()
   const resolve = useReferenceLinks()
+  const sections = inject(SECTIONS, () => USAGE_DIMENSIONS)
 
   /** The link to a task's card, where a value of a breakdown by task is one the app opens. */
   function taskLink(by: UsageDimension, value: UsageGroupValue | null): ReferenceLink | null {
@@ -51,8 +102,17 @@ export function useLineActions() {
     return link?.href ? link : null
   }
 
-  /** What a control that narrows the view to a value is called: «Show the tasks of opus». */
-  const narrowName = (label: string) => t('analytics.drill.value', { value: label })
+  /**
+   * What a control that narrows the view to a value is called, as it says what pressing it does:
+   * «Show the tasks of opus»; «Break down the work with no task by project and launch class».
+   */
+  function narrowName(by: UsageDimension, value: UsageGroupValue | null, label: string) {
+    const to = narrowsTo(by, value)
+    if (to === undefined || !toNoTask(by, to)) return t('analytics.drill.value', { value: label })
+    return narrowedBy(by, to, sections()).across
+      ? t('analytics.drill.noTask')
+      : t('analytics.drill.noTaskByLaunch')
+  }
 
   return { follow, narrowName, narrowsTo, taskLink }
 }

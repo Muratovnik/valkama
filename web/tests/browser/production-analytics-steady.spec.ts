@@ -6,9 +6,9 @@
  *
  * The days read out at very different lengths — one short task, a day of six tasks with long
  * titles, a day of two — which is what made the readout take one line on one day and three on
- * the next and pushed everything under it. Accounts change from day to day, so the notes under
- * the chart are there too, and the breakdown has work on no task and unknown work after every
- * task, and its small charts a chart of «other».
+ * the next and pushed everything under it. Accounts change from day to day, so their lines up the
+ * plot are there too, and the breakdown has work on no task and unknown work after every task,
+ * and its small charts a chart of «other».
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -69,7 +69,6 @@ const layout = (page: Page) =>
       '.period-columns',
       '.period-readout',
       '.period-frame',
-      '.period-notes',
       '.ranked-bars',
     ]
     // This body runs in the page, so a helper at the module's own scope would not be there.
@@ -124,7 +123,7 @@ for (const width of WIDTHS)
     const columns = page.locator('.spending-days .period-column')
     const bars = page.locator('.spending-bars .ranked-line')
     await expect(columns).toHaveCount(3)
-    await expect(page.locator('.spending-days .period-note')).not.toHaveCount(0)
+    await expect(page.locator('.spending-days .period-mark')).not.toHaveCount(0)
     // Work on no task and unknown work are ranked among the values, each with its bar.
     await expect(page.locator('.spending-bars .ranked-rest .ranked-row')).toHaveCount(0)
     await expect(
@@ -152,7 +151,7 @@ for (const width of WIDTHS)
       await bars.nth(index).hover()
       await hold(`bar ${index + 1}`)
     }
-    // The longest day, cut to its two lines, is whole in the readout's hint: the pointer goes
+    // The longest day, cut to its one line, is whole in the readout's hint: the pointer goes
     // from that day up to the readout, which keeps saying that day.
     const readout = page.locator('.spending-days .period-readout')
     const lengths = readouts.map((text) => text.trim().length)
@@ -160,16 +159,19 @@ for (const width of WIDTHS)
     const whole = (await readout.getAttribute('data-tooltip')) ?? ''
     await readout.hover()
     await expect(page.getByRole('tooltip')).toHaveText(whole)
-    const series = (await readout.locator('span').nth(1).textContent()) ?? ''
-    for (const part of series.split(', ')) expect(whole).toContain(part)
-    expect(series.split(', ').length).toBeGreaterThan(2)
+    expect(whole).toBe(((await readout.textContent()) ?? '').trim())
+    expect(await readout.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+      true,
+    )
+    expect(whole.split(', ').length).toBeGreaterThan(2)
     await hold('readout')
-    // Two lines of the detail type, reserved whatever the day says.
-    const lines = await readout.evaluate((element) => {
-      const [first] = element.children
-      return element.getBoundingClientRect().height / (first?.getBoundingClientRect().height ?? 1)
-    })
-    expect(lines).toBeCloseTo(2, 1)
+    // One line of the detail type, reserved whatever the day says.
+    const lines = await readout.evaluate(
+      (element) =>
+        element.getBoundingClientRect().height /
+        Number.parseFloat(getComputedStyle(element).lineHeight),
+    )
+    expect(lines).toBeCloseTo(1, 1)
     await page.mouse.move(0, 0)
     await hold('after')
 

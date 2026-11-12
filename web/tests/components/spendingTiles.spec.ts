@@ -12,7 +12,7 @@ import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 
-import { momentAt, serveUsage, task } from '../fixtures/analytics.ts'
+import { figuresAnswer, momentAt, serveUsage, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { analyticsI18n, mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
@@ -22,15 +22,8 @@ const BEFORE = {
   to: momentAt(new Date(2026, 10, 9)),
 }
 
-/** The 1.2M tokens of `NOW` by kind, beside ten times as many cache reads, which are apart. */
-const SPLIT = {
-  input: 600_000,
-  output: 360_000,
-  reasoning: 120_000,
-  cache_write_5m: 200_000,
-  cache_write_1h: 40_000,
-  cached_read: 12_000_000,
-}
+/** When the figures were read: a moment of the period they are of. */
+const READ_AT = new Date(2026, 10, 11, 14, 30)
 
 function mountTiles(
   total: Spent,
@@ -39,7 +32,11 @@ function mountTiles(
   locale: 'en' | 'ru' = 'en',
 ) {
   return mount(SpendingTiles, {
-    props: { total, split: SPLIT, before: before ? { ...BEFORE, spent: before } : null, measure },
+    props: {
+      usage: figuresAnswer(total, before ? { ...BEFORE, spent: before } : undefined),
+      readAt: READ_AT,
+      measure,
+    },
     global: { plugins: [analyticsI18n(locale)] },
   })
 }
@@ -143,6 +140,25 @@ describe('the tiles', () => {
     )
   })
 
+  // The month cut short ends the change with a stop of its own, and the hint that says the tile
+  // whole, sentence by sentence, adds none after it: «2–8 нояб..» read as a typing slip.
+  it('say the tile whole in its hint with one stop after a period named in Russian', () => {
+    const moved = mountTiles(
+      NOW,
+      { seconds: 3600, tokens: 2_400_000, cost: 12.5, unpriced: 0 },
+      'time',
+      'ru',
+    )
+    for (const measure of ['time', 'tokens', 'cost'] as const) {
+      const hint = moved
+        .get(`.tile-figure[data-measure="${measure}"]`)
+        .element.closest('.tile-body')
+      const said = (hint as HTMLElement | null)?.dataset.tooltip?.replaceAll(/\s/gu, ' ') ?? ''
+      expect(said).toContain('2–8 нояб.')
+      expect(said).not.toContain('..')
+    }
+  })
+
   // What a token figure counts is not obvious: the tile says it, kind by kind.
   it('say what the tokens count, by kind, and the cache reads they leave apart', () => {
     const tokens = tile(mountTiles(NOW, NOW), 'tokens')
@@ -151,7 +167,7 @@ describe('the tiles', () => {
     expect(tokens.text).toContain('Cache reads, not counted: 12M')
     const ru = tile(mountTiles(NOW, NOW, 'time', 'ru'), 'tokens')
     expect(ru.text).toContain(
-      'Обработано заново: ввод 600 тыс., вывод 360 тыс., запись в кэш 240 тыс.',
+      'Обработано заново: вход 600 тыс., выход 360 тыс., запись в кэш 240 тыс.',
     )
     expect(ru.text).toContain('Чтение из кэша, не учтено: 12 млн')
   })
@@ -297,13 +313,12 @@ describe('the tiles across the spring change of time', () => {
     expect(new Date(2026, 2, 23).getTimezoneOffset()).toBe(-60)
     const tiles = mount(SpendingTiles, {
       props: {
-        total: NOW,
-        split: SPLIT,
-        before: {
+        usage: figuresAnswer(NOW, {
           from: '2026-03-23T00:00:00+02:00',
           to: '2026-03-30T00:00:00+02:00',
           spent: NOW,
-        },
+        }),
+        readAt: READ_AT,
         measure: 'time',
       },
       global: { plugins: [analyticsI18n()] },

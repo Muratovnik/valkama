@@ -1,114 +1,27 @@
 /**
- * The numbers the two chart primitives draw. Each expectation is worked out by hand from the
- * data in the test, not read back from the module: a bar as long as its value over the longest,
- * a stack whose segments meet end to end and add up to the period's sum, a scale from zero past
- * the tallest column, and the rows that are not categories always at the end.
+ * The numbers the period chart draws and says. Each expectation is worked out by hand from the
+ * data in the test, not read back from the module: a stack whose segments meet end to end and add
+ * up to the period's sum, a scale from zero past the tallest column, and a period's words.
  */
 import assert from 'node:assert/strict'
 
 import { describe, test } from 'vitest'
 
-import type {
-  PeriodColumn,
-  PeriodSeries,
-  PeriodWords,
-  RankedRow,
-} from '@/shared/ui/chartGeometry.ts'
+import type { PeriodColumn, PeriodSeries, PeriodWords } from '@/shared/ui/chartGeometry.ts'
 import {
-  changeMarkers,
-  changeNotes,
   columnNotes,
   columnSummary,
   columnWidth,
   dayTicks,
-  foldChanges,
   labelledColumns,
+  lastBegun,
   nextCursor,
-  rankRows,
-  readoutLines,
+  readoutLine,
   segmentPlace,
+  segmentSummary,
   stackColumns,
   valueTicks,
 } from '@/shared/ui/chartGeometry.ts'
-
-const row = (key: string, value: number, kind?: RankedRow['kind']): RankedRow => ({
-  key,
-  label: key,
-  value,
-  valueText: String(value),
-  ...(kind ? { kind } : {}),
-})
-
-describe('ranked rows', () => {
-  test('categories stand largest first, and a bar is its value over the longest', () => {
-    const { ranked } = rankRows([row('b', 30), row('a', 120), row('c', 60)])
-    assert.deepEqual(
-      ranked.map((one) => [one.key, one.length]),
-      [
-        ['a', 1],
-        ['c', 0.5],
-        ['b', 0.25],
-      ],
-    )
-  })
-
-  test('the rows that are not categories close the chart in one order, however large', () => {
-    const { ranked, rest } = rankRows([
-      row('unknown', 5, 'unknown'),
-      row('a', 10),
-      row('none', 7, 'none'),
-      row('other', 400, 'other'),
-      row('b', 20),
-    ])
-    assert.deepEqual(
-      ranked.map((one) => one.key),
-      ['b', 'a'],
-    )
-    assert.deepEqual(
-      rest.map((one) => one.key),
-      ['other', 'none', 'unknown'],
-    )
-    // A tail larger than any category sets no scale: the longest category is the whole bar,
-    // and the rows that are not categories draw none.
-    assert.deepEqual(
-      ranked.map((one) => one.length),
-      [1, 0.5],
-    )
-    assert.deepEqual(
-      rest.map((one) => one.length),
-      [null, null, null],
-    )
-  })
-
-  test('rows that are not categories alone draw nothing and scale nothing', () => {
-    const { ranked, rest } = rankRows([row('none', 7, 'none'), row('other', 3, 'other')])
-    assert.deepEqual(ranked, [])
-    assert.deepEqual(
-      rest.map((one) => [one.key, one.length]),
-      [
-        ['other', null],
-        ['none', null],
-      ],
-    )
-  })
-
-  test('a tie keeps one order whatever order the rows came in', () => {
-    const forward = rankRows([row('beta', 5), row('alpha', 5)]).ranked.map((one) => one.key)
-    const backward = rankRows([row('alpha', 5), row('beta', 5)]).ranked.map((one) => one.key)
-    assert.deepEqual(forward, ['alpha', 'beta'])
-    assert.deepEqual(backward, forward)
-  })
-
-  test('nothing, one row, and amounts a bar cannot draw', () => {
-    assert.deepEqual(rankRows([]), { ranked: [], rest: [] })
-    assert.equal(rankRows([row('only', 3)]).ranked[0]?.length, 1)
-    const odd = rankRows([row('zero', 0), row('negative', -4), row('nan', Number.NaN)]).ranked
-    assert.deepEqual(
-      odd.map((one) => one.length),
-      [0, 0, 0],
-    )
-  })
-})
 
 const series: PeriodSeries[] = [
   { key: 'a', label: 'Account A', slot: 1 },
@@ -226,7 +139,7 @@ describe('the width of a column', () => {
 })
 
 describe('the readout over the chart', () => {
-  test('says the period and what is said of it, then the series largest first', () => {
+  test('is one line: the period and what is said of it, then the series largest first', () => {
     const said = { ...words, before: 'period before' }
     const { columns } = stackColumns(
       [{ ...column('d1', { a: 1, b: 4, c: 2 }, true), before: 9 }],
@@ -235,15 +148,41 @@ describe('the readout over the chart', () => {
     )
     const [one] = columns
     assert.ok(one)
-    assert.deepEqual(readoutLines(one, said, String), {
-      head: 'd1: total 7, period before 9. so far. Switched to B',
-      series: 'Account B 4, Account C 2, Account A 1',
-    })
+    // «so far» qualifies the sum it follows, and is no sentence of its own.
+    assert.equal(
+      readoutLine(one, said, String),
+      'd1: total 7 so far, period before 9. Switched to B. Account B 4, Account C 2, Account A 1',
+    )
     // The whole text keeps the stack's order: it is the period's name for assistive technology.
     assert.equal(
       columnSummary(one, said, String),
-      'd1: total 7, period before 9; Account A 1, Account B 4, Account C 2. so far. Switched to B',
+      'd1: total 7 so far, period before 9; Account A 1, Account B 4, Account C 2. Switched to B',
     )
+    const [segment] = one.segments
+    assert.ok(segment)
+    assert.equal(
+      segmentSummary(one, segment, said, String),
+      'd1: Account A 1, total 7 so far. Switched to B',
+    )
+    // The table says the sum in a cell of its own, so its note still says the period is running.
+    assert.deepEqual(columnNotes(one, said), ['so far', 'Switched to B'])
+  })
+
+  test('of a period with nothing drawn says the period alone, with no empty tail', () => {
+    const { columns } = stackColumns([column('d1', {})], series)
+    const [one] = columns
+    assert.ok(one)
+    assert.equal(readoutLine(one, words, String), 'd1: total 0')
+  })
+
+  test('with no period stood on says the last one begun: the running hour, not one to come', () => {
+    // A day read by its hours at 14:30: 15:00 to 23:00 are still to come.
+    const hours = Array.from({ length: 24 }, (_, hour) => column(`h${hour}`, {}, hour === 14))
+    assert.equal(lastBegun(stackColumns(hours, series).columns), 14)
+    // A period that is over has no running step: its last step is the last begun.
+    const over = Array.from({ length: 24 }, (_, hour) => column(`h${hour}`, {}))
+    assert.equal(lastBegun(stackColumns(over, series).columns), 23)
+    assert.equal(lastBegun([]), -1)
   })
 })
 
@@ -256,15 +195,23 @@ describe('a period still running', () => {
     assert.equal(top, 6)
     const [last] = stacked.slice(-1)
     assert.ok(last)
-    assert.equal(columnSummary(last, words, String), 'd3: total 1; Account A 1. so far')
+    assert.equal(columnSummary(last, words, String), 'd3: total 1 so far; Account A 1')
     const ticks = dayTicks(columns, 0, words.incomplete)
     assert.deepEqual(ticks.at(-1), {
       key: 'd3',
       text: 'd3',
-      offset: 1,
-      edge: 'end',
+      offset: 2.5 / 3,
+      edge: 'middle',
       note: 'so far',
     })
+  })
+
+  test('with no sum to say, still says it is running', () => {
+    const said = { ...words, absent: 'No price' }
+    const { columns } = stackColumns([{ ...column('d1', {}, true), absent: ['a'] }], series)
+    const [one] = columns
+    assert.ok(one)
+    assert.equal(columnSummary(one, said, String), 'd1. so far. No price: Account A')
   })
 
   test('is named on the axis even where the axis has no room for its neighbours', () => {
@@ -313,84 +260,112 @@ describe('the time axis', () => {
     assert.deepEqual(labelledColumns(0, 500), [])
   })
 
-  test('the first and the last label keep inside the axis, the others stand under their column', () => {
+  test('every label stands by its middle under the middle of its column, the first and the last too', () => {
+    // Pinning the first and the last to the axis's ends put «Mon, 9» 48px off its column at
+    // 1440px; the axis now only moves a label in where it would hang past an end (`ChartTicks`).
     const columns = Array.from({ length: 4 }, (_, index) => column(`d${index}`, {}))
     assert.deepEqual(
       dayTicks(columns, 1000, '').map((tick) => [tick.edge, tick.offset]),
       [
-        ['start', 0],
+        ['middle', 0.5 / 4],
         ['middle', 1.5 / 4],
         ['middle', 2.5 / 4],
-        ['end', 1],
+        ['middle', 3.5 / 4],
       ],
     )
+  })
+
+  test('the first name it prints, and the first it prints of each later month, carry the month', () => {
+    // 29 October to 4 November, named «Thu 29» … and, with the month, «Oct 29» ….
+    const days = [29, 30, 31, 1, 2, 3, 4].map((day, index) => ({
+      ...column(`d${index}`, {}),
+      label: `D${day}`,
+      dated: { label: `${index < 3 ? 'Oct' : 'Nov'} ${day}`, month: index < 3 ? '10' : '11' },
+    }))
+    const printed = (width: number) => dayTicks(days, width, '').map((tick) => tick.text)
+    assert.deepEqual(printed(1000), ['Oct 29', 'D30', 'D31', 'Nov 1', 'D2', 'D3', 'D4'])
+    // Where 1 November is not named, the first name of November carries the month.
+    assert.deepEqual(printed(150), ['Oct 31', 'Nov 4'])
+    // A period whose name needs no month, an hour, keeps its name.
+    assert.deepEqual(
+      dayTicks([column('h1', {})], 1000, '').map((tick) => tick.text),
+      ['h1'],
+    )
+  })
+
+  test('the running hour keeps its name, and a neighbour that would touch it gives way', () => {
+    // «Today» at 14:30 over 480px: the axis steps by four hours back from 23:00, which names
+    // 15:00 beside the running 14:00, and the two printed as «14:0015:00».
+    const hours = Array.from({ length: 24 }, (_, hour) => ({
+      ...column(`h${hour}`, {}, hour === 14),
+      label: `${String(hour).padStart(2, '0')}:00`,
+    }))
+    const unmeasured = new Set(dayTicks(hours, 480, 'so far').map((tick) => tick.key))
+    assert.ok(unmeasured.has('h14') && unmeasured.has('h15'))
+    const named = dayTicks(hours, 480, 'so far', sevenWide).map((tick) => tick.key)
+    assert.deepEqual(named, ['h3', 'h7', 'h11', 'h14', 'h19', 'h23'])
+  })
+
+  test('keeps more than a space between any two names at every width', () => {
+    const spans = [7, 24, 30, 60, 90]
+    for (const count of spans)
+      for (const running of [-1, 0, 1, Math.floor(count / 2), count - 2, count - 1])
+        for (let width = 60; width <= 2000; width += 7) {
+          const columns = Array.from({ length: count }, (_, index) => ({
+            ...column(`p${index}`, {}, index === running),
+            label: index % 2 ? `${index} Wed` : `${index}:00`,
+            dated: { label: `Nov ${index}`, month: index < count / 2 ? '10' : '11' },
+          }))
+          const ticks = dayTicks(columns, width, 'so far', sevenWide)
+          const where = `${count} periods, running ${running}, ${width}px`
+          if (running >= 0)
+            assert.ok(
+              ticks.some((tick) => tick.key === `p${running}`),
+              where,
+            )
+          const boxes = ticks.map((tick) => placed(tick, width))
+          for (let at = 1; at < boxes.length; at += 1)
+            assert.ok((boxes[at]?.start ?? 0) - (boxes[at - 1]?.end ?? 0) >= 8, where)
+        }
   })
 })
 
-/** The changes of fourteen days whose first `count` after the first start with a change. */
-const changed = (count: number) => {
-  const columns = Array.from({ length: 14 }, (_, index) => column(`d${index}`, { a: 1 }))
-  const marks = Array.from({ length: count }, (_, index) => ({
-    at: `d${index + 1}`,
-    label: `to ${index}`,
-  }))
-  return changeNotes(stackColumns(columns, series, marks).columns)
+/** A label as wide as seven pixels a character, as a stand-in for the axis's font. */
+const sevenWide = (text: string) => text.length * 7
+
+/**
+ * Where `ChartTicks` draws a label of the time axis: its middle at its share of the axis, moved
+ * in as far as it would hang past either end, as wide as its text or its note.
+ */
+function placed(tick: { offset: number; text: string; note?: string }, width: number) {
+  const wide = Math.max(sevenWide(tick.text), sevenWide(tick.note ?? ''))
+  const start = Math.max(0, Math.min(tick.offset * width - wide / 2, width - wide))
+  return { start, end: start + wide }
 }
 
-describe('changes marked on the time axis', () => {
-  test('are numbered in time order, named in the period they start, and placed at its start', () => {
+describe('a change at the start of a period', () => {
+  test('is said where the period is read: its readout, its name and its row of the table', () => {
     const { columns } = stackColumns(
-      [column('d1', { a: 1 }), column('d2', { a: 1 }), column('d3', { a: 1 })],
+      [column('d1', { a: 1 }), column('d2', { a: 1 }), column('d3', { a: 1, b: 2 })],
       series,
       [
-        { at: 'd3', label: 'Switched to B' },
-        { at: 'd2', label: 'Switched to C' },
+        { at: 'd3', label: 'Account change: A → A, B' },
         { at: 'd3', label: 'Limit reset' },
       ],
     )
-    const notes = changeNotes(columns)
-    assert.deepEqual(
-      notes.map((note) => [note.number, note.period, note.text]),
-      [
-        [1, 'd2', 'Switched to C'],
-        [2, 'd3', 'Switched to B'],
-        [3, 'd3', 'Limit reset'],
-      ],
+    const [first, , third] = columns
+    assert.ok(first && third)
+    // Before the series, so a line too narrow for all of it cuts the series and not the change.
+    assert.equal(
+      readoutLine(third, words, String),
+      'd3: total 3. Account change: A → A, B. Limit reset. Account B 2, Account A 1',
     )
-    assert.deepEqual(
-      changeMarkers(notes, 3).map((marker) => [marker.text, marker.offset]),
-      [
-        ['1', 1 / 3],
-        ['2, 3', 2 / 3],
-      ],
-    )
-    const third = columns[2]
-    assert.ok(third)
     assert.equal(
       columnSummary(third, words, String),
-      'd3: total 1; Account A 1. Switched to B. Limit reset',
+      'd3: total 3; Account A 1, Account B 2. Account change: A → A, B. Limit reset',
     )
-  })
-
-  test('fold into one line that counts them from three on, the marks keeping no number', () => {
-    const said = { ...words, changes: (count: number) => `Changes: ${count}` }
-    for (const count of [0, 2]) {
-      assert.equal(foldChanges(changed(count), said), null)
-      assert.ok(changeMarkers(changed(count), 14).every((marker) => marker.text !== ''))
-    }
-    assert.deepEqual(foldChanges(changed(3), said), {
-      text: 'Changes: 3',
-      whole: 'd1: to 0; d2: to 1; d3: to 2',
-    })
-    const twelve = foldChanges(changed(12), said)
-    assert.equal(twelve?.text, 'Changes: 12')
-    assert.equal(twelve?.whole.split('; ').length, 12)
-    assert.ok(twelve?.whole.endsWith('d12: to 11'))
-    const marks = changeMarkers(changed(12), 14, false)
-    assert.equal(marks.length, 12)
-    assert.ok(marks.every((marker) => marker.text === ''))
-    // A chart with no words for the count keeps a line for each change.
-    assert.equal(foldChanges(changed(12), words), null)
+    assert.deepEqual(columnNotes(third, words), ['Account change: A → A, B', 'Limit reset'])
+    assert.equal(readoutLine(first, words, String), 'd1: total 1. Account A 1')
   })
 })
 

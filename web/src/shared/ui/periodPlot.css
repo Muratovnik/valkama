@@ -1,15 +1,20 @@
 /*
  * The plot of a chart of periods, read by `PeriodColumns` as its own scoped style: the frame it
  * scrolls in, its tracks — the scale's figures in a column as wide as the widest, the periods
- * beside them, the change numbers over them and the periods' names under — what keeps the
+ * beside them and the periods' names under — what keeps the
  * scale in view while the periods scroll, and what a period's slot holds besides its stack: the
- * outline of the period before, the ground of a period with no data yet and the line of a change.
+ * mark of the period before, the ground of a period with no data yet and the line of a change.
  */
 
 /* A plot wider than the chart scrolls here, and the page never does. A period scrolled to
    stands clear of the scale, which stays over the plot's start. */
 .period-frame {
   --period-gutter: 0px;
+
+  /* How far the plot fades toward an edge periods are hidden past, and to what at each edge. */
+  --period-fade: var(--space-6);
+  --period-fade-start: black;
+  --period-fade-end: black;
 
   min-width: 0;
   scroll-padding-inline-start: var(--period-gutter);
@@ -21,37 +26,68 @@
   &.period-acting {
     margin-inline-end: calc(-1 * var(--space-2));
   }
+
+  /* Periods hidden past an edge (`usePlotFrame`): the plot fades out toward that edge over the
+     room of a period, so a span that opens on its first days says that more lie past the frame's
+     end, and one scrolled on says it at the scale too; the scale and its ground never fade. A mask
+     paints no colour and moves nothing. The keyboard's period keeps its ring whole: while one has
+     it, nothing fades, and the period it walks to is brought into view anyway. */
+  &[data-hidden-start] {
+    --period-fade-start: transparent;
+  }
+
+  &[data-hidden-end] {
+    --period-fade-end: transparent;
+  }
+
+  &[data-hidden-start],
+  &[data-hidden-end] {
+    mask-image: linear-gradient(
+      to right,
+      black var(--period-gutter),
+      var(--period-fade-start) var(--period-gutter),
+      black calc(var(--period-gutter) + var(--period-fade)),
+      black calc(100% - var(--period-fade)),
+      var(--period-fade-end)
+    );
+  }
+
+  &:has(:focus-visible) {
+    mask-image: none;
+  }
 }
 
 .period-plot {
   --period-count: 1;
   --period-column: var(--space-6);
 
+  /* The least width of a period that acts: the target a pointer is asked to hit, WCAG 2.5.8's. */
+  --period-reach: 24px;
+
   display: grid;
   grid-template-areas:
-    '. markers'
     'scale field'
     '. axis';
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: var(--space-2);
   padding-block-start: var(--space-2);
 
-  /* Periods that act: each at least the smallest control a pointer hits, with the gap the
-     periods keep between them, so the plot is as wide as that takes and no narrower than its
-     chart; an empty track after them leaves a gap, so the periods still end on the chart's own
-     edge. The plot's box grows with its tracks: the scale can stay in view only inside the box
-     that holds it, and keeps its width only in a track that does not give it up. */
+  /* Periods that act: each at least `--period-reach`, with the gap the periods keep between
+     them, so the plot is as wide as that takes and no narrower than its chart; an empty track
+     after them leaves a gap, so the periods still end on the chart's own edge. A floor any wider
+     would scroll a span the chart has room for: four weeks beside the rail at 1440px stand at
+     27px each, and an inline action's 28px scrolled them by a few pixels. The plot's box grows
+     with its tracks: the scale can stay in view only inside the box that holds it, and keeps its
+     width only in a track that does not give it up. */
   .period-acting > & {
     grid-template-areas:
-      '. markers .'
       'scale field .'
       '. axis .';
     grid-template-columns:
       max-content
       minmax(
         calc(
-          var(--period-count) * var(--size-control-inline) + (var(--period-count) - 1) *
-            var(--space-half)
+          var(--period-count) * var(--period-reach) + (var(--period-count) - 1) * var(--space-half)
         ),
         1fr
       )
@@ -63,7 +99,7 @@
 
 /* Under a scrolled plot the scale stays at the chart's start. This ground stands behind it,
    the height of the plot and as wide as the scale and the gap after it, and covers the
-   periods, their names and the change numbers that pass under. It takes the pointer too: a
+   periods and their names that pass under. It takes the pointer too: a
    press on it must not reach a period nobody can see. */
 .period-gutter {
   position: sticky;
@@ -73,12 +109,6 @@
   grid-column: 1;
   margin-inline-end: calc(-1 * var(--space-2));
   background: var(--color-canvas);
-}
-
-.period-markers {
-  grid-area: markers;
-  min-block-size: calc(1lh + var(--space-1));
-  padding-block-end: var(--space-1);
 }
 
 .period-scale {
@@ -91,23 +121,28 @@
   }
 }
 
+/* The names are set solid (`--font-count`), so their glyphs hang a pixel or two past the last
+   line; the room under it keeps them inside the plot, which the frame is as tall as. Without it
+   the frame scrolls up and down by that pixel and shows a bar for it. */
 .period-axis {
   grid-area: axis;
-  padding-block-start: var(--space-2);
+  padding-block: var(--space-2) var(--space-half);
 }
 
-/* The period compared with: an open dashed edge as wide as the stack, over it and never under,
-   so it reads where it is higher and where it is lower without a hue of its own. Drawn in the
-   text's colour, it takes the forced palette's ink with the text. */
+/* The period compared with: a short line at the height it reached, as wide as the stack and
+   over it, never under, ringed in the ground where it crosses the stack. It says higher or lower
+   without a hue of its own, and without a box up the plot that outweighs this period's columns
+   when the period before was the larger. Drawn as an edge in the text's colour, it takes the
+   forced palette's ink with the text. */
 .period-before {
   position: absolute;
-  inset: auto 0 0;
+  inset-inline: 0;
   inline-size: min(100%, var(--period-column));
   margin-inline: auto;
-  border: var(--space-hair) dashed currentcolor;
-  border-block-end: 0;
+  border-block-start: var(--space-half) solid currentcolor;
   color: var(--color-text-muted);
-  border-radius: var(--radius-status) var(--radius-status) 0 0;
+  box-shadow: 0 0 0 var(--space-hair) var(--color-canvas);
+  transform: translateY(50%);
   pointer-events: none;
 }
 
@@ -133,7 +168,8 @@
   }
 }
 
-/* A change at the start of a period: a line up the plot in the gap before the period. */
+/* A change at the start of a period: a line up the plot in the gap before the period, a shape
+   and not a hue, which takes no row of its own; the period's readout and name say what changed. */
 .period-mark {
   position: absolute;
   inset-block: 0;
@@ -149,13 +185,11 @@
   }
 }
 
-/* Two lines whatever the period under the pointer holds, reserved from the start, so nothing
-   under it moves as the pointer passes: each line ends in an ellipsis and the readout's hint
-   says it whole (`usePeriodReadout`). */
+/* One line whatever the period under the pointer holds, reserved from the start, so nothing
+   under it moves as the pointer passes: a longer line ends in an ellipsis (`.one-line`) and the
+   readout's hint says it whole (`usePeriodReadout`). */
 .period-readout {
-  display: grid;
-  grid-template-rows: 1lh 1lh;
-  block-size: 2lh;
+  block-size: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

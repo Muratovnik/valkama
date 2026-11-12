@@ -201,16 +201,17 @@ describe('the breakdown beside the period before', () => {
 
   it('sorts by the heading pressed, largest first and then the other way, and says how', async () => {
     const wrapper = table('time')
-    const summary = () => words(wrapper.get('.spending-table-summary').text())
+    // The line says how many values in a few words; its hint gives the whole account and the order.
+    const line = (shown = wrapper) => shown.get('.spending-table-summary')
+    const summary = () => words(line().attributes('data-tooltip') ?? '')
     const names = () => rows(wrapper).map((row) => row[0])
     // Alpha and Beta spent now, Gamma only before; work on no task and unknown work spent now.
+    expect(words(line().text())).toBe('2 tasks · 1 outside the period')
     expect(summary()).toBe(
       '2 in the period · 1 only before · and «No task», «Unknown», sorted by «Agent time», largest first',
     )
     expect(wrapper.get('thead th:nth-child(2)').attributes('aria-sort')).toBe('descending')
-    expect(words(table('time', BEFORE, 'ru').get('.spending-table-summary').text())).toMatch(
-      /^2 в периоде · 1 только в прошлом · и «Без задачи», «Неизвестно», по /u,
-    )
+    expect(words(line(table('time', BEFORE, 'ru')).text())).toBe('2 задачи · 1 вне периода')
 
     // The time before: Alpha, no task, Gamma, then the two that spent nothing before, in the
     // order the table had them.
@@ -427,9 +428,10 @@ describe('the breakdown crossed with a second dimension', () => {
       'Total',
     ])
     expect(rows(wrapper)).toEqual([
-      ['MAIN-2 Beta', '2 h', '0 min', '10 min', '9 min', '8 min', '13 min', '2 h 40 min'],
-      ['MAIN-1 Alpha', '30 min', '1 h', '0 min', '0 min', '0 min', '0 min', '1 h 30 min'],
-      ['No task', '0 min', '15 min', '0 min', '0 min', '0 min', '0 min', '15 min'],
+      // A pair that spent nothing is an empty cell, not a zero.
+      ['MAIN-2 Beta', '2 h', '—', '10 min', '9 min', '8 min', '13 min', '2 h 40 min'],
+      ['MAIN-1 Alpha', '30 min', '1 h', '—', '—', '—', '—', '1 h 30 min'],
+      ['No task', '—', '15 min', '—', '—', '—', '—', '15 min'],
     ])
     expect(wrapper.findAll('tfoot th, tfoot td').map((cell) => words(cell.text()))).toEqual([
       'Total',
@@ -448,9 +450,9 @@ describe('the breakdown crossed with a second dimension', () => {
   it('says it is reading, or that the read failed with a way to ask again, in place of the table', async () => {
     const reading = crossedTable({ status: 'reading', usage: null })
     expect(reading.find('table').exists()).toBe(false)
-    expect(reading.get('[role="status"]').text()).toBe('Reading the breakdown by model…')
     expect(reading.get('.spending-download').attributes('disabled')).toBeDefined()
 
+    // A failed read says so in the alert, and announces no wait.
     const failed = crossedTable({ status: 'failed' })
     expect(failed.get('[role="alert"]').text()).toBe('The breakdown by model could not be read.')
     await failed.get('.spending-table-waiting button').trigger('click')
