@@ -166,7 +166,10 @@ class _SchemaSixteen(unittest.TestCase):
         return sorted((self.root / "backups").glob("*.sqlite3"))
 
     def assert_reached_16(self, conn: sqlite3.Connection) -> None:
-        self.assertEqual(16, conn.execute("PRAGMA user_version").fetchone()[0])
+        # The chain runs on to this build's own schema in the same open.
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         columns = _columns(conn)
         for table, added in ADDED.items():
             with self.subTest(table=table):
@@ -345,7 +348,10 @@ class _SchemaSixteen(unittest.TestCase):
             self.assertRaises(store.StoreTooNewError) as refusal,
         ):
             store.connect()
-        self.assertEqual((16, 15), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 15),
+            (refusal.exception.stored, refusal.exception.supported),
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
 

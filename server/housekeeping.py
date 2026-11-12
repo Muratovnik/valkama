@@ -11,13 +11,14 @@ transaction:
 - deliver the hook spool: events a hook process could not write because the
   store was busy, missing or at another schema version;
 - release the Planning leases past their grace that no write met, and drop the
-  subscriptions whose session lapsed by the same rule.
+  subscriptions whose session lapsed by the same rule;
+- delete the quota samples past their year (`quota.samples.prune`).
 
 The spool goes first, because a delivered event can move a session's
-heartbeat forward and keep its lease from lapsing. Both steps share one budget,
+heartbeat forward and keep its lease from lapsing. The steps share one budget,
 `START_UP_SECONDS`, because a client waits for the MCP server it started and
 gives up after its own timeout: the drain stops starting files when its share
-is spent, and every lock either step asks for is given up after
+is spent, and every lock a step asks for is given up after
 `START_UP_BUSY_MS` instead of the connection's own busy timeout. A store
 another writer holds is an ordinary state; what was not done runs at the next
 start.
@@ -56,6 +57,7 @@ from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
 from .planning import subscriptions as planning_subscriptions
+from .quota import samples as quota_samples
 from .telemetry import liveness, usage_reread
 
 #: The whole budget of what runs before the first request. A client gives an
@@ -89,6 +91,7 @@ class Report:
 
     spool: ingest.DrainResult = field(default_factory=ingest.DrainResult)
     expired_leases: int = 0
+    pruned_samples: int = 0
     #: The step that could not finish and why; the steps after it still ran.
     failures: list[str] = field(default_factory=list)
 
@@ -102,8 +105,9 @@ def run(conn: sqlite3.Connection, *, seconds: float = START_UP_SECONDS) -> Repor
 
     report = Report()
     deadline = time.monotonic() + seconds
-    # What the lease expiry after the drain may still need: its own lock wait.
-    reserve = START_UP_BUSY_MS / 1000 * 2
+    # What the two steps after the drain may still need: the lease expiry's lock wait and
+    # the quota retention's, each with as much again to spare.
+    reserve = START_UP_BUSY_MS / 1000 * 4
     with _short_busy_timeout(conn):
         try:
             report.spool = drain_spool(conn, seconds=max(0.0, seconds - reserve))
@@ -116,6 +120,13 @@ def run(conn: sqlite3.Connection, *, seconds: float = START_UP_SECONDS) -> Repor
             report.expired_leases = expire_leases(conn)
         except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
             report.failures.append(f"lease expiry: {_describe(error)}")
+        if time.monotonic() >= deadline:
+            report.failures.append("quota retention: no time left; it runs at the next start")
+            return report
+        try:
+            report.pruned_samples = prune_quota_samples(conn)
+        except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
+            report.failures.append(f"quota retention: {_describe(error)}")
     return report
 
 
@@ -191,6 +202,19 @@ def expire_leases(conn: sqlite3.Connection) -> int:
         raise
     conn.commit()
     return expired
+
+
+def prune_quota_samples(conn: sqlite3.Connection) -> int:
+    """Delete the quota samples past their retention, in one transaction; how many."""
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        pruned = quota_samples.prune(conn)
+    except BaseException:
+        conn.rollback()
+        raise
+    conn.commit()
+    return pruned
 
 
 def start_sweep(conn: sqlite3.Connection, report: Callable[[str], None]) -> threading.Thread | None:

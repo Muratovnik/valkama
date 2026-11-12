@@ -862,8 +862,10 @@ class StartUpTests(unittest.TestCase):
             holder.execute("ROLLBACK")
             busy = conn.execute("PRAGMA busy_timeout").fetchone()[0]
         self.assertLess(elapsed, housekeeping.START_UP_SECONDS)
-        self.assertEqual(1, len(report.failures), report.failures)
+        # Each step after the drain gives the held store up on its own.
+        self.assertEqual(2, len(report.failures), report.failures)
         self.assertIn("lease expiry", report.failures[0])
+        self.assertIn("quota retention", report.failures[1])
         # The connection's own timeout is back for the requests that follow.
         self.assertEqual(5000, busy)
 
