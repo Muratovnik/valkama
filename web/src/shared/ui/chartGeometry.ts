@@ -391,7 +391,10 @@ const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stack
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
   const parts = seriesParts(stacked.segments, format)
   const head = columnHead(stacked, words, format)
-  return [parts.length ? `${head}; ${parts.join(', ')}` : head, ...columnNotes(stacked, words)]
+  return [
+    parts.length ? `${head}; ${parts.join(', ')}` : head,
+    ...columnNotes(stacked, words, { withSum: true }),
+  ]
     .filter(Boolean)
     .join('. ')
 }
@@ -401,9 +404,18 @@ function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) 
   const before = stacked.column.before
   const compared =
     words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
-  return hasSum(stacked) && !stacked.column.pending
-    ? `${periodName(stacked)}: ${words.total} ${format(stacked.total)}${compared}`
+  return saysSum(stacked)
+    ? `${periodName(stacked)}: ${sumWords(stacked, words, format)}${compared}`
     : `${periodName(stacked)}${compared}`
+}
+
+/** Whether words about a period say its sum: it has one, and its figures are in. */
+const saysSum = (stacked: StackedColumn) => hasSum(stacked) && !stacked.column.pending
+
+/** A period's sum, «total 3 h», and «so far» after it while the period is still running. */
+function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
+  const running = stacked.column.incomplete ? ` ${words.incomplete}` : ''
+  return `${words.total} ${format(stacked.total)}${running}`
 }
 
 const seriesParts = (segments: readonly StackSegment[], format: Format) =>
@@ -416,7 +428,10 @@ const seriesParts = (segments: readonly StackSegment[], format: Format) =>
 export function readoutLines(stacked: StackedColumn, words: PeriodWords, format: Format) {
   const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
   return {
-    head: [columnHead(stacked, words, format), ...columnNotes(stacked, words)].join('. '),
+    head: [
+      columnHead(stacked, words, format),
+      ...columnNotes(stacked, words, { withSum: true }),
+    ].join('. '),
     series: seriesParts(largest, format).join(', '),
   }
 }
@@ -428,8 +443,8 @@ export function segmentSummary(
   words: PeriodWords,
   format: Format,
 ): string {
-  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${words.total} ${format(stacked.total)}`
-  return [head, ...columnNotes(stacked, words)].join('. ')
+  const head = `${periodName(stacked)}: ${segment.series.label} ${format(segment.value)}, ${sumWords(stacked, words, format)}`
+  return [head, ...columnNotes(stacked, words, { withSum: true })].join('. ')
 }
 
 /** A change the chart marks, numbered in time order: the plot shows the number, a note the words. */
@@ -484,14 +499,21 @@ export function changeMarkers(
 
 /**
  * What is said of a period besides its numbers: that it is still running, that it has no data
- * yet, which series have no figure in it, what changed.
+ * yet, which series have no figure in it, what changed. Said `withSum`, after words that say the
+ * period's sum (`columnHead`), «so far» stands after that sum and is no note of its own; the
+ * table, whose sum has a cell of its own, keeps it among the notes.
  */
-export function columnNotes(stacked: StackedColumn, words: PeriodWords): string[] {
+export function columnNotes(
+  stacked: StackedColumn,
+  words: PeriodWords,
+  { withSum = false }: { withSum?: boolean } = {},
+): string[] {
   const names = stacked.absent.map((one) => one.label).join(', ')
   const absent = names ? [words.absent ? `${words.absent}: ${names}` : names] : []
   const pending = stacked.column.pending && words.pending ? [words.pending] : []
   // A period with no data yet holds nothing «so far»: it says only that it has none.
-  const running = stacked.column.incomplete && !pending.length ? [words.incomplete] : []
+  const said = withSum && saysSum(stacked)
+  const running = stacked.column.incomplete && !pending.length && !said ? [words.incomplete] : []
   return [...running, ...pending, ...absent, ...stacked.marks]
 }
 
