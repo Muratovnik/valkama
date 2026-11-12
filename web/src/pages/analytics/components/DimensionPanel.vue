@@ -10,8 +10,11 @@
  * Where the page holds it to the panel's height (`fills`), the figures stay in view at the top and
  * the charts and the table share the rest: the charts up to a little under half of it, scrolling on
  * their own past that, the table the remainder and never less than 14rem. A wheel moves the part
- * it is over and never the panel or the page. Elsewhere, as on a phone, the panel scrolls and the
- * table keeps a frame of its own.
+ * it is over and never the panel or the page. Elsewhere, in the list's place on a narrow page or a
+ * phone, the panel scrolls and the table keeps a frame of its own; where the window is tall enough
+ * that frame stays at the panel's bottom edge while the figures and the charts pass under it, so its
+ * heading row is in view from the start and a wheel over it moves the table alone. A part focused
+ * under it is brought up over it (`uncover`).
  *
  * Held, a button at the table gives it the whole panel under the figures and back (`tableWhole`),
  * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway. The
@@ -103,6 +106,31 @@ const narrow = useNarrowCharts(root)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
+/** The element that scrolls the panel where the page does not hold it: its nearest scrolling box. */
+function scrollerOf(from: HTMLElement | null) {
+  for (let node = from?.parentElement; node; node = node.parentElement)
+    if (['auto', 'scroll'].includes(getComputedStyle(node).overflowY)) return node
+  return null
+}
+
+/** The air left under a part brought up over the table, room for its focus ring. */
+const RING_ROOM = 8
+
+/**
+ * Where the table stays at the panel's bottom edge, a part focused under it is scrolled up to stand
+ * over it: the browser brings a focused part into the panel's view, and the table would cover it.
+ */
+function uncover(event: FocusEvent) {
+  const table = root.value?.querySelector<HTMLElement>('.dimension-table')
+  const target = event.target
+  if (props.fills || !table || !(target instanceof Element) || table.contains(target)) return
+  requestAnimationFrame(() => {
+    if (getComputedStyle(table).position !== 'sticky') return
+    const covered = target.getBoundingClientRect().bottom - table.getBoundingClientRect().top
+    if (covered > 0) scrollerOf(root.value)?.scrollBy({ top: covered + RING_ROOM })
+  })
+}
+
 /**
  * The values the ranked list leaves out asked for: the table takes the whole panel, as its own
  * button gives it, and the focus moves to it — to its frame where that scrolls, else its first
@@ -124,6 +152,7 @@ async function showTable() {
     class="dimension-panel"
     :data-fills="fills"
     :data-whole="whole"
+    @focusin="uncover"
   >
     <SpendingUnread
       v-if="!before"
@@ -171,6 +200,7 @@ async function showTable() {
         />
       </div>
       <SpendingTable
+        class="dimension-table"
         :across="across"
         :by="by"
         :cross="cross.state.value"
@@ -270,6 +300,34 @@ async function showTable() {
   gap: var(--space-section);
   align-items: start;
   min-width: 0;
+}
+
+/* Unheld, the panel scrolls as a whole. Where the window is tall enough, the table stays at its
+   bottom edge, up to half the window high, on the ground the panel stands on, and what stands
+   above passes under it: its heading row is in view from the start and a wheel over its frame
+   moves the table alone. Scrolled to its end, the panel shows the table in its own place under the
+   day chart, so nothing above it is out of reach. A short window, a phone on its side, keeps the
+   table in the flow, where it would cover what it stands under. */
+@media (height >= 40rem) {
+  /* A part that sticks stays inside its parent's box, which here would start under the figures
+     and hold the table down off the panel's edge until they scroll away: unheld, the charts and
+     the table stand in the panel's own grid, with the same air between them. */
+  .dimension-panel[data-fills='false'] .dimension-body {
+    display: contents;
+  }
+
+  /* A part sticks inside its scroller's padding, and the page leaves the air of --space-12 under
+     the panel's content: held at 0 the table stood that high over the panel's edge, the charts
+     showing through under it. */
+  .dimension-panel[data-fills='false'] .dimension-table {
+    position: sticky;
+    inset-block-end: calc(-1 * var(--space-12));
+    z-index: 4;
+    max-block-size: 50svh;
+    padding-block-start: var(--space-3);
+    background: var(--color-canvas);
+    box-shadow: 0 -1px var(--color-rule);
+  }
 }
 
 @container (width >= 48rem) {

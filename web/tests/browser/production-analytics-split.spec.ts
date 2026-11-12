@@ -160,10 +160,16 @@ const tableScrolled = async (page: Page) => {
   return now.table
 }
 
-/** Turns the wheel over the middle of the table's frame. */
-async function wheelOverTable(page: Page) {
-  const box = await page.locator('.spending-table-frame').boundingBox()
-  if (!box) throw new Error('the table drew no frame')
+/** How far the panel is scrolled down. */
+const panelScrolled = async (page: Page) => {
+  const now = await scrolled(page)
+  return now.panel
+}
+
+/** Turns the wheel over the middle of an element, the table's frame unless named. */
+async function wheelOver(page: Page, selector = '.spending-table-frame') {
+  const box = await page.locator(selector).boundingBox()
+  if (!box) throw new Error(`${selector} is not drawn`)
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.wheel(0, 400)
 }
@@ -212,7 +218,7 @@ for (const [width, height] of [
     for (const step of steps) expect(step.trim()).toMatch(/^(0|\d+\s(min|h|d))$/u)
     expect(top).toMatch(/ 0 to \d+\s(min|h|d)$/u)
 
-    await wheelOverTable(page)
+    await wheelOver(page)
     await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
     expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })
     // Scrolled, the heading row still stands at the frame's top, the total at its bottom, and the
@@ -352,6 +358,88 @@ test('the table counts the values of the period as the rail’s tile does', asyn
   const first = /^(\d+) tasks$/u.exec(lineText.trim())?.[1]
   expect(values).toBe('30')
   expect(first).toBe(values)
+})
+
+/**
+ * Where a section in the list's place stands in its panel at a window size: how wide the app's
+ * navigation and the section are, where the table's heading row stands against what the panel
+ * shows, and how far each scroller is scrolled.
+ */
+function inPlace(page: Page) {
+  return page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect()
+    const panel = document.querySelector<HTMLElement>('.analytics-panel')
+    const head = box('.spending-table-frame thead th')
+    const table = box('.spending-table')
+    const shown = panel?.getBoundingClientRect()
+    if (!panel || !head || !table || !shown) throw new Error('the section drew no table')
+    const shownBottom = Math.min(shown.top + panel.clientHeight, window.innerHeight)
+    return {
+      nav: Math.round(box('.app-nav-frame')?.width ?? 0),
+      section: Math.round(box('.dimension-panel')?.width ?? 0),
+      panel: panel.clientHeight,
+      panelContent: panel.scrollHeight,
+      headTop: Math.round(head.top - shown.top),
+      headInView: head.top >= shown.top - 0.5 && head.bottom <= shownBottom + 0.5,
+      charts: Math.round(box('.dimension-charts')?.height ?? 0),
+      table: Math.round(table.height),
+      // How far over the panel's visible edge the table ends: nothing shows under a table held there.
+      tableAboveEdge: Math.round(shownBottom - table.bottom),
+    }
+  })
+}
+
+// At 1024×768 the app's navigation leaves the page too narrow for the rail beside the section, so
+// the section takes the list's place and is not held. Its table stays at the panel's bottom edge
+// while what stands above passes under it: its heading row in view from the start, a wheel over it
+// moving it alone, a wheel above it moving the panel, and a part focused under it brought up over it.
+test('at 1024×768 beside the app’s navigation the table’s heading is in view and its wheel is its own', async ({
+  page,
+}, info) => {
+  await serve(page, THIRTY_TASKS)
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto(pageAt({ by: 'work_item', open: 'section' }))
+  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  await expect(page.locator('.dimension-panel')).toHaveAttribute('data-fills', 'false')
+  await page.evaluate(() => document.fonts.ready)
+  const measured = await inPlace(page)
+  await record(info, 'analytics section in place 1024x768', measured)
+  expect(measured.nav, 'the app’s navigation').toBeGreaterThan(0)
+  expect(measured.section, 'the section narrower than two charts side by side').toBeLessThan(
+    48 * 16,
+  )
+  expect(measured.panelContent, 'a panel that scrolls').toBeGreaterThan(measured.panel)
+  expect(measured.headInView, 'the table’s heading row in view unscrolled').toBe(true)
+  expect(measured.table).toBeGreaterThanOrEqual(14 * 16)
+  expect(
+    Math.abs(measured.tableAboveEdge),
+    'the table held at the panel’s edge',
+  ).toBeLessThanOrEqual(1)
+
+  await wheelOver(page)
+  await expect.poll(async () => tableScrolled(page)).toBeGreaterThan(0)
+  expect(await scrolled(page)).toMatchObject({ document: 0, panel: 0, charts: 0 })
+
+  // Over the figures the wheel moves the panel, and the table's heading row stays where it stood.
+  await wheelOver(page, '.spending-tiles')
+  await expect.poll(async () => panelScrolled(page)).toBeGreaterThan(0)
+  const moved = await inPlace(page)
+  expect(moved.headInView).toBe(true)
+  expect(moved.headTop).toBe(measured.headTop)
+  expect(Math.abs(moved.tableAboveEdge)).toBeLessThanOrEqual(1)
+
+  // A part focused under the table is brought up over it.
+  await page.locator('.analytics-panel').evaluate((panel) => panel.scrollTo({ top: 0 }))
+  const control = page.locator('.spending-days .segmented-option').first()
+  await control.focus()
+  await expect
+    .poll(() =>
+      control.evaluate((one) => {
+        const table = document.querySelector('.dimension-table')?.getBoundingClientRect()
+        return table ? Math.round(one.getBoundingClientRect().bottom - table.top) : 1
+      }),
+    )
+    .toBeLessThanOrEqual(0)
 })
 
 test('a section that is not held has no button for the whole panel', async ({ page }, info) => {
