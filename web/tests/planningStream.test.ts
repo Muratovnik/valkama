@@ -47,6 +47,30 @@ it('subscribes to the exact project and store and commits validated snapshots', 
   close()
 })
 
+it('names the revision the page read and is live on `current`, which carries no model', () => {
+  vi.useFakeTimers()
+  vi.stubGlobal('EventSource', Source)
+  const callbacks = { snapshot: vi.fn(), connection: vi.fn(), invalid: vi.fn() }
+  const revision = 'b'.repeat(64)
+  const close = subscribePlanning({ project: projectId, ...spaceRef }, callbacks, revision)
+  const source = sources.at(-1)
+  if (!source) throw new Error('Expected an event source')
+  expect(new URL(source.url, 'http://127.0.0.1').searchParams.get('since')).toBe(revision)
+  source.dispatchEvent(new MessageEvent('current', { data: revision }))
+  expect(callbacks.connection).toHaveBeenLastCalledWith('live')
+  expect(callbacks.snapshot).not.toHaveBeenCalled()
+  // Live without a frame: the silent-stream deadline does not call it reconnecting.
+  vi.advanceTimersByTime(15_000)
+  expect(callbacks.connection).toHaveBeenLastCalledWith('live')
+  // What changes later still arrives as a model.
+  source.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(planningReadModel) }))
+  expect(callbacks.snapshot).toHaveBeenCalledWith(planningReadModel)
+  close()
+  source.dispatchEvent(new MessageEvent('current', { data: revision }))
+  expect(callbacks.connection).toHaveBeenCalledTimes(3)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
 it('says an agent changed apart from the model, and only while open', () => {
   vi.stubGlobal('EventSource', Source)
   const agents = vi.fn()

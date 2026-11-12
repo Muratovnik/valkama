@@ -1145,6 +1145,35 @@ refused as above.
 `total` names every kind, `0` for one not counted in the period; `days` lists each day
 with a count, oldest first, with every kind. No MCP tool counts or reads uses.
 
+### The space's stream
+
+`GET /api/planning` answers a space's whole read model, and
+`GET /api/events?view=planning` sends it again as an unnamed event each time it
+changes. Both carry `revision` first: the SHA-256, in hex, of the model's compact JSON
+without it. Two reads that answer the same model carry the same revision, and any
+difference in what the model says, an item, a link or `live_work`, changes it. Each
+frame of the stream also names it as its event `id`.
+
+The page reads the space and only then opens its stream, with that read's revision as
+`since`. When the model still has that revision, sending it would repeat the read, so
+the stream sends this short event in its place, and its first frame is the next change:
+
+```text
+id: 3f9c…
+event: current
+data: 3f9c…
+```
+
+A change that landed between the read and the stream gives the model another revision,
+and that model is the stream's first frame. `since` is taken once, not empty, and only
+with `view=planning`; any other use of it is refused with 400.
+
+A browser that lost the stream reconnects to the same address by itself and sends the
+last event's `id` as `Last-Event-ID`. A request that carries that header is sent the
+model whatever `since` says: the page may by then hold a model newer than the read the
+address names, and it takes the first frame after a dropped connection as news even
+when that frame says what the page has.
+
 ### The live-work frame
 
 One small read says where work is going on now, across every space of the primary

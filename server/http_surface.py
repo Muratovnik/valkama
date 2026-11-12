@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import enum
+import hashlib
 import json
 import os
 import queue
@@ -96,15 +97,44 @@ class EventFrames:
         self._last_payload: str | None = None
         self._last_write = clock()
 
-    def frame(self, payload: str) -> bytes | None:
+    def frame(self, payload: str, event_id: str | None = None) -> bytes | None:
         if payload != self._last_payload:
             self._last_payload = payload
             self._last_write = self._clock()
-            return f"data: {payload}\n\n".encode()
+            head = "" if event_id is None else f"id: {event_id}\n"
+            return f"{head}data: {payload}\n\n".encode()
         if self._clock() - self._last_write >= self._keepalive_seconds:
             self._last_write = self._clock()
             return b": keep-alive\n\n"
         return None
+
+    def held(self, payload: str, revision: str) -> bytes:
+        """The client already holds `payload`: it is not sent, and the client is told so.
+
+        The short event stands where the frame would have been, so the client knows
+        the stream is open and current without a second copy of what it has.
+        """
+
+        self._last_payload = payload
+        self._last_write = self._clock()
+        return f"id: {revision}\nevent: current\ndata: {revision}\n\n".encode()
+
+
+def read_model_text(payload: Mapping[str, object]) -> tuple[str, str]:
+    """A space's read model as it is sent, carrying its revision, and that revision.
+
+    The revision is the digest of everything else the model says, so two reads
+    that answer the same model carry the same one wherever they were read: the
+    page hands the stream the revision its read answered, and the stream leaves
+    out a first frame that would repeat it. It is written ahead of the fields it
+    digests, which is what lets one serialization serve both.
+    """
+
+    if not payload or "revision" in payload:
+        raise ValueError("a read model to stamp is a non-empty object without a revision")
+    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    revision = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return revision, f'{{"revision":"{revision}",{text[1:]}'
 
 
 #: How often a stream may compute the live-work frame at most.
@@ -451,11 +481,23 @@ def _planning_read(call: _Call) -> _Answer | None:
                 400, "invalid_request", "Exact scope is supported by the Planning model read"
             )
         routing = PlanningRouting(call.store(), db_path())
-        return 200, routing.planning_read_model(
-            call.parameters,
-            lambda conn, key: planning_views.planning_payload(conn, space=key),
+        return _read_model_answer(
+            routing.planning_read_model(
+                call.parameters,
+                lambda conn, key: planning_views.planning_payload(conn, space=key),
+            )
         )
-    return planning_api.handle_get(call.store(), call.path, call.parameters)
+    answer = planning_api.handle_get(call.store(), call.path, call.parameters)
+    if answer is not None and call.path == "/api/planning":
+        return _read_model_answer(answer[1])
+    return answer
+
+
+def _read_model_answer(payload: Mapping[str, object]) -> _Answer:
+    """A space's read model, carrying the revision its event stream compares with."""
+
+    _revision, text = read_model_text(payload)
+    return _Raw(200, text.encode("utf-8"), "application/json")
 
 
 def _planning_read_error(error: Exception) -> _Answer:
@@ -1273,11 +1315,18 @@ class Handler(BaseHTTPRequestHandler):
             if exact and (view != "planning" or len(parameters.get("view", [view])) != 1):
                 self._send_json(400, {"error": "Exact scope requires one Planning view"})
                 return
-            scoped = {key: value for key, value in parameters.items() if key != "view"}
+            since = parameters.get("since")
+            if since is not None and (view != "planning" or len(since) != 1 or not since[0]):
+                self._send_json(400, {"error": "since names one revision of a Planning view"})
+                return
+            scoped = {
+                key: value for key, value in parameters.items() if key not in ("view", "since")
+            }
             self._stream_events(
                 _first_value(parameters, "space"),
                 view=view,
                 exact_parameters=scoped if exact else None,
+                since=None if since is None else since[0],
             )
         else:
             self._send(404, b"not found", "text/plain")
@@ -1393,8 +1442,19 @@ class Handler(BaseHTTPRequestHandler):
         board: str | None,
         view: str = "planning",
         exact_parameters: Mapping[str, list[str]] | None = None,
+        since: str | None = None,
     ) -> None:
-        """Push one live read model on every database change; clients never poll."""
+        """Push one live read model on every database change; clients never poll.
+
+        `since` is the revision of the space's model the page has just read. A first
+        frame with that revision would repeat it, so the stream says `current` in its
+        place. A browser coming back on its own sends `Last-Event-ID` to the same
+        address, and is sent the frame whatever it says: the page treats the first
+        frame after a dropped connection as news, and what it holds may be newer than
+        the read the address names.
+        """
+        if self.headers.get("Last-Event-ID") is not None:
+            since = None
         with contextlib.ExitStack() as cleanup:
             conn = self._open_store()
             if conn is None:
@@ -1439,23 +1499,35 @@ class Handler(BaseHTTPRequestHandler):
                 return chunk is not None
 
             def push() -> None:
+                nonlocal since
                 current: object
+                frame: bytes | None
                 if view == "live":
                     return
-                if exact_parameters is not None:
-                    # A fresh routing on every push: a binding moved while the
-                    # stream is open refuses here and closes the stream.
-                    current = PlanningRouting(conn, db_path()).planning_read_model(
-                        exact_parameters,
-                        lambda selected, key: planning_views.planning_payload(selected, space=key),
-                    )
-                elif view == "activity":
-                    current = planning_views.activity_feed(conn)
-                elif view == "spaces":
-                    current = {"planning_spaces": planning_service.list_planning_spaces(conn)}
+                if view == "planning":
+                    if exact_parameters is not None:
+                        # A fresh routing on every push: a binding moved while the
+                        # stream is open refuses here and closes the stream.
+                        model = PlanningRouting(conn, db_path()).planning_read_model(
+                            exact_parameters,
+                            lambda selected, key: planning_views.planning_payload(
+                                selected, space=key
+                            ),
+                        )
+                    else:
+                        model = planning_views.planning_payload(conn, space=board)
+                    revision, text = read_model_text(model)
+                    if since == revision:
+                        frame = frames.held(text, revision)
+                    else:
+                        frame = frames.frame(text, event_id=revision)
+                    since = None
                 else:
-                    current = planning_views.planning_payload(conn, space=board)
-                frame = frames.frame(json.dumps(current, ensure_ascii=False))
+                    if view == "activity":
+                        current = planning_views.activity_feed(conn)
+                    else:
+                        current = {"planning_spaces": planning_service.list_planning_spaces(conn)}
+                    frame = frames.frame(json.dumps(current, ensure_ascii=False))
                 if frame is not None:
                     self.wfile.write(frame)
                     self.wfile.flush()

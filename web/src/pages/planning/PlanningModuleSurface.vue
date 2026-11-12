@@ -229,13 +229,28 @@ const filterFromCard = (token: WorkFilterToken) => workspace.value?.toggleFilter
 
 const selectedId = computed(() => openRecord.value?.work_item_id ?? null)
 
+/**
+ * Whether the page holds this space, or its read failed. The stream waits for the read
+ * and opens with the revision it answered, so its first frame is not the same model
+ * again — built twice at once on the server and parsed twice here. What changed after
+ * the read, the stream still sends; after a failed read, it sends the space itself.
+ */
+const spaceRead = computed(() => {
+  const read = resource.value
+  return read.key === planningKey.value || (read.status === 'error' && read.pendingKey === null)
+})
 const streamTarget = computed(() =>
   projectId.value === undefined || boundSpace.value === undefined
     ? null
     : { project: projectId.value, ...boundSpace.value },
 )
+/**
+ * The space's stream counts as connecting while it waits for the read, so the shell
+ * opens no stream of its own for the live-work frame in the meantime.
+ */
+const openStreamTarget = computed(() => (spaceRead.value ? streamTarget.value : null))
 const { connection: liveConnection, reconnect } = usePlanningSubscription(
-  streamTarget,
+  openStreamTarget,
   (next, returning) => {
     const key = planningKey.value
     // The stream's first frame is the space as it stands when the page connects, which
@@ -250,6 +265,7 @@ const { connection: liveConnection, reconnect } = usePlanningSubscription(
   () => {
     agentsVersion.value += 1
   },
+  () => model.value?.revision,
 )
 watch(
   [liveConnection, streamTarget],

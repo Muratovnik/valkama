@@ -10,6 +10,16 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **A space's stream does not send the space the page has just read.** `GET /api/planning`
+  and each frame of `GET /api/events?view=planning` carry `revision`, a digest of the
+  model, and the page opens the stream after its read with `since=<revision>`. While the
+  model is unchanged the stream says `event: current` instead of sending the whole space
+  again, so the server no longer builds it twice at once and the page no longer parses it
+  twice. A change between the read and the stream still comes as the first frame, and a
+  browser reconnecting on its own (`Last-Event-ID`) is still sent the model.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

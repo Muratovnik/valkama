@@ -129,22 +129,59 @@ beforeEach(() => {
 })
 
 describe('Planning exact resource lifecycle', () => {
+  it('opens the stream once the read has answered, with the revision it answered', async () => {
+    const initial = deferred<ReturnType<typeof model>>()
+    vi.mocked(fetchPlanning).mockReturnValueOnce(initial.promise)
+    const wrapper = surface()
+    await flushPromises()
+    // Opened beside the read, the stream would build and send the same model again.
+    expect(subscribePlanning).not.toHaveBeenCalled()
+    // Still the space's stream, connecting: the shell opens no live-work stream meanwhile.
+    expect(wrapper.emitted('connection')?.at(-1)).toEqual(['connecting'])
+    const revision = 'a'.repeat(64)
+    initial.resolve({ ...model('Read item'), revision })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Read item')
+    expect(subscribePlanning).toHaveBeenCalledOnce()
+    const [target, , since] = vi.mocked(subscribePlanning).mock.calls[0] ?? []
+    expect(target).toEqual({ project: projectId, ...spaceRef })
+    expect(since).toBe(revision)
+    wrapper.unmount()
+  })
+
+  it('opens the stream after a read that failed, to bring the space when it can', async () => {
+    vi.mocked(fetchPlanning).mockRejectedValueOnce(new Error('Read failed'))
+    const wrapper = surface()
+    await flushPromises()
+    expect(subscribePlanning).toHaveBeenCalledOnce()
+    expect(vi.mocked(subscribePlanning).mock.calls[0]?.[2]).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it.each(['older', 'empty'])(
     'applies live snapshots and rejects a delayed %s HTTP response',
     async (response) => {
-      const initial = deferred<ReturnType<typeof model>>()
-      vi.mocked(fetchPlanning).mockReturnValueOnce(initial.promise)
+      vi.mocked(fetchPlanning).mockResolvedValueOnce(model('Initial HTTP item'))
       const wrapper = surface()
+      await flushPromises()
       const subscription = vi.mocked(subscribePlanning).mock.calls[0]
       const result = vi.mocked(subscribePlanning).mock.results[0]
       if (!subscription || !result) throw new Error('Expected initial stream subscription')
       const [target, callbacks] = subscription
       expect(target).toEqual({ project: projectId, ...spaceRef })
+      // A read of the space the page holds keeps its stream open, and a frame may beat it.
+      const refresh = deferred<ReturnType<typeof model>>()
+      vi.mocked(fetchPlanning).mockReturnValueOnce(refresh.promise)
+      const renamed = context()
+      renamed.projects = renamed.projects.map((project) => ({ ...project, title: 'Renamed' }))
+      await wrapper.setProps({ context: renamed })
+      expect(fetchPlanning).toHaveBeenCalledTimes(2)
+      expect(subscribePlanning).toHaveBeenCalledOnce()
       callbacks.snapshot(model('Fresh stream item'))
       callbacks.connection('live')
       await flushPromises()
       expect(wrapper.text()).toContain('Fresh stream item')
-      initial.resolve(
+      refresh.resolve(
         response === 'older'
           ? model('Earlier HTTP item')
           : { ...model('Empty'), planning_space: null },

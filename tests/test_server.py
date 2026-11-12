@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -55,6 +56,21 @@ class EventFrameTests(unittest.TestCase):
         self.assertIsNone(frames.frame('{"a": 1}'))
         self.assertIsNone(frames.frame('{"a": 1}'))
         self.assertEqual(b'data: {"a": 2}\n\n', frames.frame('{"a": 2}'))
+
+    def test_a_payload_the_client_holds_is_not_sent_now_or_later(self) -> None:
+        frames = http_surface.EventFrames(clock=lambda: 0.0)
+        self.assertEqual(b"id: r1\nevent: current\ndata: r1\n\n", frames.held('{"a": 1}', "r1"))
+        self.assertIsNone(frames.frame('{"a": 1}', event_id="r1"))
+        self.assertEqual(b'id: r2\ndata: {"a": 2}\n\n', frames.frame('{"a": 2}', event_id="r2"))
+
+    def test_a_read_model_carries_the_digest_of_everything_else_it_says(self) -> None:
+        revision, text = http_surface.read_model_text({"b": "é", "a": [1]})
+        self.assertEqual({"revision": revision, "b": "é", "a": [1]}, json.loads(text))
+        self.assertEqual(hashlib.sha256('{"b":"é","a":[1]}'.encode()).hexdigest(), revision)
+        self.assertNotEqual(revision, http_surface.read_model_text({"b": "e", "a": [1]})[0])
+        for refused in ({}, {"revision": "r"}):
+            with self.subTest(payload=refused), self.assertRaises(ValueError):
+                http_surface.read_model_text(refused)
 
     def test_a_change_after_dedup_is_still_delivered(self) -> None:
         frames = http_surface.EventFrames(clock=lambda: 0.0)

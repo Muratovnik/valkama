@@ -143,6 +143,10 @@ function readLiveFrame(event: MessageEvent<string>): LiveFrame {
  * The space's stream. Beside the space's model it carries the live-work frame, which
  * is the whole store's and not the space's: a frame that does not read is dropped
  * alone and said through `invalid`, and the space goes on arriving.
+ *
+ * `since` is the revision of the model the page has just read. The stream then sends
+ * no first frame that would repeat it, only `current` in its place, which says the
+ * stream is open as a frame would. A change that landed after that read still comes.
  */
 export function subscribePlanning(
   target: { project: string } & PlanningSpaceRef,
@@ -155,9 +159,10 @@ export function subscribePlanning(
     live?: (frame: LiveFrame) => void
     snapshot: (model: PlanningReadModel) => void
   },
+  since?: string,
 ): () => void {
   callbacks.connection('connecting')
-  const source = new EventSource(`/api/events${query({ view: 'planning', ...target })}`)
+  const source = new EventSource(`/api/events${query({ view: 'planning', ...target, since })}`)
   let closed = false
   const firstSnapshotDeadline = setTimeout(() => {
     if (!closed) callbacks.connection('reconnecting')
@@ -167,6 +172,7 @@ export function subscribePlanning(
     closed = true
     clearTimeout(firstSnapshotDeadline)
     source.removeEventListener('message', onMessage)
+    source.removeEventListener('current', onCurrent)
     source.removeEventListener('agents', onAgents)
     source.removeEventListener('live', onLive)
     source.removeEventListener('error', onError)
@@ -195,6 +201,12 @@ export function subscribePlanning(
       callbacks.invalid?.(error)
     }
   }
+  /** The model the page read is the one the stream would have sent. */
+  function onCurrent() {
+    if (closed) return
+    clearTimeout(firstSnapshotDeadline)
+    callbacks.connection('live')
+  }
   function onAgents() {
     if (!closed) callbacks.agents?.()
   }
@@ -203,6 +215,7 @@ export function subscribePlanning(
     if (!closed) callbacks.connection('reconnecting')
   }
   source.addEventListener('message', onMessage)
+  source.addEventListener('current', onCurrent)
   source.addEventListener('agents', onAgents)
   source.addEventListener('live', onLive)
   source.addEventListener('error', onError)
