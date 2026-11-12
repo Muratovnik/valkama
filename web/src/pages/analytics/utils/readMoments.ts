@@ -25,6 +25,17 @@ export const dayOf = (moment: string) => named(moment).toISOString().slice(0, 10
 /** The last day a period ending at `moment` holds: the day of the instant before it ends. */
 export const lastDayBefore = (moment: string) => named(moment, -1).toISOString().slice(0, 10)
 
+/**
+ * Whether a period from `from` to `to` lies wholly in the day running at `now` (ms), that day
+ * taken at the period's own offset, as its moments name their days.
+ */
+export function withinToday(from: string, to: string, now = Date.now()) {
+  const today = named(from, now - Date.parse(from))
+    .toISOString()
+    .slice(0, 10)
+  return dayOf(from) === today && lastDayBefore(to) === today
+}
+
 const pad = (number: number) => String(number).padStart(2, '0')
 
 /**

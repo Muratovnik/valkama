@@ -176,6 +176,16 @@ const holdsSection = computed(
 )
 
 /**
+ * How high a section's table stands over the panel's bottom edge where it sticks there
+ * (`DimensionPanel`'s `cover`): the panel's scroll is padded by it, so what the browser brings
+ * into view, a focused part or one scrolled to, stands over the table rather than under it.
+ */
+const tableCover = ref(0)
+const panelPadding = computed(() =>
+  tableCover.value ? { scrollPaddingBlockEnd: `${tableCover.value}px` } : undefined,
+)
+
+/**
  * A section chosen on the rail or from a card's heading, as a new place in the history, so Back
  * returns to the section it was chosen in: beside the rail, or in place of the list.
  */
@@ -302,6 +312,7 @@ const emptyDescription = computed(() => {
         v-show="showsPanel"
         class="analytics-panel"
         :class="{ 'analytics-panel-held': holdsSection }"
+        :style="panelPadding"
         :aria-label="sectionName"
       >
         <div
@@ -367,6 +378,7 @@ const emptyDescription = computed(() => {
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @update:across="(across) => change({ across }, 'replace')"
+              @cover="(height) => (tableCover = height)"
               @narrow="narrow"
               @day="narrowToDay"
               @retry="read.retry"

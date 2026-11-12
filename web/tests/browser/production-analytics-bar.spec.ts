@@ -55,8 +55,10 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   const { count } = await watchPage(page)
   const double = await serveLive(page, HOUR)
   double.lastEventAt = new Date(NOW.getTime() - 1000)
-  const analytics = await openReport(page, 1440, nowAddress)
+  // The page's time stops before it opens, so the record is 9 s old however long opening takes:
+  // paused after it, a slow open had already used up those seconds and the pause lay in the past.
   await page.clock.pauseAt(new Date(NOW.getTime() + 8000))
+  const analytics = await openReport(page, 1440, nowAddress)
   await settled(count, double)
   const fresh = analytics.locator('.analytics-bar-fresh')
   const seen: Record<string, unknown> = {}
@@ -199,6 +201,8 @@ test('«Today» is its hours 0 to 23, the running one hatched, against the same 
   await expect(page.locator('.tile-figure[data-measure="time"]')).toHaveText('40 min')
   const change = page.locator('.spending-tiles .tile-change').first()
   await expect(change).toContainText('↑ 167%')
+  // Yesterday's hours are named by their day, which the clock times alone would leave as today's.
+  await expect(change).toContainText(/Nov\s10,\s00:00\s– 14:30/u)
   const against = await change.textContent()
 
   await page.locator('.spending-days').screenshot(shot(info, 'analytics-today-1440.png'))

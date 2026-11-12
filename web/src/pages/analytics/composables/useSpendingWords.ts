@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
-import { dayOf, named } from '@/pages/analytics/utils/readMoments.ts'
+import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -36,6 +36,9 @@ const SESSION_PREFIX = 8
 
 /** A period shorter than this is named by its clock times, a longer one by its days. */
 const DAY = 24 * 3_600_000
+
+/** A date as a period names its days, «8 Nov». */
+const DATE: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
 
 /** A time of the clock, «09:05», «21:25»: the clock the minutes of a chart read on. */
 const CLOCK: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
@@ -169,12 +172,15 @@ export function useSpendingWords() {
 
   /**
    * A period as its moments name it: by its first and last day, «2 – 8 Nov», or, shorter than a
-   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds. A line
+   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds. Clock times
+   * alone read as today's, so a short period not wholly within today names its day before them:
+   * the same hours of yesterday «Today» is compared with are «Nov 10, 00:00 – 15:59». A line
    * breaks only after the dash: never inside a date, and never with the dash starting a line.
    */
   function period(from: string, to: string) {
-    const short = Date.parse(to) - Date.parse(from) < DAY
-    const options: Intl.DateTimeFormatOptions = short ? CLOCK : { day: 'numeric', month: 'short' }
+    let options = DATE
+    if (Date.parse(to) - Date.parse(from) < DAY)
+      options = withinToday(from, to) ? CLOCK : { ...DATE, ...CLOCK }
     return dayFormat(options)
       .formatRange(named(from), named(to, -1))
       .replaceAll(/\s/gu, NO_BREAK)
