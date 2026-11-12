@@ -14,7 +14,8 @@
  * left open says its figures grow old. Its clock time is the browser's own, as the time axis
  * under it reads. The freshness stands in a box of its own width with figures of one width, so
  * its count going up moves nothing beside it. A live period says beside it, by a mark and how
- * often, that it reads itself again; its hint says it in full.
+ * often, that it reads itself again; its hint says it in full. A read again that failed says so
+ * beside it (`RefreshFailed`).
  *
  * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
  * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
@@ -25,6 +26,7 @@ import { useI18n } from 'vue-i18n'
 import { useIntervalFn, useNow } from '@vueuse/core'
 
 import AnalyticsFilters from '@/pages/analytics/components/AnalyticsFilters.vue'
+import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
 import { useFilterOptions } from '@/pages/analytics/composables/useFilterOptions.ts'
 import { LIVE_INTERVAL } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -242,6 +244,7 @@ const fresh = computed(() => {
             </template>
           </template>
         </p>
+        <RefreshFailed @retry="emit('refresh')" />
         <VButton
           class="analytics-refresh"
           size="compact"

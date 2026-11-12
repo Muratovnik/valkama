@@ -380,6 +380,7 @@ function tintedSurfaces(file, source) {
  */
 export const FILL_BUDGET = new Map([
   ['pages/analytics/components/AnalyticsBar.vue', 1], // dot: the live period's 8px mark.
+  ['pages/analytics/components/RefreshFailed.vue', 1], // dot: a read again that failed, 8px.
   ['shared/ui/PlatformStatePanel.vue', 1], // dot: the failure mark's 12px disc.
   ['widgets/app-nav/components/NavConnectionButton.vue', 2], // dot: live and reconnecting.
   // edge: the chain bar, four tones.

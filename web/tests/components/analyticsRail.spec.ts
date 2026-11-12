@@ -204,6 +204,109 @@ describe('the reads', () => {
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
     holding = false
   })
+
+  it('keep their figures when a read of them again fails, and the bar says the read failed', async () => {
+    /** Which reads fail: none, every one, or those by one dimension. */
+    let failing: 'all' | 'none' | 'model' = 'none'
+    stubAnalyticsReads((query) =>
+      failing === 'all' || query.get('group_by') === failing
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'model')).toBe('model-a')
+
+    // Every read fails: no tile with figures says it could not be read, the overview's neither.
+    failing = 'all'
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    for (const section of ['overview', ...USAGE_DIMENSIONS]) {
+      expect(lead(page, section), section).not.toBe('Could not be read')
+      expect(tile(page, section).get('.rail-tile').attributes('data-state'), section).toBe('ready')
+      expect(tile(page, section).get('.rail-tile').attributes('aria-busy'), section).toBeUndefined()
+    }
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(lead(page, 'overview')).toBe('4\u{A0}h')
+    expect(page.find('.refresh-failed').exists()).toBe(true)
+
+    // Only one tile's read fails, the page's own answers: the bar still says a read failed, and
+    // the next round that lands whole takes the words away.
+    failing = 'model'
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(page.find('.refresh-failed').exists()).toBe(true)
+    failing = 'none'
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(page.find('.refresh-failed').exists()).toBe(false)
+  })
+
+  it('say a new period whose read failed failed, never the last period’s figures', async () => {
+    let failing = false
+    stubAnalyticsReads((query) =>
+      failing && query.get('group_by') === 'model' ? { status: 500 } : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'model')).toBe('model-a')
+    failing = true
+    await page.setProps({ routeState: { period: 'weeks4' } })
+    await flushPromises()
+    expect(lead(page, 'model')).toBe('Could not be read')
+    expect(page.find('.refresh-failed').exists()).toBe(false)
+  })
+
+  it('are dimmed while a new period is read, each until its own answer lands, and not on a refresh', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = false
+    const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
+    const page = await mountAnalytics()
+    const dimmed = (section: string) =>
+      tile(page, section).get('.rail-tile').classes('read-pending')
+    const wait = async (ms: number) => {
+      vi.advanceTimersByTime(ms)
+      await flushPromises()
+    }
+    const release = async (which: (query: URLSearchParams) => boolean) => {
+      for (const held of reads.held.filter(({ query }) => which(query)))
+        held.release(serveUsage(WORLD, held.query))
+      reads.held.splice(0, reads.held.length, ...reads.held.filter(({ query }) => !which(query)))
+      await flushPromises()
+    }
+
+    // The same period read again, for longer than a wait takes to be shown: nothing dims.
+    holding = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    await wait(1000)
+    for (const section of ['overview', 'model']) expect(dimmed(section), section).toBe(false)
+    await release(() => true)
+
+    // A new period: every tile with figures is dimmed once the wait is long enough to be seen.
+    await page.setProps({ routeState: { period: 'weeks4' } })
+    await flushPromises()
+    await wait(300)
+    for (const section of ['overview', ...USAGE_DIMENSIONS])
+      expect(dimmed(section), section).toBe(true)
+    // The page's own answer lands first, the overview's tile with it; a dimension's tile still
+    // shows the last period's figures and stays dimmed until its own answer lands.
+    const pageOwn = new Set(['work_item', 'account'])
+    await release((query) => pageOwn.has(query.get('group_by') ?? ''))
+    await wait(400)
+    expect(page.get('.overview-panel').classes('read-pending')).toBe(false)
+    expect(dimmed('overview')).toBe(false)
+    expect(dimmed('model')).toBe(true)
+    expect(dimmed('role')).toBe(true)
+    await release((query) => query.get('group_by') === 'model')
+    await wait(400)
+    expect(dimmed('model')).toBe(false)
+    expect(dimmed('role')).toBe(true)
+    holding = false
+    await release(() => true)
+    await wait(400)
+    for (const section of ['overview', ...USAGE_DIMENSIONS])
+      expect(dimmed(section), section).toBe(false)
+  })
 })
 
 /** The hue of every mark the page draws for a value: tile part, bar, small chart, legend key. */
