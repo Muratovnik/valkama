@@ -31,12 +31,17 @@ checkouts are therefore distinguishable even at the same version.
   over its top corner, under the sticky head: it counts a term in the words every row
   prints, at the list's width and in its language, and says «3 of 12» or «No matches».
   Enter and Shift+Enter, or F3 and Shift+F3, walk the matches in the list's order and
-  bring each to the middle of the list; the drawn matches are marked, the current one
-  apart. Case does not count, «ё» finds «е», «cafe» finds «café» and a stress over a
+  bring each match to the middle of the list under its head; the drawn matches are
+  marked, the current one apart, and a printed list carries neither the marks nor the
+  bar. Case does not count, «ё» finds «е», «cafe» finds «café» and a stress over a
   Cyrillic vowel is ignored, while «й» stays apart from «и». The current match stays on
   its row while the stream, a filter or an order changes the list, and Escape closes the
-  bar and gives focus back. With a card or a dialog open, and on every other screen,
-  Ctrl+F is the browser's as before.
+  bar and gives focus back. With a card, a dialog, a menu or a choice list open, and on
+  every other screen, Ctrl+F is the browser's as before. Ctrl+F is the key that types F
+  on the keyboard's layout, and on a layout with no Latin letter there, such as
+  Russian, the key in F's place. Typing into the term matches the rows' words without
+  reading them again, and resizing the list reads them again only where a width
+  changes what a row prints.
 
 ### Fixed
 
