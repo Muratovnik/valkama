@@ -20,8 +20,8 @@ account of its organization for the week it names, whether its UUID is known
 turns up later.
 
 Freshness. Samples are kept only when a value changed (`quota.samples`), so a series'
-latest sample says when it last moved. One older than `FRESH_FOR` raises nothing. That
-span is the five-hour forecast's own recent pace (the quarter hour `forecast` blends with
+latest sample says when it last moved. One older than `forecast.FRESH_FOR` raises
+nothing. That span is the five-hour forecast's own recent pace (the quarter hour `forecast` blends with
 the hour): a reading past it says nothing of how fast the window is being spent now. It
 is also fifteen of the reader's passes (`housekeeping.USAGE_PAUSE_SECONDS`), so a reading
 that waited for its organization is still fresh at the pass that finds it. A window
@@ -50,24 +50,15 @@ from dataclasses import dataclass
 
 from ..ops import toast
 from ..quota import forecast, samples, seats
+from ..quota import store as quota_store
 from . import emit, messages
 from . import settings as alert_settings
 
-#: How old a series' latest sample may be and still alert; see the module's note.
-FRESH_FOR = dt.timedelta(minutes=15)
 #: The share of a week spent that alerts, lowest first.
 WEEK_LEVELS = ("75", "90")
 EXHAUSTED = "exhausted"
 _EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 _WEEKS = ("week", "week_model")
-#: Every sample of a window an alert reads, oldest first, since the five-hour window could
-#: have begun: a week needs only the fresh ones, the forecast the window's own.
-_SAMPLES = (
-    "SELECT at, organization, session_id, account_uuid, seat, kind, model, percent, resets_at"
-    " FROM quota_samples WHERE at >= ? AND seat IS NOT NULL AND percent IS NOT NULL"
-    " AND resets_at IS NOT NULL AND kind IN ('five_hour', 'week', 'week_model')"
-    " ORDER BY at, id"
-)
 
 
 def _millis(text: str) -> int:
@@ -108,32 +99,29 @@ class _Due:
 
 
 def _known(conn: sqlite3.Connection, since: str) -> list[_Sample]:
-    """The samples since `since` whose organization is known, each with its account's UUID."""
+    """The samples of the windows an alert reads since `since`, oldest first, whose account
+    is known: each of them with a seat, a percent and a reset."""
 
-    organizations: dict[tuple[str, str], str | None] = {}
-    accounts: dict[tuple[str, str], str | None] = {}
-    known: list[_Sample] = []
-    for at, organization, session, uuid, seat, kind, model, percent, resets_at in conn.execute(
-        _SAMPLES, (since,)
-    ):
-        if organization is None:
-            if (session, at) not in organizations:
-                organizations[session, at] = seats.organization_at(conn, session, at)
-            organization = organizations[session, at]
-            if organization is None:
-                continue
-        if uuid is None:
-            if (organization, seat) not in accounts:
-                accounts[organization, seat] = seats.account_of_seat(conn, organization, seat)
-            uuid = accounts[organization, seat]
-        known.append(
-            _Sample(at, organization, seat, uuid, kind, model or "", float(percent), resets_at)
+    return [
+        _Sample(
+            one.at,
+            one.organization,
+            one.seat,
+            one.account_uuid,
+            one.kind,
+            one.model or "",
+            one.percent,
+            one.resets_at,
         )
-    return known
+        for one in seats.account_samples(conn, since, quota_store.ALERT_KINDS)
+        if one.seat is not None and one.percent is not None and one.resets_at is not None
+    ]
 
 
-def _week_dues(series: list[_Sample], fresh_from: str, now: str) -> list[_Due]:
-    fresh = [one for one in series if one.at >= fresh_from and one.resets_at > now]
+def _week_dues(series: list[_Sample], now: int, stamp: str) -> list[_Due]:
+    fresh = [
+        one for one in series if forecast.fresh(_millis(one.at), now) and one.resets_at > stamp
+    ]
     if not fresh:
         return []
     top = max(fresh, key=lambda one: (one.percent, one.at))
@@ -141,16 +129,16 @@ def _week_dues(series: list[_Sample], fresh_from: str, now: str) -> list[_Due]:
     return [_Due(top, reached)] if reached else []
 
 
-def _five_hour_dues(series: list[_Sample], fresh_from: str, now: dt.datetime) -> list[_Due]:
+def _five_hour_dues(series: list[_Sample], now: int) -> list[_Due]:
     latest = max(series, key=lambda one: (one.at, one.percent))
-    if latest.at < fresh_from:
+    if not forecast.fresh(_millis(latest.at), now):
         return []
     window = forecast.Window(forecast.FIVE_HOURS, latest.percent, _millis(latest.resets_at))
     readings = [
         forecast.Reading(_millis(one.at), one.percent, _millis(one.resets_at), forecast.FIVE_HOURS)
         for one in series
     ]
-    found = forecast.outlook(window, readings, (now - _EPOCH) // dt.timedelta(milliseconds=1))
+    found = forecast.outlook(window, readings, now)
     if not (
         isinstance(found, forecast.FiveHourOutlook)
         and found.alert_eligible
@@ -167,7 +155,7 @@ def _dues(conn: sqlite3.Connection, now: dt.datetime) -> list[_Due]:
     since = samples.instant(
         (now - dt.timedelta(milliseconds=forecast.FIVE_HOURS + forecast.RESET_SLACK)).isoformat()
     )
-    fresh_from = samples.instant((now - FRESH_FOR).isoformat())
+    millis = (now - _EPOCH) // dt.timedelta(milliseconds=1)
     stamp = samples.instant(now.isoformat())
     by_series: dict[tuple[str, str, str, str], list[_Sample]] = {}
     for sample in _known(conn, since):
@@ -175,9 +163,9 @@ def _dues(conn: sqlite3.Connection, now: dt.datetime) -> list[_Due]:
     dues: list[_Due] = []
     for (_, _, kind, _), series in by_series.items():
         if kind in _WEEKS:
-            dues += _week_dues(series, fresh_from, stamp)
+            dues += _week_dues(series, millis, stamp)
         else:
-            dues += _five_hour_dues(series, fresh_from, now)
+            dues += _five_hour_dues(series, millis)
     return dues
 
 
