@@ -169,7 +169,6 @@ export async function fetchUsage(query: UsageQuery, signal?: AbortSignal): Promi
 
 /** Who read a quota window: the status line, the mod, the poll of the usage endpoint, an import. */
 const QUOTA_SOURCES = ['statusline', 'mod', 'poll', 'import'] as const
-export type QuotaSource = (typeof QUOTA_SOURCES)[number]
 
 /** The windows that are a share of a limit, in the answer's order. */
 const SHARE_KINDS = ['five_hour', 'week', 'week_model'] as const
@@ -271,7 +270,6 @@ export type QuotaAccount = Quota['accounts'][number]
 export type QuotaWindow = QuotaAccount['windows'][number]
 /** A window that is a share of a limit: five hours, the week, a model's week. */
 export type QuotaShareWindow = Extract<QuotaWindow, { readings: unknown }>
-export type QuotaReading = QuotaShareWindow['latest']
 
 /** Whether a window is a share of a limit, with a percent, a pace and readings. */
 export const isShareWindow = (window: QuotaWindow): window is QuotaShareWindow =>

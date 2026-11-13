@@ -68,6 +68,14 @@ checkouts are therefore distinguishable even at the same version.
   `fresh` within the fifteen minutes the quota alerts read, and `silent` after; the usage
   credits and a gateway's spend limit are their own kinds, with no percent and no money.
   No field adds percentages, within an account or across accounts.
+- **The Analytics page shows the subscription quota.** Two tiles, «Five hours» and
+  «Week», stand on the rail after the token kinds and name the tightest account's window
+  with its share and whether it is fresh or silent. Each opens a panel with a row per
+  account: for every window a bar with a tick where steady use would stand, when it
+  resets, its forecast (a time it runs out at for the five hours, a range for a week),
+  how old its reading is and which source read it, and its readings as a step line, each
+  with a table view. No source, a silent window and a fresh 0 % read differently, and no
+  percentage is added to another or shown beside dollars.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

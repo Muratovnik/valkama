@@ -12,7 +12,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { pageAt } from './analyticsPage.ts'
+import { quotaAt } from '../fixtures/quota.ts'
+import { pageAt, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -56,6 +57,7 @@ const HEX_ONLY = /^[\da-f]{6,}$/u
 async function serve(page: Page, aliases: Record<string, string> = {}) {
   await page.clock.setSystemTime(NOW)
   await installBackend(page)
+  await serveQuota(page, quotaAt(NOW))
   await page.addInitScript((stored) => {
     if (!localStorage.getItem('valkama-settings'))
       localStorage.setItem('valkama-settings', JSON.stringify({ accountAliases: stored }))

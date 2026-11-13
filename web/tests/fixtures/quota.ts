@@ -23,7 +23,7 @@ const DAY = 24 * HOUR
 const FIVE_HOURS = 5 * HOUR
 const WEEK = 7 * DAY
 
-export const WORK = {
+const WORK = {
   organization: '5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f',
   account_uuid: '0b7d4e19-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
 }
@@ -32,7 +32,7 @@ export const NIGHT = {
   account_uuid: '7e6d5c4b-3a29-4180-9f8e-7d6c5b4a3928',
 }
 export const UNREAD = { organization: '9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a' }
-export const SEATED = { organization: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' }
+const SEATED = { organization: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' }
 
 type Reading = [ago: number, percent: number]
 

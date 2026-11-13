@@ -4,7 +4,9 @@
  *
  * A monitor screen that fills the module's frame: a bar of the period, the filters, how fresh the
  * figures are and a read of them again over the whole of it; under that a rail of the page's
- * sections — the overview, then a dimension each — and the panel of the section on show. The rail
+ * sections — the overview, the tokens by kind, the subscription quota's five hours and week, then
+ * a dimension each — and the panel of the section on show. The quota's two sections read where
+ * each account's quota stands now (`QuotaPanel`), which no period or filter changes. The rail
  * and the panel scroll on their own, so the bar and the rail stay in sight while the panel is
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
@@ -41,12 +43,15 @@ import AnalyticsBar from '@/pages/analytics/components/AnalyticsBar.vue'
 import AnalyticsRail from '@/pages/analytics/components/AnalyticsRail.vue'
 import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
+import QuotaPanel from '@/pages/analytics/components/QuotaPanel.vue'
 import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
 import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
+import { useQuota } from '@/pages/analytics/composables/useQuota.ts'
 import { useRailTiles } from '@/pages/analytics/composables/useRailTiles.ts'
 import { provideReadWaits } from '@/pages/analytics/composables/useReadWaits.ts'
+import { useRefusal } from '@/pages/analytics/composables/useRefusal.ts'
 import { provideSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { useUsageRead } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -54,9 +59,11 @@ import type { ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import {
   addressFits,
+  isQuotaSection,
   localDay,
   orderFilters,
   OVERVIEW,
+  QUOTA_SECTIONS,
   readAddress,
   TOKEN_KINDS_SECTION,
   writeAddress,
@@ -93,19 +100,8 @@ const words = useSpendingWords()
 
 const view = computed(() => readAddress(props.routeState))
 
-/** Why the last change asked for was not made, and where it was asked; null once the view moves. */
-const refused = ref<{ part: ReportPart | 'filters'; words: string } | null>(null)
-watch(view, () => {
-  refused.value = null
-})
-const filtersRefused = computed(() =>
-  refused.value?.part === 'filters' ? refused.value.words : '',
-)
-const reportRefused = computed(() =>
-  refused.value && refused.value.part !== 'filters'
-    ? { part: refused.value.part, words: refused.value.words }
-    : null,
-)
+/** Why the last change asked for was not made, and where it was asked, until the view moves. */
+const { filtersRefused, refuse, reportRefused } = useRefusal(() => view.value)
 
 /**
  * Writes a change of the view into its address; false, with nothing written, if it does not fit.
@@ -124,13 +120,13 @@ function change(next: Partial<AnalyticsView>, mode: 'push' | 'replace'): boolean
 function narrow(dimension: UsageDimension, value: string | null, label: string, part: ReportPart) {
   const filters = orderFilters({ ...view.value.filters, [dimension]: [value] })
   if (change({ filters, ...lines.narrowedBy(dimension, value) }, 'push')) return
-  refused.value = { part, words: t('analytics.drill.full', { value: label }) }
+  refuse(part, t('analytics.drill.full', { value: label }))
 }
 
 /** The view narrowed to one day, broken down by task. */
 function narrowToDay(day: string, label: string) {
   if (change({ period: 'custom', from: day, to: day, by: 'work_item' }, 'push')) return
-  refused.value = { part: 'days', words: t('analytics.drill.full', { value: label }) }
+  refuse('days', t('analytics.drill.full', { value: label }))
 }
 
 /** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
@@ -153,10 +149,14 @@ const filterDimensions = computed<UsageDimension[]>(() =>
 )
 const lines = provideLineActions(() => filterDimensions.value)
 
-/** The page's sections, in the rail's order: the overview, then each dimension filtered on. */
+/**
+ * The page's sections, in the rail's order: the overview, the tokens by kind, the quota's five
+ * hours and its week, then each dimension filtered on.
+ */
 const sections = computed<{ label: string; value: AnalyticsSection }[]>(() => [
   { value: OVERVIEW, label: t('analytics.frame.overview') },
   { value: TOKEN_KINDS_SECTION, label: t('analytics.kinds.section') },
+  ...QUOTA_SECTIONS.map((value) => ({ value, label: t(`analytics.quota.sections.${value}`) })),
   ...filterDimensions.value.map((value) => ({ value, label: words.dimension(value) })),
 ])
 
@@ -177,8 +177,10 @@ const showsRail = computed(() => !narrowScreen.value || !view.value.open)
 const showsPanel = computed(() => !narrowScreen.value || view.value.open)
 
 /** A dimension's answer beside the rail is held to the panel's height, and scrolls its own parts. */
+const quotaSection = computed(() => (isQuotaSection(view.value.by) ? view.value.by : null))
 const holdsSection = computed(
-  () => !overview.value && !narrowScreen.value && 'payload' in read.state.value,
+  () =>
+    !overview.value && !quotaSection.value && !narrowScreen.value && 'payload' in read.state.value,
 )
 
 /**
@@ -273,13 +275,10 @@ watch(
 function filter(dimension: UsageDimension, values: (string | null)[]) {
   const filters = orderFilters({ ...view.value.filters, [dimension]: values })
   if (change({ filters }, 'replace')) return
-  refused.value = {
-    part: 'filters',
-    words: t('analytics.filters.full', { dimension: words.dimension(dimension) }),
-  }
+  refuse('filters', t('analytics.filters.full', { dimension: words.dimension(dimension) }))
 }
 
-const { tiles, refresh: refreshTiles } = useRailTiles({
+const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   dimensions: () => filterDimensions.value,
   overview: () => read.state.value,
   overviewAt: () => read.askedAt.value,
@@ -288,11 +287,16 @@ const { tiles, refresh: refreshTiles } = useRailTiles({
   view: () => view.value,
 })
 
-/** The bar's refresh reads the page and every tile of the rail again, as of now. */
+/** The quota of each account now, read whatever the view, on its own interval (`useQuota`). */
+const quota = useQuota()
+const tiles = computed(() => ({ ...usageTiles.value, ...quota.tiles.value }))
+
+/** The bar's refresh reads the page, every tile of the rail and the quota again, as of now. */
 function refresh() {
   shared.renew()
   void read.retry()
   void refreshTiles()
+  void quota.refresh()
 }
 
 /**
@@ -386,7 +390,15 @@ const emptyDescription = computed(() => {
             {{ sectionName }}
           </p>
         </div>
+        <QuotaPanel
+          v-if="quotaSection"
+          :read="quota.read.value"
+          :section="quotaSection"
+          :now="quota.now.value"
+          @retry="quota.refresh"
+        />
         <PlatformStatePanel
+          v-else
           :state="read.state.value"
           :empty-description="emptyDescription"
           @retry="read.retry"
