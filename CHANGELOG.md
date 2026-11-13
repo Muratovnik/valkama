@@ -10,6 +10,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A batch's checklist tick can complete a step another session holds.** Each
+  `checklist_ticks` entry of `apply_work_item_changes` takes `force`, as
+  `tick_work_item_checklist_item` does, so `force: true` completes a step another holder
+  claimed in the same call and records the completion as the single tick does. Without
+  `force` the refusal stays, names the step, and the call writes nothing.
+
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 
 ### Changed

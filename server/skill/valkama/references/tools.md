@@ -104,7 +104,7 @@ and any of these groups, applied in this order:
 | `claim` | `true` | `claim_work_item` |
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | `update_work_item` |
 | `checklist` | `{"items": [...], "force": false}` | `set_work_item_checklist` |
-| `checklist_ticks` | `[{"item_id": "…", "done": true}]` | `tick_work_item_checklist_item` |
+| `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | `comment_work_item` |

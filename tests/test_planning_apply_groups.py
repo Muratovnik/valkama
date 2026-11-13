@@ -493,6 +493,76 @@ class EditingAndClosingTests(BatchCase):
         self.assertEqual(("done", "bug"), (answer["state"]["key"], self.record()["kind"]))
 
 
+class ChecklistTicksGroupTests(BatchCase):
+    """A tick in the batch takes `force` as the single tick does, and is refused without it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.step = self.held_step(self.ref)
+        self.twin_step = self.held_step(self.twin)
+        self.conn.commit()
+
+    def held_step(self, reference: str) -> str:
+        """One step another holder has claimed, as a second session would leave it."""
+
+        step = service.set_checklist(self.conn, reference, ["the step"])["checklist"][0]["id"]
+        service.claim_checklist_item(self.conn, reference, step, author="holder")
+        return str(step)
+
+    def test_a_forced_tick_completes_another_holders_step_as_the_single_tick_does(self) -> None:
+        self.agent(
+            "tick_work_item_checklist_item", id=self.twin, item_id=self.twin_step, force=True
+        )
+
+        answer = self.apply(checklist_ticks=[{"item_id": self.step, "force": True}])
+
+        [step] = self.record()["checklist"]
+        [single] = self.record(self.twin)["checklist"]
+        self.assertEqual((True, ""), (step["done"], step["claimed_by"]))
+        self.assertEqual(
+            (single["done"], single["done_by"], single["claimed_by"]),
+            (step["done"], step["done_by"], step["claimed_by"]),
+        )
+        self.assertEqual(self.actions(self.twin), self.actions())
+        self.assertEqual("checklist_completed", self.actions()[-1])
+        self.assertEqual(
+            [{"item_id": self.step, "done": True}], answer["applied"]["checklist_ticks"]
+        )
+
+    def test_without_force_another_holders_step_is_refused_as_the_single_tick_refuses_it(
+        self,
+    ) -> None:
+        single = self.refused("tick_work_item_checklist_item", id=self.twin, item_id=self.twin_step)
+        before = self.untouched()
+
+        error = self.refused_batch(
+            update={"title": "Renamed"}, checklist_ticks=[{"item_id": self.step}]
+        )
+
+        self.assertEqual({"group": "checklist_ticks", "index": 0}, error["step"])
+        self.assertEqual(
+            (single["code"], f"checklist_ticks[0]: {single['message']}"),
+            (error["code"], error["message"]),
+        )
+        self.assertEqual(before, self.untouched())
+
+    def test_a_tick_flag_that_is_not_a_boolean_is_refused_by_its_index_and_writes_nothing(
+        self,
+    ) -> None:
+        before = self.untouched()
+        for tick, wanted in (
+            ({"item_id": self.step, "force": "yes"}, "force must be a boolean"),
+            ({"item_id": self.step, "force": 1}, "force must be a boolean"),
+            ({"item_id": self.step, "done": "yes"}, "done must be a boolean"),
+        ):
+            with self.subTest(tick=tick):
+                error = self.refused_batch(update={"title": "Renamed"}, checklist_ticks=[tick])
+                self.assertEqual("invalid_request", error["code"])
+                self.assertEqual({"group": "checklist_ticks", "index": 0}, error["step"])
+                self.assertEqual(f"checklist_ticks[0]: {wanted}", error["message"])
+                self.assertEqual(before, self.untouched())
+
+
 class OrderTests(BatchCase):
     def test_the_groups_are_applied_in_the_published_order(self) -> None:
         self.assertEqual(
@@ -706,6 +776,9 @@ class PublishedSchemaTests(unittest.TestCase):
         self.assertEqual(fields["comments"], set(properties["comments"]["items"]["properties"]))
         self.assertEqual(fields["comments"], set(properties["comment"]["properties"]))
         self.assertEqual(fields["questions"], set(properties["questions"]["items"]["properties"]))
+        self.assertEqual(
+            fields["checklist_ticks"], set(properties["checklist_ticks"]["items"]["properties"])
+        )
         for group in ("comments", "questions"):
             self.assertEqual(api.MAX_APPLY_ENTRIES, properties[group]["maxItems"])
 
@@ -717,6 +790,9 @@ class PublishedSchemaTests(unittest.TestCase):
         self.assertEqual(set(schemas["update_work_item"]) - batch_own, fields["update"])
         self.assertEqual(set(schemas["comment_work_item"]) - batch_own, fields["comments"])
         self.assertEqual(set(schemas["create_work_item_request"]) - batch_own, fields["questions"])
+        self.assertEqual(
+            set(schemas["tick_work_item_checklist_item"]) - batch_own, fields["checklist_ticks"]
+        )
 
     def test_the_description_states_the_order(self) -> None:
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)

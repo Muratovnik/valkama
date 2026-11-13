@@ -868,7 +868,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("subscribe", frozenset()),
     ("update", frozenset({*model.UPDATABLE_FIELDS, "mentions"})),
     ("checklist", frozenset({"items", "force"})),
-    ("checklist_ticks", frozenset({"item_id", "done"})),
+    ("checklist_ticks", frozenset({"item_id", "done", "force"})),
     ("refs", frozenset({"kind", "value", "label"})),
     ("links", frozenset({"other", "kind", "remove"})),
     ("comment", _COMMENT_FIELDS),

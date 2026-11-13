@@ -1423,7 +1423,7 @@ these groups, and applies them in this order:
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
 | `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
-| `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
+| `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `comment_work_item` |
