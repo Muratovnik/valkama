@@ -69,15 +69,15 @@ class MarkTests(ResolveCase):
         root = self.comment("The export leaves out claims.")["comment_id"]
         before = self.revision()
         answer = self.tool(
-            "resolve_work_item_comment",
+            "apply_work_item_changes",
             id=self.ref,
-            comment_id=root,
-            resolution="Moved to MAIN-14",
+            resolutions=[{"comment_id": root, "resolution": "Moved to MAIN-14"}],
             author="codex",
         )
-        self.assertEqual({"work_item", "comment_id", "resolution"}, set(answer))
-        self.assertEqual((self.ref, root), (answer["work_item"], answer["comment_id"]))
-        mark = answer["resolution"]
+        [marked] = answer["applied"]["resolutions"]
+        self.assertEqual({"comment_id", "resolution"}, set(marked))
+        self.assertEqual((self.ref, root), (answer["reference"], marked["comment_id"]))
+        mark = marked["resolution"]
         self.assertEqual({"at", "by", "by_person", "text"}, set(mark))
         self.assertEqual(
             ("codex", False, "Moved to MAIN-14"), (mark["by"], mark["by_person"], mark["text"])
@@ -90,8 +90,15 @@ class MarkTests(ResolveCase):
         root = self.comment("Decide the parser")["comment_id"]
         self.mark(root, resolution="The new one")
         before = self.revision()
-        answer = self.tool("resolve_work_item_comment", id=self.ref, comment_id=root, reopen=True)
-        self.assertEqual({"work_item": self.ref, "comment_id": root, "resolution": None}, answer)
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=self.ref,
+            resolutions=[{"comment_id": root, "reopen": True}],
+        )
+        self.assertEqual(self.ref, answer["reference"])
+        self.assertEqual(
+            [{"comment_id": root, "resolution": None}], answer["applied"]["resolutions"]
+        )
         stored = self.stored(root)
         self.assertEqual(
             (None, "", "", None),
@@ -152,9 +159,9 @@ class MarkTests(ResolveCase):
         no_call = self.comment("Three")["comment_id"]
         self.http(RESOLVE, id=self.ref, comment_id=by_hand, resolution="Done", author="anyone")
         self.tool(
-            "resolve_work_item_comment",
+            "apply_work_item_changes",
             id=self.ref,
-            comment_id=by_agent,
+            resolutions=[{"comment_id": by_agent}],
             author=calls.OWNER_ACTOR,
         )
         self.mark(no_call)
@@ -173,14 +180,12 @@ class MarkTests(ResolveCase):
         answer = self.http(RESOLVE, id=self.ref, comment_id=root)
         self.assertEqual(calls.OWNER_ACTOR, answer["resolution"]["by"])
 
-    def test_the_tool_is_published_as_a_write_with_its_fields(self) -> None:
-        tool = next(t for t in tools.TOOLS if t["name"] == "resolve_work_item_comment")
+    def test_the_batch_publishes_the_mark_with_its_fields(self) -> None:
+        tool = next(t for t in tools.TOOLS if t["name"] == "apply_work_item_changes")
         self.assertIs(False, tool["annotations"]["destructiveHint"])
-        schema = tool["inputSchema"]
-        self.assertEqual(
-            {"id", "comment_id", "resolution", "reopen", "author"}, set(schema["properties"])
-        )
-        self.assertEqual(["id", "comment_id"], schema["required"])
+        entry = tool["inputSchema"]["properties"]["resolutions"]["items"]
+        self.assertEqual({"comment_id", "resolution", "reopen"}, set(entry["properties"]))
+        self.assertEqual(["comment_id"], entry["required"])
 
     def test_a_merge_carries_the_mark_with_its_root(self) -> None:
         merged = self.item("Same change")
@@ -295,31 +300,43 @@ class TellingTests(ResolveCase):
         root = self.comment("Root")["comment_id"]
         self.http(RESOLVE, id=self.ref, comment_id=root, resolution="Done")
         self.http(RESOLVE, id=self.ref, comment_id=root, reopen=True)
-        answer = self.tool("comment_work_item", id=self.ref, body="Heard")
+        answer = self.tool("apply_work_item_changes", id=self.ref, comment={"body": "Heard"})
         self.assertEqual(["thread_resolved", "thread_reopened"], self.kinds(answer))
 
     def test_a_persons_mark_holds_a_close_as_any_act_of_a_person_does(self) -> None:
         root = self.comment("Root")["comment_id"]
         self.http(RESOLVE, id=self.ref, comment_id=root, resolution="Done")
-        self.tool("set_work_item_summary", id=self.ref, summary={"done": "d", "next": "n"})
+        self.tool("apply_work_item_changes", id=self.ref, summary={"done": "d", "next": "n"})
         self.http(RESOLVE, id=self.ref, comment_id=root, resolution="Done again")
-        with self.assertRaisesRegex(model.WorkflowGuardError, "person_spoke"):
-            self.call("transition_work_item", id=self.ref, state="completed")
+        with self.assertRaisesRegex(api.PlanningHttpError, r"^transition: \[person_spoke\]"):
+            self.call("apply_work_item_changes", id=self.ref, transition={"state": "completed"})
         self.conn.commit()
 
     def test_an_agents_mark_says_what_a_person_did_and_ends_the_window(self) -> None:
         root = self.comment("Root")["comment_id"]
         self.http("/api/planning/work-item/comment", id=self.ref, body="Over to you")
-        answer = self.tool("resolve_work_item_comment", id=self.ref, comment_id=root)
+        answer = self.tool(
+            "apply_work_item_changes", id=self.ref, resolutions=[{"comment_id": root}]
+        )
         self.assertEqual(["comment"], self.kinds(answer))
-        self.assertEqual([], self.kinds(self.tool("comment_work_item", id=self.ref, body="Next")))
+        self.assertEqual(
+            [],
+            self.kinds(self.tool("apply_work_item_changes", id=self.ref, comment={"body": "Next"})),
+        )
 
     def test_a_reopen_that_writes_nothing_is_still_a_write_on_the_item(self) -> None:
         root = self.comment("Root")["comment_id"]
         self.http("/api/planning/work-item/comment", id=self.ref, body="Over to you")
-        answer = self.tool("resolve_work_item_comment", id=self.ref, comment_id=root, reopen=True)
+        answer = self.tool(
+            "apply_work_item_changes",
+            id=self.ref,
+            resolutions=[{"comment_id": root, "reopen": True}],
+        )
         self.assertEqual(["comment"], self.kinds(answer))
-        self.assertEqual([], self.kinds(self.tool("comment_work_item", id=self.ref, body="Next")))
+        self.assertEqual(
+            [],
+            self.kinds(self.tool("apply_work_item_changes", id=self.ref, comment={"body": "Next"})),
+        )
 
 
 class ReplyAndMarkTests(ResolveCase):

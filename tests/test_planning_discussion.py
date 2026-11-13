@@ -166,16 +166,18 @@ class PlanningDiscussionTests(unittest.TestCase):
             },
         )
         self.assertEqual(200, status)
-        selected = tools.OPS["select_work_item_summary"](
+        status, selected = api.handle_post(
             self.conn,
+            "/api/planning/work-item/summary/select",
             {
                 "id": self.item["reference"],
                 "comment_id": reported["comments"][0]["id"],
                 "expected_revision": reported["revision"],
             },
         )
-        self.assertTrue(selected["summary_recorded"])
-        old = tools.OPS["set_work_item_summary"](
+        self.assertEqual(200, status)
+        self.assertEqual(reported["comments"][0]["id"], selected["summary_comment_id"])
+        old = tools.OPS["apply_work_item_changes"](
             self.conn,
             {
                 "id": self.item["reference"],
@@ -183,17 +185,21 @@ class PlanningDiscussionTests(unittest.TestCase):
             },
         )
         full = service.get_work_item(self.conn, self.item["reference"])
-        self.assertEqual(old["summary_comment_id"], full["comments"][-1]["id"])
+        written = old["applied"]["summary"]["summary_comment_id"]
+        self.assertEqual(written, full["comments"][-1]["id"])
         self.assertEqual(2, len(full["comments"]))
-        short = tools.OPS["report_work_item"](
+        short = tools.OPS["apply_work_item_changes"](
             self.conn,
             {
                 "id": self.item["reference"],
-                "report": {"done": "New MCP", "next": "Kept in history"},
+                "summary": {"done": "New MCP", "next": "Kept in history"},
             },
         )
-        self.assertIn("comment_id", short)
+        self.assertIn("summary_comment_id", short["applied"]["summary"])
         self.assertNotIn("comments", short)
+        self.assertEqual(
+            3, len(service.get_work_item(self.conn, self.item["reference"])["comments"])
+        )
 
     def test_search_finds_report_history_and_real_references_with_space_scope(self) -> None:
         self.publish()

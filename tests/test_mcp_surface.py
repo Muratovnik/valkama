@@ -20,6 +20,7 @@ import io
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -536,7 +537,6 @@ class DispatchTests(McpSurfaceTestCase):
                         "get_work_item_request",
                         "list_work_item_requests",
                         "answer_work_item_request",
-                        "decline_work_item_request",
                         "expire_work_item_request",
                     }
                     <= names
@@ -604,7 +604,9 @@ class DispatchTests(McpSurfaceTestCase):
         # The one error shape a client is expected to read rather than display.
         item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="not started")
         self.conn.commit()
-        result = self.call("transition_work_item", {"id": item["reference"], "state": "dev"})
+        result = self.call(
+            "apply_work_item_changes", {"id": item["reference"], "transition": {"state": "dev"}}
+        )
         self.assertTrue(result["isError"])
         self.assertEqual("workflow_guard", result["structuredContent"]["error"]["code"])
         self.assertIn("executor", result["structuredContent"]["error"]["message"])
@@ -630,7 +632,9 @@ class DispatchTests(McpSurfaceTestCase):
             self.call("list_platform_modules"),
             self.call("claim_work_item", {"id": reference, "author": "one"}),
             self.call("claim_work_item", {"id": reference, "author": "one", "verbose": True}),
-            self.call("transition_work_item", {"id": bare["reference"], "state": "dev"}),
+            self.call(
+                "apply_work_item_changes", {"id": bare["reference"], "transition": {"state": "dev"}}
+            ),
         ]
         self.assertFalse(any(result["isError"] for result in results[:-1]))
         self.assertTrue(results[-1]["isError"])
@@ -815,7 +819,9 @@ class StaleBuildWarningTests(McpSurfaceTestCase):
         item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="not started")
         self.conn.commit()
         result = self.answer(
-            True, "transition_work_item", {"id": item["reference"], "state": "dev"}
+            True,
+            "apply_work_item_changes",
+            {"id": item["reference"], "transition": {"state": "dev"}},
         )
         self.assertTrue(result["isError"])
         self.assertIn("Restart", result["content"][-1]["text"])
@@ -915,33 +921,16 @@ class ToolArgumentTests(McpSurfaceTestCase):
     def test_the_item_synonyms_reach_every_tool_that_takes_an_id(self) -> None:
         claimed = self.call_tool("claim_work_item", reference=self.first, author="one")
         self.assertEqual("one", claimed["claim_ref"])
-        commented = self.call_tool("comment_work_item", ref=self.first, body="a note")
-        self.assertEqual(1, commented["comment_count"])
-
-    def test_a_link_reads_from_to_target_and_type(self) -> None:
-        linked = self.call_tool(
-            "link_work_items", **{"from": self.first, "to": self.second, "type": "relates-to"}
+        commented = self.call_tool(
+            "apply_work_item_changes", ref=self.first, comment={"body": "a note"}
         )
-        self.assertEqual("relates-to", linked["kind"])
-        self.assertFalse(linked["removed"])
-        removed = self.call_tool(
-            "link_work_items", id=self.first, target=self.second, kind="relates-to", remove=True
+        self.assertEqual(self.first, commented["reference"])
+        self.assertEqual(1, len(self.call_tool("get_work_item", id=self.first)["comments"]))
+        self.call_tool(
+            "apply_work_item_changes",
+            reference=self.second,
+            refs=[{"kind": "commit", "value": "d5678"}],
         )
-        self.assertTrue(removed["removed"])
-
-    def test_a_transition_reads_to_and_to_state(self) -> None:
-        for synonym in ("to", "to_state"):
-            with self.subTest(synonym):
-                moved = self.call_tool("transition_work_item", id=self.first, **{synonym: "todo"})
-                self.assertEqual("todo", moved["state"]["key"])
-                self.call_tool("transition_work_item", id=self.first, state="backlog")
-
-    def test_a_ref_is_the_value_to_attach_not_the_item(self) -> None:
-        self.call_tool("attach_work_item_ref", id=self.first, kind="commit", ref="abc1234")
-        refs = self.call_tool("get_work_item", id=self.first)["refs"]
-        self.assertEqual(["abc1234"], [ref["value"] for ref in refs])
-        # `reference` is still the item here, because `ref` is spoken for.
-        self.call_tool("attach_work_item_ref", reference=self.second, kind="commit", value="d5678")
         self.assertEqual(1, len(self.call_tool("get_work_item", id=self.second)["refs"]))
 
     def test_a_space_is_read_from_planning_space_id(self) -> None:
@@ -966,18 +955,9 @@ class ToolArgumentTests(McpSurfaceTestCase):
         cases = (
             ("get_work_item", {"id": self.first, "reference": self.second}),
             ("get_work_item", {"ref": self.second, "id": self.first}),
-            ("transition_work_item", {"id": self.first, "state": "todo", "to": "done"}),
             (
-                "link_work_items",
-                {"id": self.first, "from": self.second, "other": "x", "kind": "blocks"},
-            ),
-            (
-                "link_work_items",
-                {"id": self.first, "other": self.second, "to": "x", "kind": "blocks"},
-            ),
-            (
-                "attach_work_item_ref",
-                {"id": self.first, "kind": "commit", "value": "a", "ref": "b"},
+                "apply_work_item_changes",
+                {"id": self.first, "reference": self.second, "comment": {"body": "x"}},
             ),
             ("get_planning_space", {"space": SPACE_KEY, "id": "OTHER"}),
             ("create_work_item", {"space": SPACE_KEY, "planning_space_id": "OTHER", "title": "x"}),
@@ -990,9 +970,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
         self.assertEqual(2, len(self.call_tool("list_work_items", space=SPACE_KEY)["work_items"]))
 
     def test_two_synonyms_for_one_name_that_disagree_are_refused(self) -> None:
-        message = self.refusal(
-            "link_work_items", id=self.first, to=self.first, target=self.second, kind="blocks"
-        )
+        message = self.refusal("get_work_item", reference=self.first, ref=self.second)
         self.assertIn("different values", message)
 
     def test_a_synonym_given_beside_its_canonical_name_with_the_same_value_is_one_answer(
@@ -1010,12 +988,15 @@ class ToolArgumentTests(McpSurfaceTestCase):
             self.refusal("delete_work_item", item=self.first),
         )
         message = self.refusal(
-            "transition_work_item", id=self.first, state="todo", status="x", nope=1
+            "claim_work_item_checklist_item", id=self.first, item_id="x", status="x", nope=1
         )
         self.assertTrue(
-            message.startswith("transition_work_item: unknown arguments 'status', 'nope'; ")
+            message.startswith(
+                "claim_work_item_checklist_item: unknown arguments 'status', 'nope'; "
+            ),
+            message,
         )
-        self.assertIn("'id' (required), 'state' (required), 'reason'", message)
+        self.assertIn("'id' (required), 'item_id' (required)", message)
 
     def test_a_synonym_does_not_excuse_an_argument_the_tool_does_not_have(self) -> None:
         message = self.refusal("get_work_item", reference=self.first, bogus=1)
@@ -1032,11 +1013,14 @@ class ToolArgumentTests(McpSurfaceTestCase):
         self.assertTrue(
             message.startswith("get_planning_space: missing argument 'space'; expected")
         )
-        message = self.refusal("transition_work_item", id=self.first)
-        self.assertTrue(message.startswith("transition_work_item: missing argument 'state'; "))
+        message = self.refusal("claim_work_item_checklist_item", id=self.first)
+        self.assertTrue(
+            message.startswith("claim_work_item_checklist_item: missing argument 'item_id'; "),
+            message,
+        )
         self.assertIn(
-            "link_work_items: missing arguments 'other', 'kind'",
-            self.refusal("link_work_items", id=self.first),
+            "create_work_item_request: missing arguments",
+            self.refusal("create_work_item_request", id=self.first),
         )
 
     def test_a_request_is_read_by_request_id_as_well_as_by_id(self) -> None:
@@ -1242,8 +1226,8 @@ class CallIdentityTests(McpSurfaceTestCase):
                     "method": "tools/call",
                     "params": {
                         "_meta": {**META, "claudecode/toolUseId": tool_use},
-                        "name": "comment_work_item",
-                        "arguments": {"id": reference, "body": "Seen"},
+                        "name": "apply_work_item_changes",
+                        "arguments": {"id": reference, "comment": {"body": "Seen"}},
                     },
                 }
                 for number, tool_use, reference in (
@@ -1396,8 +1380,12 @@ class CallIdentityTests(McpSurfaceTestCase):
         ):
             with self.subTest(malformed=malformed):
                 result = self.call(
-                    "update_work_item",
-                    {"id": self.reference, "title": "Still runs", "_identity": malformed},
+                    "apply_work_item_changes",
+                    {
+                        "id": self.reference,
+                        "update": {"title": "Still runs"},
+                        "_identity": malformed,
+                    },
                     {"claudecode/toolUseId": self.TOOL_USE},
                 )
                 self.assertFalse(result["isError"], result)
@@ -1415,7 +1403,7 @@ class CallIdentityTests(McpSurfaceTestCase):
             ("get_work_item", {"id": self.reference}),
             ("list_work_items", {"space": SPACE_KEY}),
             ("list_platform_modules", {}),
-            ("comment_work_item", {"id": self.reference, "body": "Seen"}),
+            ("apply_work_item_changes", {"id": self.reference, "comment": {"body": "Seen"}}),
         ):
             with self.subTest(name):
                 result = self.call(
@@ -1426,7 +1414,7 @@ class CallIdentityTests(McpSurfaceTestCase):
                 self.assertFalse(result["isError"], result)
                 self.assertNotIn("_identity", result["content"][0]["text"])
         # Only the write is a call in the execution tree.
-        self.assertEqual(["comment_work_item"], [row["tool"] for row in self.calls()])
+        self.assertEqual(["apply_work_item_changes"], [row["tool"] for row in self.calls()])
 
     def test_no_published_schema_names_the_identity_argument(self) -> None:
         self.assertNotIn("_identity", json.dumps(mcp_surface.catalogue()))
@@ -1445,18 +1433,21 @@ class CallIdentityTests(McpSurfaceTestCase):
         self.conn.commit()
         meta = {"sessionId": self.SESSION}
         for name, arguments in (
-            ("update_work_item", {"id": self.reference, "title": "Edited"}),
-            ("comment_work_item", {"id": self.reference, "body": "A note"}),
-            ("attach_work_item_ref", {"id": self.reference, "kind": "url", "value": "https://x"}),
+            ("apply_work_item_changes", {"id": self.reference, "update": {"title": "Edited"}}),
+            ("apply_work_item_changes", {"id": self.reference, "comment": {"body": "A note"}}),
             (
-                "link_work_items",
-                {"id": self.reference, "other": other["reference"], "kind": "blocks"},
+                "apply_work_item_changes",
+                {"id": self.reference, "refs": [{"kind": "url", "value": "https://x"}]},
+            ),
+            (
+                "apply_work_item_changes",
+                {"id": self.reference, "links": [{"other": other["reference"], "kind": "blocks"}]},
             ),
         ):
             self.assertFalse(self.call(name, arguments, meta)["isError"])
         rows = self.calls()
         self.assertEqual(
-            ["update_work_item", "comment_work_item", "attach_work_item_ref", "link_work_items"],
+            ["apply_work_item_changes"] * 4,
             [row["tool"] for row in rows],
         )
         # An edit logs no event and is still a call, on the item it edited.
@@ -1748,7 +1739,9 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
 
     def test_a_closing_transition_lands_because_its_ticks_and_summary_come_first(self) -> None:
         # The same transition on its own is refused: the guards are live.
-        alone = self.refusal("transition_work_item", {"id": self.reference, "state": "done"})
+        alone = self.refusal(
+            "apply_work_item_changes", {"id": self.reference, "transition": {"state": "done"}}
+        )
         self.assertEqual("workflow_guard", alone["code"])
 
         answer = self.answer("apply_work_item_changes", self.closing())
@@ -1979,7 +1972,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 with self.subTest(name, argument=argument):
                     description = schema.get("description", "")
                     self.assertTrue(description, "an object parameter without a description")
-                    if argument not in ("comment", "summary", "report", "transition"):
+                    if argument not in ("comment", "summary", "transition"):
                         continue
                     self.assertIn("never", description)
                     start = description.index("{")
@@ -1987,9 +1980,9 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                     self.assertLessEqual(set(schema["required"]), set(form))
                     self.assertLessEqual(set(form), set(schema["properties"]))
                     shown += 1
-        self.assertEqual(5, shown)
+        self.assertEqual(3, shown)
 
-    def test_the_batch_is_published_with_every_group_and_the_single_tools_stay(self) -> None:
+    def test_the_batch_is_published_with_every_group_and_replaces_the_one_write_tools(self) -> None:
         [answer] = self.converse(
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
         )
@@ -2021,18 +2014,11 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         ticks = schema["properties"]["checklist_ticks"]["items"]["properties"]
         self.assertEqual({"item_id", "done", "force"}, set(ticks))
         self.assertEqual("boolean", ticks["force"]["type"])
-        for single in (
-            "claim_work_item",
-            "update_work_item",
-            "tick_work_item_checklist_item",
-            "attach_work_item_ref",
-            "link_work_items",
-            "comment_work_item",
-            "create_work_item_request",
-            "set_work_item_summary",
-            "transition_work_item",
-        ):
+        # A claim that releases or forces, and a question with its own options,
+        # still have their own tools; the one-write tools the groups replaced do not.
+        for single in ("claim_work_item", "create_work_item_request"):
             self.assertIn(single, tools)
+        self.assertFalse(set(planning_tools.REMOVED_TOOLS) & set(tools))
 
 
 class CreateWorkItemWithLinksTests(WireCallTestCase):
@@ -2288,23 +2274,27 @@ class RankToolTests(WireCallTestCase):
 
     def test_the_writes_that_place_an_item_publish_rank_and_no_new_tool_does(self) -> None:
         schemas = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
-        self.assertEqual("string", schemas["update_work_item"]["properties"]["rank"]["type"])
-        self.assertEqual("string", schemas["transition_work_item"]["properties"]["rank"]["type"])
-        transition = schemas["apply_work_item_changes"]["properties"]["transition"]
+        batch = schemas["apply_work_item_changes"]["properties"]
+        self.assertEqual("string", batch["update"]["properties"]["rank"]["type"])
+        transition = batch["transition"]
         self.assertIn("rank", transition["properties"])
         self.assertFalse({"rank_work_item", "place_work_item", "reorder_work_item"} & set(schemas))
 
     def test_an_update_places_the_item_and_says_so(self) -> None:
         answer = self.answer(
-            "update_work_item", {"id": self.items[2], "rank": f"before:{self.items[0]}"}
+            "apply_work_item_changes",
+            {"id": self.items[2], "update": {"rank": f"before:{self.items[0]}"}},
         )
-        self.assertEqual(["rank"], answer["updated"])
+        self.assertEqual(["rank"], answer["applied"]["update"])
         self.assertEqual([self.items[2], *self.items[:2]], self.order())
         [call] = self.calls()
-        self.assertEqual("update_work_item", call["tool"])
+        self.assertEqual("apply_work_item_changes", call["tool"])
 
     def test_a_transition_and_a_batch_place_the_item_in_its_new_state(self) -> None:
-        self.answer("transition_work_item", {"id": self.items[0], "state": "todo", "rank": "first"})
+        self.answer(
+            "apply_work_item_changes",
+            {"id": self.items[0], "transition": {"state": "todo", "rank": "first"}},
+        )
         self.assertEqual([self.items[0], self.queued], self.order("todo"))
         answer = self.answer(
             "apply_work_item_changes",
@@ -2322,7 +2312,9 @@ class RankToolTests(WireCallTestCase):
             (f"after:{self.queued}", f"{self.queued} is in Todo, not Backlog"),
         ):
             with self.subTest(rank=rank):
-                error = self.refusal("update_work_item", {"id": self.items[0], "rank": rank})
+                error = self.refusal(
+                    "apply_work_item_changes", {"id": self.items[0], "update": {"rank": rank}}
+                )
                 self.assertEqual("invalid_request", error["code"])
                 self.assertIn(message, error["message"])
         self.assertEqual(self.items, self.order())
@@ -2530,12 +2522,12 @@ class CompactWorkItemReadTests(WireCallTestCase):
     def test_sessions_name_only_the_confirmed_sessions_that_wrote(self) -> None:
         tool_use = "toolu_01ABCdefGHIjklMNOpqrSTU"
         hook = {"session_id": "unverified-session", "tool_use_id": tool_use}
-        comment = {"id": self.reference, "body": "x"}
-        self.answer("comment_work_item", comment, {"sessionId": self.SESSION})
-        self.answer("comment_work_item", comment, {"sessionId": self.SESSION})
+        comment = {"id": self.reference, "comment": {"body": "x"}}
+        self.answer("apply_work_item_changes", comment, {"sessionId": self.SESSION})
+        self.answer("apply_work_item_changes", comment, {"sessionId": self.SESSION})
         # Unconfirmed: a hook identity the client did not vouch for, and nothing at all.
-        self.answer("comment_work_item", {**comment, "_identity": hook})
-        self.answer("comment_work_item", comment)
+        self.answer("apply_work_item_changes", {**comment, "_identity": hook})
+        self.answer("apply_work_item_changes", comment)
         # Confirmed but sessionless: the owner's browser.
         with planning_calls.bind(planning_calls.browser(), "/api/planning/work-item/comment"):
             planning_service.comment_work_item(self.conn, self.reference, "by hand")
@@ -2563,7 +2555,9 @@ class CompactWorkItemReadTests(WireCallTestCase):
         # loader is service.get_work_item with no options; the neutral read
         # without parameters is the same record. Neither gains a field.
         self.answer(
-            "comment_work_item", {"id": self.reference, "body": "x"}, {"sessionId": self.SESSION}
+            "apply_work_item_changes",
+            {"id": self.reference, "comment": {"body": "x"}},
+            {"sessionId": self.SESSION},
         )
         complete = planning_service.get_work_item(self.conn, self.reference)
         handled = planning_api.handle_get(
@@ -2799,6 +2793,145 @@ class ChainToolTests(WireCallTestCase):
             39,
             len(self.answer("list_work_items", {"space": SPACE_KEY, "limit": 100})["work_items"]),
         )
+
+
+# The catalogue this build publishes, written out rather than read from the code
+# under test: a tool that comes back, or goes, has to change this line too.
+KEPT_TOOLS = {
+    "list_platform_modules",
+    "list_planning_spaces",
+    "get_planning_space",
+    "create_planning_space",
+    "create_work_item",
+    "get_work_item",
+    "read_work_item_image",
+    "list_work_items",
+    "get_work_item_chain",
+    "search_work_items",
+    "claim_work_item",
+    "claim_ready_work_item",
+    "claim_work_item_checklist_item",
+    "merge_work_items",
+    "apply_work_item_changes",
+    "delete_work_item",
+    "create_work_item_request",
+    "get_work_item_request",
+    "list_work_item_requests",
+    "answer_work_item_request",
+    "expire_work_item_request",
+}
+# Each removed tool with the call that now makes its write: the tool, and the
+# group of the batch that takes it where the tool is the batch.
+REPLACED_BY = {
+    "update_work_item": ("apply_work_item_changes", "update"),
+    "transition_work_item": ("apply_work_item_changes", "transition"),
+    "set_work_item_checklist": ("apply_work_item_changes", "checklist"),
+    "tick_work_item_checklist_item": ("apply_work_item_changes", "checklist_ticks"),
+    "link_work_items": ("apply_work_item_changes", "links"),
+    "attach_work_item_ref": ("apply_work_item_changes", "refs"),
+    "set_work_item_summary": ("apply_work_item_changes", "summary"),
+    "report_work_item": ("apply_work_item_changes", "summary"),
+    "select_work_item_summary": ("apply_work_item_changes", "summary"),
+    "comment_work_item": ("apply_work_item_changes", "comment"),
+    "resolve_work_item_comment": ("apply_work_item_changes", "resolutions"),
+    "decline_work_item_request": ("expire_work_item_request", None),
+}
+
+
+class RemovedToolTests(WireCallTestCase):
+    """The catalogue holds the kept tools, and a call to a removed one says what replaced it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reference = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Untouched"
+        )["reference"]
+        self.conn.commit()
+
+    def published(self) -> dict[str, dict]:
+        [answer] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
+        )
+        return {tool["name"]: tool for tool in answer["result"]["tools"]}
+
+    def test_the_catalogue_is_exactly_the_kept_tools(self) -> None:
+        self.assertEqual(KEPT_TOOLS, set(self.published()))
+        self.assertEqual(KEPT_TOOLS, {tool["name"] for tool in mcp_surface.catalogue()})
+
+    def test_every_removed_name_is_refused_with_its_replacement_and_writes_nothing(self) -> None:
+        self.assertEqual(set(REPLACED_BY), set(planning_tools.REMOVED_TOOLS))
+        before = planning_service.get_work_item(self.conn, self.reference)
+        schemas = {name: tool["inputSchema"] for name, tool in self.published().items()}
+        for name, (tool, group) in REPLACED_BY.items():
+            with self.subTest(name):
+                # What an agent holding the old catalogue would have sent.
+                arguments = {"id": self.reference, "body": "x", "state": "done", "title": "y"}
+                error = self.refusal(name, arguments, {"sessionId": self.SESSION})
+                self.assertEqual("removed_tool", error["code"])
+                message = error["message"]
+                self.assertTrue(
+                    message.startswith(f"{name} is no longer a Valkama tool; call {tool}"),
+                    message,
+                )
+                self.assertIn("restart the client session", message)
+                # The call it names is one the catalogue takes as written.
+                start = message.index("{")
+                form, _end = json.JSONDecoder().raw_decode(message[start:])
+                self.assertLessEqual(set(form), set(schemas[tool]["properties"]), message)
+                if group is not None:
+                    self.assertIn(f" with {group}", message)
+                    self.assertIn(group, form)
+                with self.assertRaises(planning_api.PlanningHttpError) as caught:
+                    mcp_surface.call_tool(self.conn, name, arguments)
+                self.assertEqual((404, "removed_tool"), (caught.exception.status, error["code"]))
+        self.assertEqual([], self.calls())
+        self.assertEqual(before, planning_service.get_work_item(self.conn, self.reference))
+
+    def test_a_removed_name_is_not_an_alias_of_its_replacement(self) -> None:
+        with self.assertRaises(planning_api.PlanningHttpError):
+            mcp_surface.run_tool_call(
+                self.conn,
+                "comment_work_item",
+                {"id": self.reference, "body": "Should not land"},
+                meta={"sessionId": self.SESSION},
+            )
+        self.conn.rollback()
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual([], item["comments"])
+        self.assertEqual([], self.calls())
+
+    def test_nothing_an_agent_reads_names_a_removed_tool(self) -> None:
+        published = json.dumps(mcp_surface.catalogue())
+        for name in REPLACED_BY:
+            with self.subTest(name):
+                self.assertNotIn(name, published)
+                self.assertNotIn(name, mcp_surface.PLANNING_INSTRUCTIONS)
+
+    def test_no_tracked_file_but_the_changelog_names_a_removed_tool(self) -> None:
+        """The skill, the docs, the web client and the rest: only history keeps the old names.
+
+        Python is left out: the domain functions behind the HTTP writes share these
+        names, and the refusal table must spell them. Their tool use is held by the
+        catalogue and instruction checks above.
+        """
+
+        try:
+            listed = subprocess.run(
+                ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
+            ).stdout.decode("utf-8")
+        except (OSError, subprocess.CalledProcessError) as missing:
+            self.skipTest(f"not a Git checkout: {missing}")
+        found = []
+        for path in filter(None, listed.split("\0")):
+            if path == "CHANGELOG.md" or path.endswith(".py"):
+                continue
+            try:
+                with open(os.path.join(ROOT, path), "rb") as handle:
+                    text = handle.read().decode("utf-8", errors="replace")
+            except OSError:
+                continue
+            found.extend(f"{path}: {name}" for name in REPLACED_BY if name in text)
+        self.assertEqual([], found)
 
 
 if __name__ == "__main__":

@@ -180,20 +180,33 @@ _FRICTION = {
 # A parameter whose name reads as text but whose value is an object is the one an
 # agent writes as bare text, and the client then cannot read the call as JSON; it
 # fails before it reaches this server. Each such parameter shows its form.
-#: What a summary or a report takes: an object, shown as one.
+#: What a summary takes: an object, shown as one.
 _OUTCOME_FORM = (
     'An object, never bare text: {"done": "what was done", "next": "what comes next"},'
     " with why and friction when they apply."
 )
-#: What a batch's one comment takes.
+#: What a batch's one comment takes, and where it stands in the discussion.
 _COMMENT_FORM = (
     'One comment, an object, never bare text: {"body": "the text"}, with the other'
-    " keys comment_work_item takes beside body."
+    " keys beside body when they apply. Without a parent it is the root of a thread;"
+    " reply_to (a comment id) or reply_to_request (a question id) makes it a reply"
+    " under that root. Threads are one level deep: a reply to a reply stands under"
+    " that reply's root, and applied names the root it joined in reply_to or"
+    " reply_to_request. A reply carries no checklist_item_id; its root does."
 )
-#: What a batch's transition takes.
+#: What a batch's transition takes, and the guards it meets.
 _TRANSITION_FORM = (
     'An object, never a bare state name: {"state": "done"}, with reason, force or rank'
-    " when they apply."
+    " when they apply. The one path a state changes by. The workflow's guards apply:"
+    " an active state needs an executor, a terminal state needs every checklist step"
+    " ticked and a closing summary, a blocked state needs a blocker or a stated reason."
+    " A cancelled state needs only the summary, saying why the work stopped; its undone"
+    " steps stay open. force carries a refusal through and records it. A terminal state"
+    " also ends the item's claim and any step claim, whoever holds them; the answer"
+    " names the holder as released, and last_claim_ref keeps reading it. Reopening"
+    " restores no claim. The item goes last in its new state unless rank places it. An"
+    " agent's close is refused with person_spoke while a person acted on the item in"
+    " the interface since an agent last wrote to it; the refusal quotes it."
 )
 #: A list the owner ticks under a root comment, a report or a summary: a question of
 #: one multi_choice field that nobody waits for.
@@ -353,7 +366,7 @@ TOOLS = [
             },
             "checklist": {
                 "type": "object",
-                "description": "The new item's steps, as set_work_item_checklist takes"
+                "description": "The new item's steps, as apply_work_item_changes takes"
                 ' them: the list alone, ["first step", {"text": "…", "done": true}], or'
                 ' {"items": [...]}; applied after the claim and before the links.',
                 "properties": {"items": _STEPS},
@@ -362,7 +375,7 @@ TOOLS = [
             "links": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Links from the new item, as link_work_items takes them:"
+                "description": "Links from the new item, as apply_work_item_changes takes them:"
                 " work found en route links discovered-from the item it was found from.",
                 "items": {
                     "type": "object",
@@ -529,70 +542,6 @@ TOOLS = [
         ["query"],
     ),
     _tool(
-        "update_work_item",
-        "Edit a work item",
-        "Change the fields a state transition does not own. Pass expected_revision"
-        " to refuse a stale write.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "title": _STR,
-            "description": _STR,
-            "source": {
-                "type": "string",
-                "description": "Anchor into the owning document, e.g."
-                " docs/plan.md#kb:a7f3. Update the existing marker without"
-                " changing the item's identity or copying plan text into it.",
-            },
-            "priority": {
-                "type": "string",
-                "enum": list(model.PRIORITIES),
-                "description": _PRIORITY_MEANING,
-            },
-            **_EDITED_LABELS,
-            "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
-            "parent": WORK_ITEM_REFERENCE,
-            "rank": _RANK,
-            "mentions": _TEXT_MENTIONS,
-            "expected_revision": _EXPECTED_REVISION,
-            "author": _AUTHOR,
-            "verbose": _VERBOSE,
-        },
-        ["id"],
-    ),
-    _tool(
-        "transition_work_item",
-        "Move a work item to a state",
-        "The one path a state changes by. The workflow's guards apply: an active"
-        " state needs an executor, a terminal state needs every checklist step"
-        " ticked and a closing summary, a blocked state needs a blocker or a"
-        " stated reason. A cancelled state needs only the summary, saying why the"
-        " work stopped; its undone steps stay open. force carries a refusal"
-        " through and records it. A terminal state also ends the item's claim and"
-        " any step claim, in the same write and whoever holds them; the history"
-        " records the release, the answer names the holder as released, and"
-        " last_claim_ref keeps reading it. Reopening restores no claim. The item"
-        " goes last in its new state unless rank places it. An agent's close is"
-        " refused with person_spoke while a person acted on the item in the"
-        " interface since an agent last wrote to it; the refusal quotes it. Any"
-        " write to an item answers with from_person when there is such news, once.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "state": _STATE,
-            "reason": {
-                "type": "string",
-                "description": "Why, when the state is blocked and no item blocks it.",
-            },
-            "force": _FORCE,
-            "rank": _RANK,
-            "expected_revision": _EXPECTED_REVISION,
-            "author": _AUTHOR,
-            "verbose": _VERBOSE,
-        },
-        ["id", "state"],
-    ),
-    _tool(
         "claim_work_item",
         "Claim a work item",
         "Take ownership before working it. Refuses if somebody else holds it;"
@@ -622,33 +571,12 @@ TOOLS = [
         "Claim the next ready work item",
         "Choose and claim in one step: the first unheld item in a startable state"
         " that nothing unfinished blocks, in the order of work — a queued state"
-        " before the backlog, and inside a state the planned order (see rank on"
-        " update_work_item); priority only breaks a tie. The claim starts the item"
+        " before the backlog, and inside a state the planned order (see rank in"
+        " apply_work_item_changes's update); priority only breaks a tie. The claim starts the item"
         " as claim_work_item does, so it answers in its active state with started."
         " Answers with nothing when no item is ready.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
-    ),
-    _tool(
-        "set_work_item_checklist",
-        "Set a work item's checklist",
-        "Set the steps. A step sent with the text of one the item has keeps"
-        " that step's item_id, claim and tick, so appending is sending the old"
-        " steps and then the new ones. Leaving out a claimed or completed step"
-        " is refused, naming it; force discards it explicitly. The answer lists"
-        " the steps with the item_id every later tick or step claim names."
-        " apply_work_item_changes and create_work_item take the same steps as"
-        " their checklist group.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "items": _STEPS,
-            "force": _FORCE,
-            "expected_revision": _EXPECTED_REVISION,
-            "author": _AUTHOR,
-            "verbose": _VERBOSE,
-        },
-        ["id", "items"],
     ),
     _tool(
         "claim_work_item_checklist_item",
@@ -666,40 +594,6 @@ TOOLS = [
             "verbose": _VERBOSE,
         },
         ["id", "item_id"],
-    ),
-    _tool(
-        "tick_work_item_checklist_item",
-        "Complete one checklist step",
-        "Mark one step done, or reopen it with done=false. Completion records who"
-        " and clears the live claim.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "item_id": _STR,
-            "done": _BOOL,
-            "author": _AUTHOR,
-            "force": _FORCE,
-            "expected_revision": _EXPECTED_REVISION,
-            "verbose": _VERBOSE,
-        },
-        ["id", "item_id"],
-    ),
-    _tool(
-        "link_work_items",
-        "Relate two work items",
-        "blocks carries readiness; relates-to, discovered-from and duplicates"
-        " carry meaning. relates-to is one link whichever end names it, and"
-        " linking it again from the other end changes nothing. remove=true takes"
-        " the link away, a relates-to one from either end.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "other": WORK_ITEM_REFERENCE,
-            "kind": {"type": "string", "enum": sorted(model.LINK_KINDS)},
-            "remove": _BOOL,
-            "author": _AUTHOR,
-        },
-        ["id", "other", "kind"],
     ),
     _tool(
         "merge_work_items",
@@ -744,130 +638,10 @@ TOOLS = [
         ["id", "items"],
     ),
     _tool(
-        "attach_work_item_ref",
-        "Attach a reference",
-        "A structured pointer: a commit, an AgentMemory record id, or a url. Attach"
-        " every memory record materially used for this work as kind=memory with"
-        " its stable id; this is a one-way pointer and never writes back. Your own"
-        " session needs no ref: Valkama records the confirmed session of every"
-        " write itself. Raw logs and files do not belong here.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "kind": {"type": "string", "enum": sorted(model.REF_KINDS)},
-            "value": _STR,
-            "label": _STR,
-            "author": _AUTHOR,
-        },
-        ["id", "kind", "value"],
-    ),
-    _tool(
-        "set_work_item_summary",
-        "Record a closing summary",
-        "What was done, what comes next, and why only when the choice is not"
-        " obvious. A terminal state needs this; it is what the next agent reads"
-        " instead of re-deriving the work.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "summary": {
-                "type": "object",
-                "description": _OUTCOME_FORM,
-                "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
-                "required": ["done", "next"],
-            },
-            "list": _LIST,
-            "mentions": _TEXT_MENTIONS,
-            "expected_revision": _EXPECTED_REVISION,
-            "author": _AUTHOR,
-            "verbose": _VERBOSE,
-        },
-        ["id", "summary"],
-    ),
-    _tool(
-        "report_work_item",
-        "Publish a work report",
-        "Add an immutable report to the discussion. make_current selects it as"
-        " the current outcome atomically and requires expected_revision.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "report": {
-                "type": "object",
-                "description": _OUTCOME_FORM,
-                "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
-                "required": ["done", "next"],
-            },
-            "make_current": _BOOL,
-            "list": _LIST,
-            "mentions": _MENTIONS,
-            "expected_revision": _EXPECTED_REVISION,
-            "author": _AUTHOR,
-            "verbose": _VERBOSE,
-        },
-        ["id", "report"],
-    ),
-    _tool(
-        "select_work_item_summary",
-        "Use a report as the current outcome",
-        "Select an existing report belonging to this work item without retyping it.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "comment_id": {"type": "integer", "minimum": 1},
-            "expected_revision": _EXPECTED_REVISION,
-            "author": _AUTHOR,
-            "verbose": _VERBOSE,
-        },
-        ["id", "comment_id", "expected_revision"],
-    ),
-    _tool(
-        "comment_work_item",
-        "Comment on a work item",
-        "A note on the record, for anything the fields have no place for. Without a"
-        " parent it is the root of a thread; reply_to (a comment id) or"
-        " reply_to_request (a question id) makes it a reply under that root. Threads"
-        " are one level deep: a reply to a reply stands under that reply's root, and"
-        " the answer names the root it joined in reply_to or reply_to_request. A"
-        " reply carries no checklist_item_id; its root does.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "body": _STR,
-            "author": _AUTHOR,
-            "checklist_item_id": _STR,
-            "reply_to": _REPLY_TO,
-            "reply_to_request": _REPLY_TO_REQUEST,
-            "list": _LIST,
-            "mentions": _MENTIONS,
-            "awaits_reply": _AWAITS_REPLY,
-        },
-        ["id", "body"],
-    ),
-    _tool(
-        "resolve_work_item_comment",
-        "Mark a discussion thread resolved",
-        "Mark the root of a thread resolved, which collapses the thread and leaves it out"
-        " of the unresolved read, with a one-line decision of at most"
-        f" {service.MAX_RESOLUTION} characters that may be left out; reopen=true removes"
-        " the mark. Marking again replaces the decision. A reply and a question's thread"
-        " take no mark. The mark changes no revision, writes a history event, and is"
-        " answered with work_item, comment_id and resolution as it now stands.",
-        WRITES,
-        {
-            "id": WORK_ITEM_REFERENCE,
-            "comment_id": _RESOLVED_ROOT,
-            "resolution": _RESOLUTION,
-            "reopen": _REOPEN,
-            "author": _AUTHOR,
-        },
-        ["id", "comment_id"],
-    ),
-    _tool(
         "apply_work_item_changes",
         "Apply several changes to a work item",
-        "Several writes to one item in one call, all or nothing. Each group works"
-        " exactly as its single tool does, and they apply in this order: claim,"
+        "Several writes to one item in one call, all or nothing. The groups apply"
+        " in this order: claim,"
         " subscribe, update, checklist, checklist_ticks, refs, links, comment or comments,"
         " resolutions, questions, summary, transition — so a claim and its steps"
         " take one call, and a closing"
@@ -898,30 +672,49 @@ TOOLS = [
             },
             "update": {
                 "type": "object",
-                "description": "Edit the item's fields as update_work_item does;"
+                "description": "Edit the fields a state transition does not own;"
                 " applied.update names the fields sent.",
                 "properties": {
-                    name: _STR for name in model.UPDATABLE_FIELDS if name not in _EDITED_LABELS
-                }
-                | _EDITED_LABELS
-                | {"mentions": _TEXT_MENTIONS},
+                    "title": _STR,
+                    "description": _STR,
+                    "source": {
+                        "type": "string",
+                        "description": "Anchor into the owning document, e.g."
+                        " docs/plan.md#kb:a7f3. Update the existing marker without"
+                        " changing the item's identity or copying plan text into it.",
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": list(model.PRIORITIES),
+                        "description": _PRIORITY_MEANING,
+                    },
+                    **_EDITED_LABELS,
+                    "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
+                    "parent": WORK_ITEM_REFERENCE,
+                    "rank": _RANK,
+                    "mentions": _TEXT_MENTIONS,
+                },
             },
             "checklist": {
                 "type": "object",
-                "description": "Set the steps as set_work_item_checklist does, after"
-                ' the claim and before the ticks: the list alone, ["first step",'
-                ' {"text": "…", "done": true}], or {"items": [...], "force": true} when'
-                " force must carry a refusal through. A repeated step keeps its item_id"
-                " and state, and a new one gets a new item_id, which checklist_ticks in"
-                " the same call cannot name: send it done=true instead."
-                " applied.checklist lists every item_id.",
+                "description": "Set the steps, after the claim and before the ticks:"
+                ' the list alone, ["first step", {"text": "…", "done": true}], or'
+                ' {"items": [...], "force": true} when force must carry a refusal'
+                " through. A step sent with the text of one the item has keeps that"
+                " step's item_id, claim and tick, so appending is sending the old steps"
+                " and then the new ones; a new step gets a new item_id, which"
+                " checklist_ticks in the same call cannot name: send it done=true"
+                " instead. Leaving out a claimed or completed step is refused, naming"
+                " it; force discards it explicitly. applied.checklist lists every"
+                " item_id.",
                 "properties": {"items": _STEPS, "force": _FORCE},
                 "required": ["items"],
             },
             "checklist_ticks": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Steps to complete, or to reopen with done=false.",
+                "description": "Steps to complete, or to reopen with done=false."
+                " Completion records who and clears the live claim.",
                 "items": {
                     "type": "object",
                     "properties": {"item_id": _STR, "done": _BOOL, "force": _FORCE},
@@ -931,7 +724,12 @@ TOOLS = [
             "refs": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Pointers to attach, as attach_work_item_ref takes them.",
+                "description": "Structured pointers to attach: a commit, an AgentMemory"
+                " record id or a url. Attach every memory record materially used for"
+                " this work as kind=memory with its stable id; this is a one-way"
+                " pointer and never writes back. Your own session needs no ref:"
+                " Valkama records the confirmed session of every write itself. Raw"
+                " logs and files do not belong here.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -945,7 +743,11 @@ TOOLS = [
             "links": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Links from this item, as link_work_items takes them.",
+                "description": "Links from this item. blocks carries readiness;"
+                " relates-to, discovered-from and duplicates carry meaning. relates-to"
+                " is one link whichever end names it, and linking it again from the"
+                " other end changes nothing. remove=true takes the link away, a"
+                " relates-to one from either end.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -993,9 +795,12 @@ TOOLS = [
             "resolutions": {
                 "type": "array",
                 "maxItems": api.MAX_APPLY_ENTRIES,
-                "description": "Roots to mark resolved or reopen, as"
-                " resolve_work_item_comment takes them; applied.resolutions lists each"
-                " root's mark as it now stands.",
+                "description": "Thread roots to mark resolved, which collapses the thread"
+                " and leaves it out of the unresolved read, with a one-line decision of"
+                f" at most {service.MAX_RESOLUTION} characters that may be left out;"
+                " reopen=true removes the mark, and marking again replaces the decision."
+                " A reply and a question's thread take no mark, and the mark changes no"
+                " revision. applied.resolutions lists each root's mark as it now stands.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -1027,7 +832,9 @@ TOOLS = [
             },
             "summary": {
                 "type": "object",
-                "description": _OUTCOME_FORM,
+                "description": "The closing summary: what was done, what comes next, and"
+                " why only when the choice is not obvious. A terminal state needs it; it"
+                " is what the next agent reads instead of re-deriving the work. " + _OUTCOME_FORM,
                 "properties": {
                     "done": _STR,
                     "next": _STR,
@@ -1261,14 +1068,6 @@ TOOLS.extend(
             ["id", "answers", "expected_revision"],
         ),
         _tool(
-            "decline_work_item_request",
-            "Decline a human request",
-            "Decline a pending request using its revision.",
-            WRITES,
-            {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
-            ["id", "expected_revision"],
-        ),
-        _tool(
             "expire_work_item_request",
             "Withdraw a human request",
             "Explicitly withdraw a pending request, retaining its record.",
@@ -1280,6 +1079,38 @@ TOOLS.extend(
 )
 
 TOOL_NAMES = frozenset(tool["name"] for tool in TOOLS)
+
+#: Tools this vocabulary no longer publishes, each with the call that does its work.
+#: A session started before they went still holds their schemas and calls them; the
+#: surface answers such a call with a refusal that names the replacement, so the
+#: agent corrects itself in one call. A refusal, not an alias: nothing here runs.
+REMOVED_TOOLS: dict[str, str] = {
+    "update_work_item": 'apply_work_item_changes with update: {"id": "MAIN-12",'
+    ' "update": {"title": "…"}}',
+    "transition_work_item": 'apply_work_item_changes with transition: {"id": "MAIN-12",'
+    ' "transition": {"state": "done"}}',
+    "set_work_item_checklist": 'apply_work_item_changes with checklist: {"id": "MAIN-12",'
+    ' "checklist": ["first step", {"text": "second step", "done": true}]}',
+    "tick_work_item_checklist_item": "apply_work_item_changes with checklist_ticks:"
+    ' {"id": "MAIN-12", "checklist_ticks": [{"item_id": "…"}]}',
+    "link_work_items": 'apply_work_item_changes with links: {"id": "MAIN-12",'
+    ' "links": [{"other": "MAIN-14", "kind": "blocks"}]}',
+    "attach_work_item_ref": 'apply_work_item_changes with refs: {"id": "MAIN-12",'
+    ' "refs": [{"kind": "commit", "value": "…"}]}',
+    "set_work_item_summary": 'apply_work_item_changes with summary: {"id": "MAIN-12",'
+    ' "summary": {"done": "…", "next": "…"}}',
+    "report_work_item": "apply_work_item_changes with summary, which records the outcome:"
+    ' {"id": "MAIN-12", "summary": {"done": "…", "next": "…"}}',
+    "select_work_item_summary": "apply_work_item_changes with summary, which records the"
+    ' outcome: {"id": "MAIN-12", "summary": {"done": "…", "next": "…"}}',
+    "comment_work_item": 'apply_work_item_changes with comment: {"id": "MAIN-12",'
+    ' "comment": {"body": "…"}}',
+    "resolve_work_item_comment": "apply_work_item_changes with resolutions:"
+    ' {"id": "MAIN-12", "resolutions": [{"comment_id": 7, "resolution": "…"}]}',
+    "decline_work_item_request": "expire_work_item_request, which withdraws a pending"
+    ' question: {"id": "<request_id>", "expected_revision": 1}; the owner declines one in'
+    " Valkama's interface",
+}
 
 
 def _post(path: str) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
@@ -1654,42 +1485,20 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     ),
     "get_work_item_chain": _chain,
     "search_work_items": _listing(_search),
-    "update_work_item": _acknowledged("/api/planning/work-item/update", acknowledgements.updated),
-    "transition_work_item": _acknowledged(
-        "/api/planning/work-item/transition", acknowledgements.transitioned
-    ),
     "claim_work_item": _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
     "claim_ready_work_item": _claim_ready,
-    "set_work_item_checklist": _acknowledged(
-        "/api/planning/work-item/checklist", acknowledgements.checklist_replaced
-    ),
     "claim_work_item_checklist_item": _acknowledged(
         "/api/planning/work-item/checklist/claim", acknowledgements.step_changed
     ),
-    "tick_work_item_checklist_item": _acknowledged(
-        "/api/planning/work-item/checklist/tick", acknowledgements.step_changed
-    ),
-    "link_work_items": _post("/api/planning/work-item/link"),
     "merge_work_items": _acknowledged("/api/planning/work-item/merge", acknowledgements.merged),
-    "attach_work_item_ref": _post("/api/planning/work-item/ref"),
-    "set_work_item_summary": _acknowledged(
-        "/api/planning/work-item/summary", acknowledgements.summarized
-    ),
-    "comment_work_item": _post("/api/planning/work-item/comment"),
-    "resolve_work_item_comment": _post("/api/planning/work-item/comment/resolve"),
     "apply_work_item_changes": _acknowledged(
         "/api/planning/work-item/apply", acknowledgements.applied
-    ),
-    "report_work_item": _acknowledged("/api/planning/work-item/report", acknowledgements.reported),
-    "select_work_item_summary": _acknowledged(
-        "/api/planning/work-item/summary/select", acknowledgements.summarized
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
     "create_work_item_request": _post("/api/planning/work-item/request"),
     "get_work_item_request": _get("/api/planning/request", "id", unwrap="request"),
     "list_work_item_requests": _request_list,
     "answer_work_item_request": _answer,
-    "decline_work_item_request": _post("/api/planning/request/decline"),
     "expire_work_item_request": _post("/api/planning/request/expire"),
 }
 for _write_tool in TOOLS:

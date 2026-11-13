@@ -81,18 +81,14 @@ class ByPersonTests(QuestionCase):
         self.assertIs(True, self.http_listed(request)["by_person"])
 
     def test_a_decline_or_withdrawal_says_whose_call_it_was(self) -> None:
-        for tool, status in (
-            ("decline_work_item_request", "declined"),
-            ("expire_work_item_request", "expired"),
-        ):
+        for status in ("declined", "expired"):
             with self.subTest(status=status):
                 by_agent = self.ask()
-                self.tool(
-                    tool,
-                    id=by_agent["request_id"],
-                    expected_revision=0,
-                    author=calls.OWNER_ACTOR,
-                )
+                ended = {"expected_revision": 0, "author": calls.OWNER_ACTOR}
+                if status == "declined":
+                    self.decline(by_agent["request_id"], **ended)
+                else:
+                    self.tool("expire_work_item_request", id=by_agent["request_id"], **ended)
                 self.assertIs(False, self.http_request(by_agent)["by_person"])
                 by_person = self.ask()
                 self.as_person(by_person, status=status)
@@ -280,12 +276,7 @@ class AnsweredAfterTests(QuestionCase):
     def test_only_answers_count_as_answered_after(self) -> None:
         answered = self.answer(self.ask(), {"path": "keep"})
         declined = self.ask(prompt="Declined later")
-        self.tool(
-            "decline_work_item_request",
-            id=declined["request_id"],
-            expected_revision=0,
-            author="the-owner",
-        )
+        self.decline(declined["request_id"], expected_revision=0, author="the-owner")
         withdrawn = self.ask(prompt="Withdrawn later")
         self.tool("expire_work_item_request", id=withdrawn["request_id"], expected_revision=0)
         self.ask(prompt="Still waiting")

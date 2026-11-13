@@ -189,12 +189,16 @@ class ReplyWriteTests(ThreadTestCase):
 
     def test_the_tool_and_the_batch_reply_and_say_under_which_root(self) -> None:
         root = self.comment("Root")
-        first = self.call("comment_work_item", id=self.ref, body="One", reply_to=root["comment_id"])
-        self.assertEqual(root["comment_id"], first["reply_to"])
+        first = self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            comment={"body": "One", "reply_to": root["comment_id"]},
+        )
+        self.assertEqual(root["comment_id"], first["applied"]["comment"]["reply_to"])
         batch = self.call(
             "apply_work_item_changes",
             id=self.ref,
-            comment={"body": "Two", "reply_to": first["comment_id"]},
+            comment={"body": "Two", "reply_to": first["applied"]["comment"]["comment_id"]},
         )
         applied = batch["applied"]["comment"]
         self.assertEqual(root["comment_id"], applied["reply_to"])
@@ -204,10 +208,9 @@ class ReplyWriteTests(ThreadTestCase):
         root = self.comment("Root")
         with self.assertRaisesRegex(api.PlanningHttpError, "reply_to"):
             self.call(
-                "report_work_item",
+                "apply_work_item_changes",
                 id=self.ref,
-                report={"done": "d", "next": "n"},
-                reply_to=root["comment_id"],
+                summary={"done": "d", "next": "n", "reply_to": root["comment_id"]},
             )
 
     def test_a_resolved_root_carries_its_mark_in_every_read_and_a_reply_none(self) -> None:
@@ -245,7 +248,7 @@ class ReplyWriteTests(ThreadTestCase):
         self.comment("Runner note, no call")
         with calls.bind(calls.browser(), "/api/planning/work-item/comment"):
             self.comment("By hand")
-        self.call("comment_work_item", id=self.ref, body="By an agent")
+        self.call("apply_work_item_changes", id=self.ref, comment={"body": "By an agent"})
         self.assertEqual(
             [None, True, False],
             [c["by_person"] for c in service.get_work_item(self.conn, self.ref)["comments"]],

@@ -228,9 +228,11 @@ class ListTests(EmitHarness):
     LIST: ClassVar[dict] = {"label": "Take on", "options": [{"id": "a", "label": "A"}]}
 
     def listed(self) -> str:
-        answer = self.agent("comment_work_item", id=self.ref, body="Findings", list=self.LIST)
+        answer = self.agent(
+            "apply_work_item_changes", id=self.ref, comment={"body": "Findings", "list": self.LIST}
+        )
         assert isinstance(answer, dict)
-        return str(answer["list_request_id"])
+        return str(answer["applied"]["comment"]["list_request_id"])
 
     def test_a_list_raises_no_toast_and_a_question_beside_it_counts_alone(self) -> None:
         self.listed()
@@ -259,7 +261,9 @@ class ListTests(EmitHarness):
             emit.after_write(self.conn)
         self.settle()
         self.assertEqual([], self.removed)
-        self.agent("transition_work_item", id=self.ref, state="cancelled", force=True)
+        self.agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "cancelled", "force": True}
+        )
         self.settle()
         self.assertIn((self.ref, messages.GROUP), self.removed, "positive control: a close does")
 
@@ -333,7 +337,7 @@ class CoalescingTests(EmitHarness):
     def test_the_open_question_outranks_a_move_to_review_on_the_same_item(self) -> None:
         alert_settings.write(self.conn, {"locale": "en"})
         self.ask()
-        self.agent("transition_work_item", id=self.ref, state="review")
+        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.settle()
 
         (message,) = self.shown
@@ -367,7 +371,7 @@ class SettingsTests(EmitHarness):
 
     def test_a_review_alert_turned_off_raises_nothing(self) -> None:
         alert_settings.write(self.conn, {"events": {"review": False}})
-        self.agent("transition_work_item", id=self.ref, state="review")
+        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.settle()
         self.assertEqual([], self.shown)
 
@@ -399,7 +403,7 @@ class PresenceTests(EmitHarness):
         self.assertEqual([(self.work_item_id(self.ref), True)], self.asked)
 
     def test_a_review_alert_does_not_count_the_panel_of_questions(self) -> None:
-        self.agent("transition_work_item", id=self.ref, state="review")
+        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.settle()
         self.assertEqual([(self.work_item_id(self.ref), False)], self.asked)
         self.assertEqual(1, len(self.shown))
@@ -447,7 +451,11 @@ class NoListenerTests(unittest.TestCase):
 
 class ReviewTests(EmitHarness):
     def test_a_move_to_review_is_one_toast(self) -> None:
-        self.agent("transition_work_item", id=self.ref, state="review", reason="ready")
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "review", "reason": "ready"},
+        )
         self.settle()
         (message,) = self.shown
         self.assertEqual(self.ref, message["tag"])
@@ -458,21 +466,25 @@ class ReviewTests(EmitHarness):
         self.assertEqual([self.ref], [message["tag"] for message in self.shown])
 
     def test_review_to_review_is_nothing(self) -> None:
-        self.agent("transition_work_item", id=self.ref, state="review")
+        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.settle()
         self.shown.clear()
-        self.agent("transition_work_item", id=self.ref, state="review")
+        self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.settle()
         self.assertEqual([], self.shown)
 
     def test_an_item_created_in_review_is_review_already(self) -> None:
         reference = self.item("Filed in review", state="review")
-        self.agent("transition_work_item", id=reference, state="review")
+        self.agent("apply_work_item_changes", id=reference, transition={"state": "review"})
         self.settle()
         self.assertEqual([], self.shown)
 
     def test_a_move_elsewhere_is_nothing(self) -> None:
-        self.agent("transition_work_item", id=self.ref, state="blocked", reason="waiting")
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            transition={"state": "blocked", "reason": "waiting"},
+        )
         self.settle()
         self.assertEqual([], self.shown)
 
@@ -485,7 +497,9 @@ class ReviewTests(EmitHarness):
 
 class TakingBackTests(EmitHarness):
     def test_closing_an_item_takes_its_toast_back(self) -> None:
-        self.agent("transition_work_item", id=self.ref, state="cancelled", force=True)
+        self.agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "cancelled", "force": True}
+        )
         self.settle()
         self.assertIn((self.ref, messages.GROUP), self.removed)
         self.assertEqual([], self.shown)

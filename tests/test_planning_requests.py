@@ -398,9 +398,12 @@ class PlanningRequestTests(unittest.TestCase):
     def test_checklist_quote_survives_replacement_and_plain_comments_stay_unanchored(self) -> None:
         item = service.set_checklist(self.conn, self.item["reference"], ["Original step"])
         step = item["checklist"][0]
-        tools.OPS["comment_work_item"](
+        tools.OPS["apply_work_item_changes"](
             self.conn,
-            {"id": self.item["reference"], "body": "About this", "checklist_item_id": step["id"]},
+            {
+                "id": self.item["reference"],
+                "comment": {"body": "About this", "checklist_item_id": step["id"]},
+            },
         )
         service.comment_work_item(self.conn, self.item["reference"], "General note")
         service.set_checklist(self.conn, self.item["reference"], [])

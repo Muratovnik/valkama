@@ -751,7 +751,9 @@ class WorkItemUrlTests(unittest.TestCase):
         expected = "http://127.0.0.1:8642/open/MAIN-1"
         self.assertEqual(expected, self.call("get_work_item", id="MAIN-1")["url"])
         self.assertEqual(expected, self.call("get_work_item", id="MAIN-1", full=True)["url"])
-        verbose = self.call("update_work_item", id="MAIN-1", title="Two", verbose=True)
+        verbose = self.call(
+            "apply_work_item_changes", id="MAIN-1", update={"title": "Two"}, verbose=True
+        )
         self.assertEqual(expected, verbose["url"])
 
     def test_a_write_acknowledgement_carries_the_address(self) -> None:

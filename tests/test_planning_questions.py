@@ -18,7 +18,7 @@ from unittest import mock
 
 from server import mcp_surface, store, store_backups
 from server.ops import export
-from server.planning import api, model, requests, service, tools
+from server.planning import api, calls, model, requests, service, tools
 
 CHOICE = {
     "id": "path",
@@ -127,6 +127,20 @@ class QuestionCase(unittest.TestCase):
         answer = mcp_surface.call_tool(self.conn, name, arguments)
         self.conn.commit()
         return answer
+
+    def decline(self, request_id: str, **arguments: object) -> dict:
+        """A decline that was no person's: the HTTP write under an MCP call's identity.
+
+        No tool declines any more; the rows an agent's decline left before then
+        are what this writes, and a read must still tell them from a person's.
+        """
+
+        path = "/api/planning/request/decline"
+        with calls.bind(calls.verify_mcp(None, None), path):
+            answer = api.handle_post(self.conn, path, {"id": request_id, **arguments})
+        self.conn.commit()
+        assert answer is not None
+        return answer[1]
 
     def ask(
         self,
@@ -487,12 +501,7 @@ class CompactFormTests(QuestionCase):
 
     def test_a_declined_question_names_no_answerer(self) -> None:
         request = self.ask()
-        self.tool(
-            "decline_work_item_request",
-            id=request["request_id"],
-            expected_revision=0,
-            author="the-owner",
-        )
+        self.decline(request["request_id"], expected_revision=0, author="the-owner")
         compact = self.compact(request)
         self.assertEqual(
             # Who declined it is no answerer, and the call that did was an agent's.

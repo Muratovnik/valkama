@@ -119,6 +119,39 @@ checkouts are therefore distinguishable even at the same version.
   reading them again, and resizing the list reads them again only where a width
   changes what a row prints.
 
+### Removed
+
+- **Twelve planning tools that each made one write.** The MCP catalogue now has one tool
+  per capability: a write to one item's fields, steps, refs, links, discussion, summary
+  or state is a group of `apply_work_item_changes`, which agents already used for nearly
+  every such write. A call to a removed name is refused with the code `removed_tool`
+  and a message naming the call that does its work, so an agent whose tool list is out
+  of date corrects itself in one call; it is a refusal, not an alias, and writes
+  nothing. The HTTP writes behind these tools are unchanged. Each group of
+  `apply_work_item_changes` now describes what the removed tool's description said,
+  and its `update` publishes the values `priority` and `kind` take. Running client
+  sessions keep the tool list they started with: restart them after installing this
+  release.
+
+  | Removed tool | Call instead |
+  | --- | --- |
+  | `update_work_item` | `apply_work_item_changes` with `update` |
+  | `transition_work_item` | `apply_work_item_changes` with `transition` |
+  | `set_work_item_checklist` | `apply_work_item_changes` with `checklist` |
+  | `tick_work_item_checklist_item` | `apply_work_item_changes` with `checklist_ticks` |
+  | `link_work_items` | `apply_work_item_changes` with `links` |
+  | `attach_work_item_ref` | `apply_work_item_changes` with `refs` |
+  | `set_work_item_summary` | `apply_work_item_changes` with `summary` |
+  | `comment_work_item` | `apply_work_item_changes` with `comment` or `comments` |
+  | `resolve_work_item_comment` | `apply_work_item_changes` with `resolutions` |
+  | `report_work_item` | `apply_work_item_changes` with `summary`; a report is published in the card |
+  | `select_work_item_summary` | `apply_work_item_changes` with `summary`; a report is selected as the outcome in the card |
+  | `decline_work_item_request` | `expire_work_item_request` to withdraw a question; the owner declines one in the card |
+
+  The argument spellings those tools read besides their own (`from`, `to`, `target`
+  and `type` for a link, `to` and `to_state` for a state, `ref` for a ref's value) went
+  with them.
+
 ### Fixed
 
 - **A pair's name in a split Analytics section keeps the part that tells it apart.** Where a

@@ -205,10 +205,12 @@ class FirstAnswerTests(AnswerCase):
         self.assertEqual(1, self.row(request)["answer_version"])
 
     def test_declining_or_withdrawing_gives_no_version(self) -> None:
-        for tool in ("decline_work_item_request", "expire_work_item_request"):
-            request = self.ask()
-            self.tool(tool, id=request["request_id"], expected_revision=0)
-            with self.subTest(tool=tool):
+        declined = self.ask()
+        self.decline(declined["request_id"], expected_revision=0)
+        withdrawn = self.ask()
+        self.tool("expire_work_item_request", id=withdrawn["request_id"], expected_revision=0)
+        for request in (declined, withdrawn):
+            with self.subTest(request=request["request_id"]):
                 self.assertEqual(0, self.row(request)["answer_version"])
 
 
@@ -364,9 +366,7 @@ class ChangeTests(AnswerCase):
         pending = self.ask()
         with self.assertRaisesRegex(model.WorkflowGuardError, "only an answered question"):
             self.change(pending, {"path": "keep"})
-        declined = self.tool(
-            "decline_work_item_request", id=self.ask()["request_id"], expected_revision=0
-        )
+        declined = self.decline(self.ask()["request_id"], expected_revision=0)
         with self.assertRaisesRegex(model.WorkflowGuardError, "only an answered question"):
             self.change(declined, {"path": "keep"})
 

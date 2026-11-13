@@ -34,6 +34,7 @@ from server import (
     store,
 )
 from server.planning import service as planning
+from server.planning import tools as planning_tools
 from server.planning import views as planning_views
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
@@ -181,8 +182,12 @@ class StdioTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {
                         **STDIO_META,
-                        "name": "transition_work_item",
-                        "arguments": {"id": "SPC-1", "state": "todo", "expected_revision": 0},
+                        "name": "apply_work_item_changes",
+                        "arguments": {
+                            "id": "SPC-1",
+                            "transition": {"state": "todo"},
+                            "expected_revision": 0,
+                        },
                     },
                 },
                 {
@@ -191,8 +196,12 @@ class StdioTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {
                         **STDIO_META,
-                        "name": "transition_work_item",
-                        "arguments": {"id": "SPC-1", "state": "dev", "expected_revision": 0},
+                        "name": "apply_work_item_changes",
+                        "arguments": {
+                            "id": "SPC-1",
+                            "transition": {"state": "dev"},
+                            "expected_revision": 0,
+                        },
                     },
                 },
             ]
@@ -317,8 +326,8 @@ class StdioTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {
                         **STDIO_META,
-                        "name": "comment_work_item",
-                        "arguments": {"id": "SPC-1", "body": needle},
+                        "name": "apply_work_item_changes",
+                        "arguments": {"id": "SPC-1", "comment": {"body": needle}},
                     },
                 },
                 {
@@ -405,10 +414,12 @@ class StdioTests(unittest.TestCase):
                 "valkama", discovered["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]
             )
             # The instructions must describe the catalogue this process serves.
-            # An agent reading about `move_card` while holding `transition_work_item`
-            # is a half-finished rename reaching the client.
-            self.assertIn("transition_work_item", discovered["instructions"])
+            # An agent reading about `move_card`, or about a tool this build has
+            # removed, is a half-finished rename reaching the client.
+            self.assertIn("apply_work_item_changes", discovered["instructions"])
             self.assertNotIn("move_card", discovered["instructions"])
+            for removed in planning_tools.REMOVED_TOOLS:
+                self.assertNotIn(removed, discovered["instructions"])
             self.assertEqual([mcp_surface.MODERN_PROTOCOL], discovered["supportedVersions"])
             for tool in by_id[2]["result"]["tools"]:
                 with self.subTest(tool=tool["name"]):
@@ -423,15 +434,10 @@ class StdioTests(unittest.TestCase):
             self.assertTrue(by_name["delete_work_item"]["annotations"]["destructiveHint"])
             self.assertFalse(by_name["create_work_item"]["annotations"]["destructiveHint"])
             names = {t["name"] for t in by_id[2]["result"]["tools"]}
-            self.assertIn("transition_work_item", names)
             self.assertIn("claim_work_item", names)
             self.assertIn("claim_work_item_checklist_item", names)
             self.assertLessEqual(
                 {
-                    "link_work_items",
-                    "set_work_item_checklist",
-                    "tick_work_item_checklist_item",
-                    "attach_work_item_ref",
                     "apply_work_item_changes",
                     "merge_work_items",
                     "get_work_item_chain",
@@ -443,21 +449,18 @@ class StdioTests(unittest.TestCase):
             self.assertNotIn("create_board", names)
             self.assertIn("list_platform_modules", names)
             self.assertFalse(any("improvement" in name for name in names))
-            self.assertEqual(33, len(names))
+            self.assertEqual(21, len(names))
+            self.assertFalse(set(planning_tools.REMOVED_TOOLS) & names)
             self.assertLessEqual(
                 {
                     "create_work_item_request",
                     "get_work_item_request",
                     "list_work_item_requests",
                     "answer_work_item_request",
-                    "decline_work_item_request",
                     "expire_work_item_request",
                 },
                 names,
             )
-            self.assertIn("set_work_item_summary", names)
-            self.assertIn("report_work_item", names)
-            self.assertIn("select_work_item_summary", names)
             for reply in (3, 4, 5):
                 self.assertFalse(by_id[reply]["result"]["isError"], by_id[reply]["result"])
             created = json.loads(by_id[4]["result"]["content"][0]["text"])

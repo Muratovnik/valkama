@@ -471,13 +471,13 @@ epic id on every card.
 Three things make a card honest about its own progress:
 
 - **A checklist with stable ids.** Agents claim a step with
-  `claim_work_item_checklist_item` and complete it by id with
-  `tick_work_item_checklist_item`. No invented percentages, and two agents
-  splitting a work item each hold their own step.
-  `comment_work_item` accepts an optional `checklist_item_id`: the saved comment
+  `claim_work_item_checklist_item` and complete it by id in the
+  `checklist_ticks` of `apply_work_item_changes`. No invented percentages, and
+  two agents splitting a work item each hold their own step.
+  A comment accepts an optional `checklist_item_id`: the saved comment
   keeps a quote of that step even after it is renamed or removed.
-- **Typed refs** — commit hashes, memory entry ids, urls — attached with
-  `attach_work_item_ref`, so the next agent reads pointers instead of doing
+- **Typed refs** — commit hashes, memory entry ids, urls — attached in the
+  `refs` of `apply_work_item_changes`, so the next agent reads pointers instead of doing
   archaeology. An agent's own session needs no ref: Valkama records the
   confirmed session behind every write, and `get_work_item` lists those
   sessions.
@@ -488,8 +488,9 @@ Three things make a card honest about its own progress:
 
 An agent that finishes a step usually makes several writes to one card: tick it,
 attach the commit, comment, record the summary, move the card.
-`apply_work_item_changes` does them in one call, in a fixed order and all or
-nothing, so a closing move sees the ticks and the summary sent with it. The
+`apply_work_item_changes` is the one tool for those writes and does them in one
+call, in a fixed order and all or nothing, so a closing move sees the ticks and
+the summary sent with it. The
 exact shapes are in
 [the connection contract](docs/connection-contract.md#several-changes-in-one-call).
 
@@ -514,12 +515,13 @@ shows the lease and when it expires. The exact rules are in
 The inspector keeps editable descriptions and a shared discussion. A comment can
 target a checklist step, and a reply stands under the comment, report or question
 it answers, one level deep. A thread can be marked resolved with a one-line
-decision, by a person in the card or by an agent with `resolve_work_item_comment`,
-and `get_work_item` with `unresolved: true` reads the threads still open
+decision, by a person in the card or by an agent in the `resolutions` of
+`apply_work_item_changes`, and `get_work_item` with `unresolved: true` reads the
+threads still open
 ([details](docs/connection-contract.md#threads-and-the-resolved-mark)). Work
-reports are what agents publish with `report_work_item`; they show in the
-discussion with “What was done / Why / What
-comes next”, and any of them can be selected as the task outcome. Closing a task
+reports show in the discussion with “What was done / Why / What comes next”: an
+agent's closing summary is one, and in the card any of them can be selected as
+the task outcome. Closing a task
 that has no outcome asks a person for one: what was done and what comes next. System
 and execution history have filters, date groups and expandable details. Their
 search covers the records loaded for that task.
@@ -528,8 +530,8 @@ Use `create_work_item_request` for a question or decision that needs an explicit
 answer. Each request has 1–12 named fields: text, one choice, multiple choices or
 a boolean. Optional execution and session bindings must belong to the task.
 `get_work_item_request` and `list_work_item_requests` expose the current status;
-`answer_work_item_request`, `decline_work_item_request` and
-`expire_work_item_request` require that request's `expected_revision`. A terminal
+`answer_work_item_request` and `expire_work_item_request` require that
+request's `expected_revision`; a person declines a request in the card. A terminal
 task, ended execution or elapsed deadline closes the pending request. An option
 can explain itself in a `description` and be `recommended`. A field with options
 is answered with an option or the person's own variant, and may carry a comment;
@@ -563,8 +565,8 @@ its column, or pressing Alt+↑ or Alt+↓ on a focused card, places it among th
 cards of its state; the move is announced to a screen reader. Dropping it in
 another column moves it there at the place it was dropped. Agents see the same
 order: `claim_ready_work_item` takes the first ready item of it,
-`list_work_items` lists each state in it, and `update_work_item` and
-`transition_work_item` take a `rank` (`first`, `last`, `before:<item>` or
+`list_work_items` lists each state in it, and the `update` and `transition`
+of `apply_work_item_changes` take a `rank` (`first`, `last`, `before:<item>` or
 `after:<item>`) to place an item themselves. Priority only breaks a tie. The
 order is the item's `position`, which every store already holds, so it needs
 no new schema; the exact rules are in

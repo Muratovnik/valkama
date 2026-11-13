@@ -474,7 +474,10 @@ class AnsweredInTheInterfaceTests(Listener):
         self.agent_claims()
         self.resolve("answer", self.question(), answers={"answer": "first"})
         answer = mcp_surface.call_tool(
-            self.conn, "comment_work_item", {"id": self.ref, "body": "Noted"}, meta=HOLDER
+            self.conn,
+            "apply_work_item_changes",
+            {"id": self.ref, "comment": {"body": "Noted"}},
+            meta=HOLDER,
         )
         self.conn.commit()
         assert isinstance(answer, dict)

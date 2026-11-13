@@ -89,7 +89,12 @@ class Harness(unittest.TestCase):
         return answer[1]
 
     def listed(self, body: str = "Found five places where the check misfires.") -> dict:
-        return self.agent("comment_work_item", id=self.ref, body=body, list=LIST)
+        """An agent's comment with a list: what the batch says it wrote."""
+
+        answer = self.agent(
+            "apply_work_item_changes", id=self.ref, comment={"body": body, "list": LIST}
+        )
+        return dict(answer["applied"]["comment"])
 
     def counts(self) -> list[int]:
         """Comments, requests and request events: what a refused list must not leave."""
@@ -142,15 +147,19 @@ class WritingTests(Harness):
 
         self.move("cancelled")
         before = self.counts()
-        error = self.refused("comment_work_item", id=self.ref, body="Findings", list=LIST)
+        error = self.refused(
+            "apply_work_item_changes", id=self.ref, comment={"body": "Findings", "list": LIST}
+        )
         self.assertEqual("invalid_request", error["code"])
         self.assertIn("a list on a closed item could never be answered", error["message"])
         self.assertEqual(before, self.counts())
-        self.agent("comment_work_item", id=self.ref, body="Findings")
+        self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Findings"})
         self.assertEqual(before[0] + 1, self.counts()[0], "positive control: a comment alone")
 
     def test_the_refusals_say_what_the_contract_says_and_write_nothing(self) -> None:
-        root = self.agent("comment_work_item", id=self.ref, body="A root")["comment_id"]
+        root = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "A root"})[
+            "applied"
+        ]["comment"]["comment_id"]
         before = self.counts()
         too_many = [{"id": f"o{index}", "label": f"Option {index}"} for index in range(21)]
         cases = {
@@ -162,30 +171,39 @@ class WritingTests(Harness):
         }
         for case, (arguments, message) in cases.items():
             with self.subTest(case):
-                error = self.refused("comment_work_item", id=self.ref, body="Findings", **arguments)
-                self.assertEqual(("invalid_request", message), (error["code"], error["message"]))
+                error = self.refused(
+                    "apply_work_item_changes",
+                    id=self.ref,
+                    comment={"body": "Findings", **arguments},
+                )
+                self.assertEqual(
+                    ("invalid_request", f"comment: {message}"), (error["code"], error["message"])
+                )
                 self.assertEqual(before, self.counts())
         # Twenty is the limit, not past it.
         twenty = self.agent(
-            "comment_work_item",
+            "apply_work_item_changes",
             id=self.ref,
-            body="Twenty",
-            list={"label": "Many", "options": too_many[:20]},
+            comment={"body": "Twenty", "list": {"label": "Many", "options": too_many[:20]}},
         )
-        self.assertIn("list_request_id", twenty)
+        self.assertIn("list_request_id", twenty["applied"]["comment"])
 
     def test_a_report_and_a_summary_carry_a_list_under_themselves(self) -> None:
-        reported = self.agent("report_work_item", id=self.ref, report=SUMMARY, list=LIST)
+        report = "/api/planning/work-item/report"
+        reported = self.person(report, id=self.ref, report=SUMMARY, list=LIST)
         self.assertEqual(
-            reported["comment_id"], self.request(reported["list_request_id"])["comment_id"]
+            reported["comments"][-1]["id"],
+            self.request(reported["list_request_id"])["comment_id"],
         )
-        summarized = self.agent("set_work_item_summary", id=self.ref, summary=SUMMARY, list=LIST)
+        summarized = self.agent(
+            "apply_work_item_changes", id=self.ref, summary={**SUMMARY, "list": LIST}
+        )
         self.assertEqual(
-            summarized["summary_comment_id"],
-            self.request(summarized["list_request_id"])["comment_id"],
+            summarized["applied"]["summary"]["summary_comment_id"],
+            self.request(summarized["applied"]["summary"]["list_request_id"])["comment_id"],
         )
-        plain = self.agent("report_work_item", id=self.ref, report=SUMMARY)
-        self.assertNotIn("list_request_id", plain)
+        plain = self.agent("apply_work_item_changes", id=self.ref, summary=SUMMARY)
+        self.assertNotIn("list_request_id", plain["applied"]["summary"])
 
     def test_a_batch_names_the_list_of_each_comment_and_of_its_summary(self) -> None:
         answer = self.agent(
@@ -370,7 +388,9 @@ class ReadingTests(Harness):
     def told(self) -> list[dict]:
         """What the next agent write carries of the person's answers."""
 
-        said = self.agent("comment_work_item", id=self.ref, body="Read the marks.")
+        said = self.agent(
+            "apply_work_item_changes", id=self.ref, comment={"body": "Read the marks."}
+        )
         return [
             event
             for event in said.get("from_person", [])
@@ -436,7 +456,9 @@ class MergeTests(Harness):
             body="Why b?",
             reply_to_request=rooted["list_request_id"],
         )
-        reported = self.agent("report_work_item", id=self.ref, report=SUMMARY, list=LIST)
+        reported = self.person(
+            "/api/planning/work-item/report", id=self.ref, report=SUMMARY, list=LIST
+        )
         on_report = self.person(
             "/api/planning/work-item/comment",
             id=self.ref,
@@ -468,7 +490,7 @@ class MergeTests(Harness):
         self.assertEqual(survivor_id, where_comment(rooted["comment_id"]))
         self.assertEqual(survivor_id, where_comment(reply["comment_id"]))
         self.assertEqual(merged_id, where_request(reported["list_request_id"]))
-        self.assertEqual(merged_id, where_comment(reported["comment_id"]))
+        self.assertEqual(merged_id, where_comment(reported["comments"][-1]["id"]))
         self.assertEqual(merged_id, where_comment(on_report["comment_id"]))
         self.assertEqual(survivor_id, where_request(asked["request_id"]), "a question moves")
         # The warning counts what waits on the survivor: the question, not the list.

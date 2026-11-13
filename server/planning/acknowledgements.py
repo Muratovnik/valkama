@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 from ..ops import configuration
-from . import model
 
 Acknowledge = Callable[[dict, Mapping[str, object]], dict]
 
@@ -95,35 +94,10 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
     return answer
 
 
-def updated(item: dict, arguments: Mapping[str, object]) -> dict:
-    """Names of the edited fields; the caller sent the values and can read them back.
-
-    And who hears the items its description named, when it named any.
-    """
-
-    return {**_base(item), "updated": model.updated_fields(arguments), **_told(item)}
-
-
-def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """The state is already in the base; add the findings a caller must not miss."""
-
-    return {**_base(item), **_moved(item), **_forced(item)}
-
-
 def claimed(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The holder is `claim_ref` and its lease `claim_state`, and a move of the state."""
 
     return {**_base(item), **_moved(item), **_forced(item)}
-
-
-def checklist_replaced(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """The new steps, because their ids are what every later call names."""
-
-    steps = [
-        {"item_id": step["id"], "text": step["text"], "done": step["done"]}
-        for step in item["checklist"]
-    ]
-    return {**_base(item), "checklist": steps, **_forced(item)}
 
 
 def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
@@ -153,41 +127,20 @@ def merged(item: dict, _arguments: Mapping[str, object]) -> dict:
     return answer
 
 
-def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """That the summary is recorded; its text is the caller's own. And its list, by id."""
-
-    return {
-        **_base(item),
-        "summary_recorded": True,
-        "summary_comment_id": item["summary_comment_id"],
-        **_written_beside(item),
-    }
-
-
-def applied(item: dict, arguments: Mapping[str, object]) -> dict:
-    """A batch: what each group changed, and a transition's findings like the single tool's.
+def applied(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """A batch: what each group changed, and what its claim and transition moved.
 
     `applied` names every comment and question the call wrote by its id, so the
     caller needs no read to reply to one or withdraw one.
     """
 
-    return {**transitioned(item, arguments), **_told(item), "applied": item["applied"]}
-
-
-def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
     return {
         **_base(item),
-        "comment_id": item["comments"][-1]["id"],
-        "summary_comment_id": item["summary_comment_id"],
-        **_written_beside(item),
+        **_moved(item),
+        **_forced(item),
+        **_told(item),
+        "applied": item["applied"],
     }
-
-
-def _written_beside(item: dict) -> dict:
-    """What a report's write put beside it: the list under it, and who hears the items it named."""
-
-    listed = {name: item[name] for name in ("list_request_id",) if name in item}
-    return {**listed, **_told(item)}
 
 
 def _told(item: dict) -> dict:

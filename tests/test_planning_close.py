@@ -337,16 +337,23 @@ class SurfaceTests(CloseTestCase):
             ),
         )
 
-    def test_the_transition_tool_answers_with_the_release(self) -> None:
+    def test_the_batch_transition_answers_with_the_release(self) -> None:
         reference = self.held_item()
 
         answer = mcp_surface.call_tool(
-            self.conn, "transition_work_item", {"id": reference, "state": "done", "author": "agent"}
+            self.conn,
+            "apply_work_item_changes",
+            {"id": reference, "author": "agent", "transition": {"state": "done"}},
         )
 
         assert isinstance(answer, dict)
         self.assertEqual(
-            ("", None, "agent"), (answer["claim_ref"], answer["claim_state"], answer["released"])
+            ("", None, "agent"),
+            (
+                answer["claim_ref"],
+                answer["claim_state"],
+                answer["applied"]["transition"]["released"],
+            ),
         )
         self.assertEqual("", self.item(reference)["claim_ref"])
 

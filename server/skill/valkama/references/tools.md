@@ -27,22 +27,18 @@ full item instead; it carries `url` too.
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
-| `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard (`person_spoke` among them) |
-| `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done`; `overridden` when `force` discarded an engaged step or completed another holder's |
-| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition, `overridden` among them with each step's guards; `applied.update` the fields sent; `applied.comment`, and each entry of `applied.comments`, as `comment_work_item` answers; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision` |
+| `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition: `warnings`, and `overridden` with each step's guards when `force` carried one (`person_spoke` among them); `applied.update` the fields sent; `applied.checklist` each step's `item_id`, `text`, `done`; `applied.checklist_ticks` each `item_id` and `done`; `applied.comment`, and each entry of `applied.comments`, the comment as below; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision`; `applied.summary` its `summary_comment_id`; `applied.transition` the `state`, and `released` when the close ended a claim |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` answers with the item it took, or nothing when no item
-is ready. `comment_work_item` answers with `work_item`, `comment_count`,
-`comment_id`, and `reply_to` and `reply_to_request`: the root a reply joined,
-both null for a new root, and `list_request_id` when it carried a `list`, as
-`report_work_item` and `set_work_item_summary` do. A comment or a report that named
-other items in `mentions` adds `mentions`: per item its `reference`, `holders` and,
-when nobody will hear it, `told`. A call names at most 5 items, and a session names
-one item at most 3 times an hour: the fourth is refused with `mention_limit`, which
-names the item. `resolve_work_item_comment` answers with `work_item`,
-`comment_id` and `resolution`, the root's mark as it now stands.
+is ready. A comment in `applied` has `comment_id`, and `reply_to` and
+`reply_to_request`: the root a reply joined, both null for a new root, and
+`list_request_id` when it carried a `list`, as the summary does. A comment or a
+summary that named other items in `mentions` adds `mentions`: per item its
+`reference`, `holders` and, when nobody will hear it, `told`. A call names at most
+5 items, and a session names one item at most 3 times an hour: the fourth is
+refused with `mention_limit`, which names the item.
 
 Any write to an item also answers with `from_person` when a person acted on it
 in Valkama's interface since an agent last wrote there, and has no such key
@@ -68,7 +64,7 @@ more arguments act on the new item in the same call, all or nothing:
 
 A refused claim, step or link creates nothing and spends no number.
 
-`priority` on `create_work_item` and `update_work_item` is how much the item
+`priority` on `create_work_item` and in the batch's `update` is how much the item
 matters, not when to do it:
 
 - `urgent`: blocks work or loses data
@@ -76,7 +72,7 @@ matters, not when to do it:
 - `medium`: noticeably affects work, with a workaround
 - `low`: minor
 
-`labels` on `update_work_item` replaces the whole set: `["observation"]` leaves
+`labels` in the batch's `update` replaces the whole set: `["observation"]` leaves
 the item with that one label and nothing else. To add or remove labels without
 knowing the rest, send `labels_add` or `labels_remove` (both may go in one
 call). A label already there is kept once, one the item lacks is ignored, and
@@ -97,22 +93,25 @@ new step. Leaving out a claimed or completed step needs `force`.
 ## One call, several writes
 
 `apply_work_item_changes` takes `id`, `author`, `expected_revision`, `verbose`
-and any of these groups, applied in this order:
+and any of these groups, applied in this order. It is the one tool that edits
+an item's fields, sets and ticks its steps, attaches refs, links it, writes and
+resolves its discussion, records its summary and moves its state:
 
-| Group | Shape | Works as |
+| Group | Shape | Does |
 | --- | --- | --- |
-| `claim` | `true` | `claim_work_item` |
-| `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | `update_work_item` |
-| `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | `set_work_item_checklist` |
-| `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | `tick_work_item_checklist_item` |
-| `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
-| `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
-| `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | `comment_work_item` |
-| `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | `comment_work_item`, in order |
-| `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | `resolve_work_item_comment` |
-| `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | `create_work_item_request` |
-| `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | `set_work_item_summary` |
-| `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | `transition_work_item` |
+| `claim` | `true` | claims the item as `claim_work_item` does |
+| `subscribe` | `true` or `false` | follows the item's news for this session, or stops |
+| `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | edits the fields a transition does not own |
+| `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | sets the steps |
+| `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | completes or reopens steps |
+| `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | attaches pointers |
+| `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | adds or removes links |
+| `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | writes one comment |
+| `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | writes comments, in order |
+| `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | marks thread roots resolved |
+| `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | asks as `create_work_item_request` does |
+| `summary` | `{"done": "…", "next": "…", "why": "…", "friction": "none", "list": {"label": "…", "options": [...]}}` | records the closing summary |
+| `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | moves the state |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
 the item already had and a `checklist` in the same call kept; send a new step
@@ -140,18 +139,18 @@ A typical close, in one call:
 
 ## Comments and threads
 
-`comment_work_item` takes `id`, `body` (at most 8000 characters), and
-optionally `author`, `checklist_item_id`, and one parent: `reply_to`, the id of
-a comment, or `reply_to_request`, the id of a question on the same item. A
+A comment in the batch's `comment` or `comments` takes `body` (at most 8000
+characters), and optionally `checklist_item_id`, and one parent: `reply_to`, the
+id of a comment, or `reply_to_request`, the id of a question on the same item. A
 comment with no parent is the root of a thread; a report is one too. Threads
 are one level deep: a reply to a reply is written under that reply's root, and
 a reply to a reply of a question under the question. Refused, writing nothing:
 both parents at once, a parent that is not on the item, and a reply with a
-`checklist_item_id`. `report_work_item` takes no parent.
+`checklist_item_id`.
 
-`resolve_work_item_comment` takes `id`, `comment_id`, the root of a thread, and
-optionally `resolution`, the decision in one line of at most 280 characters, which
-may be blank, `reopen: true` in its place to remove the mark, and `author`. Marking
+An entry of the batch's `resolutions` takes `comment_id`, the root of a thread,
+and optionally `resolution`, the decision in one line of at most 280 characters,
+which may be blank, or `reopen: true` in its place to remove the mark. Marking
 again replaces the decision and is recorded as a new mark, and reopening a root with
 no mark writes nothing. A mark writes the history event `comment_resolved` or
 `comment_reopened` and changes no revision. Refused, writing nothing: a reply, a
@@ -185,8 +184,8 @@ events are shown than there are.
 
 ## Placement
 
-`rank` on `update_work_item` (in the item's own state) and on
-`transition_work_item` (in the state it moves to): `first`, `last`,
+`rank` in the batch's `update` (in the item's own state) and `transition` (in
+the state it moves to): `first`, `last`,
 `before:MAIN-12`, `after:MAIN-12`, the anchor in that same state. Without
 `rank`, a moved item goes last. `claim_ready_work_item` takes the first ready
 item: a queued state before the backlog, then the order inside the state;

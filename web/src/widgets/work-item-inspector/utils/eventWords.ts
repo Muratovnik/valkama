@@ -46,7 +46,7 @@ function questionWords(detail: string, questions: readonly InputRequestEntry[], 
   return asked ? t('history.question', { question: named(asked.request.title) }) : ''
 }
 
-/** `5436: decision` or `5436`, as `resolve_work_item_comment` writes it. */
+/** `5436: decision` or `5436`, as a resolved mark writes it. */
 function markWords(detail: string, comments: WorkItem['comments'], t: Translate) {
   const [, id, decision] = /^(\d+)(?:: ([\s\S]*))?$/u.exec(detail) ?? []
   if (id === undefined) return detail
