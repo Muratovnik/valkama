@@ -8,7 +8,7 @@ export const analyticsFigureMessages = {
   en: {
     noTokens: 'No tokens',
     noPrice: 'No price',
-    costNote: 'An estimate at API list prices, not a bill',
+    costNote: 'The cost is an estimate at API list prices, not a bill.',
     unpriced: '{count} token without a price | {count} tokens without a price',
     anew: 'Processed anew: {kinds}',
     kinds: {
@@ -16,7 +16,7 @@ export const analyticsFigureMessages = {
       output: 'output {count}',
       cacheWrites: 'cache writes {count}',
     },
-    cacheReads: 'Cache reads, not counted: {count}',
+    cacheReads: 'Cache reads: {count}',
     trend: '{measure} {per} from {from} to {to}: highest {top} ({day}), last {last}',
     trendNone: '{measure} {per}: {figure}',
     perHour: {
@@ -31,7 +31,7 @@ export const analyticsFigureMessages = {
   ru: {
     noTokens: 'Нет токенов',
     noPrice: 'Нет цены',
-    costNote: 'Оценка по прейскуранту API, а не счёт',
+    costNote: 'Стоимость — оценка по прейскуранту API, а не счёт.',
     unpriced:
       '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
     anew: 'Обработано заново: {kinds}',
@@ -40,7 +40,7 @@ export const analyticsFigureMessages = {
       output: 'выход {count}',
       cacheWrites: 'запись в кэш {count}',
     },
-    cacheReads: 'Чтение из кэша, не учтено: {count}',
+    cacheReads: 'Чтение кэша: {count}',
     trend: '{measure} {per} с {from} по {to}: наибольшее {top} ({day}), последнее {last}',
     trendNone: '{measure} {per}: {figure}',
     perHour: {

@@ -197,7 +197,10 @@ describe('a narrow screen', () => {
     await flushPromises()
     expect(shown(page, '.analytics-rail')).toBe(false)
     expect(shown(page, '.analytics-panel')).toBe(true)
-    expect(page.get('.analytics-panel-name').text()).toBe('Role')
+    // The section names itself once, by its heading under the way back.
+    expect(page.get('.analytics-panel .level-section > .level-head .level-heading').text()).toBe(
+      'Role',
+    )
     // Focus goes with the reader, to the way back at the head of the section.
     expect(document.activeElement).toBe(page.get('.analytics-panel-back').element)
 

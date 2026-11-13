@@ -339,7 +339,7 @@ test('a phone shows the list or a section, and Back returns to the list', async 
   await expect.poll(() => path(page)).toBe(pageAt({ by: 'role', open: 'section' }))
   await expect(rail).toBeHidden()
   await expect(panel.locator('.spending-tiles')).toBeVisible()
-  await expect(panel.locator('.analytics-panel-name')).toHaveText('Role')
+  await expect(panel.locator('.level-section > .level-head .level-heading')).toHaveText('Role')
   await expect(panel.locator('.analytics-panel-back')).toBeFocused()
   const section = await scrolling(page)
   await record(info, 'analytics frame section 390', section)
@@ -355,8 +355,8 @@ test('a phone shows the list or a section, and Back returns to the list', async 
 
   // Forward and a reload keep the section in place of the list.
   await page.goForward()
-  await expect(panel.locator('.analytics-panel-name')).toHaveText('Role')
+  await expect(panel.locator('.level-section > .level-head .level-heading')).toHaveText('Role')
   await page.reload()
-  await expect(panel.locator('.analytics-panel-name')).toHaveText('Role')
+  await expect(panel.locator('.level-section > .level-head .level-heading')).toHaveText('Role')
   await expect(rail).toBeHidden()
 })

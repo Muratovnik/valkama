@@ -12,6 +12,8 @@
  *
  * It reads the page's own answer, whatever dimension that was read by: its total and its steps
  * hold the tokens by kind. An answer whose period before could not be read says so at the top.
+ * What the tokens count and leave apart is no line of the panel: the «ⓘ» of its heading says it
+ * once (`useSectionCaveats`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -22,6 +24,7 @@ import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import TokenKindsTable from '@/pages/analytics/components/TokenKindsTable.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
+import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { countedTotal, KIND_SLOTS, kindLines } from '@/pages/analytics/utils/tokenKinds.ts'
 
@@ -38,6 +41,9 @@ const props = defineProps<{ usage: Usage }>()
 const emit = defineEmits<{ retry: [] }>()
 
 const { t } = useI18n()
+const caveats = useSectionCaveats()
+/** What the tokens count, and of minutes their estimate, which the heading's «ⓘ» says. */
+const about = computed(() => caveats.kinds(props.usage))
 const words = useSpendingWords()
 const kindWords = useKindWords()
 
@@ -109,20 +115,17 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
     <PanelLevel
       level="section"
       as="div"
+      :title="t('analytics.kinds.section')"
+      :about="about"
     >
       <SpendingUnread
         v-if="!usage.comparison"
         @retry="emit('retry')"
       />
-      <div class="kinds-head">
-        <p class="kinds-figure">
-          <span class="kinds-figure-name">{{ t('analytics.kinds.total') }}</span>
-          <span class="kinds-figure-value">{{ total }}</span>
-        </p>
-        <p class="kinds-note">
-          {{ t('analytics.panel.table.kinds.note') }}
-        </p>
-      </div>
+      <p class="kinds-figure">
+        <span class="kinds-figure-name">{{ t('analytics.kinds.total') }}</span>
+        <span class="kinds-figure-value">{{ total }}</span>
+      </p>
       <div class="kinds-pair">
         <ChartSection
           class="kinds-bars"
@@ -188,11 +191,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
   container-type: inline-size;
 }
 
-.kinds-head {
-  display: grid;
-  gap: var(--space-1);
-}
-
 .kinds-figure {
   display: flex;
   gap: var(--space-2);
@@ -208,12 +206,6 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
 .kinds-figure-value {
   font: var(--font-section-title);
   font-variant-numeric: tabular-nums;
-}
-
-.kinds-note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 
 /* The ranked kinds first, and their small charts beside them where both read well, a block's

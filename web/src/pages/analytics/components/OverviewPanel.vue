@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 /**
  * The overview of the Analytics page, where the page opens: the period at a glance. Its chart
@@ -18,7 +19,8 @@ import { computed, ref } from 'vue'
  *   tile says both.
  *
  * Its own answer is the read by task, beside the period before; a press that could not narrow
- * the view says why where it was pressed.
+ * the view says why where it was pressed. Its heading names it, and the heading's «ⓘ» says the
+ * caveats of its figures once (`useSectionCaveats`).
  */
 import { useResizeObserver } from '@vueuse/core'
 
@@ -32,6 +34,7 @@ import { OVERVIEW_CARDS } from '@/pages/analytics/composables/useOverviewWords.t
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -71,6 +74,10 @@ const emit = defineEmits<{
   retry: []
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
+const { t } = useI18n()
+const caveats = useSectionCaveats()
+/** The caveats of the overview's figures, which its heading's «ⓘ» says. */
+const about = computed(() => caveats.spending(props.usage))
 
 /** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
 const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')
@@ -159,6 +166,8 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
     <PanelLevel
       level="section"
       as="div"
+      :title="t('analytics.frame.overview')"
+      :about="about"
     >
       <SpendingTiles
         v-model:measure="measure"

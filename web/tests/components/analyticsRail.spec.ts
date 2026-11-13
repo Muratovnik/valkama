@@ -81,8 +81,8 @@ describe('the tiles', () => {
     // The days are named as the days chart names them; the figures are what this test holds.
     const said = trend.attributes('aria-label') ?? ''
     expect(said).toMatch(/^Agent time per day from .+ to .+: highest 3\u{A0}h \(.+\), last /u)
-    // Wednesday, still running, has nothing yet: a zero in the measure's unit, so far.
-    expect(said).toMatch(/last 0\u{A0}min so far$/u)
+    // Wednesday, still running, has nothing yet: a zero in the measure's unit.
+    expect(said).toMatch(/last 0\u{A0}min running$/u)
     expect(trend.findAll('.mini-trend-period')).toHaveLength(3)
   })
 

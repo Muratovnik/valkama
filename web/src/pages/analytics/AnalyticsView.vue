@@ -366,9 +366,6 @@ const emptyDescription = computed(() => {
             />
             {{ t('analytics.frame.back') }}
           </VButton>
-          <p class="analytics-panel-name">
-            {{ sectionName }}
-          </p>
         </div>
         <QuotaPanel
           v-if="quotaSection"
@@ -502,10 +499,5 @@ const emptyDescription = computed(() => {
   display: grid;
   gap: var(--space-1);
   justify-items: start;
-}
-
-.analytics-panel-name {
-  margin: 0;
-  font: var(--font-section-title);
 }
 </style>

@@ -438,11 +438,14 @@ test('the tokens by kind are a panel whose counted kinds add up to the «Tokens�
   ])
   expect(rows[3]?.[1]).toBe(tokens)
   await expect(panel.locator('.kinds-figure-value')).toHaveText(tokens)
-  // The two kinds apart are named briefly; the note beside the figure says why they stand apart.
-  const note = panel.locator('.kinds-note')
-  await expect(note).toBeVisible()
-  await expect(note).toContainText(/cache reads stand apart/u)
-  await expect(note).toContainText(/reasoning is part of output/u)
+  // The two kinds apart are named briefly; why they stand apart is the section's caveat, which
+  // the «ⓘ» of its heading says, and no line beside the figure says again.
+  await expect(panel).not.toContainText(/cache reads stand apart/u)
+  await panel.locator('.level-about-press').click()
+  const about = page.locator('.info-tip-panel')
+  await expect(about).toContainText(/cache reads stand apart/u)
+  await expect(about).toContainText(/reasoning is part of output/u)
+  await panel.locator('.level-about-press').click()
 
   // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
   const bars = panel.locator('.kinds-bars')

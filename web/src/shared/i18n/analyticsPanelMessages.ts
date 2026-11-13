@@ -27,7 +27,7 @@ export const analyticsPanelMessages = {
       heads: {
         time: 'Agent time',
         tokens: 'Tokens',
-        cost: 'Est. cost, API prices',
+        cost: 'Cost',
         before: 'Before, {period}',
       },
       counts: {
@@ -95,7 +95,7 @@ export const analyticsPanelMessages = {
       heads: {
         time: 'Время агентов',
         tokens: 'Токены',
-        cost: 'Оценка по ценам API',
+        cost: 'Стоимость',
         before: 'Ранее, {period}',
       },
       counts: {

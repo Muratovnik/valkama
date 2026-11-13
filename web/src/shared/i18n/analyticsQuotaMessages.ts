@@ -4,9 +4,11 @@
  * names money beside a share. A window with no source, a silent one and a fresh 0 % each have
  * words of their own. `analyticsMessages` holds these under `analytics.quota`.
  *
- * What used a window (`spent`) is the one place money is named, apart from the window's share: it
- * says it is the API price estimate and not quota points, which work it leaves out, and work its
- * organization did with no account known in words of its own, never counted to the account.
+ * What used a window (`spent`) is the one place money is named, apart from the window's share: its
+ * heading names the stretch it covers, and work its organization did with no account known has
+ * words of its own, never counted to the account. That it is the API price estimate and not quota
+ * points, and which work it leaves out, is said once for the section (`spent.basis`), as is that
+ * the period and the filters do not apply (`panel.intro`): both stand in the section's «ⓘ».
  */
 export const analyticsQuotaMessages = {
   en: {
@@ -59,7 +61,7 @@ export const analyticsQuotaMessages = {
     panel: {
       heading: 'Each account',
       intro:
-        'Where each account’s quota stands now, read {ago}. The period and filters above do not apply, and no two accounts or windows are added.',
+        'The period and the filters above do not apply to the quota, and no two accounts or windows are added.',
       noSource: 'No quota source has read this account’s work in the past seven days.',
       noWindow: {
         quota_five_hour: 'No five-hour reading in the past seven days.',
@@ -83,7 +85,7 @@ export const analyticsQuotaMessages = {
       caption: 'Windows of {account}',
     },
     spent: {
-      title: 'Where the window went',
+      title: 'Where the window went from {from} to {to}',
       by: 'Show where {window} went by',
       breakdowns: {
         work_item: 'Tasks',
@@ -91,13 +93,13 @@ export const analyticsQuotaMessages = {
         model: 'Models',
       },
       basis:
-        'By API price estimate, not quota points: the work Valkama recorded on this account from {from} to {to}, without the work in claude.ai and the desktop app.',
+        'Where a window went is the API price estimate of the work Valkama recorded on the account, not quota points, without the work in claude.ai and the desktop app.',
       label: 'Where {window} of {account} went {by}, by API price estimate',
-      value: 'API price estimate and its share',
+      value: 'Cost and its share',
       share: '{cost} · {share}',
       none: 'No work was recorded on this account in this window.',
       unplaced:
-        'No work was recorded on this account in this window. Its organization recorded {cost} of work with the account unknown, which is not counted here.',
+        'No work was recorded on this account in this window. Not counted here: {cost} of work in its organization with the account unknown.',
       apart: 'Not counted here: {cost} of work in its organization with the account unknown.',
       failed: 'What used this window could not be read.',
       failedAgain: 'Could not read it again; these figures run to {to} and may be behind.',
@@ -149,7 +151,7 @@ export const analyticsQuotaMessages = {
     bar: '{window}: израсходовано {share}, при ровном расходе {even}, {state}',
     barNoPace: '{window}: израсходовано {share}, {state}',
     even: 'При ровном расходе сейчас было бы {share}',
-    noPace: 'Темпа нет, пока окно не назвало сброс',
+    noPace: 'Темпа нет: окно ещё не назвало сброс',
     resets: 'Сброс {at}, через {in}',
     reset: 'Сброс был в {at}, после последнего показания',
     noReset: 'Сброс ещё не назван',
@@ -165,8 +167,7 @@ export const analyticsQuotaMessages = {
     other: '{window}: {state}, прочитано {ago}, источник: {source}',
     panel: {
       heading: 'По аккаунтам',
-      intro:
-        'Где квота каждого аккаунта сейчас, прочитано {ago}. Период и фильтры выше к ней не относятся; аккаунты и окна не складываются.',
+      intro: 'Период и фильтры выше к квоте не относятся; аккаунты и окна не складываются.',
       noSource: 'Ни один источник квоты не читал работу этого аккаунта последние семь дней.',
       noWindow: {
         quota_five_hour: 'Нет показаний пятичасового окна за последние семь дней.',
@@ -190,7 +191,7 @@ export const analyticsQuotaMessages = {
       caption: 'Окна: {account}',
     },
     spent: {
-      title: 'На что ушло окно',
+      title: 'На что ушло окно с {from} до {to}',
       by: 'Разбивка окна «{window}»',
       breakdowns: {
         work_item: 'Задачи',
@@ -198,13 +199,13 @@ export const analyticsQuotaMessages = {
         model: 'Модели',
       },
       basis:
-        'По оценке API-цены, не в пунктах квоты: работа, которую Valkama записала на этом аккаунте с {from} до {to}, без работы в claude.ai и настольном приложении.',
+        'На что ушло окно — оценка API-цены работы, которую Valkama записала на аккаунте, а не пункты квоты, и без работы в claude.ai и настольном приложении.',
       label: 'На что ушло окно «{window}», {account}, {by}, по оценке API-цены',
-      value: 'Оценка API-цены и её доля',
+      value: 'Стоимость и её доля',
       share: '{cost} · {share}',
       none: 'На этом аккаунте в этом окне работа не записана.',
       unplaced:
-        'На этом аккаунте в этом окне работа не записана. Его организация записала работу на {cost} без известного аккаунта; здесь она не учтена.',
+        'На этом аккаунте в этом окне работа не записана. Здесь не учтено: работа организации на {cost} без известного аккаунта.',
       apart: 'Здесь не учтено: работа организации на {cost} без известного аккаунта.',
       failed: 'Не удалось прочитать, на что ушло это окно.',
       failedAgain: 'Не удалось прочитать снова; цифры — до {to}, они могут отставать.',

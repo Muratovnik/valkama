@@ -14,7 +14,9 @@
  *
  * A value or a day pressed to narrow the view goes out with the dimension the answer was read by
  * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
- * period before could not be read says so above the figures (`SpendingUnread`).
+ * period before could not be read says so above the figures (`SpendingUnread`). Its heading names
+ * the dimension the answer was read by, and the heading's «ⓘ» says the caveats of its figures
+ * once (`useSectionCaveats`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,6 +32,8 @@ import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
+import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
 import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
@@ -65,6 +69,8 @@ const emit = defineEmits<{
   'update:across': [across: UsageDimension | null]
 }>()
 const { t } = useI18n()
+const words = useSpendingWords()
+const caveats = useSectionCaveats()
 const measure = defineModel<Measure>('measure', { required: true })
 
 /**
@@ -73,6 +79,9 @@ const measure = defineModel<Measure>('measure', { required: true })
  */
 const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')
 const before = computed(() => tileFigures(props.usage).before)
+/** The section's heading and the caveats its «ⓘ» says. */
+const title = computed(() => words.dimension(by.value))
+const about = computed(() => caveats.spending(props.usage))
 
 /** The second dimension, where it is another than the section's own. */
 const across = computed(() => (props.across && props.across !== by.value ? props.across : null))
@@ -109,6 +118,8 @@ const showTable = () => table.value?.reveal()
       class="dimension-section"
       level="section"
       as="div"
+      :title="title"
+      :about="about"
     >
       <PanelLevel
         level="group"

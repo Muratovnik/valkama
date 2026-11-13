@@ -78,7 +78,7 @@ export const analyticsMessages = {
       },
       days: {
         title: '{measure} {per}, {by}',
-        soFar: 'so far',
+        soFar: 'running',
         note: 'Note',
         total: 'total',
         empty: 'No day in this period spent anything.',
@@ -89,6 +89,7 @@ export const analyticsMessages = {
         absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
       marks: { share: '{share} of the total' },
+      about: { label: 'About this section' },
       shown: {
         label: 'Show {chart} as',
         chart: 'Chart',
@@ -98,7 +99,7 @@ export const analyticsMessages = {
         label: 'What the charts show',
         time: 'Agent time',
         tokens: 'Tokens',
-        cost: 'Estimated cost at API prices',
+        cost: 'Cost',
       },
       figures: analyticsFigureMessages.en,
       change: {
@@ -265,7 +266,7 @@ export const analyticsMessages = {
       },
       days: {
         title: '{measure} {per}, {by}',
-        soFar: 'пока',
+        soFar: 'идёт',
         note: 'Примечание',
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
@@ -276,6 +277,7 @@ export const analyticsMessages = {
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
       marks: { share: '{share} от всего' },
+      about: { label: 'Об этом разделе' },
       shown: {
         label: 'Показать «{chart}» как',
         chart: 'График',
@@ -285,7 +287,7 @@ export const analyticsMessages = {
         label: 'Что показывают графики',
         time: 'Время агентов',
         tokens: 'Токены',
-        cost: 'Оценка стоимости по ценам API',
+        cost: 'Стоимость',
       },
       figures: analyticsFigureMessages.ru,
       change: {

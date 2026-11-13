@@ -4,8 +4,9 @@
  * quota read knows, in the answer's order, with every window of the section (`QuotaAccount`).
  *
  * It reads the quota (`useQuotaRead`), not the page's usage: the period and the filters do not
- * apply to it, and its words at its top say so. Its windows are drawn or read as their tables,
- * as every chart of the page is (`ChartSection`). No figure here is added to another: each is one
+ * apply to it, which the «ⓘ» of its heading says once, with what «Where the window went» is and
+ * leaves out (`useSectionCaveats`); no line of the panel says either again. Its windows are drawn
+ * or read as their tables, as every chart of the page is (`ChartSection`). No figure here is added to another: each is one
  * account's share of one window, and no money stands beside one.
  *
  * Its first wait, a first read that failed and an answer with no account stand in the product's
@@ -23,6 +24,7 @@ import QuotaAccount from '@/pages/analytics/components/QuotaAccount.vue'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
+import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { provideWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
 import { accountKey } from '@/pages/analytics/utils/quotaFigures.ts'
 
@@ -62,12 +64,9 @@ const state = computed<PlatformUiState<Quota>>(() => {
 provideWindowSpend(() => (props.read.status === 'ready' ? props.read.quota : null))
 
 const title = computed(() => words.sectionName(props.section))
-/** What the panel shows and how old it is; the period and the filters do not apply to it. */
-const intro = computed(() =>
-  props.read.status === 'ready'
-    ? t('analytics.quota.panel.intro', { ago: words.ago(props.read.quota.now, props.now) })
-    : '',
-)
+/** What does not reach the quota and what used each window, which the heading's «ⓘ» says. */
+const caveats = useSectionCaveats()
+const about = computed(() => caveats.quota())
 
 const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
@@ -86,14 +85,10 @@ const narrow = useNarrowCharts(root)
         <ChartSection
           level="section"
           :title="title"
+          :about="about"
           :narrow="narrow"
           :list-label="t('analytics.quota.panel.heading')"
         >
-          <template #lead>
-            <p class="quota-intro">
-              {{ intro }}
-            </p>
-          </template>
           <template #chart>
             <QuotaAccount
               v-for="account in payload.accounts"
@@ -126,12 +121,5 @@ const narrow = useNarrowCharts(root)
 .quota-panel {
   min-width: 0;
   container-type: inline-size;
-}
-
-.quota-intro {
-  max-inline-size: 72ch;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
 }
 </style>

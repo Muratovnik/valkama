@@ -6,7 +6,7 @@
  * its title, said to a screen reader as it comes (`notice`).
  *
  * It is a block of the panel, a chart under its heading, unless it says it is a whole section, as
- * the quota's is (`PanelLevel`).
+ * the quota's is (`PanelLevel`), whose caveats its heading's «ⓘ» says (`about`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,15 +23,17 @@ const props = withDefaults(
     /** Whether the page is too narrow to read a chart, which makes the table the first view. */
     narrow: boolean
     title: string
+    /** The caveats of the whole section, said in the «ⓘ» of its heading. */
+    about?: readonly string[]
     level?: 'section' | 'block'
     /** A list's name, when what the chart holds is a list: the quota's accounts. */
     listLabel?: string
     /** Why the last press in the chart did nothing, in words; empty otherwise. */
     notice?: string
   }>(),
-  { notice: '', level: 'block', listLabel: undefined },
+  { notice: '', level: 'block', listLabel: undefined, about: () => [] },
 )
-defineSlots<{ chart: () => unknown; lead?: () => unknown; table: () => unknown }>()
+defineSlots<{ chart: () => unknown; table: () => unknown }>()
 
 const { t } = useI18n()
 
@@ -54,15 +56,10 @@ const switchLabel = computed(() => t('analytics.shown.label', { chart: props.tit
     :level="level"
     :data-shown="shown"
     :title="title"
+    :about="about"
     :body-as="bodyAs"
     :body-label="listLabel"
   >
-    <template
-      v-if="$slots.lead"
-      #lead
-    >
-      <slot name="lead" />
-    </template>
     <template #actions="{ size }">
       <SegmentedControl
         :model-value="shown"

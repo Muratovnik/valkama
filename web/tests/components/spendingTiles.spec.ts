@@ -1,7 +1,8 @@
 /**
  * The period's three figures and how each moved from the period before. The oracle is the
- * requirement: time, tokens and a cost said to be an estimate at API prices and not a bill; a
- * change up, down, or nothing to compare with; tokens without a price said in words and never
+ * requirement: time, tokens and a cost named as an estimate at API prices, with no caveat of
+ * their own, which the section's «ⓘ» says once (`useSectionCaveats`); a change up, down, or
+ * nothing to compare with; tokens without a price said in words and never
  * drawn as a zero cost; and the tile pressed is the measure the charts below show.
  */
 import { mount } from '@vue/test-utils'
@@ -51,13 +52,14 @@ const tile = (tiles: ReturnType<typeof mountTiles>, measure: Measure) => {
 }
 
 describe('the tiles', () => {
-  it('show the agent time, the tokens and the cost as an estimate, not a bill', () => {
+  it('show the agent time, the tokens and the cost as an estimate, leaving its caveat to the section', () => {
     const tiles = mountTiles(NOW, NOW)
     expect(tile(tiles, 'time').figure).toBe('1\u{A0}h\u{A0}30\u{A0}min')
     expect(tile(tiles, 'tokens').figure).toBe('1.2M')
     expect(tile(tiles, 'cost').figure).toBe('≈\u{A0}$12.50')
-    expect(tile(tiles, 'cost').text).toContain('Estimated cost at API prices')
-    expect(tile(tiles, 'cost').text).toContain('An estimate at API list prices, not a bill')
+    // Named as what it is; the «≈» says it is an estimate, and the section's «ⓘ» of what.
+    expect(tile(tiles, 'cost').text).toMatch(/^Cost ≈/u)
+    expect(tile(tiles, 'cost').text).not.toContain('not a bill')
   })
 
   it('say how each figure moved: up, down, or the same, against the period before', () => {
@@ -160,16 +162,16 @@ describe('the tiles', () => {
   })
 
   // What a token figure counts is not obvious: the tile says it, kind by kind.
-  it('say what the tokens count, by kind, and the cache reads they leave apart', () => {
+  it('say what the tokens count, by kind, and the cache reads apart from them', () => {
     const tokens = tile(mountTiles(NOW, NOW), 'tokens')
     expect(tokens.figure).toBe('1.2M')
     expect(tokens.text).toContain('Processed anew: input 600K, output 360K, cache writes 240K')
-    expect(tokens.text).toContain('Cache reads, not counted: 12M')
+    expect(tokens.text).toContain('Cache reads: 12M')
     const ru = tile(mountTiles(NOW, NOW, 'time', 'ru'), 'tokens')
     expect(ru.text).toContain(
       'Обработано заново: вход 600 тыс., выход 360 тыс., запись в кэш 240 тыс.',
     )
-    expect(ru.text).toContain('Чтение из кэша, не учтено: 12 млн')
+    expect(ru.text).toContain('Чтение кэша: 12 млн')
   })
 
   // A period that spent nothing has a figure in every measure, and it is zero: what the words
@@ -229,8 +231,8 @@ describe('the tiles', () => {
       'ru',
     )
     const cost = tile(tiles, 'cost').text
-    expect(cost).toContain('Оценка стоимости по ценам API')
-    expect(cost).toContain('не счёт')
+    expect(cost).toMatch(/^Стоимость /u)
+    expect(cost).not.toContain('не счёт')
     expect(cost).toContain('57 токенов без цены')
     expect(tile(tiles, 'time').text).toContain('↓')
   })
