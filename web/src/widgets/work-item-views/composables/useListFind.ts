@@ -13,8 +13,10 @@
  * focus back to where it was, without scrolling the list back to it.
  *
  * The keys are the list's only while nothing lies over it: with a card, a
- * dialog or the finder open, Ctrl+F is the browser's again, as it is on every
- * other screen.
+ * dialog or the finder open, or a menu or a choice list, Ctrl+F is the
+ * browser's again, as it is on every other screen. Ctrl+F is the key that types
+ * F, wherever the layout has put it; only a layout that types no Latin letter
+ * there, such as Russian, is read by the key's place.
  *
  * The count and the current match follow the list as it changes: a row the
  * stream changed, a filter or an order. The current match stays on its row while
@@ -39,7 +41,7 @@ import {
 import type { ListMatch } from '@/widgets/work-item-views/utils/listFind.ts'
 import { rangesIn } from '@/widgets/work-item-views/utils/listFindRanges.ts'
 
-import { overlayTop } from '@/shared/ui/overlayStack.ts'
+import { overlayTop, popupOpen } from '@/shared/ui/overlayStack.ts'
 
 /** The names `base.css` styles the matches by: every match, and the current one. */
 const MATCHES = 'list-find'
@@ -48,6 +50,12 @@ const CURRENT = 'list-find-current'
 const PICKED_MAX = 120
 
 const ROWS = 'tbody tr.list-row:not(.list-row-held)'
+const LATIN_LETTER = /^\p{Script=Latin}$/u
+
+/** Whether a key is F: by the letter it types, or by its place where it types no Latin one. */
+function isF(event: KeyboardEvent): boolean {
+  return LATIN_LETTER.test(event.key) ? event.key.toLowerCase() === 'f' : event.code === 'KeyF'
+}
 
 interface ListFind<Row> {
   list: { center: (index: number) => void; placeOf: (id: string) => number }
@@ -214,7 +222,7 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
   /** Whether the list is what the page shows: drawn, with nothing lying over it. */
   function inCharge(): boolean {
     const element = root.value
-    if (!element || overlayTop() !== null) return false
+    if (!element || overlayTop() !== null || popupOpen()) return false
     return typeof element.checkVisibility === 'function'
       ? element.checkVisibility()
       : element.getClientRects().length > 0
@@ -256,7 +264,7 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
   useEventListener(globalThis, 'keydown', (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing || event.altKey) return
     const command = event.ctrlKey || event.metaKey
-    const find = command && !event.shiftKey && event.code === 'KeyF'
+    const find = command && !event.shiftKey && isF(event)
     const again = !command && event.key === 'F3'
     if ((!find && !again) || !inCharge()) return
     event.preventDefault()

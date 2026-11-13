@@ -17,6 +17,7 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import { fold, termOf } from '@/widgets/work-item-views/utils/listFind.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import { claimOverlayOwnership, releaseOverlayOwnership } from '@/shared/ui/overlayStack.ts'
 
 import { boardItem } from '../fixtures/board.ts'
@@ -81,15 +82,20 @@ function key(target: EventTarget, init: KeyboardEventInit) {
 const findKeys = (init: KeyboardEventInit = {}) =>
   key(document.activeElement ?? document.body, { code: 'KeyF', ctrlKey: true, key: 'f', ...init })
 
+async function typeIn(term: string) {
+  const input = field()
+  if (!input) throw new Error('no find bar to type in')
+  input.value = term
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await flushPromises()
+}
+
 async function open(wrapper: List, term: string) {
   rowButton(wrapper, 'MAIN-2').focus()
   findKeys()
   await flushPromises()
-  const input = field()
-  if (!input) throw new Error('Ctrl+F opened no find bar')
-  input.value = term
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-  await flushPromises()
+  if (!field()) throw new Error('Ctrl+F opened no find bar')
+  await typeIn(term)
 }
 
 async function press(init: KeyboardEventInit) {
@@ -150,6 +156,59 @@ describe('Ctrl+F on the list', () => {
     }
     await flushPromises()
     expect(findKeys().defaultPrevented).toBe(true)
+  })
+
+  it('is the browser’s while a choice list is open over the list, and the list’s once it closes', async () => {
+    await list()
+    const select = mount(ChoiceSelect, {
+      attachTo: document.body,
+      props: {
+        label: 'Move to',
+        placeholder: 'Move to',
+        modelValue: '',
+        options: [
+          { value: 'review', label: 'Review' },
+          { value: 'done', label: 'Done' },
+        ],
+      },
+    })
+    const trigger = select.get('.choice-trigger')
+    await trigger.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull()
+    const over = findKeys()
+    await flushPromises()
+    expect(over.defaultPrevented).toBe(false)
+    expect(bar()).toBeNull()
+
+    key(document.activeElement ?? document.body, { key: 'Escape' })
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(findKeys().defaultPrevented).toBe(true)
+    select.unmount()
+  })
+
+  // Dvorak types F where QWERTY has Y and U where QWERTY has F; a Russian layout
+  // types «а» in F's place, and no Latin letter at all.
+  it('takes the key that types F, and the key in F’s place only where it types no Latin letter', async () => {
+    await list()
+    expect(findKeys({ code: 'KeyF', key: 'u' }).defaultPrevented).toBe(false)
+    await flushPromises()
+    expect(bar()).toBeNull()
+    expect(findKeys({ code: 'KeyY', key: 'f' }).defaultPrevented).toBe(true)
+    await flushPromises()
+    expect(bar()).not.toBeNull()
+
+    document.body.innerHTML = ''
+    await list('ru')
+    expect(findKeys({ code: 'KeyF', key: 'а' }).defaultPrevented).toBe(true)
+    await flushPromises()
+    expect(bar()).not.toBeNull()
+
+    document.body.innerHTML = ''
+    await list()
+    // Caps Lock on: the letter is still F.
+    expect(findKeys({ code: 'KeyF', key: 'F' }).defaultPrevented).toBe(true)
   })
 })
 
@@ -226,6 +285,7 @@ describe('the steps between matches', () => {
     expect(document.activeElement).toBe(rowButton(wrapper, 'MAIN-2'))
     expect(painted.size).toBe(0)
   })
+
 })
 
 describe('the current match as the list changes', () => {
