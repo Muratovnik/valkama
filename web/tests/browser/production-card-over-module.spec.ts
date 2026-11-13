@@ -8,7 +8,7 @@
  * words and still edits what needs no space. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 
 import { planningSpaceEntity, planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -165,6 +165,53 @@ test('a card over Settings whose space cannot be read says so as the board does,
   await expect.poll(() => writes.length).toBe(1)
   expect(writes[0]).toMatchObject({ id: workItemRef.reference, priority: 'urgent' })
   await expect(drawer.locator('.card-priority')).toContainText('Urgent')
+})
+
+/** The card's own code, which downloads on demand: Settings never asks for it before a card. */
+const CARD_CHUNK = /\/assets\/WorkItemInspector-[\w-]+\.js$/
+
+test('a card opened over Settings before its code arrives waits in its frame there, then shows', async ({
+  page,
+}) => {
+  let held: Route | undefined
+  await page.route(CARD_CHUNK, (route) => {
+    held = route
+  })
+  await openSettings(page)
+  const { link } = await questionLink(page)
+  await link.click()
+
+  // The card's frame stands over Settings with its wait, and the address already names the card.
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('[aria-busy="true"]')).toContainText('Loading')
+  await expect(page.getByRole('heading', { name: workItem.title })).toHaveCount(0)
+  expect(planningWorkItemRef(parsePlatformRoute(new URL(page.url())).entity)).toEqual(workItemRef)
+  await expect(page.locator('.settings-page')).toBeVisible()
+
+  await expect.poll(() => held !== undefined).toBe(true)
+  await held?.continue()
+  await expectCardOver(page, 'settings')
+})
+
+test('a card over Settings still waiting for its code closes from its bar and with Escape, back to Settings', async ({
+  page,
+}) => {
+  await page.route(CARD_CHUNK, () => {})
+  const before = await openSettings(page)
+  const drawer = page.locator('.drawer')
+  // The frame's own close, and the drawer's: Escape, which asks the panel and not the frame.
+  for (const close of [
+    () => drawer.getByRole('button', { name: 'Close', exact: true }).click(),
+    () => page.keyboard.press('Escape'),
+  ]) {
+    const { link } = await questionLink(page)
+    await link.click()
+    await expect(drawer.locator('[aria-busy="true"]')).toContainText('Loading')
+    await close()
+    await expect(drawer).toHaveCount(0)
+    await expect.poll(() => path(page)).toBe(SETTINGS)
+    expect(await settingsShown(page)).toEqual(before)
+  }
 })
 
 test('a modified press on a task link in a question over Settings stays a link', async ({
