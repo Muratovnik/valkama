@@ -3,7 +3,9 @@
  * The ends of the reader's own period, beside the periods in the Analytics bar: its first and last
  * day as two fields, or, for a span between two moments, its name in their place, «13 нояб.,
  * 10:00–13:00», in the page's language. No field edits a span: a preset chosen in the bar leaves
- * it. The name is one line no taller than the periods, so the bar keeps its height with it.
+ * it. The name is one line no taller than the periods, so the bar keeps its height with it, and
+ * whole until the bar's line has given up all else (`cut`); then it is cut at its end, and its
+ * hint says it whole.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,9 +14,12 @@ import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords
 
 import { isMomentSpan } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
+  /** Whether the bar's line has given up all else and a span's name gives up its width. */
+  cut: boolean
   /** The day the read was asked on, the last a custom period can name. */
   today: string
   view: AnalyticsView
@@ -40,7 +45,9 @@ const rangeError = computed(() =>
 <template>
   <p
     v-if="spanName"
+    v-tooltip.clipped="spanName"
     class="analytics-bar-span one-line"
+    :class="{ 'analytics-bar-span-cut': cut }"
   >
     {{ spanName }}
   </p>
@@ -102,5 +109,11 @@ const rangeError = computed(() =>
   color: var(--color-text);
   font: var(--font-control);
   font-variant-numeric: tabular-nums;
+}
+
+/* Cut, the name takes up the line's whole shortfall: the read again beside it may shrink too, but
+   by its weight against this one's, a thousandth, it keeps its own width to the pixel. */
+.analytics-bar-span-cut {
+  flex: 0 1000 auto;
 }
 </style>

@@ -27,7 +27,8 @@
  * end (`useBarRoom`): the record and its moment are cut first, then the line goes short, then the
  * live mark goes, then the room between its parts narrows. While a read again failed the mark goes
  * before the line goes short, since the failure beside it is the news, and the failure's words go
- * last, to its disc and its retry, only where nothing else is left to give.
+ * last, to its disc and its retry, only where nothing else is left to give. Past all of that a
+ * span's name is cut at its end, its hint saying it whole.
  *
  * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
  * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
@@ -115,7 +116,8 @@ const { failed } = usePageStanding()
 const room = useBarRoom({
   line,
   last: () => refreshButton.value?.$el,
-  order: () => (failed.value ? ['live', 'words', 'gaps', 'failure'] : ['words', 'live', 'gaps']),
+  order: () =>
+    failed.value ? ['live', 'words', 'gaps', 'failure', 'span'] : ['words', 'live', 'gaps', 'span'],
   observed: [line, age],
   holds: [
     () => props.live,
@@ -139,10 +141,14 @@ const short = computed(() => {
   const narrow = ems > 0 && (ems <= 30 || (ownDays.value && ems < 87.5))
   return narrow || room.gave('words')
 })
-/** Whether the live mark stands, the room between the parts narrowed, the failure said briefly. */
+/**
+ * Whether the live mark stands, the room between the parts narrowed, the failure said briefly, and
+ * a span's name cut at its end.
+ */
 const liveShown = computed(() => props.live && !room.gave('live'))
 const tight = computed(() => room.gave('gaps'))
 const brief = computed(() => room.gave('failure'))
+const spanCut = computed(() => room.gave('span'))
 
 /** That the period is live and how often it reads itself again: in full, and as the bar says it. */
 const liveInterval = computed(() => t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }))
@@ -174,6 +180,7 @@ const fresh = useFreshness(() => props.lastEventAt)
       <AnalyticsOwnPeriod
         v-if="view.period === 'custom'"
         class="analytics-bar-own"
+        :cut="spanCut"
         :today="today"
         :view="view"
         @amend="(next) => emit('amend', next)"
