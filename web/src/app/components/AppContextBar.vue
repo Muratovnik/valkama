@@ -29,9 +29,12 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 const props = defineProps<{
-  projects: PlatformContextReady['projects']
+  /** Null until the projects have been read: a scope is named by its project's title. */
+  projects: PlatformContextReady['projects'] | null
   resources: ProjectDirectoryResource[]
-  scope: OperatingScope
+  /** Null while the shell does not yet know which scope it stands in. */
+  scope: OperatingScope | null
+  /** Empty while the module is not yet known; the line keeps its height. */
   title: string
   resourceRef?: EntityRef
 }>()
@@ -51,15 +54,24 @@ const { t } = useI18n()
 const scopeSearchable = computed(() => scopeOptions.value.length > 7)
 
 /**
+ * The selector is drawn once it can name the scope. Before that it keeps its box and paints
+ * nothing: it said «Global» over a project's address until the projects had been read, and
+ * an empty frame that then filled in would be a state of its own.
+ */
+const scopeKnown = computed(() => props.scope !== null && props.projects !== null)
+/** An empty heading is no heading: a reader is not told of one with nothing in it. */
+const titleHidden = computed(() => (props.title ? undefined : 'true'))
+
+/**
  * The project the address names when this workstation does not have it. The
  * selector stood blank over a page saying that project was not found; it names
  * the project the address asked for, marked as missing and not choosable.
  */
 const missingProject = computed<ChoiceOption[]>(() => {
-  const scope = props.scope
-  if (scope.kind !== 'project' || !props.projects.length) return []
+  const { projects, scope } = props
+  if (scope?.kind !== 'project' || !projects?.length) return []
   const id = scope.project_ref.project_id
-  if (props.projects.some((project) => project.project_id === id)) return []
+  if (projects.some((project) => project.project_id === id)) return []
   const missing = t('platform.bindings.missing')
   return [
     { value: `project:${id}`, label: id, description: missing, icon: 'client', disabled: true },
@@ -68,7 +80,7 @@ const missingProject = computed<ChoiceOption[]>(() => {
 
 const scopeOptions = computed<ChoiceOption[]>(() => [
   { value: 'global', label: t('platform.scope.global'), icon: 'client' },
-  ...props.projects.map((project) => ({
+  ...(props.projects ?? []).map((project) => ({
     value: `project:${project.project_id}`,
     label: project.title,
     description:
@@ -81,9 +93,11 @@ const scopeOptions = computed<ChoiceOption[]>(() => [
   ...missingProject.value,
 ])
 
-const selectedScopeValue = computed(() =>
-  props.scope.kind === 'global' ? 'global' : `project:${props.scope.project_ref.project_id}`,
-)
+const selectedScopeValue = computed(() => {
+  const { scope } = props
+  if (scope === null) return ''
+  return scope.kind === 'global' ? 'global' : `project:${scope.project_ref.project_id}`
+})
 
 const resourceOptions = computed<ChoiceOption[]>(() =>
   props.resources.map((resource) => ({
@@ -105,10 +119,18 @@ const selectedResourceValue = computed(() =>
 <template>
   <header class="context-bar">
     <div class="context-title">
-      <h1 class="module-title">{{ title }}</h1>
+      <h1
+        class="module-title"
+        :aria-hidden="titleHidden"
+      >
+        {{ title }}
+      </h1>
     </div>
     <div class="context-controls">
-      <div class="operating-scope">
+      <div
+        class="operating-scope"
+        :class="{ 'is-unknown': !scopeKnown }"
+      >
         <ChoiceSelect
           :model-value="selectedScopeValue"
           :options="scopeOptions"
@@ -120,7 +142,7 @@ const selectedResourceValue = computed(() =>
         />
       </div>
       <div
-        v-if="scope.kind === 'project' && resourceOptions.length > 1"
+        v-if="scopeKnown && scope?.kind === 'project' && resourceOptions.length > 1"
         class="resource-scope"
       >
         <ChoiceSelect
@@ -165,6 +187,8 @@ const selectedResourceValue = computed(() =>
 }
 
 .module-title {
+  /* The line a title stands on, held while it has none. */
+  min-height: 1lh;
   margin: 0;
   font-size: var(--font-size-module);
   font-weight: 600;
@@ -187,6 +211,10 @@ const selectedResourceValue = computed(() =>
 .operating-scope {
   min-width: 220px;
   max-width: 340px;
+
+  &.is-unknown {
+    visibility: hidden;
+  }
 }
 
 .resource-scope {

@@ -48,6 +48,9 @@ async function openList(page: Page, entries: InputRequestEntry[], width = 1280, 
   await expect(dialog).toHaveCSS('transform', 'none')
   const words = WORDS[locale ?? 'en']
   const group = dialog.getByRole('group', { name: words.group })
+  // The dialog stands before the list's code has arrived, and the way through it comes with
+  // the list.
+  await expect(group.getByRole('button')).toHaveCount(3)
   const [count, up, down] = await group.getByRole('button').all()
   if (!count || !up || !down) throw new Error('no way through the list')
   // What it says, apart from the room it keeps for its widest number, which no one reads.

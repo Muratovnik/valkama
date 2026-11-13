@@ -12,13 +12,18 @@
  * from the space it holds, the overlay from one read of the card's space beside the card. Each is
  * bound by its name here rather than spread onto the card, so what reaches the card is a list the
  * reader and the style guard can both see.
+ *
+ * The card's code downloads on demand (`inspectorView`), so a card opened before it is resident
+ * waits in the card's own frame, on every host alike. Until then there is no card to ask about
+ * its drafts or to open another through, so the panel closes at once and leaves an opening to the
+ * host.
  */
 import { computed, useTemplateRef } from 'vue'
 
 import type { PlanningCardTrail } from '@/pages/planning/composables/usePlanningCardTrail.ts'
 import PlanningCardDrawer from '@/pages/planning/PlanningCardDrawer.vue'
+import { WorkItemInspector } from '@/pages/planning/utils/inspectorView.ts'
 
-import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 type InspectorProps = InstanceType<typeof WorkItemInspector>['$props']
@@ -55,7 +60,8 @@ const props = defineProps<{
   trail: PlanningCardTrail
 }>()
 
-const inspector = useTemplateRef<InstanceType<typeof WorkItemInspector>>('inspector')
+/** The card, once its code is resident: before that it exposes nothing. */
+const inspector = useTemplateRef<Partial<InstanceType<typeof WorkItemInspector>>>('inspector')
 
 const shown = computed(() => props.card !== null)
 const canGoBack = computed(() => props.trail.canGoBack.value)
@@ -65,17 +71,18 @@ function openRelated(reference: string, left: InspectorReturn) {
   props.trail.openItem(reference, true, left)
 }
 
-/** Closing the panel is the card's to decide, after its drafts. */
-const close = () => inspector.value?.close()
+/** Closing the panel is the card's to decide, after its drafts; a card still downloading has none. */
+const close = () => (inspector.value?.close ? inspector.value.close() : props.trail.closeItem())
 
 /**
  * Another card of the space, opened from the one on show through its departure — its draft guard
- * and its Back. False while no card is on show, and the host opens it itself.
+ * and its Back. False while no card is on show or its code is still on its way, and the host
+ * opens it itself.
  */
 function openFrom(reference: string): boolean {
-  const card = inspector.value
-  if (!card) return false
-  if (reference !== props.card?.reference) card.openFrom(reference)
+  const departure = inspector.value?.openFrom
+  if (!departure) return false
+  if (reference !== props.card?.reference) departure(reference)
   return true
 }
 

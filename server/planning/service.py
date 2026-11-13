@@ -736,22 +736,17 @@ def transition_work_item(
         _log(conn, str(row["work_item_id"]), "released", held, author)
     for step in unheld:
         _log(conn, str(row["work_item_id"]), "checklist_released", step["text"][:120], author)
-    if refusals:
-        _log(
-            conn,
-            str(row["work_item_id"]),
-            "overridden",
-            "; ".join(guard for guard, _ in refusals),
-            author,
-        )
+    overridden = _record_overrides(
+        conn, str(row["work_item_id"]), [guard for guard, _ in refusals], author
+    )
     answer = read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
     answer["warnings"] = warnings
     if held:
         answer["released"] = held
-    if refusals:
-        answer["overridden"] = [guard for guard, _ in refusals]
+    if overridden:
+        answer["overridden"] = overridden
     return answer
 
 
@@ -796,14 +791,17 @@ def claim_work_item(
         lease, expired = None, True
     held = lease.holder if lease is not None else ""
     holder = lease is not None and leases.held_by(lease, caller, actor)
+    carried: list[str] = []
     if release:
         if expired:
             # The lease this release named is already gone, released above.
             return read_model.present(conn, row, full=True)
-        if lease is not None and not holder and not force:
-            raise model.PlanningError(
-                f"{read_model.reference(conn, row)} is held by {held}, not by you"
-            )
+        if lease is not None and not holder:
+            if not force:
+                raise model.PlanningError(
+                    f"{read_model.reference(conn, row)} is held by {held}, not by you"
+                )
+            carried.append("claim")
         _hold(conn, row, "")
         _log(conn, str(row["work_item_id"]), "released", held, author)
     elif lease is not None and not holder:
@@ -812,6 +810,7 @@ def claim_work_item(
                 f"{read_model.reference(conn, row)} is already held by {held};"
                 " pass force to take the work over"
             )
+        carried.append("claim")
         _hold(conn, row, label)
         _log(conn, str(row["work_item_id"]), "taken_over", held, author)
     else:
@@ -821,15 +820,19 @@ def claim_work_item(
             return _claim_lost(conn, row, actor)
         _log(conn, str(row["work_item_id"]), "claimed", "", author)
     identity = str(row["work_item_id"])
+    overridden = _record_overrides(conn, identity, carried, author)
     if not move_state:
-        return read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
-    if release:
+        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    elif release:
         requeued = _hand_back(conn, identity, author, "released")
         answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
         if requeued is not None:
             answer["requeued"] = requeued
-        return answer
-    return _start(conn, identity, author, start_reason)
+    else:
+        answer = _start(conn, identity, author, start_reason)
+    if overridden:
+        answer["overridden"] = overridden
+    return answer
 
 
 def _start(conn: sqlite3.Connection, identity: str, author: str | None, reason: str) -> dict:
@@ -1076,6 +1079,7 @@ def set_checklist(
     kept: set[str] = set()
     replacement: list[dict] = []
     completed: list[dict] = []
+    guards: list[str] = []
     for step, raw in zip(sent_steps, sent, strict=True):
         named = raw.get("id") if isinstance(raw, dict) else None
         if named and named not in by_id:
@@ -1098,12 +1102,15 @@ def set_checklist(
         same = {**match, "text": step["text"]}
         if step["done"] and not match["done"]:
             held = match["claimed_by"]
+            theirs = bool(held) and held not in (label, model.actor(author))
             # The tick's own guard: completing a step someone else holds is
             # theirs to do, whichever write sends it.
-            if held and held not in (label, model.actor(author)) and not force:
+            if theirs and not force:
                 raise model.PlanningError(
                     f"that step is claimed by {held}; pass force to complete it anyway"
                 )
+            if theirs:
+                guards.append("checklist_claim")
             same.update(done=True, claimed_by="")
             completed.append(same)
         replacement.append(same)
@@ -1117,16 +1124,49 @@ def set_checklist(
             " by their text or id, to keep them, or pass force to discard that state"
             " explicitly"
         )
+    if dropped:
+        guards.append("checklist_discard")
     for step in completed:
         step["done_by"] = label
+    identity = str(row["work_item_id"])
+    _write_checklist(conn, row, replacement, completed, author)
+    overridden = _record_overrides(conn, identity, guards, author)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    if overridden:
+        answer["overridden"] = overridden
+    return answer
+
+
+def _write_checklist(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    replacement: list[dict],
+    completed: list[dict],
+    author: str | None,
+) -> None:
+    """Write the steps and their history: the replacement, then each step it completed."""
+
     _write(conn, row, ["checklist = ?"], [model.dumps(replacement)])
     identity = str(row["work_item_id"])
     _log(conn, identity, "checklist_replaced", str(len(replacement)), author)
     for step in completed:
         _log(conn, identity, "checklist_completed", step["text"][:120], author)
-    return read_model.present(
-        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
-    )
+
+
+def _record_overrides(
+    conn: sqlite3.Connection, identity: str, guards: list[str], author: str | None
+) -> list[str]:
+    """Record the refusals a `force` carried through, as one `overridden` event; the guards named.
+
+    Every forced write records through here, in the shape a forced transition
+    always had: one event whose detail names the guards, and the same guards in
+    the answer. Nothing is written when `force` refused nothing.
+    """
+
+    names = list(dict.fromkeys(guards))
+    if names:
+        _log(conn, identity, "overridden", "; ".join(names), author)
+    return names
 
 
 def claim_checklist_item(
@@ -1147,9 +1187,12 @@ def claim_checklist_item(
     # A step held under the caller's signature is the caller's too: that is how
     # every step was held before a session could hold one.
     mine = held in (label, model.actor(author))
+    carried: list[str] = []
     if release:
-        if held and not mine and not force:
-            raise model.PlanningError(f"that step is held by {held}, not by you")
+        if held and not mine:
+            if not force:
+                raise model.PlanningError(f"that step is held by {held}, not by you")
+            carried.append("checklist_claim")
         step["claimed_by"] = ""
         action = "checklist_released"
     elif held and not mine:
@@ -1157,16 +1200,20 @@ def claim_checklist_item(
             raise model.PlanningError(
                 f"that step is already held by {held}; pass force to take it over"
             )
+        carried.append("checklist_claim")
         step["claimed_by"] = label
         action = "checklist_taken_over"
     else:
         step["claimed_by"] = label
         action = "checklist_claimed"
     _write(conn, row, ["checklist = ?"], [model.dumps(steps)])
-    _log(conn, str(row["work_item_id"]), action, step["text"][:120], author)
-    return read_model.present(
-        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
-    )
+    identity = str(row["work_item_id"])
+    _log(conn, identity, action, step["text"][:120], author)
+    overridden = _record_overrides(conn, identity, carried, author)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    if overridden:
+        answer["overridden"] = overridden
+    return answer
 
 
 def tick_checklist_item(
@@ -1183,7 +1230,8 @@ def tick_checklist_item(
     steps = model.checklist(row["checklist"])
     step = _step(steps, item_id, conn, row)
     label = calls.holder(author)
-    if step["claimed_by"] and step["claimed_by"] not in (label, model.actor(author)) and not force:
+    theirs = bool(step["claimed_by"]) and step["claimed_by"] not in (label, model.actor(author))
+    if theirs and not force:
         raise model.PlanningError(
             f"that step is claimed by {step['claimed_by']}; pass force to complete it anyway"
         )
@@ -1191,16 +1239,19 @@ def tick_checklist_item(
     step["done_by"] = label if done else ""
     step["claimed_by"] = "" if done else step["claimed_by"]
     _write(conn, row, ["checklist = ?"], [model.dumps(steps)])
+    identity = str(row["work_item_id"])
     _log(
         conn,
-        str(row["work_item_id"]),
+        identity,
         "checklist_completed" if done else "checklist_reopened",
         step["text"][:120],
         author,
     )
-    return read_model.present(
-        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
-    )
+    overridden = _record_overrides(conn, identity, ["checklist_claim"] if theirs else [], author)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    if overridden:
+        answer["overridden"] = overridden
+    return answer
 
 
 def link_work_items(
@@ -1458,7 +1509,7 @@ def _fold(
     warnings: list[str] = []
     forced: list[str] = []
     if survivor_id in overridden:
-        _log(conn, survivor_id, "overridden", "claim", author)
+        _record_overrides(conn, survivor_id, ["claim"], author)
         forced.append(f"{survivor_ref}: claim")
     for row, found, target in merging:
         identity = str(row["work_item_id"])
@@ -1499,14 +1550,15 @@ def _fold(
         # The pictures its threads show move with them; the merged item keeps its own.
         images.carry(conn, identity, survivor_id)
         if found:
-            set_checklist(conn, identity, [], force=True, author=author)
+            # Its steps moved with their claims: a move, not a discard to be recorded.
+            _write_checklist(conn, _row_for_write(conn, identity, None), [], [], author)
         link_work_items(conn, identity, survivor_id, "duplicates", author=author)
         current = read_model.item_by_id(conn, identity)
         if current["claim_ref"]:
             _hold(conn, current, "")
             _log(conn, identity, "released", str(current["claim_ref"]), author)
         if identity in overridden:
-            _log(conn, identity, "overridden", "claim", author)
+            _record_overrides(conn, identity, ["claim"], author)
             forced.append(f"{reference}: claim")
         summary = {
             "done": f"Merged into {survivor_ref}, which now holds its {_counts(moved)}.",
@@ -1527,7 +1579,7 @@ def _fold(
         guards = closed.get("overridden", [])
         forced.extend(f"{reference}: {guard}" for guard in guards)
         if identity in spoke and "person_spoke" not in guards:
-            _log(conn, identity, "overridden", "person_spoke", author)
+            _record_overrides(conn, identity, ["person_spoke"], author)
             forced.append(f"{reference}: person_spoke")
         parent = row["parent_id"]
         if parent and parent not in (survivor["parent_id"], survivor_id):

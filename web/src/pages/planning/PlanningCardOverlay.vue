@@ -165,7 +165,7 @@ const panel = useTemplateRef<InstanceType<typeof PlanningCardPanel>>('panel')
 
 // References to the card's space open in the card, through its departure and onto its trail.
 usePlanningReferenceLinks(space, model, (reference) => {
-  panel.value?.openFrom(reference)
+  if (!panel.value?.openFrom(reference)) trail.openItem(reference)
 })
 
 /** The chain on the board's graph, in the card's project: the overlay has no graph of its own. */

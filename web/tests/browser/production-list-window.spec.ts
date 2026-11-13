@@ -36,7 +36,8 @@ const drawnOf = (page: Page) => page.locator('.work-item-list tbody tr.list-row'
 const inSight = async (list: Locator, row: Locator) =>
   row.evaluate(
     (element, box) => {
-      const head = box.querySelector('thead')?.getBoundingClientRect()
+      // The head's cells are what stays; the thead itself scrolls away with the rows.
+      const head = box.querySelector('thead .list-head')?.getBoundingClientRect()
       const edge = box.getBoundingClientRect()
       const own = element.getBoundingClientRect()
       return Boolean(head && own.top >= head.bottom - 1 && own.bottom <= edge.bottom + 1)

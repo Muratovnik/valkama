@@ -43,8 +43,10 @@ async function openCard(page: Page, width: number, locale: 'en' | 'ru') {
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-identity')).toBeVisible()
   await expect(drawer).toHaveCSS('transform', 'none')
-  await expect.poll(() => streams.open()).toHaveLength(1)
+  // The frame first: a space's stream is sent it as it opens, and the stream the
+  // shell started with closes then.
   await streams.live(frameWithCard())
+  await expect.poll(() => streams.open()).toHaveLength(1)
   return { drawer, sent }
 }
 

@@ -39,9 +39,10 @@ export function usePlanningSubscription(
             connection: (state) => {
               if (current()) connection.value = state
             },
-            // The tab's one stream carries the side panel's frame too, so the shell opens none.
+            // The tab's one stream carries the side panel's frame too, so the shell opens none,
+            // and the one it opened at the start closes once this has come.
             live: (frame) => {
-              if (current()) useLiveWorkStore().accept(frame)
+              if (current()) useLiveWorkStore().acceptFromSpace(frame)
             },
             snapshot: (model) => {
               if (current()) snapshot(model, connection.value === 'reconnecting')

@@ -132,9 +132,11 @@ class AgentsCase(unittest.TestCase):
         ingest.record(self.conn, record, delivery="direct")
 
     def _last_event_at(self, reference: str, minute: int, second: int = 0) -> None:
+        # The claim's own event: a forced claim also writes `overridden` after it.
         self.conn.execute(
             "UPDATE work_item_events SET created_at = ? WHERE id = (SELECT MAX(id)"
-            " FROM work_item_events WHERE work_item_id = ?)",
+            " FROM work_item_events WHERE work_item_id = ?"
+            " AND action IN ('claimed', 'taken_over', 'released'))",
             (f"2026-10-31T10:{minute:02d}:{second:02d}Z", self.identity(reference)),
         )
 

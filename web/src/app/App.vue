@@ -56,6 +56,7 @@ const {
   documentPage,
   entryRestorePending,
   goHome,
+  moveRoute,
   openProject,
   operatingScope,
   pendingSession,
@@ -161,13 +162,12 @@ const routeRecoveryFailure = computed(
   () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
 )
 // A space's stream carries the live-work frame, so the shell opens its own only without one,
-// and only once it knows: the space a project shows is known once the context has been read.
+// and at the start until the space's stream has delivered: see the composable. The space a
+// project shows is known once the context has been read.
 const { connection: liveConnection } = useLiveWorkFeed({
-  shell: () =>
-    documentPage.value === null &&
-    modulesSettled.value &&
-    !entryRestorePending.value &&
-    contextState.value.status !== 'loading',
+  shell: () => documentPage.value === null,
+  known: () =>
+    modulesSettled.value && !entryRestorePending.value && contextState.value.status !== 'loading',
   spaceStream: () =>
     activeModule.value === 'planning' &&
     planningConnection.value !== null &&
@@ -191,13 +191,31 @@ const displayedConnection = computed(() => {
 const routeLost = computed(
   () => Boolean(routeFailure.value) || routeUnavailable.value?.reason === 'unknown-module',
 )
+/**
+ * A clean entry stands on the default route only until the remembered one is read, so the
+ * chrome names nothing of it: the rail and the bar said «Work» and «Global» and then the
+ * place the app actually came back to.
+ */
 const currentModule = computed(() =>
-  routeLost.value || workItemLink.value !== null ? null : activeModule.value,
+  routeLost.value || workItemLink.value !== null || entryRestorePending.value
+    ? null
+    : activeModule.value,
 )
 const contextTitle = computed(() => {
   if (workItemLink.value !== null) return t('workItemLink.contextTitle')
+  if (entryRestorePending.value) return ''
   return routeLost.value ? t('platform.route.lostTitle') : moduleTitle.value
 })
+const barScope = computed(() => (entryRestorePending.value ? null : operatingScope.value))
+/**
+ * The projects the bar names a scope by, or null until the context and the module list have
+ * been read once: the scope's name and the resource selector beside it come from both.
+ */
+const barProjects = computed(() =>
+  contextState.value.status === 'loading' || !modulesSettled.value
+    ? null
+    : (contextReady.value?.projects ?? []),
+)
 // A state the module's manifest does not admit is dropped, not shown as a
 // blocked module: the address keeps the module and scope, and says so once.
 watch(liveRouteFailure, (failure) => {
@@ -262,7 +280,7 @@ usePlatformEntryRestore({
   entryRestorePending,
   blocked: routeBlocked,
   defaultRoute: DEFAULT_ROUTE,
-  writeRoute,
+  writeRoute: moveRoute,
 })
 </script>
 
@@ -298,10 +316,10 @@ usePlatformEntryRestore({
     <div class="app-main">
       <AppContextBar
         :title="contextTitle"
-        :scope="operatingScope"
+        :scope="barScope"
         :resource-ref="selectedResourceRef"
         :resources="availableProjectResources"
-        :projects="contextReady?.projects ?? []"
+        :projects="barProjects"
         @scope="switchScope"
         @resource="selectResource"
       />

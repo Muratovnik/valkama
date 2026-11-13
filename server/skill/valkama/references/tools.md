@@ -26,11 +26,11 @@ full item instead; it carries `url` too.
 | Tool | Also answers |
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
-| `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings` |
+| `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings`; `overridden` when `force` took over or released another session's claim |
 | `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard (`person_spoke` among them) |
-| `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done` |
-| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition; `applied.update` the fields sent; `applied.comment`, and each entry of `applied.comments`, as `comment_work_item` answers; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision` |
+| `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done`; `overridden` when `force` discarded an engaged step or completed another holder's |
+| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim, steps and transition, `overridden` among them with each step's guards; `applied.update` the fields sent; `applied.comment`, and each entry of `applied.comments`, as `comment_work_item` answers; `applied.resolutions` each root's `comment_id` and `resolution`; `applied.questions` each `request_id` and `revision` |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` answers with the item it took, or nothing when no item
@@ -104,7 +104,7 @@ and any of these groups, applied in this order:
 | `claim` | `true` | `claim_work_item` |
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | `update_work_item` |
 | `checklist` | `{"items": [...], "force": false}` | `set_work_item_checklist` |
-| `checklist_ticks` | `[{"item_id": "…", "done": true}]` | `tick_work_item_checklist_item` |
+| `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}, "mentions": ["MAIN-14"]}` | `comment_work_item` |

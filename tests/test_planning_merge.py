@@ -404,6 +404,17 @@ class MergeClaimTests(MergeTestCase):
         self.assertIn("overridden", actions)
         self.assertEqual("released", actions[actions.index("overridden") - 1])
 
+    def test_moving_a_step_another_holds_records_no_override(self) -> None:
+        # A step moves with its claim; nothing is refused, so nothing is overridden.
+        step = service.set_checklist(self.conn, self.first, ["moves"])["checklist"][0]["id"]
+        service.claim_checklist_item(self.conn, self.first, step, author="holder")
+        self.conn.commit()
+        answer = self.call(SESSION, id=self.survivor, items=[self.first])
+        self.assertNotIn("overridden", answer)
+        first = self.get(self.first)
+        self.assertNotIn("overridden", [event["action"] for event in first["events"]])
+        self.assertEqual(1, len(self.get(self.survivor)["checklist"]))
+
     def test_my_own_claims_and_a_stale_one_do_not_stand_in_the_way(self) -> None:
         self.claim(self.survivor, SESSION)
         self.claim(self.first, SESSION)

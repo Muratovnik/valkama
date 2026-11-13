@@ -19,7 +19,7 @@ interface EntryInputs {
   modules: Ref<readonly ModuleManifest[]>
   modulesSettled: Ref<boolean>
   route: Ref<PlatformRoute>
-  writeRoute: (next: PlatformRoute, mode?: 'push' | 'replace') => void
+  writeRoute: (next: PlatformRoute, mode?: 'push' | 'replace') => Promise<void> | void
 }
 
 /**
@@ -84,15 +84,22 @@ export function usePlatformEntryRestore(inputs: EntryInputs) {
     return inputs.defaultRoute
   }
 
+  // The entry is pending until the remembered route has been written, not until it was asked
+  // for: the router moves a moment later, and in between the chrome named the default route.
+  let restoring = false
   watch([inputs.contextState, inputs.modulesSettled], () => {
     if (
       !inputs.entryRestorePending.value ||
+      restoring ||
       inputs.contextState.value.status === 'loading' ||
       !inputs.modulesSettled.value
     )
       return
-    inputs.entryRestorePending.value = false
-    inputs.writeRoute(restoredEntryRoute(), 'replace')
+    restoring = true
+    void Promise.resolve(inputs.writeRoute(restoredEntryRoute(), 'replace')).finally(() => {
+      restoring = false
+      inputs.entryRestorePending.value = false
+    })
   })
 
   let lastSavedPrefs = ''
@@ -105,6 +112,7 @@ export function usePlatformEntryRestore(inputs: EntryInputs) {
     () =>
       [
         inputs.modulesSettled.value,
+        inputs.entryRestorePending.value,
         inputs.route.value.module_id,
         JSON.stringify(inputs.route.value.scope),
         JSON.stringify(inputs.route.value.entity),

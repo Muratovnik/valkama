@@ -7,8 +7,10 @@
  * once or because it went at once. A switch of space on a two-megabyte board reads in
  * about 170–200 ms between the moment the space is cleared and the moment the next one
  * is drawn, so a delay of 200 ms let a slightly slower read through as a sliver of
- * «Loading»; the delay is set past that with room to spare, and the minimum keeps a
- * read that only just outlasts it from flashing in its turn.
+ * «Loading»; the delay is set past that with room to spare, at 500 ms (the default of
+ * common spinner and progress-bar libraries, and no mark under a second), and a 200 ms
+ * minimum keeps a read that only just outlasts the delay from flashing in its turn.
+ * DESIGN.md states the rule and the measurements behind these two numbers.
  *
  * `PlatformStatePanel` follows it for every state it is handed, and `lazyView` for
  * every download, so a screen that shows a wait through either cannot get it wrong. A
@@ -26,10 +28,10 @@
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
 /** How long a wait runs before anything says it is waiting. */
-export const LOADING_DELAY_MS = 300
+export const LOADING_DELAY_MS = 500
 
 /** How long a wait, once shown, stays shown, however soon what it waited for arrives. */
-export const LOADING_MIN_SHOWN_MS = 400
+export const LOADING_MIN_SHOWN_MS = 200
 
 /** When a wait began, and how long it runs before it is said, where those are not the rule's. */
 interface LoadingPresenceOptions {

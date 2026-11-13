@@ -43,6 +43,7 @@ import {
   withGrouping,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningChainView } from '@/pages/planning/composables/usePlanningChainView.ts'
+import { usePlanningDownloads } from '@/pages/planning/composables/usePlanningDownloads.ts'
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
@@ -53,7 +54,6 @@ import type { PlanningCardProps } from '@/pages/planning/PlanningCardPanel.vue'
 import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
-import { graphView } from '@/pages/planning/utils/graphView.ts'
 import { readingModel } from '@/pages/planning/utils/readingModel.ts'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
@@ -128,8 +128,6 @@ const {
 const inspectorProjectId = computed(() => projectId.value ?? '')
 
 const view = computed<PlanningViewMode>(() => viewOf(props.route.state))
-// An address that opens on the graph downloads it beside the space read, not after it.
-watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
 const grouping = computed(() => groupingOf(props.route.state))
 /** The space a saved view belongs to: the store and the key, which the project does not change. */
 const viewPlace = computed(() =>
@@ -165,6 +163,7 @@ const {
  */
 const resource = shallowRef(createResource<PlanningReadModel>())
 const model = computed(() => resource.value.data)
+usePlanningDownloads(view, model)
 const stale = computed(() => resource.value.status === 'refreshing')
 const planning = ref<PlatformUiState>(uiLoading())
 /** A space the route cannot bind is not loaded by asking again. */
