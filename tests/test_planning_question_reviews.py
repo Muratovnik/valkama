@@ -390,7 +390,9 @@ class SchemaRefusalTests(ReviewCase):
             (
                 [verdict("p1", colour="red")],
                 "each field requires id, label, type, required and options and may add"
-                " description, group, under, recommended and why",
+                " description, group, under, recommended and why; one field:"
+                ' {"id": "scope", "label": "Scope", "type": "choice", "required": true, "options":'
+                ' [{"id": "small", "label": "Small"}, {"id": "full", "label": "Full"}]}',
             ),
         ]
         for fields, refusal in cases:

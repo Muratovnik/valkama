@@ -1547,6 +1547,45 @@ class WireCallTestCase(McpSurfaceTestCase):
         ]
 
 
+class RequestFieldRefusalTests(WireCallTestCase):
+    """A refused question shows the shape of a field the tool takes."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Asks")
+        self.reference = item["reference"]
+        self.conn.commit()
+
+    def test_a_refused_field_shape_shows_one_field_the_tool_then_takes(self) -> None:
+        good = {"id": "go", "label": "Go", "type": "boolean", "required": True, "options": []}
+        cases = {
+            "an id that is not lowercase": [{**good, "id": "Go"}],
+            "an option id with a space": [
+                {
+                    **good,
+                    "type": "choice",
+                    "options": [{"id": "a b", "label": "A"}, {"id": "c", "label": "C"}],
+                }
+            ],
+            "a field without required": [{key: good[key] for key in good if key != "required"}],
+            "a field without options": [{key: good[key] for key in good if key != "options"}],
+        }
+        for case, fields in cases.items():
+            with self.subTest(case):
+                arguments = {"id": self.reference, "kind": "question", "prompt": "Which?"}
+                error = self.refusal("create_work_item_request", {**arguments, "fields": fields})
+                self.assertEqual("invalid_request", error["code"])
+                message = error["message"]
+                example = message[message.index("{") :]
+                # Short enough to read at a glance: one field with two options.
+                self.assertLess(len(example), 160, example)
+                field = json.loads(example)
+                self.assertEqual(2, len(field["options"]))
+                asked = self.answer("create_work_item_request", {**arguments, "fields": [field]})
+                read = self.answer("get_work_item_request", {"id": asked["request_id"]})
+                self.assertEqual(field["id"], read["fields"][0]["id"])
+
+
 class ApplyWorkItemChangesTests(WireCallTestCase):
     """Several writes to one item in one call: in a fixed order, and all or nothing."""
 

@@ -42,6 +42,12 @@ checkouts are therefore distinguishable even at the same version.
   own, held to the same names and rules. A `changes` that is not one object, or that repeats
   a group given beside it, is refused with a call in the unwrapped form. None of these
   names is added to the published schemas.
+- **A question refused for the shape of its fields shows a field to copy.** When
+  `create_work_item_request`, or a batch's `questions`, refuses a field or option id that
+  is not a lowercase identifier, or a field missing one of `id`, `label`, `type`,
+  `required` and `options`, the refusal now ends with one valid `choice` field with two
+  options, written as the JSON to send, and the id refusal says what an identifier may
+  hold: a-z first, then a-z, 0-9, `_` or `-`, at most 64.
 
 ### Added
 

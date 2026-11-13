@@ -2600,7 +2600,8 @@ nothing written:
 | `why` on an option not recommended | `option keep: why says why it is recommended; give recommended: true or leave why out` |
 | a group split by another | `group Checks is split by Web code: fields of one group stand together` |
 | more than 40 fields | `fields must contain between 1 and 40 fields` |
-| a key a field does not take | `each field requires id, label, type, required and options and may add description, group, under, recommended and why` |
+| a key a field does not take, or one it requires missing | `each field requires id, label, type, required and options and may add description, group, under, recommended and why; one field: {"id": "scope", "label": "Scope", "type": "choice", "required": true, "options": [{"id": "small", "label": "Small"}, {"id": "full", "label": "Full"}]}` |
+| a field or option id that is not a lowercase identifier | `field and option ids must be stable lowercase identifiers (a-z first, then a-z, 0-9, _ or -; at most 64), as in {"id": "scope", …}`, with the same field in full |
 
 A field without a group between two fields of one group splits it as well, and the
 refusal names that field: `group Checks is split by p7, which has no group: fields
