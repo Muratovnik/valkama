@@ -113,10 +113,14 @@ test('with no line over the plot, the drawing field at 1440×900 takes the room 
   await page.setViewportSize({ width: 1440, height: 900 })
   const section = await field('.spending-days .period-field')
   await record(info, 'analytics field heights', { overview, overviewScroll, section })
-  // The overview's field fills what the panel leaves under the cards, never under its floor, so
-  // the room a line over the plot took goes to the field and the panel does not scroll.
+  // The overview's field fills what the panel leaves under the cards, so the room a line over
+  // the plot took goes to the field; it never drops under its 200 px floor, and the panel scrolls
+  // only with the field at that floor (the rule `production-analytics-overview-fit` holds).
   expect(overview).toBeGreaterThanOrEqual(200)
-  expect(overviewScroll).toBeLessThanOrEqual(1)
+  expect(
+    overviewScroll <= 1 || Math.round(overview) === 200,
+    'a panel that scrolls keeps the field at its floor',
+  ).toBe(true)
   // The section's field: the height it had while a line of words stood over the plot.
   expect(section).toBeGreaterThanOrEqual(160)
 })
