@@ -91,7 +91,9 @@ test('the age of the newest record counting up moves nothing in the bar, one row
     [600_000, '● 12\u{A0}min ago'],
     [2_820_000, '● 59\u{A0}min ago'],
   ] as const) {
-    await page.clock.runFor(step)
+    // The page's time jumps on, as a lid closed and opened again does, each due timer fired once:
+    // run through, every live read of 47 minutes took the test past its time beside other specs.
+    await page.clock.fastForward(step)
     // One element: the live mark and the age, the sentence whole in its hint.
     await expect.poll(() => freshDrawn(page)).toBe(words)
     await expect(fresh).toHaveAttribute(
