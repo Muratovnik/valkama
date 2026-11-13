@@ -87,12 +87,7 @@ def organization_at(conn: sqlite3.Connection, session_id: str, at: str) -> str |
 def account_of_seat(conn: sqlite3.Connection, organization: str, seat: str) -> str | None:
     """The UUID of the one account whose samples in `organization` name `seat`; or None."""
 
-    found = conn.execute(
-        "SELECT DISTINCT account_uuid FROM quota_samples WHERE organization = ? AND seat = ?"
-        " AND account_uuid IS NOT NULL LIMIT 2",
-        (organization, seat),
-    ).fetchall()
-    return str(found[0][0]) if len(found) == 1 else None
+    return _accounts(conn.cursor(), [organization]).get((organization, seat))
 
 
 @dataclass(frozen=True)
@@ -136,6 +131,7 @@ def account_samples(
 
     organizations: dict[tuple[str, str], str | None] = {}
     accounts: dict[tuple[str, str], str | None] = {}
+    read_seats_of: set[str] = set()
     known: list[AccountSample] = []
     query = _SINCE.format(", ".join("?" * len(kinds)))
     for (
@@ -159,9 +155,11 @@ def account_samples(
             if organization is None:
                 continue
         if uuid is None:
-            if (organization, seat) not in accounts:
-                accounts[organization, seat] = account_of_seat(conn, organization, seat)
-            uuid = accounts[organization, seat]
+            if organization not in read_seats_of:
+                # Every seat an account of the organization names, read once for its samples.
+                accounts.update(_accounts(conn.cursor(), [organization]))
+                read_seats_of.add(organization)
+            uuid = accounts.get((organization, seat))
         known.append(
             AccountSample(
                 at,
@@ -277,7 +275,9 @@ def _later(moment: str, by: dt.timedelta) -> str:
     return later.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def _accounts(cursor: sqlite3.Cursor, organizations: Sequence[str]) -> dict[tuple, str | None]:
+def _accounts(
+    cursor: sqlite3.Cursor, organizations: Sequence[str]
+) -> dict[tuple[str, str], str | None]:
     """`account_of_seat` for every seat of these organizations a UUID names, in one read."""
 
     named: dict[tuple[str, str], set[str]] = {}
