@@ -35,6 +35,26 @@ checkouts are therefore distinguishable even at the same version.
   card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
   own will, so nothing moves when the card arrives.
 
+### Added
+
+- **The work list finds in every row.** A list of 300 rows or more keeps only the rows
+  about its window in the page, so the browser's find reached those and missed the rest.
+  While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar
+  over its top corner, under the sticky head: it counts a term in the words every row
+  prints, at the list's width and in its language, and says «3 of 12» or «No matches».
+  Enter and Shift+Enter, or F3 and Shift+F3, walk the matches in the list's order and
+  bring each match to the middle of the list under its head; the drawn matches are
+  marked, the current one apart, and a printed list carries neither the marks nor the
+  bar. Case does not count, «ё» finds «е», «cafe» finds «café» and a stress over a
+  Cyrillic vowel is ignored, while «й» stays apart from «и». The current match stays on
+  its row while the stream, a filter or an order changes the list, and Escape closes the
+  bar and gives focus back. With a card, a dialog, a menu or a choice list open, and on
+  every other screen, Ctrl+F is the browser's as before. Ctrl+F is the key that types F
+  on the keyboard's layout, and on a layout with no Latin letter there, such as
+  Russian, the key in F's place. Typing into the term matches the rows' words without
+  reading them again, and resizing the list reads them again only where a width
+  changes what a row prints.
+
 ### Fixed
 
 - **The chrome no longer shows interim values at launch.** Until the module list was read

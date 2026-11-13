@@ -382,6 +382,20 @@ function valueOf(facet: FacetId, item: FacetSubject, context: FacetContext): str
 }
 
 /**
+ * A width as a surface's facets read it: the widest `minWidth` of its rules the width
+ * reaches, or 0. Every facet prints at this width as at the width itself, so what is
+ * keyed on it changes only where a width decides what prints, not at every pixel.
+ */
+export function markWidth(surface: FacetSurface, width: number): number {
+  let reached = 0
+  for (const rules of Object.values(FACET_RULES)) {
+    const step = rules[surface]?.minWidth
+    if (step !== undefined && step <= width && step > reached) reached = step
+  }
+  return reached
+}
+
+/**
  * Whether a surface prints a facet for an item. A surface that prints a
  * column (`always`) prints it whatever the value, including none, and says
  * "nobody" or "—" in its own words; every other cell prints only a value the
