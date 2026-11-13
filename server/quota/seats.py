@@ -117,14 +117,17 @@ class AccountSample:
 #: Every sample of some kinds since a moment, in the order they were made.
 _SINCE = (
     "SELECT at, source, organization, session_id, account_uuid, seat, kind, model, percent,"
-    " resets_at FROM quota_samples WHERE at >= ? AND kind IN ({}) ORDER BY at, id"
+    " resets_at FROM quota_samples WHERE at >= ? AND at <= ? AND kind IN ({}) ORDER BY at, id"
 )
+#: Later than any moment the store writes: no upper bound.
+_NEVER = "9999-12-31T23:59:59.999Z"
 
 
 def account_samples(
-    conn: sqlite3.Connection, since: str, kinds: tuple[str, ...]
+    conn: sqlite3.Connection, since: str, kinds: tuple[str, ...], *, until: str | None = None
 ) -> list[AccountSample]:
-    """The samples of `kinds` since `since` whose account can be named, oldest first.
+    """The samples of `kinds` since `since`, and up to `until` when it is given, whose account
+    can be named, oldest first.
 
     A session's sample takes the organization the session was working for at its moment
     (`organization_at`) and is passed over while that is not known. A sample with neither
@@ -146,7 +149,7 @@ def account_samples(
         model,
         percent,
         resets_at,
-    ) in conn.execute(query, (since, *kinds)):
+    ) in conn.execute(query, (since, until or _NEVER, *kinds)):
         if uuid is None and seat is None:
             continue
         if organization is None:

@@ -233,6 +233,17 @@ class AccountTests(_Quota):
         self.working("s-c", ORG_C, ago(days=1))
         self.assertEqual([], self.quota()["accounts"])
 
+    def test_a_reading_or_work_dated_after_the_answers_moment_is_not_in_it(self) -> None:
+        # A source whose clock runs ahead can date a reading after the moment read.
+        self.poll(ago(minutes=-5), five(30))
+        self.working("s-b", ORG_B, ago(minutes=-5))
+        self.assertEqual([], self.quota()["accounts"])
+        self.poll(ago(minutes=5), five(20))
+        answer = self.quota()
+        self.assertEqual([ORG_A], [one["organization"] for one in answer["accounts"]])
+        latest = self.window(self.account(answer, ORG_A), "five_hour")["latest"]
+        self.assertEqual(20.0, latest["used_percent"])
+
     def test_a_session_whose_organization_is_not_read_yet_is_no_account(self) -> None:
         self.statusline(ago(minutes=2), "s-unread", week(31))
         self.assertEqual([], self.quota()["accounts"])

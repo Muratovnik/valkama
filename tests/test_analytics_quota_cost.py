@@ -80,15 +80,14 @@ class QuotaCostTests(UsageStore):
             spent.append(time.perf_counter() - began)
         took = ", ".join(f"{one:.3f}" for one in spent)
         self.assertLess(min(spent), cost.BUDGET, f"the quota read took {took} s")
-        # The status line's account is a provisional seat, one a week: the week before this
-        # one began within the seven days, so both are answered.
+        # The status line's account is a provisional seat, one a week. The week before this
+        # one began within the seven days but ended a day before NOW, so only this one is
+        # answered; its readings are still read.
         this_week = samples.seat_for_week((START + 53 * _WEEK).isoformat())
-        last_week = samples.seat_for_week((START + 52 * _WEEK).isoformat())
         self.assertEqual(
             [
                 ("org-a", "acct-a", None, 2),
                 ("org-b", "acct-b", None, 3),
-                ("org-c", None, last_week, 2),
                 ("org-c", None, this_week, 2),
             ],
             [

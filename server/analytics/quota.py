@@ -46,7 +46,7 @@ _LENGTHS = {
 }
 _ORGANIZATIONS_AT_WORK = (
     "SELECT DISTINCT organization FROM usage_segments"
-    " WHERE ended_at >= ? AND organization IS NOT NULL"
+    " WHERE ended_at >= ? AND started_at <= ? AND organization IS NOT NULL"
 )
 
 #: An account: its organization, its account's UUID, and its provisional seat without one.
@@ -204,15 +204,21 @@ def _ended(account: _Account, clock: _Clock) -> bool:
 
 
 def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None = None) -> dict:
-    """Every account's quota windows at `now`, the times at `utc_offset` minutes from UTC."""
+    """Every account's quota windows at `now`, the times at `utc_offset` minutes from UTC.
+
+    Only what the store holds up to `now` is read: a source whose clock runs ahead can date
+    a sample later, and the answer is as of `now`.
+    """
 
     clock = _Clock(now or dt.datetime.now(dt.UTC), usage.caller_zone(utc_offset))
-    since = samples.instant((_EPOCH + dt.timedelta(milliseconds=clock.now) - LOOKBACK).isoformat())
-    accounts = _by_account(seats.account_samples(conn, since, quota_store.KINDS))
+    moment = _EPOCH + dt.timedelta(milliseconds=clock.now)
+    since = samples.instant((moment - LOOKBACK).isoformat())
+    until = samples.instant(moment.isoformat())
+    accounts = _by_account(seats.account_samples(conn, since, quota_store.KINDS, until=until))
     read_from = {organization for organization, _, _ in accounts}
     for account in [one for one in accounts if _ended(one, clock)]:
         del accounts[account]
-    for (organization,) in conn.execute(_ORGANIZATIONS_AT_WORK, (since,)):
+    for (organization,) in conn.execute(_ORGANIZATIONS_AT_WORK, (since, until)):
         if organization not in read_from:
             accounts[str(organization), None, None] = {}
     # The owner names an organization, so every entry of one has its name; read once.

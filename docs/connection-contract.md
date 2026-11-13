@@ -1288,7 +1288,8 @@ Its one parameter is `utc_offset`, the caller's offset from UTC in minutes, from
 to `840`, `0` by default, at which every time in the answer is written. Any other
 parameter, a repeated one or an offset out of its range is refused with `400` and
 `{"error": {"code": "invalid_request", "message": …}}`, as the usage read refuses it. An
-empty store answers with no account.
+empty store answers with no account. A sample or a stretch of work dated after `now`, as a
+source whose clock runs ahead could write, is left out until `now` reaches it.
 
 ```json
 {"interface_version": "valkama-analytics-api",
