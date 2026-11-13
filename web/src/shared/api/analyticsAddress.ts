@@ -23,6 +23,13 @@
  * next week's week, as the words say, «today» is the day it is opened on, and «now» is the hour
  * up to whenever it is opened.
  *
+ * The reader's own period is held by its ends, both days or both moments. Two days are its first
+ * and last day, both whole, as the page has always written them. Two moments, each a local time
+ * to the minute (`2030-03-04T10:00`), are its start and its end, the end not included, so a frame
+ * drawn across three hours of «Today» or ten minutes of «Now» is a period of its own. A moment
+ * stands only beside a later one: a moment beside a day, beside nothing or not before its end is
+ * a part this build cannot read, and is dropped.
+ *
  * The one reader and the one writer of that address. The page reads its view here and writes
  * every change here; a way to the page from elsewhere, such as an item's Agents tab, writes its
  * link here too, so a link says what the page will read.
@@ -73,12 +80,19 @@ export interface AnalyticsView {
    */
   by: AnalyticsSection
   filters: UsageFilters
-  /** The first and last day of a custom period, both included: `2030-03-04`. Empty otherwise. */
+  /**
+   * Where a custom period starts: its first day, included, `2030-03-04`, or the local moment it
+   * starts at, `2030-03-04T10:00` (`isMomentSpan`). Empty otherwise.
+   */
   from: string
   measure: Measure
   /** Whether a screen too narrow for the list of sections beside a section shows the section. */
   open: boolean
   period: PeriodPreset
+  /**
+   * Where a custom period ends: its last day, included, or the local moment it ends at, not
+   * included, as `from` is written. Empty otherwise.
+   */
   to: string
 }
 
@@ -116,11 +130,39 @@ const OPEN = 'section'
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/u
 
+/** A local moment to the minute, as a custom period holds one: `2030-03-04T10:00`, hours 00-23. */
+const MOMENT = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/u
+
 const pad = (value: number) => String(value).padStart(2, '0')
 
 /** A day as the browser's calendar names it and a custom period holds it: `2030-03-04`. */
 export const localDay = (day: Date) =>
   `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
+
+/**
+ * A moment as the browser's clock names it and a custom period holds it, `2030-03-04T10:00`: its
+ * seconds dropped, so it names the minute it falls in.
+ */
+const localMoment = (at: Date) => `${localDay(at)}T${pad(at.getHours())}:${pad(at.getMinutes())}`
+
+/** Whether a view is the reader's own period between two moments rather than between two days. */
+export const isMomentSpan = (view: Pick<AnalyticsView, 'from' | 'period' | 'to'>) =>
+  view.period === 'custom' && MOMENT.test(view.from) && MOMENT.test(view.to)
+
+/**
+ * The reader's own period from one moment to another, each taken to the minute it falls in, as a
+ * view's change holds it. A step of the history when the page writes it as a new place (`push`),
+ * so Back returns to the view it was set from. A span whose end falls in no later minute than its
+ * start is one the address drops (`readAddress`).
+ */
+export const momentSpan = (
+  from: Date,
+  to: Date,
+): Pick<AnalyticsView, 'from' | 'period' | 'to'> => ({
+  period: 'custom',
+  from: localMoment(from),
+  to: localMoment(to),
+})
 
 const oneOf = <T extends string>(values: readonly T[], value: unknown, fallback: T): T =>
   values.includes(value as T) ? (value as T) : fallback
@@ -172,12 +214,16 @@ export function orderFilters(filters: UsageFilters): UsageFilters {
 export function readAddress(state: RouteState | undefined): AnalyticsView {
   const period = oneOf(PERIODS, state?.period, DEFAULT_VIEW.period)
   const custom = period === 'custom'
-  const date = (value: unknown) =>
-    custom && typeof value === 'string' && DATE.test(value) ? value : ''
+  const held = (form: RegExp, value: unknown) =>
+    custom && typeof value === 'string' && form.test(value) ? value : ''
+  // Both ends moments, in the order of time; the form's fixed width orders them as text does.
+  const start = held(MOMENT, state?.from)
+  const end = held(MOMENT, state?.to)
+  const moments = Boolean(start && end && start < end)
   return {
     period,
-    from: date(state?.from),
-    to: date(state?.to),
+    from: moments ? start : held(DATE, state?.from),
+    to: moments ? end : held(DATE, state?.to),
     by: isSection(state?.by) ? state.by : DEFAULT_VIEW.by,
     measure: oneOf(MEASURES, state?.measure, DEFAULT_VIEW.measure),
     filters: readFilters(state?.filters),

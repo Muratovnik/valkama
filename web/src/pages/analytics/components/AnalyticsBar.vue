@@ -1,15 +1,18 @@
 <script setup lang="ts">
 /**
- * The bar over every section of the Analytics page: the period, with its two days when it is the
- * reader's own; the filters set, each a chip that takes it out, and the way to add one; how fresh
- * the figures are; and a read of them again. It stays where it is while the rail and the panel
- * under it scroll, since it says what everything under it is of.
+ * The bar over every section of the Analytics page: the period, with the ends of the reader's own
+ * beside it, its two days or the name of a span between two moments (`AnalyticsOwnPeriod`); the
+ * filters set, each a chip that takes it out, and the way to add one; how fresh the figures are;
+ * and a read of them again. It stays where it is while the rail and the panel under it scroll,
+ * since it says what everything under it is of.
  *
  * The bar is one line wherever it has room for the period, its days and the read again, so the
  * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
  * room the rest leaves, counting those it has none for, and the list of filters they open lies
  * over the panel. The bar is short (`short`) on a phone and where a span of days leaves no room
- * for the freshness's sentence, at 1440 pixels among them.
+ * for the freshness's sentence, at 1440 pixels among them. A span between moments is named in
+ * fewer pixels than the two days take, and gives up the freshness's words only as any part of the
+ * line does, where the line has no room for them (`useBarRoom`).
  *
  * How fresh the figures are is the newest record the store holds, of any session, and how old
  * it is now, counted on each second, so a page left open says its figures grow old
@@ -24,7 +27,8 @@
  * end (`useBarRoom`): the record and its moment are cut first, then the line goes short, then the
  * live mark goes, then the room between its parts narrows. While a read again failed the mark goes
  * before the line goes short, since the failure beside it is the news, and the failure's words go
- * last, to its disc and its retry, only where nothing else is left to give.
+ * last, to its disc and its retry, only where nothing else is left to give. Past all of that a
+ * span's name is cut at its end, its hint saying it whole.
  *
  * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
  * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
@@ -35,6 +39,7 @@ import { useI18n } from 'vue-i18n'
 import { useElementSize } from '@vueuse/core'
 
 import AnalyticsChips from '@/pages/analytics/components/AnalyticsChips.vue'
+import AnalyticsOwnPeriod from '@/pages/analytics/components/AnalyticsOwnPeriod.vue'
 import RefreshFailed from '@/pages/analytics/components/RefreshFailed.vue'
 import { useBarRoom } from '@/pages/analytics/composables/useBarRoom.ts'
 import { useFreshness } from '@/pages/analytics/composables/useFreshness.ts'
@@ -43,7 +48,7 @@ import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.t
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
-import { PERIODS } from '@/shared/api/analyticsAddress.ts'
+import { isMomentSpan, PERIODS } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView, PeriodPreset } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
@@ -51,7 +56,6 @@ import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   /** The dimensions a filter may be set on. */
@@ -78,6 +82,9 @@ const emit = defineEmits<{
 const adding = defineModel<boolean>('adding', { required: true })
 
 const { locale, t } = useI18n()
+
+/** Whether the period is the reader's own between two days, which the bar shows as two fields. */
+const ownDays = computed(() => props.view.period === 'custom' && !isMomentSpan(props.view))
 
 const periodOptions = computed(() =>
   PERIODS.map((value) => ({ value, label: t(`analytics.period.${value}`) })),
@@ -109,9 +116,15 @@ const { failed } = usePageStanding()
 const room = useBarRoom({
   line,
   last: () => refreshButton.value?.$el,
-  order: () => (failed.value ? ['live', 'words', 'gaps', 'failure'] : ['words', 'live', 'gaps']),
+  order: () =>
+    failed.value ? ['live', 'words', 'gaps', 'failure', 'span'] : ['words', 'live', 'gaps', 'span'],
   observed: [line, age],
-  holds: [() => props.live, () => props.view.period, () => props.view.filters, locale],
+  holds: [
+    () => props.live,
+    () => [props.view.period, props.view.from, props.view.to],
+    () => props.view.filters,
+    locale,
+  ],
 })
 
 /**
@@ -125,22 +138,17 @@ const { width: barWidth } = useElementSize(bar)
 const short = computed(() => {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
   const ems = barWidth.value / rem
-  const narrow = ems > 0 && (ems <= 30 || (props.view.period === 'custom' && ems < 87.5))
+  const narrow = ems > 0 && (ems <= 30 || (ownDays.value && ems < 87.5))
   return narrow || room.gave('words')
 })
-/** Whether the live mark stands, the room between the parts narrowed, the failure said briefly. */
+/**
+ * Whether the live mark stands, the room between the parts narrowed, the failure said briefly, and
+ * a span's name cut at its end.
+ */
 const liveShown = computed(() => props.live && !room.gave('live'))
 const tight = computed(() => room.gave('gaps'))
 const brief = computed(() => room.gave('failure'))
-
-const rangeError = computed(() =>
-  props.view.period === 'custom' &&
-  props.view.from &&
-  props.view.to &&
-  props.view.to < props.view.from
-    ? t('analytics.period.reversed')
-    : '',
-)
+const spanCut = computed(() => room.gave('span'))
 
 /** That the period is live and how often it reads itself again: in full, and as the bar says it. */
 const liveInterval = computed(() => t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }))
@@ -169,37 +177,14 @@ const fresh = useFreshness(() => props.lastEventAt)
         :options="periodOptions"
         @update:model-value="choosePeriod"
       />
-      <div
+      <AnalyticsOwnPeriod
         v-if="view.period === 'custom'"
-        class="analytics-bar-days"
-      >
-        <VTextInput
-          class="analytics-day"
-          type="date"
-          size="compact"
-          :label="t('analytics.period.from')"
-          :model-value="view.from"
-          :max="today"
-          hide-label
-          @update:model-value="(from) => emit('amend', { from: String(from) })"
-        />
-        <span
-          class="analytics-bar-days-dash"
-          aria-hidden="true"
-          >–</span
-        >
-        <VTextInput
-          class="analytics-day"
-          type="date"
-          size="compact"
-          :label="t('analytics.period.to')"
-          :model-value="view.to"
-          :max="today"
-          :error="rangeError"
-          hide-label
-          @update:model-value="(to) => emit('amend', { to: String(to) })"
-        />
-      </div>
+        class="analytics-bar-own"
+        :cut="spanCut"
+        :today="today"
+        :view="view"
+        @amend="(next) => emit('amend', next)"
+      />
       <AnalyticsChips
         v-model:adding="adding"
         :dimensions="dimensions"
@@ -300,23 +285,6 @@ const fresh = useFreshness(() => props.lastEventAt)
   max-width: 100%;
 }
 
-.analytics-bar-days {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-}
-
-.analytics-day {
-  inline-size: 9rem;
-}
-
-.analytics-bar-days-dash {
-  color: var(--color-text-muted);
-}
-
 .analytics-bar-read {
   display: flex;
   flex: 0 1 auto;
@@ -409,7 +377,7 @@ const fresh = useFreshness(() => props.lastEventAt)
     scrollbar-width: none;
   }
 
-  .analytics-bar-days {
+  .analytics-bar-own {
     grid-column: 1 / -1;
   }
 
