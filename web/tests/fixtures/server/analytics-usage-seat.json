@@ -1,0 +1,200 @@
+{
+  "interface_version": "valkama-analytics-api",
+  "usage": {
+    "period": {
+      "from": "2026-01-02T03:04:05+03:00",
+      "to": "2026-01-02T03:04:05+03:00",
+      "step": "day",
+      "utc_offset": 180
+    },
+    "group_by": [
+      "seat"
+    ],
+    "cost_basis": "An estimate at public API list prices for each request. A subscription pays differently, so this is not a bill.",
+    "last_event_at": "2026-01-02T03:04:05.000Z",
+    "total": {
+      "agent_seconds": 1800.0,
+      "estimated_seconds": 0.0,
+      "quality": "observed",
+      "tokens": {
+        "input": 30,
+        "cached_read": null,
+        "cache_write_5m": null,
+        "cache_write_1h": null,
+        "output": 3,
+        "reasoning": null
+      },
+      "estimated_api_cost_usd": 0.03,
+      "unpriced_tokens": 0,
+      "unpriced_models": []
+    },
+    "rows": [
+      {
+        "group": {
+          "seat": {
+            "id": "org-fixture/acct-fixture",
+            "unknown": false,
+            "organization": "org-fixture",
+            "account_uuid": "acct-fixture",
+            "seat_key": null
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0
+      },
+      {
+        "group": {
+          "seat": {
+            "id": "org-fixture/week:2026-11-17T19:00Z",
+            "unknown": false,
+            "organization": "org-fixture",
+            "account_uuid": null,
+            "seat_key": "week:2026-11-17T19:00Z"
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0
+      },
+      {
+        "group": {
+          "seat": {
+            "id": null,
+            "unknown": true,
+            "organization": null,
+            "account_uuid": null,
+            "seat_key": null
+          }
+        },
+        "agent_seconds": 600.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 10,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 1,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.01,
+        "unpriced_tokens": 0
+      }
+    ],
+    "series": [
+      {
+        "start": "2026-01-02T03:04:05+03:00",
+        "end": "2026-01-02T03:04:05+03:00",
+        "agent_seconds": 1800.0,
+        "estimated_seconds": 0.0,
+        "quality": "observed",
+        "tokens": {
+          "input": 30,
+          "cached_read": null,
+          "cache_write_5m": null,
+          "cache_write_1h": null,
+          "output": 3,
+          "reasoning": null
+        },
+        "estimated_api_cost_usd": 0.03,
+        "unpriced_tokens": 0,
+        "groups": [
+          {
+            "group": {
+              "seat": {
+                "id": "org-fixture/acct-fixture",
+                "unknown": false,
+                "organization": "org-fixture",
+                "account_uuid": "acct-fixture",
+                "seat_key": null
+              }
+            },
+            "agent_seconds": 600.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 10,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 1,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": 0.01,
+            "unpriced_tokens": 0
+          },
+          {
+            "group": {
+              "seat": {
+                "id": "org-fixture/week:2026-11-17T19:00Z",
+                "unknown": false,
+                "organization": "org-fixture",
+                "account_uuid": null,
+                "seat_key": "week:2026-11-17T19:00Z"
+              }
+            },
+            "agent_seconds": 600.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 10,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 1,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": 0.01,
+            "unpriced_tokens": 0
+          },
+          {
+            "group": {
+              "seat": {
+                "id": null,
+                "unknown": true,
+                "organization": null,
+                "account_uuid": null,
+                "seat_key": null
+              }
+            },
+            "agent_seconds": 600.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 10,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 1,
+              "reasoning": null
+            },
+            "estimated_api_cost_usd": 0.01,
+            "unpriced_tokens": 0
+          }
+        ]
+      }
+    ],
+    "comparison": null
+  }
+}

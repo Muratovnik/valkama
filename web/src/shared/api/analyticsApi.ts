@@ -14,7 +14,7 @@ import { enumField, invalid } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 /**
- * The dimensions the read breaks work down by and filters it on, in the contract's order. The
+ * The dimensions the page breaks work down by and filters it on, in the contract's order. The
  * one list of them on the web: the address, the filters and the breakdown all read it here.
  */
 export const USAGE_DIMENSIONS = [
@@ -32,6 +32,12 @@ export type UsageDimension = (typeof USAGE_DIMENSIONS)[number]
 
 export const isUsageDimension = (value: unknown): value is UsageDimension =>
   USAGE_DIMENSIONS.includes(value as UsageDimension)
+
+/**
+ * Every dimension an answer may name: the page's, and `seat`, the quota account a stretch was
+ * spent on, which the read answers and no screen offers yet.
+ */
+const ANSWER_DIMENSIONS = [...USAGE_DIMENSIONS, 'seat'] as const
 
 const VALUE = /^[^\u{0}]{1,512}$/u
 /** A moment with its own offset, as the read writes it: `2030-03-04T00:00:00+03:00`. */
@@ -69,9 +75,13 @@ const groupValueSchema = strictObject({
   family: onTheSide().optional(),
   opened_in: onTheSide().optional(),
   opened_host: onTheSide().optional(),
+  /** A seat's: its organization, and its account's UUID or, for a seat no account names, its key. */
+  organization: boundedText(VALUE, 512).nullable().optional(),
+  account_uuid: boundedText(VALUE, 512).nullable().optional(),
+  seat_key: boundedText(VALUE, 512).nullable().optional(),
 })
 
-const groupSchema = z.partialRecord(z.enum(USAGE_DIMENSIONS), groupValueSchema)
+const groupSchema = z.partialRecord(z.enum(ANSWER_DIMENSIONS), groupValueSchema)
 
 const rowSchema = strictObject({ group: groupSchema, ...measures })
 
@@ -87,7 +97,7 @@ const usageSchema = strictObject({
     step: enumField(USAGE_STEPS),
     utc_offset: z.number().int().min(-840).max(840),
   }),
-  group_by: z.array(z.enum(USAGE_DIMENSIONS)).max(2),
+  group_by: z.array(z.enum(ANSWER_DIMENSIONS)).max(2),
   cost_basis: z.string().min(1).max(512),
   last_event_at: moment().nullable(),
   total: totalSchema,
@@ -113,6 +123,12 @@ export type Usage = z.infer<typeof usageSchema>
 export type UsageRow = Usage['rows'][number]
 export type UsageMeasures = Omit<UsageRow, 'group'>
 export type UsageGroupValue = z.infer<typeof groupValueSchema>
+
+/** The page's dimension an answer is broken down by first; `null` with none or one it does not offer. */
+export const pageDimensionOf = (usage: Usage): UsageDimension | null => {
+  const first = usage.group_by[0]
+  return isUsageDimension(first) ? first : null
+}
 
 /** A dimension's admitted values; `null` admits work with no value there ("none"). */
 export type UsageFilters = Partial<Record<UsageDimension, readonly (string | null)[]>>

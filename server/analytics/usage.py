@@ -32,6 +32,7 @@ one offset; a caller that minds asks for it in two.
 | `role` | who spent it: `main`, a session's own run; `subagent`; `advisor`, a segment an adviser spent, in either | the run and the segment |
 | `launch_class` | how a subagent's run was launched, `null` for a session's own run | the run |
 | `model`, `effort`, `environment` | as the segment holds them | the segment |
+| `seat` | the quota account of its organization the stretch was spent on, else the seat's key for the week, `unknown` where no sample says | the quota samples (`quota.seats`) |
 
 A value the store does not hold is its own group, `unknown`. Work on no item and a
 session's own run, which is launched by no one, are groups of their own too, and are not
@@ -54,6 +55,7 @@ from ..planning import executors, live_sessions
 from ..planning import usage as item_usage
 from ..planning.usage import Value
 from ..projects import project_registry
+from ..quota import seats
 
 ACCOUNT = "account"
 PROJECT = "project"
@@ -64,6 +66,7 @@ LAUNCH_CLASS = "launch_class"
 MODEL = "model"
 EFFORT = "effort"
 ENVIRONMENT = "environment"
+SEAT = "seat"
 DIMENSIONS = (
     ACCOUNT,
     PROJECT,
@@ -74,6 +77,7 @@ DIMENSIONS = (
     MODEL,
     EFFORT,
     ENVIRONMENT,
+    SEAT,
 )
 #: Who spent a stretch: a session's own run, a subagent's, or an adviser in either.
 ROLES = item_usage.ROLES
@@ -112,6 +116,8 @@ _ORGANIZATION = _FIRST_TOKEN + _TOKENS
 _ITEM, _SESSION, _LAUNCH, _EFFORT, _ENVIRONMENT, _ITEM_PROJECT, _AGENT, _ADVISOR = range(
     _ORGANIZATION + 1, _ORGANIZATION + 9
 )
+#: Where a row carries its seat's value, added to the read's rows when a seat is needed.
+_SEAT = _ADVISOR + 1
 #: The token columns stand in `TOKEN_KINDS` order.
 SEGMENTS = (
     "SELECT s.started_at, s.ended_at, s.seconds, s.quality, s.estimated_api_cost_usd, s.model,"
@@ -132,6 +138,7 @@ _COLUMN_OF = {
     MODEL: _MODEL,
     EFFORT: _EFFORT,
     ENVIRONMENT: _ENVIRONMENT,
+    SEAT: _SEAT,
 }
 
 
@@ -450,6 +457,44 @@ def _session_projects(
     }
 
 
+def _with_seats(
+    conn: sqlite3.Connection, rows: Sequence[Sequence]
+) -> tuple[list[Sequence], dict[str, dict]]:
+    """The rows, each with its seat's value added, and what each value names.
+
+    The value is the quota account the seat belongs to, as its organization and UUID, or
+    else the seat's key for its week; `None`, unknown, where no sample says. Its id is the
+    organization, a slash and the UUID or the key, so neither an account in two
+    organizations nor one key in two is one group. All rows are resolved in one pass over
+    the samples (`seats.seats_of_segments`).
+    """
+
+    found = seats.seats_of_segments(
+        conn,
+        [
+            seats.Segment(
+                str(row[_SESSION]), row[_ORGANIZATION], str(row[_STARTED]), str(row[_ENDED])
+            )
+            for row in rows
+        ],
+    )
+    named: dict[str, dict] = {}
+    seated: list[Sequence] = []
+    for row, seat in zip(rows, found, strict=True):
+        value = None
+        if seat.seat is not None:
+            organization = str(row[_ORGANIZATION])
+            value = f"{organization}/{seat.account_uuid or seat.seat}"
+            if value not in named:
+                named[value] = {
+                    "organization": organization,
+                    "account_uuid": seat.account_uuid,
+                    "seat_key": None if seat.account_uuid else seat.seat,
+                }
+        seated.append((*row, value))
+    return seated, named
+
+
 def _readers(
     conn: sqlite3.Connection, rows: Sequence[Sequence], needed: set[str], projects: Sequence
 ) -> dict[str, Callable[[Sequence], Value]]:
@@ -496,6 +541,7 @@ _UNNAMED: dict[str, dict] = {
     WORK_ITEM: {"reference": None, "title": None},
     PROJECT: {"name": None},
     EXECUTOR: {"family": "", "opened_in": "", "opened_host": "", "title": None},
+    SEAT: {"organization": None, "account_uuid": None, "seat_key": None},
 }
 
 #: What a session's executor says of it that the answer carries: where it was opened.
@@ -503,7 +549,11 @@ _PLACE = ("family", "opened_in", "opened_host")
 
 
 def _labels(
-    conn: sqlite3.Connection, dimension: str, ids: set[str], projects: Sequence[Mapping]
+    conn: sqlite3.Connection,
+    dimension: str,
+    ids: set[str],
+    projects: Sequence[Mapping],
+    seat_names: Mapping[str, dict],
 ) -> dict[str, dict]:
     """What a person already sees for each of these values: an item's number and title,
     a project's name, where a session was opened and the name its client gave it, as
@@ -529,6 +579,8 @@ def _labels(
             }
             for session, executor in executors.session_executors(conn, named).items()
         }
+    if dimension == SEAT:
+        return {value: seat_names[value] for value in ids}
     return {}
 
 
@@ -541,6 +593,7 @@ class _Namer:
         group_by: Sequence[str],
         keys: Iterable[tuple[Value, ...]],
         projects: Sequence[Mapping],
+        seat_names: Mapping[str, dict],
     ) -> None:
         self.group_by = group_by
         found: list[set[str]] = [set() for _ in group_by]
@@ -549,7 +602,7 @@ class _Namer:
                 if isinstance(value, str):
                     found[index].add(value)
         self.labels = [
-            _labels(conn, dimension, ids, projects) if ids else {}
+            _labels(conn, dimension, ids, projects, seat_names) if ids else {}
             for dimension, ids in zip(group_by, found, strict=True)
         ]
 
@@ -602,6 +655,9 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
         SEGMENTS, (_stamp(bounds[-1], up=True), _stamp(bounds[0], up=False))
     ).fetchall()
     needed = {*request.group_by, *request.filters}
+    seat_names: dict[str, dict] = {}
+    if SEAT in needed:
+        rows, seat_names = _with_seats(conn, rows)
     projects = project_registry.read_registry()["projects"] if PROJECT in needed else []
     readers = _readers(conn, rows, needed, projects)
     grouping = [readers[dimension] for dimension in request.group_by]
@@ -633,7 +689,7 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
                 steps[interval - first].add(part)
                 if key:
                     by_step[interval - first].setdefault(key[0], _Tally()).add(part)
-    namer = _Namer(conn, request.group_by, [*main.groups, *earlier.groups], projects)
+    namer = _Namer(conn, request.group_by, [*main.groups, *earlier.groups], projects, seat_names)
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
     def at(moment: int) -> str:

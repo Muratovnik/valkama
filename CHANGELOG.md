@@ -24,6 +24,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **`GET /api/analytics/usage` breaks work down by `seat`**, the subscription account of
+  its organization a stretch was spent on: the account's UUID where a quota sample names
+  it, else the seat's key for its week, and one unknown group for work no sample speaks
+  for or that names no organization. It groups, filters and compares like the other
+  dimensions, and its groups add up to the total. The seats of a read are worked out in
+  one pass over the samples it needs. The Analytics page does not offer it yet.
 - **The store keeps subscription quota samples and accounts, at store schema 17.**
   `quota_samples` holds one row per reading of one window that changed, from the
   status line, the mod, the poll or an import, each named by its organization or its

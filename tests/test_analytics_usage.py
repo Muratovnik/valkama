@@ -495,6 +495,135 @@ class ComparisonTests(UsageStore):
         self.assertIsNone(self.read(**{"from": day(-1), "to": day(1)})["comparison"])
 
 
+#: Three accounts of one organization, each on its own seat this week, and a seat no
+#: sample with an account names.
+SEAT_1, SEAT_2, SEAT_3 = (
+    "week:2030-03-08T09:00Z",
+    "week:2030-03-08T19:00Z",
+    "week:2030-03-09T05:00Z",
+)
+SEAT_P = "week:2030-03-10T01:00Z"
+
+
+class SeatTests(UsageStore):
+    """Which quota account a stretch was spent on, by the seat its samples say it was on."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        sessions = {"s-1": "org-a", "s-2": "org-a", "s-3": "org-a", "s-4": "org-b", "s-6": "org-c"}
+        for session, organization in sessions.items():
+            # What each session worked for, outside every period read here.
+            self.segment(session, -2 * DAY, -2 * DAY, seconds=0.0, organization=organization)
+        for at, account, seat in (
+            (0, "acct-1", SEAT_1),
+            (1, "acct-2", SEAT_2),
+            (2, "acct-3", SEAT_3),
+        ):
+            self.quota_sample(at, seat, organization="org-a", account=account)
+        # The same account's UUID in another organization is another account.
+        self.quota_sample(0, SEAT_1, organization="org-c", account="acct-1")
+        self.quota_sample(-DAY + 10, SEAT_2, session="s-1")
+        for session, seat in (("s-1", SEAT_1), ("s-2", SEAT_2), ("s-3", SEAT_P)):
+            self.quota_sample(10, seat, session=session)
+        self.segment("s-1", 60, 660, organization="org-a")
+        self.segment("s-2", 60, 360, organization="org-a")
+        self.segment("s-3", 60, 160, organization="org-a")
+        # No sample of org-b says where its work was, and work with no organization has none.
+        self.segment("s-4", 60, 110, organization="org-b")
+        self.segment("s-5", 60, 80)
+        self.segment("s-6", 60, 90, organization="org-c")
+        # The day before, s-1's own feed named another seat.
+        self.segment("s-1", -DAY + 60, -DAY + 260, organization="org-a")
+
+    def seat_rows(self, read: dict, key: str = "rows") -> list[tuple[dict, float]]:
+        lines = read[key] if key == "rows" else read["comparison"]["rows"]
+        return [(row["group"]["seat"], row["agent_seconds"]) for row in lines]
+
+    def test_a_seat_is_its_account_else_its_weeks_key_else_unknown(self) -> None:
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "seat"})
+
+        def account(organization: str, uuid: str) -> dict:
+            return {
+                "id": f"{organization}/{uuid}",
+                "unknown": False,
+                "organization": organization,
+                "account_uuid": uuid,
+                "seat_key": None,
+            }
+
+        unknown = {
+            "id": None,
+            "unknown": True,
+            "organization": None,
+            "account_uuid": None,
+            "seat_key": None,
+        }
+        provisional = {
+            "id": f"org-a/{SEAT_P}",
+            "unknown": False,
+            "organization": "org-a",
+            "account_uuid": None,
+            "seat_key": SEAT_P,
+        }
+        self.assertEqual(
+            [
+                (account("org-a", "acct-1"), 600.0),
+                (account("org-a", "acct-2"), 300.0),
+                (provisional, 100.0),
+                # Work of an organization no sample speaks for, and work of none: one group.
+                (unknown, 70.0),
+                (account("org-c", "acct-1"), 30.0),
+            ],
+            self.seat_rows(read),
+        )
+        self.assertEqual(1100.0, read["total"]["agent_seconds"])
+        self.assertEqual(
+            read["total"]["agent_seconds"], sum(row["agent_seconds"] for row in read["rows"])
+        )
+        self.assertEqual(
+            [["org-a/acct-1", "org-a/acct-2", f"org-a/{SEAT_P}", None, "org-c/acct-1"]],
+            [
+                [group["group"]["seat"]["id"] for group in point["groups"]]
+                for point in read["series"]
+            ],
+        )
+
+    def test_a_filter_admits_a_seats_values_and_none_its_unknown(self) -> None:
+        def seconds(**filters: str) -> float:
+            return self.read(**{"from": day(0), "to": day(1), **filters})["total"]["agent_seconds"]
+
+        self.assertEqual(630.0, seconds(seat="org-a/acct-1,org-c/acct-1"))
+        self.assertEqual(100.0, seconds(seat=f"org-a/{SEAT_P}"))
+        self.assertEqual(70.0, seconds(none="seat"))
+        self.assertEqual(670.0, seconds(seat="org-a/acct-1", none="seat"))
+        self.assertEqual(0.0, seconds(seat="acct-1"))
+        self.assertEqual(50.0, seconds(account="org-b", none="seat"))
+
+    def test_a_seat_beside_another_dimension_and_the_period_before(self) -> None:
+        read = self.read(
+            **{"from": day(0), "to": day(1), "group_by": "seat,account", "compare": "true"}
+        )
+        self.assertEqual(
+            [
+                ("org-a/acct-1", "org-a", 600.0),
+                ("org-a/acct-2", "org-a", 300.0),
+                (f"org-a/{SEAT_P}", "org-a", 100.0),
+                (None, "org-b", 50.0),
+                ("org-c/acct-1", "org-c", 30.0),
+                (None, None, 20.0),
+            ],
+            [
+                (row["group"]["seat"]["id"], row["group"]["account"]["id"], row["agent_seconds"])
+                for row in read["rows"]
+            ],
+        )
+        # The same session's feed said another seat the day before, and that one held then.
+        self.assertEqual(
+            [("org-a/acct-2", 200.0)],
+            [(group["id"], seconds) for group, seconds in self.seat_rows(read, "comparison")],
+        )
+
+
 class RefusalTests(UsageStore):
     def test_a_bad_parameter_is_refused_as_the_neighbouring_reads_refuse(self) -> None:
         good = {"from": day(0), "to": day(1)}
@@ -535,10 +664,10 @@ class RefusalTests(UsageStore):
                 self.assertEqual("invalid_request", body["error"]["code"])
                 self.assertTrue(body["error"]["message"])
 
-    def test_a_refusal_for_a_dimension_names_all_nine(self) -> None:
+    def test_a_refusal_for_a_dimension_names_all_ten(self) -> None:
         _, body = self.answer(**{"from": day(0), "to": day(1), "group_by": "colour"})
         message = body["error"]["message"]
-        self.assertEqual(9, len(usage.DIMENSIONS))
+        self.assertEqual(10, len(usage.DIMENSIONS))
         for name in usage.DIMENSIONS:
             self.assertIn(name, message)
 

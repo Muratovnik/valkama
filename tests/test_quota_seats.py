@@ -26,6 +26,7 @@ NOW = dt.datetime(2030, 3, 20, tzinfo=dt.UTC)
 ORGANIZATION = "org-1"
 OTHER = "org-2"
 SESSION = "session-1"
+OTHER_SESSION = "session-2"
 SEAT_A = "week:2030-03-08T09:00Z"
 SEAT_B = "week:2030-03-08T19:00Z"
 WEEK_A = "2030-03-08T09:00:00Z"
@@ -298,6 +299,57 @@ class AccountTests(_Seats):
             [tuple(row) for row in self.conn.execute(
                 "SELECT organization, account_uuid FROM quota_accounts")],
         )  # fmt: skip
+
+
+class ManySegmentsTests(_Seats):
+    """Many segments read at once get the seat each gets alone, from the same few reads."""
+
+    def test_segments_read_together_are_each_on_the_seat_it_is_on_alone(self) -> None:
+        self.working(OTHER_SESSION, ORGANIZATION, "2030-03-04T00:00:00.000Z")
+        self.sample("2030-03-04T07:00:00Z", SEAT_A)
+        self.sample("2030-03-04T09:30:00Z", SEAT_B, resets_at="2030-03-08T19:00:00Z")
+        self.sample("2030-03-04T08:00:00Z", SEAT_B, session=OTHER_SESSION,
+                    resets_at="2030-03-08T19:00:00Z")  # fmt: skip
+        self.poll("2030-03-04T06:00:00Z", SEAT_A, account=ACCOUNT_A)
+        self.poll("2030-03-04T06:30:00Z", SEAT_B, account=ACCOUNT_B)
+        # Out of the order they end, and one that no feed reaches, one of no organization
+        # and one of a session with no feed of its own.
+        segments = [
+            seats.Segment(SESSION, ORGANIZATION, "2030-03-04T11:00:00.000Z", "2030-03-04T11:10:00.000Z"),
+            seats.Segment(SESSION, ORGANIZATION, "2030-03-04T09:00:00.000Z", "2030-03-04T09:10:00.000Z"),
+            seats.Segment(SESSION, ORGANIZATION, "2030-03-04T05:00:00.000Z", "2030-03-04T05:10:00.000Z"),
+            seats.Segment(SESSION, None, "2030-03-04T10:00:00.000Z", "2030-03-04T10:10:00.000Z"),
+            seats.Segment("session-3", ORGANIZATION, "2030-03-04T07:10:00.000Z", "2030-03-04T07:20:00.000Z"),
+            seats.Segment(OTHER_SESSION, ORGANIZATION, "2030-03-04T08:10:00.000Z", "2030-03-04T08:20:00.000Z"),
+        ]  # fmt: skip
+        statements: list[str] = []
+        self.conn.set_trace_callback(statements.append)
+        together = seats.seats_of_segments(self.conn, segments)
+        self.conn.set_trace_callback(None)
+        self.assertEqual(
+            [
+                seats.Seat(SEAT_B, "session", "2030-03-04T09:30:00.000Z", ACCOUNT_B),
+                seats.Seat(SEAT_A, "session", "2030-03-04T07:00:00.000Z", ACCOUNT_A),
+                seats.UNKNOWN,
+                seats.UNKNOWN,
+                seats.Seat(SEAT_A, "organization", "2030-03-04T07:00:00.000Z", ACCOUNT_A),
+                seats.Seat(SEAT_B, "session", "2030-03-04T08:00:00.000Z", ACCOUNT_B),
+            ],
+            together,
+        )
+        alone = [
+            seats.seat_of_segment(
+                self.conn,
+                session_id=segment.session_id,
+                organization=segment.organization,
+                started_at=segment.started_at,
+                ended_at=segment.ended_at,
+            )
+            for segment in segments
+        ]
+        self.assertEqual(alone, together)
+        # The samples with whom they worked for, and the accounts: however many segments.
+        self.assertEqual(2, len(statements), statements)
 
 
 if __name__ == "__main__":
