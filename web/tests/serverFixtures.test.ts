@@ -41,6 +41,7 @@ import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+import { messages } from '@/shared/i18n/index.ts'
 
 const STEP_KINDS = [
   'focus-folder',
@@ -89,8 +90,9 @@ const readers: Record<string, (value: unknown) => unknown> = {
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
-  // The server's closed lists, which the test below holds the web's to.
+  // The server's closed lists, which the tests below hold the web's to.
   'open-vocabulary.json',
+  'doctor-vocabulary.json',
   'mcp-get-work-item.json',
   'mcp-get-work-item-thread.json',
   'mcp-get-work-item-unresolved.json',
@@ -117,6 +119,23 @@ describe('the server fixtures', () => {
       states: [...PLAN_STATES],
       steps: [...STEP_KINDS],
     })
+  })
+
+  it('give every quota code the doctor reports a title and a detail in each language', () => {
+    // Read from the server's source, so a code the server adds fails here until it has words.
+    const { quota } = read('doctor-vocabulary.json') as { quota: string[] }
+    expect(quota.length).toBeGreaterThan(0)
+    const missing = (['en', 'ru'] as const).flatMap((locale) => {
+      const findings: Record<string, { detail?: unknown; title?: unknown } | undefined> =
+        messages[locale].health.finding
+      return quota
+        .filter((code) => {
+          const words = findings[code]
+          return typeof words?.title !== 'string' || typeof words.detail !== 'string'
+        })
+        .map((code) => `${locale}: ${code}`)
+    })
+    expect(missing).toEqual([])
   })
 
   it('name the executor at the claim, each step and each agent of a card', () => {

@@ -751,6 +751,17 @@ class DoctorTests(_Profile):
                 self.assertIn("sign-in refused", found["detail"])
                 self.assertIn("Claude Code", found["fix"])
 
+    def test_each_state_the_poll_writes_reports_a_code_of_its_own(self) -> None:
+        self.switch_on()
+        codes = {}
+        for state in poll.STATES:
+            with self.subTest(state=state):
+                self.status(state)
+                codes[state] = self.check()["presentation"]["code"]
+        self.assertEqual("quota-poll-not-running", codes.pop(poll.STOPPED))
+        self.assertEqual(len(codes), len(set(codes.values())), codes)
+        self.assertEqual("quota-poll-no-login", codes[poll.NO_LOGIN])
+
     def test_switched_on_with_no_listener_polling(self) -> None:
         self.switch_on()
         found = self.check()
