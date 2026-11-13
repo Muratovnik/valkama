@@ -5,6 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
+import { watchLoading } from './loadingWatch.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
@@ -147,19 +148,6 @@ test('a failed graph download says so in the stage, and Retry downloads it again
   expect(graph.length).toBeGreaterThan(attempts)
 })
 
-/** Whether a loading or failure panel ever stood in the card's drawer after this call. */
-async function watchDrawerPanels(page: Page) {
-  await page.evaluate(() => {
-    const host = window as unknown as { drawerPanelSeen?: boolean }
-    host.drawerPanelSeen = false
-    new MutationObserver(() => {
-      if (document.querySelector('.drawer .platform-state-panel')) host.drawerPanelSeen = true
-    }).observe(document.body, { childList: true, subtree: true })
-  })
-  return () =>
-    page.evaluate(() => (window as unknown as { drawerPanelSeen?: boolean }).drawerPanelSeen)
-}
-
 const openTile = (page: Page) =>
   page.locator('.work-item-tile').filter({ hasText: workItemRef.reference }).first().click()
 
@@ -180,10 +168,12 @@ test('the board stands without the card or the questions, and the card downloads
   expect(card).toHaveLength(1)
   expect(questions).toHaveLength(0)
   // ... so opening one has nothing to wait for.
-  const panelSeen = await watchDrawerPanels(page)
+  const watched = await watchLoading(page)
   await openTile(page)
   await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
-  expect(await panelSeen()).toBe(false)
+  await expect(page.locator('.drawer .platform-state-panel[aria-busy="true"]')).toHaveCount(0)
+  const { spans } = await watched()
+  expect(spans).toEqual([])
   expect(card).toHaveLength(1)
   expect(questions).toHaveLength(0)
   expect(await page.locator('.workspace-head').boundingBox()).toEqual(header)
