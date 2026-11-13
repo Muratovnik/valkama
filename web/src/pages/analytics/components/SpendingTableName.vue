@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * The name that heads a row of a dimension's table, on one line: cut with an ellipsis where the
- * column is narrower than it, and said whole in its hint while it is cut. A value the page names
- * by the start of its id, an account, has the whole id after its name on the same line.
+ * column is narrower than it, a pair's in its first value (`PairName`), and said whole in its
+ * hint while it is cut. A value the page names by the start of its id, an account, has the whole
+ * id after its name on the same line.
  *
  * It acts as its value does in the bars (`useLineActions`): a link to a task, or a control that
  * narrows the view to the value, sent out as `narrow`. Either is named by the value, since it
@@ -14,6 +15,7 @@ import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
+import PairName from '@/shared/ui/PairName.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -61,6 +63,8 @@ function narrowTo() {
       v-tooltip.clipped="whole"
       class="table-name one-line"
     >
+      <!-- The link's words are the name `PairName` writes as text, which the rule cannot see. -->
+      <!-- eslint-disable-next-line vuejs-accessibility/anchor-has-content -->
       <a
         v-if="link"
         class="chart-press"
@@ -68,7 +72,10 @@ function narrowTo() {
         @click="follow"
         @auxclick="followAside"
       >
-        {{ line.name }}
+        <PairName
+          :name="line.name"
+          :end="line.nameEnd"
+        />
       </a>
       <button
         v-else-if="narrows"
@@ -77,9 +84,16 @@ function narrowTo() {
         :aria-description="narrowDescription"
         @click="narrowTo"
       >
-        {{ line.name }}
+        <PairName
+          :name="line.name"
+          :end="line.nameEnd"
+        />
       </button>
-      <template v-else>{{ line.name }}</template>
+      <PairName
+        v-else
+        :name="line.name"
+        :end="line.nameEnd"
+      />
       <span
         v-if="line.detail"
         class="chart-detail"
@@ -95,7 +109,8 @@ function narrowTo() {
 
 <style scoped>
 /* One line however long the name: the cut is the ellipsis, and the hint says it whole. A press
-   inside it keeps the line's box, and what it leaves out follows it in the quiet ink. */
+   inside it keeps the line's box, no wider than the line, so a pair's first value gives way
+   inside the press and its second stays in view; what it leaves out follows it in the quiet ink. */
 .table-name {
   display: block;
 
@@ -103,6 +118,7 @@ function narrowTo() {
      keeps at the panel's edges (`--stuck-head`, `--stuck-foot`, declared by `SpendingTable`). */
   & .chart-press {
     display: inline;
+    max-inline-size: 100%;
     scroll-margin-block: var(--stuck-head, 0) var(--stuck-foot, 0);
   }
 

@@ -71,6 +71,7 @@ const multiples = computed<SmallMultiple[]>(() =>
   drawn.value.map(({ line, values }) => ({
     key: line.key,
     label: words.lineLabel(props.by, line),
+    labelEnd: words.lineEnd(line),
     // Work with no value is charted as a value is, on the same scale; the folded tail stands apart.
     kind: line.kind === 'other' ? 'other' : 'category',
     slot: props.slots.get(line.key) ?? 'other',

@@ -67,6 +67,8 @@ export interface RankedRow extends MarkAction {
    */
   detail?: string
   kind?: RankedRowKind
+  /** The end of a label of two parts that stays whole while the rest is cut (`PairName`). */
+  labelEnd?: string
   /**
    * Whether a row ranked among the categories names no value, such as work on no task in a list
    * that ranks it by its figure: its name is then in the quiet ink, slanted, as a note is.

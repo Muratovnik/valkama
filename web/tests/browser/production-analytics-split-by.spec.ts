@@ -89,16 +89,19 @@ async function splitByEffort(page: Page, locale: Locale) {
 const trimmed = (texts: readonly string[]) => texts.map((one) => one.trim())
 const minutes = (texts: readonly string[]) => texts.map((one) => minutesOf(one))
 
-/** What the bars, the table and the day columns show, as names and minutes. */
+/**
+ * What the bars, the table and the day columns show, as names and minutes. A name is read by its
+ * words: a pair's two parts are boxes of their own on one line, which `innerText` breaks apart.
+ */
 async function shown(page: Page, locale: Locale) {
   const bars = page.locator('.spending-bars .ranked-row')
-  const barLabels = await bars.locator('.ranked-label').allInnerTexts()
+  const barLabels = await bars.locator('.ranked-label').allTextContents()
   const barValues = await bars.locator('.ranked-value').allInnerTexts()
   const multipleNames = await page
     .locator('.spending-multiples .multiple .multiple-name')
-    .allInnerTexts()
+    .allTextContents()
   const table = page.locator('.spending-table')
-  const tableLabels = await table.locator('tbody th').allInnerTexts()
+  const tableLabels = await table.locator('tbody th').allTextContents()
   const tableTotal = await table.locator('tfoot td[data-measure="time"]').textContent()
   // The day columns as their table: each day's total under the column the words call it.
   const days = page.locator('.spending-days')

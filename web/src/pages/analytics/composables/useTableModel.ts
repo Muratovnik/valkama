@@ -66,6 +66,8 @@ export interface TableLine {
    */
   when: 'before' | 'elsewhere' | 'neither' | 'now'
   detail?: string
+  /** The end of a pair's name that stays whole while the rest is cut (`PairName`). */
+  nameEnd?: string
 }
 
 /** What the rows of a table are, as its heading row counts them. */
@@ -172,6 +174,7 @@ export function useTableModel(source: () => TableSource) {
       when,
       rest: line.kind !== 'category',
       name: words.pairLabel(by, line.value, line.second),
+      nameEnd: words.pairEnd(line.second) || undefined,
       valueName: words.valueLabel(by, line.value),
       detail: words.valueDetail(by, line.value),
     }

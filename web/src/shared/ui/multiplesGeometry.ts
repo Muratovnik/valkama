@@ -26,6 +26,8 @@ export interface SmallMultiple extends MarkAction {
   /** The multiple's figure over the whole span, as the reader reads it: units and all. */
   valueText: string
   kind?: MultipleKind
+  /** The end of a label of two parts that stays whole while the rest is cut (`PairName`). */
+  labelEnd?: string
   /** The hue of the value wherever the page draws it; the neutral when it has none. */
   slot?: SeriesSlot
 }

@@ -2372,7 +2372,10 @@ The second dimension is the section's, not the table's: «Split by» in the sect
 chooses it, and the ranked bars, the small charts, the period columns and the table all read
 its pairs, «claude-opus-5-5 · high», each pair a value with its own colour and the tail folded
 into «other» as any series is. Chosen over the table alone, it left the charts beside a crossed
-table answering the first dimension only.
+table answering the first dimension only. A pair's name short of room on its line cuts its first
+part and keeps the separator and the second whole, «claude-opus-5-… · medium», because the second
+is what tells one value's pairs apart: cut from its end, «claude-opus-5-5 · …» stood twice in one
+chart.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
