@@ -90,6 +90,8 @@ function narrowTo() {
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
 
+<style scoped src="@/shared/ui/rowStates.css"></style>
+
 <style scoped>
 /* One line however long the name: the cut is the ellipsis, and the hint says it whole. A press
    inside it keeps the line's box, and what it leaves out follows it in the quiet ink. */

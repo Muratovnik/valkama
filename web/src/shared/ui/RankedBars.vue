@@ -126,7 +126,7 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
           <component
             :is="markTag(row, 'div')"
             v-tooltip.detail="namedHint(row, whole, formatShare)"
-            class="ranked-line"
+            class="ranked-line row-state"
             :data-key="row.key"
             v-bind="lineAttrs(row)"
             @click="(event: MouseEvent) => press(row, event)"
@@ -162,6 +162,8 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 
 <style scoped src="@/shared/ui/seriesFill.css"></style>
 
+<style scoped src="@/shared/ui/rowStates.css"></style>
+
 <style scoped>
 .ranked-bars {
   min-width: 0;
@@ -193,7 +195,8 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 }
 
 /* A line of the chart, not a control standing in it: a row that opens something takes the
-   same box as one that does not, and the whole of it is what a pointer presses. */
+   same box as one that does not, and the whole of it is what a pointer presses. Its states are
+   the model the page's rows share (`rowStates.css`). */
 .ranked-line {
   display: grid;
   grid-template-columns: subgrid;
@@ -205,15 +208,9 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
   color: var(--color-text);
   font: var(--font-detail);
   text-align: start;
-  background: none;
-  border-radius: var(--radius-control);
 
   &:is([type='button'], [href]) {
     cursor: pointer;
-
-    &:hover {
-      background: var(--color-surface-hover);
-    }
   }
 
   /* A link reads as one by its name, underlined as a name that opens something in a table is. */
@@ -222,12 +219,8 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
 
     & .ranked-label {
       text-decoration: underline;
-      text-decoration-color: var(--color-rule-strong);
+      text-decoration-color: var(--row-state-underline, var(--color-rule-strong));
       text-underline-offset: var(--space-half);
-    }
-
-    &:hover .ranked-label {
-      text-decoration-color: currentcolor;
     }
   }
 }

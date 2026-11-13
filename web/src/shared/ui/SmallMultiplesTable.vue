@@ -93,6 +93,7 @@ const rows = computed(() => {
       <tr
         v-for="row in rows"
         :key="row.key"
+        class="row-state tabular"
         :class="{ 'chart-rest': row.rest }"
         :data-kind="row.kind"
       >
@@ -138,3 +139,5 @@ const rows = computed(() => {
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
+
+<style scoped src="@/shared/ui/rowStates.css"></style>

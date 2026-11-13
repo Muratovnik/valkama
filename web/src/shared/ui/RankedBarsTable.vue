@@ -64,6 +64,7 @@ const empty = computed(() => !props.rows.length)
       <tr
         v-for="row in ordered"
         :key="row.key"
+        class="row-state tabular"
         :class="{ 'chart-rest': row.rest }"
         :data-kind="row.kind"
       >
@@ -110,3 +111,5 @@ const empty = computed(() => !props.rows.length)
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
+
+<style scoped src="@/shared/ui/rowStates.css"></style>

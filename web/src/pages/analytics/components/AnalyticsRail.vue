@@ -4,9 +4,11 @@
  * reader goes to see one of them in the panel beside the rail.
  *
  * A section is a place on the page, so the rail is navigation — a landmark of buttons, the one on
- * show marked as the page — rather than a value chosen in a field. That entry carries the mark
- * three ways, a line on its start edge, the heavier weight and a brighter ground, so it reads
- * without its colour and in a forced palette, where the line is drawn in the system's own ink.
+ * show marked as the page — rather than a value chosen in a field. Every entry is a box at rest,
+ * and the entries take their states from the model the page's rows share (`rowStates.css`): the
+ * one on show carries the mark three ways, a line inside its box on the start side, the heavier
+ * weight and a brighter ground, so it reads without its colour and in a forced palette, where the
+ * line is drawn in the system's own ink.
  *
  * Each entry is a tile: the section's name and, under it, its figures in the page's measure
  * (`RailTile`) — the overview's total, its change and its days; a dimension's count of values, its
@@ -107,7 +109,7 @@ defineExpose({ focusSelected })
       >
         <button
           type="button"
-          class="analytics-rail-entry"
+          class="analytics-rail-entry row-state boxed"
           :data-section="section.value"
           :aria-labelledby="section.nameId"
           :aria-describedby="section.tileId"
@@ -154,6 +156,8 @@ defineExpose({ focusSelected })
   </nav>
 </template>
 
+<style scoped src="@/shared/ui/rowStates.css"></style>
+
 <style scoped>
 /* A ground on the module's panel, which is what parts the rail from the panel and the bar, and a
    column that scrolls on its own and holds what it scrolls, a copy for a reader placed out of
@@ -198,8 +202,9 @@ defineExpose({ focusSelected })
   list-style: none;
 }
 
-/* The name over the tile's figures. The start edge keeps the room of the selected entry's line
-   on every entry, so choosing one moves no word. */
+/* The name over the tile's figures, in a box its states share with the page's rows
+   (`rowStates.css`): the chosen entry's line stands inside the start padding, clear of the
+   words, so choosing one moves no word. */
 .analytics-rail-entry {
   display: grid;
   gap: var(--space-1);
@@ -208,34 +213,10 @@ defineExpose({ focusSelected })
   min-height: var(--size-control-height);
   padding: var(--space-2) var(--space-3);
   border: 0;
-  border-inline-start: 3px solid transparent;
   color: var(--color-text-muted);
   font: var(--font-name);
   text-align: start;
-  background: transparent;
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
   cursor: pointer;
-
-  &:hover {
-    color: var(--color-text);
-    background: var(--color-surface-hover);
-  }
-
-  &:focus-visible {
-    outline: var(--size-focus-ring) solid var(--color-focus-ring);
-    outline-offset: -2px;
-  }
-
-  &.selected {
-    color: var(--color-text);
-    font-weight: 600;
-    background: var(--color-surface-active);
-    border-inline-start-color: var(--color-accent);
-
-    @media (forced-colors: active) {
-      border-inline-start-color: Highlight;
-    }
-  }
 }
 
 /* Beside the panel the rail is as wide as the widest head asks (`AnalyticsView`): its figures

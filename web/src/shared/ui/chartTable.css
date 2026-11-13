@@ -85,7 +85,9 @@
 }
 
 /* A name that opens what it names: a line of the table, not a control standing in it. The whole
-   cell around it answers a press, so a finger has the row's height to hit and not the words'. */
+   cell around it answers a press, so a finger has the row's height to hit and not the words'. A
+   row with the states the page's rows share (`rowStates.css`) brings the underline to the ink
+   under the pointer anywhere on the row; a row without them, under the name. */
 .chart-press {
   position: relative;
   display: inline-block;
@@ -96,13 +98,13 @@
   font: inherit;
   text-align: start;
   text-decoration: underline;
-  text-decoration-color: var(--color-rule-strong);
+  text-decoration-color: var(--row-state-underline, var(--color-rule-strong));
   text-underline-offset: var(--space-half);
   background: none;
   cursor: pointer;
 
   &:hover {
-    text-decoration-color: currentcolor;
+    --row-state-underline: currentcolor;
   }
 
   &::after {
