@@ -12,6 +12,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The usage read gives each step by the pair.** With two dimensions in `group_by`,
+  each point of `series` in `GET /api/analytics/usage` now breaks its step down by the
+  pair of both, and each of its `groups` names both dimensions as a row does, where it
+  used to break the step down by the first dimension alone and name only that one. The
+  groups of a step still add up to the step exactly; with one dimension nothing changes.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context

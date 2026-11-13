@@ -397,7 +397,7 @@ class ReferenceTests(UsageStore):
                         if falls_in(stretch, low, high):
                             series[index].add(stretch, low, high)
                             if grouping:
-                                by_step[index].setdefault(key[0], Figures()).add(stretch, low, high)
+                                by_step[index].setdefault(key, Figures()).add(stretch, low, high)
                 where = f"{step} at {offset} by {grouping}"
                 self.assertEqual(total, Figures.of(read["total"]), where)
                 self.assertEqual(
@@ -414,7 +414,9 @@ class ReferenceTests(UsageStore):
                         by_step,
                         [
                             {
-                                group_of(group["group"][grouping[0]]): Figures.of(group)
+                                tuple(
+                                    group_of(group["group"][name]) for name in grouping
+                                ): Figures.of(group)
                                 for group in point["groups"]
                             }
                             for point in read["series"]

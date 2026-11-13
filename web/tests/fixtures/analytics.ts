@@ -266,12 +266,12 @@ function answerOf(options: {
   const end = edges.at(-1) ?? first
   const series = edges.slice(1).map((next, index) => {
     const own = stretches.filter((stretch) => stretch.day === index)
-    const firstOnly = groupBy[0]
     return {
       start: at(edges[index] ?? first),
       end: at(next),
       ...sumOf(own),
-      groups: firstOnly ? rowsOf(own, [firstOnly]) : [],
+      // A step by the groups of the rows: by the pair where the read groups by two.
+      groups: groupBy.length ? rowsOf(own, groupBy) : [],
     }
   })
   return {

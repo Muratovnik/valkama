@@ -430,17 +430,59 @@ class GroupTests(UsageStore):
         # A role is never missing.
         self.assertEqual(0.0, seconds(none="role"))
 
-    def test_the_series_is_broken_down_by_the_first_grouping(self) -> None:
+    def test_the_series_is_broken_down_by_the_pair_of_two_groupings(self) -> None:
         self.session("s-1")
-        self.segment("s-1", 0, 60, model="m-1", effort="high")
+        # One model at two efforts in the first step, so a step by the model alone would
+        # fold them into one group.
+        self.segment("s-1", 0, 60, model="m-1", effort="high", tokens=(7, 70, 0, None, 1, None))
+        self.segment("s-1", 100, 130, model="m-1", effort="low", cost=0.02)
+        self.segment("s-1", 200, 215, model="m-2", effort="high", cost=None)
         self.segment("s-1", DAY, DAY + 30, model="m-2")
         read = self.read(**{"from": day(0), "to": day(2), "group_by": "model,effort"})
         self.assertEqual(
-            [["m-1"], ["m-2"]],
-            [[g["group"]["model"]["id"] for g in point["groups"]] for point in read["series"]],
+            [[("m-1", "high"), ("m-1", "low"), ("m-2", "high")], [("m-2", None)]],
+            [
+                [(g["group"]["model"]["id"], g["group"]["effort"]["id"]) for g in point["groups"]]
+                for point in read["series"]
+            ],
         )
-        self.assertEqual({"model"}, set(read["series"][0]["groups"][0]["group"]))
-        self.assertEqual({"model", "effort"}, set(read["rows"][0]["group"]))
+        for point in read["series"]:
+            for group in point["groups"]:
+                self.assertEqual({"model", "effort"}, set(group["group"]))
+        # A pair names its values as the rows do.
+        rows = {
+            (row["group"]["model"]["id"], row["group"]["effort"]["id"]): row["group"]
+            for row in read["rows"]
+        }
+        for point in read["series"]:
+            for group in point["groups"]:
+                pair = (group["group"]["model"]["id"], group["group"]["effort"]["id"])
+                self.assertEqual(rows[pair], group["group"])
+        # The pairs of a step add up to the step, figure by figure.
+        first = read["series"][0]
+        self.assertEqual(first["agent_seconds"], sum(g["agent_seconds"] for g in first["groups"]))
+        self.assertEqual(105.0, first["agent_seconds"])
+        self.assertEqual(
+            first["estimated_api_cost_usd"],
+            round(sum(g["estimated_api_cost_usd"] or 0 for g in first["groups"]), 6),
+        )
+        for kind, value in first["tokens"].items():
+            parts = [g["tokens"][kind] for g in first["groups"] if g["tokens"][kind] is not None]
+            self.assertEqual(value, sum(parts) if parts else None, kind)
+
+    def test_the_series_by_one_grouping_names_that_dimension_alone(self) -> None:
+        self.session("s-1")
+        self.segment("s-1", 0, 60, model="m-1", effort="high")
+        self.segment("s-1", 100, 130, model="m-1", effort="low")
+        read = self.read(**{"from": day(0), "to": day(1), "group_by": "model"})
+        self.assertEqual(
+            [[({"model"}, "m-1", 90.0)]],
+            [
+                [(set(g["group"]), g["group"]["model"]["id"], g["agent_seconds"])]
+                for point in read["series"]
+                for g in point["groups"]
+            ],
+        )
 
 
 class FilterTests(UsageStore):

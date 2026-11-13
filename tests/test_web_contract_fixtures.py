@@ -921,7 +921,7 @@ class ServerFixtureTests(unittest.TestCase):
         for point in usage["series"]:
             self.assertEqual(measures | {"start", "end", "groups"}, set(point))
             for group in point["groups"]:
-                self.assertEqual({"work_item"}, set(group["group"]))
+                self.assertEqual({"work_item", "model"}, set(group["group"]))
         self.assertEqual({"period", "total", "rows"}, set(usage["comparison"]))
         self.assertNotIn("quota", json.dumps(answer))
 

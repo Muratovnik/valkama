@@ -157,21 +157,25 @@
                 "unknown": false,
                 "reference": "MAIN-1",
                 "title": "Contract card"
+              },
+              "model": {
+                "id": "claude-opus-5-5",
+                "unknown": false
               }
             },
-            "agent_seconds": 1200.0,
+            "agent_seconds": 600.0,
             "estimated_seconds": 0.0,
             "quality": "observed",
             "tokens": {
-              "input": 1050,
+              "input": 1000,
               "cached_read": 20000,
               "cache_write_5m": 300,
               "cache_write_1h": null,
-              "output": 407,
-              "reasoning": 2
+              "output": 400,
+              "reasoning": null
             },
             "estimated_api_cost_usd": 0.25,
-            "unpriced_tokens": 57
+            "unpriced_tokens": 0
           },
           {
             "group": {
@@ -180,6 +184,10 @@
                 "unknown": false,
                 "reference": null,
                 "title": null
+              },
+              "model": {
+                "id": "claude-opus-5-5",
+                "unknown": false
               }
             },
             "agent_seconds": 600.0,
@@ -195,6 +203,33 @@
             },
             "estimated_api_cost_usd": 0.01,
             "unpriced_tokens": 0
+          },
+          {
+            "group": {
+              "work_item": {
+                "id": "00000000-0000-4000-8000-000000000005",
+                "unknown": false,
+                "reference": "MAIN-1",
+                "title": "Contract card"
+              },
+              "model": {
+                "id": "claude-unknown-9",
+                "unknown": false
+              }
+            },
+            "agent_seconds": 600.0,
+            "estimated_seconds": 0.0,
+            "quality": "observed",
+            "tokens": {
+              "input": 50,
+              "cached_read": null,
+              "cache_write_5m": null,
+              "cache_write_1h": null,
+              "output": 7,
+              "reasoning": 2
+            },
+            "estimated_api_cost_usd": null,
+            "unpriced_tokens": 57
           }
         ]
       }
