@@ -118,7 +118,7 @@ describe('the width of a column', () => {
 })
 
 describe('a period still running', () => {
-  test('is drawn at what it holds so far, and says so in its name and under its column', () => {
+  test('is drawn at what it holds so far, says so in its name, and has no word under its column', () => {
     const columns = [column('d1', { a: 4 }), column('d2', { a: 6 }), column('d3', { a: 1 }, true)]
     const { columns: stacked, top } = stackColumns(columns, series)
     // Its amount is not projected forward: the column is as tall as what it holds.
@@ -127,13 +127,13 @@ describe('a period still running', () => {
     const [last] = stacked.slice(-1)
     assert.ok(last)
     assert.equal(columnSummary(last, words, String), 'd3: total 1 so far; Account A 1')
-    const ticks = dayTicks(columns, 0, words.incomplete)
+    // The axis names it as any period: its hatching and its hint say it is under way.
+    const ticks = dayTicks(columns, 0)
     assert.deepEqual(ticks.at(-1), {
       key: 'd3',
       text: 'd3',
       offset: 2.5 / 3,
       edge: 'middle',
-      note: 'so far',
     })
   })
 
@@ -149,7 +149,7 @@ describe('a period still running', () => {
     const columns = Array.from({ length: 30 }, (_, index) =>
       column(`d${index}`, { a: 1 }, index === 20),
     )
-    const named = new Set(dayTicks(columns, 330, words.incomplete).map((tick) => tick.key))
+    const named = new Set(dayTicks(columns, 330).map((tick) => tick.key))
     assert.ok(named.has('d20'))
     assert.ok(named.has('d29'))
   })
@@ -196,7 +196,7 @@ describe('the time axis', () => {
     // 1440px; the axis now only moves a label in where it would hang past an end (`ChartTicks`).
     const columns = Array.from({ length: 4 }, (_, index) => column(`d${index}`, {}))
     assert.deepEqual(
-      dayTicks(columns, 1000, '').map((tick) => [tick.edge, tick.offset]),
+      dayTicks(columns, 1000).map((tick) => [tick.edge, tick.offset]),
       [
         ['middle', 0.5 / 4],
         ['middle', 1.5 / 4],
@@ -213,13 +213,13 @@ describe('the time axis', () => {
       label: `D${day}`,
       dated: { label: `${index < 3 ? 'Oct' : 'Nov'} ${day}`, month: index < 3 ? '10' : '11' },
     }))
-    const printed = (width: number) => dayTicks(days, width, '').map((tick) => tick.text)
+    const printed = (width: number) => dayTicks(days, width).map((tick) => tick.text)
     assert.deepEqual(printed(1000), ['Oct 29', 'D30', 'D31', 'Nov 1', 'D2', 'D3', 'D4'])
     // Where 1 November is not named, the first name of November carries the month.
     assert.deepEqual(printed(150), ['Oct 31', 'Nov 4'])
     // A period whose name needs no month, an hour, keeps its name.
     assert.deepEqual(
-      dayTicks([column('h1', {})], 1000, '').map((tick) => tick.text),
+      dayTicks([column('h1', {})], 1000).map((tick) => tick.text),
       ['h1'],
     )
   })
@@ -231,9 +231,9 @@ describe('the time axis', () => {
       ...column(`h${hour}`, {}, hour === 14),
       label: `${String(hour).padStart(2, '0')}:00`,
     }))
-    const unmeasured = new Set(dayTicks(hours, 480, 'so far').map((tick) => tick.key))
+    const unmeasured = new Set(dayTicks(hours, 480).map((tick) => tick.key))
     assert.ok(unmeasured.has('h14') && unmeasured.has('h15'))
-    const named = dayTicks(hours, 480, 'so far', sevenWide).map((tick) => tick.key)
+    const named = dayTicks(hours, 480, sevenWide).map((tick) => tick.key)
     assert.deepEqual(named, ['h3', 'h7', 'h11', 'h14', 'h19', 'h23'])
   })
 
@@ -247,7 +247,7 @@ describe('the time axis', () => {
             label: index % 2 ? `${index} Wed` : `${index}:00`,
             dated: { label: `Nov ${index}`, month: index < count / 2 ? '10' : '11' },
           }))
-          const ticks = dayTicks(columns, width, 'so far', sevenWide)
+          const ticks = dayTicks(columns, width, sevenWide)
           const where = `${count} periods, running ${running}, ${width}px`
           if (running >= 0)
             assert.ok(
@@ -266,10 +266,10 @@ const sevenWide = (text: string) => text.length * 7
 
 /**
  * Where `ChartTicks` draws a label of the time axis: its middle at its share of the axis, moved
- * in as far as it would hang past either end, as wide as its text or its note.
+ * in as far as it would hang past either end, as wide as its text.
  */
-function placed(tick: { offset: number; text: string; note?: string }, width: number) {
-  const wide = Math.max(sevenWide(tick.text), sevenWide(tick.note ?? ''))
+function placed(tick: { offset: number; text: string }, width: number) {
+  const wide = sevenWide(tick.text)
   const start = Math.max(0, Math.min(tick.offset * width - wide / 2, width - wide))
   return { start, end: start + wide }
 }

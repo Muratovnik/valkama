@@ -214,7 +214,8 @@ describe('the days', () => {
       false,
       true,
     ])
-    expect(days.get('.period-axis').text()).toContain('running')
+    // Its hatching and its hint say it is under way; no word stands under its name.
+    expect(days.get('.period-axis').text()).not.toContain('running')
     expect(spokenDays(days).at(-1)?.holds).toContain('running')
     expect(days.find('.period-readout').exists()).toBe(false)
   })
@@ -292,7 +293,8 @@ describe('the days', () => {
   it('say the same in Russian', () => {
     const days = mountDays(week(), {}, 'ru')
     expect(days.get('h2').text()).toBe('Время агентов по дням, по задачам')
-    expect(days.get('.period-axis').text()).toContain('идёт')
+    expect(days.get('.period-axis').text()).not.toContain('идёт')
+    expect(spokenDays(days).at(-1)?.holds).toContain('идёт')
   })
 })
 

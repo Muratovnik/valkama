@@ -192,7 +192,10 @@ export interface PeriodMark {
 
 export interface PeriodWords {
   empty: string
-  /** What a period still running says of itself: "so far". */
+  /**
+   * What a period still running says of itself, in its hint, its name and its row of the
+   * table: no word stands under its name on the axis, where it is hatched instead.
+   */
   incomplete: string
   /** The heading over the table's notes: what is still running, what changed. */
   note: string
@@ -361,8 +364,6 @@ export interface PlacedTick {
   /** Where along the edge, from 0 at its start (or the baseline) to 1 at its end. */
   offset: number
   text: string
-  /** A second line under the first: "so far" under a period still running. */
-  note?: string
 }
 
 /** The narrowest a period's column is drawn, and the widest it grows where its period has room. */
@@ -398,15 +399,14 @@ function labelSpan(index: number, count: number, width: number, wide: number) {
  * hang past the plot. The first name printed, and the first printed of each later month, carry
  * their month (`PeriodColumn.dated`).
  *
- * No two names come closer than `LABEL_GAP`, each as wide as `measure` says its text and its
- * note are: a period still running keeps its name, and a neighbour that would touch it gives
- * way, as does any name that would touch one nearer the end. Without a measure (0 for every
- * text) only names standing in one place would touch.
+ * No two names come closer than `LABEL_GAP`, each as wide as `measure` says its text is: a
+ * period still running keeps its name, and a neighbour that would touch it gives way, as does
+ * any name that would touch one nearer the end. Without a measure (0 for every text) only
+ * names standing in one place would touch.
  */
 export function dayTicks(
   columns: readonly PeriodColumn[],
   width: number,
-  incomplete: string,
   measure: (text: string) => number = () => 0,
 ): PlacedTick[] {
   const count = columns.length
@@ -418,11 +418,7 @@ export function dayTicks(
     const column = columns[index]
     if (!column) continue
     // Measured at its widest — dated or not — since which name carries the month is known last.
-    const wide = Math.max(
-      measure(column.label),
-      column.dated ? measure(column.dated.label) : 0,
-      column.incomplete ? measure(incomplete) : 0,
-    )
+    const wide = Math.max(measure(column.label), column.dated ? measure(column.dated.label) : 0)
     const span = labelSpan(index, count, width, wide)
     const clear = kept.every(
       (other) => span.end + LABEL_GAP <= other.start || other.end + LABEL_GAP <= span.start,
@@ -439,9 +435,8 @@ export function dayTicks(
       const { dated } = column
       const text = dated && dated.month !== month ? dated.label : column.label
       month = dated?.month
-      const note = column.incomplete ? { note: incomplete } : {}
       const offset = (index + 0.5) / count
-      return [{ key: column.key, text, offset, edge: 'middle' as const, ...note }]
+      return [{ key: column.key, text, offset, edge: 'middle' as const }]
     })
 }
 

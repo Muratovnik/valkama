@@ -212,7 +212,8 @@ for (const width of WIDTHS) {
     for (const key of seen.days.legend)
       expect(inside(key, seen.days.frame), 'a legend key outside its chart').toBe(true)
     expect(seen.days.readouts, 'a line over a plot').toBe(0)
-    expect(seen.days.axis.at(-1)?.text).toBe('Oct 30so far')
+    // The running day is named as any other: its hatching and its hint say it is under way.
+    expect(seen.days.axis.at(-1)?.text).toBe('Oct 30')
     expect(seen.days.axis.length).toBeLessThanOrEqual(8)
     expect(seen.days.incomplete).toBe(1)
     expect(seen.days.zeroFromFloor, 'the scale names zero').not.toBeNull()

@@ -208,10 +208,15 @@ test('the minutes after the newest record say they have no data yet, and the min
   const days = analytics.locator('.spending-days')
   await expect(days.locator('.period-column')).toHaveCount(60)
 
-  // The note under the minutes says what a minute's figures are.
-  await expect(days.locator('.spending-days-estimate')).toHaveText(
-    'Figures per minute are an estimate: each stretch of work is shared out among the minutes it spans by its time in each.',
-  )
+  // What a minute's figures are is the section's to say, in its «ⓘ», and no line of the chart's.
+  const estimate =
+    'Figures per minute are an estimate: each stretch of work is shared out among the minutes it spans by its time in each.'
+  const about = analytics.locator('.analytics-panel .level-about-press')
+  await about.click()
+  await expect(page.locator('.info-tip-panel')).toContainText(estimate)
+  await about.click()
+  await expect(page.locator('.info-tip-panel')).toBeHidden()
+  await expect(days).not.toContainText(estimate)
 
   // The three minutes after 14:27:05 are hatched as the plot is tall, a minute of nothing before
   // them is not: no data yet is told from zero by more than a hue.
@@ -248,7 +253,7 @@ test('the minutes after the newest record say they have no data yet, and the min
   await expect(cells(57).last()).toHaveText('No data yet')
   await expect(cells(56).nth(headings.indexOf('total'))).toHaveText(/^0\smin$/u)
   await expect(cells(56).last()).toHaveText('')
-  await expect(days.locator('.spending-days-estimate')).toBeVisible()
+  await expect(days).not.toContainText(estimate)
 
   await record(info, 'live-not-yet', { slots: slots.slice(54) })
 })

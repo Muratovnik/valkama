@@ -24,8 +24,8 @@
  * A single day stands as its hours and the live hour as its minutes, each named by its clock time;
  * an hour or a minute still to come has nothing to narrow to, and only shows. A minute after the
  * newest record read has no data yet, which it
- * shows and says rather than a zero, and a note under the minutes says their figures are an
- * estimate: each stretch of work shared out by its time in each. Given the steps of the period
+ * shows and says rather than a zero; that a minute's figures are an estimate is the section's
+ * to say, in its «ⓘ» (`useSectionCaveats`). Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
  * short mark at its height on the same scale, named in the legend and said in the period's hint
  * and the table; while those steps are read there is no mark, and when they could not be read a note
@@ -223,12 +223,6 @@ function frame(firstKey: string, lastKey: string) {
       >
         {{ t('analytics.days.accountsFailed') }}
       </p>
-      <p
-        v-if="step === 'minute'"
-        class="spending-days-note spending-days-estimate"
-      >
-        {{ t('analytics.time.estimate') }}
-      </p>
     </template>
     <template #table>
       <PeriodColumnsTable
@@ -242,12 +236,6 @@ function frame(firstKey: string, lastKey: string) {
         class="spending-days-note"
       >
         {{ t('analytics.days.accountsFailed') }}
-      </p>
-      <p
-        v-if="step === 'minute'"
-        class="spending-days-note spending-days-estimate"
-      >
-        {{ t('analytics.time.estimate') }}
       </p>
     </template>
   </ChartSection>

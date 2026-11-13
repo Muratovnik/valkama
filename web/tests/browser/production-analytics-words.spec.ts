@@ -250,8 +250,6 @@ for (const locale of ['ru', 'en'] as const) {
   test(`${locale}: the live hour says its minutes are an estimate in its «ⓘ» alone`, async ({
     page,
   }, info) => {
-    // The day chart still prints its note under the minutes, a line of the chart's own.
-    test.fail(true, 'the day chart prints the minutes’ estimate under them as well')
     await speak(page, locale)
     await serveLive(page, [
       {

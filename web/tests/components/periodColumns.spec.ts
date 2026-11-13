@@ -108,12 +108,12 @@ describe('period columns that open nothing', () => {
     expect(chart.findAll('[data-key="d2"] .period-segment')).toHaveLength(0)
   })
 
-  it('hatches the running period and names it so on the axis', () => {
+  it('hatches the running period, and the axis names it with no word under its name', () => {
     const chart = mountColumns()
 
     expect(chart.findAll('.period-incomplete')).toHaveLength(1)
     expect(chart.get('[data-key="d4"] .period-stack').classes()).toContain('period-incomplete')
-    expect(chart.get('.period-axis').text()).toContain('so far')
+    expect(chart.get('.period-axis').text()).not.toContain('so far')
   })
 
   it('marks a change by a line in its period, says it in its hint and keeps no row for it', () => {

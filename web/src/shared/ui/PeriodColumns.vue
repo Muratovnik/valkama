@@ -148,7 +148,7 @@ const days = computed(() => {
   void fontsArrived.value
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-count').trim()
   const measure = (text: string) => drawnWidth(text, font)
-  return dayTicks(props.columns, width.value, props.words.incomplete, measure)
+  return dayTicks(props.columns, width.value, measure)
 })
 
 const segmentActs = (segment: StackSegment) => markActs(segment.series)

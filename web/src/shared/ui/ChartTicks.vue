@@ -7,8 +7,7 @@
  * so a period's name stays under its column wherever it fits there.
  *
  * Every label sits in one grid cell, because labels in one cell still give it the size of the
- * largest: the scale's column is as wide as its widest figure, the axis's row as tall as a name
- * with a note. Up a side a label is moved by its share of that cell; along an edge the edge is the
+ * largest: the scale's column is as wide as its widest figure, the axis's row as tall as a name. Up a side a label is moved by its share of that cell; along an edge the edge is the
  * container a label is kept inside, so its place and its own width are read in one length.
  * Drawn for the eye; the chart's names and its table say the same in words.
  */
@@ -42,11 +41,6 @@ function place(tick: PlacedTick) {
       :style="place(tick)"
     >
       <span>{{ tick.text }}</span>
-      <span
-        v-if="tick.note"
-        class="chart-tick-note"
-        >{{ tick.note }}</span
-      >
     </span>
   </div>
 </template>
@@ -106,9 +100,5 @@ function place(tick: PlacedTick) {
 
     justify-items: end;
   }
-}
-
-.chart-tick-note {
-  color: var(--color-text-muted);
 }
 </style>
