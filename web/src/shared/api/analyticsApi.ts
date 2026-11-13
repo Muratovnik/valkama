@@ -54,6 +54,19 @@ export type UsageStep = (typeof USAGE_STEPS)[number]
 
 const seconds = () => z.number().nonnegative()
 const moment = () => boundedText(MOMENT, 96)
+/**
+ * The answer's own moment, once it names an instant, as UTC with a `Z`: the one grammar the page
+ * state checks (`platformUiState`). The same instant, so every time the page draws is unchanged.
+ */
+const utcMoment = () =>
+  moment().transform((value, context) => {
+    const at = Date.parse(value)
+    if (Number.isNaN(at)) {
+      context.addIssue({ code: 'custom', message: 'expected a moment' })
+      return z.NEVER
+    }
+    return new Date(at).toISOString()
+  })
 const onTheSide = () => z.string().max(200)
 
 const measures = {
@@ -271,7 +284,8 @@ const quotaAccountSchema = strictObject({
 })
 
 const quotaSchema = strictObject({
-  now: moment(),
+  /** When the answer was read: UTC with a `Z`, unlike the offset every other moment carries. */
+  now: utcMoment(),
   utc_offset: z.number().int().min(-840).max(840),
   fresh_for_seconds: positiveInt(),
   accounts: z.array(quotaAccountSchema),
@@ -299,7 +313,7 @@ export function validateQuotaAnswer(payload: unknown): Quota {
   return parseContract(quotaAnswerSchema, payload, 'analytics.quota', invalid).quota
 }
 
-/** Each account's quota now, every time in it at `utcOffset` minutes east of UTC. */
+/** Each account's quota now, every time in it at `utcOffset` minutes east of UTC, but `now` in UTC. */
 export async function fetchQuota(utcOffset: number, signal?: AbortSignal): Promise<Quota> {
   const path = '/api/analytics/quota'
   const query = new URLSearchParams({ utc_offset: String(utcOffset) })
