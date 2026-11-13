@@ -1,10 +1,12 @@
 /**
- * What agent work spent in a period: `GET /api/analytics/usage`, read by the Analytics page.
+ * What agent work spent in a period, `GET /api/analytics/usage`, and where each account's
+ * subscription quota stands now, `GET /api/analytics/quota`: the two reads of the Analytics page.
  *
- * The answer is described in `docs/connection-contract.md` ("What agent work spent in a
- * period"). Its figures add up exactly: the rows to the total, the steps of the series to the
- * total, a step's groups to the step. Strict like every contract here: a field nobody declared
- * is refused rather than drawn.
+ * Both answers are described in `docs/connection-contract.md` ("What agent work spent in a
+ * period", "Each account's subscription quota"). The usage figures add up exactly: the rows to
+ * the total, the steps of the series to the total, a step's groups to the step. A quota figure
+ * is a share of one window of one account and adds up to nothing. Strict like every contract
+ * here: a field nobody declared is refused rather than drawn.
  */
 
 import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
@@ -163,4 +165,128 @@ export async function fetchUsage(query: UsageQuery, signal?: AbortSignal): Promi
   })
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
   return validateUsageAnswer(payload)
+}
+
+/** Who read a quota window: the status line, the mod, the poll of the usage endpoint, an import. */
+const QUOTA_SOURCES = ['statusline', 'mod', 'poll', 'import'] as const
+export type QuotaSource = (typeof QUOTA_SOURCES)[number]
+
+/** The windows that are a share of a limit, in the answer's order. */
+const SHARE_KINDS = ['five_hour', 'week', 'week_model'] as const
+/** The windows of money spent past a limit, which the answer gives no figure of. */
+const SPEND_KINDS = ['extra_usage', 'spend_limit'] as const
+
+/** A provisional seat: `week:` and its week's reset to the ten minutes. */
+const SEAT = /^week:\d{4}-\d{2}-\d{2}T\d{2}:\d0Z$/u
+
+/** A share of a window, from 0; above 100 only where the source said it overran. */
+const percent = () => z.number().nonnegative()
+const quotaState = () => enumField(['fresh', 'silent'] as const)
+const quotaSource = () => enumField(QUOTA_SOURCES)
+
+const quotaReadingSchema = strictObject({
+  at: moment(),
+  used_percent: percent(),
+  source: quotaSource(),
+})
+
+/** The five hours' point answer: it lasts to the reset, runs out at a time, or is spent. */
+const pointForecastSchema = strictObject({
+  outcome: enumField(['lasts', 'runs_out', 'spent'] as const),
+  runs_out_at: moment().nullable(),
+  basis: enumField(['recent', 'blend', 'window'] as const).nullable(),
+}).refine((point) => (point.outcome === 'runs_out') === (point.runs_out_at !== null), {
+  message: 'a time to run out at only where it runs out',
+})
+
+/** A week's answer, only ever a range: what its slower and its faster pace spend by the reset. */
+const rangeForecastSchema = strictObject({
+  low_percent: percent(),
+  high_percent: percent(),
+}).refine((range) => range.low_percent <= range.high_percent, {
+  message: 'a range runs from its low to its high',
+})
+
+const shareWindowSchema = strictObject({
+  kind: enumField(SHARE_KINDS),
+  model: boundedText(RUN_TEXT, 200).nullable(),
+  state: quotaState(),
+  resets_at: moment().nullable(),
+  latest: quotaReadingSchema,
+  started_at: moment().nullable(),
+  even_percent: percent().nullable(),
+  readings: z.array(quotaReadingSchema),
+  forecast: z.union([pointForecastSchema, rangeForecastSchema]).nullable(),
+}).superRefine((window, context) => {
+  if ((window.kind === 'week_model') !== (window.model !== null))
+    context.addIssue({ code: 'custom', path: ['model'], message: 'a model only for its week' })
+  const { forecast } = window
+  if (forecast && 'outcome' in forecast !== (window.kind === 'five_hour'))
+    context.addIssue({
+      code: 'custom',
+      path: ['forecast'],
+      message: 'a point for the five hours, a range for a week',
+    })
+})
+
+const spendWindowSchema = strictObject({
+  kind: enumField(SPEND_KINDS),
+  model: z.null(),
+  state: quotaState(),
+  resets_at: moment().nullable(),
+  latest: strictObject({ at: moment(), source: quotaSource() }),
+})
+
+const quotaAccountSchema = strictObject({
+  organization: boundedText(VALUE, 512),
+  account_uuid: boundedText(VALUE, 512).nullable(),
+  seat: boundedText(SEAT, 32).nullable(),
+  plan: boundedText(RUN_TEXT, 200).nullable(),
+  name: boundedText(VALUE, 512).nullable(),
+  no_source: z.boolean(),
+  windows: z.array(z.union([shareWindowSchema, spendWindowSchema])),
+}).superRefine((account, context) => {
+  if (account.no_source && account.windows.length)
+    context.addIssue({ code: 'custom', path: ['windows'], message: 'no source reads no window' })
+  if (account.account_uuid !== null && account.seat !== null)
+    context.addIssue({ code: 'custom', path: ['seat'], message: 'a seat only without an account' })
+})
+
+const quotaSchema = strictObject({
+  now: moment(),
+  utc_offset: z.number().int().min(-840).max(840),
+  fresh_for_seconds: positiveInt(),
+  accounts: z.array(quotaAccountSchema),
+})
+
+const quotaAnswerSchema = strictObject({
+  interface_version: z.literal('valkama-analytics-api', {
+    message: 'expected valkama-analytics-api',
+  }),
+  quota: quotaSchema,
+})
+
+export type Quota = z.infer<typeof quotaSchema>
+export type QuotaAccount = Quota['accounts'][number]
+export type QuotaWindow = QuotaAccount['windows'][number]
+/** A window that is a share of a limit: five hours, the week, a model's week. */
+export type QuotaShareWindow = Extract<QuotaWindow, { readings: unknown }>
+export type QuotaReading = QuotaShareWindow['latest']
+
+/** Whether a window is a share of a limit, with a percent, a pace and readings. */
+export const isShareWindow = (window: QuotaWindow): window is QuotaShareWindow =>
+  'readings' in window
+
+/** The quota answer, or a refusal naming what does not fit the contract. */
+export function validateQuotaAnswer(payload: unknown): Quota {
+  return parseContract(quotaAnswerSchema, payload, 'analytics.quota', invalid).quota
+}
+
+/** Each account's quota now, every time in it at `utcOffset` minutes east of UTC. */
+export async function fetchQuota(utcOffset: number, signal?: AbortSignal): Promise<Quota> {
+  const path = '/api/analytics/quota'
+  const query = new URLSearchParams({ utc_offset: String(utcOffset) })
+  const { response, payload } = await readJsonResponse(`${path}?${query}`, { signal })
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
+  return validateQuotaAnswer(payload)
 }
