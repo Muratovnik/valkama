@@ -5,18 +5,23 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { watchLoading } from './loadingWatch.ts'
+import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
 /**
- * The code the board does not draw downloads when it is needed: the graph and
- * Settings. These are the states that boundary can be in on a real page — not
- * needed yet, downloading, slow, failed and retried — read from the built
- * bundle, because only the bundle has chunks to delay or lose.
+ * The code the board does not draw downloads when it is needed: the graph,
+ * Settings, the card and the questions waiting for an answer. These are the states
+ * that boundary can be in on a real page — not needed yet, downloading, slow,
+ * failed and retried — read from the built bundle, because only the bundle has
+ * chunks to delay or lose.
  */
 
 const GRAPH_CHUNK = /\/assets\/GraphView-[\w-]+\.js$/
 const SETTINGS_CHUNK = /\/assets\/SettingsView-[\w-]+\.js$/
+const CARD_CHUNK = /\/assets\/WorkItemInspector-[\w-]+\.js$/
+const QUESTIONS_CHUNK = /\/assets\/RequestList-[\w-]+\.js$/
 
 function shot(info: TestInfo, name: string) {
   return { path: info.outputPath(name), animations: 'disabled' as const }
@@ -31,8 +36,10 @@ function chunkRequests(page: Page, chunk: RegExp) {
   return seen
 }
 
-async function openBoard(page: Page) {
+/** The board, with `prepare` adding routes of the test's own over the backend's. */
+async function openBoard(page: Page, prepare?: () => Promise<unknown>) {
   await installBackend(page)
+  await prepare?.()
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
@@ -139,6 +146,219 @@ test('a failed graph download says so in the stage, and Retry downloads it again
   await expect(failure).toHaveCount(0)
   // The browser asked again rather than replaying the failed module fetch.
   expect(graph.length).toBeGreaterThan(attempts)
+})
+
+const openTile = (page: Page) =>
+  page.locator('.work-item-tile').filter({ hasText: workItemRef.reference }).first().click()
+
+test('the board stands without the card or the questions, and the card downloads after it', async ({
+  page,
+}) => {
+  const card = chunkRequests(page, CARD_CHUNK)
+  const questions = chunkRequests(page, QUESTIONS_CHUNK)
+  // The questions' code never arrives: nothing on the first screen may wait for it.
+  await page.route(QUESTIONS_CHUNK, () => {})
+  const downloaded = page.waitForResponse(CARD_CHUNK)
+  await openBoard(page)
+  await expect(page.locator('.workspace-stage .platform-state-panel')).toHaveCount(0)
+  const header = await page.locator('.workspace-head').boundingBox()
+
+  // Once the board stands, the card downloads with nobody waiting for it ...
+  await downloaded
+  expect(card).toHaveLength(1)
+  expect(questions).toHaveLength(0)
+  // ... so opening one has nothing to wait for.
+  const watched = await watchLoading(page)
+  await openTile(page)
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  await expect(page.locator('.drawer .platform-state-panel[aria-busy="true"]')).toHaveCount(0)
+  const { spans } = await watched()
+  expect(spans).toEqual([])
+  expect(card).toHaveLength(1)
+  expect(questions).toHaveLength(0)
+  expect(await page.locator('.workspace-head').boundingBox()).toEqual(header)
+})
+
+/** The card's own read, which the backend answers once a test lets each request go on. */
+const CARD_READ = '**/api/modules/planning/work-item?*'
+
+/** Where an element stands inside the drawer, so the drawer sliding in moves nothing. */
+async function placeInDrawer(page: Page, selector: string) {
+  return page.locator(selector).evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const drawer = element.closest('.drawer')?.getBoundingClientRect()
+    return {
+      left: box.left - (drawer?.left ?? 0),
+      top: box.top - (drawer?.top ?? 0),
+      width: box.width,
+    }
+  })
+}
+
+interface DotsPlace {
+  /** Drawn by the card's own wait for its record, rather than by the wait for its code. */
+  card: boolean
+  left: number
+  top: number
+}
+
+/**
+ * Runs in the page: from now on, note each place in the drawer where a wait's dots were
+ * painted, on every mutation and every frame, so a place held for one frame is caught.
+ * The dots' row is measured, not a dot, whose pulse lifts it by two pixels.
+ */
+async function watchDrawerDots(page: Page) {
+  await page.evaluate(() => {
+    const places: DotsPlace[] = []
+    ;(window as unknown as { drawerDots?: DotsPlace[] }).drawerDots = places
+    const sample = () => {
+      for (const dots of document.querySelectorAll('.drawer [aria-busy="true"] .work-dots')) {
+        if (!dots.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue
+        const box = dots.getBoundingClientRect()
+        const drawer = dots.closest('.drawer')?.getBoundingClientRect()
+        const place = {
+          card: dots.closest('.inspector-scope') !== null,
+          left: Math.round((box.left - (drawer?.left ?? 0)) * 10) / 10,
+          top: Math.round((box.top - (drawer?.top ?? 0)) * 10) / 10,
+        }
+        if (!places.some((seen) => JSON.stringify(seen) === JSON.stringify(place)))
+          places.push(place)
+      }
+    }
+    new MutationObserver(sample).observe(document, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+    const frame = () => {
+      sample()
+      requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  })
+  return () =>
+    page.evaluate(() =>
+      structuredClone((window as unknown as { drawerDots?: DotsPlace[] }).drawerDots ?? []),
+    )
+}
+
+// The card draws its frame from its first frame and waits for its record inside it, in
+// the drawer's column. The wait for its code stood on the drawer's bare ground, a frame's
+// inset to the left of that column, and jumped there when the card took over.
+test('a card opened before its code arrives waits where the card will wait, then shows the card', async ({
+  page,
+}, info) => {
+  let held: Route | undefined
+  await page.route(CARD_CHUNK, (route) => {
+    held = route
+  })
+  await openBoard(page)
+  const reads: Route[] = []
+  await page.route(CARD_READ, (route) => {
+    reads.push(route)
+  })
+  const places = await watchDrawerDots(page)
+  await openTile(page)
+
+  const drawer = page.locator('.drawer')
+  const loading = drawer.locator('[aria-busy="true"]')
+  await expect(loading).toContainText('Loading')
+  await expect(page.getByRole('heading', { name: workItem.title })).toHaveCount(0)
+  await drawer.screenshot(shot(info, 'w-bundle-card-loading.png'))
+
+  await expect.poll(() => held !== undefined).toBe(true)
+  await held?.continue()
+  // The card takes over and waits for its record in the same drawer.
+  await expect(drawer.locator('.inspector-scope [aria-busy="true"]')).toContainText('Loading')
+  await drawer.screenshot(shot(info, 'w-bundle-card-own-wait.png'))
+  for (const read of reads) await read.fallback()
+  await page.unroute(CARD_READ)
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  await expect(loading).toHaveCount(0)
+
+  const seen = await places()
+  const [own, ...more] = seen.filter((place) => place.card)
+  const waits = seen.filter((place) => !place.card)
+  expect(more).toEqual([])
+  expect(waits.length).toBeGreaterThan(0)
+  for (const wait of waits) {
+    expect(Math.abs(wait.left - (own?.left ?? Number.NaN))).toBeLessThanOrEqual(1)
+    expect(Math.abs(wait.top - (own?.top ?? Number.NaN))).toBeLessThanOrEqual(1)
+  }
+})
+
+test('a card whose code fails to download says so where the card will wait, and Retry shows the card', async ({
+  page,
+}, info) => {
+  const card = chunkRequests(page, CARD_CHUNK)
+  await page.route(CARD_CHUNK, (route) => route.abort('failed'))
+  await openBoard(page)
+  const reads: Route[] = []
+  await page.route(CARD_READ, (route) => {
+    reads.push(route)
+  })
+  await openTile(page)
+
+  const drawer = page.locator('.drawer')
+  const failure = drawer.locator('[role="alert"]')
+  await expect(failure).toContainText('Could not load this view')
+  await drawer.screenshot(shot(info, 'w-bundle-card-failed.png'))
+  const failed = await placeInDrawer(page, '.drawer [role="alert"]')
+
+  const attempts = card.length
+  await page.unroute(CARD_CHUNK)
+  await failure.getByRole('button', { name: 'Retry', exact: true }).click()
+  // The card's own wait for its record stands in the column the failure had to stand in.
+  await expect(drawer.locator('.inspector-scope [aria-busy="true"]')).toContainText('Loading')
+  const own = await placeInDrawer(page, '.drawer .inspector-scope [aria-busy="true"]')
+  expect(Math.abs(failed.left - own.left)).toBeLessThanOrEqual(1)
+  expect(Math.abs(failed.top - own.top)).toBeLessThanOrEqual(1)
+  expect(Math.abs(failed.width - own.width)).toBeLessThanOrEqual(1)
+
+  for (const read of reads) await read.fallback()
+  await page.unroute(CARD_READ)
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  await expect(failure).toHaveCount(0)
+  expect(card.length).toBeGreaterThan(attempts)
+})
+
+test('a card waiting for its code closes from its bar and with Escape', async ({ page }) => {
+  await page.route(CARD_CHUNK, () => {})
+  await openBoard(page)
+  const drawer = page.locator('.drawer')
+  const loading = drawer.locator('[aria-busy="true"]')
+
+  await openTile(page)
+  await expect(loading).toContainText('Loading')
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(drawer).toHaveCount(0)
+
+  await openTile(page)
+  await expect(loading).toContainText('Loading')
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+})
+
+test('the questions opened before their code arrives say so in the dialog, then show', async ({
+  page,
+}, info) => {
+  let held: Route | undefined
+  await page.route(QUESTIONS_CHUNK, (route) => {
+    held = route
+  })
+  await openBoard(page, () => installQuestions(page, [asked()]))
+  await page.getByRole('button', { name: /^Needs my answer/u }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
+  const loading = dialog.locator('[aria-busy="true"]')
+  await expect(loading).toContainText('Loading')
+  await expect(dialog.locator('.request-card')).toHaveCount(0)
+  await dialog.screenshot(shot(info, 'w-bundle-questions-loading.png'))
+
+  await expect.poll(() => held !== undefined).toBe(true)
+  await held?.continue()
+  await expect(dialog.locator('.request-card').first()).toBeVisible()
+  await expect(dialog.locator('.platform-state-panel')).toHaveCount(0)
 })
 
 test('a link to Settings whose code fails to download offers Retry in the module frame', async ({

@@ -94,11 +94,11 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
 | `update_work_item` | `updated`, the names of the fields it edited; `mentions` when its description named other items |
 | `transition_work_item` | `released`, the holder a close released (see [A close ends the claims](#a-close-ends-the-claims)); `warnings` and `overridden`; each when there is one |
-| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued` and `warnings` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
-| `set_work_item_checklist` | `checklist`, the steps as `item_id`, `text` and `done` |
-| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
+| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
+| `set_work_item_checklist` | `checklist`, the steps as `item_id`, `text` and `done`; `overridden` when `force` discarded an engaged step or completed another holder's |
+| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
 | `set_work_item_summary` | `summary_recorded: true`; `mentions` when it named other items |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 **Since 2.5.** `comment_work_item` answers with `work_item`, `comment_count`,
@@ -1610,6 +1610,14 @@ seconds have passed. `view=live` takes no scope: with one it is refused as any v
 other than `planning` is. A page whose space stream is open takes the frame from
 that stream, and a page with none opens `view=live`, so a tab holds one stream.
 
+The start is the one exception, and it is bounded. A space stream opens only after
+the space has been read, which on a large space takes seconds, so the shell opens
+`view=live` as it starts, before it knows what it shows. That stream lives only
+until a space stream has delivered its own `live` event, and then closes; the list
+is never without a source between the two. When the shell turns out to show a page
+with no space stream, the same stream stays open as that page's. The start happens
+once per tab: a space stream that drops and reconnects does not open it again.
+
 ### Pins
 
 A person pins an item to keep it in the side panel whether or not anyone is
@@ -1696,7 +1704,7 @@ these groups, and applies them in this order:
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
 | `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
-| `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
+| `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
 | `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `comment_work_item` |

@@ -62,7 +62,11 @@ async function cardReading(page: Page, answer: 'fails' | 'waits') {
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toHaveCSS('transform', 'none')
-  const panel = drawer.locator('.platform-state-panel')
+  const panels = drawer.locator('.platform-state-panel')
+  // The download of the card's code waits in a panel of its own in the same place, so a
+  // failed read is the panel that bears the failure's mark.
+  const panel =
+    answer === 'fails' ? panels.filter({ has: page.locator('.platform-state-mark') }) : panels
   await expect(panel).toBeVisible()
   return panel
 }

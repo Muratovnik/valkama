@@ -1,7 +1,14 @@
 /**
  * The live-work list in the browser: an `EventSource` that counts what a tab opens and
- * delivers `event: live` frames to every stream that is open, the pin's route, and the
- * rail's rows as the specs read them.
+ * delivers `event: live` frames as the server does, the pin's route, and the rail's rows as
+ * the specs read them.
+ *
+ * The server sends a stream the current frame when it opens and every later one to each
+ * stream that is open. Here the current frame is the last one a spec delivered or the pin
+ * answered with; until a spec delivers one there is none, as if the server had not yet
+ * computed it, so a spec decides when the first frame lands. A tab briefly holds two
+ * streams at its start, and the shell closes its own once the space's stream has delivered:
+ * a frame sent at open is what ends that, as it does against the server.
  *
  * Installed after the backend, whose quiet stream it replaces.
  */
@@ -10,7 +17,7 @@ import type { Page } from '@playwright/test'
 import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
 
 export interface LiveStreams {
-  /** Deliver a frame as `event: live` to every open stream. */
+  /** Make this the current frame and deliver it as `event: live` to every open stream. */
   live: (frame: LiveFrame) => Promise<void>
   /** The streams the page has made since it loaded, open or closed, by address. */
   made: () => Promise<string[]>
@@ -18,11 +25,29 @@ export interface LiveStreams {
   open: () => Promise<string[]>
 }
 
-export async function installLiveStreams(page: Page): Promise<LiveStreams> {
-  await page.addInitScript(() => {
+type Streams = {
+  current: (data: string) => void
+  live: (data: string) => void
+  made: () => string[]
+  open: () => string[]
+}
+
+export async function installLiveStreams(
+  page: Page,
+  options: {
+    /**
+     * A stream that opens is sent the current frame, as the server sends it. Off, a frame
+     * reaches only the streams open when a spec delivers it, so a spec can hold a stream
+     * without its first frame for as long as it needs.
+     */
+    sendOnOpen?: boolean
+  } = {},
+): Promise<LiveStreams> {
+  await page.addInitScript((sendOnOpen: boolean) => {
     type Listener = (event: Event) => void
     const open: CountedEventSource[] = []
     const made: string[] = []
+    let current: string | null = null
     class CountedEventSource {
       readonly url: string
       readonly readyState = 1
@@ -32,6 +57,12 @@ export async function installLiveStreams(page: Page): Promise<LiveStreams> {
         this.url = String(url)
         made.push(this.url)
         open.push(this)
+        // After the caller has added its listeners, as a frame comes over the network.
+        if (sendOnOpen)
+          setTimeout(() => {
+            if (current !== null && open.includes(this))
+              this.fire(new MessageEvent('live', { data: current }))
+          }, 0)
       }
       addEventListener(type: string, listener: Listener) {
         const known = this.listeners.get(type) ?? new Set<Listener>()
@@ -59,15 +90,18 @@ export async function installLiveStreams(page: Page): Promise<LiveStreams> {
     Object.defineProperty(window, '__liveStreams', {
       configurable: true,
       value: {
+        current: (data: string) => {
+          current = data
+        },
         open: () => open.map((stream) => stream.url),
         made: () => [...made],
         live: (data: string) => {
+          current = data
           for (const stream of open) stream.fire(new MessageEvent('live', { data }))
         },
-      },
+      } satisfies Streams,
     })
-  })
-  type Streams = { live: (data: string) => void; made: () => string[]; open: () => string[] }
+  }, options.sendOnOpen ?? true)
   return {
     live: (frame) =>
       page.evaluate((data) => {
@@ -80,13 +114,20 @@ export async function installLiveStreams(page: Page): Promise<LiveStreams> {
   }
 }
 
-/** The pin's route: what it was sent, and the frame it answers with. */
+/**
+ * The pin's route: what it was sent, and the frame it answers with. That frame is the
+ * server's current one from then on, so a stream opened later is sent it.
+ */
 export async function servePins(page: Page, answer: (body: unknown) => LiveFrame) {
   const sent: unknown[] = []
-  await page.route('**/api/planning/work-item/pin', (route) => {
+  await page.route('**/api/planning/work-item/pin', async (route) => {
     const body = route.request().postDataJSON() as unknown
     sent.push(body)
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(answer(body)) })
+    const frame = JSON.stringify(answer(body))
+    await page.evaluate((data) => {
+      ;(window as unknown as { __liveStreams?: Streams }).__liveStreams?.current(data)
+    }, frame)
+    return route.fulfill({ contentType: 'application/json', body: frame })
   })
   return sent
 }

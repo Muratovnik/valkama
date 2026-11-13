@@ -1,6 +1,23 @@
-import { nextTick } from 'vue'
+import { inject, nextTick, provide } from 'vue'
+import type { InjectionKey } from 'vue'
 
 import { pageWasTouched } from '@/shared/ui/overlayStack.ts'
+
+const CONTENT_REPLACED: InjectionKey<() => void> = Symbol('overlay-content-replaced')
+
+/**
+ * Let what a surface holds say that it replaced the element focus was in. Focus fell to the
+ * page with the element, and the surface puts it in again as an open does: on what the
+ * drawer is read with while nobody has touched the page, on the first control after that.
+ */
+export function provideContentReplaced(placeFocus: () => void): void {
+  provide(CONTENT_REPLACED, placeFocus)
+}
+
+/** What a part of a surface calls once it replaced the element that held focus. */
+export function useContentReplaced(): () => void {
+  return inject(CONTENT_REPLACED, () => {})
+}
 
 /** Where focus goes in an overlay surface: on an open, and when a Tab runs out of controls. */
 export function useOverlayFocus(options: {

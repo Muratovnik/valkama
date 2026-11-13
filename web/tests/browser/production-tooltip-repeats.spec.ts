@@ -52,8 +52,10 @@ async function board(page: Page, locale: Locale, width = 1280) {
   await serve(page)
   const streams = await installLiveStreams(page)
   await openBoard(page)
-  await expect.poll(() => streams.open()).toHaveLength(1)
+  // The frame first: a space's stream is sent it as it opens, and the stream the
+  // shell started with closes then.
   await streams.live(busyFrame())
+  await expect.poll(() => streams.open()).toHaveLength(1)
   const fold = page.locator('.nav-fold-toggle').first()
   if (width > 390) {
     await fold.click()
@@ -217,8 +219,10 @@ for (const locale of ['en', 'ru'] as const) {
       live.streams = await installLiveStreams(page)
     })
     // The menu holds the pin, which a live frame says.
-    await expect.poll(() => live.streams?.open()).toHaveLength(1)
+    // The frame first: a space's stream is sent it as it opens, and the stream the
+    // shell started with closes then.
     await live.streams?.live(busyFrame())
+    await expect.poll(() => live.streams?.open()).toHaveLength(1)
     await drawer.locator('.menu-trigger').click()
     const menu = page.locator('.menu-popup')
     await expect(menu.locator('.menu-item').first()).toBeVisible()

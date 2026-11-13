@@ -244,6 +244,67 @@ class ChecklistGroupTests(unittest.TestCase):
         )["checklist"][0]
         self.assertEqual((True, "", "holder"), (done["done"], done["claimed_by"], done["done_by"]))
 
+    def overrides(self) -> list[str]:
+        return [
+            event["detail"]
+            for event in service.get_work_item(self.conn, self.reference)["events"]
+            if event["action"] == "overridden"
+        ]
+
+    def test_a_forced_discard_of_an_engaged_step_records_the_override(self) -> None:
+        steps = service.set_checklist(self.conn, self.reference, ["one", "two"])["checklist"]
+        service.tick_checklist_item(self.conn, self.reference, steps[0]["id"], author="agent")
+        kept = service.set_checklist(self.conn, self.reference, ["one", "two", "three"])
+        self.assertNotIn("overridden", kept)
+        self.assertEqual([], self.overrides())
+
+        forced = service.set_checklist(self.conn, self.reference, ["two"], force=True)
+
+        self.assertEqual(["checklist_discard"], forced["overridden"])
+        self.assertEqual(["checklist_discard"], self.overrides())
+        self.assertEqual(["checklist_replaced", "overridden"], self.actions()[-2:])
+
+    def test_a_forced_completion_of_a_step_held_by_another_records_the_override(self) -> None:
+        step = service.set_checklist(self.conn, self.reference, ["theirs"])["checklist"][0]
+        service.claim_checklist_item(self.conn, self.reference, step["id"], author="holder")
+
+        forced = service.set_checklist(
+            self.conn,
+            self.reference,
+            [{"text": "theirs", "done": True}],
+            author="other",
+            force=True,
+        )
+
+        self.assertEqual(["checklist_claim"], forced["overridden"])
+        self.assertEqual(["checklist_claim"], self.overrides())
+
+    def test_a_forced_takeover_and_release_of_a_held_step_record_the_override(self) -> None:
+        step = service.set_checklist(self.conn, self.reference, ["theirs"])["checklist"][0]
+        service.claim_checklist_item(self.conn, self.reference, step["id"], author="holder")
+
+        taken = service.claim_checklist_item(
+            self.conn, self.reference, step["id"], author="other", force=True
+        )
+        self.assertEqual(["checklist_claim"], taken["overridden"])
+        self.assertEqual(["checklist_taken_over", "overridden"], self.actions()[-2:])
+
+        released = service.claim_checklist_item(
+            self.conn, self.reference, step["id"], author="third", release=True, force=True
+        )
+        self.assertEqual(["checklist_claim"], released["overridden"])
+        self.assertEqual(["checklist_claim", "checklist_claim"], self.overrides())
+
+    def test_a_forced_claim_of_an_unheld_step_records_no_override(self) -> None:
+        step = service.set_checklist(self.conn, self.reference, ["free"])["checklist"][0]
+
+        claimed = service.claim_checklist_item(
+            self.conn, self.reference, step["id"], author="other", force=True
+        )
+
+        self.assertNotIn("overridden", claimed)
+        self.assertEqual([], self.overrides())
+
     def post_get(self) -> dict:
         return service.get_work_item(self.conn, self.reference)
 

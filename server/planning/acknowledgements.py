@@ -70,6 +70,12 @@ def _moved(item: dict) -> dict:
     }
 
 
+def _forced(item: dict) -> dict:
+    """What a `force` carried through, as `overridden`: the guards a forced move names too."""
+
+    return {"overridden": item["overridden"]} if item.get("overridden") else {}
+
+
 def created(item: dict, _arguments: Mapping[str, object]) -> dict:
     """A new item: the defaults the caller may not have named are the news.
 
@@ -101,16 +107,13 @@ def updated(item: dict, arguments: Mapping[str, object]) -> dict:
 def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The state is already in the base; add the findings a caller must not miss."""
 
-    answer = {**_base(item), **_moved(item)}
-    if item.get("overridden"):
-        answer["overridden"] = item["overridden"]
-    return answer
+    return {**_base(item), **_moved(item), **_forced(item)}
 
 
 def claimed(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The holder is `claim_ref` and its lease `claim_state`, and a move of the state."""
 
-    return {**_base(item), **_moved(item)}
+    return {**_base(item), **_moved(item), **_forced(item)}
 
 
 def checklist_replaced(item: dict, _arguments: Mapping[str, object]) -> dict:
@@ -120,7 +123,7 @@ def checklist_replaced(item: dict, _arguments: Mapping[str, object]) -> dict:
         {"item_id": step["id"], "text": step["text"], "done": step["done"]}
         for step in item["checklist"]
     ]
-    return {**_base(item), "checklist": steps}
+    return {**_base(item), "checklist": steps, **_forced(item)}
 
 
 def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
@@ -136,6 +139,7 @@ def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
             "claimed_by": step["claimed_by"],
             "done_by": step["done_by"],
         },
+        **_forced(item),
     }
 
 

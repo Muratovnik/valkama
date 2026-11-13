@@ -182,6 +182,12 @@
   --color-black-68: rgb(0 1 2 / 68%);
   --color-black-42: rgb(0 0 0 / 42%);
 
+  /* The yellow of a match found, as the browser's find draws it: lighter and yellower than
+     the amber that says a decision waits, and laid over text rather than drawn as a mark. A
+     quarter of it lies under every match, and the whole of it under the current one. */
+  --color-yellow-300: #f2cf6b;
+  --color-yellow-24: rgb(242 207 107 / 24%);
+
   /* The type ramp, as tokens rather than as a paragraph in DESIGN.md.
      The document has named these steps all along and every component still
      wrote the number, which is how one overlay title came to exist at 19, 20,
@@ -433,6 +439,14 @@
      lifts further. tests/designTokens.test.ts holds both against every ground. */
   --color-chip-face: var(--color-white-8);
   --color-chip-face-raised: var(--color-white-18);
+
+  /* The list's find marks every match it can see and the current one apart. Every match
+     keeps the text's own ink on a tint of the yellow, which holds 4.5:1 on a row and on a
+     hovered row; the current one is the whole yellow with dark ink, so it differs by
+     lightness and not only by hue. tests/findColors.test.ts holds both. */
+  --color-find-match: var(--color-yellow-24);
+  --color-find-current: var(--color-yellow-300);
+  --color-text-on-find: var(--color-gray-1000);
   --shadow-overlay: 0 20px 56px rgb(0 0 0 / 55%);
 
   /* What a modal drops on the window, and what a floating surface casts. The

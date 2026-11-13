@@ -62,7 +62,7 @@ async function layoutsToSettle(page: Page, labelled: boolean) {
   const answered = new Promise<void>((resolve) => {
     gate.open = resolve
   })
-  await serveSpace(page, space(labelled), [], answered)
+  await serveSpace(page, space(labelled), [], { answered })
   const devtools = await page.context().newCDPSession(page)
   await devtools.send('Performance.enable')
   const layouts = async () => {
@@ -225,7 +225,7 @@ test('a list one row short of a window paints its first rows first, then all of 
   const answered = new Promise<void>((resolve) => {
     gate.open = resolve
   })
-  await serveSpace(page, rows, [], answered)
+  await serveSpace(page, rows, [], { answered })
   await page.addInitScript(() => {
     const frames: { cells: number[]; rows: number }[] = []
     Object.assign(globalThis, { listFrames: frames })

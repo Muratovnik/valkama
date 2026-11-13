@@ -43,6 +43,7 @@ import {
   withGrouping,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningChainView } from '@/pages/planning/composables/usePlanningChainView.ts'
+import { usePlanningDownloads } from '@/pages/planning/composables/usePlanningDownloads.ts'
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
@@ -52,10 +53,8 @@ import PlanningCardDrawer from '@/pages/planning/PlanningCardDrawer.vue'
 import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
-import { graphView } from '@/pages/planning/utils/graphView.ts'
+import { WorkItemInspector } from '@/pages/planning/utils/inspectorView.ts'
 import { readingModel } from '@/pages/planning/utils/readingModel.ts'
-
-import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
@@ -129,8 +128,6 @@ const {
 const inspectorProjectId = computed(() => projectId.value ?? '')
 
 const view = computed<PlanningViewMode>(() => viewOf(props.route.state))
-// An address that opens on the graph downloads it beside the space read, not after it.
-watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
 const grouping = computed(() => groupingOf(props.route.state))
 /** The space a saved view belongs to: the store and the key, which the project does not change. */
 const viewPlace = computed(() =>
@@ -166,6 +163,7 @@ const {
  */
 const resource = shallowRef(createResource<PlanningReadModel>())
 const model = computed(() => resource.value.data)
+usePlanningDownloads(view, model)
 const stale = computed(() => resource.value.status === 'refreshing')
 const planning = ref<PlatformUiState>(uiLoading())
 /** A space the route cannot bind is not loaded by asking again. */
@@ -235,9 +233,12 @@ const {
 })
 
 const { openRecord, parent } = useOpenCardModel(model, open)
-/** The card on show: every way of closing the panel asks it about its drafts first. */
-const card = useTemplateRef<InstanceType<typeof WorkItemInspector>>('card')
-const closePanel = () => card.value?.close()
+/**
+ * The card on show: every way of closing the panel asks it about its drafts first. Until
+ * its code is resident it has none to ask about, so the panel just closes.
+ */
+const card = useTemplateRef<Partial<InstanceType<typeof WorkItemInspector>>>('card')
+const closePanel = () => (card.value?.close ? card.value.close() : closeItem())
 /** The workspace owns the filter; the card's label chips reach it here. */
 const workspace = useTemplateRef<{ toggleFilter: (token: WorkFilterToken) => void }>('workspace')
 const filterFromCard = (token: WorkFilterToken) => workspace.value?.toggleFilter(token)
@@ -391,7 +392,7 @@ usePlanningReferenceLinks(boundSpace, model, openFromPage)
  * card answers for leaving itself: its draft guard first, then Back to where it was left.
  */
 function openFromPage(reference: string) {
-  if (!card.value) openItem(reference)
+  if (!card.value?.openFrom) openItem(reference)
   else if (reference !== open.value) card.value.openFrom(reference)
 }
 

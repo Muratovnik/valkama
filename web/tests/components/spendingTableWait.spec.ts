@@ -1,7 +1,7 @@
 /**
  * The wait of a breakdown crossed with a second dimension, while that read lands. The oracle is
- * the rule every read wait keeps: nothing on screen for the first 300 ms, then the shared word for
- * at least 400 ms, and the table held away for that minimum. The page says the word once for all of
+ * the rule every read wait keeps: nothing on screen for the first 500 ms, then the shared word for
+ * at least 200 ms, and the table held away for that minimum. The page says the word once for all of
  * its waits (`analytics-read-wait`, see the view's spec); a read that fails says so in its alert.
  */
 import { mount } from '@vue/test-utils'

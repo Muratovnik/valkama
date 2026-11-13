@@ -134,6 +134,19 @@ const liveWithin = computed(() => {
   )
 })
 const withinFor = (live: boolean) => live && liveWithin.value
+/**
+ * The groups under the list of work going on now are not drawn until the list has its first
+ * frame: they stood under «Work» at once and dropped by the list's height when its rows came,
+ * which carried «Analytics» half a rail down in the first second. They keep their place in the
+ * flow, so nothing is held open for rows that may not come; a lost connection, which may bring
+ * no frame, draws them. A folded list takes no room and holds nothing back.
+ */
+const liveIndex = computed(() => groupedModules.value.findIndex((entry) => entry.live))
+const awaitingList = computed(
+  () => liveStore.frame === null && navOpen.isOpen('work') && props.connection !== 'reconnecting',
+)
+const heldFor = (index: number) =>
+  awaitingList.value && liveIndex.value !== -1 && index > liveIndex.value
 const toggleLive = () => navOpen.set('work', !navOpen.isOpen('work'))
 const foldFor = (live: boolean) => (live ? liveFold.value : null)
 
@@ -229,9 +242,9 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
           @requests="emit('requests')"
         />
         <NavModuleList
-          v-for="entry in groupedModules"
+          v-for="(entry, index) in groupedModules"
           :key="entry.group"
-          :class="{ 'nav-live-group': entry.live }"
+          :class="{ 'nav-live-group': entry.live, 'nav-held': heldFor(index) }"
           :active="active"
           :badges="badges"
           :heading="entry.heading"
@@ -391,6 +404,11 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   flex: 0 1 auto;
 }
 
+/* Hidden, not removed: a group waiting for the list above it keeps its place in the flow. */
+.nav-held {
+  visibility: hidden;
+}
+
 /* Its entries start where the middle's do. A rule above it only while it says the
    connection is lost: Settings alone is one more entry of the rail, and a line over it
    would divide nothing. */
@@ -425,6 +443,11 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
 @container nav (width < 150px) {
   .app-nav {
     gap: var(--space-2);
+  }
+
+  /* A rail of icons has a button in the list's place, which its rows do not grow. */
+  .nav-held {
+    visibility: visible;
   }
 
   .app-brand {

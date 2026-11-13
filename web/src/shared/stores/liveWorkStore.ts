@@ -27,6 +27,11 @@ interface Fading extends DepartedRow {
  */
 export const useLiveWorkStore = defineStore('liveWork', () => {
   const frame = shallowRef<LiveFrame | null>(null)
+  /**
+   * A space's stream has delivered a frame since the tab opened. The stream the shell opens
+   * as it starts lives until then, so the list never stands without a source at the handover.
+   */
+  const spaceDelivered = ref(false)
   const fading = ref<Fading[]>([])
   /** How many surfaces hold each row: the pointer over it, focus in it. */
   const held = new Map<string, number>()
@@ -70,6 +75,12 @@ export const useLiveWorkStore = defineStore('liveWork', () => {
       )
   }
 
+  /** A frame from a space's stream, which ends the shell's start. */
+  function acceptFromSpace(next: LiveFrame) {
+    accept(next)
+    spaceDelivered.value = true
+  }
+
   /** The pointer or focus came onto a row, or left it. */
   function hold(reference: string, on: boolean) {
     const now = Math.max(0, (held.get(reference) ?? 0) + (on ? 1 : -1))
@@ -94,5 +105,16 @@ export const useLiveWorkStore = defineStore('liveWork', () => {
     accept(await pinWorkItem({ id: reference, pinned: on }))
   }
 
-  return { accept, count, elsewhere, frame, hold, pin, pinned, spaces }
+  return {
+    accept,
+    acceptFromSpace,
+    count,
+    elsewhere,
+    frame,
+    hold,
+    pin,
+    pinned,
+    spaceDelivered,
+    spaces,
+  }
 })
