@@ -26,6 +26,14 @@ checkouts are therefore distinguishable even at the same version.
   answers within half a second now shows no «Loading» at all, where it used to flash the
   mark after 300 ms. A mark that has appeared stays on screen for at least 200 ms, down
   from 400 ms.
+- **The first screen downloads a sixth less.** The card and the list of questions waiting
+  for an answer no longer ship with the board: the code the first screen loads before it
+  can draw falls from 443 KiB to 367 KiB compressed. The card downloads once the board
+  stands, so opening one still waits for nothing; the questions download as their dialog
+  opens, beside the read it starts. Opened before its code has arrived, either says
+  «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
+  card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
+  own will, so nothing moves when the card arrives.
 
 ### Fixed
 
