@@ -121,6 +121,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A pair's name in a split Analytics section keeps the part that tells it apart.** Where a
+  name such as «claude-opus-5-5 · medium» does not fit its line — in the ranked bars, the small
+  charts' names and the table — the first part is now cut, «claude-opus-5-… · medium», and the
+  separator and the second part stand whole. The name used to be cut from its end, so two pairs
+  of one model read alike, «claude-opus-5-5 · …», in the bars of a 1440px window. The hint still
+  says the whole pair.
 - **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
   `apply_work_item_changes` and `set_work_item_summary` calls as input that "could not be
   parsed as JSON" when an agent wrote `comment`, `summary` or `transition` as bare text,

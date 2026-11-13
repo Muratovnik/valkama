@@ -263,22 +263,29 @@ export function useSpendingWords() {
   }
 
   /**
+   * What a pair's name says after the section's value, « · high»: the end that tells the pairs of
+   * one value apart, so it stays whole where the name is cut (`PairName`). Empty for one value.
+   */
+  const pairEnd = (second?: SpendingLine['second']) =>
+    second ? ` · ${valueLabel(second.dimension, second.value)}` : ''
+
+  /**
    * A value by its name, or a pair by both, the section's value first: «claude-opus-5-5 · high».
    */
   const pairLabel = (
     name: UsageDimension,
     value: UsageGroupValue,
     second?: SpendingLine['second'],
-  ) =>
-    second
-      ? `${valueLabel(name, value)} · ${valueLabel(second.dimension, second.value)}`
-      : valueLabel(name, value)
+  ) => `${valueLabel(name, value)}${pairEnd(second)}`
 
   /** A line of a breakdown by its name: a value or a pair, or the folded tail with how many it holds. */
   const lineLabel = (name: UsageDimension, line: SpendingLine) =>
     line.value
       ? pairLabel(name, line.value, line.second)
       : t('analytics.values.other', { count: line.folded }, line.folded)
+
+  /** The end a line's name keeps whole where it is cut: a pair's (`pairEnd`); none otherwise. */
+  const lineEnd = (line: SpendingLine) => (line.value && pairEnd(line.second)) || undefined
 
   /**
    * A line's figure in a measure; a cost says beside it the tokens it leaves out, so a line
@@ -502,9 +509,11 @@ export function useSpendingWords() {
     figure,
     lineChange,
     lineFigure,
+    lineEnd,
     lineLabel,
     measure,
     noneLabel,
+    pairEnd,
     pairLabel,
     tokenKinds,
     unpriced,

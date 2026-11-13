@@ -14,11 +14,12 @@
  * mark of its chart: its hint, under the pointer or the keyboard, says what it does not print —
  * its share of the whole where the caller says how a share reads (`formatShare`), and what the
  * label leaves out (`detail`). A row's name takes one line, ends in an ellipsis where it is cut
- * and is then said whole first in that hint (`markHints.ts`); the values stand in one column whatever the names do. In a
- * narrow container the name takes a line of its own over its bar. A `dense` chart, a few rows in
- * a small card, keeps the name and the value on one line and draws a thin bar under both; there
- * each value is as wide as its own figure, ending where the others end, and the name takes the
- * rest of its row, so a long figure in one row cuts no name in another.
+ * and is then said whole first in that hint (`markHints.ts`); a name of two parts keeps its end
+ * whole and cuts its first part (`labelEnd`, `PairName`). The values stand in one column whatever
+ * the names do. In a narrow container the name takes a line of its own over its bar. A `dense`
+ * chart, a few rows in a small card, keeps the name and the value on one line and draws a thin
+ * bar under both; there each value is as wide as its own figure, ending where the others end,
+ * and the name takes the rest of its row, so a long figure in one row cuts no name in another.
  */
 import { computed, useId } from 'vue'
 
@@ -26,6 +27,7 @@ import type { PlacedRow, RankedRow, RankedWords } from '@/shared/ui/chartGeometr
 import { markTag, rankRows } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { namedHint } from '@/shared/ui/markHints.ts'
+import PairName from '@/shared/ui/PairName.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -135,8 +137,10 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
             <span
               class="ranked-label one-line"
               :class="{ 'ranked-quiet': row.quiet }"
-              >{{ row.label }}</span
-            >
+              ><PairName
+                :name="row.label"
+                :end="row.labelEnd"
+            /></span>
             <span
               class="ranked-track"
               aria-hidden="true"

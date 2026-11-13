@@ -2,11 +2,11 @@
 /**
  * One small chart of the span per value, all on one scale whose top is said once over them, so
  * a short column means less in every chart alike: each a name on one line (cut with an ellipsis,
- * whole in its hint), its figure for the whole span, and a column per period. The categories come
- * first, in the order given, then the folded tail; work with nothing to file it under and work
- * nobody can place close the chart in a list of their own set apart by air, by name and figure,
- * with no chart and no part in the scale (`placeMultiples`). `SmallMultiplesTable` is the same
- * numbers as a table.
+ * a name of two parts in its first part, `PairName`; whole in its hint), its figure for the whole
+ * span, and a column per period. The categories come first, in the order given, then the folded
+ * tail; work with nothing to file it under and work nobody can place close the chart in a list of
+ * their own set apart by air, by name and figure, with no chart and no part in the scale
+ * (`placeMultiples`). `SmallMultiplesTable` is the same numbers as a table.
  *
  * A column is drawn in its value's hue (`seriesFill.css`), the one the value has wherever the page
  * draws it, and a name always stands beside it: a hue never speaks alone.
@@ -30,6 +30,7 @@ import type {
   PlacedMultiple,
   SmallMultiple,
 } from '@/shared/ui/multiplesGeometry.ts'
+import PairName from '@/shared/ui/PairName.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -123,8 +124,10 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             v-bind="nameAttrs(one)"
             @click="(event: MouseEvent) => press(one, event)"
             @auxclick="(event: MouseEvent) => pressAside(one, event)"
-            >{{ one.label }}</component
-          >
+            ><PairName
+              :name="one.label"
+              :end="one.labelEnd"
+          /></component>
           <span class="multiple-value">{{ one.valueText }}</span>
           <span
             class="multiple-plot"
@@ -164,8 +167,10 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             v-bind="nameAttrs(one)"
             @click="(event: MouseEvent) => press(one, event)"
             @auxclick="(event: MouseEvent) => pressAside(one, event)"
-            >{{ one.label }}</component
-          >
+            ><PairName
+              :name="one.label"
+              :end="one.labelEnd"
+          /></component>
           <span class="multiple-value">{{ one.valueText }}</span>
         </li>
       </ul>
