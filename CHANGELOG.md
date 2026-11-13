@@ -22,6 +22,10 @@ checkouts are therefore distinguishable even at the same version.
   motion nothing in it moves. The window remembers the rail's width beside the language
   whenever the reader changes either and as the window closes, so the next start draws
   the rail where it was left; a window that has never heard a width draws the default.
+- **A loading mark appears after half a second and stays at least 200 ms.** A read that
+  answers within half a second now shows no «Loading» at all, where it used to flash the
+  mark after 300 ms. A mark that has appeared stays on screen for at least 200 ms, down
+  from 400 ms.
 
 ### Fixed
 

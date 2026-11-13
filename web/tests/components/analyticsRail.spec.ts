@@ -344,7 +344,7 @@ describe('the reads', () => {
     // A new period: every tile with figures is dimmed once the wait is long enough to be seen.
     await page.setProps({ routeState: { period: 'weeks4' } })
     await flushPromises()
-    await wait(300)
+    await wait(LOADING_DELAY_MS)
     for (const section of ['overview', ...USAGE_DIMENSIONS])
       expect(dimmed(section), section).toBe(true)
     // The page's own answer lands first, the overview's tile with it; a dimension's tile still

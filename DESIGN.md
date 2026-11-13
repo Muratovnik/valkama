@@ -582,15 +582,22 @@ and only fades the end of a strip that scrolls on past it.
   operator's, not the data's, and a switch of space that took them away for the length of
   a read read as the view being lost. What the bar counts it says only once it has read it.
 - A wait is said only once it has lasted, and then long enough to be read: nothing for
-  the first 300 ms, and once shown at least 400 ms, with whatever arrives meanwhile held
+  the first 500 ms, and once shown at least 200 ms, with whatever arrives meanwhile held
   back until then. `web/src/shared/ui/loadingPresence.ts` holds both numbers and the rule,
   and every read wait goes through it: `PlatformStatePanel`, the downloaded views, and a
   wait said in a line of its own — a section of a card, a dialog's note, a search, whose
   delay counts from the keystroke. A screen whose own branch takes the panel away keeps
   the branch while the rule says the wait is held. While it is not shown, the panel keeps
   its box and its busy mark and paints nothing, and a line keeps a line's height, so the
-  place does not collapse and grow back. A switch of space on a two-megabyte board reads
-  in about 170–200 ms, which is why the delay is not shorter.
+  place does not collapse and grow back.
+  The delay is 500 ms because that is the default of the spin-delay library and of
+  Turbo's progress bar, and because Primer advises showing no indicator for a wait under
+  a second. The minimum of 200 ms is the spin-delay default too; it keeps a read that only
+  just outlasts the delay from flashing for a few dozen milliseconds. The earlier 300 ms
+  delay was too short for a cold first entry: a reply that arrived just after 300 ms
+  lengthened the wait by about 370 ms, in 2 of 10 cold board entries and 3 of 10 list
+  entries. A switch of space on a two-megabyte board reads in about 170–200 ms, which
+  the 500 ms delay also covers with room to spare.
 - Before the application mounts, `web/index.html` draws the shell's chrome and nothing
   else: the rail with its mark and the outline of its first entries, the context bar and
   the empty workspace panel, each where the shell draws it, so the shell takes its place
