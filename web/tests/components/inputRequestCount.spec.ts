@@ -1,7 +1,7 @@
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import { requestListView } from '@/features/input-requests/utils/requestListView.ts'
@@ -10,6 +10,7 @@ import { fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { requestList, twoQuestions, unavailableSource } from '../support/inputRequests.ts'
+import { residentView } from '../support/residentView.ts'
 
 vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/inputRequestApi.ts')>()),
@@ -31,10 +32,7 @@ function hub(locale: 'en' | 'ru') {
   return wrapper
 }
 
-// The app downloads this view when it is first drawn; a test mounts it resident.
-beforeAll(async () => {
-  await requestListView.load()
-})
+residentView(requestListView)
 
 beforeEach(() => {
   vi.resetAllMocks()

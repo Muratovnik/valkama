@@ -2,7 +2,7 @@ import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 import { inspectorView } from '@/pages/planning/utils/inspectorView.ts'
@@ -13,6 +13,8 @@ import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
+
+import { residentView } from '../support/residentView.ts'
 
 // The card asks for its chain on every open; this spec is about something else.
 vi.mock('@/shared/api/planningChainApi.ts', async () => {
@@ -119,10 +121,7 @@ const context = {
   ui_prefs: null,
 } as PlatformContextReady
 
-// The app downloads this view when it is first drawn; a test mounts it resident.
-beforeAll(async () => {
-  await inspectorView.load()
-})
+residentView(inspectorView)
 
 beforeEach(() => {
   vi.stubGlobal(
