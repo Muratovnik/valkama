@@ -11,7 +11,11 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { pageDimensionOf, validateQuotaAnswer, validateUsageAnswer } from '@/shared/api/analyticsApi.ts'
+import {
+  pageDimensionOf,
+  validateQuotaAnswer,
+  validateUsageAnswer,
+} from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
 import {
   validateDocument,
