@@ -166,11 +166,20 @@ _ARGUMENT_SYNONYMS: dict[str, dict[str, str]] = {
     "list_work_items": {"planning_space_id": "space"},
     "search_work_items": {"planning_space_id": "space"},
     "get_planning_space": {"planning_space_id": "space", "id": "space"},
+    "get_work_item_request": {"request_id": "id"},
 }
 # A tool that takes an `id` but has no argument called `ref` or `reference` of
 # its own is read with those two as the item's reference; a table entry above
 # wins where the same name means something else (`ref` is the value to attach).
 _ITEM_SYNONYMS = {"reference": "id", "ref": "id"}
+# Where `id` is a work item, the field its description names, `work_item_id`, is
+# read as it too. A request's or a space's `id` is not a work item, so not there.
+_WORK_ITEM_SYNONYMS = {"work_item_id": "id"}
+# An agent that wraps the groups of a batch in one argument means the groups. The
+# client hands an argument the schema does not publish over as text, so the
+# wrapper arrives as the JSON of that object, or as the object itself.
+_WRAPPERS = {"apply_work_item_changes": "changes"}
+_UNWRAPPED_EXAMPLE = '{"id": "MAIN-12", "claim": true, "comment": {"body": "…"}}'
 
 _SCHEMAS: dict[str, dict] = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
 
@@ -182,10 +191,43 @@ def _synonyms(name: str) -> dict[str, str]:
         if "id" in properties and not set(_ITEM_SYNONYMS) & set(properties)
         else {}
     )
+    if properties.get("id") == planning_tools.WORK_ITEM_REFERENCE:
+        found.update(_WORK_ITEM_SYNONYMS)
     return {**found, **_ARGUMENT_SYNONYMS.get(name, {})}
 
 
 _SYNONYMS = {name: _synonyms(name) for name in _SCHEMAS}
+
+
+def _unwrapped(name: str, arguments: dict) -> list[tuple[str, object]]:
+    """The arguments as given, with a wrapper's entries read as arguments of their own."""
+
+    wrapper = _WRAPPERS.get(name)
+    if wrapper is None or wrapper not in arguments:
+        return list(arguments.items())
+    value = arguments[wrapper]
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            value = None
+    unwrap = (
+        f"send each group as an argument of its own, not inside '{wrapper}': {_UNWRAPPED_EXAMPLE}"
+    )
+    if not isinstance(value, dict):
+        raise planning_api.PlanningHttpError(
+            400, "invalid_request", f"{name}: '{wrapper}' is not one object of groups; {unwrap}"
+        )
+    outer = [(argument, given) for argument, given in arguments.items() if argument != wrapper]
+    twice = sorted(set(value) & {argument for argument, _given in outer})
+    if twice:
+        raise planning_api.PlanningHttpError(
+            400,
+            "invalid_request",
+            f"{name}: {_plural(twice, 'argument')} given both inside '{wrapper}' and beside"
+            f" it; {unwrap}",
+        )
+    return outer + list(value.items())
 
 
 def _expected(name: str) -> str:
@@ -218,7 +260,8 @@ def _canonical_arguments(name: str, arguments: object) -> dict:
     guessing which the caller meant. An argument the schema does not have, and
     a required one that is missing, are refused naming the tool and the names it
     does take, so a caller whose schema is out of view can correct itself in one
-    call.
+    call. A batch whose groups came wrapped in one argument is read unwrapped,
+    and each group is then held to the same rules.
     """
 
     if not isinstance(arguments, dict):
@@ -230,7 +273,7 @@ def _canonical_arguments(name: str, arguments: object) -> dict:
     resolved: dict = {}
     given: dict[str, str] = {}
     unknown: list[str] = []
-    for argument, value in arguments.items():
+    for argument, value in _unwrapped(name, arguments):
         target = argument if argument in schema["properties"] else synonyms.get(argument)
         if target is None:
             unknown.append(argument)

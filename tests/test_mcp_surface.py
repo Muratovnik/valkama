@@ -1037,6 +1037,79 @@ class ToolArgumentTests(McpSurfaceTestCase):
             self.refusal("link_work_items", id=self.first),
         )
 
+    def test_a_request_is_read_by_request_id_as_well_as_by_id(self) -> None:
+        asked = self.call_tool(
+            "create_work_item_request",
+            id=self.first,
+            kind="question",
+            prompt="Proceed?",
+            fields=[
+                {"id": "go", "label": "Go", "type": "boolean", "required": True, "options": []}
+            ],
+        )
+        expected = self.call_tool("get_work_item_request", id=asked["request_id"])
+        self.assertEqual("Proceed?", expected["prompt"])
+        self.assertEqual(
+            expected, self.call_tool("get_work_item_request", request_id=asked["request_id"])
+        )
+        # A request is not a work item, so the work item's field is not its id.
+        message = self.refusal("get_work_item_request", work_item_id=asked["request_id"])
+        self.assertIn("unknown argument 'work_item_id'", message)
+
+    def test_an_item_is_read_by_work_item_id_where_id_is_a_work_item(self) -> None:
+        expected = self.call_tool("get_work_item", id=self.first)
+        self.assertEqual(expected, self.call_tool("get_work_item", work_item_id=self.first))
+        uuid = expected["work_item_id"]
+        self.assertEqual(
+            self.first, self.call_tool("get_work_item", work_item_id=uuid)["reference"]
+        )
+        claimed = self.call_tool("claim_work_item", work_item_id=self.second, author="one")
+        self.assertEqual("one", claimed["claim_ref"])
+        message = self.refusal("get_planning_space", work_item_id=SPACE_KEY)
+        self.assertIn("unknown argument 'work_item_id'", message)
+
+    def test_a_batch_wrapped_in_changes_is_read_as_its_groups(self) -> None:
+        groups = {"claim": True, "comment": {"body": "wrapped"}}
+        # The client passes the unpublished argument as text: the JSON of the object.
+        for wrapped, item in ((json.dumps(groups), self.first), (groups, self.second)):
+            with self.subTest(type(wrapped).__name__):
+                applied = self.call_tool(
+                    "apply_work_item_changes", id=item, author="one", changes=wrapped
+                )
+                self.assertEqual({"claim", "comment"}, set(applied["applied"]))
+                read = self.call_tool("get_work_item", id=item)
+                self.assertEqual("one", read["claim_ref"])
+                self.assertEqual(["wrapped"], [comment["body"] for comment in read["comments"]])
+
+    def test_a_wrapper_that_is_not_one_object_shows_the_unwrapped_call(self) -> None:
+        for wrapped in ('[{"claim": true}]', [{"claim": True}], "claim it"):
+            with self.subTest(wrapped=wrapped):
+                message = self.refusal("apply_work_item_changes", id=self.first, changes=wrapped)
+                self.assertIn("not inside 'changes'", message)
+                example = json.loads(message[message.index("{") :])
+                # The call it shows is one the tool takes.
+                applied = self.call_tool(
+                    "apply_work_item_changes", **{**example, "id": self.first, "claim": False}
+                )
+                self.assertEqual(["comment"], list(applied["applied"]))
+
+    def test_a_group_both_inside_and_beside_the_wrapper_is_refused(self) -> None:
+        message = self.refusal(
+            "apply_work_item_changes",
+            id=self.first,
+            comment={"body": "beside"},
+            changes={"comment": {"body": "inside"}},
+        )
+        self.assertIn("argument 'comment' given both inside 'changes' and beside it", message)
+        self.assertEqual([], self.call_tool("get_work_item", id=self.first)["comments"])
+
+    def test_a_wrapped_group_is_held_to_the_names_the_tool_takes(self) -> None:
+        message = self.refusal(
+            "apply_work_item_changes", id=self.first, changes={"ticks": [{"item_id": "x"}]}
+        )
+        self.assertIn("unknown argument 'ticks'", message)
+        self.assertIn("'checklist_ticks'", message)
+
     def test_arguments_that_are_not_an_object_are_refused(self) -> None:
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "arguments must be an object"):
             mcp_surface.call_tool(self.conn, "get_work_item", ["QA-1"])  # type: ignore[arg-type]

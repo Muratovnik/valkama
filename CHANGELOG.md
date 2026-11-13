@@ -34,6 +34,14 @@ checkouts are therefore distinguishable even at the same version.
   «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
   card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
   own will, so nothing moves when the card arrives.
+- **Three argument forms agents write are read instead of refused.** `get_work_item_request`
+  reads `request_id` as its `id`, and every tool whose `id` is a work item reads
+  `work_item_id` as it, the field that `id`'s description names. An
+  `apply_work_item_changes` call whose groups came wrapped in one `changes` argument, as an
+  object or as the text of one, is applied as if each group had been an argument of its
+  own, held to the same names and rules. A `changes` that is not one object, or that repeats
+  a group given beside it, is refused with a call in the unwrapped form. None of these
+  names is added to the published schemas.
 
 ### Added
 

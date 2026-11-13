@@ -57,7 +57,7 @@ _EDITED_LABELS = {
         " ignored. Not with labels.",
     },
 }
-_REFERENCE = {
+WORK_ITEM_REFERENCE = {
     "type": "string",
     "description": "A work item, by its reference (MAIN-142) or its work_item_id.",
 }
@@ -321,7 +321,7 @@ TOOLS = [
                 " docs/plan.md#kb:a7f3. Point at the immutable <!-- kb:xxxx -->"
                 " comment; never copy the plan text into the item.",
             },
-            "parent": _REFERENCE,
+            "parent": WORK_ITEM_REFERENCE,
             "claim": {
                 "type": "boolean",
                 "description": "true claims the new item as claim_work_item does,"
@@ -343,7 +343,7 @@ TOOLS = [
                 "items": {
                     "type": "object",
                     "properties": {
-                        "other": _REFERENCE,
+                        "other": WORK_ITEM_REFERENCE,
                         "kind": {"type": "string", "enum": sorted(model.LINK_KINDS)},
                     },
                     "required": ["other", "kind"],
@@ -378,7 +378,7 @@ TOOLS = [
         " names; read_work_item_image shows one.",
         READ_ONLY,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "full": {
                 "type": "boolean",
                 "description": "Answer with every comment and history event instead of"
@@ -414,7 +414,7 @@ TOOLS = [
         " from get_work_item's images, or the last part of its /api/images/ path.",
         READ_ONLY,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "sha256": {
                 "type": "string",
                 "pattern": "^[0-9a-f]{64}$",
@@ -469,7 +469,7 @@ TOOLS = [
         f" {CHAIN_PAGE} per page." + _PAGING,
         READ_ONLY,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "scope": {"type": "string", "enum": ["chain", "epic"]},
             "offset": _OFFSET,
             "limit": {
@@ -508,7 +508,7 @@ TOOLS = [
         " to refuse a stale write.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "title": _STR,
             "description": _STR,
             "source": {
@@ -524,7 +524,7 @@ TOOLS = [
             },
             **_EDITED_LABELS,
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
-            "parent": _REFERENCE,
+            "parent": WORK_ITEM_REFERENCE,
             "rank": _RANK,
             "mentions": _TEXT_MENTIONS,
             "expected_revision": _EXPECTED_REVISION,
@@ -551,7 +551,7 @@ TOOLS = [
         " write to an item answers with from_person when there is such news, once.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "state": _STATE,
             "reason": {
                 "type": "string",
@@ -581,7 +581,7 @@ TOOLS = [
         " their words about this work, to read before the next step.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "author": _AUTHOR,
             "force": _FORCE,
             "release": _BOOL,
@@ -614,7 +614,7 @@ TOOLS = [
         " their checklist group.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "items": _STEPS,
             "force": _FORCE,
             "expected_revision": _EXPECTED_REVISION,
@@ -630,7 +630,7 @@ TOOLS = [
         " a percentage. Refuses another holder's step unless force.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "item_id": _STR,
             "author": _AUTHOR,
             "force": _FORCE,
@@ -647,7 +647,7 @@ TOOLS = [
         " and clears the live claim.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "item_id": _STR,
             "done": _BOOL,
             "author": _AUTHOR,
@@ -666,8 +666,8 @@ TOOLS = [
         " the link away, a relates-to one from either end.",
         WRITES,
         {
-            "id": _REFERENCE,
-            "other": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
+            "other": WORK_ITEM_REFERENCE,
             "kind": {"type": "string", "enum": sorted(model.LINK_KINDS)},
             "remove": _BOOL,
             "author": _AUTHOR,
@@ -726,7 +726,7 @@ TOOLS = [
         " write itself. Raw logs and files do not belong here.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "kind": {"type": "string", "enum": sorted(model.REF_KINDS)},
             "value": _STR,
             "label": _STR,
@@ -742,7 +742,7 @@ TOOLS = [
         " instead of re-deriving the work.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "summary": {
                 "type": "object",
                 "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
@@ -763,7 +763,7 @@ TOOLS = [
         " the current outcome atomically and requires expected_revision.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "report": {
                 "type": "object",
                 "properties": {"done": _STR, "next": _STR, "why": _STR, "friction": _FRICTION},
@@ -784,7 +784,7 @@ TOOLS = [
         "Select an existing report belonging to this work item without retyping it.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "comment_id": {"type": "integer", "minimum": 1},
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
@@ -803,7 +803,7 @@ TOOLS = [
         " reply carries no checklist_item_id; its root does.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "body": _STR,
             "author": _AUTHOR,
             "checklist_item_id": _STR,
@@ -826,7 +826,7 @@ TOOLS = [
         " answered with work_item, comment_id and resolution as it now stands.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "comment_id": _RESOLVED_ROOT,
             "resolution": _RESOLUTION,
             "reopen": _REOPEN,
@@ -852,7 +852,7 @@ TOOLS = [
         " transition's person_spoke refusal.",
         WRITES,
         {
-            "id": _REFERENCE,
+            "id": WORK_ITEM_REFERENCE,
             "claim": {
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
@@ -918,7 +918,7 @@ TOOLS = [
                 "items": {
                     "type": "object",
                     "properties": {
-                        "other": _REFERENCE,
+                        "other": WORK_ITEM_REFERENCE,
                         "kind": {"type": "string", "enum": sorted(model.LINK_KINDS)},
                         "remove": _BOOL,
                     },
@@ -1030,7 +1030,7 @@ TOOLS = [
         "Delete a work item",
         "Removes the item and its trail. Refuses while it still has children.",
         DESTRUCTIVE,
-        {"id": _REFERENCE},
+        {"id": WORK_ITEM_REFERENCE},
         ["id"],
     ),
 ]
@@ -1114,7 +1114,7 @@ TOOLS.extend(
             " lifecycle.",
             WRITES,
             {
-                "id": _REFERENCE,
+                "id": WORK_ITEM_REFERENCE,
                 "kind": {"type": "string", "enum": ["question", "decision"]},
                 "prompt": _STR,
                 "fields": {
@@ -1164,7 +1164,7 @@ TOOLS.extend(
             READ_ONLY,
             {
                 "space": _SPACE,
-                "id": _REFERENCE,
+                "id": WORK_ITEM_REFERENCE,
                 "status": {
                     "type": "string",
                     "enum": ["pending", "answered", "declined", "expired"],
