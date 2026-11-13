@@ -80,6 +80,16 @@ checkouts are therefore distinguishable even at the same version.
   answer carries `overridden`. A batch names the overrides of every step in it, where it
   named only the last one before. A forced call that refused nothing records nothing.
   `force` permits what it permitted before.
+- **A hint comes for what a scroll brings under a resting pointer.** A wheel that moved a
+  ranked row, or any element with a hint, under a pointer that stayed still showed no hint
+  until the pointer moved again, because the host heard only pointer moves and the browser
+  sends none then. And a hint that opened as a scroll was ending, such as at once after
+  another hint, was closed by that scroll's late event and never came back. The host now
+  hears the pointer's arrival on an element however it comes, and a hint a scroll closed is
+  asked for again when the scroll ends, for the element the pointer rests on.
+- **A cut name and its share keep their space in a hint.** A ranked row whose name was cut
+  read «…part 132% of the total» in its hint, and to a screen reader, for «part 1» and «32%».
+  The name still stands on its own line over the detail.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

@@ -22,6 +22,9 @@
  *   either one opening closes the other.
  * - Escape closes the hint and still does what it does where it was pressed; a press anywhere,
  *   a scroll of what holds the element and a surface opening over it close the hint too.
+ * - A pointer at rest is pointing at whatever a scroll brings under it. The browser says so with
+ *   a `pointerover` and no move, so that is heard as the pointer's arrival too; and a hint a
+ *   scroll closed is asked for again when that scroll ends, for the element the pointer is on.
  */
 import { computed, defineComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 
@@ -63,6 +66,13 @@ const shown = shallowRef<HTMLElement | null>(null)
 const hint = computed(() => (shown.value ? tooltipOf(shown.value) : undefined))
 /** The shown element's own words are cut, so its hint says them first. */
 const whole = ref(false)
+/**
+ * What stands between the words and the detail, as an expression: the template compiler drops a
+ * space that ends an element, and the hint's text, which is its accessible copy too, read a cut
+ * name glued to its share, «part 1» and «32%» as «part 132%». The detail's line starts with it,
+ * so it shows nothing.
+ */
+const apart = ' '
 /** What the hint is placed against; the stub trigger stands nowhere. */
 const reference = computed(() => shown.value ?? undefined)
 
@@ -74,8 +84,14 @@ let hovered: HTMLElement | null = null
 let keyed = false
 /** Focus is what holds the hint up, not the pointer. */
 let heldByFocus = false
-/** A scroll event is on its way through the window. */
-let scrolling = false
+/** A scroll event is on its way through the window, from what scrolled. */
+let scrolling: EventTarget | null = null
+/**
+ * What scrolled and closed the hint the pointer was on, until its scroll ends. The scroll that
+ * closes a hint can be the one that brought the element under the pointer, its event a frame
+ * behind the pointer's arrival, and a pointer at rest gives no other sign that it is still there.
+ */
+let closedBy: EventTarget | null = null
 
 /** A reference's card is up: it is a popup of the same library, and the reader's. */
 const previewUp = () => document.querySelector('.reference-preview') !== null
@@ -111,6 +127,7 @@ function request(next: boolean) {
   if (!next) {
     // A Tab scrolls the element it lands on into view, and that is no reason to close.
     if (scrolling && heldByFocus) return
+    if (scrolling && open.value) closedBy = scrolling
     heldByFocus = false
     open.value = false
     return
@@ -124,7 +141,12 @@ function request(next: boolean) {
   open.value = true
 }
 
+/**
+ * Closes the hint for one of the host's own reasons, a press or Escape among them: that close
+ * stands past the end of a scroll.
+ */
 function close() {
+  closedBy = null
   root?.onClose()
 }
 
@@ -133,26 +155,30 @@ function leave() {
   root?.onTriggerLeave()
 }
 
-useEventListener(
-  document,
-  'pointermove',
-  (event: PointerEvent) => {
-    if (event.pointerType === 'touch') return
-    if (event.buttons !== 0) {
-      if (open.value && !heldByFocus) close()
-      return
-    }
-    const element = tooltipAnchorOf(event.target)
-    if (element === hovered) return
-    if (hovered) leave()
-    if (!element) return
-    hovered = element
-    if (previewAnchorOf(element)) return
-    pointAt(element)
-    root?.onTriggerEnter()
-  },
-  { capture: true },
-)
+/** The pointer is on `element`, from now on: it asks for its hint, after the delay. */
+function enter(element: HTMLElement) {
+  if (previewAnchorOf(element)) return
+  pointAt(element)
+  root?.onTriggerEnter()
+}
+
+/** The pointer moved, or a scroll or a change of the page put another element under it. */
+function point(event: PointerEvent) {
+  if (event.pointerType === 'touch') return
+  if (event.buttons !== 0) {
+    if (open.value && !heldByFocus) close()
+    return
+  }
+  const element = tooltipAnchorOf(event.target)
+  if (element === hovered) return
+  if (hovered) leave()
+  if (!element) return
+  hovered = element
+  enter(element)
+}
+
+useEventListener(document, 'pointerover', point, { capture: true })
+useEventListener(document, 'pointermove', point, { capture: true })
 useEventListener(
   document,
   'pointerout',
@@ -203,8 +229,8 @@ useEventListener(document, 'focusout', (event: FocusEvent) => {
 useEventListener(
   window,
   'scroll',
-  () => {
-    scrolling = true
+  (event: Event) => {
+    scrolling = event.target
   },
   { capture: true, passive: true },
 )
@@ -212,7 +238,18 @@ useEventListener(
   document,
   'scroll',
   () => {
-    scrolling = false
+    scrolling = null
+  },
+  { capture: true, passive: true },
+)
+// The scroll that closed the hint is over, and the pointer rests on what it left under it.
+useEventListener(
+  document,
+  'scrollend',
+  (event: Event) => {
+    if (!closedBy || event.target !== closedBy) return
+    closedBy = null
+    if (hovered?.isConnected && !open.value) enter(hovered)
   },
   { capture: true, passive: true },
 )
@@ -272,10 +309,9 @@ onBeforeUnmount(stopHearing)
           :collision-padding="8"
           hide-when-detached
         >
-          <span
-            v-if="whole && hint.words"
-            class="tooltip-words"
-            >{{ hint.words }} </span
+          <template v-if="whole && hint.words">
+            <span class="tooltip-words">{{ hint.words }}</span
+            >{{ apart }} </template
           >{{ hint.text
           }}<span
             v-if="hint.note"

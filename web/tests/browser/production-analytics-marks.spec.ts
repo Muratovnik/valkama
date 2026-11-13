@@ -2,10 +2,11 @@
  * Every mark of the Analytics charts says itself in a hint over the page and acts as its row of
  * the table does, in the real app. The oracle is the requirement: a segment of a day, a ranked
  * row and a day the keyboard stands on each show a hint, and none of them moves the plot, the
- * panel's first block or the table by a pixel; no line of words stands over a plot, so the
- * drawing field keeps that room; a task's segment opens the task's card over the page, the
- * module still Analytics, and closing it gives back the section, the period and the scroll. Each
- * run prints what it measured.
+ * panel's first block or the table by a pixel; so does a ranked row the panel has to scroll to,
+ * pointed at or brought under a resting pointer by the wheel, its cut name a space apart from its
+ * share; no line of words stands over a plot, so the drawing field keeps that room; a task's
+ * segment opens the task's card over the page, the module still Analytics, and closing it gives
+ * back the section, the period and the scroll. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -96,6 +97,90 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
   await record(info, 'analytics mark hints', seen)
   for (const [name, { still, now }] of Object.entries(seen))
     expect(now, `moved under ${name}`).toEqual(still)
+})
+
+/** What the hint says and where the parts stand while it shows, and once the pointer has left. */
+async function shownAndGone(page: Page) {
+  const hint = page.getByRole('tooltip')
+  await expect(hint).toBeVisible()
+  const says = (await hint.textContent()) ?? ''
+  const now = await standing(page)
+  await page.mouse.move(0, 0)
+  await expect(hint).toBeHidden()
+  return { says, now, gone: await standing(page) }
+}
+
+/** The panel's scroll, and how far its first ranked row stands below what the panel shows. */
+const reach = (page: Page) =>
+  page.locator('.analytics-panel').evaluate((panel) => {
+    const row = panel.querySelector('.spending-bars .ranked-line')?.getBoundingClientRect()
+    return {
+      scrolled: panel.scrollTop,
+      below: (row?.bottom ?? 0) - panel.getBoundingClientRect().bottom,
+    }
+  })
+
+/** The name of the row the world ranks first, cut on its row, then a space and its share. */
+const NAMED_SHARE = /^MAIN-1 Rework the import of planning documents, part 1 \d+% of the total/u
+
+test('a ranked row the panel scrolls to reach says itself, its cut name apart from its share, and nothing moves', async ({
+  page,
+}, info) => {
+  await serve(page, WORLD)
+  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await page.setViewportSize({ width: 1440, height: 400 })
+  const days = analytics.locator('.spending-days')
+  await expect(days).toHaveAttribute('data-shown', 'chart')
+  const before = await reach(page)
+  expect(before.scrolled).toBe(0)
+  expect(before.below, 'the row stands below what the panel shows').toBeGreaterThan(0)
+
+  // A hint was up a moment ago, so the next one comes at once, before the scroll's event.
+  await days.locator('.period-segment').first().hover()
+  await expect(page.getByRole('tooltip')).toBeVisible()
+  await page.mouse.move(0, 0)
+  await expect(page.getByRole('tooltip')).toBeHidden()
+  const row = analytics.locator('.spending-bars .ranked-line').first()
+  await row.hover()
+  const after = await reach(page)
+  expect(after.scrolled, 'pointing at the row scrolled the panel').toBeGreaterThan(0)
+  const seen = await shownAndGone(page)
+  await record(info, 'a ranked row reached by the scroll', { before, after, ...seen })
+  expect(seen.says).toMatch(NAMED_SHARE)
+  expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
+})
+
+test('a ranked row a wheel brings under a resting pointer says itself, and nothing moves', async ({
+  page,
+}, info) => {
+  await serve(page, WORLD)
+  const analytics = await openReport(page, 1440, pageAt({ by: 'work_item' }))
+  await page.setViewportSize({ width: 1440, height: 400 })
+  await expect(analytics.locator('.spending-days')).toHaveAttribute('data-shown', 'chart')
+  const start = await reach(page)
+  expect(start.below, 'the row stands below what the panel shows').toBeGreaterThan(0)
+
+  // The pointer rests near the panel's foot, over no mark, where the rows will pass.
+  const at = await page.locator('.analytics-panel').evaluate((panel) => {
+    const row = panel.querySelector('.spending-bars .ranked-line')?.getBoundingClientRect()
+    const foot = panel.getBoundingClientRect().bottom
+    return { x: (row?.x ?? 0) + (row?.width ?? 0) / 2, y: foot - 40 }
+  })
+  await page.mouse.move(at.x, at.y)
+  const hint = page.getByRole('tooltip')
+  await expect(hint).toBeHidden()
+  // The wheel moves the panel under the pointer, which itself never moves.
+  for (let step = 0; step < 4; step++) await page.mouse.wheel(0, 60)
+  const under = () =>
+    page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('.ranked-line')?.textContent ?? null,
+      at,
+    )
+  await expect.poll(under, { message: 'a ranked row came under the pointer' }).not.toBeNull()
+  const seen = await shownAndGone(page)
+  await record(info, 'a ranked row under a resting pointer', { under: await under(), ...seen })
+  expect(seen.says).toMatch(/ of the total/u)
+  expect(seen.now, 'the hint moved nothing').toEqual(seen.gone)
 })
 
 test('with no line over the plot, the drawing field at 1440×900 takes the room the panel leaves', async ({
