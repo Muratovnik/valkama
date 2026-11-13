@@ -128,9 +128,11 @@ and only fades the end of a strip that scrolls on past it.
 - Spacing stays on the four-pixel grid: label/value gaps are 8px, heading/content
   gaps are 12px and panel spacing is 16px. What a module lays out stands at four
   levels, each with its own gap: sections 36px apart, the groups of a section
-  24px, the blocks of a group 16px and the lines of a block 4–8px. A heading is
-  smaller at each level down and never the size of the level over it, so it says
-  its level before it is read. With no group level, an account of the quota stood
+  24px, the blocks of a group 16px and the lines of a block 4–8px. A heading says
+  its level before it is read: the type scale gives each level one size in every
+  module — the module's name `module` 18px, a section `section` 16px, a group
+  `emphasis` 15px, a block `interface` 14px and a label over a block's lines
+  `dense` 13px — so no heading is the size of the level over it. With no group level, an account of the quota stood
   16px from the next like any block, under a heading as large as its section's,
   and six accounts ran together into one 4279px list. A module keeps
   `--size-page-gutter` from the panel edge. Density comes from alignment and
@@ -2212,9 +2214,9 @@ the chosen entry's mark stands inside its box. Drawn for the chosen entry alone 
 pointer's, and as an entry pushed out of its column.
 
 The page's levels are the four of the spacing rule: a section of the panel, a group in it such
-as an account of the quota, a block such as a chart or a window, and the block's lines. Their
-headings are 16, 15 and 14px, and 13px for a label over a block's lines, a step down at each
-level; the quota's section and the account in it both stood at 16px and the same weight.
+as an account of the quota, a block such as a chart or a window, and the block's lines, with
+the headings the type scale gives each level (System rules); the quota's section and the
+account in it both stood at 16px and the same weight.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period
