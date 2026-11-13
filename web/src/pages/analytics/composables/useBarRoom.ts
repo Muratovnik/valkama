@@ -13,12 +13,12 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useResizeObserver } from '@vueuse/core'
 
 /**
- * A part the bar's line can give up: the live period's mark, the words a short bar drops, the
- * room between its parts down to a narrow gap, the failure's words, which a screen reader
- * still hears beside the disc and the retry, or the whole of a span's name, cut at its end with
+ * A part the bar's line can give up: the words a short bar drops from its buttons, the room
+ * between its parts down to a narrow gap, the word around the age («ago»), the failure's words,
+ * each of which a screen reader still hears, or the whole of a span's name, cut at its end with
  * its hint saying it whole.
  */
-export type BarPart = 'failure' | 'gaps' | 'live' | 'span' | 'words'
+export type BarPart = 'ago' | 'failure' | 'gaps' | 'span' | 'words'
 
 export function useBarRoom(options: {
   /** What else changes what the line holds, read again once it has been drawn. */

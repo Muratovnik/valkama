@@ -13,7 +13,6 @@ export const analyticsTimeMessages = {
     },
     seconds: '{count}\u{A0}s',
     live: 'Live, every {interval}',
-    liveShort: 'every {interval}',
     notYet: 'No data yet',
     estimate:
       'Figures per minute are an estimate: each stretch of work is shared out among the minutes it spans by its time in each.',
@@ -26,7 +25,6 @@ export const analyticsTimeMessages = {
     },
     seconds: '{count}\u{A0}с',
     live: 'В реальном времени, каждые {interval}',
-    liveShort: 'каждые {interval}',
     notYet: 'Данных ещё нет',
     estimate:
       'Цифры по минутам — оценка: каждый отрезок работы делится между минутами, которые он захватывает, по времени в каждой.',

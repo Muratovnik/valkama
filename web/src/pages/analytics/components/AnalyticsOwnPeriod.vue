@@ -94,8 +94,10 @@ const rangeError = computed(() =>
   min-width: 0;
 }
 
+/* As wide as a date of the widest figures needs beside the calendar's button, «28.08.2026», and
+   no wider: the bar's line has no room to spare beside a span of days, and a day is never cut. */
 .analytics-day {
-  inline-size: 9rem;
+  inline-size: 8.25rem;
 }
 
 .analytics-bar-days-dash {

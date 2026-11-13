@@ -290,7 +290,7 @@ describe('the bar', () => {
       return answer
     })
     const page = await mountAnalytics({}, 'ru')
-    expect(page.get('.analytics-bar-fresh').text()).toBe('Записей ещё нет')
+    expect(page.get('.analytics-bar-fresh').text()).toBe('Записей нет')
     expect(page.get('.analytics-refresh').text()).toBe('Обновить')
     expect(page.get('.analytics-filter-add').text()).toBe('Добавить фильтр')
     expect(names(page)[0]).toBe('Обзор')

@@ -2257,7 +2257,11 @@ sort and the place under the pointer stay. Freshness is one element of constant 
 mark and the newest record's age in tabular figures, «● 15 s ago», with the whole sentence in
 its hint — the record's time and, for a live period, how often it reads again. Said twice, as
 «every 30 s» and «Last record 14:17 · 15 s ago», it held 21em of the bar, and the air after
-the first part still changed as the record aged. A refresh that fails keeps what is shown and
+the first part still changed as the record aged. A line short of room gives up its buttons'
+words, then the air between its parts, then the word around the age, «● 15 s», in the room of
+the widest span, and never a day of the reader's own period, whose fields are as wide as a date of
+the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
+bar's end at 1200px. A refresh that fails keeps what is shown and
 says so in the bar, «Could not refresh» with a retry. Reading another period or filter dims
 what is shown until its answer comes, after a moment so that a quick answer does not flicker;
 a refresh of the same view dims nothing. Records reach the store in batches, so the age is in

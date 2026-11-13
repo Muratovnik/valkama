@@ -179,12 +179,8 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
-    'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="{ text: fresh.full, words: fresh.words }"',
-    'the day and the time of the newest record, where the bar says only how long ago it was; while its own words are cut, they come first, whole',
-  ],
-  [
-    'pages/analytics/components/AnalyticsBar.vue <p> v-tooltip.detail="liveWords"',
-    'that the period is live, where the bar shows only its mark and how often it reads itself again',
+    'pages/analytics/components/AnalyticsBar.vue <p> v-tooltip.detail="freshHint"',
+    'the moment of the newest record and, for a live period, how often it reads itself again, where the bar shows only the age and the live mark',
   ],
   [
     'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: leadDetail, words: lead }"',
