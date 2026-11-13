@@ -17,6 +17,14 @@ checkouts are therefore distinguishable even at the same version.
   `tick_work_item_checklist_item` does, so `force: true` completes a step another holder
   claimed in the same call and records the completion as the single tick does. Without
   `force` the refusal stays, names the step, and the call writes nothing.
+- **A forced write that carries a refusal is recorded as an `overridden` event.** A
+  forced checklist tick, step claim or takeover, a `set_work_item_checklist` that discards
+  a claimed or completed step or completes one another session holds, and a
+  `claim_work_item` that takes over or releases another session's claim now write the
+  `overridden` event a forced transition has always written, naming the guard, and the
+  answer carries `overridden`. A batch names the overrides of every step in it, where it
+  named only the last one before. A forced call that refused nothing records nothing.
+  `force` permits what it permitted before.
 
 ## [2.9.0](https://github.com/Muratovnik/valkama/compare/v2.8.0...v2.9.0) - 2026-11-12
 

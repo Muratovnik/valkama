@@ -973,6 +973,12 @@ def _steps(
     return steps
 
 
+def _forced_findings(answer: Mapping[str, object]) -> dict:
+    """The override a step's single write recorded, which the batch's answer names as well."""
+
+    return {"overridden": answer["overridden"]} if answer.get("overridden") else {}
+
+
 def _apply_step(
     conn: sqlite3.Connection, group: str, base: Mapping[str, object], entry: Mapping[str, object]
 ) -> tuple[dict, object]:
@@ -992,13 +998,16 @@ def _apply_step(
         )
     if group == "checklist":
         replaced = _checklist(conn, {**entry, **base})
-        return {}, [
+        return _forced_findings(replaced), [
             {"item_id": step["id"], "text": step["text"], "done": step["done"]}
             for step in replaced["checklist"]
         ]
     if group == "checklist_ticks":
-        _checklist_tick(conn, {**entry, **base})
-        return {}, {"item_id": entry.get("item_id"), "done": entry.get("done", True)}
+        ticked = _checklist_tick(conn, {**entry, **base})
+        return _forced_findings(ticked), {
+            "item_id": entry.get("item_id"),
+            "done": entry.get("done", True),
+        }
     if group == "refs":
         _ref(conn, {**entry, **base})
         return {}, 1
@@ -1148,11 +1157,14 @@ def _run_steps(
                 f"{label}: {body['error']['message']}",
                 {**detail, "step": {"group": group, "index": index}},
             ) from error
-        # A claim's start and a transition may both warn; neither hides the other.
-        warnings = [*findings.get("warnings", []), *extra.pop("warnings", [])]
+        # A claim's start and a transition may both warn, and a tick and a close may
+        # both carry a force; no step's findings hide another's.
+        joined = {
+            name: [*findings.get(name, []), *extra.pop(name, [])]
+            for name in ("warnings", "overridden")
+        }
         findings.update(extra)
-        if warnings:
-            findings["warnings"] = warnings
+        findings.update({name: values for name, values in joined.items() if values})
         if group in _APPLY_LISTED:
             applied.setdefault(group, []).append(change)
         elif group in _APPLY_LISTS:

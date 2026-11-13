@@ -524,10 +524,71 @@ class ChecklistTicksGroupTests(BatchCase):
             (step["done"], step["done_by"], step["claimed_by"]),
         )
         self.assertEqual(self.actions(self.twin), self.actions())
-        self.assertEqual("checklist_completed", self.actions()[-1])
+        self.assertEqual(["checklist_completed", "overridden"], self.actions()[-2:])
         self.assertEqual(
             [{"item_id": self.step, "done": True}], answer["applied"]["checklist_ticks"]
         )
+
+    def overridden_events(self, reference: str | None = None) -> list[str]:
+        return [
+            event["detail"]
+            for event in self.record(reference)["events"]
+            if event["action"] == "overridden"
+        ]
+
+    def unclaimed_step(self, reference: str) -> str:
+        """A step nobody holds, added beside the step the holder claimed."""
+
+        steps = service.set_checklist(self.conn, reference, ["the step", "free"])["checklist"]
+        self.conn.commit()
+        return str(steps[1]["id"])
+
+    def test_a_forced_tick_records_the_override_it_carried_as_the_single_tick_does(self) -> None:
+        single = self.agent(
+            "tick_work_item_checklist_item", id=self.twin, item_id=self.twin_step, force=True
+        )
+
+        answer = self.apply(checklist_ticks=[{"item_id": self.step, "force": True}])
+
+        self.assertEqual(["checklist_claim"], single["overridden"])
+        self.assertEqual(["checklist_claim"], answer["overridden"])
+        self.assertEqual(["checklist_claim"], self.overridden_events())
+        self.assertEqual(["checklist_claim"], self.overridden_events(self.twin))
+        self.assertEqual(["checklist_completed", "overridden"], self.actions()[-2:])
+
+    def test_a_forced_tick_of_an_unclaimed_step_records_no_override(self) -> None:
+        free = self.unclaimed_step(self.ref)
+
+        answer = self.apply(checklist_ticks=[{"item_id": free, "force": True}])
+
+        self.assertNotIn("overridden", answer)
+        self.assertEqual([], self.overridden_events())
+        self.assertEqual("checklist_completed", self.actions()[-1])
+
+    def test_a_forced_tick_of_a_step_the_caller_holds_records_no_override(self) -> None:
+        mine = self.unclaimed_step(self.ref)
+        self.agent("claim_work_item_checklist_item", id=self.ref, item_id=mine)
+
+        single = self.agent("tick_work_item_checklist_item", id=self.ref, item_id=mine, force=True)
+
+        self.assertNotIn("overridden", single)
+        self.assertEqual([], self.overridden_events())
+
+    def test_forced_ticks_and_a_forced_close_in_one_batch_record_every_override(self) -> None:
+        answer = self.apply(
+            claim=True,
+            checklist_ticks=[{"item_id": self.step, "force": True}],
+            transition={"state": "done", "force": True},
+        )
+
+        self.assertEqual(["checklist_claim", "summary"], answer["overridden"])
+        self.assertEqual(["checklist_claim", "summary"], self.overridden_events())
+
+    def test_a_forced_checklist_group_that_discards_a_held_step_records_it(self) -> None:
+        answer = self.apply(checklist={"items": ["replacement"], "force": True})
+
+        self.assertEqual(["checklist_discard"], answer["overridden"])
+        self.assertEqual(["checklist_discard"], self.overridden_events())
 
     def test_without_force_another_holders_step_is_refused_as_the_single_tick_refuses_it(
         self,
