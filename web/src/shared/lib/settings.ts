@@ -1,8 +1,9 @@
 /**
  * The owner's local preferences: opening sessions and files, whether a card offers
  * its Execution tab, the colours of the work item kinds, whether the standard workflow
- * states read in the interface's language, the views saved in each planning space
- * (`savedViews.ts`) and the names given to accounts (`accountAliases.ts`).
+ * states read in the interface's language and the views saved in each planning space
+ * (`savedViews.ts`). The names a build before this one gave accounts on this device wait here
+ * until they move to Valkama, once (`accountNamesStore.ts`).
  *
  * A session opens where it was last open; the server decides that. What the owner
  * sets here is only what the rule falls back to, per client family, and an
@@ -40,7 +41,10 @@ interface SessionOpening {
 }
 
 export interface PlatformSettings {
-  /** The owner's name for an account, by its id; an account with none is not here. */
+  /**
+   * Names this device gave accounts before Valkama kept them, by the account's id, until they
+   * move there; empty after that, and on a device that never gave one.
+   */
   accountAliases: AccountAliases
   editor: Editor
   executionTab: boolean

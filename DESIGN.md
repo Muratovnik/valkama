@@ -2196,8 +2196,12 @@ chosen. A plain task has no glyph anywhere, so its row is its word. Accounts hol
 row per account the past year's work was billed to, the most agent time first: its
 whole id with its share of that time, a name field whose placeholder says what Analytics
 shows without one, and a clear; an account named before that the year did not see keeps
-its row, so its name can still be taken away. Analytics says an account by that name and
-a session by the title its client gave it, with the id in the hint.
+its row, so its name can still be taken away. A name is saved when its field is left or
+Enter is pressed, and the group's status line, where its reads say they are under way or
+failed, says the save under way, a save that failed with a retry beside it, a saved name
+and a cleared one; a field keeps what was typed until its save holds. Analytics says an
+account by that name and a session by the title its client gave it, with the id in the
+hint.
 
 ## Accessibility
 

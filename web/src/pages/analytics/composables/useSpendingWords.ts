@@ -2,10 +2,10 @@
  * How the Analytics page names what it shows: a dimension, and a value of one as a card or the
  * rail already names it — a task by its number and title, a project by its name, a session by
  * the title its client gave it as the live work names it, else by its client and the start of
- * its id, and an account by the name the owner gave it in Settings, else by the start of its id
- * as an item's card does. What a name leaves out is its `valueDetail`, which the page says in the
- * hint or beside the name: a titled session's client and the start of its id, so two of one title
- * can be told apart, and an account's whole id. Work with no value — no task, a session's own
+ * its id, and an account by the name the owner gave it in Settings, as Valkama keeps it, else by
+ * the start of its id as an item's card does. What a name leaves out is its `valueDetail`, which
+ * the page says in the hint or beside the name: a titled session's client and the start of its
+ * id, so two of one title can be told apart, and an account's whole id. Work with no value — no task, a session's own
  * run — and a value nobody can place say so in words of their own, per dimension: «unknown» is
  * said only of what nobody can place.
  */
@@ -27,7 +27,7 @@ import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/an
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
 import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
-import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
+import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
 import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
 
@@ -70,10 +70,10 @@ export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
   const usage = useUsageWords()
-  const { settings } = storeToRefs(useSettingsStore())
+  const { names } = storeToRefs(useAccountNamesStore())
 
   /** The owner's name for an account, or null where it has none. */
-  const accountName = (id: string) => aliasOf(settings.value.accountAliases, id)
+  const accountName = (id: string) => aliasOf(names.value, id)
 
   /**
    * What a value's name leaves out, for its hint and its table: the client and the start of the id

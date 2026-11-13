@@ -3,7 +3,9 @@
  * gave it in Settings, with the id in the hint, so no label made only of hex characters stands for
  * a value whose name is known: in the rail, the overview's cards, a section's bars and its table.
  * A session with no title, and an account with no name, keep the labels they had. The name is the
- * one the owner types in Settings → General → Accounts, which this follows from the field to the page.
+ * one the owner types in Settings → General → Accounts, kept in Valkama, which this follows from the
+ * field through the server to the page; and the names a device kept before move there once, never
+ * over a name Valkama has, and leave the device.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -53,13 +55,9 @@ const WORLD: TimedStretch[] = [
 /** A label that is only hex characters: the start of an id, said for a value with no name. */
 const HEX_ONLY = /^[\da-f]{6,}$/u
 
-async function serve(page: Page, aliases: Record<string, string> = {}) {
+async function serve(page: Page, names: Record<string, string> = {}) {
   await page.clock.setSystemTime(NOW)
-  await installBackend(page)
-  await page.addInitScript((stored) => {
-    if (!localStorage.getItem('valkama-settings'))
-      localStorage.setItem('valkama-settings', JSON.stringify({ accountAliases: stored }))
-  }, aliases)
+  const backend = await installBackend(page, { accountNames: names })
   await page.route('**/api/analytics/usage?*', async (route) => {
     const query = new URL(route.request().url()).searchParams
     await route.fulfill({
@@ -67,6 +65,7 @@ async function serve(page: Page, aliases: Record<string, string> = {}) {
       body: JSON.stringify(serveUsage(WORLD, query)),
     })
   })
+  return backend
 }
 
 async function open(page: Page, state: Record<string, string> = {}) {
@@ -120,13 +119,16 @@ test('a session is named by its title and an account by the owner’s name, the 
 })
 
 test('a name typed in Settings is the name Analytics gives the account', async ({ page }) => {
-  await serve(page)
+  const backend = await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
   const field = page.getByRole('textbox', { name: `Name of account ${SIDE_ID}` })
+  const status = page.locator('.accounts-status [role="status"]')
   await expect(field).toHaveAttribute('placeholder', 'No name: Analytics shows 9c0de5b1')
   await field.fill('Night shift')
   await field.blur()
+  await expect(status).toHaveText('Saved the name of account 9c0de5b1.')
+  expect(backend.accountNames).toEqual({ [SIDE_ID]: 'Night shift' })
 
   const accounts = await open(page, { by: 'account' })
   const labels = accounts.locator('.ranked-label')
@@ -137,6 +139,42 @@ test('a name typed in Settings is the name Analytics gives the account', async (
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))
   await page.getByRole('button', { name: `Clear the name of account ${SIDE_ID}` }).click()
   await expect(field).toHaveValue('')
+  await expect(status).toHaveText('Cleared the name of account 9c0de5b1.')
+  expect(backend.accountNames).toEqual({})
   const again = await open(page, { by: 'account' })
   await expect(again.locator('.ranked-label').nth(1)).toHaveText('9c0de5b1')
+})
+
+test('names a device kept move to Valkama once, never over a name it has, and leave the device', async ({
+  page,
+}) => {
+  const backend = await serve(page, { [MAIN_ID]: 'Given since' })
+  await page.addInitScript(
+    ([main, side]) => {
+      if (!localStorage.getItem('valkama-settings'))
+        localStorage.setItem(
+          'valkama-settings',
+          JSON.stringify({ accountAliases: { [main]: 'Kept on this device', [side]: 'Side' } }),
+        )
+    },
+    [MAIN_ID, SIDE_ID],
+  )
+  const accounts = await open(page, { by: 'account' })
+  const labels = accounts.locator('.ranked-label')
+  await expect(labels).toHaveText(['Given since', 'Side'])
+  expect(backend.accountNameWrites).toEqual([
+    { names: { [MAIN_ID]: 'Kept on this device', [SIDE_ID]: 'Side' }, replace: false },
+  ])
+  expect(backend.accountNames).toEqual({ [MAIN_ID]: 'Given since', [SIDE_ID]: 'Side' })
+  const kept = await page.evaluate(
+    () =>
+      (JSON.parse(localStorage.getItem('valkama-settings') ?? '{}') as Record<string, unknown>)
+        .accountAliases,
+  )
+  expect(kept).toEqual({})
+
+  // Opened again, the page reads Valkama's names and moves nothing.
+  const again = await open(page, { by: 'account' })
+  await expect(again.locator('.ranked-label')).toHaveText(['Given since', 'Side'])
+  expect(backend.accountNameWrites).toHaveLength(1)
 })
