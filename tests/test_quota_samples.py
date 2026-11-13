@@ -162,11 +162,9 @@ class RecordTests(_Store):
 
     def test_an_organization_s_account_is_kept_by_its_uuid_across_weeks(self) -> None:
         self.record(poll("2030-03-04T09:00:00Z", week(40), account_uuid="account-1"))
-        with self.conn:
-            self.conn.execute("UPDATE quota_accounts SET label = 'Mine'")
         self.record(poll("2030-03-04T09:10:00Z", week(41), plan="Team", account_uuid="account-1"))
         self.record(poll("2030-03-04T09:20:00Z", week(42), account_uuid="account-1"))
-        # The next week's seat is another key; the account and its label stay one row.
+        # The next week's seat is another key; the account stays one row.
         next_week = poll(
             "2030-03-04T09:25:00Z",
             samples.Window("week", 0, "2030-03-15T09:00:00Z"),
@@ -180,7 +178,7 @@ class RecordTests(_Store):
         self.record(mod("2030-03-04T09:40:00Z", week(44)))
         self.record(poll("2030-03-04T09:45:00Z", week(1), account_uuid="account-2"))
         self.assertEqual(
-            [(ORGANIZATION, "account-1", "Team", "Mine"), (ORGANIZATION, "account-2", None, None)],
+            [(ORGANIZATION, "account-1", "Team"), (ORGANIZATION, "account-2", None)],
             [
                 tuple(row)
                 for row in self.conn.execute("SELECT * FROM quota_accounts ORDER BY account_uuid")

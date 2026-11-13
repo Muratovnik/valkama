@@ -32,7 +32,7 @@ from server.alerts import quota as quota_alerts
 from server.alerts import settings as alert_settings
 from server.hooks import ingest
 from server.ops import toast
-from server.quota import samples
+from server.quota import names, samples
 from server.telemetry import usage_reread
 from tests.usage_fixtures import HOUR, MINUTE, ORG_A, ORG_B, START, Case
 
@@ -197,11 +197,7 @@ class WeekTests(_Quota):
         self.assertEqual([(ORG_A, "week", "", "2030-03-15T09:00:00.000Z", "75")], self.keys())
 
     def test_a_model_week_alerts_on_its_own(self) -> None:
-        self.conn.execute(
-            "INSERT INTO quota_accounts(organization, account_uuid, label) VALUES (?,?,?)",
-            (ORG_A, "acct-1", "Team account"),
-        )
-        self.conn.commit()
+        names.write(self.conn, {"names": {ORG_A: "Team account"}})
         self.poll(
             60,
             samples.Window("week", 50, WEEK_RESET),
@@ -224,6 +220,26 @@ class WeekTests(_Quota):
         self.assertEqual(1, len(self.evaluate(61)))
         self.poll(120, samples.Window("week", 81, WEEK_RESET))
         self.assertEqual([], self.evaluate(121))
+
+
+class NameTests(_Quota):
+    """The toast names the account by the name the owner gave its organization, or by none."""
+
+    def test_a_session_s_reading_is_named_by_its_organization_s_name(self) -> None:
+        # A session's reading names no account's UUID: the name is the organization's.
+        names.write(self.conn, {"names": {ORG_A: "Main account", ORG_B: "Side account"}})
+        self.statusline(60, week=76)
+        [shown] = self.evaluate(61)
+        self.assertEqual("Valkama: the week's quota passed 75%", texts(shown)[0])
+        self.assertTrue(texts(shown)[1].startswith("Main account · 76% used"), texts(shown)[1])
+        self.assertNotIn("Side account", "".join(texts(shown)))
+
+    def test_with_no_name_the_toast_says_what_it_said_before(self) -> None:
+        names.write(self.conn, {"names": {ORG_B: "Side account"}})
+        self.statusline(60, week=76)
+        [shown] = self.evaluate(61)
+        self.assertTrue(texts(shown)[1].startswith("76% used"), texts(shown)[1])
+        self.assertNotIn("Side account", "".join(texts(shown)))
 
 
 class FiveHourTests(_Quota):

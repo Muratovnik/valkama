@@ -1208,12 +1208,12 @@ again adds nothing. A sample is never rewritten. Samples older than a year are d
 when a server starts.
 
 An account is an organization and the account's UUID in it. Its row holds the plan a
-source named and the label the owner gives it, and nothing else of a profile: no e-mail
-address and no name. A reading that names an organization and an account's UUID makes the
-row if it is not there yet, and a plan it names replaces the one there; a plan comes only
-with the UUID. A label is the owner's: no source changes it. The UUID does not change when
-a week resets, so the row, its label and whatever is kept against the account hold from
-week to week.
+source named, and nothing else of a profile: no e-mail address and no name. A reading that
+names an organization and an account's UUID makes the row if it is not there yet, and a
+plan it names replaces the one there; a plan comes only with the UUID. The UUID does not
+change when a week resets, so the row and whatever is kept against the account hold from
+week to week. The name the owner gives an account is kept apart, by its organization
+([The owner's names for accounts](#the-owners-names-for-accounts)), and no source writes it.
 
 A seat key comes from the week's reset, so it changes every week, and two seats whose
 weeks reset within the same ten minutes cannot be told apart by it and share one key. A
@@ -1271,6 +1271,40 @@ cannot hold refuses the whole file, naming the line, and writes nothing. The com
 prints the lines read, how many were added, how many matched the sample before them
 (`unchanged`) or were older than a year (`expired`), and each organization's first and
 last time.
+
+### The owner's names for accounts
+
+The usage rows and the quota samples hold an account's organization id and nothing that
+names it, so the owner names it, and Valkama keeps one name per organization in the store's
+`quota_account_names` table: `organization`, `name` and `updated_at`, the UTC time of the
+write to the millisecond. An organization with no name has no row. Settings writes the
+name; the Analytics page on every device and the quota alerts read it, and the store's
+snapshots and restore carry it with the other quota tables. Other server modules read it
+through `server.quota.names.names_of(conn, organizations)`, which answers the names of any
+number of organizations in one query, by organization, leaving out one with none.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/quota/account-names` | every name: `{"names": {"<organization>": "<name>"}}`, `{"names": {}}` until one is given |
+| `PUT /api/quota/account-names` | `{"names": {"<organization>": "<name>"}, "replace": true}` names each account given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for an organization that has none, and an empty one changes nothing |
+
+A name is one line: its runs of spaces and line breaks are collapsed to one space and its
+ends trimmed, and what is left is at most 80 characters, counted as characters rather
+than UTF-16 units, with no control character. An organization is 1 to 512 characters with
+no NUL. A write that breaks either rule, names more than 1000 accounts, or carries a field
+other than `names` and `replace` is refused whole with `400`,
+`{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing. The read
+answers under the `Host` rule alone; the write takes the browser's credential, as the
+quota settings do.
+
+A device that kept names of its own, as builds before this one did in the settings each
+browser and the desktop app keep, writes them once with `"replace": false` the first time
+it opens Settings or Analytics, so a name given since on another device stays, and drops
+them once the write succeeded. A write that failed leaves them for the next open.
+
+A quota alert names the account by its organization's name where there is one, before the
+share spent, and says no name where there is none, nor where the owner chose notifications
+whose text reveals nothing of the work.
 
 ### The poll of the usage endpoint
 

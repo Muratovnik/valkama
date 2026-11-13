@@ -287,9 +287,10 @@ MIGRATIONS = {
 # read again), a segment the columns its later dimensions fill, and Analytics the counts of
 # how often each of its surfaces was opened (`analytics_surface_uses`, empty).
 #
-# 17 added the subscription quota's accounts, samples, the alerts given about them and
-# the owner's settings for its sources (`quota_accounts`, `quota_samples`, `quota_alerts`,
-# `quota_settings`), empty in an upgraded store, and no existing row changed its meaning.
+# 17 added the subscription quota's accounts, the owner's names for them, samples, the
+# alerts given about them and the owner's settings for its sources (`quota_accounts`,
+# `quota_account_names`, `quota_samples`, `quota_alerts`, `quota_settings`), empty in an
+# upgraded store, and no existing row changed its meaning.
 # It is raised so the upgrade takes a recovery point of its own, and because what opens
 # a store without bringing it up -- a hook's `ingest.open_light`, the listener's reader,
 # `open_read_only` -- takes the stamp for the catalog: a quota source of this build would
