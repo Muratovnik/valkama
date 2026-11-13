@@ -264,9 +264,5 @@ const selectedResourceValue = computed(() =>
       width: 100%;
     }
   }
-
-  .module-title {
-    font-size: var(--font-size-section);
-  }
 }
 </style>

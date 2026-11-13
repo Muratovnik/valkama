@@ -258,7 +258,6 @@ body { overflow: hidden; color: ${c.text}; font: 400 14px/1.5 'Inter Variable', 
 }
 @container sk-main (width <= 586px) {
   .sk-bar { flex-direction: column; gap: 8px; align-items: stretch; height: auto; padding: 8px 12px; }
-  .sk-title-row { height: 23px; }
   .sk-scope { width: 100%; }
 }
 /* What the window waits for, said only once the wait is long enough to read it. */
