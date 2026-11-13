@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The heading row over a dimension's table (`SpendingTable`): its title and its controls — one
- * its panel may set (`actions`), the second dimension, and the download of what it shows, in that
- * order. With no value to list the download is disabled, and words say why.
+ * The heading row over a dimension's table (`SpendingTable`): its title and its controls — the
+ * second dimension and the download of what it shows, in that order. With no value to list the
+ * download is disabled, and words say why.
  *
  * Under it a line says in a few words how many values of the period the table lists in the
  * measure, how many spent nothing there and how many spent only before it, «2 roles · 1 with no
@@ -17,6 +17,7 @@
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
@@ -24,7 +25,6 @@ import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -98,14 +98,13 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
 
 <template>
   <div class="spending-table-head">
-    <SectionHeader
+    <PanelLevel
       class="spending-table-title"
-      as="h2"
-      level="page"
+      level="block"
+      as="div"
       :title="title"
     />
     <div class="spending-table-controls">
-      <slot name="actions" />
       <ChoiceSelect
         class="spending-table-across"
         size="compact"

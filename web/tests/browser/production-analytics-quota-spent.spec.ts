@@ -122,9 +122,7 @@ for (const colorScheme of ['light', 'dark'] as const)
       // No dollar among the quota's shares, no quota share in a block, and each block under its
       // window's bar and readings, not beside them.
       const shares = await page
-        .locator(
-          '.window-bar, .quota-window-facts, .quota-window-readings, .quota-account > .chart-table-frame',
-        )
+        .locator('.window-bar, .quota-window-facts, .quota-window-readings, .quota-account-table')
         .allTextContents()
       expect(shares.join(' '), 'no dollar among the shares').not.toContain('$')
       const blocks = await page.locator('.window-spend').allTextContents()

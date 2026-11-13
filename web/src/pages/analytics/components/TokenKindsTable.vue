@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { KindLine } from '@/pages/analytics/utils/tokenKinds.ts'
@@ -15,7 +16,6 @@ import { changeOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import ChartTable from '@/shared/ui/ChartTable.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
 
 const props = defineProps<{
   /** The period the figures are compared with; null when it was not read. */
@@ -71,12 +71,11 @@ const apart = computed(() => rows.value.filter((row) => !row.counted))
 </script>
 
 <template>
-  <section class="kinds-table">
-    <SectionHeader
-      as="h2"
-      level="page"
-      :title="title"
-    />
+  <PanelLevel
+    class="kinds-table"
+    level="block"
+    :title="title"
+  >
     <ChartTable
       :label="title"
       :empty="!lines.length"
@@ -202,19 +201,12 @@ const apart = computed(() => rows.value.filter((row) => !row.counted))
         </tr>
       </tbody>
     </ChartTable>
-  </section>
+  </PanelLevel>
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
 
 <style scoped>
-.kinds-table {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  min-width: 0;
-}
-
 /* The sum the counted kinds add up to, in the full ink and the heavier weight, and set apart by
    air from the kinds the sum leaves out under it. */
 .kinds-table-total > * {

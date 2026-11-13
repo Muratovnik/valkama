@@ -84,46 +84,37 @@ const narrow = useNarrowCharts(root)
         class="quota-panel"
       >
         <ChartSection
+          level="section"
           :title="title"
           :narrow="narrow"
+          :list-label="t('analytics.quota.panel.heading')"
         >
-          <template #chart>
+          <template #lead>
             <p class="quota-intro">
               {{ intro }}
             </p>
-            <ul
-              class="quota-accounts"
-              :aria-label="t('analytics.quota.panel.heading')"
-            >
-              <QuotaAccount
-                v-for="account in payload.accounts"
-                :key="accountKey(account)"
-                shown="chart"
-                :account="account"
-                :section="section"
-                :today="payload.now"
-                :now="now"
-              />
-            </ul>
+          </template>
+          <template #chart>
+            <QuotaAccount
+              v-for="account in payload.accounts"
+              :key="accountKey(account)"
+              shown="chart"
+              :account="account"
+              :section="section"
+              :today="payload.now"
+              :now="now"
+            />
           </template>
           <template #table>
-            <p class="quota-intro">
-              {{ intro }}
-            </p>
-            <ul
-              class="quota-accounts"
-              :aria-label="t('analytics.quota.panel.heading')"
-            >
-              <QuotaAccount
-                v-for="account in payload.accounts"
-                :key="accountKey(account)"
-                shown="table"
-                :account="account"
-                :section="section"
-                :today="payload.now"
-                :now="now"
-              />
-            </ul>
+            <QuotaAccount
+              v-for="account in payload.accounts"
+              :key="accountKey(account)"
+              shown="table"
+              :account="account"
+              :section="section"
+              :today="payload.now"
+              :now="now"
+            />
           </template>
         </ChartSection>
       </div>
@@ -142,15 +133,5 @@ const narrow = useNarrowCharts(root)
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-}
-
-/* Each account one under the next, parted by air: no line and no card around one. */
-.quota-accounts {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-section);
-  padding: 0;
-  margin: 0;
-  list-style: none;
 }
 </style>

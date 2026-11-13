@@ -1,8 +1,8 @@
 /**
  * The panel of a dimension in the real app, measured. Beside the rail its parts stand whole, one
- * under the next, and the table takes the height the charts leave: a wheel over it scrolls the
- * table alone, the document and the panel standing still, and at the end of its scroll its
- * heading row, its names and its total row are still in view. On a phone the names stay in view
+ * under the next, and the table stands at its full height in the panel's one scroll: a wheel over
+ * it scrolls the panel, the document standing still, and at the end of that scroll its heading
+ * row, its names and its total row are still in view. On a phone the names stay in view
  * while the table scrolls sideways. A second dimension chosen over the table crosses it, is the
  * address and outlives a reload, and the file downloaded is the table crossed; with the measure
  * tokens, the table and the file split the tokens by kind. At 1440 pixels the ranked list and the
@@ -49,28 +49,28 @@ async function pointAt(page: Page, selector: string, down?: number) {
   await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, down ?? box.height))
 }
 
-/** How far the document, the panel, the charts and the table's frame are scrolled. */
+/** How far the document, the panel and the table's frame are scrolled, and could be. */
 async function scrolled(page: Page) {
   return page.evaluate(() => {
-    const top = (selector: string) => document.querySelector(selector)?.scrollTop ?? -1
+    const panel = document.querySelector('.analytics-panel')
     const frame = document.querySelector('.spending-table-frame')
     const charts = document.querySelector('.dimension-charts')
     return {
       document: document.scrollingElement?.scrollTop ?? 0,
-      panel: top('.analytics-panel'),
-      charts: top('.dimension-charts'),
+      panel: panel?.scrollTop ?? -1,
+      panelEnd: panel ? panel.scrollHeight - panel.clientHeight : 0,
       // How far the charts could scroll sideways: never, whatever a chart reaches past.
       chartsWide: charts ? charts.scrollWidth - charts.clientWidth : -1,
-      table: frame?.scrollTop ?? 0,
-      tableEnd: frame ? frame.scrollHeight - frame.clientHeight : 0,
+      // How far the table's frame could scroll up and down: never, it stands at its full height.
+      tableEnd: frame ? frame.scrollHeight - frame.clientHeight : -1,
       tableLeft: frame?.scrollLeft ?? 0,
     }
   })
 }
 
 /**
- * Where the frame stands, and whether each of its fixed parts is in it and drawn on top: the
- * heading row, the total row and the name of the row the test names.
+ * Whether each of the table's fixed parts is in the part of its frame the panel shows, and drawn
+ * on top: the heading row, the total row and the name of the row the test names.
  */
 async function fixedParts(page: Page, row: 'first' | 'last') {
   return page.evaluate((which) => {
@@ -78,7 +78,15 @@ async function fixedParts(page: Page, row: 'first' | 'last') {
     if (!frame) throw new Error('the table drew no frame')
     const rows = [...frame.querySelectorAll('tbody tr')]
     const named = (which === 'first' ? rows[0] : rows.at(-1))?.querySelector('th')
-    const box = frame.getBoundingClientRect()
+    const own = frame.getBoundingClientRect()
+    const panel = document.querySelector<HTMLElement>('.analytics-panel')
+    const shown = panel?.getBoundingClientRect()
+    const box = {
+      left: own.left,
+      right: own.right,
+      top: Math.max(own.top, shown?.top ?? own.top),
+      bottom: Math.min(own.bottom, shown && panel ? shown.top + panel.clientHeight : own.bottom),
+    }
     const seen = (cell: Element | null | undefined) => {
       if (!cell) return { inside: false, onTop: false }
       const { left, right, top, bottom } = cell.getBoundingClientRect()
@@ -104,7 +112,7 @@ for (const [width, height] of [
   [1440, 900],
   [1280, 768],
 ] as const)
-  test(`at ${width}×${height} the table scrolls alone and keeps its heading, names and total in view`, async ({
+  test(`at ${width}×${height} the table stands whole in the panel’s scroll and keeps its heading, names and total in view`, async ({
     page,
   }, info) => {
     await serve(page)
@@ -116,23 +124,28 @@ for (const [width, height] of [
 
     expect(await parts(page), 'parts that spill or overlap').toEqual([])
     const before = await scrolled(page)
-    expect(before.tableEnd, 'a table taller than its frame').toBeGreaterThan(0)
+    expect(before.tableEnd, 'a table that scrolls up and down on its own').toBe(0)
+    expect(before.panelEnd, 'a panel taller than its window').toBeGreaterThan(0)
     expect(before.chartsWide, 'charts that scroll sideways').toBe(0)
 
-    await pointAt(page, '.spending-table-frame')
+    await frame.evaluate((one) => {
+      one.scrollIntoView({ block: 'start' })
+    })
+    await pointAt(page, '.spending-table-frame', 100)
     await page.mouse.wheel(0, 20_000)
     await expect
       .poll(async () => {
         const now = await scrolled(page)
-        return now.tableEnd - now.table
+        return now.panelEnd - now.panel
       })
       .toBeLessThanOrEqual(1)
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    )
     const after = await scrolled(page)
     const fixed = await fixedParts(page, 'last')
     await record(info, `analytics panel table ${width}x${height}`, { before, after, fixed })
     expect(after.document).toBe(0)
-    expect(after.panel).toBe(0)
-    expect(after.charts).toBe(before.charts)
     expect(fixed).toEqual({
       head: { inside: true, onTop: true },
       name: { inside: true, onTop: true },

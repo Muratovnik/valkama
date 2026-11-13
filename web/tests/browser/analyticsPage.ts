@@ -20,7 +20,7 @@ export const pageAt = (state: Record<string, string> = {}) =>
   serializePlatformRoute({ module_id: 'analytics', scope: globalScope, state })
 
 /** Wednesday afternoon, so the week holds two whole days and one not over yet. */
-const NOW = new Date(2026, 10, 11, 14, 30)
+export const NOW = new Date(2026, 10, 11, 14, 30)
 const on = (day: number) => new Date(2026, 10, day, 10)
 
 /** Two accounts, each an organization's id as the store holds it; the page names it by its start. */

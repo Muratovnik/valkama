@@ -1,0 +1,214 @@
+<script setup lang="ts">
+/**
+ * One level of what the Analytics panel lays out: a section of the panel, a group in it such as
+ * an account of the quota, or a block such as a chart or a window. Each level is declared here
+ * once, with the size of its heading and the air between what it holds: the groups of a section
+ * stand 24px apart, the blocks of a group 16px and the lines of a block 8px, and a heading is
+ * 16px over a section, 15px over a group and 14px over a block, so no heading is the size of the
+ * level over it. The panel shows one section at a time, so the 36px between two sections has no
+ * place on it yet.
+ *
+ * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact) and the
+ * controls that act on the whole level, each at the one size a heading's control takes; a line
+ * the whole level reads first, such as what its figures are and how old, stands under it
+ * (`lead`). What the level holds stands one under the next, two side by side where both read well
+ * (`pair`), or as many side by side as keep `columnMin` (`fit`); a part that must take the whole
+ * width says so on its own root. A group may stand on a surface of its own.
+ */
+import { computed } from 'vue'
+
+import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
+
+type Level = 'section' | 'group' | 'block'
+
+const props = withDefaults(
+  defineProps<{
+    level: Level
+    /** The element the level is; a group of a list is its item. */
+    as?: 'section' | 'div' | 'li'
+    /** The element of what the level holds: a list of groups is a list. */
+    bodyAs?: 'div' | 'ul'
+    /** The list's name, said to a screen reader, when what the level holds is a list. */
+    bodyLabel?: string
+    /** The narrowest a part stands in `fit` columns. */
+    columnMin?: string
+    columns?: 'one' | 'pair' | 'fit'
+    /** Where the heading sits in the document outline, which the surface decides. */
+    headingAs?: 'h2' | 'h3' | 'h4'
+    /** Whether the level stands on a surface of its own. */
+    surface?: boolean
+    /** The heading's words; a heading with more than words takes the `heading` slot. */
+    title?: string
+  }>(),
+  {
+    as: 'section',
+    title: '',
+    headingAs: 'h2',
+    bodyAs: 'div',
+    columns: 'one',
+    columnMin: '20rem',
+    surface: false,
+    bodyLabel: undefined,
+  },
+)
+
+/** The size a control of the heading row takes. */
+const ACTION_SIZE = 'compact'
+
+const slots = defineSlots<{
+  actions?: (scope: { size: typeof ACTION_SIZE }) => unknown
+  beside?: () => unknown
+  default?: () => unknown
+  heading?: () => unknown
+  lead?: () => unknown
+}>()
+
+const headed = computed(() => props.title !== '' || Boolean(slots.heading))
+</script>
+
+<template>
+  <component
+    :is="as"
+    class="panel-level"
+    :class="[`level-${level}`, `columns-${columns}`, { 'level-surface': surface }]"
+    :data-level="level"
+    :style="{ '--level-column-min': columnMin }"
+  >
+    <div
+      v-if="headed || $slots.beside || $slots.actions"
+      class="level-head"
+    >
+      <component
+        :is="headingAs"
+        v-if="$slots.heading"
+        class="level-heading"
+      >
+        <slot name="heading" />
+      </component>
+      <component
+        :is="headingAs"
+        v-else-if="title"
+        v-slash-breaks="title"
+        class="level-heading"
+      />
+      <slot name="beside" />
+      <div
+        v-if="$slots.actions"
+        class="level-actions"
+      >
+        <slot
+          name="actions"
+          :size="ACTION_SIZE"
+        />
+      </div>
+    </div>
+    <slot name="lead" />
+    <component
+      :is="bodyAs"
+      v-if="$slots.default"
+      class="level-body"
+      :aria-label="bodyLabel"
+    >
+      <slot />
+    </component>
+  </component>
+</template>
+
+<style scoped>
+/* The heading row 12px over what the level holds, as every heading stands over its content. */
+.panel-level {
+  --level-column-min: 20rem;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+.level-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.level-heading {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The controls stand at the row's end, centred on its first line. */
+.level-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  align-items: center;
+  align-self: center;
+  margin-inline-start: auto;
+}
+
+.level-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.level-section {
+  & > .level-head > .level-heading {
+    font: var(--font-section-title);
+  }
+
+  & > .level-body {
+    gap: var(--space-6);
+  }
+}
+
+.level-group {
+  & > .level-head > .level-heading {
+    font: var(--font-panel-title);
+  }
+
+  & > .level-body {
+    gap: var(--space-4);
+  }
+}
+
+.level-block {
+  & > .level-head > .level-heading {
+    font: var(--font-name);
+  }
+
+  & > .level-body {
+    gap: var(--space-2);
+  }
+}
+
+.level-surface {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+}
+
+/* What it holds side by side where its width allows: its own width, so a query reads it. */
+.columns-pair,
+.columns-fit {
+  container-type: inline-size;
+}
+
+.columns-fit > .level-body {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--level-column-min)), 1fr));
+}
+
+@container (width >= 48rem) {
+  .columns-pair > .level-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

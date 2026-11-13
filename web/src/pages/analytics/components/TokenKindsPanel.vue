@@ -17,6 +17,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import TokenKindsTable from '@/pages/analytics/components/TokenKindsTable.vue'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
@@ -105,85 +106,82 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
     ref="root"
     class="kinds-panel"
   >
-    <SpendingUnread
-      v-if="!usage.comparison"
-      @retry="emit('retry')"
-    />
-    <div class="kinds-head">
-      <p class="kinds-figure">
-        <span class="kinds-figure-name">{{ t('analytics.kinds.total') }}</span>
-        <span class="kinds-figure-value">{{ total }}</span>
-      </p>
-      <p class="kinds-note">
-        {{ t('analytics.panel.table.kinds.note') }}
-      </p>
-    </div>
-    <div class="kinds-pair">
-      <ChartSection
-        class="kinds-bars"
-        :title="barsTitle"
-        :narrow="narrow"
-      >
-        <template #chart>
-          <RankedBars
-            :label="barsTitle"
-            :rows="bars"
-            :words="barWords"
-          />
-        </template>
-        <template #table>
-          <RankedBarsTable
-            :label="barsTitle"
-            :rows="bars"
-            :words="barWords"
-          />
-        </template>
-      </ChartSection>
-      <ChartSection
-        class="kinds-multiples"
-        :title="multiplesHeading"
-        :narrow="narrow"
-      >
-        <template #chart>
-          <SmallMultiples
-            :label="multiplesTitle"
-            :multiples="multiples"
-            :words="multiplesWords"
-            :format-value="formatValue"
-          />
-        </template>
-        <template #table>
-          <SmallMultiplesTable
-            :label="multiplesTitle"
-            :multiples="multiples"
-            :periods="periods"
-            :words="multiplesWords"
-            :format-value="formatValue"
-          />
-        </template>
-      </ChartSection>
-    </div>
-    <TokenKindsTable
-      :lines="lines"
-      :total="total"
-      :compared="usage.comparison?.period ?? null"
-    />
+    <PanelLevel
+      level="section"
+      as="div"
+    >
+      <SpendingUnread
+        v-if="!usage.comparison"
+        @retry="emit('retry')"
+      />
+      <div class="kinds-head">
+        <p class="kinds-figure">
+          <span class="kinds-figure-name">{{ t('analytics.kinds.total') }}</span>
+          <span class="kinds-figure-value">{{ total }}</span>
+        </p>
+        <p class="kinds-note">
+          {{ t('analytics.panel.table.kinds.note') }}
+        </p>
+      </div>
+      <div class="kinds-pair">
+        <ChartSection
+          class="kinds-bars"
+          :title="barsTitle"
+          :narrow="narrow"
+        >
+          <template #chart>
+            <RankedBars
+              :label="barsTitle"
+              :rows="bars"
+              :words="barWords"
+            />
+          </template>
+          <template #table>
+            <RankedBarsTable
+              :label="barsTitle"
+              :rows="bars"
+              :words="barWords"
+            />
+          </template>
+        </ChartSection>
+        <ChartSection
+          class="kinds-multiples"
+          :title="multiplesHeading"
+          :narrow="narrow"
+        >
+          <template #chart>
+            <SmallMultiples
+              :label="multiplesTitle"
+              :multiples="multiples"
+              :words="multiplesWords"
+              :format-value="formatValue"
+            />
+          </template>
+          <template #table>
+            <SmallMultiplesTable
+              :label="multiplesTitle"
+              :multiples="multiples"
+              :periods="periods"
+              :words="multiplesWords"
+              :format-value="formatValue"
+            />
+          </template>
+        </ChartSection>
+      </div>
+      <TokenKindsTable
+        :lines="lines"
+        :total="total"
+        :compared="usage.comparison?.period ?? null"
+      />
+    </PanelLevel>
   </div>
 </template>
 
 <style scoped>
-/* The figures, the two charts and the table one under the next, each as tall as it is. Held to
-   the panel's height, the panel scrolls it whole: a few kinds never need a scroll of their own. */
+/* A section of the panel: the figures, the two charts and the table one under the next, each as
+   tall as it is, in the panel's one scroll (`PanelLevel`). */
 .kinds-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-auto-rows: max-content;
-  gap: var(--space-section);
-  align-content: start;
   min-width: 0;
-  min-block-size: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   container-type: inline-size;
 }
 
@@ -215,11 +213,12 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
   font: var(--font-detail);
 }
 
-/* The ranked kinds first, and their small charts beside them where both read well. */
+/* The ranked kinds first, and their small charts beside them where both read well, a block's
+   air apart. */
 .kinds-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-section);
+  gap: var(--space-4);
   align-items: start;
 }
 

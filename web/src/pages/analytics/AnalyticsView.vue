@@ -180,22 +180,7 @@ const bodyColumns = computed(() =>
 const showsRail = computed(() => !narrowScreen.value || !view.value.open)
 const showsPanel = computed(() => !narrowScreen.value || view.value.open)
 
-/** A dimension's answer beside the rail is held to the panel's height, and scrolls its own parts. */
 const quotaSection = computed(() => (isQuotaSection(view.value.by) ? view.value.by : null))
-const holdsSection = computed(
-  () =>
-    !overview.value && !quotaSection.value && !narrowScreen.value && 'payload' in read.state.value,
-)
-
-/**
- * How high a section's table stands over the panel's bottom edge where it sticks there
- * (`DimensionPanel`'s `cover`): the panel's scroll is padded by it, so what the browser brings
- * into view, a focused part or one scrolled to, stands over the table rather than under it.
- */
-const tableCover = ref(0)
-const panelPadding = computed(() =>
-  tableCover.value ? { scrollPaddingBlockEnd: `${tableCover.value}px` } : undefined,
-)
 
 /**
  * A section chosen on the rail or from a card's heading, as a new place in the history, so Back
@@ -258,13 +243,6 @@ watch(
     else rail.value?.focusSelected()
   },
 )
-
-/**
- * Whether the table of a held section takes the whole panel under its figures. It belongs to the
- * page view, not to a section or a read, so a change of section, measure or period or a refresh
- * keeps it; it is no part of the address.
- */
-const tableWhole = ref(false)
 
 /** Whether the field of each dimension is open under the bar, which asks what each offers. */
 const adding = ref(false)
@@ -369,8 +347,6 @@ const emptyDescription = computed(() => {
         ref="panelBox"
         class="analytics-panel"
         tabindex="-1"
-        :class="{ 'analytics-panel-held': holdsSection }"
-        :style="panelPadding"
         :aria-label="sectionName"
       >
         <div
@@ -432,19 +408,16 @@ const emptyDescription = computed(() => {
             />
             <DimensionPanel
               v-else
-              v-model:table-whole="tableWhole"
               :usage="payload"
               :accounts="read.accounts.value"
               :across="view.across"
               :dimensions="filterDimensions"
-              :fills="holdsSection"
               :filters="read.readWith.value"
               :read-at="read.askedAt.value"
               :measure="view.measure"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
               @update:across="(across) => change({ across }, 'replace')"
-              @cover="(height) => (tableCover = height)"
               @narrow="narrow"
               @day="narrowToDay"
               @retry="read.retry"
@@ -505,9 +478,6 @@ const emptyDescription = computed(() => {
   align-content: start;
   min-width: 0;
   min-height: 0;
-
-  /* The air under the content is the one a section's held table sticks past
-     (`DimensionPanel.vue`, `.dimension-table`): change both together. */
   padding: var(--space-3) var(--size-page-gutter) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -517,12 +487,6 @@ const emptyDescription = computed(() => {
   &:focus-visible {
     outline-offset: calc(-1 * (var(--size-focus-ring) + 2px));
   }
-}
-
-/* A dimension's section stands in the panel's whole height and scrolls its own parts, so the
-   panel itself holds still. */
-.analytics-panel-held {
-  grid-template-rows: minmax(0, 1fr);
 }
 
 /* One at a time: the list of sections on its ground across the screen, or the section in its

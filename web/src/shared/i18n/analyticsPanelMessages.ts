@@ -21,8 +21,7 @@ export const analyticsPanelMessages = {
     table: {
       across: 'Cross with',
       acrossNone: 'No second dimension',
-      expand: 'Expand table',
-      collapse: 'Collapse table',
+      toTable: 'To the table',
       crossTitle: '{measure} {by} and {across}',
       total: 'Total',
       heads: {
@@ -90,8 +89,7 @@ export const analyticsPanelMessages = {
     table: {
       across: 'В разрезе по',
       acrossNone: 'Без второго измерения',
-      expand: 'Развернуть таблицу',
-      collapse: 'Свернуть таблицу',
+      toTable: 'К таблице',
       crossTitle: '{measure} {by} и {across}',
       total: 'Итого',
       heads: {

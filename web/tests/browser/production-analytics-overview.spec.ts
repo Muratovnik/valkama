@@ -189,7 +189,7 @@ test('what changed names the tasks that moved most, in the measure’s own units
   })
   expect(entry.under).toBe(true)
   expect(entry.spare).toBeLessThanOrEqual(16)
-  const tallest = await panel.locator('.overview-cards > *').evaluateAll((cards) =>
+  const tallest = await panel.locator('.overview-cards > .level-body > *').evaluateAll((cards) =>
     cards.map((card) => {
       const last = card.lastElementChild?.getBoundingClientRect().bottom ?? 0
       return Math.round(last - card.getBoundingClientRect().top)

@@ -199,3 +199,29 @@ export function quotaAt(now: Date | number, offset = -new Date(now).getTimezoneO
 
 /** The answer as the server sends it. */
 export const quotaAnswer = (quota: Quota) => ({ interface_version: 'valkama-analytics-api', quota })
+
+/** Two more accounts like «Work», each a week and a model's week, by these names and ids. */
+const MORE = [
+  {
+    name: 'Studio',
+    organization: '3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f',
+    account_uuid: '6f5e4d3c-2b1a-4098-8f7e-6d5c4b3a2918',
+  },
+  {
+    name: 'Lab',
+    organization: '8e9f0a1b-2c3d-4e5f-9a6b-7c8d9e0f1a2b',
+    account_uuid: '2a3b4c5d-6e7f-4809-9a1b-2c3d4e5f6a7b',
+  },
+]
+
+/**
+ * Six accounts as of `now`: the four, then two more like «Work» under names of their own, as a
+ * workstation that holds six accounts reads them.
+ */
+export function quotaOfSix(now: Date | number, offset = -new Date(now).getTimezoneOffset()): Quota {
+  const quota = quotaAt(now, offset)
+  const [work] = quota.accounts
+  if (!work) throw new Error('the four accounts start with «Work»')
+  const more = MORE.map((account) => ({ ...work, ...account }))
+  return { ...quota, accounts: [...quota.accounts, ...more] }
+}

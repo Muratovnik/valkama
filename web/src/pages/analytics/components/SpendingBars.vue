@@ -9,7 +9,7 @@
  * whole id as its detail.
  *
  * It lists the first twelve values; past them one line says how many more there are and, pressed,
- * asks for the whole table, sent out as `more`, since the table lists them all.
+ * asks for the table, sent out as `more`, since the table lists them all (`SpendingTableLink`).
  *
  * A bar acts as its value does (`useRankedLines`): by task, a task's bar is a link to it; a value
  * the read can filter by — work with no task, or any value of another dimension it can — is a
@@ -20,6 +20,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import SpendingTableLink from '@/pages/analytics/components/SpendingTableLink.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
@@ -99,14 +100,13 @@ const barWords = computed(() => ({
         @follow="follow"
         @select="select"
       />
-      <button
+      <SpendingTableLink
         v-if="unlisted"
-        type="button"
         class="spending-bars-more"
-        @click="emit('more')"
+        @press="emit('more')"
       >
         {{ moreWords }}
-      </button>
+      </SpendingTableLink>
     </template>
     <template #table>
       <RankedBarsTable
@@ -117,39 +117,13 @@ const barWords = computed(() => ({
         @follow="follow"
         @select="select"
       />
-      <button
+      <SpendingTableLink
         v-if="unlisted"
-        type="button"
         class="spending-bars-more"
-        @click="emit('more')"
+        @press="emit('more')"
       >
         {{ moreWords }}
-      </button>
+      </SpendingTableLink>
     </template>
   </ChartSection>
 </template>
-
-<style scoped>
-/* The values past the first twelve, as one line under the list in the quiet ink of what a list
-   leaves out, pressed as a link to the table that holds them. */
-.spending-bars-more {
-  display: block;
-  min-block-size: var(--size-control-inline);
-  padding: var(--space-1) var(--space-2);
-  border: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  text-align: start;
-  text-decoration: underline;
-  text-decoration-color: var(--color-rule-strong);
-  text-underline-offset: var(--space-half);
-  background: none;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-text);
-    text-decoration-color: currentcolor;
-  }
-}
-</style>

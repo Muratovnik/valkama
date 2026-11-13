@@ -9,10 +9,14 @@
  * section says that instead, so no source, a window never read and a fresh 0 % never read alike.
  * A seat known only for its week says so. A window of money past a limit has no share: it is a
  * line of its state, its age and its source, and never a figure beside a share.
+ *
+ * It is a group of the panel on a surface of its own, its windows side by side where the width
+ * keeps each readable and one under the next where it does not (`PanelLevel`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindow from '@/pages/analytics/components/QuotaWindow.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { sectionWindows, spendWindows, windowKey } from '@/pages/analytics/utils/quotaFigures.ts'
@@ -65,24 +69,32 @@ const tableWords = computed<WindowWords>(() => ({
 </script>
 
 <template>
-  <li
+  <PanelLevel
     class="quota-account"
+    level="group"
+    as="li"
+    heading-as="h3"
+    columns="fit"
+    column-min="24rem"
     :data-account="name"
+    surface
   >
-    <header class="quota-account-head">
-      <h3 class="quota-account-name">
+    <template #heading>
+      <span class="quota-account-name">
         <span v-tooltip.detail="{ text: detail, words: name }">{{ name }}</span>
-      </h3>
-      <p
-        v-if="account.plan || account.seat"
-        class="quota-account-facts"
-      >
+      </span>
+    </template>
+    <template
+      v-if="account.plan || account.seat"
+      #beside
+    >
+      <p class="quota-account-facts">
         <span v-if="account.plan">{{
           t('analytics.quota.panel.plan', { plan: account.plan })
         }}</span>
         <span v-if="account.seat">{{ t('analytics.quota.panel.provisional') }}</span>
       </p>
-    </header>
+    </template>
     <p
       v-if="account.no_source"
       class="quota-account-none"
@@ -100,6 +112,7 @@ const tableWords = computed<WindowWords>(() => ({
     <template v-else>
       <WindowBarTable
         v-if="shown === 'table'"
+        class="quota-account-table"
         :label="t('analytics.quota.table.caption', { account: name })"
         :rows="rows"
         :words="tableWords"
@@ -125,30 +138,15 @@ const tableWords = computed<WindowWords>(() => ({
         {{ other.text }}
       </li>
     </ul>
-  </li>
+  </PanelLevel>
 </template>
 
 <style scoped>
-.quota-account {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.quota-account-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-  align-items: baseline;
-  min-width: 0;
-}
-
-.quota-account-name {
-  min-width: 0;
-  margin: 0;
-  font: var(--font-section-title);
-  overflow-wrap: anywhere;
+/* What is not a window takes the group's whole width, over or under its windows. */
+.quota-account-none,
+.quota-account-table,
+.quota-account-others {
+  grid-column: 1 / -1;
 }
 
 .quota-account-facts {
