@@ -143,6 +143,27 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
     }),
   )
 
+  /**
+   * The scroll offset that stands a point of the scrolled content at the middle of the
+   * room under the head, or as near it as the list's ends let the scroll go.
+   */
+  function centring(point: number): number {
+    const element = root.value
+    if (!element) return 0
+    const offset = point - (edges.value.margin + element.clientHeight) / 2
+    return Math.max(0, Math.min(offset, element.scrollHeight - element.clientHeight))
+  }
+  // The window's own 'center' centres in the whole scrolled box less its padding, which put
+  // a row half the head below the middle of the room under it. The window reads this method
+  // again on each frame until the row's measured place settles, so the room's middle is
+  // what the scroll settles on, to within the whole pixels the window measures rows in.
+  const instance = virtualizer.value
+  const offsetFor = instance.getOffsetForIndex
+  instance.getOffsetForIndex = (index, align) => {
+    const item = align === 'center' ? instance.measurementsCache[index] : undefined
+    return item ? [centring(item.start + item.size / 2), 'center'] : offsetFor(index, align)
+  }
+
   const held = computed(() =>
     windowed.value ? (widestRows(rows(), columns) ?? new Set<Row>()) : new Set<Row>(),
   )
@@ -226,9 +247,9 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
       return true
     },
     /**
-     * Scrolls the row at `index`, drawn or not, to about the middle of the room
-     * under the head, which is where find stands what it goes to: brought only
-     * into view, a row below stood on the bottom edge.
+     * Scrolls the row at `index`, drawn or not, to the middle of the room under the
+     * head, which is where find stands what it goes to: brought only into view, a row
+     * below stood on the bottom edge. The scroll stops at either end of the list.
      */
     center(index: number) {
       if (windowed.value) {
@@ -238,11 +259,9 @@ export function useWindowRows<Row>({ columns, key, pinned, root, rows }: WindowR
       const element = root.value
       const row = element?.querySelector('tbody')?.children[index]
       if (!element || !row) return
-      const { end, start } = edges.value
       const box = row.getBoundingClientRect()
-      const room = element.clientHeight - start - end
-      const top = element.getBoundingClientRect().top + element.clientTop + start
-      element.scrollTop += box.top - top - Math.max(0, room - box.height) / 2
+      const top = element.getBoundingClientRect().top + element.clientTop
+      element.scrollTop = centring(box.top - top + element.scrollTop + box.height / 2)
     },
     /** How tall the head is, which is where the body starts. */
     headSize: computed(() => edges.value.margin),

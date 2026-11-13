@@ -176,18 +176,21 @@ input:is([type='checkbox'], [type='radio']) {
 
 /* The matches of the list's find (`useListFind.ts`), registered by these two names and
    painted wherever their text stands: in a title's pieces and a state's word as well,
-   which no component's scope reaches. A forced palette has a pair of its own for each. */
-::highlight(list-find) {
-  color: var(--color-text);
-  background-color: var(--color-find-match);
+   which no component's scope reaches. A forced palette has a pair of its own for each.
+   They are marks of the screen: a printed list carries none, as it carries no find bar. */
+@media screen {
+  ::highlight(list-find) {
+    color: var(--color-text);
+    background-color: var(--color-find-match);
+  }
+
+  ::highlight(list-find-current) {
+    color: var(--color-text-on-find);
+    background-color: var(--color-find-current);
+  }
 }
 
-::highlight(list-find-current) {
-  color: var(--color-text-on-find);
-  background-color: var(--color-find-current);
-}
-
-@media (forced-colors: active) {
+@media screen and (forced-colors: active) {
   ::highlight(list-find) {
     color: MarkText;
     background-color: Mark;

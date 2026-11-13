@@ -9,6 +9,8 @@
  * name; the count is a polite status, so a step is heard as «3 of 12» and a term
  * that matches nothing as «No matches», and the field is described by it.
  *
+ * It is a control of the screen and is not printed.
+ *
  * Enter and Shift+Enter in the field step, and Escape anywhere in the bar closes
  * it. The steps stay focusable while there is nothing to step to, which is how a
  * change of the list that leaves no match keeps focus where it was. The count is
@@ -180,6 +182,10 @@ defineExpose({
   background: var(--color-surface);
   border-radius: var(--radius-control);
   box-shadow: 0 14px 34px var(--color-shadow);
+
+  @media print {
+    display: none;
+  }
 }
 
 .list-find-field {

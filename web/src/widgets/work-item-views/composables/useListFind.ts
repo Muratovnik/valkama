@@ -59,6 +59,9 @@ function isF(event: KeyboardEvent): boolean {
   return LATIN_LETTER.test(event.key) ? event.key.toLowerCase() === 'f' : event.code === 'KeyF'
 }
 
+/** How many times a match brought to the middle is set right once the scroll stops. */
+const SETTLE_TRIES = 4
+
 interface ListFind<Row> {
   list: { center: (index: number) => void; placeOf: (id: string) => number }
   /** The element that scrolls the rows. */
@@ -119,6 +122,9 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
   const current = shallowRef<ListMatch | null>(null)
   /** Where focus was when the bar opened, to give it back. */
   let returnTo: HTMLElement | null = null
+  /** The match being brought to the middle, until the scroll settles on it. */
+  let placing: ListMatch | null = null
+  let tries = 0
 
   // Every row's words, folded. They follow the rows and what the rows print, never the
   // term: a key typed into it only matches again.
@@ -202,12 +208,53 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
     )
   }
 
-  /** Brings the current match into sight, once the matches have caught up with the step. */
+  /** How far a match stands below the middle of the room under the head. */
+  function offCentre(element: HTMLElement, range: Range): number {
+    const top = element.getBoundingClientRect().top + element.clientTop
+    const head = element.querySelector('th.list-head')?.getBoundingClientRect().bottom ?? top
+    const box = range.getBoundingClientRect()
+    return (box.top + box.bottom - head - top - element.clientHeight) / 2
+  }
+
+  /**
+   * Sets the match being brought in on the middle itself, once its row is drawn and the
+   * scroll has stopped: the list centres the row, by the sizes it knows of rows it has
+   * not drawn, and the match is a line of the row.
+   */
+  function settle() {
+    const now = placing
+    const element = root.value
+    if (!now || !element) return
+    const found = now === current.value ? paint() : null
+    if (!found) {
+      if (now !== current.value) placing = null
+      return
+    }
+    const off = offCentre(element, found)
+    tries -= 1
+    const before = element.scrollTop
+    if (Math.abs(off) >= 1 && tries >= 0) element.scrollTop += off
+    // Set right, stopped at an end of the list, or given up: a later scroll is the reader's.
+    if (element.scrollTop === before) placing = null
+  }
+  useEventListener(root, 'scrollend', settle)
+  // A reader who takes the scroll in hand takes it from the find too.
+  useEventListener(root, ['wheel', 'pointerdown'], () => (placing = null), { passive: true })
+
+  /**
+   * Brings the current match into sight, once the matches have caught up with the step:
+   * to the middle of the room under the head.
+   */
   async function reveal() {
     await nextTick()
     const range = paint()
     const now = current.value
-    if (now && !(range && inSight(range))) list.center(now.place)
+    placing = null
+    if (!now || (range && inSight(range))) return
+    list.center(now.place)
+    placing = now
+    tries = SETTLE_TRIES
+    requestAnimationFrame(settle)
   }
 
   // The rows drawn change as the list scrolls, as a row changes and as the window
@@ -222,7 +269,10 @@ export function useListFind<Row>({ bar, focusBar, key, list, root, rows, words }
     },
   )
   watch([term, current], () => (term.value ? paint() : unpaint()), { flush: 'post' })
-  onBeforeUnmount(unpaint)
+  onBeforeUnmount(() => {
+    placing = null
+    unpaint()
+  })
 
   /** Whether the list is what the page shows: drawn, with nothing lying over it. */
   function inCharge(): boolean {
