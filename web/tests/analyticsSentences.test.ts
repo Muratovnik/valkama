@@ -10,17 +10,12 @@ import { describe, expect, it } from 'vitest'
 import { messages } from '@/shared/i18n/index.ts'
 import { sentences } from '@/shared/lib/sentences.ts'
 
+import { flatten } from './fixtures/analyticsWords.ts'
+
 /** The placeholders a period, a day or a date is put into. */
 const LABELS = new Set(['period', 'day', 'date', 'from', 'to'])
 /** A label that ends in a stop of its own, as the shortest Russian months do. */
 const CUT_SHORT = '2–5 нояб.'
-
-/** Every message under a part of the catalog, by its key. */
-function flatten(node: unknown, prefix: string): [string, string][] {
-  if (typeof node === 'string') return [[prefix, node]]
-  if (!node || typeof node !== 'object') return []
-  return Object.entries(node).flatMap(([key, child]) => flatten(child, `${prefix}.${key}`))
-}
 
 /** A message as the page says it: each label ending in its stop, anything else a word. */
 const said = (message: string) =>
