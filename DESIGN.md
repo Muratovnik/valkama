@@ -944,6 +944,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   running is hatched, and a forced palette draws the marks in its ink and the floor, the rest and
   an empty track in its quiet ink. Neither acts or moves under the pointer, and each keeps its
   height with nothing to draw, so the tile around it never moves when its figures arrive.
+  Two forms draw one window of a limit, a share of it spent and never a sum of two:
+  `WindowBar`, the share as a fill on a track of the series hue's own tint, a tick across the
+  bar where steady use from the window's start would stand now, and the share and the state in
+  words beside it; and `StepLine`, the window's readings as steps from its start to its reset,
+  flat until the next reading and never a slope between two, with steady use as a thin diagonal
+  in the text ink and the reading under the pointer said over the plot in a box that keeps its
+  size. A window no longer fresh is hatched, a 0 % has no fill, and a window with no figure draws
+  the track alone; the fill stands apart from the ground and the track by lightness, so both read
+  in grayscale and under a forced palette in its inks. Their table twins are `WindowBarTable`
+  and `StepLineTable`.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, takes the height the

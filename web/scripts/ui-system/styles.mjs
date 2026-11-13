@@ -18,10 +18,12 @@ import { styleBlocks } from './sfc.mjs'
 
 // The chain's scope chart and branch map are drawings of data, not icons: the
 // chart plots two lines from a series, and the map draws one segment per member
-// along the lane it came from, which no icon set can draw.
+// along the lane it came from, which no icon set can draw. A window's step line draws its
+// readings as steps beside a sloped line of steady pace, which boxes of HTML cannot draw.
 const svgOwners = new Set([
   'shared/ui/VIcon.vue',
   'shared/ui/BrandMark.vue',
+  'shared/ui/StepLine.vue',
   'widgets/work-item-inspector/components/ChainBranchMap.vue',
   'widgets/work-item-inspector/components/ChainScopeChart.vue',
 ])
