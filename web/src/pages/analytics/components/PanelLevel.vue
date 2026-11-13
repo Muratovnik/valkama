@@ -2,11 +2,12 @@
 /**
  * One level of what the Analytics panel lays out: a section of the panel, a group in it such as
  * an account of the quota, or a block such as a chart or a window. Each level is declared here
- * once, with the size of its heading and the air between what it holds: the groups of a section
- * stand 24px apart, the blocks of a group 16px and the lines of a block 8px, and a heading is
- * 16px over a section, 15px over a group and 14px over a block, so no heading is the size of the
- * level over it. The panel shows one section at a time, so the 36px between two sections has no
- * place on it yet.
+ * once, with the air between what it holds: the groups of a section stand 24px apart, the blocks
+ * of a group 16px and the lines of a block 8px. Its heading takes the type the scale gives its
+ * level, 16px over a section, 15px over a group and 14px over a block, from the one stylesheet
+ * every heading of a level reads (`headingLevels.css`), so no heading is the size of the level
+ * over it. The panel shows one section at a time, so the 36px between two sections has no place
+ * on it yet.
  *
  * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact) and the
  * controls that act on the whole level, each at the one size a heading's control takes. A caveat
@@ -97,6 +98,7 @@ const caveats = computed(() => (headed.value ? props.about : []))
         :is="headingAs"
         v-if="$slots.heading"
         class="level-heading"
+        :class="`heading-${level}`"
       >
         <slot name="heading" />
       </component>
@@ -105,10 +107,12 @@ const caveats = computed(() => (headed.value ? props.about : []))
         v-else-if="title"
         v-slash-breaks="title"
         class="level-heading"
+        :class="`heading-${level}`"
       />
       <LineEnd
         v-if="caveats.length"
         class="level-about"
+        :class="`heading-${level}`"
       >
         <InfoTip :label="t('analytics.about.label')">
           <div class="level-about-caveats">
@@ -160,6 +164,8 @@ const caveats = computed(() => (headed.value ? props.about : []))
     </component>
   </component>
 </template>
+
+<style scoped src="@/shared/ui/headingLevels.css"></style>
 
 <style scoped>
 /* The heading row 12px over what the level holds, as every heading stands over its content. */
@@ -218,34 +224,18 @@ const caveats = computed(() => (headed.value ? props.about : []))
   list-style: none;
 }
 
-.level-section {
-  & > .level-head > :is(.level-heading, .level-about) {
-    font: var(--font-section-title);
-  }
-
-  & > .level-body {
-    gap: var(--space-6);
-  }
+/* The heading and its «ⓘ» take their level's type from the scale (`headingLevels.css`); the air
+   between what each level holds is the level's own. */
+.level-section > .level-body {
+  gap: var(--space-6);
 }
 
-.level-group {
-  & > .level-head > :is(.level-heading, .level-about) {
-    font: var(--font-group-title);
-  }
-
-  & > .level-body {
-    gap: var(--space-4);
-  }
+.level-group > .level-body {
+  gap: var(--space-4);
 }
 
-.level-block {
-  & > .level-head > :is(.level-heading, .level-about) {
-    font: var(--font-name);
-  }
-
-  & > .level-body {
-    gap: var(--space-2);
-  }
+.level-block > .level-body {
+  gap: var(--space-2);
 }
 
 .level-surface {
