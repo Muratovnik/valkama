@@ -1,4 +1,4 @@
-import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
+import { pairKey, pairKind, valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
 import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { tokensAnew } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
@@ -108,18 +108,54 @@ const SHOWN_CATEGORIES = 10
  */
 const NEVER_FOLDED: ReadonlySet<UsageDimension> = new Set(['role', 'launch_class'])
 
-/** A line of a breakdown: a value of the dimension, or the folded tail of `folded` values. */
+/**
+ * A line of a breakdown: a value of the dimension, or with a split a pair of it and a value of the
+ * dimension it is split by, or the folded tail of `folded` of them.
+ */
 export interface SpendingLine {
   /** How many values the folded tail holds; 0 for any other line. */
   folded: number
   key: string
   kind: ValueKind | 'other'
   spent: Spent
-  /** The value the line names; null for the folded tail. */
+  /** The value the line names, the first of a pair; null for the folded tail. */
   value: UsageGroupValue | null
+  /** A pair's second value, and the dimension it is of; absent for a line of one value. */
+  second?: { dimension: UsageDimension; value: UsageGroupValue }
 }
 
 const UNPLACED: UsageGroupValue = { id: null, unknown: true }
+
+/**
+ * What a breakdown's lines are of: the values of a dimension, or, split by a second one, the pairs
+ * of a value of the first and one of the second, in that order.
+ */
+export type Breakdown = UsageDimension | readonly [UsageDimension, UsageDimension]
+
+/** The breakdown by `by`, split by `across` where one is given. */
+export const breakdownOf = (by: UsageDimension, across?: UsageDimension | null): Breakdown =>
+  across ? [by, across] : by
+
+/** The line a row adds to: its value of the dimension, or its pair. */
+function lineOfRow(row: UsageRow, breakdown: Breakdown) {
+  if (typeof breakdown === 'string') {
+    const value = row.group[breakdown] ?? UNPLACED
+    return { key: valueKey(value), kind: valueKind(value), value }
+  }
+  const [dimension, across] = breakdown
+  const value = row.group[dimension] ?? UNPLACED
+  const second = row.group[across] ?? UNPLACED
+  return {
+    key: pairKey(value, second),
+    kind: pairKind(value, second),
+    value,
+    second: { dimension: across, value: second },
+  }
+}
+
+/** Whether no line of a breakdown is folded: each of its dimensions holds a few values. */
+const neverFolded = (breakdown: Breakdown) =>
+  (typeof breakdown === 'string' ? [breakdown] : breakdown).every((one) => NEVER_FOLDED.has(one))
 
 const byCodePoint = (left: string, right: string) => {
   if (left === right) return 0
@@ -130,23 +166,23 @@ const byCodePoint = (left: string, right: string) => {
 const weight = (measure: Measure, line: SpendingLine) => measureOf(measure, line.spent) ?? 0
 
 /**
- * The lines of a breakdown by `dimension`, ranked by `measure`: the largest categories, the rest
- * folded into one «other» line, then work with no value there and work nobody can place, each
- * its own line. Nothing is dropped, so the lines add up to the rows they come from.
+ * The lines of a breakdown by a dimension, or by the pairs of two (`Breakdown`), ranked by
+ * `measure`: the largest categories, the rest folded into one «other» line, then work with no
+ * value there and work nobody can place, each its own line. Nothing is dropped, so the lines add
+ * up to the rows they come from.
  */
 export function spendingLines(
   rows: readonly UsageRow[],
-  dimension: UsageDimension,
+  breakdown: Breakdown,
   measure: Measure,
   shown = SHOWN_CATEGORIES,
 ): SpendingLine[] {
   const byKey = new Map<string, SpendingLine>()
   for (const row of rows) {
-    const value = row.group[dimension] ?? UNPLACED
-    const key = valueKey(value)
-    const held = byKey.get(key)
+    const line = lineOfRow(row, breakdown)
+    const held = byKey.get(line.key)
     const spent = held ? addSpent(held.spent, spentOf(row)) : spentOf(row)
-    byKey.set(key, { key, kind: valueKind(value), spent, value, folded: 0 })
+    byKey.set(line.key, { ...line, spent, folded: 0 })
   }
   const lines = [...byKey.values()]
   const categories = lines
@@ -155,7 +191,7 @@ export function spendingLines(
       (left: SpendingLine, right: SpendingLine) =>
         weight(measure, right) - weight(measure, left) || (left.key < right.key ? -1 : 1),
     )
-  const keep = NEVER_FOLDED.has(dimension) ? categories.length : shown
+  const keep = neverFolded(breakdown) ? categories.length : shown
   const tail = categories.slice(keep)
   let folded = NOTHING
   for (const line of tail) folded = addSpent(folded, line.spent)
@@ -167,22 +203,22 @@ export function spendingLines(
 }
 
 /**
- * The lines of a section's ranked chart by `dimension`: every value ranked by its figure in
- * `measure` — work with no value there and work nobody can place among them, where their figures
- * put them — the first `shown` kept and the rest folded into one «other» line, which comes last.
- * A tie keeps the order of the keys. Nothing is dropped.
+ * The lines of a section's ranked chart by a dimension, or by its pairs (`Breakdown`): every value
+ * ranked by its figure in `measure` — work with no value there and work nobody can place among
+ * them, where their figures put them — the first `shown` kept and the rest folded into one «other»
+ * line, which comes last. A tie keeps the order of the keys. Nothing is dropped.
  */
 export function rankedLines(
   rows: readonly UsageRow[],
-  dimension: UsageDimension,
+  breakdown: Breakdown,
   measure: Measure,
   shown = SHOWN_CATEGORIES,
 ): SpendingLine[] {
-  const lines = spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).sort(
+  const lines = spendingLines(rows, breakdown, measure, Number.POSITIVE_INFINITY).sort(
     (left: SpendingLine, right: SpendingLine) =>
       weight(measure, right) - weight(measure, left) || byCodePoint(left.key, right.key),
   )
-  const keep = NEVER_FOLDED.has(dimension) ? lines.length : shown
+  const keep = neverFolded(breakdown) ? lines.length : shown
   const tail = lines.slice(keep)
   let folded = NOTHING
   for (const line of tail) folded = addSpent(folded, line.spent)
@@ -192,7 +228,7 @@ export function rankedLines(
   return [...lines.slice(0, keep), ...other]
 }
 
-/** A value of a breakdown in this period beside the period it is compared with. */
+/** A value of a breakdown, or a pair, in this period beside the period it is compared with. */
 export interface ComparedLine {
   /** What the value spent in the period before; null when that period was not read. */
   before: Spent | null
@@ -202,13 +238,15 @@ export interface ComparedLine {
   kind: ValueKind
   now: Spent
   value: UsageGroupValue
+  /** A pair's second value, as its line holds it (`SpendingLine`). */
+  second?: SpendingLine['second']
 }
 
 /**
- * Every value of `dimension` that this period or the period before holds, none folded, with what
- * it spent in each and how `measure` moved, by the tiles' own rule (`changeOf`). A value that
- * worked in one period alone spent nothing in the other. `before` is null for a period before
- * that was not read, and then no line has a figure or a change there.
+ * Every value of `dimension`, or every pair with `across`, that this period or the period before
+ * holds, none folded, with what it spent in each and how `measure` moved, by the tiles' own rule
+ * (`changeOf`). A value that worked in one period alone spent nothing in the other. `before` is
+ * null for a period before that was not read, and then no line has a figure or a change there.
  *
  * Largest first in `measure` this period, a value with no figure there after every figure, and
  * a tie in the order of the names `name` gives, then of the keys.
@@ -218,12 +256,14 @@ export function comparedLines(options: {
   dimension: UsageDimension
   measure: Measure
   rows: readonly UsageRow[]
+  across?: UsageDimension | null
   name: (value: UsageGroupValue) => string
 }): ComparedLine[] {
-  const { before, dimension, measure, name } = options
+  const { before, dimension, measure, name, across } = options
+  const breakdown = breakdownOf(dimension, across)
   const all = (rows: readonly UsageRow[]) =>
     new Map(
-      spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).map((line) => [
+      spendingLines(rows, breakdown, measure, Number.POSITIVE_INFINITY).map((line) => [
         line.key,
         line,
       ]),
@@ -231,13 +271,15 @@ export function comparedLines(options: {
   const now = all(options.rows)
   const was = before ? all(before) : new Map<string, SpendingLine>()
   const lines = [...new Set([...now.keys(), ...was.keys()])].map((key): ComparedLine => {
-    const value = (now.get(key) ?? was.get(key))?.value ?? UNPLACED
+    const line = now.get(key) ?? was.get(key)
+    const value = line?.value ?? UNPLACED
     const spent = now.get(key)?.spent ?? NOTHING
     const spentBefore = before ? (was.get(key)?.spent ?? NOTHING) : null
     return {
       key,
-      kind: valueKind(value),
+      kind: line && line.kind !== 'other' ? line.kind : valueKind(value),
       value,
+      ...(line?.second ? { second: line.second } : {}),
       now: spent,
       before: spentBefore,
       change: spentBefore ? changeOf(measure, spent, spentBefore) : null,

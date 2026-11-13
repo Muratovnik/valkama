@@ -2,8 +2,10 @@
  * The panel of a dimension on the Analytics page. The oracle is the requirement: a value has one
  * hue in its small chart, its bar and the key of the day chart, each beside its name, and work
  * nobody can place stands apart in the neutral; the small charts say their one scale once; a
- * second dimension in the address is read with the first over the page's own period and filters
- * and crosses the table, and choosing one, or none, in the table writes it into the address.
+ * second dimension in the address splits the section: it is read with the first over the page's
+ * own period and filters, and the period before too, and the ranked bars and the table read its
+ * pairs, each pair in the hue of its rank among every pair of the read; choosing one, or none, in
+ * the section's heading writes it into the address as a step of its own.
  */
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -127,40 +129,61 @@ describe('the panel of a dimension', () => {
   })
 })
 
-describe('a second dimension', () => {
-  it('is read with the first over the page’s period and filters, and crosses the table', async () => {
+describe('the split of a section', () => {
+  it('is read with the first over the page’s period and filters, and the period before', async () => {
     const reads = stubAnalyticsReads((query) => serveUsage(WORLD, query))
-    const page = await mountAnalytics({
-      projectId: 'sample',
-      routeState: { by: 'model', across: 'role' },
-    })
+    await mountAnalytics({ projectId: 'sample', routeState: { by: 'model', across: 'role' } })
     const own = reads.grouped('model').at(0)
     const crossed = reads.grouped('model,role')
-    expect(crossed).toHaveLength(1)
+    expect(crossed).toHaveLength(2)
+    const [now, before] = crossed
     // The period as the answer on show wrote it: from Monday's midnight to the moment it was read.
-    expect(Date.parse(crossed[0]?.get('from') ?? '')).toBe(new Date(2026, 10, 9).getTime())
-    expect(Date.parse(crossed[0]?.get('to') ?? '')).toBe(Date.parse(own?.get('to') ?? ''))
-    for (const key of ['utc_offset', 'project']) expect(crossed[0]?.get(key)).toBe(own?.get(key))
-    expect(crossed[0]?.get('compare')).not.toBe('true')
-
-    expect(text(page, '.spending-table thead th')).toEqual([
-      'Model',
-      'Main agent',
-      'Adviser',
-      'Total',
-    ])
+    expect(Date.parse(now?.get('from') ?? '')).toBe(new Date(2026, 10, 9).getTime())
+    expect(Date.parse(now?.get('to') ?? '')).toBe(Date.parse(own?.get('to') ?? ''))
+    // The period before ends where the week before reached by the same moment of its Wednesday.
+    expect(Date.parse(before?.get('from') ?? '')).toBe(new Date(2026, 10, 2).getTime())
+    expect(Date.parse(before?.get('to') ?? '')).toBeLessThan(Date.parse(now?.get('from') ?? ''))
+    for (const read of crossed) {
+      for (const key of ['utc_offset', 'project']) expect(read?.get(key)).toBe(own?.get(key))
+      expect(read?.get('compare')).not.toBe('true')
+    }
   })
 
-  it('is written into the address when chosen in the table, and taken out with none', async () => {
+  it('makes each bar and each row of the table a pair, in the hue of its rank', async () => {
+    stubAnalyticsReads((query) => serveUsage(WORLD, query))
+    const page = await mountAnalytics({ routeState: { by: 'model', across: 'role' } })
+    const bars = huesIn(page, '.spending-bars .ranked-row', '.ranked-label', '[data-slot]')
+    // Largest first: model-a by the main agent, model-b and model-c by the adviser take the first
+    // three hues in order; the work of no known model is no pair of two values, in the neutral.
+    expect([...bars]).toEqual([
+      ['model-a · Main agent', '1'],
+      ['model-b · Adviser', '2'],
+      ['Unknown · Main agent', 'apart'],
+      ['model-c · Adviser', '3'],
+    ])
+    expect(text(page, '.spending-table tbody th')).toEqual([...bars.keys()])
+    // The small charts still read the section's own values: the read gives no pair a period.
+    expect(text(page, '.spending-multiples .multiple-name')).toContain('model-a')
+  })
+
+  it('is chosen in the section’s heading, written into the address as a step, and taken out with none', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model' } })
-    const choice = page.get('.spending-table-across').findComponent(ChoiceSelect)
+    expect(page.find('.spending-table').findComponent(ChoiceSelect).exists()).toBe(false)
+    const choice = page.get('.dimension-section .level-head').getComponent({ name: 'ChoiceSelect' })
+    const labels = (choice.props('options') as { label: string }[]).map((option) => option.label)
+    // «None», then every dimension of the page but the section's own.
+    expect(labels[0]).toBe('None')
+    expect(labels).toContain('Effort')
+    expect(labels).not.toContain('Model')
     choice.vm.$emit('update:modelValue', 'role')
     await page.setProps({ routeState: { by: 'model', across: 'role' } })
     choice.vm.$emit('update:modelValue', 'none')
-    const written = (page.emitted<[Record<string, string>]>('state') ?? []).map(([state]) => state)
-    expect(written.at(-2)?.across).toBe('role')
-    expect(written.at(-1)?.across).toBeUndefined()
-    expect(written.at(-1)?.by).toBe('model')
+    const written = page.emitted<[Record<string, string>, string]>('state') ?? []
+    expect(written.at(-2)?.[0].across).toBe('role')
+    expect(written.at(-2)?.[1]).toBe('push')
+    expect(written.at(-1)?.[0].across).toBeUndefined()
+    expect(written.at(-1)?.[0].by).toBe('model')
+    expect(written.at(-1)?.[1]).toBe('push')
   })
 })

@@ -11,8 +11,9 @@
  * read. Where the page leaves the panel beside the rail too narrow for its charts (`usePanelRoom`)
  * the rail is the screen, a list, and a section chosen there takes its place as a new place in the
  * history, so Back returns to the list. Beside the rail a section chosen on it or from a card of
- * the overview is a new place too, so Back returns to the section it was chosen in; the period,
- * the measure, the filters and the second dimension change the place in hand. Each section's
+ * the overview is a new place too, so Back returns to the section it was chosen in, and so is a
+ * split chosen in a section's heading, so Back returns the split before; the period, the measure
+ * and the filters change the place in hand. Each section's
  * entry on the rail carries its figures (`useRailTiles`).
  *
  * The view — the period, the section, the measure, a filter per dimension and whether a narrow
@@ -418,7 +419,7 @@ const emptyDescription = computed(() => {
               :measure="view.measure"
               :refused="reportRefused"
               @update:measure="(measure) => change({ measure }, 'replace')"
-              @update:across="(across) => change({ across }, 'replace')"
+              @update:across="(across) => change({ across }, 'push')"
               @narrow="narrow"
               @step="narrowToPeriod"
               @frame="(span, label) => narrowToPeriod(span, label, true)"

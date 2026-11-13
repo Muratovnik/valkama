@@ -18,6 +18,7 @@ const line = (name: string, when: TableLine['when'], rest = false): TableLine =>
   name,
   rest,
   value: { id: name, unknown: false },
+  valueName: name,
   when,
 })
 

@@ -1,6 +1,7 @@
 /**
- * The panel of one dimension on the Analytics page: a small chart per value on one scale, and the
- * table under it that sorts, crosses the dimension with a second one and splits tokens by kind.
+ * The panel of one dimension on the Analytics page: the second dimension its heading splits it
+ * by, a small chart per value on one scale, and the table under it that sorts and splits tokens
+ * by kind.
  * Merged into the page's own words as `analytics.panel`.
  */
 export const analyticsPanelMessages = {
@@ -18,9 +19,11 @@ export const analyticsPanelMessages = {
       scale: 'Every chart from 0 to',
       period: 'Whole period',
     },
+    split: {
+      label: 'Split by',
+      none: 'None',
+    },
     table: {
-      across: 'Cross with',
-      acrossNone: 'No second dimension',
       toTable: 'To the table',
       crossTitle: '{measure} {by} and {across}',
       total: 'Total',
@@ -40,6 +43,7 @@ export const analyticsPanelMessages = {
         before: '{count} only before',
         apart: 'and {names}',
         outside: '{count} outside the period',
+        pairs: '{count} pair | {count} pairs',
         values: {
           account: '{count} account | {count} accounts',
           project: '{count} project | {count} projects',
@@ -86,9 +90,11 @@ export const analyticsPanelMessages = {
       scale: 'Шкала всех графиков: от 0 до',
       period: 'Весь период',
     },
+    split: {
+      label: 'Разбить по',
+      none: 'Нет',
+    },
     table: {
-      across: 'В разрезе по',
-      acrossNone: 'Без второго измерения',
       toTable: 'К таблице',
       crossTitle: '{measure} {by} и {across}',
       total: 'Итого',
@@ -108,6 +114,7 @@ export const analyticsPanelMessages = {
         before: '{count} только в прошлом',
         apart: 'и {names}',
         outside: '{count} вне периода',
+        pairs: '{count} пара | {count} пары | {count} пар',
         values: {
           account: '{count} аккаунт | {count} аккаунта | {count} аккаунтов',
           project: '{count} проект | {count} проекта | {count} проектов',

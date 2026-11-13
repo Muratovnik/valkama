@@ -8,8 +8,8 @@
  * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model, or a day
  * pressed by keyboard or by mouse beside its coloured stack, narrows the view to it as a new place
  * in the history, while a segment of the stack acts for its own model as its bar does, so Back
- * returns, as a section opened from a card or the rail does, while the
- * period, the measure and the second dimension change the place in hand; the task's bar then
+ * returns, as a section opened from a card or the rail does, and as a split chosen in a section's
+ * heading does, while the period and the measure change the place in hand; the task's bar then
  * opens the task's card over the page, whose address keeps the view and names the card, and the
  * opening is counted once. Each run prints what it measured.
  */
@@ -391,7 +391,7 @@ for (const width of WIDTHS)
     }
   })
 
-test('a section opened from a card or the rail is a place Back returns from; the period, measure and second dimension are not', async ({
+test('a section opened from a card or the rail, and its split, are places Back returns from; the period and measure are not', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -428,18 +428,20 @@ test('a section opened from a card or the rail is a place Back returns from; the
   await expect.poll(() => path(page)).toBe(weeksTokens)
   await expect(models).toBeVisible()
 
-  // A tile of the rail does the same; the second dimension then changes the section in place.
+  // A tile of the rail does the same; a split chosen in the section's heading is a step of its
+  // own, so Back takes the split away before it leaves the section.
   await analytics.locator('.analytics-rail [data-section="work_item"]').click()
   const tasks = pageAt({ period: 'weeks4', by: 'work_item', measure: 'tokens' })
   await expect.poll(() => path(page)).toBe(tasks)
-  const table = analytics.locator('.spending-table')
-  await table.locator('.spending-table-across .choice-trigger').click()
+  await analytics.locator('.dimension-section .dimension-split .choice-trigger').click()
   await page.getByRole('option', { name: 'Model' }).click()
   await expect
     .poll(() => path(page))
     .toBe(pageAt({ period: 'weeks4', by: 'work_item', measure: 'tokens', across: 'model' }))
   const steps = await length()
-  expect(steps, 'one step for the section, none for the second dimension').toBe(opened + 1)
+  expect(steps, 'one step for the section, one for the split').toBe(opened + 2)
+  await page.goBack()
+  await expect.poll(() => path(page)).toBe(tasks)
   await page.goBack()
   await expect.poll(() => path(page)).toBe(weeksTokens)
   await record(info, 'analytics history', { opened, steps })

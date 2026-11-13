@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The heading row over a dimension's table (`SpendingTable`): its title and its controls — the
- * second dimension and the download of what it shows, in that order. With no value to list the
- * download is disabled, and words say why.
+ * The heading row over a dimension's table (`SpendingTable`): its title and the download of what
+ * it shows. With no value to list the download is disabled, and words say why. The second
+ * dimension is the section's, chosen in its heading (`DimensionPanel`), not the table's.
  *
  * Under it a line says in a few words how many values of the period the table lists in the
  * measure, how many spent nothing there and how many spent only before it, «2 roles · 1 with no
@@ -10,7 +10,7 @@
  * hint. The line is a row of its own, so its words are whole however many parts the measure gives
  * it: beside the title and the controls it was cut in half under the measure «tokens». Where even
  * its row is too narrow it breaks between its parts, never inside one. It keeps its place while
- * there is nothing to count, so choosing a measure or a second dimension moves nothing under it.
+ * there is nothing to count, so choosing a measure or a split moves nothing under it.
  *
  * The title and the controls keep one line; only a narrow table lets them wrap.
  */
@@ -18,50 +18,43 @@ import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
-import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
-  /** The second dimension the table is crossed with; null for none. */
-  across: UsageDimension | null
   by: UsageDimension
-  /** The dimensions the table may be crossed with. */
-  dimensions: readonly UsageDimension[]
   /** The rows the table lists. */
   lines: readonly TableLine[]
   /** The measure the rows are counted in: a value with nothing there is said apart. */
   measure: Measure
+  /** Whether the rows are pairs, the section being split by a second dimension. */
+  split: boolean
   /** The whole account of the rows and their order, the hint of the words about them. */
   summary: string
   title: string
-  /** A second dimension is chosen and its read has not landed: nothing to count or download. */
+  /** A split is chosen and its read has not landed: nothing to count or download. */
   waiting: boolean
 }>()
-/** The download asked for; a second dimension chosen, or none. */
-const emit = defineEmits<{
-  'download': []
-  'update:across': [across: UsageDimension | null]
-}>()
+/** The download asked for. */
+const emit = defineEmits<{ download: [] }>()
 
 const { t } = useI18n()
-const words = useSpendingWords()
 
 /**
- * How many values of the period the rows are, as the rail's tile counts them; how many spent in
- * it nothing in the measure; and how many spent only before it.
+ * How many values of the period the rows are, as the rail's tile counts them, or how many pairs;
+ * how many spent in it nothing in the measure; and how many spent only before it.
  */
 const parts = computed(() => {
   if (props.waiting || !props.lines.length) return []
   const { now, elsewhere, before } = tableCounts(props.lines)
+  const what = props.split ? 'pairs' : `values.${props.by}`
   return [
-    t(`analytics.panel.table.counts.values.${props.by}`, { count: now }, now),
+    t(`analytics.panel.table.counts.${what}`, { count: now }, now),
     elsewhere
       ? t(`analytics.panel.table.counts.elsewhere.${props.measure}`, { count: elsewhere })
       : '',
@@ -78,18 +71,6 @@ const shownParts = computed(() =>
   parts.value.map((part, index, all) => (index < all.length - 1 ? `${part} · ` : part)),
 )
 
-const NONE = 'none'
-const acrossOptions = computed(() => [
-  { value: NONE, label: t('analytics.panel.table.acrossNone') },
-  ...props.dimensions
-    .filter((dimension) => dimension !== props.by)
-    .map((dimension) => ({ value: dimension, label: words.dimension(dimension) })),
-])
-function chooseAcross(value: string) {
-  const chosen = props.dimensions.find((dimension) => dimension === value)
-  emit('update:across', chosen ?? null)
-}
-
 /** Nothing to download: no value to list. */
 const nothing = computed(() => !props.lines.length)
 const nothingId = useId()
@@ -105,14 +86,6 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
       :title="title"
     />
     <div class="spending-table-controls">
-      <ChoiceSelect
-        class="spending-table-across"
-        size="compact"
-        :label="t('analytics.panel.table.across')"
-        :model-value="across ?? NONE"
-        :options="acrossOptions"
-        @update:model-value="chooseAcross"
-      />
       <span
         v-if="nothing"
         :id="nothingId"

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The table of a dimension's panel: every value beside the period before, or crossed with a second
- * dimension chosen over it, with each value's tokens by kind under the measure «tokens»
- * (`useTableModel`). A figure the read does not hold says so in words; a period before that was
+ * The table of a dimension's panel: every value beside the period before, or with the section split
+ * by a second dimension every pair, «claude-opus-5-5 · high», read from the answer by both, with
+ * each row's tokens by kind under the measure «tokens» (`useTableModel`). A figure the read does not hold says so in words; a period before that was
  * not read is said once, over the table.
  *
  * It stands at its full height in the panel's one scroll, and only a table wider than its column
@@ -10,12 +10,12 @@
  * is in view, its heading row stays at the panel's top edge and its total at the bottom edge
  * (`stuck`), and a row brought into view by the focus stands clear of both. Each
  * column's heading sorts by it, largest first, then the other way; the first sort is the chosen
- * measure, or the total of a crossed table. A row is one line: its name is cut where the column is
+ * measure. A row is one line: its name is cut where the column is
  * narrower (`SpendingTableName`), and the figures take what they need, the name the rest.
  *
  * The sorted column's heading is marked, in the ink of the figures with its arrow and a rule under
  * it. The heading row over the frame (`SpendingTableHead`) counts the rows, gives their whole account
- * and order in its hint, and holds the controls; the download it asks for is what the table shows,
+ * and order in its hint, and holds the download; the download it asks for is what the table shows,
  * in its order, as a CSV file (`tableFile`). A row's name pressed to narrow the view goes out as
  * `narrow`. Asked to (`reveal`), it brings itself into view with the focus on it.
  */
@@ -47,13 +47,11 @@ import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
-  /** The second dimension the table is crossed with; null for none. */
+  /** The second dimension the section is split by; null for none. */
   across: UsageDimension | null
   by: UsageDimension
-  /** The read by both dimensions, while the table is crossed. */
+  /** The read by both dimensions, while the section is split. */
   cross: CrossRead
-  /** The dimensions the table may be crossed with. */
-  dimensions: readonly UsageDimension[]
   /** The filters the answer was read with, which the downloaded file names. */
   filters: UsageFilters
   measure: Measure
@@ -61,24 +59,23 @@ const props = defineProps<{
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
-/** A value pressed to narrow the view to it; a second dimension chosen; the crossed read again. */
+/** A value pressed to narrow the view to it; the crossed read again. */
 const emit = defineEmits<{
-  'narrow': [value: string | null, label: string]
-  'reread': []
-  'update:across': [across: UsageDimension | null]
+  narrow: [value: string | null, label: string]
+  reread: []
 }>()
 
 const { locale, t } = useI18n()
 const words = useSpendingWords()
 
-/** The crossed answer on show, once there is one for the second dimension chosen. */
+/** The crossed answer on show, once there is one for the split chosen. */
 const crossed = computed(() => {
   const read = props.cross
   return props.across && 'usage' in read && read.usage
     ? { across: props.across, usage: read.usage }
     : null
 })
-/** A second dimension is chosen and its read has not landed: it is being read, or failed. */
+/** A split is chosen and its read has not landed: it is being read, or failed. */
 const waiting = computed(() => Boolean(props.across) && !crossed.value)
 /** The crossed read is under way: a wait, unlike a failure, which says so in its place. */
 const reading = computed(() => waiting.value && props.cross.status !== 'failed')
@@ -91,11 +88,14 @@ const waitWord = computed(() => (shown.value ? t('platform.states.loading') : ''
 const held = computed(() => waiting.value || shown.value)
 const acrossWords = computed(() => (props.across ? t(`analytics.byDimension.${props.across}`) : ''))
 
+/** The answer the rows are of: by both dimensions while split, the one on show otherwise. */
+const tableUsage = computed(() => crossed.value?.usage ?? props.usage)
+
 const model = useTableModel(() => ({
   by: props.by,
   measure: props.measure,
-  usage: props.usage,
-  cross: crossed.value,
+  usage: tableUsage.value,
+  across: crossed.value?.across ?? null,
 }))
 
 const { sort, sortBy, lines, direction, marks } = useTableSort(model, () => locale.value)
@@ -119,12 +119,15 @@ const summary = computed(() => {
   return `${model.value.counts}, ${t('analytics.panel.table.sorted', { column, direction: way })}`
 })
 
-const nameOf = (value: UsageGroupValue) => words.valueLabel(props.by, value)
+const nameOf = (value: UsageGroupValue, dimension: UsageDimension = props.by) =>
+  words.valueLabel(dimension, value)
 
 function download() {
-  const { by, filters, measure, usage } = props
-  const source = { by, filters, measure, usage, order: lines.value.map(({ key }) => key) }
-  const file = tableFile({ ...source, name: nameOf, cross: crossed.value, column: words.lineLabel })
+  const { by, filters, measure } = props
+  const order = lines.value.map(({ key }) => key)
+  const across = crossed.value?.across ?? null
+  const source = { by, across, filters, measure, usage: tableUsage.value, order }
+  const file = tableFile({ ...source, name: nameOf })
   offerDownload(file.name, file.text, 'text/csv;charset=utf-8')
 }
 
@@ -160,16 +163,14 @@ defineExpose({ reveal })
     }"
   >
     <SpendingTableHead
-      :across="across"
       :by="by"
-      :dimensions="dimensions"
       :lines="model.lines"
       :measure="measure"
+      :split="Boolean(across)"
       :summary="summary"
       :title="model.title"
       :waiting="waiting"
       @download="download"
-      @update:across="(next) => emit('update:across', next)"
     />
     <FieldError
       v-if="notice"
@@ -178,7 +179,7 @@ defineExpose({ reveal })
       {{ notice }}
     </FieldError>
     <p
-      v-if="!usage.comparison && !across"
+      v-if="!tableUsage.comparison && !waiting"
       class="spending-table-note"
     >
       {{ t('analytics.table.unread') }}

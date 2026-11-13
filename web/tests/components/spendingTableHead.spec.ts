@@ -20,6 +20,7 @@ const line = (name: string, when: TableLine['when'], rest = false): TableLine =>
   name,
   rest,
   value: { id: name, unknown: false },
+  valueName: name,
   when,
 })
 
@@ -32,14 +33,13 @@ const ROLES = [
   line('No value', 'elsewhere', true),
 ]
 
-function countsOf(lines: TableLine[], measure: Measure, locale: 'en' | 'ru' = 'en') {
+function countsOf(lines: TableLine[], measure: Measure, locale: 'en' | 'ru' = 'en', split = false) {
   const head = mount(SpendingTableHead, {
     props: {
-      across: null,
       by: 'role',
-      dimensions: [],
       lines,
       measure,
+      split,
       summary: '',
       title: 'Spending by role',
       waiting: false,
@@ -55,6 +55,13 @@ describe('the words over a dimension’s table', () => {
     expect(countsOf(ROLES, 'time', 'ru')).toBe('2 роли · 1 без времени агентов · 1 вне периода')
     expect(countsOf(ROLES, 'cost', 'ru')).toBe('2 роли · 1 без цены · 1 вне периода')
     expect(countsOf(ROLES, 'tokens')).toBe('2 roles · 1 with no tokens · 1 outside the period')
+  })
+
+  it('count pairs, not values of the section, while it is split', () => {
+    expect(countsOf(ROLES, 'time', 'en', true)).toBe(
+      '2 pairs · 1 with no agent time · 1 outside the period',
+    )
+    expect(countsOf(ROLES.slice(0, 1), 'time', 'ru', true)).toBe('1 пара')
   })
 
   it('say no part that holds nothing', () => {

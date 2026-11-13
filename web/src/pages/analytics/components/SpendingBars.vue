@@ -8,6 +8,10 @@
  * a value the day chart folds away. A value named by the start of its id, an account, carries the
  * whole id as its detail.
  *
+ * With the section split by a second dimension (`across`) the rows are of the read by both, and
+ * each bar is a pair, «claude-opus-5-5 · high», ranked, coloured and folded as a value is; it acts
+ * as its first value does.
+ *
  * It lists the first twelve values; past them one line says how many more there are and, pressed,
  * asks for the table, sent out as `more`, since the table lists them all (`SpendingTableLink`).
  *
@@ -23,7 +27,7 @@ import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import SpendingTableLink from '@/pages/analytics/components/SpendingTableLink.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { measureOf, rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { breakdownOf, measureOf, rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -36,8 +40,10 @@ const props = defineProps<{
   measure: Measure
   narrow: boolean
   rows: readonly UsageRow[]
-  /** The hue of each value on the page, by its key. */
+  /** The hue of each value, or each pair, on the page, by its key. */
   slots: ReadonlyMap<string, SeriesSlot>
+  /** The second dimension the section is split by, which `rows` are read by too; null for none. */
+  across?: UsageDimension | null
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
@@ -50,10 +56,15 @@ const LISTED = 12
 const { t } = useI18n()
 const words = useSpendingWords()
 
-const title = computed(() => words.chartTitle(props.measure, props.by))
+const title = computed(() => words.chartTitle(props.measure, props.by, props.across))
 
 const all = computed(() =>
-  rankedLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
+  rankedLines(
+    props.rows,
+    breakdownOf(props.by, props.across),
+    props.measure,
+    Number.POSITIVE_INFINITY,
+  ),
 )
 const lines = computed(() => all.value.slice(0, LISTED))
 /** What every value adds up to, listed or not: what each bar's hint says its share of. */
@@ -82,7 +93,9 @@ const {
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
-  category: words.dimension(props.by),
+  category: props.across
+    ? `${words.dimension(props.by)} · ${words.dimension(props.across)}`
+    : words.dimension(props.by),
   value: words.measure(props.measure),
   empty: t('analytics.bars.empty'),
 }))

@@ -2292,8 +2292,9 @@ quota — «Five hours» and «Week» — and one for each dimension of the read
 task, executor, role, launch class, model, effort and environment. A tile is a summary of its own — the leading value, its share, how many values
 have a figure in the chosen measure and one bar of the split — so every breakdown is in view
 before any is opened, and choosing a tile opens its section in the panel. Opening a section,
-from its tile or a card's heading, is a step of the history, so Back returns to where it was;
-a period chosen in the bar, a measure or a second dimension replaces the step. The rail and
+from its tile or a card's heading, is a step of the history, so Back returns to where it was,
+and so is a split chosen in its heading, so Back returns the split before; a period chosen in
+the bar or a measure replaces the step. The rail and
 the panel stand side by side only while the panel keeps 640 pixels; narrower, a section takes
 the rail's place and a way back stands over it. A plain address opens the overview.
 

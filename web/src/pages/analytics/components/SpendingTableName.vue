@@ -28,8 +28,9 @@ const actions = useLineActions()
 const link = computed(() => actions.taskLink(props.by, props.line.value))
 const narrowsTo = computed(() => actions.narrowsTo(props.by, props.line.value))
 const narrows = computed(() => !link.value && narrowsTo.value !== undefined)
+/** A pair acts as its first value does, and its action says that value alone. */
 const narrowDescription = computed(() =>
-  actions.narrowName(props.by, props.line.value, props.line.name),
+  actions.narrowName(props.by, props.line.value, props.line.valueName),
 )
 /** The name and what it leaves out, as the hint says them while the line is cut. */
 const whole = computed(() =>
@@ -47,7 +48,7 @@ function followAside(event: MouseEvent) {
 
 function narrowTo() {
   const value = narrowsTo.value
-  if (value !== undefined) emit('narrow', value, props.line.name)
+  if (value !== undefined) emit('narrow', value, props.line.valueName)
 }
 </script>
 
