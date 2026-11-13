@@ -69,8 +69,10 @@ send no release after the closing transition.
 ## Work the item
 
 **Checklist.** Keep the steps you actually take. Send them with the claim in one
-call (`apply_work_item_changes` with `claim: true` and `checklist`), and send
-a step that is already done as `{"text": "…", "done": true}`. A step sent with
+call: `apply_work_item_changes` with `claim: true` and
+`checklist: ["first step", {"text": "…", "done": true}]`, a step already done
+sent as that object. `{"items": [...], "force": true}` sends the same steps when
+`force` must carry a refusal through. A step sent with
 the text of one the item has keeps its id, claim and tick, so add steps by
 sending the existing ones first and the new ones after; the acknowledgement
 lists every step's `item_id`. Tick a step by its `item_id` with
@@ -86,7 +88,10 @@ Item and step claims are independent: a step's holder need not hold the item.
 `claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`
 or `comments`, `resolutions`, `questions`, `summary`, `transition`. Each group
 works as its single tool does: `update` as `update_work_item`, `comments` as
-several `comment_work_item` calls, `questions` as `create_work_item_request`. A
+several `comment_work_item` calls, `questions` as `create_work_item_request`.
+Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
+`{"body": "…"}`, `summary` `{"done": "…", "next": "…"}`, `transition`
+`{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
 refused step writes nothing and names the group and index to correct. Pass the
 `revision` of the last acknowledgement as `expected_revision` to refuse a stale
 write. A question cannot go in the call that closes its item, which would end it

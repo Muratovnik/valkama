@@ -55,11 +55,20 @@ MAX_CHANGE_QUOTE = 60
 MINUS = "\u2212"
 _KEY = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _OPTION_KEYS = frozenset({"id", "label", "description", "recommended", "why"})
+#: One valid field with two options, which a refusal of the fields' shape shows, so a
+#: caller sees the form to send instead of rebuilding it from the rule's words.
+FIELD_EXAMPLE = (
+    '{"id": "scope", "label": "Scope", "type": "choice", "required": true, "options":'
+    ' [{"id": "small", "label": "Small"}, {"id": "full", "label": "Full"}]}'
+)
 
 
 def key(value: object) -> str:
     if not isinstance(value, str) or not _KEY.fullmatch(value):
-        raise model.PlanningError("field and option ids must be stable lowercase identifiers")
+        raise model.PlanningError(
+            "field and option ids must be stable lowercase identifiers (a-z first, then"
+            f" a-z, 0-9, _ or -; at most 64), as in {FIELD_EXAMPLE}"
+        )
     return value
 
 
@@ -82,7 +91,8 @@ def fields(value: object) -> list[dict]:
         ):
             raise model.PlanningError(
                 "each field requires id, label, type, required and options"
-                " and may add description, group, under, recommended and why"
+                " and may add description, group, under, recommended and why;"
+                f" one field: {FIELD_EXAMPLE}"
             )
         identity = key(raw["id"])
         if identity in earlier:

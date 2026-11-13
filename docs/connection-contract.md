@@ -1703,7 +1703,7 @@ these groups, and applies them in this order:
 | `claim` | `true` | `claim_work_item`; `false` is no change |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
-| `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
+| `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
@@ -1834,7 +1834,7 @@ arguments that act on the item it creates:
 | Argument | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
-| `checklist` | `{items}`, as the batch's group takes it, without `force` | `set_work_item_checklist` |
+| `checklist` | the steps' list or `{items}`, as the batch's group takes it, without `force` | `set_work_item_checklist` |
 | `links` | list of `{other, kind}`, linking from the new item, at most 100 | `link_work_items` |
 
 They apply in the same transaction as the creation: the item is created, then
@@ -2600,7 +2600,8 @@ nothing written:
 | `why` on an option not recommended | `option keep: why says why it is recommended; give recommended: true or leave why out` |
 | a group split by another | `group Checks is split by Web code: fields of one group stand together` |
 | more than 40 fields | `fields must contain between 1 and 40 fields` |
-| a key a field does not take | `each field requires id, label, type, required and options and may add description, group, under, recommended and why` |
+| a key a field does not take, or one it requires missing | `each field requires id, label, type, required and options and may add description, group, under, recommended and why; one field: {"id": "scope", "label": "Scope", "type": "choice", "required": true, "options": [{"id": "small", "label": "Small"}, {"id": "full", "label": "Full"}]}` |
+| a field or option id that is not a lowercase identifier | `field and option ids must be stable lowercase identifiers (a-z first, then a-z, 0-9, _ or -; at most 64), as in {"id": "scope", …}`, with the same field in full |
 
 A field without a group between two fields of one group splits it as well, and the
 refusal names that field: `group Checks is split by p7, which has no group: fields

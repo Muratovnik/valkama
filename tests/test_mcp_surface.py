@@ -1037,6 +1037,79 @@ class ToolArgumentTests(McpSurfaceTestCase):
             self.refusal("link_work_items", id=self.first),
         )
 
+    def test_a_request_is_read_by_request_id_as_well_as_by_id(self) -> None:
+        asked = self.call_tool(
+            "create_work_item_request",
+            id=self.first,
+            kind="question",
+            prompt="Proceed?",
+            fields=[
+                {"id": "go", "label": "Go", "type": "boolean", "required": True, "options": []}
+            ],
+        )
+        expected = self.call_tool("get_work_item_request", id=asked["request_id"])
+        self.assertEqual("Proceed?", expected["prompt"])
+        self.assertEqual(
+            expected, self.call_tool("get_work_item_request", request_id=asked["request_id"])
+        )
+        # A request is not a work item, so the work item's field is not its id.
+        message = self.refusal("get_work_item_request", work_item_id=asked["request_id"])
+        self.assertIn("unknown argument 'work_item_id'", message)
+
+    def test_an_item_is_read_by_work_item_id_where_id_is_a_work_item(self) -> None:
+        expected = self.call_tool("get_work_item", id=self.first)
+        self.assertEqual(expected, self.call_tool("get_work_item", work_item_id=self.first))
+        uuid = expected["work_item_id"]
+        self.assertEqual(
+            self.first, self.call_tool("get_work_item", work_item_id=uuid)["reference"]
+        )
+        claimed = self.call_tool("claim_work_item", work_item_id=self.second, author="one")
+        self.assertEqual("one", claimed["claim_ref"])
+        message = self.refusal("get_planning_space", work_item_id=SPACE_KEY)
+        self.assertIn("unknown argument 'work_item_id'", message)
+
+    def test_a_batch_wrapped_in_changes_is_read_as_its_groups(self) -> None:
+        groups = {"claim": True, "comment": {"body": "wrapped"}}
+        # The client passes the unpublished argument as text: the JSON of the object.
+        for wrapped, item in ((json.dumps(groups), self.first), (groups, self.second)):
+            with self.subTest(type(wrapped).__name__):
+                applied = self.call_tool(
+                    "apply_work_item_changes", id=item, author="one", changes=wrapped
+                )
+                self.assertEqual({"claim", "comment"}, set(applied["applied"]))
+                read = self.call_tool("get_work_item", id=item)
+                self.assertEqual("one", read["claim_ref"])
+                self.assertEqual(["wrapped"], [comment["body"] for comment in read["comments"]])
+
+    def test_a_wrapper_that_is_not_one_object_shows_the_unwrapped_call(self) -> None:
+        for wrapped in ('[{"claim": true}]', [{"claim": True}], "claim it"):
+            with self.subTest(wrapped=wrapped):
+                message = self.refusal("apply_work_item_changes", id=self.first, changes=wrapped)
+                self.assertIn("not inside 'changes'", message)
+                example = json.loads(message[message.index("{") :])
+                # The call it shows is one the tool takes.
+                applied = self.call_tool(
+                    "apply_work_item_changes", **{**example, "id": self.first, "claim": False}
+                )
+                self.assertEqual(["comment"], list(applied["applied"]))
+
+    def test_a_group_both_inside_and_beside_the_wrapper_is_refused(self) -> None:
+        message = self.refusal(
+            "apply_work_item_changes",
+            id=self.first,
+            comment={"body": "beside"},
+            changes={"comment": {"body": "inside"}},
+        )
+        self.assertIn("argument 'comment' given both inside 'changes' and beside it", message)
+        self.assertEqual([], self.call_tool("get_work_item", id=self.first)["comments"])
+
+    def test_a_wrapped_group_is_held_to_the_names_the_tool_takes(self) -> None:
+        message = self.refusal(
+            "apply_work_item_changes", id=self.first, changes={"ticks": [{"item_id": "x"}]}
+        )
+        self.assertIn("unknown argument 'ticks'", message)
+        self.assertIn("'checklist_ticks'", message)
+
     def test_arguments_that_are_not_an_object_are_refused(self) -> None:
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "arguments must be an object"):
             mcp_surface.call_tool(self.conn, "get_work_item", ["QA-1"])  # type: ignore[arg-type]
@@ -1474,6 +1547,45 @@ class WireCallTestCase(McpSurfaceTestCase):
         ]
 
 
+class RequestFieldRefusalTests(WireCallTestCase):
+    """A refused question shows the shape of a field the tool takes."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Asks")
+        self.reference = item["reference"]
+        self.conn.commit()
+
+    def test_a_refused_field_shape_shows_one_field_the_tool_then_takes(self) -> None:
+        good = {"id": "go", "label": "Go", "type": "boolean", "required": True, "options": []}
+        cases = {
+            "an id that is not lowercase": [{**good, "id": "Go"}],
+            "an option id with a space": [
+                {
+                    **good,
+                    "type": "choice",
+                    "options": [{"id": "a b", "label": "A"}, {"id": "c", "label": "C"}],
+                }
+            ],
+            "a field without required": [{key: good[key] for key in good if key != "required"}],
+            "a field without options": [{key: good[key] for key in good if key != "options"}],
+        }
+        for case, fields in cases.items():
+            with self.subTest(case):
+                arguments = {"id": self.reference, "kind": "question", "prompt": "Which?"}
+                error = self.refusal("create_work_item_request", {**arguments, "fields": fields})
+                self.assertEqual("invalid_request", error["code"])
+                message = error["message"]
+                example = message[message.index("{") :]
+                # Short enough to read at a glance: one field with two options.
+                self.assertLess(len(example), 160, example)
+                field = json.loads(example)
+                self.assertEqual(2, len(field["options"]))
+                asked = self.answer("create_work_item_request", {**arguments, "fields": [field]})
+                read = self.answer("get_work_item_request", {"id": asked["request_id"]})
+                self.assertEqual(field["id"], read["fields"][0]["id"])
+
+
 class ApplyWorkItemChangesTests(WireCallTestCase):
     """Several writes to one item in one call: in a fixed order, and all or nothing."""
 
@@ -1678,6 +1790,89 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertIn("events", answer)
         self.assertEqual(["comment"], list(answer["applied"]))
 
+    def test_the_checklist_group_takes_the_steps_as_a_bare_list(self) -> None:
+        answer = self.answer(
+            "apply_work_item_changes",
+            {
+                "id": self.reference,
+                "author": "one",
+                "claim": True,
+                "checklist": ["one", "two", {"text": "three", "done": True}],
+            },
+        )
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(
+            [("one", False), ("two", False), ("three", True)],
+            [(step["text"], step["done"]) for step in item["checklist"]],
+        )
+        # The steps the item had keep their ids, as the object form keeps them.
+        self.assertEqual(self.steps, [step["id"] for step in item["checklist"]][:2])
+        self.assertEqual(
+            [step["id"] for step in item["checklist"]],
+            [step["item_id"] for step in answer["applied"]["checklist"]],
+        )
+
+    def test_force_is_taken_only_in_the_checklist_object_form(self) -> None:
+        planning_service.tick_checklist_item(self.conn, self.reference, self.steps[1])
+        self.conn.commit()
+        error = self.refusal(
+            "apply_work_item_changes", {"id": self.reference, "checklist": ["one"]}
+        )
+        self.assertEqual({"group": "checklist", "index": 0}, error["step"])
+        self.assertEqual(
+            2, len(planning_service.get_work_item(self.conn, self.reference)["checklist"])
+        )
+        self.answer(
+            "apply_work_item_changes",
+            {"id": self.reference, "checklist": {"items": ["one"], "force": True}},
+        )
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(["one"], [step["text"] for step in item["checklist"]])
+
+    def test_the_skill_and_the_tool_show_the_same_checklist_list(self) -> None:
+        form = '["first step", {"text": "…", "done": true}]'
+        with open(
+            os.path.join(ROOT, "server", "skill", "valkama", "SKILL.md"), encoding="utf-8"
+        ) as handle:
+            skill = handle.read()
+        self.assertIn(f"`checklist: {form}`", skill)
+        [tool] = [
+            tool for tool in mcp_surface.catalogue() if tool["name"] == "apply_work_item_changes"
+        ]
+        self.assertIn(form, tool["inputSchema"]["properties"]["checklist"]["description"])
+        self.assertIn('{"items": [...], "force": true}', skill)
+
+    def test_an_object_parameter_named_like_text_shows_its_form(self) -> None:
+        """A bare-text value for an object parameter fails in the client, before this server.
+
+        Every one of those failures was on an object parameter with no description;
+        each now shows the JSON it takes, and the form shown is one its schema accepts.
+        """
+
+        [answer] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
+        )
+        tools = {
+            tool["name"]: tool["inputSchema"]["properties"] for tool in answer["result"]["tools"]
+        }
+        shown = 0
+        for name, properties in tools.items():
+            for argument, schema in properties.items():
+                if schema.get("type") != "object":
+                    continue
+                with self.subTest(name, argument=argument):
+                    description = schema.get("description", "")
+                    self.assertTrue(description, "an object parameter without a description")
+                    if argument not in ("comment", "summary", "report", "transition"):
+                        continue
+                    self.assertIn("never", description)
+                    start = description.index("{")
+                    form, _end = json.JSONDecoder().raw_decode(description[start:])
+                    self.assertLessEqual(set(schema["required"]), set(form))
+                    self.assertLessEqual(set(form), set(schema["properties"]))
+                    shown += 1
+        self.assertEqual(5, shown)
+
     def test_the_batch_is_published_with_every_group_and_the_single_tools_stay(self) -> None:
         [answer] = self.converse(
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
@@ -1769,6 +1964,16 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         # The refused item's number was not spent: the next one takes it.
         number = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Next")
         self.assertEqual(f"{SPACE_KEY}-3", number["reference"])
+
+    def test_the_new_items_steps_may_be_a_bare_list_or_the_object(self) -> None:
+        for checklist in (["a", {"text": "b", "done": True}], {"items": ["a", "b"]}):
+            with self.subTest(type(checklist).__name__):
+                answer = self.answer(
+                    "create_work_item",
+                    {"space": SPACE_KEY, "title": "Steps", "checklist": checklist},
+                )
+                item = planning_service.get_work_item(self.conn, answer["reference"])
+                self.assertEqual(["a", "b"], [step["text"] for step in item["checklist"]])
 
     def test_the_item_is_created_claimed_and_linked_in_one_call(self) -> None:
         answer = self.answer("create_work_item", self.discovered(), {"sessionId": self.SESSION})

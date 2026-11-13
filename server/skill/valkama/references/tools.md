@@ -63,7 +63,7 @@ more arguments act on the new item in the same call, all or nothing:
 | Argument | Shape |
 | --- | --- |
 | `claim` | `true` |
-| `checklist` | `{"items": [...]}`, steps as below |
+| `checklist` | `["…", {"text": "…", "done": true}]` or `{"items": [...]}`, steps as below |
 | `links` | `[{"other": "MAIN-12", "kind": "discovered-from"}]`, at most 100 |
 
 A refused claim, step or link creates nothing and spends no number.
@@ -103,7 +103,7 @@ and any of these groups, applied in this order:
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item` |
 | `update` | `{"title": "…", "priority": "high", "parent": "MAIN-3", "labels_add": ["…"]}` | `update_work_item` |
-| `checklist` | `{"items": [...], "force": false}` | `set_work_item_checklist` |
+| `checklist` | `["…", {"text": "…", "done": true}]`, or `{"items": [...], "force": true}` to carry a refusal through | `set_work_item_checklist` |
 | `checklist_ticks` | `[{"item_id": "…", "done": true, "force": false}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |

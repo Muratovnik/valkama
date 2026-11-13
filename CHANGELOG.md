@@ -50,6 +50,26 @@ checkouts are therefore distinguishable even at the same version.
   «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
   card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
   own will, so nothing moves when the card arrives.
+- **Three argument forms agents write are read instead of refused.** `get_work_item_request`
+  reads `request_id` as its `id`, and every tool whose `id` is a work item reads
+  `work_item_id` as it, the field that `id`'s description names. An
+  `apply_work_item_changes` call whose groups came wrapped in one `changes` argument, as an
+  object or as the text of one, is applied as if each group had been an argument of its
+  own, held to the same names and rules. A `changes` that is not one object, or that repeats
+  a group given beside it, is refused with a call in the unwrapped form. None of these
+  names is added to the published schemas.
+- **A question refused for the shape of its fields shows a field to copy.** When
+  `create_work_item_request`, or a batch's `questions`, refuses a field or option id that
+  is not a lowercase identifier, or a field missing one of `id`, `label`, `type`,
+  `required` and `options`, the refusal now ends with one valid `choice` field with two
+  options, written as the JSON to send, and the id refusal says what an identifier may
+  hold: a-z first, then a-z, 0-9, `_` or `-`, at most 64.
+- **A checklist group may be the list of steps itself.** The `checklist` of
+  `apply_work_item_changes` and of `create_work_item` now takes
+  `["first step", {"text": "…", "done": true}]` as well as `{"items": [...]}`, where a bare
+  list used to be refused with «checklist must be an object». `force` stays in the object
+  form, `{"items": [...], "force": true}`. The skill shows the list form first, and the
+  tool descriptions say both.
 
 ### Added
 
@@ -73,6 +93,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Fewer batch calls fail in the client before they reach Valkama.** Claude Code refused
+  `apply_work_item_changes` and `set_work_item_summary` calls as input that "could not be
+  parsed as JSON" when an agent wrote `comment`, `summary` or `transition` as bare text,
+  and most retries failed the same way. Those parameters, and `report` of `report_work_item`, were the only object
+  parameters with no description; each now shows the JSON it takes, such as
+  `{"body": "the text"}` or `{"state": "done"}`, and says it is never bare text. The skill
+  says the same beside the batch's groups.
 - **The Analytics bar no longer runs past its end beside a span of your own days.** In a
   window from about 1108 to 1300px beside the navigation, the bar's one line with every
   word and gap given up still ran «Refresh» up to 188px past its end, and pressing it

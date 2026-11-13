@@ -948,6 +948,9 @@ def _steps(
                 raise PlanningHttpError(400, "invalid_request", "subscribe must be a boolean")
             steps.append((group, 0, {"follows": value}))
             continue
+        if group == "checklist" and isinstance(value, list):
+            # The steps alone: the object form is needed only to carry `force`.
+            value = {"items": value}
         entries = value if group in _APPLY_LISTS else [value]
         if not isinstance(entries, list) or len(entries) > MAX_APPLY_ENTRIES:
             raise PlanningHttpError(
