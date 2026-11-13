@@ -8,11 +8,10 @@
  * (`valueSlots`), and its name beside it.
  *
  * «Split by» in the section's heading chooses a second dimension, or none, and the address keeps
- * it (`across`). Split, the section is read by both (`useCrossRead`), and the ranked bars and the
- * table read its pairs, «claude-opus-5-5 · high», each a value with its own hue in the fixed order
- * of their rank over every pair of the read, the tail past the hues in the neutral of «other». The
- * small charts and the day chart stay by the section's own dimension: the read gives each period
- * by its first dimension alone. While the pairs are first read the bars keep the values.
+ * it (`across`). Split, the section is read by both (`useCrossRead`), and the ranked bars, the
+ * small charts, the day chart and the table read its pairs, «claude-opus-5-5 · high», each a value
+ * with its own hue in the fixed order of their rank over every pair of the read, the tail past the
+ * hues in the neutral of «other». While the pairs are first read the charts keep the values.
  *
  * It runs in the panel's one scroll: the figures, the charts at their own height and the table at
  * its full height under them, nothing scrolling up and down on its own. A «To the table» line over
@@ -110,11 +109,14 @@ const crossed = computed(() => {
   const read = cross.state.value
   return across.value && 'usage' in read && read.usage ? read.usage : null
 })
-/** What the ranked bars read: the pairs, while split and read, or the section's own values. */
+/**
+ * What the charts read: the answer by the pairs, while split and read, or the section's own
+ * values, each with its hues.
+ */
 const ranked = computed(() =>
   crossed.value
     ? {
-        rows: crossed.value.rows,
+        usage: crossed.value,
         across: across.value,
         slots: valueSlots({
           usage: crossed.value,
@@ -123,7 +125,7 @@ const ranked = computed(() =>
           across: across.value,
         }),
       }
-    : { rows: props.usage.rows, across: null, slots: slots.value },
+    : { usage: props.usage, across: null, slots: slots.value },
 )
 
 /** «Split by»: none, or any dimension of the page but the section's own. */
@@ -211,28 +213,30 @@ const showTable = () => table.value?.reveal()
             :measure="measure"
             :narrow="narrow"
             :notice="noticeIn('bars')"
-            :rows="ranked.rows"
+            :rows="ranked.usage.rows"
             :slots="ranked.slots"
             @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
             @more="showTable"
           />
           <SpendingMultiples
             :by="by"
+            :across="ranked.across"
             :measure="measure"
             :narrow="narrow"
-            :slots="slots"
-            :usage="usage"
+            :slots="ranked.slots"
+            :usage="ranked.usage"
             @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
           />
         </div>
         <SpendingDays
           :accounts="accounts"
           :by="by"
+          :across="ranked.across"
           :measure="measure"
           :narrow="narrow"
           :notice="noticeIn('days')"
           :read-at="readAt"
-          :usage="usage"
+          :usage="ranked.usage"
           @frame="(span, label) => emit('frame', span, label)"
           @step="(span, label) => emit('step', span, label)"
           @narrow="(value, label) => emit('narrow', by, value, label, 'days')"

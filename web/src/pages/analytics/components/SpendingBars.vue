@@ -93,9 +93,7 @@ const {
 
 /** A breakdown with no row is a period that spent nothing, in whatever measure it is drawn. */
 const barWords = computed(() => ({
-  category: props.across
-    ? `${words.dimension(props.by)} · ${words.dimension(props.across)}`
-    : words.dimension(props.by),
+  category: words.breakdownName(props.by, props.across),
   value: words.measure(props.measure),
   empty: t('analytics.bars.empty'),
 }))

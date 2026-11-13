@@ -1,6 +1,7 @@
 import {
   breakdownOf,
   figureOf,
+  lineKeyOf,
   measureOf,
   spendingLines,
   spentOf,
@@ -101,7 +102,7 @@ const NOT_CATEGORIES = ['none', 'unknown'] as const satisfies readonly ValueKind
  * categories in the measure, up to `STACKED`, each in its hue of the page's key (`rankedSlots`),
  * then work with no value there and unknown work, each its own series in the darker neutral and
  * never folded; only values with anything to draw. The rest of the period is one «other» series
- * in the lighter neutral, on top.
+ * in the lighter neutral, on top. Split by `across`, the values are the pairs.
  */
 export function stackLines({ usage, by: dimension, measure, across = null }: StackSource) {
   // A value with no figure in the measure stays, so its days can say it has none.
@@ -136,22 +137,22 @@ export interface StackSource {
 }
 
 /**
- * Each day of the answer as a column of the measure, by the series of the stack. A value that
- * spent in a day with no figure in the measure is absent there, not a zero, and a minute with no
- * data yet (`notYet`) is pending, not a zero either.
+ * Each day of the answer as a column of the measure, by the series of the stack: by its values,
+ * or split, by its pairs. A value that spent in a day with no figure in the measure is absent
+ * there, not a zero, and a minute with no data yet (`notYet`) is pending, not a zero either.
  */
 export function dayColumns(
-  { usage, by: dimension, measure }: StackSource,
+  { usage, by: dimension, measure, across = null }: StackSource,
   series: readonly StackLine[],
   readAt: Date,
 ): Omit<PeriodColumn, 'fullLabel' | 'label'>[] {
   const named = new Set(series.filter((one) => one.line).map((one) => one.key))
+  const breakdown = breakdownOf(dimension, across)
   return usage.series.map((point) => {
     const values: Record<string, number> = {}
     const absent = new Set<string>()
     for (const group of point.groups) {
-      const value = group.group[dimension]
-      const key = value ? valueKey(value) : 'unknown'
+      const key = lineKeyOf(group, breakdown)
       const into = named.has(key) ? key : 'other'
       const figure = figureOf(measure, spentOf(group))
       if (figure === null) absent.add(into)

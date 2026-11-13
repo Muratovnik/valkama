@@ -162,8 +162,9 @@ describe('the split of a section', () => {
       ['model-c · Adviser', '3'],
     ])
     expect(text(page, '.spending-table tbody th')).toEqual([...bars.keys()])
-    // The small charts still read the section's own values: the read gives no pair a period.
-    expect(text(page, '.spending-multiples .multiple-name')).toContain('model-a')
+    // The small charts read the same pairs, in the same order, each in its bar's hue.
+    const charts = huesIn(page, '.spending-multiples .multiple', '.multiple-name', '[data-slot]')
+    expect([...charts]).toEqual([...bars])
   })
 
   it('is chosen in the section’s heading, written into the address as a step, and taken out with none', async () => {

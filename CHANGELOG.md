@@ -17,6 +17,10 @@ checkouts are therefore distinguishable even at the same version.
   pair of both, and each of its `groups` names both dimensions as a row does, where it
   used to break the step down by the first dimension alone and name only that one. The
   groups of a step still add up to the step exactly; with one dimension nothing changes.
+- **A split section's small charts and day columns read its pairs.** With «Split by» chosen,
+  the small charts and the day columns of an Analytics section now show the same pairs as its
+  ranked bars and its table, «claude-opus-5-5 · high», named the same way and each in one hue
+  across the three charts, where they used to stay by the section's own values.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context

@@ -9,6 +9,10 @@
  * row does (`useLineMarks`): a task opens its card, a value the read can filter by goes out as
  * `narrow`.
  *
+ * Split by a second dimension (`across`), the answer is read by both and each chart is a pair,
+ * «claude-opus-5-5 · high», ranked, coloured and folded as a value is; it acts as its first value
+ * does, as its bar does.
+ *
  * Its heading is short, «Per day, by task», since the ranked list beside it already names the
  * measure and the dimension and the two stand on one line; the charts themselves are named whole.
  */
@@ -31,9 +35,11 @@ const props = defineProps<{
   by: UsageDimension
   measure: Measure
   narrow: boolean
-  /** The hue of each value on the page, by its key. */
+  /** The hue of each value, or each pair, on the page, by its key. */
   slots: ReadonlyMap<string, SeriesSlot>
   usage: Usage
+  /** The second dimension the section is split by, which `usage` is read by too; null for none. */
+  across?: UsageDimension | null
 }>()
 /** A value pressed to narrow the view to it: its filter value, and its name. */
 const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
@@ -43,14 +49,14 @@ const words = useSpendingWords()
 
 const heading = computed(() =>
   t(`analytics.panel.multiples.heading.${props.usage.period.step}`, {
-    by: t(`analytics.byDimension.${props.by}`),
+    by: words.breakdownBy(props.by, props.across),
   }),
 )
 const title = computed(() =>
   t('analytics.panel.multiples.title', {
     measure: words.measure(props.measure),
     per: words.per(props.usage.period.step),
-    by: t(`analytics.byDimension.${props.by}`),
+    by: words.breakdownBy(props.by, props.across),
   }),
 )
 
@@ -82,7 +88,7 @@ const periods = computed(() =>
 )
 
 const chartWords = computed<MultiplesWords>(() => ({
-  category: words.dimension(props.by),
+  category: words.breakdownName(props.by, props.across),
   empty: t('analytics.bars.empty'),
   scale: t('analytics.panel.multiples.scale'),
   total: t('analytics.panel.multiples.period'),

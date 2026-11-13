@@ -2,7 +2,7 @@
  * The read behind a split section: the answer on show again, broken down by its own dimension and
  * the one it is split by, for exactly the period and the filters that answer was read with — the
  * period by its moments as the answer wrote them, so the two never disagree about where a day
- * starts. Where the answer on show is compared with a period before, that period is read by both
+ * starts, and by the answer's steps, so its days, hours or minutes stand as the answer's do. Where the answer on show is compared with a period before, that period is read by both
  * as well, by the moments the answer names for it, and stands in the crossed answer as its
  * comparison; its pairs are what the table sets beside each pair now.
  *
@@ -57,10 +57,18 @@ export function useCrossRead(options: {
       status: 'reading',
       usage: 'usage' in shown && shown.usage && pairOf(shown.usage) === pair ? shown.usage : null,
     }
-    const { utc_offset: utcOffset } = usage.period
+    const { utc_offset: utcOffset, step } = usage.period
     const ask = ({ from, to }: { from: string; to: string }) =>
       shared.read(
-        { from, to, utcOffset, groupBy: [by, across], filters: options.filters(), compare: false },
+        {
+          from,
+          to,
+          utcOffset,
+          step,
+          groupBy: [by, across],
+          filters: options.filters(),
+          compare: false,
+        },
         controller.signal,
       )
     const { comparison } = usage

@@ -22,10 +22,10 @@ export const analyticsPanelMessages = {
     split: {
       label: 'Split by',
       none: 'None',
+      by: '{by} and {across}',
     },
     table: {
       toTable: 'To the table',
-      crossTitle: '{measure} {by} and {across}',
       total: 'Total',
       heads: {
         time: 'Agent time',
@@ -93,10 +93,10 @@ export const analyticsPanelMessages = {
     split: {
       label: 'Разбить по',
       none: 'Нет',
+      by: '{by} и {across}',
     },
     table: {
       toTable: 'К таблице',
-      crossTitle: '{measure} {by} и {across}',
       total: 'Итого',
       heads: {
         time: 'Время агентов',

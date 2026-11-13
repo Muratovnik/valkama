@@ -1,14 +1,12 @@
 /**
  * The second dimension is the section's, in the real app at 1440 by 1000, in English and in
- * Russian: «Split by» in the heading of the «Model» section chooses «Effort», and the ranked bars
- * and the table then read the pairs, «claude-opus-5-5 · high», the model first. The bars add up to
- * the table's total, and so do the day columns, for the same period and filters. The split is the
- * address: a reload opens it again, and Back takes it away, a step of its own. In Russian the
- * heading holds the section's name, its «ⓘ» and the choice on one line at 1280 and 1440 pixels.
- * Each run prints what it measured.
- *
- * The day columns' series stay the models: the read gives each day by its first dimension alone,
- * so the check that they are the pairs waits, marked, for a read that gives them.
+ * Russian: «Split by» in the heading of the «Model» section chooses «Effort», and the ranked bars,
+ * the small charts, the day columns and the table then read the pairs, «claude-opus-5-5 · high»,
+ * the model first, each pair in one hue in the bars, its small chart and the day columns. The bars
+ * add up to the table's total, and so do the day columns, for the same period and filters. The
+ * split is the address: a reload opens it again, and Back takes it away, a step of its own. In
+ * Russian the heading holds the section's name, its «ⓘ» and the choice on one line at 1280 and
+ * 1440 pixels. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -17,6 +15,7 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { hues } from './analyticsHues.ts'
 import { openReport, pageAt, record, serve } from './analyticsPage.ts'
 import { test } from './test.ts'
 
@@ -95,6 +94,9 @@ async function shown(page: Page, locale: Locale) {
   const bars = page.locator('.spending-bars .ranked-row')
   const barLabels = await bars.locator('.ranked-label').allInnerTexts()
   const barValues = await bars.locator('.ranked-value').allInnerTexts()
+  const multipleNames = await page
+    .locator('.spending-multiples .multiple .multiple-name')
+    .allInnerTexts()
   const table = page.locator('.spending-table')
   const tableLabels = await table.locator('tbody th').allInnerTexts()
   const tableTotal = await table.locator('tfoot td[data-measure="time"]').textContent()
@@ -112,6 +114,7 @@ async function shown(page: Page, locale: Locale) {
     )
   await days.locator('.segmented-option').nth(0).click()
   return {
+    multipleNames: trimmed(multipleNames),
     barNames: trimmed(barLabels),
     barMinutes: minutes(barValues),
     tableNames: trimmed(tableLabels),
@@ -132,11 +135,24 @@ for (const locale of ['en', 'ru'] as const) {
     await expect.poll(() => path(page)).toBe(SPLIT)
     await expect(page.locator('.spending-bars .ranked-label').first()).toHaveText(PAIRS[0] ?? '')
 
+    await expect(page.locator('.spending-days .chart-key[data-series]')).toHaveCount(PAIRS.length)
     const split = await shown(page, locale)
-    await record(info, `analytics split by ${locale}`, split)
-    // Every pair, the model first, largest first, in the bars and in the table alike.
+    const drawn = await hues(page, 'model')
+    await record(info, `analytics split by ${locale}`, { ...split, hues: drawn })
+    // Every pair, the model first, largest first, in the bars, the small charts, the day columns
+    // and the table alike.
     expect(split.barNames).toEqual(PAIRS)
+    expect(split.multipleNames).toEqual(PAIRS)
+    expect(split.daySeries).toEqual(PAIRS)
     expect(split.tableNames).toEqual(PAIRS)
+    // Each pair is one hue in the three charts, and five pairs are five hues.
+    const keys = Object.keys(drawn.bars)
+    expect(keys).toHaveLength(PAIRS.length)
+    for (const key of keys) {
+      expect(drawn.multiples[key], key).toBe(drawn.bars[key])
+      expect(drawn.days[key], key).toBe(drawn.bars[key])
+    }
+    expect(new Set(Object.values(drawn.bars)).size).toBe(PAIRS.length)
     // The bars and the day columns each add up to the table's total, the period's 12 h 30 min.
     expect(split.tableTotal).toBe(TOTAL_MINUTES)
     expect(sum(split.barMinutes)).toBe(split.tableTotal)
@@ -191,12 +207,4 @@ test('in ru, the section heading holds its name, its «ⓘ» and «Split by» on
     expect(room.choice.right, `${width}px`).toBeLessThanOrEqual(room.head.right + 0.5)
   }
   await record(info, 'analytics split heading ru', measured)
-})
-
-test.fixme('the day columns of a split section stack its pairs', async ({ page }) => {
-  // Waits for a read that gives each day by both dimensions: `series[].groups` is by the first.
-  await openModels(page, 'en', 1440)
-  await splitByEffort(page, 'en')
-  const split = await shown(page, 'en')
-  expect(split.daySeries).toEqual(PAIRS)
 })
