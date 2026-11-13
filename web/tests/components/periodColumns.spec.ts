@@ -32,9 +32,18 @@ const columns: PeriodColumn[] = [
   { key: 'd4', label: '4', fullLabel: 'May 4', values: { ci: 1 }, incomplete: true },
 ]
 
+/** Each period a control that narrows to itself, as a chart of days is. */
+const acting = columns.map((column) => ({ ...column, action: `Show ${column.fullLabel}` }))
+/** `work` narrows the view to itself, `ci` is a task that leads to its card. */
+const pressed: PeriodSeries[] = [
+  { key: 'ci', label: 'ci', slot: 1, href: '/open/MAIN-1' },
+  { key: 'work', label: 'work', slot: 2, actionable: true, action: 'Show the tasks of work' },
+]
+
 const marks: PeriodMark[] = [{ at: 'd3', label: 'Switched to work' }]
 
 const hours = (value: number) => `${value} h`
+const share = (ratio: number) => `${Math.round(ratio * 100)}% of the total`
 
 type Props = Partial<InstanceType<typeof PeriodColumns>['$props']>
 
@@ -61,7 +70,7 @@ const focusedCell = () => (document.activeElement as HTMLElement | null)?.datase
  * said in words, not only drawn.
  */
 describe('period columns that open nothing', () => {
-  it('name each period with its sum and each series by name, and offer no control', () => {
+  it('name each period with its sum and each series by name, one of them the Tab stop', () => {
     const chart = mountColumns()
 
     expect(chart.get('figure').attributes('aria-label')).toBe('Time per day')
@@ -72,8 +81,9 @@ describe('period columns that open nothing', () => {
       'May 3: total 3 h; work 3 h. Switched to work',
       'May 4: total 1 h so far; ci 1 h',
     ])
-    expect(chart.findAll('button')).toHaveLength(0)
-    expect(chart.findAll('[tabindex]')).toHaveLength(0)
+    expect(chart.findAll('button, a')).toHaveLength(0)
+    // The keyboard stands on a period to read its hint: one stop, the latest period.
+    expect(images.map((image) => image.attributes('tabindex'))).toEqual(['-1', '-1', '-1', '0'])
   })
 
   it('carries a legend for two series and none for one', () => {
@@ -106,7 +116,7 @@ describe('period columns that open nothing', () => {
     expect(chart.get('.period-axis').text()).toContain('so far')
   })
 
-  it('marks a change by a line in its period, says it in its readout and keeps no row for it', async () => {
+  it('marks a change by a line in its period, says it in its hint and keeps no row for it', () => {
     const chart = mountColumns()
 
     expect(chart.findAll('.period-mark')).toHaveLength(1)
@@ -115,64 +125,54 @@ describe('period columns that open nothing', () => {
     expect(chart.find('.period-notes').exists()).toBe(false)
     expect(chart.find('.period-markers').exists()).toBe(false)
     expect(chart.findAll('.period-plot > .chart-ticks')).toHaveLength(2)
-    await chart.get('[data-key="d3"]').trigger('pointerenter')
-    expect(chart.get('.period-readout').text()).toBe('May 3: total 3 h. Switched to work. work 3 h')
+    expect(chart.get('[data-cell="2:"]').attributes('data-tooltip')).toBe(
+      'May 3: total 3 h\nSwitched to work\nwork 3 h',
+    )
   })
 
-  it('reads out the latest period until the pointer stands on another', async () => {
+  // A line over the plot cut a period of several series to an ellipsis and named no segment.
+  it('stands no line of words over the plot', () => {
     const chart = mountColumns()
-    const readout = () => chart.get('.period-readout').text()
 
-    expect(readout()).toBe('May 4: total 1 h so far. ci 1 h')
-    await chart.get('[data-key="d1"]').trigger('pointerenter')
-    expect(readout()).toBe('May 1: total 3 h. ci 2 h, work 1 h')
+    expect(chart.find('.period-readout').exists()).toBe(false)
+    expect(chart.findAll('figure > p')).toHaveLength(0)
+    expect(chart.get('figure').element.children[1]?.classList.contains('period-frame')).toBe(true)
   })
 
-  it('reads out the period running, not one still to come, when nothing stands on one', async () => {
-    // A day by its hours at 14:30: the hours after the running one are still to come.
-    const day: PeriodColumn[] = Array.from({ length: 24 }, (_, hour) => ({
-      key: `h${hour}`,
-      label: `${hour}:00`,
-      values: hour <= 14 ? { ci: 1 } : {},
-      ...(hour === 14 ? { incomplete: true } : {}),
-    }))
-    const chart = mountColumns({ columns: day, marks: [] })
-    const readout = () => chart.get('.period-readout').text()
+  it('gives each period a hint of its sum, the period before and its series largest first', () => {
+    const before = columns.map((column, index) => ({ ...column, before: index + 1 }))
+    const chart = mountColumns({ columns: before, words: { ...words, before: 'before' } })
+    const hint = chart.get('[data-cell="0:"]')
 
-    expect(readout()).toBe('14:00: total 1 h so far. ci 1 h')
-    expect(chart.get('[data-key="h14"]').attributes('data-shown')).toBe('true')
-    await chart.get('[data-key="h20"]').trigger('pointerenter')
-    expect(readout()).toBe('20:00: total 0 h')
-    await chart.get('[data-key="h20"]').trigger('pointerleave')
-    expect(readout()).toBe('14:00: total 1 h so far. ci 1 h')
+    expect(hint.attributes('data-tooltip-kind')).toBe('detail')
+    expect(hint.attributes('data-tooltip')).toBe('May 1: total 3 h, before 1 h\nci 2 h\nwork 1 h')
+    expect(chart.get('[data-cell="3:"]').attributes('data-tooltip')).toBe(
+      'May 4: total 1 h so far, before 4 h\nci 1 h',
+    )
   })
 
-  it('keeps saying the period the pointer left for the readout, so its hint can be read', async () => {
-    const chart = mountColumns()
-    const readout = chart.get('.period-readout')
+  it('gives each segment a hint of its series, its value and its share of the period', () => {
+    const chart = mountColumns({ formatShare: share })
+    const segments = chart.findAll('[data-key="d1"] .period-segment')
 
-    await chart.get('[data-key="d1"]').trigger('pointerenter')
-    await chart.get('[data-key="d1"]').trigger('pointerleave')
-    await readout.trigger('pointerenter')
-    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h. ci 2 h, work 1 h')
-    await readout.trigger('pointerleave')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far. ci 1 h')
+    expect(segments.map((one) => one.attributes('data-tooltip'))).toEqual([
+      'ci 2 h, 67% of the total\nMay 1',
+      'work 1 h, 33% of the total\nMay 1',
+    ])
+    // A segment that leads nowhere is a block of hue, out of the reader's way.
+    expect(segments.map((one) => one.attributes('aria-hidden'))).toEqual(['true', 'true'])
+    expect(chart.get('[data-key="d4"] .period-segment').attributes('data-tooltip')).toBe(
+      'ci 1 h so far, 100% of the total\nMay 4',
+    )
   })
 
-  // The browser spec measures that nothing moves; this holds the means: one line cut with an
-  // ellipsis, and its whole words in a hint that follows the period shown.
-  it('keeps the readout to one line, whole in a hint shown while cut', async () => {
-    const chart = mountColumns()
-    const readout = chart.get('.period-readout')
+  it('gives each legend entry a hint of its series over the span and its share', () => {
+    const chart = mountColumns({ formatShare: share })
 
-    expect(readout.classes()).toContain('one-line')
-    expect(readout.findAll('span')).toHaveLength(0)
-    expect(readout.attributes('data-tooltip-kind')).toBe('clipped')
-    expect(readout.attributes('data-tooltip')).toBe(readout.text())
-    await chart.get('[data-key="d1"]').trigger('pointerenter')
-    expect(readout.attributes('data-tooltip')).toBe('May 1: total 3 h. ci 2 h, work 1 h')
-    await chart.get('[data-key="d1"]').trigger('pointerleave')
-    expect(readout.attributes('data-tooltip')).toBe('May 4: total 1 h so far. ci 1 h')
+    expect(chart.findAll('.chart-key').map((key) => key.attributes('data-tooltip'))).toEqual([
+      '3 h, 43% of the total',
+      '4 h, 57% of the total',
+    ])
   })
 
   it('starts its scale at zero', () => {
@@ -187,17 +187,26 @@ describe('period columns that open nothing', () => {
 })
 
 describe('period columns whose periods open', () => {
-  it('make each period a named button, one of them the Tab stop: the latest', () => {
-    const chart = mountColumns({ actionable: 'column' })
+  it('make each period a button named by what it does, one of them the Tab stop: the latest', () => {
+    const chart = mountColumns({ columns: acting })
     const buttons = chart.findAll('button.period-column')
 
     expect(buttons).toHaveLength(4)
-    expect(buttons[0]?.attributes('aria-label')).toBe('May 1: total 3 h; ci 2 h, work 1 h')
+    expect(buttons[0]?.attributes('aria-label')).toBe('Show May 1')
     expect(buttons.map((one) => one.attributes('tabindex'))).toEqual(['-1', '-1', '-1', '0'])
   })
 
+  it('stop Tab on the period under way, not on a later one still to come', () => {
+    // A day read by its hours at 15:30: the hour under way is the third, the fourth is to come.
+    const under = acting.map((column, index) => ({ ...column, incomplete: index === 2 }))
+    const chart = mountColumns({ columns: under })
+
+    expect(chart.get('[data-cell="2:"]').attributes('tabindex')).toBe('0')
+    expect(chart.findAll('[tabindex="0"]')).toHaveLength(1)
+  })
+
   it('walk the periods with the arrows, Home and End, and keep the stop where the reader went', async () => {
-    const chart = mountColumns({ actionable: 'column' })
+    const chart = mountColumns({ columns: acting })
     const last = chart.get('[data-cell="3:"]')
     ;(last.element as HTMLElement).focus()
 
@@ -214,47 +223,76 @@ describe('period columns whose periods open', () => {
     expect(focusedCell()).toBe('3:')
   })
 
-  it('send the period pressed, with no series', async () => {
-    const chart = mountColumns({ actionable: 'column' })
+  it('send the period pressed, and nothing for a segment that leads nowhere', async () => {
+    const chart = mountColumns({ columns: acting })
 
     await chart.get('[data-cell="2:"]').trigger('click')
-    expect(chart.emitted('select')).toEqual([[{ column: 'd3', series: null }]])
+    await chart.get('[data-key="d1"] .period-segment').trigger('click')
+    expect(chart.emitted('period')).toEqual([['d3']])
+    expect(chart.emitted('series')).toBeUndefined()
   })
 })
 
-describe('period columns whose series open', () => {
-  it('make each segment a named button and the periods around them nothing', () => {
-    const chart = mountColumns({ actionable: 'segment' })
+describe('period columns whose series act', () => {
+  it('make each segment of a series that acts its link or button, and the period apart', () => {
+    const chart = mountColumns({ series: pressed })
 
-    expect(chart.findAll('button.period-column')).toHaveLength(0)
-    expect(chart.findAll('[role="img"]')).toHaveLength(0)
-    const segments = chart.findAll('button.period-segment')
-    expect(segments).toHaveLength(4)
-    expect(segments[1]?.attributes('aria-label')).toContain('work')
-    expect(segments[1]?.attributes('aria-label')).toContain('1 h')
-    expect(segments.filter((one) => one.attributes('tabindex') === '0')).toHaveLength(1)
-    expect(chart.get('[data-cell="3:0"]').attributes('tabindex')).toBe('0')
+    expect(chart.findAll('a.period-segment').map((one) => one.attributes('href'))).toEqual([
+      '/open/MAIN-1',
+      '/open/MAIN-1',
+    ])
+    const buttons = chart.findAll('button.period-segment')
+    expect(buttons.map((one) => one.attributes('aria-label'))).toEqual([
+      'Show the tasks of work',
+      'Show the tasks of work',
+    ])
+    // The period is no control of its own, and no ancestor of one.
+    expect(chart.findAll('[role="img"] a, [role="img"] button')).toHaveLength(0)
+    expect(chart.findAll('[tabindex="0"]')).toHaveLength(1)
+    expect(chart.get('[data-cell="3:"]').attributes('tabindex')).toBe('0')
   })
 
-  it('climb the stack with up and down, and step over an empty period sideways', async () => {
-    const chart = mountColumns({ actionable: 'segment' })
-    ;(chart.get('[data-cell="0:0"]').element as HTMLElement).focus()
-    await chart.get('[data-cell="0:0"]').trigger('focus')
+  it('climb from a period into its segments, and keep to the series sideways', async () => {
+    const chart = mountColumns({ series: pressed })
+    ;(chart.get('[data-cell="0:"]').element as HTMLElement).focus()
+    await chart.get('[data-cell="0:"]').trigger('focus')
 
+    await chart.get('[data-cell="0:"]').trigger('keydown', { key: 'ArrowUp' })
+    await nextTick()
+    expect(focusedCell()).toBe('0:0')
     await chart.get('[data-cell="0:0"]').trigger('keydown', { key: 'ArrowUp' })
     await nextTick()
     expect(focusedCell()).toBe('0:1')
     await chart.get('[data-cell="0:1"]').trigger('keydown', { key: 'ArrowRight' })
     await nextTick()
-    // May 2 holds nothing; May 3 holds work alone.
-    expect(focusedCell()).toBe('2:0')
+    // May 2 holds nothing, so the keyboard stands on the period itself.
+    expect(focusedCell()).toBe('1:')
   })
 
-  it('send the period and the series pressed', async () => {
-    const chart = mountColumns({ actionable: 'segment' })
+  it('keep to the nearest segment that acts where the series is not in the next period', async () => {
+    const chart = mountColumns({ series: pressed })
+    ;(chart.get('[data-cell="0:1"]').element as HTMLElement).focus()
+    await chart.get('[data-cell="0:1"]').trigger('focus')
+
+    await chart.get('[data-cell="0:1"]').trigger('keydown', { key: 'End' })
+    await nextTick()
+    // May 4 holds ci alone, the segment below work's place.
+    expect(focusedCell()).toBe('3:0')
+    await chart.get('[data-cell="3:0"]').trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(focusedCell()).toBe('3:')
+  })
+
+  it('send the series pressed, on its segment or its legend entry, and follow a link', async () => {
+    const chart = mountColumns({ series: pressed })
 
     await chart.get('[data-cell="0:1"]').trigger('click')
-    expect(chart.emitted('select')).toEqual([[{ column: 'd1', series: 'work' }]])
+    await chart.get('button.chart-key[data-series="work"]').trigger('click')
+    expect(chart.emitted('series')).toEqual([['work'], ['work']])
+    await chart.get('[data-cell="0:0"]').trigger('click')
+    await chart.get('a.chart-key[data-series="ci"]').trigger('click')
+    expect(chart.emitted('follow')?.map(([key]) => key)).toEqual(['ci', 'ci'])
+    expect(chart.emitted('period')).toBeUndefined()
   })
 })
 
@@ -283,10 +321,11 @@ describe('the period table', () => {
       ['May 3', '0 h', '3 h', '3 h', 'Switched to work'],
       ['May 4', '1 h', '0 h', '1 h', 'so far'],
     ])
+    expect(table.findAll('button, a')).toHaveLength(0)
   })
 
   it('opens from the period name where periods open', async () => {
-    const table = mountTable({ actionable: 'column' })
+    const table = mountTable({ columns: acting })
 
     expect(table.findAll('button').map((one) => one.text())).toEqual([
       'May 1',
@@ -295,21 +334,23 @@ describe('the period table', () => {
       'May 4',
     ])
     await table.findAll('button')[2]?.trigger('click')
-    expect(table.emitted('select')).toEqual([[{ column: 'd3', series: null }]])
+    expect(table.emitted('period')).toEqual([['d3']])
   })
 
-  it('opens from a figure the chart draws where series open, and from no zero', async () => {
-    const table = mountTable({ actionable: 'segment' })
-    const presses = table.findAll('button')
+  it('acts from a figure the chart draws where its series acts, and from no zero', async () => {
+    const table = mountTable({ series: pressed })
+    const presses = table.findAll('.chart-press')
 
-    expect(presses.map((one) => one.attributes('data-series'))).toEqual([
-      'ci',
-      'work',
-      'work',
-      'ci',
+    expect(presses.map((one) => [one.element.tagName, one.attributes('data-series')])).toEqual([
+      ['A', 'ci'],
+      ['BUTTON', 'work'],
+      ['BUTTON', 'work'],
+      ['A', 'ci'],
     ])
     await presses[2]?.trigger('click')
-    expect(table.emitted('select')).toEqual([[{ column: 'd3', series: 'work' }]])
+    await presses[0]?.trigger('click')
+    expect(table.emitted('series')).toEqual([['work']])
+    expect(table.emitted('follow')?.map(([key]) => key)).toEqual(['ci'])
   })
 
   it('says there is nothing in the same words as the chart', () => {
@@ -341,6 +382,9 @@ describe('a period with a series absent', () => {
     expect(
       chart.findAll('.period-slot').map((slot) => slot.findAll('.period-segment').length),
     ).toEqual([1, 0, 0])
+    expect(chart.get('[data-cell="1:"]').attributes('data-tooltip')).toBe(
+      'May 2\nNo price: ci, work',
+    )
   })
 
   it('reads as a dash in the table, never as a zero, and a day that spent nothing as zero', () => {

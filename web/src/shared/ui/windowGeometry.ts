@@ -34,7 +34,7 @@ export interface StepPoint {
   key: string
   /** What the reading is besides its value, its source: «the poll». */
   noteText: string
-  /** The reading in words, for the readout and the table: «12:05, 35%, the poll». */
+  /** The reading in words, for its hint, its name and the table: «12:05, 35%, the poll». */
   text: string
   /** Its moment in words, the table's first column: «12:05». */
   timeText: string
@@ -100,14 +100,4 @@ export function stepPath(frame: StepFrame, points: readonly StepPoint[], end: nu
     parts.push(`H${fixed(stepX(frame, point.at))}`, `V${fixed(stepY(frame, point.value))}`)
   parts.push(`H${fixed(stepX(frame, Math.max(end, points.at(-1)?.at ?? end)))}`)
   return parts.join(' ')
-}
-
-/**
- * The reading that holds at a place across the plot, from 0 to 1: the last one at or before it,
- * or the first where the place comes before every reading.
- */
-export function readingAt(frame: StepFrame, points: readonly StepPoint[], ratio: number) {
-  const at = frame.from + Math.min(1, Math.max(0, ratio)) * (frame.to - frame.from)
-  const after = points.findIndex((point) => point.at > at)
-  return after === -1 ? points.length - 1 : Math.max(0, after - 1)
 }

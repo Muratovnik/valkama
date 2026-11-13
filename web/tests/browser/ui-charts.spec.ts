@@ -106,7 +106,8 @@ function measure(page: Page) {
           box(element),
         ),
         legend: all('[data-harness="days"] .chart-key').map((element) => box(element)),
-        readout: box(days.querySelector('.period-readout') ?? days),
+        // No line of words stands over the plot: each mark says itself in its hint.
+        readouts: all('.period-readout, .step-readout').length,
         stacks: all('[data-harness="days"] .period-stack').map((element) => box(element)),
         incomplete: all('[data-harness="days"] .period-incomplete').length,
       },
@@ -210,7 +211,7 @@ for (const width of WIDTHS) {
       expect(inside(tick, scrolled), 'a label outside its chart').toBe(true)
     for (const key of seen.days.legend)
       expect(inside(key, seen.days.frame), 'a legend key outside its chart').toBe(true)
-    expect(inside(seen.days.readout, seen.days.frame)).toBe(true)
+    expect(seen.days.readouts, 'a line over a plot').toBe(0)
     expect(seen.days.axis.at(-1)?.text).toBe('Oct 30so far')
     expect(seen.days.axis.length).toBeLessThanOrEqual(8)
     expect(seen.days.incomplete).toBe(1)
@@ -346,27 +347,39 @@ for (const width of [1440, 390] as const) {
     await expect(selected).toHaveText('row web')
 
     // Tab leaves the ranked chart past its rows that open, then lands once in the days chart,
-    // on the latest day's lowest segment.
+    // first on its legend's entries that act, then once on the latest day itself, which says what
+    // it holds; up climbs into its segments that act. A press on a segment or an entry acts for its
+    // series, never for the day it stands in.
     await page.keyboard.press('Tab')
     await page.keyboard.press('Tab')
     await page.keyboard.press('Tab')
-    const segment = page.locator(':focus')
-    await expect(segment).toHaveAttribute('data-cell', '29:0')
-    await expect(segment).toHaveAttribute('aria-label', /^October 30: personal .+ so far$/u)
+    await expect(page.locator(':focus')).toHaveAttribute('data-series', 'personal')
+    await page.keyboard.press('Enter')
+    await expect(selected).toHaveText('series personal')
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab')
+    const day = page.locator(':focus')
+    await expect(day).toHaveAttribute('data-cell', '29:')
+    await expect(day).toHaveAttribute('aria-label', /^October 30: total .+ so far; personal /u)
     rings.push(await ring(page))
     await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowUp')
+    await expect(page.locator(':focus')).toHaveAttribute('data-cell', '28:0')
     await page.keyboard.press('ArrowUp')
     await expect(page.locator(':focus')).toHaveAttribute('data-cell', '28:1')
     rings.push(await ring(page))
     await page.keyboard.press('Enter')
-    await expect(selected).toHaveText('period 2026-10-29 work')
+    await expect(selected).toHaveText('series work')
 
-    // One more Tab leaves the days chart for the hours chart: thirty days were one stop.
+    // Tab leaves the days chart for the hours chart, past its one entry that acts: thirty days
+    // were one stop.
+    await page.keyboard.press('Tab')
+    await expect(page.locator(':focus')).toHaveAttribute('data-series', 'work')
     await page.keyboard.press('Tab')
     await expect(page.locator(':focus')).toHaveAttribute('data-cell', '23:')
     await page.keyboard.press('Home')
     await page.keyboard.press('Enter')
-    await expect(selected).toHaveText('period h0 -')
+    await expect(selected).toHaveText('period h0')
     rings.push(await ring(page))
 
     await testInfo.attach(`rings-${width}`, {

@@ -5,9 +5,10 @@
  *
  * The table stands whole in both languages, scrolls sideways inside its own frame with its row
  * names kept in view, and says once when the period before was not read. The download is offered
- * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model or a day,
- * pressed by keyboard or by mouse on its coloured stack, narrows the view to it as a new place in
- * the history, so Back returns, as a section opened from a card or the rail does, while the
+ * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model, or a day
+ * pressed by keyboard or by mouse beside its coloured stack, narrows the view to it as a new place
+ * in the history, while a segment of the stack acts for its own model as its bar does, so Back
+ * returns, as a section opened from a card or the rail does, while the
  * period, the measure and the second dimension change the place in hand; the task's bar then
  * opens the task's card over the page, whose address keeps the view and names the card, and the
  * opening is counted once. Each run prints what it measured.
@@ -88,8 +89,8 @@ const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
 /**
  * The keys that bring the focus to `target`, as a keyboard reaches it: Tab from control to
- * control, and inside a chart of columns, one stop for Tab, Home to its first column and the
- * right arrow along it.
+ * control, past a chart's legend entries that act, and on a chart's columns, one stop for Tab,
+ * Home to its first column and the right arrow along it.
  */
 async function tabTo(page: Page, target: Locator) {
   const keys: string[] = []
@@ -98,7 +99,7 @@ async function tabTo(page: Page, target: Locator) {
   for (let press = 1; press <= 120; press += 1) {
     const inChart =
       chart &&
-      (await page.evaluate(() => Boolean(document.activeElement?.closest('.period-columns'))))
+      (await page.evaluate(() => document.activeElement?.hasAttribute('data-cell') ?? false))
     const along = homed ? 'ArrowRight' : 'Home'
     const key = inChart ? along : 'Tab'
     homed ||= inChart
@@ -284,26 +285,41 @@ for (const width of WIDTHS)
     await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(1)
 
-    // By pointer on the coloured stack of a day, drawn as a chart at every width: Tuesday.
+    // By pointer on a day drawn as a chart at every width, Tuesday: its coloured stack acts for
+    // its model, as the model's bar does, and the day itself beside the stack for the day.
     await openReport(page, width, byModel)
     const days = analytics.locator('.spending-days')
     // A narrow page shows the days as a table first; the section's own control draws them.
     await days.locator('.segmented-option', { hasText: 'Chart' }).click()
     await expect(days).toHaveAttribute('data-shown', 'chart')
-    const stack = days.locator('.period-column').nth(1).locator('.period-segment').first()
+    const tuesdaySlot = days.locator('.period-slot').nth(1)
+    const stack = tuesdaySlot.locator('.period-segment').first()
     await stack.scrollIntoViewIfNeeded()
     const pressedAt = await stack.boundingBox()
     const point = {
       x: (pressedAt?.x ?? 0) + (pressedAt?.width ?? 0) / 2,
       y: (pressedAt?.y ?? 0) + (pressedAt?.height ?? 0) / 2,
     }
-    // The press lands on the stack itself, not on the column around it.
+    // The press lands on the stack itself, not on the day around it.
     const landsOn = await page.evaluate(
       ({ x, y }) => document.elementFromPoint(x, y)?.classList.contains('period-segment') ?? false,
       point,
     )
     expect(landsOn).toBe(true)
     await page.mouse.click(point.x, point.y)
+    await expect.poll(() => path(page)).toBe(narrowed)
+    await page.goBack()
+    await expect.poll(() => path(page)).toBe(byModel)
+    await expect(days).toHaveAttribute('data-shown', 'chart')
+    // Over the stack, where no segment stands, the press is the day's own.
+    const dayAt = await tuesdaySlot.locator('.period-column').boundingBox()
+    const dayPoint = { x: (dayAt?.x ?? 0) + (dayAt?.width ?? 0) / 2, y: (dayAt?.y ?? 0) + 2 }
+    const landsOnDay = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.classList.contains('period-column') ?? false,
+      dayPoint,
+    )
+    expect(landsOnDay).toBe(true)
+    await page.mouse.click(dayPoint.x, dayPoint.y)
     const tuesdayAlone = at({
       period: 'custom',
       from: '2026-11-10',

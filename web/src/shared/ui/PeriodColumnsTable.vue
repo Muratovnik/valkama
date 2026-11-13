@@ -6,23 +6,35 @@
  * the chart draws is here,
  * a series with nothing in a period included; a figure nobody has, and the sum of a period with
  * no data yet, reads as a dash and never as a zero. A period compared with has a column of its own, after the sum. It is the chart's
- * accessible equivalent and may stand beside it or instead of it: what a press opens in the
- * chart, a period or one series in it, opens here from the period's name or from the series'
- * figure. A period's name that acts heads its row, so it is named by the period, and what
+ * accessible equivalent and may stand beside it or instead of it: what a press does in the
+ * chart it does here, a period's from the period's name, sent out as `period`, and a series'
+ * from its figures, sent out as `series` or, where the series leads somewhere, as `follow` with
+ * the press. A period's name that acts heads its row, so it is named by the period, and what
  * pressing it does is its description.
  */
 import { computed } from 'vue'
 
-import type { PeriodChartProps, PeriodSelection, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
-import { columnNotes, hasSum, stackColumns } from '@/shared/ui/chartGeometry.ts'
+import type { PeriodChartProps, PeriodSeries } from '@/shared/ui/chartGeometry.ts'
+import {
+  columnNotes,
+  hasSum,
+  markActs,
+  markTag,
+  markType,
+  stackColumns,
+} from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 
 const props = withDefaults(defineProps<PeriodChartProps>(), {
-  actionable: null,
+  formatShare: undefined,
   marks: () => [],
 })
 
-const emit = defineEmits<{ select: [selection: PeriodSelection] }>()
+const emit = defineEmits<{
+  follow: [series: string, press: MouseEvent]
+  period: [key: string]
+  series: [key: string]
+}>()
 
 const rows = computed(() =>
   stackColumns(props.columns, props.series, props.marks).columns.map((one) => ({
@@ -51,9 +63,18 @@ const ABSENT = '—'
 /** The period's sum; absent (null) when nothing is drawn and a series has no figure. */
 const sum = (row: TableRow) => (hasSum(row.one) ? props.formatValue(row.one.total) : null)
 
-/** Where segments act, a figure the chart draws opens the same series as its segment. */
-const opens = (row: TableRow, series: PeriodSeries) =>
-  props.actionable === 'segment' && row.held.has(series.key)
+/** A figure the chart draws of a series that acts does what its segment does. */
+const opens = (row: TableRow, series: PeriodSeries) => markActs(series) && row.held.has(series.key)
+
+function pressSeries(series: PeriodSeries, event: MouseEvent) {
+  if (series.href) emit('follow', series.key, event)
+  else emit('series', series.key)
+}
+
+/** A middle press on a series' link opens it elsewhere, and is a press on it all the same. */
+function pressSeriesAside(series: PeriodSeries, event: MouseEvent) {
+  if (series.href && event.button === 1) emit('follow', series.key, event)
+}
 
 /** Whether a period is compared with, which gives its figures a column after the sum. */
 const compared = computed(() => props.columns.some((column) => column.before !== undefined))
@@ -123,11 +144,11 @@ const empty = computed(() => !props.columns.length || !props.series.length)
           class="chart-cell chart-name"
         >
           <button
-            v-if="actionable === 'column'"
+            v-if="row.one.column.action"
             type="button"
             class="chart-press"
             :aria-description="row.one.column.action"
-            @click="emit('select', { column: row.one.column.key, series: null })"
+            @click="emit('period', row.one.column.key)"
           >
             {{ row.name }}
           </button>
@@ -139,15 +160,19 @@ const empty = computed(() => !props.columns.length || !props.series.length)
           class="chart-cell"
           data-numeric="true"
         >
-          <button
+          <component
+            :is="markTag(one, 'span')"
             v-if="opens(row, one)"
-            type="button"
             class="chart-press"
+            :type="markType(one)"
+            :href="one.href"
+            :aria-description="one.action"
             :data-series="one.key"
-            @click="emit('select', { column: row.one.column.key, series: one.key })"
+            @click="(event: MouseEvent) => pressSeries(one, event)"
+            @auxclick="(event: MouseEvent) => pressSeriesAside(one, event)"
           >
             {{ amount(row, one) }}
-          </button>
+          </component>
           <template v-else-if="amount(row, one) === null">
             <span aria-hidden="true">{{ ABSENT }}</span>
             <span class="visually-hidden">{{ words.absent }}</span>

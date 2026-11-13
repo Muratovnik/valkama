@@ -4,7 +4,7 @@
  * «0, 20 min, 40 min, 60 min», «0, 25 h, 50 h, 75 h, 100 h», «0, 5 d, 10 d». A step said in
  * two units, «4 d 4 h», reads as a figure rather than a step, and steps of hours that are not
  * a whole number of days said that way were the four different shapes of one axis. A figure, a
- * readout or a table still says a span in its two largest units (`spanWords`).
+ * hint or a table still says a span in its two largest units (`spanWords`).
  */
 import type { SpanWords } from '@/shared/lib/timeSpan.ts'
 import { valueTicks } from '@/shared/ui/chartGeometry.ts'

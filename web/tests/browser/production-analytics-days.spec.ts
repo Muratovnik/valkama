@@ -100,14 +100,17 @@ const focusedColumn = (page: Page) =>
       ring: !style || style.outlineStyle === 'none' ? 0 : Number.parseFloat(style.outlineWidth),
       left,
       right,
-      // What stands on top at the column's middle: the column or a part of it, never the scale.
+      // What stands on top at the column's middle: the day — its column or a segment of its stack,
+      // which stand side by side in its slot so that no control holds another — never the scale.
       onTop:
-        column?.contains(
-          document.elementFromPoint(
-            (left + right) / 2,
-            (column.getBoundingClientRect().top + column.getBoundingClientRect().bottom) / 2,
-          ),
-        ) ?? false,
+        column
+          ?.closest('.period-slot')
+          ?.contains(
+            document.elementFromPoint(
+              (left + right) / 2,
+              (column.getBoundingClientRect().top + column.getBoundingClientRect().bottom) / 2,
+            ),
+          ) ?? false,
     }
   })
 
@@ -445,7 +448,10 @@ for (const width of [1440, 1920])
       // Higher than this week's column, as the week before was.
       expect(mark.top, 'the mark under its column’s top').toBeLessThan(stacks[index] ?? 0)
     }
-    // The readout still says the figure of the week before in words.
-    await expect(days.locator('.period-readout')).toContainText('7 h')
+    // The latest day's hint still says the figure of the week before in words.
+    await expect(days.locator('.period-column[tabindex="0"]')).toHaveAttribute(
+      'data-tooltip',
+      /period before 7\sh/u,
+    )
     await days.screenshot(shot(info, `days-lower-week-${width}.png`))
   })

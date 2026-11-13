@@ -8,7 +8,7 @@
  */
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import { roundAxis } from '@/shared/ui/chartGeometry.ts'
-import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
+import type { MarkAction, ValueAxis } from '@/shared/ui/chartGeometry.ts'
 
 /**
  * What a multiple is. A category and the folded tail (`other`) share one scale; work with
@@ -17,7 +17,8 @@ import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
  */
 type MultipleKind = 'category' | 'none' | 'other' | 'unknown'
 
-export interface SmallMultiple {
+/** A small chart of one value; pressing its name does what the value does (`MarkAction`). */
+export interface SmallMultiple extends MarkAction {
   key: string
   label: string
   /** Each period's amount, in the order of the periods; null for a period with no figure. */

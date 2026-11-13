@@ -1,6 +1,6 @@
 /**
  * Whether the box a panel's charts stand in is too narrow for them: under 560 pixels a row of a
- * day's columns crowds its readout and a bar's name crowds its figure, so each chart opens as its
+ * day's columns crowds its hints and a bar's name crowds its figure, so each chart opens as its
  * table. Unmeasured, the box is taken as wide enough, so nothing opens as a table before it is
  * known to have to.
  */

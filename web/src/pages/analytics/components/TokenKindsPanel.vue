@@ -129,6 +129,7 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
             :label="barsTitle"
             :rows="bars"
             :words="barWords"
+            :format-share="words.markShare"
           />
         </template>
         <template #table>
@@ -148,7 +149,9 @@ const formatValue = (amount: number) => words.scale('tokens', amount)
           <SmallMultiples
             :label="multiplesTitle"
             :multiples="multiples"
+            :periods="periods"
             :words="multiplesWords"
+            :format-share="words.markShare"
             :format-value="formatValue"
           />
         </template>

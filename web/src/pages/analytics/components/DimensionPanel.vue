@@ -191,6 +191,7 @@ async function showTable() {
             :narrow="narrow"
             :slots="slots"
             :usage="usage"
+            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
           />
         </div>
         <SpendingDays
@@ -202,6 +203,7 @@ async function showTable() {
           :read-at="readAt"
           :usage="usage"
           @day="(day, label) => emit('day', day, label)"
+          @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
         />
       </div>
       <SpendingTable

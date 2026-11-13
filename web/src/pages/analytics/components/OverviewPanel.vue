@@ -175,6 +175,7 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
         :usage="usage"
         brief
         @day="(day, label) => emit('day', day, label)"
+        @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
       />
     </div>
     <FieldError

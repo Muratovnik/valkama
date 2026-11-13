@@ -5,7 +5,9 @@
  * can place are among the largest where their figures put them, a chart of their own in the
  * neutral hue (`dayMultiples`, `SmallMultiples`). Each chart is in its
  * value's hue on the page (`slots`) and says its name, so the hue never speaks alone. Drawn, or as
- * its table, as every chart of the page is (`ChartSection`).
+ * its table, as every chart of the page is (`ChartSection`). A chart's name does what its value's
+ * row does (`useLineMarks`): a task opens its card, a value the read can filter by goes out as
+ * `narrow`.
  *
  * Its heading is short, «Per day, by task», since the ranked list beside it already names the
  * measure and the dimension and the two stand on one line; the charts themselves are named whole.
@@ -14,6 +16,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { dayMultiples } from '@/pages/analytics/utils/dayMultiples.ts'
 
@@ -32,6 +35,8 @@ const props = defineProps<{
   slots: ReadonlyMap<string, SeriesSlot>
   usage: Usage
 }>()
+/** A value pressed to narrow the view to it: its filter value, and its name. */
+const emit = defineEmits<{ narrow: [value: string | null, label: string] }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -49,8 +54,15 @@ const title = computed(() =>
   }),
 )
 
+const drawn = computed(() => dayMultiples(props))
+const marks = useLineMarks({
+  by: () => props.by,
+  lines: () => drawn.value.map(({ line }) => line),
+  narrow: (value, label) => emit('narrow', value, label),
+})
+
 const multiples = computed<SmallMultiple[]>(() =>
-  dayMultiples(props).map(({ line, values }) => ({
+  drawn.value.map(({ line, values }) => ({
     key: line.key,
     label: words.lineLabel(props.by, line),
     // Work with no value is charted as a value is, on the same scale; the folded tail stands apart.
@@ -58,6 +70,7 @@ const multiples = computed<SmallMultiple[]>(() =>
     slot: props.slots.get(line.key) ?? 'other',
     values,
     valueText: words.lineFigure(props.measure, line.spent),
+    ...marks.markOf(line),
   })),
 )
 
@@ -91,9 +104,13 @@ const valueAxis = computed(() => words.axis(props.measure))
       <SmallMultiples
         :label="title"
         :multiples="multiples"
+        :periods="periods"
         :words="chartWords"
+        :format-share="words.markShare"
         :format-value="formatValue"
         :value-axis="valueAxis"
+        @follow="marks.follow"
+        @select="marks.select"
       />
     </template>
     <template #table>
@@ -103,6 +120,8 @@ const valueAxis = computed(() => words.axis(props.measure))
         :periods="periods"
         :words="chartWords"
         :format-value="formatValue"
+        @follow="marks.follow"
+        @select="marks.select"
       />
     </template>
   </ChartSection>

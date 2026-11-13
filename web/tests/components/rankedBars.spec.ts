@@ -21,6 +21,9 @@ const rows: RankedRow[] = [
   { key: 'other', label: 'Other (4)', value: 15, valueText: '15 min', kind: 'other' },
 ]
 
+/** A share as the caller says it, the words its own. */
+const share = (ratio: number) => `${Math.round(ratio * 100)}% of the total`
+
 const mountBars = (given: RankedRow[] = rows) =>
   mount(RankedBars, { props: { label: 'Time by project', rows: given, words } })
 
@@ -85,25 +88,53 @@ describe('ranked bars', () => {
     )
   })
 
-  it('keeps a name to one line with its whole words, and what it leaves out, in its hint', () => {
-    const chart = mountBars([
-      {
-        key: 'acct',
-        label: 'a1b2c3d4',
-        detail: 'a1b2c3d4-0000-4000-8000-00000000abcd',
-        value: 3,
-        valueText: '3 h',
+  it('keeps a name to one line, and gives its row a hint of what the row does not print', () => {
+    const chart = mount(RankedBars, {
+      props: {
+        label: 'Time by project',
+        words,
+        formatShare: share,
+        rows: [
+          {
+            key: 'acct',
+            label: 'a1b2c3d4',
+            detail: 'a1b2c3d4-0000-4000-8000-00000000abcd',
+            value: 3,
+            valueText: '3 h',
+          },
+          { key: 'web', label: 'Web', value: 1, valueText: '1 h' },
+        ],
       },
-      { key: 'web', label: 'Web', value: 1, valueText: '1 h' },
-    ])
-    const account = chart.get('[data-key="acct"] .ranked-label')
-    const web = chart.get('[data-key="web"] .ranked-label')
+    })
+    const account = chart.get('[data-key="acct"]')
+    const web = chart.get('[data-key="web"]')
 
-    expect(account.classes()).toContain('one-line')
+    expect(account.get('.ranked-label').classes()).toContain('one-line')
+    // The row is the mark: its hint is what it leaves out and its share, never its printed words.
     expect(account.attributes('data-tooltip-kind')).toBe('detail')
-    expect(account.attributes('data-tooltip')).toBe('a1b2c3d4-0000-4000-8000-00000000abcd')
+    expect(account.attributes('data-tooltip')).toBe(
+      'a1b2c3d4-0000-4000-8000-00000000abcd\n75% of the total',
+    )
+    expect(tooltipOf(account.element)?.words).toBe('a1b2c3d4')
     expect(tooltipOf(account.element)?.clipped).toBe(false)
-    // With nothing to add, the hint is the name itself, shown only while it is cut.
+    expect(web.attributes('data-tooltip')).toBe('25% of the total')
+    // A whole given where the rows are not all of it.
+    const part = mount(RankedBars, {
+      props: {
+        label: 'x',
+        words,
+        formatShare: share,
+        whole: 10,
+        rows: [{ key: 'web', label: 'Web', value: 1, valueText: '1 h' }],
+      },
+    })
+    expect(part.get('[data-key="web"]').attributes('data-tooltip')).toBe('10% of the total')
+  })
+
+  it('with nothing to add, gives a row the hint of its name, shown only while it is cut', () => {
+    const web = mountBars([{ key: 'web', label: 'Web', value: 1, valueText: '1 h' }]).get(
+      '[data-key="web"]',
+    )
     expect(web.attributes('data-tooltip')).toBe('Web')
     expect(tooltipOf(web.element)?.clipped).toBe(true)
   })

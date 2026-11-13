@@ -7,40 +7,19 @@ import assert from 'node:assert/strict'
 
 import { describe, test } from 'vitest'
 
-import type { PeriodColumn, PeriodSeries, PeriodWords } from '@/shared/ui/chartGeometry.ts'
 import {
   columnNotes,
   columnSummary,
   columnWidth,
   dayTicks,
   labelledColumns,
-  lastBegun,
-  nextCursor,
-  readoutLine,
   segmentPlace,
-  segmentSummary,
   stackColumns,
   valueTicks,
 } from '@/shared/ui/chartGeometry.ts'
+import { periodHint } from '@/shared/ui/markHints.ts'
 
-const series: PeriodSeries[] = [
-  { key: 'a', label: 'Account A', slot: 1 },
-  { key: 'b', label: 'Account B', slot: 2 },
-  { key: 'c', label: 'Account C', slot: 3 },
-]
-const column = (key: string, values: PeriodColumn['values'], incomplete = false): PeriodColumn => ({
-  key,
-  label: key,
-  values,
-  ...(incomplete ? { incomplete } : {}),
-})
-const words: PeriodWords = {
-  total: 'total',
-  incomplete: 'so far',
-  period: 'Day',
-  note: 'Note',
-  empty: 'Nothing',
-}
+import { column, series, words } from './fixtures/periodChart.ts'
 
 describe('stacked columns', () => {
   test("a period's segments meet end to end in the series' order and add up to its sum", () => {
@@ -109,7 +88,7 @@ describe('stacked columns', () => {
     // Nothing spent and nothing absent is a real zero, said beside what the period before held.
     assert.equal(columnSummary(second, said, String), 'd2: total 0, period before 3')
     assert.equal(columnSummary(third, said, String), 'd3: total 1; Account A 1')
-    // With no words for it the readout stays as it was.
+    // With no words for it the summary stays as it was.
     assert.equal(columnSummary(first, words, String), 'd1: total 2; Account A 2')
   })
 
@@ -135,54 +114,6 @@ describe('the width of a column', () => {
     // Between the two, half a period's room; unmeasured, as before.
     assert.equal(columnWidth(10, 800), 40)
     assert.equal(columnWidth(4, 0), 24)
-  })
-})
-
-describe('the readout over the chart', () => {
-  test('is one line: the period and what is said of it, then the series largest first', () => {
-    const said = { ...words, before: 'period before' }
-    const { columns } = stackColumns(
-      [{ ...column('d1', { a: 1, b: 4, c: 2 }, true), before: 9 }],
-      series,
-      [{ at: 'd1', label: 'Switched to B' }],
-    )
-    const [one] = columns
-    assert.ok(one)
-    // «so far» qualifies the sum it follows, and is no sentence of its own.
-    assert.equal(
-      readoutLine(one, said, String),
-      'd1: total 7 so far, period before 9. Switched to B. Account B 4, Account C 2, Account A 1',
-    )
-    // The whole text keeps the stack's order: it is the period's name for assistive technology.
-    assert.equal(
-      columnSummary(one, said, String),
-      'd1: total 7 so far, period before 9; Account A 1, Account B 4, Account C 2. Switched to B',
-    )
-    const [segment] = one.segments
-    assert.ok(segment)
-    assert.equal(
-      segmentSummary(one, segment, said, String),
-      'd1: Account A 1, total 7 so far. Switched to B',
-    )
-    // The table says the sum in a cell of its own, so its note still says the period is running.
-    assert.deepEqual(columnNotes(one, said), ['so far', 'Switched to B'])
-  })
-
-  test('of a period with nothing drawn says the period alone, with no empty tail', () => {
-    const { columns } = stackColumns([column('d1', {})], series)
-    const [one] = columns
-    assert.ok(one)
-    assert.equal(readoutLine(one, words, String), 'd1: total 0')
-  })
-
-  test('with no period stood on says the last one begun: the running hour, not one to come', () => {
-    // A day read by its hours at 14:30: 15:00 to 23:00 are still to come.
-    const hours = Array.from({ length: 24 }, (_, hour) => column(`h${hour}`, {}, hour === 14))
-    assert.equal(lastBegun(stackColumns(hours, series).columns), 14)
-    // A period that is over has no running step: its last step is the last begun.
-    const over = Array.from({ length: 24 }, (_, hour) => column(`h${hour}`, {}))
-    assert.equal(lastBegun(stackColumns(over, series).columns), 23)
-    assert.equal(lastBegun([]), -1)
   })
 })
 
@@ -344,7 +275,7 @@ function placed(tick: { offset: number; text: string; note?: string }, width: nu
 }
 
 describe('a change at the start of a period', () => {
-  test('is said where the period is read: its readout, its name and its row of the table', () => {
+  test('is said where the period is read: its hint, its name and its row of the table', () => {
     const { columns } = stackColumns(
       [column('d1', { a: 1 }), column('d2', { a: 1 }), column('d3', { a: 1, b: 2 })],
       series,
@@ -355,72 +286,15 @@ describe('a change at the start of a period', () => {
     )
     const [first, , third] = columns
     assert.ok(first && third)
-    // Before the series, so a line too narrow for all of it cuts the series and not the change.
     assert.equal(
-      readoutLine(third, words, String),
-      'd3: total 3. Account change: A → A, B. Limit reset. Account B 2, Account A 1',
+      periodHint(third, words, String),
+      'd3: total 3\nAccount change: A → A, B\nLimit reset\nAccount B 2\nAccount A 1',
     )
     assert.equal(
       columnSummary(third, words, String),
       'd3: total 3; Account A 1, Account B 2. Account change: A → A, B. Limit reset',
     )
     assert.deepEqual(columnNotes(third, words), ['Account change: A → A, B', 'Limit reset'])
-    assert.equal(readoutLine(first, words, String), 'd1: total 1. Account A 1')
-  })
-})
-
-describe('the keyboard in a chart', () => {
-  const { columns } = stackColumns(
-    [
-      column('d0', { a: 1, b: 1 }),
-      column('d1', {}),
-      column('d2', { b: 2 }),
-      column('d3', { a: 1, b: 1, c: 1 }),
-    ],
-    series,
-  )
-
-  test('walks the periods sideways, stopping at either end', () => {
-    const at = { column: 1, segment: null }
-    assert.deepEqual(nextCursor(columns, at, 'ArrowRight'), { column: 2, segment: null })
-    assert.deepEqual(nextCursor(columns, at, 'ArrowLeft'), { column: 0, segment: null })
-    assert.deepEqual(nextCursor(columns, { column: 3, segment: null }, 'ArrowRight'), {
-      column: 3,
-      segment: null,
-    })
-    assert.deepEqual(nextCursor(columns, at, 'Home'), { column: 0, segment: null })
-    assert.deepEqual(nextCursor(columns, at, 'End'), { column: 3, segment: null })
-    assert.equal(nextCursor(columns, at, 'ArrowUp'), null)
-    assert.equal(nextCursor(columns, at, 'a'), null)
-  })
-
-  test('among segments, keeps to the series, passes over an empty period, and climbs the stack', () => {
-    // From series b in d0 (its second segment): d1 is empty, d2 holds b as its only segment.
-    assert.deepEqual(nextCursor(columns, { column: 0, segment: 1 }, 'ArrowRight'), {
-      column: 2,
-      segment: 0,
-    })
-    // From b in d2 to d3, where b is the second segment.
-    assert.deepEqual(nextCursor(columns, { column: 2, segment: 0 }, 'ArrowRight'), {
-      column: 3,
-      segment: 1,
-    })
-    // From c in d3 back to d2, which has no c: the nearest segment.
-    assert.deepEqual(nextCursor(columns, { column: 3, segment: 2 }, 'ArrowLeft'), {
-      column: 2,
-      segment: 0,
-    })
-    assert.deepEqual(nextCursor(columns, { column: 3, segment: 1 }, 'ArrowUp'), {
-      column: 3,
-      segment: 2,
-    })
-    assert.deepEqual(nextCursor(columns, { column: 3, segment: 2 }, 'ArrowUp'), {
-      column: 3,
-      segment: 2,
-    })
-    assert.deepEqual(nextCursor(columns, { column: 3, segment: 0 }, 'ArrowDown'), {
-      column: 3,
-      segment: 0,
-    })
+    assert.equal(periodHint(first, words, String), 'd1: total 1\nAccount A 1')
   })
 })

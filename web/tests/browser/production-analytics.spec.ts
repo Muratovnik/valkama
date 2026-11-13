@@ -40,6 +40,23 @@ import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
+/**
+ * How many days of the day chart say `text` where a day is read: a row of its table, or a day's
+ * hint on its chart, which the day carries whether or not it shows.
+ */
+const daysSaying = (analytics: Locator, text: string) =>
+  analytics
+    .locator('.spending-days')
+    .evaluate(
+      (days, said) =>
+        [...days.querySelectorAll<HTMLElement>('tbody tr, .period-column')].filter((day) =>
+          (day.matches('tr') ? (day.textContent ?? '') : (day.dataset.tooltip ?? '')).includes(
+            said,
+          ),
+        ).length,
+      text,
+    )
+
 for (const width of [1440, 1024, 390]) {
   test(`the page stands whole and Tab reaches every control at ${width}px`, async ({
     page,
@@ -57,11 +74,12 @@ for (const width of [1440, 1024, 390]) {
     for (const section of await analytics.locator('.chart-section').all())
       await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : 'chart')
 
-    // The day not over yet says so; the change of accounts is marked and said.
+    // The day not over yet says so; the change of accounts is marked and said where its day is
+    // read, in its row of the table or in its day's hint on the chart.
     await expect(analytics.locator('.spending-days')).toContainText('so far')
-    await expect(analytics.locator('.spending-days')).toContainText(
-      'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0',
-    )
+    await expect
+      .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
+      .toBe(1)
 
     const measured = await measure(page)
     await record(info, `analytics layout ${width}`, measured)
@@ -176,14 +194,9 @@ const READ_STATES: {
     name: 'accounts changed past unrecorded work',
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
-      await expect(analytics.locator('.spending-days')).toContainText(
-        `${ru ? 'Смена аккаунта' : 'Account change'}: 5b0c7e21 → d4e8a1f0`,
-      )
-      // Said where the day is read: its readout over the chart, or its row of the table.
-      const notes = analytics.locator('.spending-days :is(.period-readout, td)', {
-        hasText: ru ? 'Смена аккаунта:' : 'Account change:',
-      })
-      await expect(notes).toHaveCount(1)
+      // Said where the day is read, once: its day's hint on the chart, or its row of the table.
+      const said = `${ru ? 'Смена аккаунта' : 'Account change'}: 5b0c7e21 → d4e8a1f0`
+      await expect.poll(() => daysSaying(analytics, said), 'days that say it').toBe(1)
     },
   },
 ]

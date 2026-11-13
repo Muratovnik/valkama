@@ -62,11 +62,14 @@ function byAccount(): Usage {
 /** A week after the five days below, so none of them is still running. */
 const AFTER = new Date(2026, 10, 20)
 
-/** What a screen reader says of each day: the name of what pressing it does, then what it holds. */
+/**
+ * What each day says: the name of what pressing it does, and what it holds, in its hint, which
+ * the hint host also gives a screen reader as the day's description.
+ */
 function spokenDays(days: ReturnType<typeof mount>) {
   return days.findAll('.period-column').map((day) => ({
     name: day.attributes('aria-label') ?? '',
-    holds: days.find(`[id="${day.attributes('aria-describedby') ?? ''}"]`).text(),
+    holds: day.attributes('data-tooltip') ?? '',
   }))
 }
 
@@ -176,6 +179,33 @@ describe('the days', () => {
     expect(rows[2]?.slice(0, 3)).toEqual(['0', '0', '0'])
   })
 
+  // A press on a part of a day once acted for the day: it now does what the part's row does.
+  it('let a value narrow from its segment and legend entry, and the folded tail lead nowhere', async () => {
+    const days = mountDays(
+      week([...STRETCHES, { day: 1, group: { work_item: noTask }, spend: { seconds: 9 * 3600 } }]),
+    )
+    const none = days.findAll('button.period-segment')
+    expect(none.length).toBeGreaterThan(0)
+    expect(new Set(none.map((one) => one.attributes('data-series')))).toEqual(new Set(['none']))
+    const folded = days.findAll('.period-segment[data-series="other"]')
+    expect(folded.length).toBeGreaterThan(0)
+    for (const one of folded) {
+      expect(one.element.tagName).toBe('SPAN')
+      expect(one.attributes('data-tooltip')).toContain('Other')
+    }
+
+    await none[0]?.trigger('click')
+    await days.get('button.chart-key[data-series="none"]').trigger('click')
+    await days.findAll('.period-segment[data-series="other"]')[0]?.trigger('click')
+    expect(days.emitted('narrow')).toEqual([
+      [null, 'No task'],
+      [null, 'No task'],
+    ])
+    expect(days.emitted('day')).toBeUndefined()
+    await days.get('button.period-column').trigger('click')
+    expect(days.emitted('day')).toHaveLength(1)
+  })
+
   it('mark the day not over yet as so far, and only that day', () => {
     const days = mountDays(week())
     const stacks = days.findAll('.period-stack')
@@ -185,7 +215,8 @@ describe('the days', () => {
       true,
     ])
     expect(days.get('.period-axis').text()).toContain('so far')
-    expect(days.get('.period-readout').text()).toContain('so far')
+    expect(spokenDays(days).at(-1)?.holds).toContain('so far')
+    expect(days.find('.period-readout').exists()).toBe(false)
   })
 
   it('mark no day once the period is over', () => {
@@ -194,7 +225,7 @@ describe('the days', () => {
     expect(days.text()).not.toContain('so far')
   })
 
-  it('mark where the accounts that worked change, past a day nobody worked', async () => {
+  it('mark where the accounts that worked change, past a day nobody worked', () => {
     expect(accountChanges(byAccount(), 'time').map((change) => change.at)).toEqual([
       momentAt(new Date(2026, 10, 12)),
       momentAt(new Date(2026, 10, 13)),
@@ -204,13 +235,13 @@ describe('the days', () => {
     // Said where the day is read, not in a note under the chart.
     expect(days.find('.period-notes').exists()).toBe(false)
     // A span of time keeps its figure and unit together with a space no line breaks at.
-    const readout = () => days.get('.period-readout').text().replaceAll(/\s/gu, ' ')
-    expect(readout()).toBe(
-      'Friday, November 13: total 1 h. Account change: acc-b → acc-a, acc-b. MAIN-1 One 1 h',
+    const hint = (index: number) =>
+      (spokenDays(days)[index]?.holds ?? '').replaceAll(/[^\S\n]/gu, ' ')
+    expect(hint(4)).toBe(
+      'Friday, November 13: total 1 h\nAccount change: acc-b → acc-a, acc-b\nMAIN-1 One 1 h',
     )
-    await days.get('.period-slot:nth-child(4)').trigger('pointerenter')
-    expect(readout()).toBe(
-      'Thursday, November 12: total 1 h. Account change: acc-a → acc-b. MAIN-1 One 1 h',
+    expect(hint(3)).toBe(
+      'Thursday, November 12: total 1 h\nAccount change: acc-a → acc-b\nMAIN-1 One 1 h',
     )
   })
 
@@ -356,12 +387,10 @@ describe('the account marks', () => {
     ])
   })
 
-  it('say the change in the readout and to a screen reader by the known accounts alone', async () => {
+  it('say the change in the hint of its day and to a screen reader by the known accounts alone', () => {
     const accounts = daysOf(['acc-a'], [UNRECORDED], ['acc-b', UNRECORDED], ['acc-b'])
     const days = mountDays(everyDay(4), { accounts, readAt: AFTER })
     expect(days.findAll('.period-mark')).toHaveLength(1)
-    await days.get('.period-slot:nth-child(3)').trigger('pointerenter')
-    expect(days.get('.period-readout').text()).toContain('Account change: acc-a → acc-b')
     const named = spokenDays(days).map((day) => day.holds)
     expect(named.map((name) => name.includes('Account change:'))).toEqual([
       false,

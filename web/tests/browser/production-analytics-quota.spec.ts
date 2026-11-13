@@ -121,7 +121,7 @@ for (const colorScheme of ['light', 'dark'] as const)
         .screenshot(shot(info, `quota-five-hours-${width}-${colorScheme}.png`))
 
       // The pointer over every bar, across every step line and over the quota's tiles moves
-      // nothing; the readout says another reading in its own box.
+      // nothing; each reading says itself in its hint, over the page.
       const still = await boxes(page)
       for (const bar of await page.locator('.quota-window .window-track').all()) {
         await bar.hover()

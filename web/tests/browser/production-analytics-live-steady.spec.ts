@@ -125,15 +125,15 @@ const drawnParts = (page: Page) =>
     () => (globalThis as unknown as { drawnParts: { fewest: Drawn; start: Drawn } }).drawnParts,
   )
 
-/** The reader's place: the address, the table's sort and the minute the readout stands on. */
+/** The reader's place: the address, the table's sort and the minute the pointer stands on. */
 const place = async (page: Page) => ({
   address: page.url(),
   sort: await page
     .locator('.spending-table thead th[aria-sort]')
     .evaluateAll((cells) => cells.map((cell) => `${cell.textContent?.trim()} ${cell.ariaSort}`)),
   pointed: await page
-    .locator('.spending-days .period-slot[data-shown="true"]')
-    .evaluateAll((slots) => slots.map((slot) => slot.dataset.key)),
+    .locator('.spending-days .period-slot:hover')
+    .evaluateAll((slots) => slots.map((slot) => (slot as HTMLElement).dataset.key)),
 })
 
 /**

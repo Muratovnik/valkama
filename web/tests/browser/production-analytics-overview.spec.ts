@@ -127,7 +127,7 @@ test('a figure chooses the measure, pressed by a check, from the keyboard, into 
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true')
 })
 
-test('the chart outlines the period before on its own scale, in the legend, the readout and the table', async ({
+test('the chart outlines the period before on its own scale, in the legend, the hint and the table', async ({
   page,
 }) => {
   await serve(page, WORLD)
@@ -150,7 +150,11 @@ test('the chart outlines the period before on its own scale, in the legend, the 
   // Monday: eight hours against twelve; Wednesday so far: four hours against a quarter of one.
   expect(heights[0]?.before).toBeGreaterThan(heights[0]?.stack ?? 0)
   expect(heights[2]?.before).toBeLessThan(heights[2]?.stack ?? 0)
-  await expect(days.locator('.period-readout')).toContainText(/period before 15\smin/u)
+  // The latest day's hint says the figure of the period before in words.
+  await expect(days.locator('.period-column[tabindex="0"]')).toHaveAttribute(
+    'data-tooltip',
+    /period before 15\smin/u,
+  )
   await days.getByRole('radio', { name: 'Table' }).click()
   await expect(days.locator('thead th').nth(-2)).toHaveText('period before')
   await expect(days.locator('tbody tr').first().locator('td').nth(-2)).toHaveText(/^12\sh$/u)

@@ -294,7 +294,7 @@ export function useSpendingWords() {
   const chartTitle = (name: Measure, by: UsageDimension) =>
     t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
 
-  /** A day as the time axis names it, «Mon 9», and in full for the readout and the table. */
+  /** A day as the time axis names it, «Mon 9», and in full for the hints and the table. */
   const day = (start: string) =>
     dayFormat({ weekday: 'short', day: 'numeric' }).format(named(start))
   const longDay = (start: string) =>
@@ -436,6 +436,9 @@ export function useSpendingWords() {
     points: figures.trend,
   })
 
+  /** A mark's share of the whole its chart draws, as its hint says it: «42 % of the total». */
+  const markShare = (ratio: number) => t('analytics.marks.share', { share: share(ratio) })
+
   return {
     accounts,
     axis,
@@ -444,6 +447,7 @@ export function useSpendingWords() {
     datedClock,
     day,
     fullDay,
+    markShare,
     scale,
     share,
     span,
