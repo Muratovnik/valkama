@@ -91,7 +91,7 @@ export const analyticsQuotaMessages = {
         model: 'Models',
       },
       basis:
-        'By API price estimate, not quota points: the work Valkama recorded on this account from {from} to {to}. Work in claude.ai and the desktop app is not in it.',
+        'By API price estimate, not quota points: the work Valkama recorded on this account from {from} to {to}, without the work in claude.ai and the desktop app.',
       label: 'Where {window} of {account} went {by}, by API price estimate',
       value: 'API price estimate and its share',
       share: '{cost} · {share}',
@@ -100,7 +100,7 @@ export const analyticsQuotaMessages = {
         'No work was recorded on this account in this window. Its organization recorded {cost} of work with the account unknown, which is not counted here.',
       apart: 'Not counted here: {cost} of work in its organization with the account unknown.',
       failed: 'What used this window could not be read.',
-      failedAgain: 'Could not read it again; these figures run to {to}.',
+      failedAgain: 'Could not read it again; these figures run to {to} and may be behind.',
     },
     readings: {
       label: '{window} of {account} from {from} to {to}: {readings}',
@@ -198,7 +198,7 @@ export const analyticsQuotaMessages = {
         model: 'Модели',
       },
       basis:
-        'По оценке API-цены, не в пунктах квоты: работа, которую Valkama записала на этом аккаунте с {from} до {to}. Работы в claude.ai и настольном приложении здесь нет.',
+        'По оценке API-цены, не в пунктах квоты: работа, которую Valkama записала на этом аккаунте с {from} до {to}, без работы в claude.ai и настольном приложении.',
       label: 'На что ушло окно «{window}», {account}, {by}, по оценке API-цены',
       value: 'Оценка API-цены и её доля',
       share: '{cost} · {share}',
@@ -207,7 +207,7 @@ export const analyticsQuotaMessages = {
         'На этом аккаунте в этом окне работа не записана. Его организация записала работу на {cost} без известного аккаунта; здесь она не учтена.',
       apart: 'Здесь не учтено: работа организации на {cost} без известного аккаунта.',
       failed: 'Не удалось прочитать, на что ушло это окно.',
-      failedAgain: 'Не удалось прочитать снова; цифры — до {to}.',
+      failedAgain: 'Не удалось прочитать снова; цифры — до {to}, они могут отставать.',
     },
     readings: {
       label: '{window}, {account}, с {from} до {to}: {readings}',

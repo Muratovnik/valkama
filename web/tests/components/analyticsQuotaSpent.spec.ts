@@ -9,92 +9,31 @@
  * and never counted to it. No work, only such work, a wait and a failed read each say so in words
  * of their own, and a failed read is retried in its block while the quota panel stands.
  *
- * The figures are made up: the account «Work» spent 13 dollars in its five hours — 6 on MAIN-1,
- * 3 on MAIN-2, 1 on no task and 0.5 on each of six small tasks — and its organization 2 more with
- * no account known; another account of its organization spent 20 on MAIN-1 in the same hours, one
- * of another organization 100, and the provisional seat's organization 4 with no account known.
+ * The work is the fixture's (`quotaSpent.ts`): «Work» spent 13 dollars in its five hours, its
+ * organization 2 more with no account known and another account of it 20 on MAIN-1; an account of
+ * another organization 100 on MAIN-1, and the provisional seat's organization 4 with no account.
  */
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { QuotaAccount, UsageGroupValue } from '@/shared/api/analyticsApi.ts'
 import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
-import { momentAt, noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
-import type { TimedStretch } from '../fixtures/analytics.ts'
+import { momentAt, serveUsage } from '../fixtures/analytics.ts'
 import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
+import {
+  isSpendRead as isSpend,
+  NIGHT,
+  SPENT_NOW as NOW,
+  SEATED,
+  seatOf,
+  WORK,
+  SPENT_WORLD as WORLD,
+} from '../fixtures/quotaSpent.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
 
-/** Wednesday afternoon: the five hours of «Work» began at 11:30, its week on Saturday. */
-const NOW = new Date(2026, 10, 11, 14, 30)
-const at = (hour: number, minute = 0) => new Date(2026, 10, 11, hour, minute)
-
-const [WORK, NIGHT, , SEATED] = quotaAt(NOW).accounts as [
-  QuotaAccount,
-  QuotaAccount,
-  QuotaAccount,
-  QuotaAccount,
-]
-/** A seat as the contract writes it: the organization, a slash, the account's UUID or seat key. */
-const seatOf = (account: QuotaAccount) =>
-  value(`${account.organization}/${account.account_uuid ?? account.seat ?? ''}`)
 const WORK_SEAT = seatOf(WORK)
 const NIGHT_SEAT = seatOf(NIGHT)
-const project = (id: string, name: string): UsageGroupValue => ({ id, unknown: false, name })
-const ATLAS = project('p-atlas', 'Atlas')
-const BEACON = project('p-beacon', 'Beacon')
-
-const onWork = (when: Date, group: TimedStretch['group'], cost: number): TimedStretch => ({
-  at: when,
-  group: { account: value(WORK.organization), seat: WORK_SEAT, ...group },
-  spend: { seconds: 600, tokens: 1000, cost },
-})
-
-const WORLD: TimedStretch[] = [
-  onWork(at(13), { work_item: task(1, 'Answer a review'), project: ATLAS, model: value('m-a') }, 6),
-  onWork(at(12), { work_item: task(2, 'Fix the import'), project: ATLAS, model: value('m-b') }, 3),
-  // Work on no task, of no project anyone knows.
-  onWork(at(14), { work_item: noTask, model: value('m-a') }, 1),
-  ...[3, 4, 5, 6, 7, 8].map((number) =>
-    onWork(
-      at(12, 30),
-      { work_item: task(number, `Small step ${number}`), project: BEACON, model: value('m-a') },
-      0.5,
-    ),
-  ),
-  // Before the five hours began, inside the week.
-  onWork(at(10), { work_item: task(9, 'Earlier'), project: ATLAS, model: value('m-a') }, 50),
-  // Another account of Work's organization, and one of another, on the same task in the same hours.
-  {
-    at: at(13),
-    group: {
-      account: value(WORK.organization),
-      seat: value(`${WORK.organization}/3c4d5e6f-0000-4000-8000-000000000001`),
-      work_item: task(1, 'Answer a review'),
-    },
-    spend: { seconds: 600, tokens: 1000, cost: 20 },
-  },
-  {
-    at: at(13),
-    group: { account: value(NIGHT.organization), seat: NIGHT_SEAT, work_item: task(1, 'Answer') },
-    spend: { seconds: 600, tokens: 1000, cost: 100 },
-  },
-  // Work's organization and the provisional seat's, with no account known.
-  {
-    at: at(13, 30),
-    group: { account: value(WORK.organization), work_item: noTask },
-    spend: { seconds: 60, tokens: 10, cost: 2 },
-  },
-  {
-    at: at(13, 45),
-    group: { account: value(SEATED.organization), work_item: noTask },
-    spend: { seconds: 60, tokens: 10, cost: 4 },
-  },
-]
-
-/** A read of what used a window: the one that names a seat. */
-const isSpend = (query: URLSearchParams) => query.has('seat')
 const quota = () => quotaAnswer(quotaAt(NOW))
 const usage = (query: URLSearchParams) => serveUsage(WORLD, query)
 
@@ -173,7 +112,7 @@ describe('where a window went', () => {
     const block = blockOf(page, 'Work')
     expect(block.get('h5').text()).toBe('Where the window went')
     expect(block.get('.window-spend-basis').text()).toBe(
-      'By API price estimate, not quota points: the work Valkama recorded on this account from 11:30 to 14:30. Work in claude.ai and the desktop app is not in it.',
+      'By API price estimate, not quota points: the work Valkama recorded on this account from 11:30 to 14:30, without the work in claude.ai and the desktop app.',
     )
     expect(block.get('.ranked-bars').attributes('aria-label')).toBe(
       'Where Five hours of Work went by task, by API price estimate',
