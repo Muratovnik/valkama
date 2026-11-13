@@ -5,6 +5,7 @@ import { ref } from 'vue'
 import { test } from 'vitest'
 
 import {
+  cardInPlace,
   resolveResourceSelection,
   selectableProjectResources,
   useModuleRouteAuthority,
@@ -17,6 +18,7 @@ import {
 } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleId, ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { resolveManifestRouteAuthority } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -33,7 +35,7 @@ const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
     project: ['planning-space', 'work-item'],
   },
   sessions: { global: ['execution', 'session'], project: [] },
-  analytics: { global: [], project: [] },
+  analytics: { global: ['work-item'], project: ['work-item'] },
   improvements: { global: ['work-item', 'improvement-case'], project: [] },
   skills: { global: ['skill'], project: ['skill'] },
   memory: { global: ['memory-resource'], project: ['memory-resource', 'work-item'] },
@@ -261,6 +263,51 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
   assert.equal(accepts('planning', project, entities.workItem), true)
 
   assert.equal(accepts('planning', project, entities.session), false)
+})
+
+test('a task pressed in Analytics is named in the page’s own route; Planning and Settings leave it to the board', () => {
+  const manifests = Object.fromEntries(
+    OFFLINE_MODULE_FALLBACK.map((manifest) => [manifest.module_id, manifest]),
+  ) as Record<ModuleId, ModuleManifest>
+  const target = {
+    project_id: 'project-alpha',
+    space_ref: { data_scope_id: '123e4567-e89b-42d3-a456-426614174000', space_key: 'MAIN' },
+    reference: 'MAIN-7',
+    writable: true,
+  }
+  const card = planningWorkItemEntity({ space_ref: target.space_ref, reference: target.reference })
+  const state = { by: 'work_item', period: 'week' }
+  for (const scope of [
+    { kind: 'global' as const },
+    { kind: 'project' as const, project_ref: { project_id: 'project-beta' } },
+  ]) {
+    const page: PlatformRoute = { module_id: 'analytics', scope, state }
+    // The module, its scope and its view stay; only the card is named.
+    assert.deepEqual(cardInPlace(manifests.analytics, page, target), { ...page, entity: card })
+    // A card already open gives way to the one pressed.
+    const other = planningWorkItemEntity({ space_ref: target.space_ref, reference: 'MAIN-8' })
+    assert.deepEqual(cardInPlace(manifests.analytics, { ...page, entity: other }, target), {
+      ...page,
+      entity: card,
+    })
+  }
+  const global = { kind: 'global' as const }
+  // The board opens its card in the task's own project, as it did.
+  assert.equal(
+    cardInPlace(manifests.planning, { module_id: 'planning', scope: global }, target),
+    null,
+  )
+  // A module whose address cannot name a card leaves the press to the board.
+  assert.equal(
+    cardInPlace(manifests.settings, { module_id: 'settings', scope: global }, target),
+    null,
+  )
+  // A manifest that is not the route's own decides nothing.
+  assert.equal(
+    cardInPlace(manifests.analytics, { module_id: 'settings', scope: global }, target),
+    null,
+  )
+  assert.equal(cardInPlace(undefined, { module_id: 'analytics', scope: global }, target), null)
 })
 
 test('App resource emissions are derived from and rechecked against the active manifest', () => {

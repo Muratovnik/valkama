@@ -15,7 +15,7 @@ import { useDocumentOpening } from '@/app/composables/useDocumentOpening.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import { useLiveWorkFeed } from '@/app/composables/useLiveWorkFeed.ts'
 import { useLiveWorkNav } from '@/app/composables/useLiveWorkNav.ts'
-import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
+import { cardInPlace, useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryRestore.ts'
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
@@ -34,6 +34,7 @@ import SessionContext from '@/features/session-open/SessionContext.vue'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
 
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
+import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
@@ -235,11 +236,20 @@ const { documentView, openDocument } = useAppDocuments([
 // What a path written in free text can do from here: see the composable.
 useDocumentOpening(say, openDocument)
 provideOpenNotice(say)
+/**
+ * A task pressed in the text of a module opens its card over that module where its address can
+ * name the card, so the page stays under it and Back closes it; elsewhere on its board.
+ */
+function openPressedTask(target: PlanningTarget) {
+  const here = cardInPlace(activeManifest.value, route.value, target)
+  if (here) writeRoute(here)
+  else openTarget(target)
+}
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
   projects: () => contextReady.value?.projects ?? [],
   primaryScope: () => contextReady.value?.primary.data_scope_id,
-  openTarget,
+  openTarget: openPressedTask,
   openSession: (id) => void openSession(id),
   say,
 })
@@ -343,6 +353,7 @@ usePlatformEntryRestore({
           @connection="(state) => (planningConnection = state)"
           @entity="openEntity"
           @find="findText"
+          @go="(next) => writeRoute(next)"
           @notice="(message) => say(message, 'refused')"
           @open-project="openProject"
           @question-taken="cardQuestionTaken"

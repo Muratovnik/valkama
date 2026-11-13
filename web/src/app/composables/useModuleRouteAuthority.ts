@@ -1,9 +1,11 @@
 import { computed } from 'vue'
 import type { Ref } from 'vue'
 
+import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { ProjectDirectoryResource } from '@/shared/api/platformApiTypes.ts'
 import { hasModuleRenderer } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleManifest, ModuleRegistration } from '@/shared/api/platformModuleContract.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute, PlatformRouteUnavailable } from '@/shared/api/platformRoute.ts'
 import {
   resolveManifestRouteAuthority,
@@ -57,6 +59,25 @@ export function resolveResourceSelection(
   )
     return null
   const proposed = { ...route, entity: resource.resource_ref }
+  return resolveManifestRouteAuthority(manifest, proposed).status === 'ready' ? proposed : null
+}
+
+/**
+ * Where a task pressed in the module on show opens its card: over that module, when its manifest
+ * admits a work item in the route, as the same route naming the card; null where it does not, and
+ * on the board, which opens the card in the task's own project instead.
+ */
+export function cardInPlace(
+  manifest: ModuleManifest | undefined,
+  route: PlatformRoute,
+  target: PlanningTarget,
+): PlatformRoute | null {
+  if (manifest === undefined || manifest.module_id !== route.module_id) return null
+  if (route.module_id === 'planning') return null
+  const proposed: PlatformRoute = {
+    ...route,
+    entity: planningWorkItemEntity({ space_ref: target.space_ref, reference: target.reference }),
+  }
   return resolveManifestRouteAuthority(manifest, proposed).status === 'ready' ? proposed : null
 }
 

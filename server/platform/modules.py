@@ -155,9 +155,10 @@ _MODULES = (
         ["module.analytics.report-use"],
         ["usage"],
         [],
-        ["project"],
-        [],
-        [],
+        # A task's card opens over the page and the address names it, so Back closes it.
+        ["project", "work-item"],
+        ["work-item"],
+        ["work-item"],
         [],
     ),
     _module(
@@ -199,7 +200,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-11-13T00:00:00Z"
+DECLARED_AT = "2026-11-13T12:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

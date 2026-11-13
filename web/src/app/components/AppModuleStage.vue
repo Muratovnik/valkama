@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import { analyticsView, settingsView } from '@/app/moduleViews.ts'
 
+import PlanningCardOverlay from '@/pages/planning/PlanningCardOverlay.vue'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
@@ -29,6 +30,8 @@ const emit = defineEmits<{
   'connection': [state: 'connecting' | 'live' | 'reconnecting' | null]
   'entity': [entity?: EntityRef]
   'find': [text: string]
+  /** A place in another module, such as a chain on the board's graph from a card over a page. */
+  'go': [route: PlatformRoute]
   'locale': [value: string]
   'notice': [message: string]
   'open-project': [projectId: string, moduleId?: ModuleId]
@@ -38,6 +41,7 @@ const emit = defineEmits<{
 const SettingsView = settingsView.component
 const AnalyticsView = analyticsView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
+const cardOverlay = ref<InstanceType<typeof PlanningCardOverlay> | null>(null)
 async function refresh() {
   await planningSurface.value?.refresh()
 }
@@ -49,7 +53,9 @@ const scopeProject = computed(() =>
   props.scope.kind === 'project' ? props.scope.project_ref.project_id : null,
 )
 /** The work item whose card is on show, for as long as its module is. */
-const openCardId = computed(() => planningSurface.value?.selectedId ?? null)
+const openCardId = computed(
+  () => planningSurface.value?.selectedId ?? cardOverlay.value?.selectedId ?? null,
+)
 defineExpose({ openCardId, refresh })
 </script>
 <template>
@@ -95,4 +101,18 @@ defineExpose({ openCardId, refresh })
       @state="(state) => emit('state', state)"
     />
   </ModuleFrame>
+
+  <!-- A card another module's address names stands over that module's page, which stays. -->
+  <PlanningCardOverlay
+    v-if="activeModule !== 'planning'"
+    ref="cardOverlay"
+    :context="context"
+    :entity="route.entity"
+    :primary-write-scope-id="primaryWriteScopeId"
+    :question-asked="questionAsked"
+    :scope="scope"
+    @entity="(entity) => emit('entity', entity)"
+    @go="(next) => emit('go', next)"
+    @question-taken="emit('question-taken')"
+  />
 </template>

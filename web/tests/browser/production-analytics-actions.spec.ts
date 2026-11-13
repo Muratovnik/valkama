@@ -9,8 +9,8 @@
  * pressed by keyboard or by mouse on its coloured stack, narrows the view to it as a new place in
  * the history, so Back returns, as a section opened from a card or the rail does, while the
  * period, the measure and the second dimension change the place in hand; the task's bar then
- * opens the task the way the app opens any reference to it, and the opening is counted once. Each
- * run prints what it measured.
+ * opens the task's card over the page, whose address keeps the view and names the card, and the
+ * opening is counted once. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -33,10 +33,11 @@ import {
   record,
   scrolledNames,
   serve,
+  serveTask,
 } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectId, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { globalScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const WIDTHS = [1440, 1024, 390]
@@ -70,53 +71,18 @@ const WORLD: TimedStretch[] = [
   },
 ]
 
-/** Where the app takes a press on the task: its card on the board of its project. */
-const TASK_ADDRESS = serializePlatformRoute({
-  module_id: 'planning',
-  scope: projectScope,
-  entity: planningWorkItemEntity(workItemRef),
-})
+/** A phone shows the section, not the list of sections, at each address of a walk. */
+const shownAt = (width: number, state: Record<string, string>) =>
+  width < NARROW_FRAME ? { ...state, open: 'section' } : state
 
-/** The app's search finds the task by its reference; each count of a use is kept. */
-async function serveTask(page: Page) {
-  await page.route('**/api/modules/planning/search?*', (route) =>
-    route.fulfill({
-      json: {
-        interface_version: 'valkama-planning-search',
-        query: workItemRef.reference,
-        limit: 50,
-        has_more: false,
-        items: [
-          {
-            target: {
-              project_id: projectId,
-              space_ref: spaceRef,
-              reference: 'MAIN-264',
-              writable: true,
-            },
-            item: {
-              work_item_id: workItem.work_item_id,
-              planning_space_id: workItem.planning_space_id,
-              reference: 'MAIN-264',
-              title: workItem.title,
-              state: { name: 'Dev' },
-              claim_ref: '',
-            },
-          },
-        ],
-        coverage: [
-          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
-        ],
-      },
-    }),
-  )
-  const uses: string[] = []
-  await page.route('**/api/analytics/uses', async (route) => {
-    uses.push((route.request().postDataJSON() as { kind: string }).kind)
-    await route.fulfill({ status: 204 })
+/** Where the app takes a press on the task: its card over the page, which keeps its view. */
+const cardOver = (state: Record<string, string>) =>
+  serializePlatformRoute({
+    module_id: 'analytics',
+    scope: globalScope,
+    entity: planningWorkItemEntity(workItemRef),
+    state,
   })
-  return uses
-}
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
 
@@ -280,9 +246,8 @@ for (const width of WIDTHS)
   }, info) => {
     await serve(page, WORLD)
     const uses = await serveTask(page)
-    // A phone shows the section, not the list of sections, at each address of this walk.
-    const at = (state: Record<string, string>) =>
-      pageAt(width < NARROW_FRAME ? { ...state, open: 'section' } : state)
+    const shown = (state: Record<string, string>) => shownAt(width, state)
+    const at = (state: Record<string, string>) => pageAt(shown(state))
     const byModel = at({ by: 'model' })
     const analytics = await openReport(page, width, byModel)
     const bars = analytics.locator('.spending-bars')
@@ -313,7 +278,9 @@ for (const width of WIDTHS)
     const link = bars.getByRole('link', { name: 'MAIN-264 Import the planning documents' })
     await expect(link).toHaveAttribute('href', '/open/MAIN-264')
     await link.click()
-    await expect.poll(() => path(page)).toBe(TASK_ADDRESS)
+    await expect
+      .poll(() => path(page))
+      .toBe(cardOver(shown({ by: 'work_item', filters: '{"model":["model-a"]}' })))
     await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(1)
 
@@ -361,7 +328,13 @@ for (const width of WIDTHS)
     const rowPresses = await tabTo(page, row)
     const rowRing = await focusRing(row)
     await page.keyboard.press('Enter')
-    await expect.poll(() => path(page)).toBe(TASK_ADDRESS)
+    await expect
+      .poll(() => path(page))
+      .toBe(
+        cardOver(
+          shown({ period: 'custom', from: '2026-11-10', to: '2026-11-10', by: 'work_item' }),
+        ),
+      )
     await expect(page.locator('.drawer')).toContainText(workItem.title)
     await expect.poll(() => uses.filter((kind) => kind === 'task_open')).toHaveLength(2)
 

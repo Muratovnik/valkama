@@ -50,7 +50,7 @@ import { planningReadFor } from './planningReadFixture.ts'
 import { improvementProfile, signalSummary } from './platformFixtures.ts'
 import { skillMatrixPayload, skillsPayload } from './skillsFixtures.ts'
 
-type BackendOptions = {
+export type BackendOptions = {
   /** The names Valkama keeps for accounts, by organization id, before the page writes any. */
   accountNames?: Record<string, string>
   activity?: 'bound' | 'unbound'
