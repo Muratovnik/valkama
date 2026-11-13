@@ -184,29 +184,55 @@ for (const lang of ['en', 'ru'] as const)
         ...TODAY,
         { at: at(0, 20), group: { work_item: task(1, 'Fix') }, spend: { seconds: 600 } },
       ])
-      const analytics = await openReport(page, 1200, NIGHT_ADDRESS)
-      await page.evaluate(() => document.fonts.ready)
-      const name = analytics.locator('.analytics-bar-span')
-      await expect(name).toHaveText(WORDS[lang].night)
-      // The line fits once it gave up what it can, and gives nothing up for room it has.
-      await expect
-        .poll(() =>
-          page.evaluate(() => {
-            const line = document.querySelector('.analytics-bar-line')?.getBoundingClientRect()
-            const end = document.querySelector('.analytics-refresh')?.getBoundingClientRect()
-            return Math.round((end?.right ?? Number.POSITIVE_INFINITY) - (line?.right ?? 0))
-          }),
-        )
-        .toBeLessThanOrEqual(0)
-      const cut = await name.evaluate((element) => element.scrollWidth > element.clientWidth)
-      await record(info, `moment-span night ${lang}`, { name: await name.textContent(), cut })
-      // In Russian the name is longer than the room the line has left at this width; in English
-      // it fits whole, and the line keeps it so. Cut, its hint says it whole; whole, it has none.
-      const cutHere = lang === 'ru'
-      expect(cut).toBe(cutHere)
-      await name.hover()
-      await expect(page.getByRole('tooltip').filter({ hasText: WORDS[lang].night })).toHaveCount(
-        Number(cutHere),
+      // Registered last, so it is asked first: while failing, every read is refused.
+      let failing = false
+      await page.route('**/api/analytics/usage?*', (route) =>
+        failing
+          ? route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+          : route.fallback(),
       )
+      const name = page.locator('.analytics-bar-span')
+      const words = WORDS[lang].night
+
+      /** Whether the line ends at the read again, and whether the name is cut and has a hint. */
+      async function nameState() {
+        // The line fits once it gave up what it can, and gives nothing up for room it has.
+        await expect
+          .poll(() =>
+            page.evaluate(() => {
+              const line = document.querySelector('.analytics-bar-line')?.getBoundingClientRect()
+              const end = document.querySelector('.analytics-refresh')?.getBoundingClientRect()
+              return Math.round((end?.right ?? Number.POSITIVE_INFINITY) - (line?.right ?? 0))
+            }),
+          )
+          .toBeLessThanOrEqual(0)
+        const cut = await name.evaluate((element) => element.scrollWidth > element.clientWidth)
+        await name.hover()
+        const hint = page.getByRole('tooltip').filter({ hasText: words })
+        // A hint shows after a moment, or never: wait for one only where the name is cut.
+        await expect(hint).toHaveCount(Number(cut))
+        await page.mouse.move(0, 0)
+        return { name: await name.textContent(), cut }
+      }
+
+      // At 1200px the line has room for the name whole, and it has no hint.
+      await openReport(page, 1200, NIGHT_ADDRESS)
+      await page.evaluate(() => document.fonts.ready)
+      await expect(name).toHaveText(words)
+      const wide = await nameState()
+      expect(wide.cut, 'the name cut at 1200px').toBe(false)
+
+      // At 1120px, about the narrowest window the bar is one line in, a read again that failed
+      // says so beside it, and the line has room for the name only once it gave up all else: it
+      // is cut at its end, and its hint says it whole.
+      const analytics = await openReport(page, 1120, NIGHT_ADDRESS)
+      await page.evaluate(() => document.fonts.ready)
+      await expect(name).toHaveText(words)
+      failing = true
+      await analytics.locator('.analytics-refresh').click()
+      await expect(analytics.locator('.refresh-failed')).toBeVisible()
+      const narrow = await nameState()
+      expect(narrow.cut, 'the name cut at 1120px beside a failure').toBe(true)
+      await record(info, `moment-span night ${lang}`, { wide, narrow })
     })
   })

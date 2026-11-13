@@ -9,26 +9,21 @@
  * The bar is one line wherever it has room for the period, its days and the read again, so the
  * panel under it never moves with what the bar holds: the filters (`AnalyticsChips`) take the
  * room the rest leaves, counting those it has none for, and the list of filters they open lies
- * over the panel. The bar is short (`short`) on a phone and where a span of days leaves no room
- * for the freshness's sentence, at 1440 pixels among them. A span between moments is named in
- * fewer pixels than the two days take, and gives up the freshness's words only as any part of the
- * line does, where the line has no room for them (`useBarRoom`).
+ * over the panel.
  *
- * How fresh the figures are is the newest record the store holds, of any session, and how old
- * it is now, counted on each second, so a page left open says its figures grow old
- * (`useFreshness`). The freshness keeps at least the room of a short age, with figures of one
- * width, so its count going up moves nothing beside it; a longer one takes the width of its words,
- * and only a bar with no room left cuts the record and its moment, never the age, its hint saying
- * them whole; a short bar says the age alone, and the read again by its icon. A live period says
- * beside it, by a mark and how often, that it reads itself again; its hint says it in full. A read
- * again that failed says so beside it (`RefreshFailed`).
+ * How fresh the figures are is one element of one width: a live period's mark and the age of the
+ * newest record the store holds, of any session, counted on each second (`useFreshness`), «● 15 s
+ * ago». Its room is that of the widest age, in figures of one width, so the age counting up moves
+ * nothing beside it, and the sentence whole — the record's moment and, for a live period, how
+ * often it reads itself again — is its hint. A read again that failed says so beside it
+ * (`RefreshFailed`).
  *
  * A line with no room for all of that gives up what matters least first, and never runs past its
- * end (`useBarRoom`): the record and its moment are cut first, then the line goes short, then the
- * live mark goes, then the room between its parts narrows. While a read again failed the mark goes
- * before the line goes short, since the failure beside it is the news, and the failure's words go
- * last, to its disc and its retry, only where nothing else is left to give. Past all of that a
- * span's name is cut at its end, its hint saying it whole.
+ * end (`useBarRoom`): the words of its buttons go first, the read again then said by its icon,
+ * then the room between its parts narrows, then the age is said by its span, «● 15 s», in the
+ * room of the widest span, and then the failure's words go to its disc and its retry. Past all of
+ * that a span's name is cut at its end, its hint saying it whole. The age's span is never given
+ * up, and neither is a day of the period: its fields are as wide as a date needs.
  *
  * On a phone the bar is two rows: the periods in one row that scrolls sideways, the chosen one
  * scrolled into view, and under it the filter, the freshness and the read again, by its icon.
@@ -48,7 +43,7 @@ import { usePageStanding } from '@/pages/analytics/composables/useReadStanding.t
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { customDays } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
-import { isMomentSpan, PERIODS } from '@/shared/api/analyticsAddress.ts'
+import { PERIODS } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsView, PeriodPreset } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
@@ -83,9 +78,6 @@ const adding = defineModel<boolean>('adding', { required: true })
 
 const { locale, t } = useI18n()
 
-/** Whether the period is the reader's own between two days, which the bar shows as two fields. */
-const ownDays = computed(() => props.view.period === 'custom' && !isMomentSpan(props.view))
-
 const periodOptions = computed(() =>
   PERIODS.map((value) => ({ value, label: t(`analytics.period.${value}`) })),
 )
@@ -105,20 +97,19 @@ onMounted(showChosen)
 watch(() => props.view.period, showChosen, { flush: 'post' })
 
 /**
- * What the line gives up while it has no room for all it holds (`useBarRoom`): its words, as a
- * short bar drops them, the live period's mark and the room between its parts; while a read again
- * failed, the mark first and the failure's words last.
+ * What the line gives up while it has no room for all it holds (`useBarRoom`): its buttons' words,
+ * the room between its parts, the word around the age, the failure's words while a read again
+ * failed, and a span's name.
  */
 const line = useTemplateRef<HTMLElement>('line')
 const refreshButton = useTemplateRef<{ $el: HTMLElement }>('refreshButton')
-const age = useTemplateRef<HTMLElement>('age')
 const { failed } = usePageStanding()
 const room = useBarRoom({
   line,
   last: () => refreshButton.value?.$el,
   order: () =>
-    failed.value ? ['live', 'words', 'gaps', 'failure', 'span'] : ['words', 'live', 'gaps', 'span'],
-  observed: [line, age],
+    failed.value ? ['words', 'gaps', 'ago', 'failure', 'span'] : ['words', 'gaps', 'ago', 'span'],
+  observed: [line],
   holds: [
     () => props.live,
     () => [props.view.period, props.view.from, props.view.to],
@@ -128,34 +119,41 @@ const room = useBarRoom({
 })
 
 /**
- * Whether the bar is short of room for its words: a phone's, one beside a span of days under
- * 87.5 root ems, where the period, the days and the read again leave the freshness's sentence no
- * room, or a line that had to give its words up. A short bar says the freshness by its age and
- * its buttons by their icons.
+ * Whether the bar says its buttons by their icons: on a phone, or on a line that had to give their
+ * words up.
  */
 const bar = useTemplateRef<HTMLElement>('bar')
 const { width: barWidth } = useElementSize(bar)
 const short = computed(() => {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
   const ems = barWidth.value / rem
-  const narrow = ems > 0 && (ems <= 30 || (ownDays.value && ems < 87.5))
-  return narrow || room.gave('words')
+  return (ems > 0 && ems <= 30) || room.gave('words')
 })
 /**
- * Whether the live mark stands, the room between the parts narrowed, the failure said briefly, and
- * a span's name cut at its end.
+ * Whether the room between the parts narrowed, the age said by its span alone («15 s», its hint
+ * and its hidden words saying «ago»), the failure said briefly, and a span's name cut.
  */
-const liveShown = computed(() => props.live && !room.gave('live'))
 const tight = computed(() => room.gave('gaps'))
+const bare = computed(() => room.gave('ago'))
 const brief = computed(() => room.gave('failure'))
 const spanCut = computed(() => room.gave('span'))
 
-/** That the period is live and how often it reads itself again: in full, and as the bar says it. */
-const liveInterval = computed(() => t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }))
-const liveWords = computed(() => t('analytics.time.live', { interval: liveInterval.value }))
-const liveShort = computed(() => t('analytics.time.liveShort', { interval: liveInterval.value }))
+/** That the period is live and how often it reads itself again, as the freshness's hint says. */
+const liveWords = computed(() =>
+  t('analytics.time.live', {
+    interval: t('analytics.time.seconds', { count: LIVE_INTERVAL / 1000 }),
+  }),
+)
 
-const fresh = useFreshness(() => props.lastEventAt)
+const { fresh, widest } = useFreshness(() => props.lastEventAt)
+/** The forms of the age whose widest the freshness keeps the room of, as the line says it. */
+const freshRoom = computed(() => (bare.value ? widest.value.bare : widest.value.whole))
+/** The freshness's hint, a fact a line: the sentence of the newest record; the period live. */
+const freshHint = computed(() =>
+  [fresh.value?.at ? fresh.value.words : '', props.live ? liveWords.value : '']
+    .filter(Boolean)
+    .join('\n'),
+)
 </script>
 
 <template>
@@ -196,38 +194,29 @@ const fresh = useFreshness(() => props.lastEventAt)
       />
       <div class="analytics-bar-read">
         <p
-          v-if="liveShown"
-          v-tooltip.detail="liveWords"
-          class="analytics-bar-live"
+          v-tooltip.detail="freshHint"
+          class="analytics-bar-fresh"
+          :class="{ 'analytics-bar-fresh-live': live }"
+          :data-widest="freshRoom"
         >
-          <span
-            class="analytics-bar-live-mark"
-            aria-hidden="true"
-          />{{ liveShort }}
-        </p>
-        <p class="analytics-bar-fresh">
-          <template v-if="fresh">
-            <time
-              v-if="fresh.at"
-              v-tooltip.detail="{ text: fresh.full, words: fresh.words }"
-              class="analytics-bar-fresh-time"
-              :datetime="fresh.at"
-              :data-age="fresh.ago"
-              ><span class="analytics-bar-fresh-words"
-                ><span class="analytics-bar-fresh-record one-line">{{ fresh.record }}</span
-                ><span
-                  ref="age"
-                  class="analytics-bar-fresh-age"
-                  >{{ fresh.age }}</span
-                ></span
-              ></time
-            >
+          <span class="analytics-bar-fresh-shown">
             <span
-              v-else
-              class="analytics-bar-fresh-none one-line"
-              >{{ fresh.words }}</span
-            >
-          </template>
+              v-if="live"
+              class="analytics-bar-fresh-mark"
+              aria-hidden="true"
+            />
+            <template v-if="fresh">
+              <time
+                v-if="fresh.at"
+                :datetime="fresh.at"
+                ><span class="visually-hidden">{{ fresh.lead }}</span
+                ><span :class="{ 'visually-hidden': bare }">{{ fresh.before }}</span
+                >{{ fresh.span
+                }}<span :class="{ 'visually-hidden': bare }">{{ fresh.after }}</span></time
+              >
+              <template v-else>{{ fresh.words }}</template>
+            </template>
+          </span>
         </p>
         <RefreshFailed
           :brief="brief"
@@ -268,9 +257,8 @@ const fresh = useFreshness(() => props.lastEventAt)
 }
 
 /* The period, its days, the filters, the freshness and the read again on one line: the filters
-   take the room the rest leaves and give it up first, the freshness's record cut only once they
-   have none, and then the line gives up its words and the live mark (`useBarRoom`). A narrow bar
-   wraps the line instead (below). */
+   take the room the rest leaves and give it up first, and then the line gives up its words and
+   the room between its parts (`useBarRoom`). A narrow bar wraps the line instead (below). */
 .analytics-bar-line {
   position: relative;
   display: flex;
@@ -295,13 +283,12 @@ const fresh = useFreshness(() => props.lastEventAt)
 }
 
 /* A bar too narrow for the freshness beside the rest wraps its line, and keeps the freshness and
-   the read again on a line of their own from the start, the freshness first and held a line high
-   before the first answer brings its words: otherwise a line wrapped when they came, and moved
-   everything under the bar down. That line never wraps again, a failure said on it included:
-   it gives way as the one line does, so nothing under the bar moves. Pressed past its room it
-   runs past its end, where the room it gives way by is measured, and not past its start. The
-   one line needs 50rem in Russian once it has given up all it can beside a failure and an age
-   of hours: at 48rem it ran 13px past its end. */
+   the read again on a line of their own from the start: otherwise a line wrapped when they came,
+   and moved everything under the bar down. That line never wraps again, a failure said on it
+   included: it gives way as the one line does, so nothing under the bar moves. Pressed past its
+   room it runs past its end, where the room it gives way by is measured, and not past its start.
+   The one line needs 50rem in Russian once it has given up all it can beside a failure and an
+   age of hours: at 48rem it ran 13px past its end. */
 @container (width < 50rem) {
   .analytics-bar-line {
     flex-wrap: wrap;
@@ -311,53 +298,44 @@ const fresh = useFreshness(() => props.lastEventAt)
     flex-basis: 100%;
     justify-content: safe flex-end;
   }
-
-  .analytics-bar-fresh {
-    order: -1;
-    min-block-size: 1lh;
-    text-align: end;
-  }
 }
 
-/* The freshness keeps at least the room of a short age, «9 s» or «12 min», held by an empty
-   item under its words, and its figures one width, so a tick of its count moves and resizes
-   nothing beside it. A longer age takes the width of its words. A line with no room left cuts the
-   record and its moment at their end, and the hint says them whole; the age is never cut. So the
-   freshness is never narrower than its age: its column's least is the least of its words, which
-   is the age, and the empty item, a grid of one track from nothing to 21em, asks for no least. */
+/* The freshness, one element of one width: the room of the widest age (`data-widest`, one form a
+   line, drawn by nobody and as high as nothing), and a live period's mark before it, a line high
+   before the first answer brings its words. What it shows stands at its end, against the read
+   again, in figures of one width, so the age counting up moves and resizes nothing beside it. */
 .analytics-bar-fresh {
   display: grid;
-  flex: 0 1 auto;
-  grid-template-columns: minmax(min-content, 1fr);
+  flex: none;
+  justify-items: end;
+  min-block-size: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
-  text-align: end;
+  white-space: nowrap;
 
   &::before {
-    content: '';
-    display: grid;
+    content: attr(data-widest) / '';
     grid-area: 1 / 1;
-    grid-template-columns: minmax(0, 21em);
+    block-size: 0;
+    white-space: pre;
+    overflow-y: clip;
+    visibility: hidden;
   }
 }
 
-.analytics-bar-fresh-time,
-.analytics-bar-fresh-none {
+/* A live period's mark takes its room in the widest's too, so the mark and the age keep one
+   width whether the period reads itself again or not. */
+.analytics-bar-fresh-live::before {
+  padding-inline-start: calc(var(--space-2) + var(--space-1));
+}
+
+.analytics-bar-fresh-shown {
+  display: flex;
   grid-area: 1 / 1;
-}
-
-/* The record with its moment takes what the age leaves it, up to its own width. */
-.analytics-bar-fresh-words {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) max-content;
-  justify-content: end;
-}
-
-/* Whole, on one line, with the space before its separator. */
-.analytics-bar-fresh-age {
-  white-space: pre;
+  gap: var(--space-1);
+  align-items: center;
 }
 
 /* A phone: the periods one row that scrolls sideways, and the filter, the freshness and the
@@ -385,39 +363,17 @@ const fresh = useFreshness(() => props.lastEventAt)
     gap: var(--space-2);
     min-width: 0;
   }
-
-  .analytics-bar-fresh {
-    flex: 1 1 auto;
-    order: 0;
-  }
 }
 
-/* A short bar (`short`) says only the age of the freshness, the record's clock time left to its
-   hint and its name, and the read again by its icon. The whole words stay in each element for
-   assistive technology, hidden from sight, and the age the bar shows is drawn and never read
-   twice. */
-.analytics-bar-short {
-  & .analytics-bar-fresh::before {
-    content: none;
-  }
-
-  & .analytics-bar-fresh-time {
-    position: relative;
-    white-space: nowrap;
-
-    &::after {
-      content: attr(data-age) / '';
-    }
-  }
-
-  & :is(.analytics-bar-fresh-words, .analytics-refresh-words) {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    white-space: nowrap;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
+/* A short bar (`short`) says the read again by its icon. Its words stay in the button for
+   assistive technology, hidden from sight. */
+.analytics-bar-short .analytics-refresh-words {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 /* A line that gave up everything else narrows the room between its parts. */
@@ -425,18 +381,9 @@ const fresh = useFreshness(() => props.lastEventAt)
   column-gap: var(--space-2);
 }
 
-/* A live period says so in words; the mark before them is their sign, not their meaning. */
-.analytics-bar-live {
-  display: flex;
+/* That the period reads itself again: the sign of the hint's words, not their meaning. */
+.analytics-bar-fresh-mark {
   flex: none;
-  gap: var(--space-1);
-  align-items: center;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.analytics-bar-live-mark {
   inline-size: var(--space-2);
   block-size: var(--space-2);
   background: var(--color-success);

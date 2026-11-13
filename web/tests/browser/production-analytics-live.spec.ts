@@ -145,7 +145,10 @@ test('«Now» reads itself again every 30 s while the page is seen, and never wh
   // The page's time stops before it opens, so a slow open cannot move the pause into the past.
   await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   const analytics = await openReport(page, 1440, nowAddress)
-  await expect(analytics.locator('.analytics-bar-live')).toHaveText('every 30 s')
+  // The freshness's mark says it is live, and its hint how often it reads itself again.
+  const fresh = analytics.locator('.analytics-bar-fresh')
+  await expect(fresh.locator('.analytics-bar-fresh-mark')).toBeVisible()
+  await expect(fresh).toHaveAttribute('data-tooltip', /\nLive, every 30\u{A0}s$/u)
   await settled(count, double)
   expect(roundsOf(await reads())).toBe(1)
 
@@ -176,7 +179,8 @@ test('«Now» reads itself again every 30 s while the page is seen, and never wh
   // Another period never reads itself again, and says nothing of being live.
   await analytics.locator('.analytics-period').getByRole('radio', { name: 'This week' }).click()
   await expect(analytics.locator('.spending-days .period-column')).toHaveCount(3)
-  await expect(analytics.locator('.analytics-bar-live')).toHaveCount(0)
+  await expect(fresh.locator('.analytics-bar-fresh-mark')).toHaveCount(0)
+  await expect(fresh).not.toHaveAttribute('data-tooltip', /Live/u)
   await settled(count, double)
   const weekReads = await count()
   await page.clock.runFor(4 * 30_000)

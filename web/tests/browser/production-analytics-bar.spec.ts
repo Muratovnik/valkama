@@ -1,6 +1,8 @@
 /**
- * The bar stays put: the age of the newest record counting up moves and resizes nothing beside
- * it, and a live period keeps the bar one row at 1440px. An old record says its whole age there.
+ * The bar stays put: the freshness is one element, the live mark and the age, «● 5 s ago», with
+ * the sentence and how often the period reads itself again in its hint, and the age counting up
+ * from 5 s to 59 min moves and resizes nothing in the bar; a live period keeps the bar one row at
+ * 1440px. An old record says its whole age there.
  * At 1440 and 1920 the bar keeps one height with none to four filters and with a span of days,
  * the filters it has no room for counted in «Filters: N»; the list of filters opens over the
  * panel, moving nothing, and a chip taken out leaves the focus in the bar. On a phone the bar is
@@ -30,14 +32,13 @@ const HOUR: TimedStretch[] = [
 const offCentre = (box: number[] | null | undefined, other: number[] | null | undefined) =>
   Math.abs((box?.[1] ?? 0) + (box?.[3] ?? 0) / 2 - (other?.[1] ?? 0) - (other?.[3] ?? 0) / 2)
 
-/** Where the bar's parts stand and how big they are, but the freshness's own words. */
+/** Where the bar's parts stand and how big they are. */
 const barParts = (page: Page) =>
   page.evaluate(() =>
     Object.fromEntries(
       [
         '.analytics-period',
         '.analytics-bar-filters',
-        '.analytics-bar-live',
         '.analytics-bar-fresh',
         '.analytics-refresh',
         '.analytics-bar',
@@ -48,6 +49,24 @@ const barParts = (page: Page) =>
     ),
   )
 
+/**
+ * What the freshness draws, its words hidden for assistive technology left out: the live mark,
+ * then the age.
+ */
+const freshDrawn = (page: Page) =>
+  page.evaluate(() => {
+    const fresh = document.querySelector('.analytics-bar-fresh')
+    const drawn: string[] = []
+    const walker = document.createTreeWalker(fresh ?? document.body, NodeFilter.SHOW_ALL)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.parentElement?.closest('.visually-hidden')) continue
+      if (node instanceof Element && node.matches('.analytics-bar-fresh-mark')) drawn.push('●')
+      if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
+        drawn.push(node.textContent.trim())
+    }
+    return drawn.join(' ')
+  })
+
 test('the age of the newest record counting up moves nothing in the bar, one row at 1440px', async ({
   page,
 }, info) => {
@@ -55,36 +74,42 @@ test('the age of the newest record counting up moves nothing in the bar, one row
   const { count } = await watchPage(page)
   const double = await serveLive(page, HOUR)
   double.lastEventAt = new Date(NOW.getTime() - 1000)
-  // The page's time stops before it opens, so the record is 9 s old however long opening takes:
+  // The page's time stops before it opens, so the record is 5 s old however long opening takes:
   // paused after it, a slow open had already used up those seconds and the pause lay in the past.
-  await page.clock.pauseAt(new Date(NOW.getTime() + 8000))
+  await page.clock.pauseAt(new Date(NOW.getTime() + 4000))
   const analytics = await openReport(page, 1440, nowAddress)
   await settled(count, double)
   const fresh = analytics.locator('.analytics-bar-fresh')
   const seen: Record<string, unknown> = {}
   const start = await barParts(page)
-  // 9 s → 10 s, then 1 min → 2 min → 12 min.
+  // 5 s → 10 s, then 1 min → 2 min → 12 min → 59 min.
   for (const [step, words] of [
-    [0, /\b9\s/u],
-    [1000, /\b10\s/u],
-    [50_000, /\b1\smin/u],
-    [60_000, /\b2\smin/u],
-    [600_000, /\b12\smin/u],
+    [0, '● 5\u{A0}s ago'],
+    [5000, '● 10\u{A0}s ago'],
+    [50_000, '● 1\u{A0}min ago'],
+    [60_000, '● 2\u{A0}min ago'],
+    [600_000, '● 12\u{A0}min ago'],
+    [2_820_000, '● 59\u{A0}min ago'],
   ] as const) {
     await page.clock.runFor(step)
-    await expect(fresh).toHaveText(words)
+    // One element: the live mark and the age, the sentence whole in its hint.
+    await expect.poll(() => freshDrawn(page)).toBe(words)
+    await expect(fresh).toHaveAttribute(
+      'data-tooltip',
+      new RegExp(`^Newest record \\d\\d:\\d\\d · ${words.slice(2)}\\nLive, every 30\\u{A0}s$`, 'u'),
+    )
     const now = await barParts(page)
-    seen[(await fresh.textContent()) ?? ''] = now
-    expect(now, `the bar at «${await fresh.textContent()}»`).toEqual(start)
+    seen[words] = now
+    expect(now, `the bar at «${words}»`).toEqual(start)
   }
-  // One row: the periods, the filters and the read again stand on one line.
-  const [period, filters, live, refresh] = [
+  // One row: the periods, the filters, the freshness and the read again stand on one line.
+  const [period, ...rest] = [
     '.analytics-period',
     '.analytics-bar-filters',
-    '.analytics-bar-live',
+    '.analytics-bar-fresh',
     '.analytics-refresh',
   ].map((selector) => start[selector])
-  for (const part of [filters, live, refresh]) expect(offCentre(part, period)).toBeLessThan(4)
+  for (const part of rest) expect(offCentre(part, period)).toBeLessThan(4)
   await record(info, 'bar-steady', seen)
 })
 
@@ -112,20 +137,25 @@ test('on a phone the bar is two rows, its periods one row, and the rail right un
   expect(measured.gap).toBeLessThan(40)
   await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible()
 
-  // The freshness shows its age alone, whole; the sentence with the clock time is its hint.
-  const time = page.locator('.analytics-bar-fresh time')
-  const shown = await time.evaluate((element) => ({
-    drawn: getComputedStyle(element, '::after').content,
-    cut: element.scrollWidth > element.clientWidth,
-    words: element.textContent ?? '',
-  }))
-  await record(info, 'bar-phone-fresh', shown)
+  // The freshness shows its age alone, whole, inside the bar; the sentence with the clock time is
+  // its hint, and what a screen reader hears.
+  const fresh = page.locator('.analytics-bar-fresh')
+  const shown = await fresh.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const bar = document.querySelector('.analytics-bar')?.getBoundingClientRect()
+    return {
+      inside: box.left >= (bar?.left ?? 0) - 0.5 && box.right <= (bar?.right ?? 0) + 0.5,
+      words: element.textContent ?? '',
+    }
+  })
+  const drawn = await freshDrawn(page)
+  await record(info, 'bar-phone-fresh', { ...shown, drawn })
   const [, age] = /^Newest record \d\d:\d\d · (.+)$/u.exec(shown.words.trim()) ?? []
   expect(age).toBeTruthy()
-  // Drawn, and kept out of the name, which already says the age in its sentence.
-  expect(shown.drawn).toBe(`"${age}" / ""`)
-  expect(shown.cut, 'the age is cut').toBe(false)
-  await time.hover()
+  // The age, or its span alone where the line gave up the word around it: «just now», «5 s».
+  expect(drawn).toMatch(/^(just now|\d+\s(s|min|h)(\s\d+\s(min|h))?(\sago)?)$/u)
+  expect(shown.inside, 'the age is outside the bar').toBe(true)
+  await fresh.hover()
   // The sentence up to its age, which may have counted on a second since it was read.
   const [said] = shown.words.trim().split(' · ')
   await expect(page.getByRole('tooltip')).toContainText(`${said} · `)

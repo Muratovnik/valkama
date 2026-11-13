@@ -6,8 +6,13 @@
  * A refresh that fails says so in the bar with its retry, readable, and the bar stays inside the
  * window at 1440, 1280 and 1024px beside the app's navigation, in «Now», «Today» and this week,
  * with an age of seconds or of hours: no part of it past the line's end, the read again in the
- * window, the age whole, and the bar as high as before, so nothing under it moves. Where it has
- * not the room for all of it, the live mark gives way before the line goes short.
+ * window, the age whole, and the bar as high as before, so nothing under it moves. A live
+ * period's mark is part of the freshness and stays.
+ *
+ * Beside the reader's own span of days or of moments, in either language, the read again stands
+ * inside the bar at every width from 1024 to 1920px: the line gives up its words, its room between
+ * parts and the word around the age, and never a day. At each width the bar's controls stand
+ * where they stood when the age was 5 s, however old it grows: the freshness is one width.
  *
  * The age is measured where its letters are drawn, against every box that would hide what it
  * covers, rather than by a box's scroll width, which misses a cut of a fraction of a pixel.
@@ -34,44 +39,33 @@ const DAYS: TimedStretch[] = [
 ]
 
 /**
- * Where the age the freshness ends with is drawn, how wide its words are, and every box that
- * would hide what it covers: each around it up to the bar that does not show what overflows it,
- * and the window. Its words are read from its letters; a short bar draws them after the time
- * (`data-age`), and there they are the time's own box, against their width set beside it, where
- * a copy takes the same type.
+ * Where the age the freshness shows is drawn, how wide its words are, and every box that would
+ * hide what it covers: each around it up to the bar that does not show what overflows it, and the
+ * window. Its words are the time's text a reader sees, the sentence's start and any word the line
+ * gave up being hidden for assistive technology; they are read from their letters, and measured
+ * again in a copy that takes the same type, where nothing can cut them.
  */
 async function agePlace(page: Page) {
   await page.evaluate(() => document.fonts.ready)
   const time = page.locator('.analytics-bar-fresh time')
   const drawn = await time.evaluate((element: HTMLElement) => {
-    const age = element.dataset.age ?? ''
-    if (element.closest('.analytics-bar-short')) {
-      const copy = document.createElement('span')
-      copy.textContent = age
-      copy.style.cssText = 'position: absolute; visibility: hidden; white-space: pre'
-      element.after(copy)
-      const need = copy.getBoundingClientRect().width
-      copy.remove()
-      const { left, right } = element.getBoundingClientRect()
-      return { age, need, at: [left, right] }
-    }
     const texts: Text[] = []
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text)
-    const start = texts
-      .map((text) => text.data)
-      .join('')
-      .lastIndexOf(age)
-    const end = start + age.length
+    for (let node = walker.nextNode(); node; node = walker.nextNode())
+      if (!node.parentElement?.closest('.visually-hidden') && node.textContent)
+        texts.push(node as Text)
+    const age = texts.map((text) => text.data).join('')
     const range = document.createRange()
-    let at = 0
-    for (const text of texts) {
-      if (start >= at && start < at + text.length) range.setStart(text, start - at)
-      if (end > at && end <= at + text.length) range.setEnd(text, end - at)
-      at += text.length
-    }
-    const { left, right, width } = range.getBoundingClientRect()
-    return { age, need: width, at: [left, right] }
+    range.setStart(texts[0] ?? element, 0)
+    range.setEnd(texts.at(-1) ?? element, texts.at(-1)?.length ?? 0)
+    const { left, right } = range.getBoundingClientRect()
+    const copy = document.createElement('span')
+    copy.textContent = age
+    copy.style.cssText = 'position: absolute; visibility: hidden; white-space: pre'
+    element.after(copy)
+    const need = copy.getBoundingClientRect().width
+    copy.remove()
+    return { age, need, at: [left, right] }
   })
   const around = await time.evaluate((element) => {
     const clips = [{ name: 'the window', left: 0, right: document.documentElement.clientWidth }]
@@ -163,7 +157,6 @@ const barParts = (page: Page) =>
       [
         '.analytics-period',
         '.analytics-bar-filters',
-        '.analytics-bar-live',
         '.analytics-bar-fresh',
         '.refresh-failed',
         '.refresh-failed-words',
@@ -180,7 +173,7 @@ const barParts = (page: Page) =>
       window: document.documentElement.clientWidth,
       line: across('.analytics-bar-line'),
       parts,
-      short: document.querySelector('.analytics-bar-short') !== null,
+      mark: document.querySelector('.analytics-bar-fresh-mark') !== null,
       bar: bar?.height ?? 0,
       panel: panel?.top ?? 0,
     }
@@ -199,10 +192,6 @@ function expectOnLine(name: string, after: BarParts) {
     expect(box.right, `${name}: ${part} past the window`).toBeLessThanOrEqual(after.window)
   }
 }
-
-/** Whether a live period's mark went before the line went short for the failure. */
-const liveWentFirst = (period: string, before: BarParts, after: BarParts) =>
-  period === 'week' || before.short || !after.short || !('.analytics-bar-live' in after.parts)
 
 /** Opens a period and lets the bar's words and room settle. */
 async function openPeriod(page: Page, period: string) {
@@ -255,12 +244,62 @@ for (const lang of ['en', 'ru'] as const)
             const words = after.parts['.refresh-failed-words'] ?? { left: 0, right: 0 }
             expect(words.right - words.left, `${name}: the failure's words`).toBeGreaterThan(40)
             await expect(failed.getByRole('button')).toBeVisible()
-            // The live mark goes before the line goes short.
-            expect(liveWentFirst(period, before, after), `${name}: the live mark`).toBe(true)
+            // A live period keeps its mark beside the failure; another has none.
+            expect(after.mark, `${name}: the live mark`).toBe(period !== 'week')
             // Nothing under the bar moves.
             expect(after.bar, `${name}: the bar's height`).toBe(before.bar)
             expect(after.panel, `${name}: the panel's top`).toBe(before.panel)
           }
         await record(info, `bar-failed ${lang} ${width}`, seen)
+      })
+  })
+
+/** The reader's own periods: a span of days, and a span of two hours' moments. */
+const OWN = {
+  days: { period: 'custom', from: '2026-11-09', to: '2026-11-11' },
+  moments: { period: 'custom', from: '2026-11-11T12:00', to: '2026-11-11T14:00' },
+} as const
+
+/** The youngest and the oldest age of the same hour: the freshness keeps one width for both. */
+const SPREAD = [5000, 59 * 60_000] as const
+
+for (const lang of ['en', 'ru'] as const)
+  test.describe(`the bar beside an own period, ${lang}`, () => {
+    test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
+
+    for (const [own, address] of Object.entries(OWN))
+      test(`keeps the read again inside the bar and the controls in place, by ${own}`, async ({
+        page,
+      }, info) => {
+        await page.clock.install({ time: NOW })
+        const double = await serveLive(page, DAYS)
+        const seen: Record<string, unknown> = {}
+        for (const width of [1024, 1200, 1280, 1440, 1920]) {
+          await page.setViewportSize({ width, height: 900 })
+          const at: BarParts[] = []
+          for (const back of SPREAD) {
+            double.lastEventAt = new Date(NOW.getTime() - back)
+            await page.goto(pageAt(address))
+            await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
+            await page.evaluate(() => document.fonts.ready)
+            await page.evaluate(
+              () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+            )
+            const parts = await barParts(page)
+            const name = `${width}px, ${back / 1000} s`
+            seen[name] = { parts, age: await agePlace(page) }
+            expectOnLine(name, parts)
+            const refresh = parts.parts['.analytics-refresh']
+            const line = parts.line ?? { right: Number.NaN }
+            expect(refresh?.right, `${name}: the read again past the line`).toBeLessThanOrEqual(
+              line.right + 0.5,
+            )
+            expectWholeAge(await agePlace(page))
+            at.push(parts)
+          }
+          const [young, old] = at
+          expect(old?.parts, `${width}px: the bar's parts at 59 min`).toEqual(young?.parts)
+        }
+        await record(info, `bar-own ${lang} ${own}`, seen)
       })
   })
