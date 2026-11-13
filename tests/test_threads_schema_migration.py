@@ -54,6 +54,7 @@ ADDED_TABLES = {
     "work_item_subscriptions",
     "work_item_images",
     "analytics_surface_uses",
+    "quota_account_names",
     "quota_accounts",
     "quota_samples",
     "quota_alerts",
