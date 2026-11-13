@@ -14,7 +14,6 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 function mountPanel(state: PlatformUiState<string>, since?: number) {
   return mount(PlatformStatePanel, {
     global: { plugins: [i18n] },
-    attrs: { class: 'host-place' },
     props: { state, since },
     slots: { default: '<p class="content">The work</p>' },
   })
@@ -35,6 +34,32 @@ async function advance(panel: Panel, ms: number) {
   await panel.vm.$nextTick()
 }
 
+/** The panel's status region: what a screen reader hears of its waits. */
+const region = (panel: Panel) => panel.get('.visually-hidden[role="status"]')
+
+/**
+ * Every text the status region held while a read answered after `answerAfter` ms and the
+ * panel went on for the minimum, each change once: what a reader hears. `from` is the
+ * state the panel stood in before the read began.
+ */
+async function heard(answerAfter: number, from?: PlatformUiState<string>) {
+  const panel = mountPanel(from ?? uiLoading())
+  const listened = region(panel).element
+  const said: string[] = []
+  const listen = () => {
+    const same = region(panel).element === listened
+    const text = same ? (listened.textContent ?? '').trim() : '(another region)'
+    if (said.at(-1) !== text) said.push(text)
+  }
+  listen()
+  if (from) await panel.setProps({ state: uiLoading() })
+  for (let at = 0; at < answerAfter; at += 10) await advance(panel, 10).then(listen)
+  await panel.setProps({ state: uiReady('work') })
+  listen()
+  for (let at = 0; at < LOADING_MIN_SHOWN_MS + 50; at += 10) await advance(panel, 10).then(listen)
+  return said
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
 })
@@ -43,18 +68,24 @@ afterEach(() => {
 })
 
 describe('a wait is shown only once it has lasted, and then long enough to be read', () => {
-  it('stands busy with its words from the start, and paints only after the delay', async () => {
+  it('stands busy with an empty status region from the start, and says its word after the delay', async () => {
     const panel = mountPanel(uiLoading())
     const busy = panel.get('[aria-busy="true"]')
-    // The place it holds and what assistive technology reads are there at once.
-    expect(busy.attributes('role')).toBe('status')
-    expect(busy.classes()).toContain('host-place')
-    expect(busy.text()).toContain('Loading')
+    // The place it holds and the region a screen reader listens to are there at once; the
+    // word is not, so a read that answers first is never announced. The region stands
+    // outside the busy box, which some readers keep quiet until it is no longer busy.
+    expect(busy.attributes('role')).toBeUndefined()
+    expect(busy.text()).toBe('')
+    expect(busy.find('[role="status"]').exists()).toBe(false)
+    expect(region(panel).text()).toBe('')
     expect(seen(panel)).toBe('nothing')
     await advance(panel, LOADING_DELAY_MS - 1)
     expect(seen(panel)).toBe('nothing')
+    expect(region(panel).text()).toBe('')
     await advance(panel, 1)
     expect(seen(panel)).toBe('loading')
+    expect(busy.text()).toBe('Loading')
+    expect(region(panel).text()).toBe('Loading')
   })
 
   it('a read that answers inside the delay goes straight to the content', async () => {
@@ -102,6 +133,19 @@ describe('a wait is shown only once it has lasted, and then long enough to be re
     await advance(panel, LOADING_DELAY_MS - 1)
     await panel.setProps({ state: uiReady('next') })
     expect(seen(panel)).toBe('content')
+  })
+
+  it('announces a wait once, into the region that stood before it, and a quick one never', async () => {
+    expect(await heard(LOADING_DELAY_MS - 50)).toEqual([''])
+    // Said once at the delay, the same words through the minimum, and gone with the mark.
+    expect(await heard(LOADING_DELAY_MS + 50)).toEqual(['', 'Loading', ''])
+    expect(await heard(LOADING_DELAY_MS * 4)).toEqual(['', 'Loading', ''])
+  })
+
+  it('announces a wait that follows what was drawn in the region that stood beside it', async () => {
+    // The region stood with the content, so a read again is heard as the first one is.
+    expect(await heard(LOADING_DELAY_MS - 50, uiReady('drawn'))).toEqual([''])
+    expect(await heard(LOADING_DELAY_MS + 50, uiReady('drawn'))).toEqual(['', 'Loading', ''])
   })
 
   it('counts its delay from when the wait began, not from when it was drawn', async () => {

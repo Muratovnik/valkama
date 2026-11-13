@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
+import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { TopRead } from '@/pages/analytics/composables/useTopValues.ts'
 import { rankedSlots } from '@/pages/analytics/utils/dayFigures.ts'
@@ -26,6 +27,7 @@ import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import RankedBars from '@/shared/ui/RankedBars.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -48,12 +50,11 @@ const heading = computed(() => overviewWords.cardTitle(props.dimension))
 
 /** The values read, or null while they are read for the first time or could not be. */
 const values = computed(() => (Array.isArray(props.read) ? props.read : null))
-/** What the card says in their place. */
-const waiting = computed(() =>
-  props.read === 'failed'
-    ? t('analytics.overview.cards.failed')
-    : t('analytics.overview.cards.reading'),
-)
+/** The first read's wait, shown once it has lasted and held for the minimum (`useLoadingPresence`). */
+const { shown } = useLoadingPresence(() => props.read === 'loading')
+useReadWaitReport(shown)
+/** The word on screen, once the wait has lasted. */
+const waitWord = computed(() => (shown.value ? t('platform.states.loading') : ''))
 
 const weight = (line: SpendingLine) => measureOf(props.measure, line.spent) ?? 0
 
@@ -109,8 +110,9 @@ const barWords = computed(() => ({
         />
       </button>
     </h3>
+    <!-- A wait shown keeps the card's wait for its minimum, whatever arrives meanwhile. -->
     <RankedBars
-      v-if="values"
+      v-if="values && !shown"
       :label="heading"
       :rows="rows"
       :words="barWords"
@@ -119,10 +121,16 @@ const barWords = computed(() => ({
       @select="select"
     />
     <DataEmptyState
-      v-else
-      :title="waiting"
+      v-else-if="read === 'failed' && !shown"
+      :title="t('analytics.overview.cards.failed')"
       inline
     />
+    <p
+      v-else
+      class="overview-top-wait"
+    >
+      {{ waitWord }}
+    </p>
   </section>
 </template>
 
@@ -138,6 +146,14 @@ const barWords = computed(() => ({
 .overview-top-head {
   margin: 0;
   font: var(--font-field-label);
+}
+
+/* The first read's wait, one quiet line in the card's place: it keeps that place while held. */
+.overview-top-wait {
+  min-block-size: 1lh;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 /* The heading reads as one and opens its section: no ground of its own, the arrow says where. */

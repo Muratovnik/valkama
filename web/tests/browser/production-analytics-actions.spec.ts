@@ -7,7 +7,8 @@
  * names kept in view, and says once when the period before was not read. The download is offered
  * under a name that says the period, as UTF-8 with a byte order mark. A bar of a model or a day,
  * pressed by keyboard or by mouse on its coloured stack, narrows the view to it as a new place in
- * the history, so Back returns; the task's bar then
+ * the history, so Back returns, as a section opened from a card or the rail does, while the
+ * period, the measure and the second dimension change the place in hand; the task's bar then
  * opens the task the way the app opens any reference to it, and the opening is counted once. Each
  * run prints what it measured.
  */
@@ -386,3 +387,57 @@ for (const width of WIDTHS)
       expect(area.width, area.name).toBeGreaterThanOrEqual(24)
     }
   })
+
+test('a section opened from a card or the rail is a place Back returns from; the period, measure and second dimension are not', async ({
+  page,
+}, info) => {
+  await serve(page, WORLD)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  // A fresh tab: the page is the first place of its history.
+  await page.goto(pageAt())
+  const analytics = page.locator('.analytics-page')
+  const models = analytics.locator('.overview-top[data-card="model"] .overview-top-open')
+  await expect(models).toBeVisible()
+  const length = () => page.evaluate(() => history.length)
+  const opened = await length()
+
+  // The period and the measure change the view in place.
+  await analytics
+    .locator('.analytics-period .segmented-option', { hasText: 'Past 4 weeks' })
+    .click()
+  const weeks = pageAt({ period: 'weeks4' })
+  await expect.poll(() => path(page)).toBe(weeks)
+  const tokens = analytics.locator('.spending-tiles .segmented-option', {
+    has: page.locator('[data-measure="tokens"]'),
+  })
+  await tokens.click()
+  const weeksTokens = pageAt({ period: 'weeks4', measure: 'tokens' })
+  await expect.poll(() => path(page)).toBe(weeksTokens)
+  expect(await length(), 'the period and the measure add no step').toBe(opened)
+
+  // A card's heading opens its section as a new place: Back is the overview of this page.
+  await models.click()
+  await expect
+    .poll(() => path(page))
+    .toBe(pageAt({ period: 'weeks4', by: 'model', measure: 'tokens' }))
+  expect(await length()).toBe(opened + 1)
+  await page.goBack()
+  await expect.poll(() => path(page)).toBe(weeksTokens)
+  await expect(models).toBeVisible()
+
+  // A tile of the rail does the same; the second dimension then changes the section in place.
+  await analytics.locator('.analytics-rail [data-section="work_item"]').click()
+  const tasks = pageAt({ period: 'weeks4', by: 'work_item', measure: 'tokens' })
+  await expect.poll(() => path(page)).toBe(tasks)
+  const table = analytics.locator('.spending-table')
+  await table.locator('.spending-table-across .choice-trigger').click()
+  await page.getByRole('option', { name: 'Model' }).click()
+  await expect
+    .poll(() => path(page))
+    .toBe(pageAt({ period: 'weeks4', by: 'work_item', measure: 'tokens', across: 'model' }))
+  const steps = await length()
+  expect(steps, 'one step for the section, none for the second dimension').toBe(opened + 1)
+  await page.goBack()
+  await expect.poll(() => path(page)).toBe(weeksTokens)
+  await record(info, 'analytics history', { opened, steps })
+})

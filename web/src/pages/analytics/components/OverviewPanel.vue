@@ -2,18 +2,20 @@
 import { computed, ref } from 'vue'
 
 /**
- * The overview of the Analytics page, where the page opens: the period at a glance, laid out to be
- * taken in without scrolling on a desktop screen.
+ * The overview of the Analytics page, where the page opens: the period at a glance. Its chart
+ * keeps a field tall enough to read (`fit`), and where the window has no room for it the panel
+ * scrolls rather than the chart shrinking.
  *
  * - The period's three figures, which also choose the page's measure (`SpendingTiles`).
- * - The period's chart by day, or by hour for a single day, stacked by task, with the period the
- *   figures are compared with outlined behind it on the same scale (`usePeriodBefore`) and the
- *   marks of where the accounts changed.
- * - Beside it, what changed most from the period before, task by task.
- * - Under them, a card of the first five values of each dimension a person asks about most —
- *   tasks, models, roles and projects; no project at a project's scope, where every figure is
- *   that project's — each asked of the same read (`useTopValues`). A card's heading opens its
- *   section and a row narrows the view, as a bar of that section does.
+ * - The period's chart by day, or by hour for a single day, across the panel's whole width,
+ *   stacked by task, with the period the figures are compared with outlined behind it on the
+ *   same scale (`usePeriodBefore`) and the marks of where the accounts changed.
+ * - Under it one row of cards: what changed most from the period before, task by task, then the
+ *   first five values of each dimension a person asks about most — tasks, models and projects;
+ *   no project at a project's scope, where every figure is that project's — each asked of the
+ *   same read (`useTopValues`). A card's heading opens its section and a row narrows the view,
+ *   as a bar of that section does. The roles have no card: there are two of them, and the rail's
+ *   tile says both.
  *
  * Its own answer is the read by task, beside the period before; a press that could not narrow
  * the view says why where it was pressed.
@@ -28,10 +30,11 @@ import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.t
 import { OVERVIEW_CARDS } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { usePeriodBefore } from '@/pages/analytics/composables/usePeriodBefore.ts'
+import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
-import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
+import { refusedIn } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -67,8 +70,6 @@ const emit = defineEmits<{
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
 
-const figures = computed(() => tileFigures(props.usage))
-
 /** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
 
@@ -94,18 +95,27 @@ const narrow = useNarrowCharts(chartColumn)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
 
+/** Dimmed while a new view is read in place of this answer (`readPending.css`). */
+const pending = useAnewDimmed(usePanelStanding())
+
 /**
- * The chart's plot takes up what the panel's box leaves over or lacks: a tall window's room
- * under the cards makes it higher, and a short one takes from it, down to `FLOOR`, before the
- * panel scrolls. Where even the floor would not spare the scroll the plot keeps its own height,
- * since giving it up would buy nothing. The change is what the plot adds to its own height (or
- * takes from it), worked out from the room the content leaves with that change in place, so a
- * second look at the same box finds the same answer and changes nothing.
+ * The chart's drawing field — where its columns stand, without the scale's figures and the
+ * steps' names — is never lower than `FLOOR`, whatever else the overview holds: the figures,
+ * the marks and notes of where the accounts changed, the cards. Over the floor it takes the room
+ * the panel's box leaves under the cards, so a tall window gives that room to the chart; a box
+ * that lacks the room for the floor scrolls, and the chart keeps it. `grow` is what the field
+ * adds to the floor, worked out from the room the content leaves with that addition in place,
+ * so a second look at the same box finds the same answer and changes nothing.
+ *
+ * A box short of the floor by no more than the air the panel keeps under its content gives up
+ * that much of the air instead (`air`): the content stands whole inside the box, and a scroll
+ * would have moved nothing but a few pixels of air. Shorter still, the panel keeps all its air
+ * and scrolls, and what it scrolls to is content.
  */
-const OWN = 160
-const FLOOR = 100
+const FLOOR = 200
 const panel = ref<HTMLElement | null>(null)
 const grow = ref(0)
+const air = ref(0)
 
 /** The box the panel scrolls in: the nearest one around it that scrolls. */
 function scroller(from: HTMLElement) {
@@ -119,13 +129,18 @@ function fit() {
   const frame = own && scroller(own)
   if (!own || !frame) {
     grow.value = 0
+    air.value = 0
     return
   }
-  const bottom = frame.getBoundingClientRect().bottom + frame.scrollTop
+  // Where the content's end would stand unscrolled: a scrolled box has moved it up by its scroll.
+  const end = own.getBoundingClientRect().bottom + frame.scrollTop
   const padding = Number.parseFloat(getComputedStyle(frame).paddingBlockEnd) || 0
-  const room = bottom - padding - own.getBoundingClientRect().bottom
-  const fits = Math.floor(grow.value + room)
-  grow.value = fits < FLOOR - OWN ? 0 : fits
+  const room = frame.getBoundingClientRect().bottom - padding - end
+  const next = Math.max(0, Math.floor(grow.value + room))
+  // How far the content still reaches into the air with the field at `next`: only at the floor.
+  const short = next - grow.value - room
+  air.value = short > 0 && short <= padding ? Math.ceil(short) : 0
+  grow.value = next
 }
 
 useResizeObserver(panel, fit)
@@ -136,36 +151,29 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   <div
     ref="panel"
     class="overview-panel"
-    :style="{ '--overview-plot-grow': `${grow}px` }"
+    :class="{ 'read-pending': pending }"
+    :style="{ '--overview-field-height': `${FLOOR + grow}px`, '--overview-air': `${air}px` }"
   >
     <SpendingTiles
       v-model:measure="measure"
-      :split="usage.total.tokens"
-      :total="figures.total"
-      :before="figures.before"
+      :usage="usage"
+      :read-at="readAt"
     />
-    <div class="overview-middle">
-      <div
-        ref="chartColumn"
-        class="overview-chart"
-      >
-        <SpendingDays
-          :accounts="accounts"
-          :before="beforeSteps"
-          :by="by"
-          :measure="measure"
-          :narrow="narrow"
-          :notice="noticeIn('days')"
-          :read-at="readAt"
-          :usage="usage"
-          brief
-          @day="(day, label) => emit('day', day, label)"
-        />
-      </div>
-      <OverviewChanges
+    <div
+      ref="chartColumn"
+      class="overview-chart"
+    >
+      <SpendingDays
+        :accounts="accounts"
+        :before="beforeSteps"
+        :by="by"
         :measure="measure"
+        :narrow="narrow"
+        :notice="noticeIn('days')"
+        :read-at="readAt"
         :usage="usage"
-        @retry="emit('retry')"
+        brief
+        @day="(day, label) => emit('day', day, label)"
       />
     </div>
     <FieldError
@@ -175,6 +183,11 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
       {{ noticeIn('bars') }}
     </FieldError>
     <div class="overview-cards">
+      <OverviewChanges
+        :measure="measure"
+        :usage="usage"
+        @retry="emit('retry')"
+      />
       <OverviewTop
         v-for="card in cards"
         :key="card"
@@ -189,33 +202,30 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
 </template>
 
 <style scoped>
-/* The figures across the panel; the chart and what changed side by side under them, the chart
-   taking the most of the width; the cards in one row under those while they fit, as many to a
-   line as fit otherwise. A narrow panel stands each part under the one before. */
+/* The figures across the panel, the chart across it under them, and the cards — what changed
+   first — in one row under the chart while they fit, as many to a line as fit otherwise, and
+   one to a line on a phone. */
 .overview-panel {
-  /* What the plot adds to its height, or takes from it, to fill the panel's box; set by `fit`. */
-  --overview-plot-grow: 0px;
+  /* The chart's drawing field: its floor, and what it adds to fill the panel's box (`fit`). */
+  --overview-field-height: 200px;
+
+  /* The air under the content the panel gives up rather than scroll by it alone (`fit`). */
+  --overview-air: 0px;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
+  margin-block-end: calc(-1 * var(--overview-air));
   container-type: inline-size;
-}
-
-.overview-middle {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: start;
 }
 
 .overview-chart {
   min-width: 0;
 
-  /* The plot's own height, and what the panel's box leaves over or lacks (`fit`). */
+  /* The field's floor, and the room the panel's box leaves over it (`fit`). */
   & :deep(.period-field) {
-    block-size: calc(160px + var(--overview-plot-grow, 0px));
+    block-size: var(--overview-field-height, 200px);
   }
 }
 
@@ -224,10 +234,6 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   gap: var(--space-5);
 }
-
-@container (width < 48rem) {
-  .overview-middle {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 </style>
+
+<style scoped src="@/pages/analytics/components/readPending.css"></style>

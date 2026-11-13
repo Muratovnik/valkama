@@ -753,6 +753,16 @@ after 150 ms, which reads as nothing being visible. An on-demand listener answer
 
 ### What a link says about its other end
 
+A `relates-to` link is one link whichever end names it. `link_work_items` from
+the other end, or again from the same one, adds nothing and writes no history;
+`remove: true` from either end takes it away, and the history of both items says
+so. The store refuses a second record of it. A store in which an earlier build
+recorded one relation twice, once from each end, keeps the earlier record when
+it is opened, after a verified recovery point labelled `prerelatesonce`. Every
+reader therefore sees the link once: `outgoing` from the item that wrote it and
+`incoming` from the other. `blocks`, `discovered-from` and `duplicates` stay
+directed, and only the end that wrote one removes it.
+
 A reader judges a link by the item at its far end: a `blocks` link holds only
 while its blocker is unfinished, and that blocker may live in another space,
 under another workflow. So a link names that end's state itself, and nobody has
@@ -1081,13 +1091,21 @@ item, and for `launch_class` a session's own run, are groups of their own too, w
 | `account` | the organization the work was billed to, as the usage rows hold it; unknown until the reader fills it | — |
 | `project` | the project whose planning space holds the item; for work on no item, the project whose registered root holds the session's working directory. Unknown when the item is gone, the session has no folder or no root holds it, and for work on no item whenever the projects registry cannot be read | `name`, as the projects registry gives it, or `null` |
 | `work_item` | the item the work is counted to | `reference` and `title`, `null` for an item since deleted |
-| `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them. Not its live `state`, which changes while the period's figures do not |
+| `executor` | the session a card's holder opens: a subagent's work is its session's | `family`, `opened_in` and `opened_host`, as a card's executor gives them, and `title`, the name its client gave the session, as the live work beside the board names it, or `null` when there is none to read. Not its live `state`, which changes while the period's figures do not |
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |
 | `model`, `effort`, `environment` | as the usage rows hold them | — |
 
 The answer carries ids, the names and numbers a card already shows, times and counts.
-It holds no path, no folder and no text from a transcript.
+It holds no path and no folder. The one text from a transcript is an executor's
+`title`: Claude Code writes the name it shows for a session into the session's
+transcript, a name a person gave winning over the one it made, and the server reads it
+from the file's tail, where the live work reads it, and keeps it nowhere. Another
+client's transcript is not read, so a Codex session's `title` is `null`. A transcript is
+read once per answer and again only after it changed, so a period of many sessions
+costs the status of their files once each has been read. Because a person can rename a
+session, the `title` is the one value in the answer that two reads of the same rows may
+give differently.
 
 ### How often each analytics surface is opened
 
@@ -1294,6 +1312,35 @@ paused after a 429, sign-in refused (a 401 or 403, or an expired sign-in), no si
 failing endpoint, or switched on with no listener polling, each with what to do. It reads
 the setting from the store and the poll's state from `<store>.quota-poll.json`, which the
 listener writes and which names no account.
+
+### The space's stream
+
+`GET /api/planning` answers a space's whole read model, and
+`GET /api/events?view=planning` sends it again as an unnamed event each time it
+changes. Both carry `revision` first: the SHA-256, in hex, of the model's compact JSON
+without it. Two reads that answer the same model carry the same revision, and any
+difference in what the model says, an item, a link or `live_work`, changes it. Each
+frame of the stream also names it as its event `id`.
+
+The page reads the space and only then opens its stream, with that read's revision as
+`since`. When the model still has that revision, sending it would repeat the read, so
+the stream sends this short event in its place, and its first frame is the next change:
+
+```text
+id: 3f9c…
+event: current
+data: 3f9c…
+```
+
+A change that landed between the read and the stream gives the model another revision,
+and that model is the stream's first frame. `since` is taken once, not empty, and only
+with `view=planning`; any other use of it is refused with 400.
+
+A browser that lost the stream reconnects to the same address by itself and sends the
+last event's `id` as `Last-Event-ID`. A request that carries that header is sent the
+model whatever `since` says: the page may by then hold a model newer than the read the
+address names, and it takes the first frame after a dropped connection as news even
+when that frame says what the page has.
 
 ### The live-work frame
 

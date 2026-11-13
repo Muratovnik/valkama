@@ -21,6 +21,11 @@
  * change the step to what it opens (`--space-disclosure-gap`), on this component's root; the
  * defaults are in `tokens.css`. `heading` puts the toggle inside a heading of that rank, for
  * a disclosure whose words name a section of the outline.
+ *
+ * `subgrid` stands it on the columns of the grid it is placed in: it spans them, its toggle's
+ * line crosses them, and what it opens takes them on, so rows in several disclosures share
+ * one set of columns. A host cannot reach the body to say that, and each disclosure sizing
+ * columns of its own put the same column at a different edge in each.
  */
 import { computed, useId } from 'vue'
 
@@ -29,7 +34,10 @@ import { CollapsibleContent, CollapsibleRoot, CollapsibleTrigger } from 'reka-ui
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-withDefaults(defineProps<{ heading?: 'h3' | 'h4' }>(), { heading: undefined })
+withDefaults(defineProps<{ heading?: 'h3' | 'h4'; subgrid?: boolean }>(), {
+  heading: undefined,
+  subgrid: false,
+})
 
 const open = defineModel<boolean>('open', { default: false })
 const bodyId = useId()
@@ -42,10 +50,14 @@ const chevron = computed(() => (open.value ? 'disclosure-open' : 'disclosure-clo
     :unmount-on-hide="false"
     as-child
   >
-    <div class="disclosure">
+    <div
+      class="disclosure"
+      :class="{ 'disclosure-subgrid': subgrid }"
+    >
       <component
         :is="heading ?? 'div'"
         class="disclosure-head"
+        :class="{ 'disclosure-across': subgrid }"
       >
         <CollapsibleTrigger as-child>
           <VButton
@@ -66,6 +78,7 @@ const chevron = computed(() => (open.value ? 'disclosure-open' : 'disclosure-clo
         <div
           :id="bodyId"
           class="disclosure-body"
+          :class="{ 'disclosure-subgrid': subgrid }"
         >
           <slot />
         </div>
@@ -101,6 +114,21 @@ const chevron = computed(() => (open.value ? 'disclosure-open' : 'disclosure-clo
   gap: var(--space-2);
   align-items: center;
   font: var(--font-disclosure);
+}
+
+/* The root and the body take the host's columns, and the toggle's line spans them. The body
+   is a grid only while open: closed, it is contained, and a contained grid is no subgrid. */
+.disclosure-subgrid {
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+
+  &.disclosure-body:not([hidden]) {
+    display: grid;
+  }
+}
+
+.disclosure-across {
+  grid-column: 1 / -1;
 }
 
 /* Closed, the body keeps its box with nothing drawn in it, so the space between it and the

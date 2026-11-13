@@ -1,6 +1,7 @@
 """SQLite storage: the schema, the order a store is brought up in, and the connection.
 
-Everything else in the package reads and writes through `connect()`, and what
+Everything else in the package reads and writes through `connect()`, or reads a
+store that bring-up already finished through `connect_for_read()`, and what
 this module owns above all is the *order* of that bring-up: which check refuses
 before the first write, when the recovery point is taken, what runs inside the
 one transaction, and that the generation stamp is the last statement in it.
@@ -507,6 +508,7 @@ def _assert_current_catalog(conn: sqlite3.Connection) -> None:
     if absent:
         raise RuntimeError(f"post-migration sessions lacks {', '.join(absent)}")
     planning_store.assert_threads_postconditions(conn)
+    planning_store.assert_links_postconditions(conn)
     usage_store.assert_current(conn)
 
 
@@ -733,10 +735,7 @@ def open_read_only() -> sqlite3.Connection:
     `sqlite3.OperationalError` too, and the short timeout makes a busy one a refusal.
     """
 
-    path = os.path.abspath(db_path()).replace(os.sep, "/")
-    escaped = path.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
-    prefix = "file:" if escaped.startswith("/") else "file:/"
-    conn = sqlite3.connect(f"{prefix}{escaped}?mode=ro", uri=True, timeout=0.25)
+    conn = sqlite3.connect(_uri(db_path(), "ro"), uri=True, timeout=0.25)
     try:
         stored_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
         if stored_version != STORE_SCHEMA_VERSION:
@@ -745,6 +744,49 @@ def open_read_only() -> sqlite3.Connection:
         conn.close()
         raise
     return conn
+
+
+def _uri(path: str, mode: str) -> str:
+    """The store's file as an SQLite URI that opens it in `mode` and never creates it."""
+
+    absolute = os.path.abspath(path).replace(os.sep, "/")
+    escaped = absolute.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
+    prefix = "file:" if escaped.startswith("/") else "file:/"
+    return f"{prefix}{escaped}?mode={mode}"
+
+
+def connect_for_read() -> sqlite3.Connection:
+    """The store for a request that commits nothing: `connect()` without a bring-up it
+    does not need.
+
+    `connect()` holds the migration lock across the whole bring-up, which on a store
+    already at this build's schema still runs every check and the picture sweep, tens
+    of milliseconds of statements. Reads that arrived together therefore went one at a
+    time, each waiting out the lock for all the ones before it. A store at this build's
+    schema is opened here as `connect()` leaves it -- rows by name, foreign keys on, the
+    same busy timeout -- with no lock and no write. Any other store, or none, goes
+    through `connect()`, which adopts, creates, migrates or refuses it as it always has.
+
+    Nothing is lost by the skip: once `connect()` has returned, its connection holds no
+    lock either, so a migration by another process could already commit between any two
+    statements of a read.
+    """
+
+    try:
+        conn = sqlite3.connect(_uri(db_path(), "rw"), uri=True, timeout=5)
+    except sqlite3.OperationalError:
+        return connect()
+    try:
+        current = int(conn.execute("PRAGMA user_version").fetchone()[0]) == STORE_SCHEMA_VERSION
+        if current:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys=ON")
+            return conn
+    except BaseException:
+        conn.close()
+        raise
+    conn.close()
+    return connect()
 
 
 def connect() -> sqlite3.Connection:
@@ -833,6 +875,19 @@ def connect() -> sqlite3.Connection:
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preinteractions", locate=backup_location
                 )
+            # A `relates-to` link stored from both ends loses its later record, which
+            # only a recovery point keeps; an upgrade's covers it, and a store already
+            # at this schema takes its own. The step raises no schema: a build before
+            # it reads the one record as it read any link, and the index turns its
+            # `INSERT OR IGNORE` of a mirror into nothing.
+            if (
+                planning_store.symmetric_mirrors_present(conn)
+                and source_identity is None
+                and pretable_backup is None
+            ):
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "prerelatesonce", locate=backup_location
+                )
             # Session identity is additive, so it takes its own recovery point
             # only when nothing above took one already for this same open.
             if (
@@ -888,6 +943,15 @@ def connect() -> sqlite3.Connection:
             # Schema 10: columns cannot come from the script, which leaves an
             # existing table alone, so they are appended here.
             planning_store.migrate_threads(conn)
+            # A mirror written between the read above and this transaction would be
+            # deleted with no recovery point holding it: refused, the next open takes one.
+            if (
+                planning_store.symmetric_mirrors_present(conn)
+                and source_identity is None
+                and pretable_backup is None
+            ):
+                raise RuntimeError("merging mirrored links requires a pre-mutation snapshot")
+            planning_store.migrate_symmetric_links(conn)
             _migrate_session_place(conn)
             # Schema 16: the usage columns, and one row per request in the whole store.
             usage_store.migrate(conn)

@@ -4,15 +4,17 @@
  * how much of it is closed, where the rest stands, and whether the scope is
  * still growing.
  *
- * The section exists only where there is a chain. A leaf with nothing
- * discovered from it says nothing here, and a leaf whose chain is still loading
- * says nothing either — only an item known to have children holds the place
- * while it loads, so opening an ordinary task does not flash an empty section.
+ * It is the card's Chain tab, which the card offers only where a chain is
+ * certain: an item with children, one whose read found work discovered from it,
+ * or a card Back returned to this tab. So the section holds its place while the
+ * chain loads, and an ordinary task, offered no tab, flashes no empty section.
+ * The tab names the section, so it opens on its actions, not on a heading that
+ * would say «Chain» a second time under «Chain».
  *
  * An item of an attached store is the exception. The chain read answers for
  * the primary store alone, so the card asks it nothing for one, and the section
- * says where a chain can be read instead of leaving the reader to wonder why
- * there is none.
+ * of an item with children says where its chain can be read instead of leaving
+ * the reader to wonder why there is none.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,15 +31,13 @@ import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { useStateName } from '@/shared/lib/useStateName.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   chain: WorkItemChain | null
-  /** The item has children, so a chain is certain before it has loaded. */
-  container: boolean
   failed: boolean
   loading: boolean
   /** The chain read reaches this item: it is in the primary store, not an attached one. */
@@ -56,9 +56,24 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const stateName = useStateName()
 
+/**
+ * The first read of the chain, shown as every wait is: nothing for a read that answers
+ * quickly, and once shown, long enough to be read, with the chain held back meanwhile.
+ * A read again with the chain on screen keeps it there and shows nothing.
+ *
+ * The section is a block of the card, so its wait is no announcement of its own: the card
+ * has one status region for its waits, and the section says its wait by its busy mark and
+ * its word on screen.
+ */
+const { shown: firstShown, held: firstHeld } = useLoadingPresence(
+  () => !props.chain && props.loading,
+)
+/** The word the held line shows: the panel's, once the wait is shown, and nothing before. */
+const firstWord = computed(() => (firstShown.value ? t('platform.states.loading') : ''))
+
 const visible = computed(() => {
-  if (!props.readable) return true
-  return props.chain ? props.chain.total > 0 : props.container && (props.loading || props.failed)
+  if (!props.readable || firstHeld.value) return true
+  return props.chain ? props.chain.total > 0 : props.loading || props.failed
 })
 
 /** Busy only while a read runs; absent otherwise rather than a claim of `false`. */
@@ -218,34 +233,32 @@ defineExpose({ restore, reveal, view })
     :aria-busy="busy"
     :aria-label="t('workItem.chain.title')"
   >
-    <!-- No count beside the heading: the line under the map is the card's one
-         number for the chain and says what it counts, the work under the root.
-         A bare 306 here stood beside the board's «Chain MAIN-1 · 307», which
-         counts the root as well, and in Epic scope it named a third population. -->
-    <SectionHeader :title="t('workItem.chain.title')">
-      <template
-        v-if="chain"
-        #actions="{ size }"
+    <!-- No count here: the line under the map is the card's one number for the
+         chain and says what it counts, the work under the root. A bare 306 stood
+         beside the board's «Chain MAIN-1 · 307», which counts the root as well,
+         and in Epic scope it named a third population. -->
+    <div
+      v-if="chain && !firstHeld"
+      class="chain-actions"
+    >
+      <SegmentedControl
+        v-if="twoScopes"
+        class="chain-scope"
+        size="compact"
+        :label="t('workItem.chain.scopeLabel')"
+        :model-value="scope"
+        :options="scopes"
+        @update:model-value="(next) => emit('scope', next)"
+      />
+      <VButton
+        variant="ghost"
+        size="compact"
+        :aria-label="t('workItem.chain.showOnGraph')"
+        @click="emit('graph', chain, lane)"
       >
-        <SegmentedControl
-          v-if="twoScopes"
-          class="chain-scope"
-          :size="size"
-          :label="t('workItem.chain.scopeLabel')"
-          :model-value="scope"
-          :options="scopes"
-          @update:model-value="(next) => emit('scope', next)"
-        />
-        <VButton
-          variant="ghost"
-          :size="size"
-          :aria-label="t('workItem.chain.showOnGraph')"
-          @click="emit('graph', chain, lane)"
-        >
-          {{ t('workItem.chain.onGraph') }}
-        </VButton>
-      </template>
-    </SectionHeader>
+        {{ t('workItem.chain.onGraph') }}
+      </VButton>
+    </div>
 
     <DataEmptyState
       v-if="!readable"
@@ -254,14 +267,13 @@ defineExpose({ restore, reveal, view })
     />
 
     <p
-      v-if="!chain && loading"
+      v-if="firstHeld"
       class="chain-quiet"
-      role="status"
     >
-      {{ t('workItem.chain.loading') }}
+      {{ firstWord }}
     </p>
     <div
-      v-if="failed"
+      v-if="failed && !firstHeld"
       class="chain-failure"
       role="alert"
     >
@@ -277,7 +289,7 @@ defineExpose({ restore, reveal, view })
     </div>
 
     <div
-      v-if="chain && groups && listed && labels"
+      v-if="chain && groups && listed && labels && !firstHeld"
       class="chain-body"
     >
       <ChainBranchMap
@@ -374,6 +386,15 @@ defineExpose({ restore, reveal, view })
   min-width: 0;
 }
 
+/* The section's actions, the size a section heading gives its own, on the line a heading
+   would take. */
+.chain-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
 /* Three parts, the map, its figures and the list, stand further apart than the rows inside
    any one of them, or they read as one run of equal rows. */
 .chain-body {
@@ -423,7 +444,9 @@ defineExpose({ restore, reveal, view })
   font-variant-numeric: tabular-nums;
 }
 
+/* One line tall before its word arrives, so the word moves nothing when it does. */
 .chain-quiet {
+  min-height: 1lh;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

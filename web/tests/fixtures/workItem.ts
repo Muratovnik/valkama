@@ -68,11 +68,22 @@ export function getButton(wrapper: VueWrapper, text: string) {
   return button
 }
 
-/** Open a card's Relations, where its chain stands. */
-export async function showRelations(wrapper: VueWrapper) {
-  await getButton(wrapper, 'Relations').trigger('click')
+/** A tab of the card's strip by its name, or undefined where the card does not offer it. */
+export function findTab(wrapper: VueWrapper, name: string) {
+  return wrapper.findAll('.inspector-tabs [role="tab"]').find((tab) => tab.text() === name)
+}
+
+/** Open a tab of the card's strip, once the reads that decide which tabs it offers are in. */
+export async function showTab(wrapper: VueWrapper, name: string) {
+  await flushPromises()
+  const tab = findTab(wrapper, name)
+  if (tab === undefined) throw new Error(`Missing tab: ${name}`)
+  await tab.trigger('click')
   await flushPromises()
 }
+
+/** Open a card's Chain tab, which the card offers once it knows the item has a chain. */
+export const showChain = (wrapper: VueWrapper) => showTab(wrapper, 'Chain')
 
 export function value(wrapper: VueWrapper, label: string) {
   return (wrapper.get(`textarea[aria-label="${label}"]`).element as HTMLTextAreaElement).value

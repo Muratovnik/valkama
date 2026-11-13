@@ -35,7 +35,7 @@ export function useRankedLines(options: {
     const href = actions.taskLink(options.by(), line.value)?.href
     if (href) return { href }
     if (actions.narrowsTo(options.by(), line.value) === undefined) return {}
-    return { actionable: true, action: actions.narrowName(label) }
+    return { actionable: true, action: actions.narrowName(options.by(), line.value, label) }
   }
 
   const rows = computed<RankedRow[]>(() =>

@@ -34,4 +34,6 @@ export interface InspectorReturn {
   scroll: number
   /** The section that was shown. */
   section: string
+  /** The groups of Relations the reader opened or folded, by key. */
+  relations?: Record<string, boolean>
 }

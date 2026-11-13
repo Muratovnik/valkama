@@ -86,8 +86,9 @@ beforeEach(() => {
 })
 
 describe('work discovery', () => {
-  // The list draws all 1201 rows twice, which is the point and is heavy: 0.6 s alone, 2 s
-  // beside the rest of the suite, and past the 5 s default on a busy machine.
+  // The list of 1201 rows is long enough to draw only its window, and the test page lays
+  // nothing out, so the whole list coming back is read from the count the table says. The
+  // longer timeout dates from when every row was drawn, twice, which took 2 s in the suite.
   it('finds late work by trimmed case-insensitive reference and title, then clears', async () => {
     const wrapper = workspace('en', true)
     const input = wrapper.get('input[aria-label="Filter work"]')
@@ -98,7 +99,8 @@ describe('work discovery', () => {
     await input.setValue(' DELIVERY MILESTONE ')
     expect(wrapper.get('tbody').text()).toContain('MAIN-1201')
     await button(wrapper, 'Clear the text').trigger('click')
-    expect(wrapper.findAll('tbody tr')).toHaveLength(1201)
+    // Every row and the head's.
+    expect(wrapper.get('table').attributes('aria-rowcount')).toBe('1202')
     expect(wrapper.emitted('view')).toBeUndefined()
   }, 15_000)
   it('intersects the text with a condition and resets a filtered empty result', async () => {

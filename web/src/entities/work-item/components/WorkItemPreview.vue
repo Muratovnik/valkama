@@ -12,9 +12,10 @@
  * (`surface: 'preview'`), drawn as a tile draws its own, so a stale claim reads
  * the same here as on the board.
  *
- * Until the item is read the reference stands alone with one line under it, and
- * a refusal says so in a line of its own; the card only grows downwards, so it
- * does not jump sideways under the pointer when the item arrives.
+ * Until the item is read the reference stands alone with one line under it, which
+ * says the wait once it has lasted, and a refusal says so in a line of its own; the
+ * card only grows downwards, so it does not jump sideways under the pointer when the
+ * item arrives.
  *
  * Its number copies itself and the icon beside it copies the item's address, as in a card's
  * head and with the head's words. Beyond those it draws what it is given. Where it floats, when
@@ -32,6 +33,7 @@ import { useWorkItemCopy } from '@/entities/work-item/composables/useWorkItemCop
 import { useWorkItemPreviewWords } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 import type { WorkItemPreviewSubject } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
 
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import { vSlashBreaks } from '@/shared/ui/slashBreaks.ts'
 
@@ -44,13 +46,28 @@ const props = withDefaults(defineProps<WorkItemPreviewSubject>(), {
 const { t } = useI18n()
 const preview = useWorkItemPreviewWords()
 
-const head = computed(() => (props.item ? preview.headMarks(props, props.item) : []))
-const facts = computed(() => (props.item ? preview.factMarks(props, props.item) : []))
-const stale = computed(() => (props.item ? preview.staleClaim(props.item) : false))
-const when = computed(() => (props.item ? preview.when(props.item) : null))
+/**
+ * The read of an item nothing is known of, said as every wait is (`loadingPresence`):
+ * nothing for a read that answers quickly, and once said, long enough to be read, with the
+ * item held back meanwhile. The delay counts from the read, which began before the card
+ * opened.
+ */
+const presence = useLoadingPresence(() => !props.item && !props.failure, {
+  since: () => props.since ?? undefined,
+})
+/** The item as the card draws it: none while the wait is held. */
+const drawn = computed(() => (presence.held.value ? null : props.item))
+const head = computed(() => (drawn.value ? preview.headMarks(props, drawn.value) : []))
+const facts = computed(() => (drawn.value ? preview.factMarks(props, drawn.value) : []))
+const stale = computed(() => (drawn.value ? preview.staleClaim(drawn.value) : false))
+const when = computed(() => (drawn.value ? preview.when(drawn.value) : null))
 /** What the card holds: the item, or why there is none yet. */
-const read = computed(() => (props.item ? 'item' : (props.failure ?? 'loading')))
-const note = computed(() => preview.note(props))
+const read = computed(() => (drawn.value ? 'item' : (props.failure ?? 'loading')))
+/** The line under a reference with no item: why there is none, or the wait once it is shown. */
+const note = computed(() => {
+  if (props.failure) return preview.note(props)
+  return presence.shown.value ? preview.note(props) : ''
+})
 const copied = useWorkItemCopy(() => props.reference)
 </script>
 
@@ -78,9 +95,9 @@ const copied = useWorkItemCopy(() => props.reference)
         :failed="copied.failed.value"
       />
     </p>
-    <template v-if="item">
+    <template v-if="drawn">
       <p
-        v-slash-breaks="item.title"
+        v-slash-breaks="drawn.title"
         class="preview-title"
         aria-hidden="true"
       />
@@ -178,6 +195,11 @@ const copied = useWorkItemCopy(() => props.reference)
 .preview-note {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* A line tall before a wait's word arrives, so the word moves nothing when it does. */
+.preview-note {
+  min-block-size: 1lh;
 }
 
 .preview-project {

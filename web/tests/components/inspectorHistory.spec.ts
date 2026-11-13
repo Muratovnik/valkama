@@ -301,7 +301,10 @@ describe('recorded history', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('No matching records')
     await wrapper.setProps({ loading: true })
-    expect(wrapper.text()).toContain(messages.en.execution.loading)
+    // A first read holds the records back behind a line whose word waits for the delay.
+    expect(wrapper.get('section.executions > p.quiet').text()).toBe('')
+    expect(wrapper.get('section.executions').attributes('aria-busy')).toBe('true')
+    expect(wrapper.findAll('.attempt')).toHaveLength(0)
     await wrapper.setProps({ loading: false, error: 'Unavailable record', writable: false })
     expect(wrapper.get('[role="alert"]').text()).toBe('Unavailable record')
     expect(wrapper.find('.execution-actions').exists()).toBe(false)

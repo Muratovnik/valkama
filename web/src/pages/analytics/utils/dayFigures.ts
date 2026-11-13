@@ -1,11 +1,12 @@
 import {
   figureOf,
+  measureOf,
   spendingLines,
-  spentAnything,
   spentOf,
 } from '@/pages/analytics/utils/usageFigures.ts'
 import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKey, valueKind } from '@/pages/analytics/utils/usageValues.ts'
+import type { ValueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 /**
  * The period day by day: each day's measure stacked by the largest values of the dimension and
@@ -62,21 +63,29 @@ export interface StackLine extends PeriodSeries {
 
 /**
  * The page's one colour key of a dimension: its categories ranked by the measure over the rows
- * (`spendingLines`), the first `STACKED` of them each a hue by rank. Work with no value there,
- * unknown work and the folded rest are the neutral, never a hue. The rail's tile, the section's
- * bars, small charts and day chart and the overview's chart all read this one key, so a value has
- * one colour on the page; another measure ranks again and may repaint.
+ * (`spendingLines`), the first `STACKED` of them each a hue by rank, never a hue past them. Work
+ * with no value there and unknown work are one neutral (`apart`) and the folded rest (`other`)
+ * another, a step lighter: two greys and no hue, so the two largest parts of a day can be told
+ * apart without the hint. The rail's tile, the section's bars, small charts and day chart and the
+ * overview's chart all read this one key, so a value has one colour on the page; another measure
+ * ranks again and may repaint.
  */
 export function rankedSlots(
   rows: readonly UsageRow[],
   dimension: UsageDimension,
   measure: Measure,
 ): Map<string, SeriesSlot> {
-  return rankSlots(
+  const slots = rankSlots(
     rankedCategories(rows, dimension, measure).map((line) => line.key),
     STACKED,
   )
+  // The folded rest takes no entry: a key with none is `other`, wherever the key is read.
+  for (const kind of NOT_CATEGORIES) slots.set(kind, 'apart')
+  return slots
 }
+
+/** The keys of what is not a category: work with no value in the dimension, unknown work. */
+const NOT_CATEGORIES = ['none', 'unknown'] as const satisfies readonly ValueKind[]
 
 /** The categories with a figure in the measure, largest first. */
 function rankedCategories(rows: readonly UsageRow[], dimension: UsageDimension, measure: Measure) {
@@ -86,10 +95,11 @@ function rankedCategories(rows: readonly UsageRow[], dimension: UsageDimension, 
 }
 
 /**
- * The values a stack names: the period's largest categories in the measure, up to `STACKED`, each
- * in its hue of the page's key (`rankedSlots`), then work with no value there and unknown work,
- * each its own series in the neutral and never folded; only values with anything to draw. The
- * rest of the period is one «other» series in the neutral, on top.
+ * The values a stack names, bottom first, which is also the legend's order: the period's largest
+ * categories in the measure, up to `STACKED`, each in its hue of the page's key (`rankedSlots`),
+ * then work with no value there and unknown work, each its own series in the darker neutral and
+ * never folded; only values with anything to draw. The rest of the period is one «other» series
+ * in the lighter neutral, on top.
  */
 export function stackLines({ usage, by: dimension, measure }: StackSource) {
   // A value with no figure in the measure stays, so its days can say it has none.
@@ -159,12 +169,13 @@ export interface AccountChange {
 }
 
 /**
- * The known accounts that spent anything in a day. Work whose organization nobody recorded is
- * not an account, so it is not one of them.
+ * The known accounts with a figure above zero in a day, in the measure the chart shows: any
+ * figure counts, however small, and none, or no price or token counted, does not. Work whose
+ * organization nobody recorded is not an account, so it is not one of them.
  */
-const accountsOf = (point: Usage['series'][number]) =>
+const accountsOf = (point: Usage['series'][number], measure: Measure) =>
   point.groups
-    .filter((group) => spentAnything(spentOf(group)))
+    .filter((group) => (measureOf(measure, spentOf(group)) ?? 0) > 0)
     .flatMap((group) => {
       const account = group.group.account
       return account && valueKind(account) === 'category' ? [account] : []
@@ -177,16 +188,16 @@ const sameKeys = (left: readonly UsageGroupValue[], right: readonly UsageGroupVa
 
 /**
  * Where the set of known accounts that worked differs from that of the last day a known account
- * worked, read from an answer by account. A day with no known account changes nothing, whether
+ * worked, read from an answer by account in the measure the chart shows (`accountsOf`). A day with no known account changes nothing, whether
  * nobody worked or only work nobody recorded the organization of: the next day is compared with
  * the last one that had a known account, so a quiet weekend is not two changes, and unrecorded
  * work beside the same accounts, or between them, is no change at all.
  */
-export function accountChanges(byAccount: Usage): AccountChange[] {
+export function accountChanges(byAccount: Usage, measure: Measure): AccountChange[] {
   const changes: AccountChange[] = []
   let last: UsageGroupValue[] | null = null
   for (const point of byAccount.series) {
-    const now = accountsOf(point)
+    const now = accountsOf(point, measure)
     if (!now.length) continue
     if (last && !sameKeys(last, now)) changes.push({ at: point.start, before: last, after: now })
     last = now

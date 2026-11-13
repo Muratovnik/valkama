@@ -2,9 +2,10 @@
  * The figures of the rail's tiles, held to the requirement rather than to the code: the overview
  * says the period's total, how it moved — in words, not a percentage, where the period before
  * spent nothing or a tenth of it or less — and its days, the one still running marked; a
- * dimension says how many values worked, its first real value with that value's share of the
- * whole, and the shares of its first few with what they leave out as one rest. Expected figures
- * are worked out by hand from the stretches below.
+ * dimension says how many real values worked in the measure — a figure there above zero — its
+ * first real value with that value's share of the whole, and the shares of its first few with
+ * what they leave out as one rest. Expected figures are worked out by hand from the stretches
+ * below and from the made-up rows of `usageCases`.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -17,6 +18,7 @@ import { spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { noTask, task, unknownTask, usageAnswer, value } from './fixtures/analytics.ts'
 import type { Stretch } from './fixtures/analytics.ts'
+import { ACCOUNTS_OF_A_DAY, BY_ROLE, NOW_BY_LAUNCH } from './fixtures/usageCases.ts'
 
 const MONDAY = new Date(2026, 10, 9)
 const HOUR = 3600
@@ -162,5 +164,37 @@ describe('a dimension', () => {
 
   it('is nothing at all when the period spent nothing, which the tile says in words', () => {
     expect(dimensionFigures(answer([]).rows, 'work_item', 'time')).toBeNull()
+  })
+})
+
+describe('a dimension at its edges: one measure only, no value, nearly all of the whole', () => {
+  it('counts a role only where it spent in the measure: the adviser has tokens, no agent time', () => {
+    expect(dimensionFigures(BY_ROLE, 'role', 'time')?.count).toBe(2)
+    expect(dimensionFigures(BY_ROLE, 'role', 'tokens')?.count).toBe(3)
+    expect(dimensionFigures(BY_ROLE, 'role', 'cost')?.count).toBe(3)
+  })
+
+  it('names a session’s own run with all of «now» while nothing was launched, counted apart', () => {
+    const figures = dimensionFigures(NOW_BY_LAUNCH, 'launch_class', 'time')
+    expect(figures?.first.line.kind).toBe('none')
+    expect(figures?.first.share).toBe(1)
+    // No launch class worked: the table says «0 in the period · and «Session itself»» too.
+    expect(figures?.count).toBe(0)
+  })
+
+  it('holds an account’s share under the whole where under a minute of the day was not its own', () => {
+    const figures = dimensionFigures(ACCOUNTS_OF_A_DAY, 'account', 'time')
+    const share = figures?.first.share ?? 1
+    // 81 264.519 s of 81 314.596, about 0.99938: a share a whole percent cannot say, and not all
+    // of it.
+    expect(share).toBeCloseTo(81_264.519 / (81_264.519 + 47.362 + 2.715), 9)
+    expect(share).toBeLessThan(1)
+    // The account of a few seconds is a value of the day; the unplaced 47 s are not.
+    expect(figures?.count).toBe(2)
+    // Neither the few seconds nor the unplaced ones have a price: under the cost the account is
+    // all.
+    const cost = dimensionFigures(ACCOUNTS_OF_A_DAY, 'account', 'cost')
+    expect(cost?.first.share).toBe(1)
+    expect(cost?.count).toBe(1)
   })
 })

@@ -6,8 +6,13 @@ import { beforeAll, test } from 'vitest'
 
 const configFile = fileURLToPath(new URL('../stylelint.config.ts', import.meta.url))
 
-/** How many type-selector warnings one file earns under the real config. */
-const typeSelectors = async (codeFilename: string, code: string) => {
+/**
+ * How many type-selector warnings one file earns under the real config. The file is named from
+ * the config's own folder, not the working one: the overrides are matched against the config's
+ * path, and on Windows a working folder spelled `c:` beside a config at `C:` matches none.
+ */
+const typeSelectors = async (file: string, code: string) => {
+  const codeFilename = fileURLToPath(new URL(`../${file}`, import.meta.url))
   const { results } = await stylelint.lint({ code, codeFilename, configFile })
   return results[0].warnings.filter((warning) => warning.rule === 'selector-max-type').length
 }

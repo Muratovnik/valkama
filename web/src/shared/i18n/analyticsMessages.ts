@@ -2,6 +2,7 @@
  * The Analytics page: what agent work was spent on in a period, and how that changed from the
  * period before. A cost is always said to be an estimate at API prices and never a bill.
  */
+import { analyticsFigureMessages } from '@/shared/i18n/analyticsFigureMessages.ts'
 import { analyticsOverviewMessages } from '@/shared/i18n/analyticsOverviewMessages.ts'
 import { analyticsPanelMessages } from '@/shared/i18n/analyticsPanelMessages.ts'
 import { analyticsRailMessages } from '@/shared/i18n/analyticsRailMessages.ts'
@@ -18,10 +19,12 @@ export const analyticsMessages = {
         title: 'Nothing was spent in this period',
         description:
           'No agent work was recorded in this period with these filters. Choose a longer period or clear a filter.',
+        unfiltered: 'No agent work was recorded in this period. Choose a longer period.',
       },
       period: {
         label: 'Period',
         now: 'Now',
+        today: 'Today',
         week: 'This week',
         weeks4: 'Past 4 weeks',
         custom: 'Custom',
@@ -79,8 +82,7 @@ export const analyticsMessages = {
         total: 'total',
         empty: 'No day in this period spent anything.',
         other: 'Other',
-        accounts: 'Accounts: {before} → {after}',
-        changes: 'Account changes: {count}',
+        accounts: 'Account change: {before} → {after}',
         accountsFailed:
           'The accounts that worked could not be read, so their changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
@@ -96,19 +98,7 @@ export const analyticsMessages = {
         tokens: 'Tokens',
         cost: 'Estimated cost at API prices',
       },
-      figures: {
-        noTokens: 'No tokens',
-        noPrice: 'No price',
-        costNote: 'An estimate at API list prices, not a bill',
-        unpriced: '{count} token without a price | {count} tokens without a price',
-        anew: 'Processed anew: {kinds}',
-        kinds: {
-          input: 'input {count}',
-          output: 'output {count}',
-          cacheWrites: 'cache writes {count}',
-        },
-        cacheReads: 'Cache reads, not counted: {count}',
-      },
+      figures: analyticsFigureMessages.en,
       change: {
         up: '↑ {change} against {period}',
         down: '↓ {change} against {period}',
@@ -155,14 +145,16 @@ export const analyticsMessages = {
       },
       drill: {
         value: 'Show the tasks of {value}',
+        noTask: 'Break down the work with no task by project and launch class',
+        noTaskByLaunch: 'Break down the work with no task by launch class',
         day: 'Show the tasks of {day}',
+        dayName: '{weekdayLong}, {date}',
         full: 'The link to this view cannot hold one more filter, so the tasks of {value} are not shown. Clear a filter to make room.',
       },
       filters: {
         any: 'Any',
         clear: 'Clear filters',
         remove: 'Remove {label}',
-        reading: 'Reading the values…',
         failed: 'The values could not be read.',
         noMatches: 'No matches',
         full: 'The link to this view cannot hold more values of the {dimension} filter, so this one was not added.',
@@ -172,10 +164,30 @@ export const analyticsMessages = {
         overview: 'Overview',
         back: 'All sections',
         addFilter: 'Add a filter',
+        filtersFolded: 'Filters: {count}',
         filter: '{dimension}: {value}',
         fresh: 'Newest record {at} · {ago}',
         freshNone: 'Nothing recorded yet',
         refresh: 'Refresh',
+        refreshFailed: 'Could not refresh',
+      },
+      kinds: {
+        section: 'Token kinds',
+        bars: 'Tokens by kind',
+        multiples: 'Tokens {per} of each kind',
+        heading: {
+          day: 'Per day, by kind',
+          hour: 'Per hour, by kind',
+          minute: 'Per minute, by kind',
+        },
+        table: 'Tokens by kind beside the period before',
+        kind: 'Kind',
+        total: 'Tokens',
+        count: '{count} kind | {count} kinds',
+        apart: {
+          cached_read: 'Cache read',
+          reasoning: 'Reasoning',
+        },
       },
       overview: analyticsOverviewMessages.en,
       panel: analyticsPanelMessages.en,
@@ -192,10 +204,12 @@ export const analyticsMessages = {
         title: 'За этот период ничего не потрачено',
         description:
           'За этот период с этими фильтрами работа агентов не записана. Выберите период длиннее или снимите фильтр.',
+        unfiltered: 'За этот период работа агентов не записана. Выберите период длиннее.',
       },
       period: {
         label: 'Период',
         now: 'Сейчас',
+        today: 'Сегодня',
         week: 'Эта неделя',
         weeks4: 'Последние 4 недели',
         custom: 'Свой',
@@ -253,8 +267,7 @@ export const analyticsMessages = {
         total: 'всего',
         empty: 'Ни в один день периода ничего не потрачено.',
         other: 'Остальное',
-        accounts: 'Аккаунты: {before} → {after}',
-        changes: 'Смен аккаунта: {count}',
+        accounts: 'Смена аккаунта: {before} → {after}',
         accountsFailed:
           'Не удалось прочитать, какие аккаунты работали, поэтому их смены не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
@@ -270,20 +283,7 @@ export const analyticsMessages = {
         tokens: 'Токены',
         cost: 'Оценка стоимости по ценам API',
       },
-      figures: {
-        noTokens: 'Нет токенов',
-        noPrice: 'Нет цены',
-        costNote: 'Оценка по прейскуранту API, а не счёт',
-        unpriced:
-          '{count}\u{A0}токен без цены | {count}\u{A0}токена без цены | {count}\u{A0}токенов без цены',
-        anew: 'Обработано заново: {kinds}',
-        kinds: {
-          input: 'ввод {count}',
-          output: 'вывод {count}',
-          cacheWrites: 'запись в кэш {count}',
-        },
-        cacheReads: 'Чтение из кэша, не учтено: {count}',
-      },
+      figures: analyticsFigureMessages.ru,
       change: {
         up: '↑ {change} к периоду {period}',
         down: '↓ {change} к периоду {period}',
@@ -330,14 +330,16 @@ export const analyticsMessages = {
       },
       drill: {
         value: 'Показать задачи: {value}',
+        noTask: 'Разобрать работу без задачи по проектам и способам запуска',
+        noTaskByLaunch: 'Разобрать работу без задачи по способам запуска',
         day: 'Показать задачи за {day}',
+        dayName: '{date}, {weekday}',
         full: 'Ссылка на этот вид не вмещает ещё один фильтр, поэтому задачи «{value}» не показаны. Снимите фильтр, чтобы освободить место.',
       },
       filters: {
         any: 'Любое',
         clear: 'Снять фильтры',
         remove: 'Убрать {label}',
-        reading: 'Читаю значения…',
         failed: 'Не удалось прочитать значения.',
         noMatches: 'Ничего не найдено',
         full: 'Ссылка на этот вид не вмещает больше значений фильтра «{dimension}», поэтому это значение не добавлено.',
@@ -347,10 +349,30 @@ export const analyticsMessages = {
         overview: 'Обзор',
         back: 'Все разделы',
         addFilter: 'Добавить фильтр',
+        filtersFolded: 'Фильтры: {count}',
         filter: '{dimension}: {value}',
         fresh: 'Последняя запись {at} · {ago}',
         freshNone: 'Записей ещё нет',
         refresh: 'Обновить',
+        refreshFailed: 'Не удалось обновить',
+      },
+      kinds: {
+        section: 'Виды токенов',
+        bars: 'Токены по видам',
+        multiples: 'Токены {per} у каждого вида',
+        heading: {
+          day: 'По дням, по видам',
+          hour: 'По часам, по видам',
+          minute: 'По минутам, по видам',
+        },
+        table: 'Токены по видам рядом с прошлым периодом',
+        kind: 'Вид',
+        total: 'Токены',
+        count: '{count} вид | {count} вида | {count} видов',
+        apart: {
+          cached_read: 'Чтение кэша',
+          reasoning: 'Рассуждения',
+        },
       },
       overview: analyticsOverviewMessages.ru,
       panel: analyticsPanelMessages.ru,

@@ -6,7 +6,7 @@
  * Accepted with a way, it names the way chosen and says when that is the recommended one; a way
  * still to be chosen is said in words, in the warning's ink. Undecided, or decided otherwise
  * than the agent recommends, it says what the agent recommends, and why when the agent said
- * (`RequestAdvice`), followed while undecided by the start of the description. Otherwise it is
+ * (`WhyWords`), followed while undecided by the start of the description. Otherwise it is
  * the start of the description. A comment written adds a line of its own.
  *
  * The line is cut at the row's end rather than wrapped, except the way, whose words are the
@@ -15,7 +15,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import RequestAdvice from '@/features/input-requests/components/RequestAdvice.vue'
 import type { DescriptionView } from '@/features/input-requests/utils/optionDescriptions.ts'
 import type { PointWay, Verdict } from '@/features/input-requests/utils/reviewForm.ts'
 
@@ -23,6 +22,7 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import WhyWords from '@/shared/ui/WhyWords.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -63,7 +63,7 @@ const said = computed(() => props.comment.trim().split('\n')[0] ?? '')
     v-if="advice || way || excerpt"
     class="request-point-line"
   >
-    <RequestAdvice
+    <WhyWords
       v-if="advice"
       class="request-point-whole"
       :tab-stop="tabStop"

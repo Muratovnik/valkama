@@ -92,16 +92,17 @@ for (const width of [1280, 390])
       await serve(page, largeChainHere())
       await page.goto(CARD)
       const drawer = page.locator('.drawer')
-      // The chain stands under Relations.
-      await drawer.getByRole('tab', { name: /Relations|Связи/u }).click()
-      await expect(drawer.locator('section.chain .section-header-actions')).toBeVisible()
+      // The chain has a tab of its own.
+      await drawer.getByRole('tab', { name: /^(Chain|Цепочка)$/u }).click()
+      await expect(drawer.locator('section.chain .chain-actions')).toBeVisible()
       await expect(drawer).toHaveCSS('transform', 'none')
 
-      // The chain's heading: the scope switch and «На графе», one compact height.
+      // The chain's actions, where its tab has no heading: the scope switch and «На графе»,
+      // one compact height, the height a heading gives its actions.
       expectOneRow(
-        await edges(drawer.locator('section.chain .section-header-actions > *')),
+        await edges(drawer.locator('section.chain .chain-actions > *')),
         HEADER_ACTION,
-        'chain heading',
+        'chain actions',
       )
       // Every other heading of the card with an action gives it the same height.
       for (const tab of await drawer.locator('.inspector-tabs').getByRole('tab').all()) {

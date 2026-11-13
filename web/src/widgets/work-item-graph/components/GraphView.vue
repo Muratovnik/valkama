@@ -125,6 +125,8 @@ const {
 
 /** Whether a drawing is on the field: a layout over it runs in the background. */
 const drawn = computed(() => placed.value !== null)
+/** Busy while a layout runs; absent otherwise, because `aria-busy="false"` is a claim. */
+const busyMark = computed(() => pending.value || undefined)
 
 /** Which empty the field is in, if any; the first cause wins. */
 const emptyKind = computed(() => {
@@ -332,7 +334,7 @@ function toggleFrame(frameId: string) {
     v-show="open"
     class="graph"
     :aria-label="t('graph.title')"
-    :aria-busy="pending"
+    :aria-busy="busyMark"
   >
     <GraphBar
       v-model:show-done="showDone"

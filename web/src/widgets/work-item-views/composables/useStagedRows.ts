@@ -1,22 +1,23 @@
 /**
  * The rows a list draws in its first frame, and the rest right after it.
  *
- * Opening a list of a thousand rows drew, styled and laid out all of them before
- * anything showed, and most are below the fold. So the first frame holds what
- * fills the list's height, and the next task draws every other row; none is ever
- * taken out of the DOM again, so a sort, a filter, the keyboard and the browser's
- * find work on all of them from then on.
+ * Opening a list of a few hundred rows drew, styled and laid out all of them
+ * before anything showed, and most are below the fold. So the first frame holds
+ * what fills the list's height, and the next task draws every other row. A list
+ * long enough to draw only its window (`useWindowRows.ts`) is not staged.
  *
- * A table works out its column widths from every cell it holds, so the rest
- * arriving would move the columns. The first frame therefore also holds the row
- * with the widest value of each column, collapsed: a collapsed row gives its
- * widths and takes no height. A scroll cannot outrun the rows, because the table
- * ends where the drawn rows end until the rest are there.
+ * The rest arriving would move the columns, so the first frame also holds the
+ * row with the widest value of each column, collapsed (`widestRows.ts`). A
+ * scroll cannot outrun the rows, because the table ends where the drawn rows
+ * end until the rest are there.
  *
  * Only the first drawing is staged. Where nothing lays the page out, or the rows
  * change meanwhile, every row is drawn at once.
  */
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
+
+import { widestRows } from '@/widgets/work-item-views/utils/widestRows.ts'
+import type { WidthColumn } from '@/widgets/work-item-views/utils/widestRows.ts'
 
 /** A row's height is never less than this, so this many fill any height. */
 const SHORTEST_ROW = 36
@@ -25,38 +26,8 @@ const BEYOND_THE_FOLD = 12
 
 const nothing = () => {}
 
-/** The widest of some words in one font; of equal length the canvas decides. */
-function widestWord(
-  words: readonly (readonly [string, number])[],
-  canvas: CanvasRenderingContext2D,
-  font: string,
-) {
-  let longest = 0
-  for (const [word] of words) longest = Math.max(longest, word.length)
-  canvas.font = font
-  let widest = -1
-  let at = -1
-  const measured = new Map<string, number>()
-  for (const [word, index] of words) {
-    if (word.length < longest - 1) continue
-    const width = measured.get(word) ?? canvas.measureText(word).width
-    measured.set(word, width)
-    if (width > widest) {
-      widest = width
-      at = index
-    }
-  }
-  return at
-}
-
-/** One column: what a row prints in it, and the token of the font it prints in. */
-interface StagedColumn<Row> {
-  font: string
-  word: (row: Row) => string
-}
-
 interface StagedRows<Row> {
-  columns: readonly StagedColumn<Row>[]
+  columns: readonly WidthColumn<Row>[]
   /** The element that scrolls the rows; its height says how many fill it. */
   root: () => HTMLElement | null
   rows: () => readonly Row[]
@@ -75,28 +46,12 @@ export function useStagedRows<Row>({ columns, root, rows }: StagedRows<Row>) {
     staged.value = null
   }
 
-  function heldRows(all: readonly Row[], shown: number) {
-    const canvas = document.createElement('canvas').getContext('2d')
-    if (!canvas) return null
-    const style = getComputedStyle(document.documentElement)
-    const held = new Set<Row>()
-    for (const { font, word } of columns) {
-      const at = widestWord(
-        all.map((row, index) => [word(row), index] as const),
-        canvas,
-        style.getPropertyValue(font),
-      )
-      if (at >= shown) held.add(all[at] as Row)
-    }
-    return held
-  }
-
   /** Draw the first frame, and the rest once it has been painted. */
   function stage() {
     const all = rows()
     const height = root()?.clientHeight ?? 0
     const shown = Math.ceil(height / SHORTEST_ROW) + BEYOND_THE_FOLD
-    const held = height > 0 && all.length > shown ? heldRows(all, shown) : null
+    const held = height > 0 && all.length > shown ? widestRows(all, columns, shown) : null
     if (!held) return
     staged.value = { all, first: all.slice(0, shown), held }
     let done = false

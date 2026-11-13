@@ -15,7 +15,7 @@ import { FACET_ORDER } from '@/entities/work-item/utils/facets.ts'
 
 import { searchSpaceDocuments } from '@/shared/api/documentApi.ts'
 import { createWorkItem } from '@/shared/api/planningApi.ts'
-import { PRIORITIES, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
@@ -137,38 +137,24 @@ describe('WorkItemComposer priority', () => {
     document.body.innerHTML = ''
   })
 
-  it('says what each level means on the chosen value and on each option, in both languages', async () => {
+  it('shows each level as one line, its mark and word, and names the chosen one on hover, in both languages', async () => {
     const cases = [
       {
         locale: 'en',
         label: 'Priority',
-        options: [
-          ['Low', 'Low — minor'],
-          ['Medium', 'Medium — noticeably affects work, with a workaround'],
-          ['High', 'High — serious; could block work'],
-          ['Urgent', 'Urgent — blocks work or loses data'],
-        ],
+        options: ['Low', 'Medium', 'High', 'Urgent'],
       },
       {
         locale: 'ru',
         label: 'Приоритет',
-        options: [
-          ['Низкий', 'Низкий — мелочь'],
-          ['Средний', 'Средний — заметно влияет, есть обход'],
-          ['Высокий', 'Высокий — серьёзно, может заблокировать'],
-          ['Срочный', 'Срочный — блокирует работу или теряет данные'],
-        ],
+        options: ['Низкий', 'Средний', 'Высокий', 'Срочный'],
       },
     ] as const
     for (const { locale, label, options } of cases) {
       const wrapper = mountComposer(locale)
       const trigger = wrapper.get(`.choice-trigger[aria-label="${label}"]`)
-      // The chosen value starts at medium, the default the model gives, and says on hover
-      // what it means, as the card's priority does: its word is on screen, so not the word.
-      const medium = options[1]?.[1] ?? ''
-      expect(hintOf(trigger.get('.facet-mark')), locale).toBe(
-        medium.slice(medium.indexOf(' — ') + ' — '.length),
-      )
+      // The chosen value starts at medium, the default the model gives; its hover is its level's name.
+      expect(hintOf(trigger.get('.facet-mark')), locale).toBe(options[1])
       await trigger.trigger('keydown', { key: 'Enter' })
       await flushPromises()
       const rows = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
@@ -176,25 +162,16 @@ describe('WorkItemComposer priority', () => {
       expect(
         rows.map((row) => row.querySelector('.facet-word')?.textContent),
         locale,
-      ).toEqual(options.map(([name]) => name).toReversed())
-      for (const [name, hover] of options) {
+      ).toEqual(options.toReversed())
+      for (const name of options) {
         const option = present(
           rows.find((item) => item.textContent?.includes(name)),
           `${locale} option ${name}`,
         )
-        // In the list the meaning is the option's note under its word, not a hover.
-        const meaning = hover.slice(hover.indexOf(' — ') + ' — '.length)
-        expect(option.querySelector('.choice-note')?.textContent, `${locale} ${name}`).toBe(meaning)
+        // A level is one line: no note under its word.
+        expect(option.querySelector('.choice-note'), `${locale} ${name}`).toBeNull()
       }
       wrapper.unmount()
-    }
-  })
-
-  it('has a meaning for every priority level in both catalogues', () => {
-    for (const locale of ['en', 'ru'] as const) {
-      for (const level of PRIORITIES) {
-        expect(messages[locale].priorityMeaning.meaning[level], `${locale} ${level}`).toBeTruthy()
-      }
     }
   })
 })

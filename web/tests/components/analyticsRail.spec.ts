@@ -13,10 +13,12 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { noTask, serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
+import { saidBy } from '../support/liveRegion.ts'
 
 /** Wednesday afternoon, the moment the page's reads are asked at. */
 const NOW = new Date(2026, 10, 11, 14, 30)
@@ -185,16 +187,33 @@ describe('the reads', () => {
     expect(lead(page, 'overview')).toBe('4\u{A0}h')
   })
 
-  it('say they are reading until their answer lands, then keep it while the next is read', async () => {
+  it('show their wait once it has lasted, hold it for the minimum, and keep the figures on show while they are read again', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
     let holding = true
     const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
     const page = await mountAnalytics()
-    expect(lead(page, 'model')).toBe('Reading…')
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    // Nothing is said or shown before the delay; the tile keeps its place until then.
+    expect(said).toEqual([''])
+    expect(lead(page, 'model')).toBe('')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await page.vm.$nextTick()
+    expect(lead(page, 'model')).toBe('Loading')
+    expect(said).toEqual(['', 'Loading'])
+
     for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
     await flushPromises()
+    // The figures wait for the minimum the wait was shown for, then take its place.
+    expect(lead(page, 'model')).toBe('Loading')
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(lead(page, 'model')).toBe('Loading')
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
     expect(lead(page, 'model')).toBe('model-a')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBeUndefined()
+    expect(said).toEqual(['', 'Loading', ''])
 
     holding = true
     await page.get('.analytics-refresh').trigger('click')
@@ -203,6 +222,149 @@ describe('the reads', () => {
     expect(lead(page, 'model')).toBe('model-a')
     expect(tile(page, 'model').get('.rail-tile').attributes('aria-busy')).toBe('true')
     holding = false
+  })
+
+  it('show and say nothing for a read that answers inside the delay', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    const reads = stubAnalyticsReads((query) =>
+      query.get('group_by') === 'model' ? 'hold' : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
+    await page.vm.$nextTick()
+    expect(lead(page, 'model')).toBe('')
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    // Nothing was shown, so nothing is held: the figures are there at once.
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(said).toEqual([''])
+  })
+
+  it('say a cold entry once for all its waits, and clear after the last one has held its minimum', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = true
+    const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
+    const page = await mountAnalytics()
+    const said = saidBy(page.get('.analytics-read-wait').element)
+    // Several reads, a tile each and the overview's cards, wait together on a cold entry.
+    expect(reads.held.length).toBeGreaterThan(1)
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await page.vm.$nextTick()
+    expect(said).toEqual(['', 'Loading'])
+
+    holding = false
+    for (const held of reads.held) held.release(serveUsage(WORLD, held.query))
+    await flushPromises()
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await page.vm.$nextTick()
+    expect(said).toEqual(['', 'Loading'])
+    vi.advanceTimersByTime(1)
+    await page.vm.$nextTick()
+    expect(said).toEqual(['', 'Loading', ''])
+  })
+
+  it('keep their figures when a read of them again fails, and the bar says the read failed', async () => {
+    /** Which reads fail: none, every one, or those by one dimension. */
+    let failing: 'all' | 'none' | 'model' = 'none'
+    stubAnalyticsReads((query) =>
+      failing === 'all' || query.get('group_by') === failing
+        ? { status: 500 }
+        : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'model')).toBe('model-a')
+
+    // Every read fails: no tile with figures says it could not be read, the overview's neither.
+    failing = 'all'
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    for (const section of ['overview', ...USAGE_DIMENSIONS]) {
+      expect(lead(page, section), section).not.toBe('Could not be read')
+      expect(tile(page, section).get('.rail-tile').attributes('data-state'), section).toBe('ready')
+      expect(tile(page, section).get('.rail-tile').attributes('aria-busy'), section).toBeUndefined()
+    }
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(lead(page, 'overview')).toBe('4\u{A0}h')
+    expect(page.find('.refresh-failed').exists()).toBe(true)
+
+    // Only one tile's read fails, the page's own answers: the bar still says a read failed, and
+    // the next round that lands whole takes the words away.
+    failing = 'model'
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(lead(page, 'model')).toBe('model-a')
+    expect(page.find('.refresh-failed').exists()).toBe(true)
+    failing = 'none'
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    expect(page.find('.refresh-failed').exists()).toBe(false)
+  })
+
+  it('say a new period whose read failed failed, never the last period’s figures', async () => {
+    let failing = false
+    stubAnalyticsReads((query) =>
+      failing && query.get('group_by') === 'model' ? { status: 500 } : serveUsage(WORLD, query),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'model')).toBe('model-a')
+    failing = true
+    await page.setProps({ routeState: { period: 'weeks4' } })
+    await flushPromises()
+    expect(lead(page, 'model')).toBe('Could not be read')
+    expect(page.find('.refresh-failed').exists()).toBe(false)
+  })
+
+  it('are dimmed while a new period is read, each until its own answer lands, and not on a refresh', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], now: NOW })
+    let holding = false
+    const reads = stubAnalyticsReads((query) => (holding ? 'hold' : serveUsage(WORLD, query)))
+    const page = await mountAnalytics()
+    const dimmed = (section: string) =>
+      tile(page, section).get('.rail-tile').classes('read-pending')
+    const wait = async (ms: number) => {
+      vi.advanceTimersByTime(ms)
+      await flushPromises()
+    }
+    const release = async (which: (query: URLSearchParams) => boolean) => {
+      for (const held of reads.held.filter(({ query }) => which(query)))
+        held.release(serveUsage(WORLD, held.query))
+      reads.held.splice(0, reads.held.length, ...reads.held.filter(({ query }) => !which(query)))
+      await flushPromises()
+    }
+
+    // The same period read again, for longer than a wait takes to be shown: nothing dims.
+    holding = true
+    await page.get('.analytics-refresh').trigger('click')
+    await flushPromises()
+    await wait(1000)
+    for (const section of ['overview', 'model']) expect(dimmed(section), section).toBe(false)
+    await release(() => true)
+
+    // A new period: every tile with figures is dimmed once the wait is long enough to be seen.
+    await page.setProps({ routeState: { period: 'weeks4' } })
+    await flushPromises()
+    await wait(300)
+    for (const section of ['overview', ...USAGE_DIMENSIONS])
+      expect(dimmed(section), section).toBe(true)
+    // The page's own answer lands first, the overview's tile with it; a dimension's tile still
+    // shows the last period's figures and stays dimmed until its own answer lands.
+    const pageOwn = new Set(['work_item', 'account'])
+    await release((query) => pageOwn.has(query.get('group_by') ?? ''))
+    await wait(400)
+    expect(page.get('.overview-panel').classes('read-pending')).toBe(false)
+    expect(dimmed('overview')).toBe(false)
+    expect(dimmed('model')).toBe(true)
+    expect(dimmed('role')).toBe(true)
+    await release((query) => query.get('group_by') === 'model')
+    await wait(400)
+    expect(dimmed('model')).toBe(false)
+    expect(dimmed('role')).toBe(true)
+    holding = false
+    await release(() => true)
+    await wait(400)
+    for (const section of ['overview', ...USAGE_DIMENSIONS])
+      expect(dimmed(section), section).toBe(false)
   })
 })
 
@@ -245,8 +407,9 @@ describe('a value', () => {
       expect(hues.length, `task ${number}`).toBeGreaterThanOrEqual(3)
       expect(new Set(hues), `task ${number}`).toEqual(new Set([String(rank + 1)]))
     }
-    // Work on no task is the neutral wherever it is drawn, never a hue.
-    expect(new Set(huesOf(page, 'none'))).toEqual(new Set(['other']))
+    // Work on no task is the neutral of what is not a value wherever it is drawn, never a hue
+    // and never the lighter neutral of the folded rest.
+    expect(new Set(huesOf(page, 'none'))).toEqual(new Set(['apart']))
   })
 
   it('is named in its tile when it is work on no task holding a twentieth or more', async () => {
@@ -259,8 +422,59 @@ describe('a value', () => {
     )
     const none = bar.get('[data-key="none"]')
     expect(none.classes()).toContain('mini-share-apart')
-    expect(none.attributes('data-slot')).toBe('other')
+    expect(none.attributes('data-slot')).toBe('apart')
     // The lead stays the first real value.
     expect(lead(page, 'work_item')).toBe('MAIN-3 Task 3')
+  })
+})
+
+describe('a share', () => {
+  it('is said in whole percents, never as all or none of what it is not', async () => {
+    // A second on a task beside 999 on no task: a thousandth, and the rest a hair under all.
+    stubAnalyticsReads((query) =>
+      serveUsage(
+        [
+          {
+            at: new Date(2026, 10, 9, 10),
+            group: { work_item: task(1, 'One') },
+            spend: { seconds: 1 },
+          },
+          { at: new Date(2026, 10, 9, 11), group: { work_item: noTask }, spend: { seconds: 999 } },
+        ],
+        query,
+      ),
+    )
+    const page = await mountAnalytics()
+    expect(lead(page, 'work_item')).toBe('MAIN-1 One')
+    expect(aside(page, 'work_item')).toBe('<1%')
+    expect(tile(page, 'work_item').get('.mini-share-bar').attributes('aria-label')).toBe(
+      'Shares of Agent time: No task >99%',
+    )
+  })
+})
+
+describe('a tile of «Now»', () => {
+  it('says no count beside work with no value when no value worked', async () => {
+    // Ten minutes of the live hour, on no task and launched by the session itself.
+    stubAnalyticsReads((query) =>
+      serveUsage(
+        [
+          {
+            at: new Date(2026, 10, 11, 14, 10),
+            group: { work_item: noTask, launch_class: noTask },
+            spend: { seconds: 600 },
+          },
+        ],
+        query,
+      ),
+    )
+    const page = await mountAnalytics({ routeState: { period: 'now' } })
+    expect(lead(page, 'launch_class')).toBe('The session itself')
+    expect(count(page, 'launch_class').exists()).toBe(false)
+    expect(lead(page, 'work_item')).toBe('No task')
+    expect(count(page, 'work_item').exists()).toBe(false)
+    // Work nobody can place is no work with no value: its tile keeps its count of none.
+    expect(lead(page, 'model')).toBe('Unknown')
+    expect(count(page, 'model').text()).toBe('0 values')
   })
 })

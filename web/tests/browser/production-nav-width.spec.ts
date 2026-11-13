@@ -149,17 +149,26 @@ test('a name the rail cuts shows a hint beside it, and one it does not cut shows
   await expect(page.locator('.nav-work-list')).toBeVisible()
 })
 
-test('a row the rail cuts hints beside the row, clear of the row’s own ring', async ({ page }) => {
+test('a title the rail cuts hints beside it, clear of its text, and says it without its number', async ({
+  page,
+}) => {
   await open(page, { width: 1280, height: 800 })
-  const row = page.locator('.nav-row', { has: page.locator('[aria-label^="LONG-1 "]') })
+  const title = page
+    .locator('.nav-row', { has: page.locator('[aria-label^="LONG-1 "]') })
+    .locator('.nav-row-title')
   const words = page.getByRole('tooltip')
   await page.getByRole('separator', { name: 'Navigation width' }).focus()
   await page.keyboard.press('Home')
-  await row.hover()
+  await title.hover()
   await page.clock.runFor(1000)
-  await expect(words).toHaveText(new RegExp(`^LONG-1 ${LONG_TITLE}`, 'u'))
-  const [box, shown] = await Promise.all([boxOf(row), boxOf(page.locator('.tooltip-hint'))])
-  expect(shown.x).toBeGreaterThanOrEqual(box.right)
+  // The row draws its number, so the hint says the title alone: the words the rail cuts.
+  await expect(words).toHaveText(LONG_TITLE)
+  await expect(words).not.toContainText('LONG-1')
+  // The title's own hint stands at its end, level with it and inside the window.
+  const [name, shown] = await Promise.all([boxOf(title), boxOf(page.locator('.tooltip-hint'))])
+  expect(shown.x).toBeGreaterThanOrEqual(name.right)
+  expect(Math.abs(shown.y + shown.height / 2 - (name.y + name.height / 2))).toBeLessThanOrEqual(1)
+  expect(shown.right).toBeLessThanOrEqual(1280)
 })
 
 test('focus brought by a key shows an icon’s hint, and a press shows none', async ({ page }) => {

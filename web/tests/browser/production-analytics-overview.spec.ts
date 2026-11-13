@@ -1,86 +1,23 @@
 /**
  * The overview of the Analytics page in the real app, where the page opens. The oracle is the
- * requirement: on a desktop window of 1440 by 900 its three figures, the period's chart, what
- * changed and the four cards of first values all stand in the panel without scrolling it; a
- * figure is the control that chooses the page's measure, pressed by more than a colour and from
+ * requirement: its three figures, the period's chart across the panel and, in one row under it,
+ * what changed and the three cards of first values, in that order; how high the chart stands is
+ * `production-analytics-overview-field`'s; a figure is the control that chooses the page's measure, pressed by more than a colour and from
  * the keyboard, and the address keeps it; the chart outlines the period before on its own scale;
  * what changed names the tasks that moved most by the measure's own units; a card's heading opens
  * its section and a row narrows the view; a single day stands as its hours. Each run prints what
  * it measured.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
-import { noTask, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
+import { openOverview, TASKS, worked, WORLD } from './overviewPage.ts'
 import { test } from './test.ts'
 
 const path = (page: Page) => page.url().slice(new URL(page.url()).origin.length)
-
-/** Ten in the morning of a day of November 2026, in the browser's own time. */
-const on = (day: number, hour = 10) => new Date(2026, 10, day, hour)
-const HOUR = 3600
-
-const ACCOUNT = value('5b0c7e21-4a3f-4d8e-9c16-2f7a8b9d0e1f')
-
-/** A stretch of work on a day: its task, model, role and project, and its hours. */
-function worked(
-  day: number,
-  workItem: TimedStretch['group']['work_item'],
-  [model, role, project]: [string, string, string],
-  hours: number,
-): TimedStretch {
-  return {
-    at: on(day),
-    group: {
-      work_item: workItem,
-      model: value(model),
-      role: value(role),
-      project: value(project),
-      account: ACCOUNT,
-    },
-    spend: { seconds: hours * HOUR, tokens: hours * 100_000, cost: hours * 2 },
-  }
-}
-
-const TASKS = Array.from({ length: 6 }, (_, index) =>
-  task(index + 1, `Rework the import of planning documents, part ${index + 1}`),
-)
-
-/**
- * This week to Wednesday afternoon, and the same days of the week before. From the week before:
- * MAIN-1 and work on no task fall by four hours each; MAIN-2 rises from a quarter of an hour,
- * MAIN-3 by two hours, MAIN-5 from nothing.
- */
-const WORLD: TimedStretch[] = [
-  worked(9, TASKS[0], ['model-a', 'main', 'alpha'], 5),
-  worked(9, TASKS[1], ['model-b', 'subagent', 'alpha'], 3),
-  worked(10, TASKS[2], ['model-a', 'main', 'beta'], 4),
-  worked(10, TASKS[3], ['model-c', 'advisor', 'beta'], 1),
-  worked(10, noTask, ['model-a', 'main', 'alpha'], 2),
-  worked(11, TASKS[4], ['model-b', 'main', 'gamma'], 2),
-  worked(11, TASKS[5], ['model-a', 'subagent', 'gamma'], 1),
-  worked(11, TASKS[0], ['model-a', 'main', 'alpha'], 1),
-  worked(2, TASKS[0], ['model-a', 'main', 'alpha'], 10),
-  worked(2, TASKS[2], ['model-a', 'main', 'beta'], 2),
-  worked(3, noTask, ['model-a', 'main', 'alpha'], 6),
-  worked(4, TASKS[1], ['model-b', 'subagent', 'alpha'], 0.25),
-]
-
-/** Opens the page at an address and waits until the overview's reads have all landed. */
-async function openOverview(page: Page, width: number, height: number, address = pageAt()) {
-  await page.setViewportSize({ width, height })
-  await page.goto(address)
-  const panel = page.locator('.analytics-panel')
-  await expect(panel.locator('.overview-panel')).toBeVisible()
-  await expect(panel.locator('.overview-top')).not.toHaveCount(0)
-  for (const card of await panel.locator('.overview-top').all())
-    await expect(card.locator('.ranked-row').first()).toBeVisible()
-  await expect(panel.locator('.period-before').first()).toBeAttached()
-  return panel
-}
 
 /** Where each part of the overview stands against the panel that holds it, and how it scrolls. */
 async function overviewLayout(page: Page) {
@@ -117,7 +54,7 @@ async function overviewLayout(page: Page) {
   })
 }
 
-test('opens a plain address on the overview, every part in sight at 1440×900', async ({
+test('opens a plain address on the overview, its parts in order at 1440×900', async ({
   page,
 }, info) => {
   const asked: string[] = []
@@ -131,26 +68,31 @@ test('opens a plain address on the overview, every part in sight at 1440×900', 
   const layout = await overviewLayout(page)
   await record(info, 'analytics overview 1440x900', { layout, reads: asked.length })
   await page.screenshot(shot(info, 'analytics-overview-1440x900.png'))
+  // The document stands still: whatever the overview lacks room for, its panel scrolls.
   expect(layout.document.scrollHeight).toBe(layout.document.clientHeight)
-  // Nothing of the panel lies under its edge: it has nothing to scroll, and nothing was.
-  expect(layout.panel.scrollHeight).toBe(layout.panel.clientHeight)
   expect(layout.panel.scrollTop).toBe(0)
   const count = (selector: string) => layout.parts.filter((part) => part.selector === selector)
   expect(count('.spending-tiles')).toHaveLength(1)
   expect(count('.spending-days')).toHaveLength(1)
   expect(count('.overview-changes')).toHaveLength(1)
-  expect(count('.overview-top')).toHaveLength(4)
+  expect(count('.overview-top')).toHaveLength(3)
   for (const part of layout.parts) {
     expect(part.top, part.selector).toBeGreaterThanOrEqual(layout.panel.top)
-    expect(part.bottom, part.selector).toBeLessThanOrEqual(layout.panel.bottom)
     expect(part.right, part.selector).toBeLessThanOrEqual(layout.panel.right)
   }
-  // The four cards stand in one row.
-  expect(new Set(count('.overview-top').map((card) => card.top)).size).toBe(1)
-  await expect(panel.locator('.overview-top h3')).toHaveText([
+  // The chart spans the panel as the figures do; what changed and the three cards stand in one
+  // row under it, what changed first.
+  const [tiles] = count('.spending-tiles')
+  const [chart] = count('.spending-days')
+  expect([chart?.left, chart?.right]).toEqual([tiles?.left, tiles?.right])
+  const row = [...count('.overview-changes'), ...count('.overview-top')]
+  expect(new Set(row.map((card) => card.top)).size).toBe(1)
+  expect(row.every((card) => card.top > (chart?.bottom ?? 0))).toBe(true)
+  expect(row[0]?.left).toBe(tiles?.left)
+  await expect(panel.locator('.overview-cards h3')).toHaveText([
+    'What changed',
     'Tasks',
     'Models',
-    'Roles',
     'Projects',
   ])
   // The page's read and the same days of the week before, the accounts, the steps of the week
@@ -197,9 +139,12 @@ test('the chart outlines the period before on its own scale, in the legend, the 
   await expect(days.locator('.period-scale')).toContainText('15')
   const heights = await days.locator('.period-slot').evaluateAll((slots) =>
     slots.map((slot) => {
-      const stack = slot.querySelector('.period-stack')?.getBoundingClientRect().height ?? 0
-      const before = slot.querySelector('.period-before')?.getBoundingClientRect().height ?? 0
-      return { stack: Math.round(stack), before: Math.round(before) }
+      const stack = slot.querySelector('.period-stack')?.getBoundingClientRect()
+      // The period before is a short mark: its height on the plot is where its middle stands.
+      const mark = slot.querySelector('.period-before')?.getBoundingClientRect()
+      const floor = stack?.bottom ?? 0
+      const before = mark ? floor - (mark.top + mark.bottom) / 2 : 0
+      return { stack: Math.round(stack?.height ?? 0), before: Math.round(before) }
     }),
   )
   // Monday: eight hours against twelve; Wednesday so far: four hours against a quarter of one.
@@ -219,22 +164,38 @@ test('what changed names the tasks that moved most, in the measure’s own units
   const changes = panel.locator('.overview-changes')
   const up = changes.locator('[data-way="up"]')
   const down = changes.locator('[data-way="down"]')
-  await expect(up.locator('.overview-changes-name')).toHaveText([
-    /^MAIN-2 /u,
-    /^MAIN-3 /u,
-    /^MAIN-5 /u,
-  ])
+  // Four of the five that moved, by the most either way: MAIN-5, two hours from nothing, ties
+  // with MAIN-3 and comes after it.
+  await expect(up.locator('.overview-changes-name')).toHaveText([/^MAIN-2 /u, /^MAIN-3 /u])
   await expect(up.locator('.overview-changes-amount')).toHaveText([
     /^\+\s2\sh\s45\smin$/u,
     /^\+\s2\sh$/u,
-    /^\+\s2\sh$/u,
   ])
-  await expect(up.nth(2).locator('.overview-changes-note')).toHaveText('nothing before')
   await expect(down.locator('.overview-changes-name')).toHaveText(['No task', /^MAIN-1 /u])
   await expect(down.locator('.overview-changes-amount')).toHaveText([/^−\s4\sh$/u, /^−\s4\sh$/u])
   // A task is a link to its card; work on no task leads nowhere.
   await expect(up.first()).toHaveAttribute('href', /MAIN-2/u)
   await expect(down.first()).not.toHaveAttribute('href')
+  // An entry is two lines: the name across the card's width, the arrow and the amount under it;
+  // the four no taller than a card's five rows.
+  const entry = await up.first().evaluate((line) => {
+    const box = (selector: string) => line.querySelector(selector)?.getBoundingClientRect()
+    const name = box('.overview-changes-name')
+    const amount = box('.overview-changes-amount')
+    return {
+      spare: Math.round(line.getBoundingClientRect().width - (name?.width ?? 0)),
+      under: (amount?.top ?? 0) >= (name?.bottom ?? 0),
+    }
+  })
+  expect(entry.under).toBe(true)
+  expect(entry.spare).toBeLessThanOrEqual(16)
+  const tallest = await panel.locator('.overview-cards > *').evaluateAll((cards) =>
+    cards.map((card) => {
+      const last = card.lastElementChild?.getBoundingClientRect().bottom ?? 0
+      return Math.round(last - card.getBoundingClientRect().top)
+    }),
+  )
+  expect(tallest[0]).toBeLessThanOrEqual(Math.max(...tallest.slice(1)))
 })
 
 test('a card’s heading opens its section, and a row narrows the view as a bar does', async ({
@@ -262,6 +223,60 @@ test('a card’s heading opens its section, and a row narrows the view as a bar 
   )
 })
 
+/** What holds focus: its tag, its name, whether its ring is drawn, and where it stands. */
+const focused = (page: Page) =>
+  page.evaluate(() => {
+    const active = document.activeElement
+    return {
+      tag: active?.tagName,
+      name: active?.getAttribute('aria-label') ?? active?.textContent?.trim(),
+      ringed: active?.matches(':focus-visible') ?? false,
+      panel: active?.matches('.analytics-panel') ?? false,
+      card: active?.closest<HTMLElement>('[data-card]')?.dataset.card ?? null,
+    }
+  })
+
+/** A card's heading pressed by the pointer or by a key. */
+const OPEN_BY = {
+  click: (heading: Locator) => heading.click(),
+  Enter: (heading: Locator) => heading.press('Enter'),
+}
+
+for (const key of ['click', 'Enter'] as const)
+  test(`a card’s heading opened by ${key} takes focus to the section, and Back brings it to the heading`, async ({
+    page,
+  }, info) => {
+    await serve(page, WORLD)
+    const panel = await openOverview(page, 1440, 900)
+    const heading = panel.locator('[data-card="model"]').getByRole('button', { name: 'Models' })
+    await OPEN_BY[key](heading)
+    await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
+    await expect(panel.locator('.dimension-panel')).toBeVisible()
+    const opened = await focused(page)
+    await page.goBack()
+    await expect(panel.locator('[data-card="model"]')).toBeVisible()
+    const back = await focused(page)
+    await record(info, `card-focus ${key}`, { opened, back })
+    // The section's panel, named as the rail names the section, ringed only after a key.
+    expect(opened).toEqual({
+      tag: 'SECTION',
+      name: 'Model',
+      ringed: key === 'Enter',
+      panel: true,
+      card: null,
+    })
+    expect(back).toMatchObject({ tag: 'BUTTON', name: 'Models', card: 'model' })
+  })
+
+test('a section chosen on the rail keeps the focus on its tile', async ({ page }) => {
+  await serve(page, WORLD)
+  await openOverview(page, 1440, 900)
+  const tile = page.locator('.analytics-rail [data-section="model"]')
+  await tile.click()
+  await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
+  await expect(tile).toBeFocused()
+})
+
 test('a single day stands as its hours beside the day before', async ({ page }, info) => {
   await serve(page, WORLD)
   const day = pageAt({ period: 'custom', from: '2026-11-10', to: '2026-11-10' })
@@ -277,91 +292,44 @@ test('a single day stands as its hours beside the day before', async ({ page }, 
   await page.screenshot(shot(info, 'analytics-overview-day-1440x900.png'))
 })
 
-/** The chart's plot and the room the panel leaves under the cards, inside its padding. */
-async function plotAndRoom(page: Page) {
-  return page.evaluate(() => {
-    const panel = document.querySelector<HTMLElement>('.analytics-panel')
-    const plot = document.querySelector('.overview-chart .period-field')
-    const cards = document.querySelector('.overview-cards')
-    if (!panel || !plot || !cards) throw new Error('no overview')
-    const { x, y, width, height } = plot.getBoundingClientRect()
-    const padding = Number.parseFloat(getComputedStyle(panel).paddingBlockEnd)
-    const room =
-      panel.getBoundingClientRect().bottom - padding - cards.getBoundingClientRect().bottom
-    const scrolls = panel.scrollHeight > panel.clientHeight
-    return { plot: { x, y, width, height }, room: Math.round(room), scrolls }
-  })
-}
-
-test('a tall window gives the room under the cards to the plot, and 1440 by 900 fits it', async ({
-  page,
-}, info) => {
-  await serve(page, WORLD)
-  await openOverview(page, 1440, 900)
-  const usual = await plotAndRoom(page)
-  await record(info, 'usual', usual)
-  await page.setViewportSize({ width: 1920, height: 1080 })
-  const plotHeight = async () => {
-    const measured = await plotAndRoom(page)
-    return measured.plot.height
-  }
-  await expect.poll(plotHeight).toBeGreaterThanOrEqual(280)
-  const tall = await plotAndRoom(page)
-  await record(info, 'tall', tall)
-  expect(tall.room).toBeGreaterThanOrEqual(0)
-  expect(tall.room).toBeLessThan(40)
-  expect(tall.scrolls).toBe(false)
-  // At 1440 by 900 the plot takes the few pixels the panel leaves, and nothing scrolls.
-  expect(usual.scrolls).toBe(false)
-  const { x, y, width, height } = usual.plot
-  expect([x, y, width, height].map((side) => Math.round(side))).toEqual([568, 443, 532, 165])
-})
-
-const OTHER_ACCOUNT = value('0d6f1c3a-8b2e-4f5a-9e7d-3c1b2a4f6e8d')
-
 /**
- * A full week: five tasks, models, roles and projects in each card, no task and a sixth task
- * in the chart's legend, and accounts that change twice: one on Monday, both on Tuesday, the
- * other on Wednesday.
+ * Three models this week: two of hours, named as clients name them, and one of seconds, whose
+ * figure is the longest words of the card.
  */
-const FULL: TimedStretch[] = [
-  ...[0, 1, 2, 3, 4, 5].map((index): TimedStretch => {
-    const day = [9, 10, 10, 11, 11, 9][index] ?? 9
-    const stretch = worked(
-      day,
-      TASKS[index],
-      [`model-${(index % 5) + 1}`, `role-${(index % 5) + 1}`, `project-${(index % 5) + 1}`],
-      6 - index,
-    )
-    const account = day === 11 || index === 2 ? OTHER_ACCOUNT : ACCOUNT
-    return { ...stretch, group: { ...stretch.group, account } }
-  }),
-  worked(10, noTask, ['model-1', 'role-1', 'project-1'], 2),
-  worked(2, TASKS[0], ['model-1', 'role-1', 'project-1'], 4),
+const MODELS: TimedStretch[] = [
+  worked(9, TASKS[0], ['claude-sonnet-5-5', 'main', 'alpha'], 3),
+  worked(10, TASKS[1], ['claude-opus-5-5', 'main', 'alpha'], 2),
+  { ...worked(11, TASKS[2], ['gpt-6.1-sol', 'main', 'alpha'], 0), spend: { seconds: 30 } },
+  worked(2, TASKS[0], ['claude-sonnet-5-5', 'main', 'alpha'], 1),
 ]
 
-test('at 1440 by 900 a full overview fits its panel: the plot gives up height before it scrolls', async ({
+test('a card’s figure is as wide as itself, and the name of its row takes the rest', async ({
   page,
 }, info) => {
-  await serve(page, FULL)
+  await serve(page, MODELS)
   const panel = await openOverview(page, 1440, 900)
-  for (const card of await panel.locator('.overview-top').all())
-    await expect(card.locator('.ranked-row')).toHaveCount(5)
-  await expect(panel.locator('.period-mark')).toHaveCount(2)
-  const legendLines = await panel
-    .locator('.overview-chart .chart-key')
-    .evaluateAll(
-      (keys) => new Set(keys.map((key) => Math.round(key.getBoundingClientRect().top))).size,
-    )
-  expect(legendLines).toBe(2)
-  const fitted = async () => {
-    const measured = await plotAndRoom(page)
-    return measured.scrolls
-  }
-  await expect.poll(fitted).toBe(false)
-  const full = await plotAndRoom(page)
-  const box = await panel.evaluate((element) => [element.scrollHeight, element.clientHeight])
-  await record(info, 'full', { ...full, box, legendLines })
-  expect(box[0]).toBe(box[1])
-  expect(full.plot.height).toBeGreaterThanOrEqual(100)
+  const models = panel.locator('[data-card="model"]')
+  await expect(models.locator('.ranked-value')).toHaveText([/^3\sh$/u, /^2\sh$/u, 'under a minute'])
+  const rows = await models.locator('.ranked-line').evaluateAll((lines) =>
+    lines.map((line) => {
+      const label = line.querySelector('.ranked-label')
+      const figure = line.querySelector('.ranked-value')?.getBoundingClientRect()
+      return {
+        name: label?.textContent ?? '',
+        cut: !label || label.scrollWidth > label.clientWidth,
+        nameWidth: Math.round(label?.getBoundingClientRect().width ?? 0),
+        figureRight: Math.round(figure?.right ?? 0),
+      }
+    }),
+  )
+  await record(info, 'model rows', rows)
+  // The long figure of the last row takes no room from the names above it.
+  expect(rows.map((row) => [row.name, row.cut])).toEqual([
+    ['claude-sonnet-5-5', false],
+    ['claude-opus-5-5', false],
+    ['gpt-6.1-sol', false],
+  ])
+  expect(rows[0]?.nameWidth).toBeGreaterThan(rows[2]?.nameWidth ?? 0)
+  // The figures still end on one edge.
+  expect(new Set(rows.map((row) => row.figureRight)).size).toBe(1)
 })

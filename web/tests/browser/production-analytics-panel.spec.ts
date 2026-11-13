@@ -6,7 +6,11 @@
  * while the table scrolls sideways. A second dimension chosen over the table crosses it, is the
  * address and outlives a reload, and the file downloaded is the table crossed; with the measure
  * tokens, the table and the file split the tokens by kind. At 1440 pixels the ranked list and the
- * small charts beside it are titled in one line each. Each run prints what it measured.
+ * small charts beside it are titled in one line each, and so is the line over the table that
+ * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
+ * word. The section of the tokens by kind is such a panel too: its counted kinds add up to the
+ * summary's «Tokens» figure, the cache reads stand apart from them, and its address gives it
+ * back. Each run prints what it measured.
  */
 import { readFile } from 'node:fs/promises'
 
@@ -14,6 +18,8 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { openReport, pageAt, record, serve, TASK_REPORT } from './analyticsPage.ts'
+import { shot } from './boardPage.ts'
+import { brokenWords } from './brokenWords.ts'
 import { test } from './test.ts'
 
 /** Whether each part of the charts and of the table stands whole, above the next one. */
@@ -184,6 +190,102 @@ test('on a phone the names stay in view while the table scrolls sideways', async
   expect(fixed.name).toEqual({ inside: true, onTop: true })
 })
 
+/** Each heading of the table: its words, whether it is marked sorted, its ink and its rule. */
+const sortMarks = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.spending-table-frame thead th')].map((one) => {
+      const style = getComputedStyle(one)
+      return {
+        text: one.textContent.trim(),
+        sorted: one.hasAttribute('aria-sort'),
+        arrow: one.querySelector('.table-sort-icon') !== null,
+        ink: style.color,
+        rule: style.boxShadow,
+      }
+    }),
+  )
+
+test('the column the table is sorted by is marked on its heading, and the mark follows a sort', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(TASK_REPORT)
+  await expect(page.locator('.spending-table-frame tbody tr').first()).toBeVisible()
+  const first = await sortMarks(page)
+  const body = await page
+    .locator('.spending-table-frame tbody td[data-chosen="true"]')
+    .first()
+    .evaluate((one) => getComputedStyle(one).color)
+  await record(info, 'analytics table sort marks', { first, body })
+  const sorted = first.filter((one) => one.sorted)
+  expect(sorted.map((one) => one.text)).toEqual(['Agent time'])
+  const [mark] = sorted
+  const tokens = first.find((one) => one.text === 'Tokens')
+  expect(mark?.arrow).toBe(true)
+  expect(mark?.ink, 'the sorted heading in the ink of the figures').toBe(body)
+  expect(mark?.ink).not.toBe(tokens?.ink)
+  expect(mark?.rule).not.toBe(tokens?.rule)
+
+  await page.locator('.spending-table-frame thead').getByRole('button', { name: 'Tokens' }).click()
+  const next = await sortMarks(page)
+  expect(next.filter((one) => one.sorted).map((one) => one.text)).toEqual(['Tokens'])
+  expect(next.find((one) => one.text === 'Tokens')?.rule).toBe(mark?.rule)
+})
+
+test.describe('in Russian', () => {
+  test.use({ locale: 'ru-RU' })
+
+  test('at 1440 pixels the small charts’ title and the table’s count each keep to one line', async ({
+    page,
+  }, info) => {
+    await serve(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(TASK_REPORT)
+    await expect(page.locator('.spending-table-summary')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const seen = await page.evaluate(() => {
+      // This body runs in the page, so a helper at the module's own scope would not be there.
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+      const fit = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector)
+        if (!element) throw new Error(`${selector} is missing`)
+        return {
+          text: element.textContent.trim(),
+          height: Math.round(element.getBoundingClientRect().height),
+          cut: element.scrollWidth > element.clientWidth,
+        }
+      }
+      return {
+        bars: fit('.spending-bars h2'),
+        multiples: fit('.spending-multiples h2'),
+        count: fit('.spending-table-summary'),
+      }
+    })
+    await record(info, 'analytics panel one line ru 1440x900', seen)
+    expect(seen.multiples.text).toBe('По дням, по задачам')
+    expect(seen.multiples.cut).toBe(false)
+    expect(seen.multiples.height).toBe(seen.bars.height)
+    // Twelve tasks spent this week, and none only in the week before.
+    expect(seen.count.text).toBe('12 задач')
+    expect(seen.count.cut).toBe(false)
+  })
+
+  test('on a phone no name or heading in a chart’s table breaks inside a word', async ({
+    page,
+  }, info) => {
+    await serve(page)
+    const analytics = await openReport(page, 390)
+    await expect(analytics.locator('.spending-days table')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const broken = await brokenWords(page, '.analytics-panel .chart-cell')
+    const days = await analytics.locator('.spending-days tbody th').allInnerTexts()
+    await record(info, 'analytics panel words 390 ru', { broken, days })
+    expect(days.some((day) => day.startsWith('понедельник'))).toBe(true)
+    expect(broken).toEqual([])
+  })
+})
+
 /** The text of the CSV file the table's button downloads, and its name. */
 async function download(page: Page) {
   const offered = page.waitForEvent('download')
@@ -255,4 +357,99 @@ test('with the measure tokens the table and its file split the tokens by kind', 
       ',filters,input_tokens,cached_read_tokens,cache_write_5m_tokens,cache_write_1h_tokens,output_tokens,reasoning_tokens',
     ),
   ).toBe(true)
+})
+
+/**
+ * The week's tokens by kind as the double splits them (`split` in the fixture): every stretch of
+ * the week is a whole number of ten thousand tokens, half input, three tenths output, the rest
+ * written to the cache for five minutes, and ten times as many read from it.
+ */
+const WEEK_TOKENS = [
+  ...Array.from({ length: 12 }, (_, index) => (13 - index) * 1_250_000),
+  900_000,
+  10_000,
+]
+const WEEK_KINDS = {
+  input: WEEK_TOKENS.reduce((sum, tokens) => sum + Math.round(tokens / 2), 0),
+  output: WEEK_TOKENS.reduce((sum, tokens) => sum + Math.round((tokens * 3) / 10), 0),
+  cacheWrite: WEEK_TOKENS.reduce(
+    (sum, tokens) => sum + tokens - Math.round(tokens / 2) - Math.round((tokens * 3) / 10),
+    0,
+  ),
+  cacheRead: WEEK_TOKENS.reduce((sum, tokens) => sum + tokens * 10, 0),
+  reasoning: WEEK_TOKENS.reduce(
+    (sum, tokens) => sum + Math.floor(Math.round((tokens * 3) / 10) / 3),
+    0,
+  ),
+}
+const compact = (count: number) =>
+  new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(count)
+
+test('the tokens by kind are a panel whose counted kinds add up to the «Tokens» figure', async ({
+  page,
+}, info) => {
+  await serve(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(pageAt())
+  const figure = page.locator('.tile-figure[data-measure="tokens"]')
+  await expect(figure).toBeVisible()
+  const tokens = await figure.evaluate((element) => element.textContent.trim())
+
+  await page
+    .getByRole('navigation', { name: 'Sections of the usage' })
+    .getByRole('button', { name: 'Token kinds', exact: true })
+    .click()
+  await expect
+    .poll(() => page.url().slice(new URL(page.url()).origin.length))
+    .toBe(pageAt({ by: 'token_kind' }))
+  const panel = page.locator('.kinds-panel')
+  const table = panel.locator('.kinds-table')
+  await expect(table.locator('tbody tr').first()).toBeVisible()
+
+  const rows = await table
+    .locator('tbody tr')
+    .evaluateAll((all) =>
+      all.map((row) => [...row.children].slice(0, 2).map((cell) => cell.textContent.trim())),
+    )
+  await record(info, 'analytics token kinds', { tokens, rows })
+  // The counted kinds are exactly the double's, and they add up to the figure of the summary.
+  const { input, output, cacheWrite, cacheRead, reasoning } = WEEK_KINDS
+  expect(input + output + cacheWrite).toBe(WEEK_TOKENS.reduce((sum, one) => sum + one, 0))
+  expect(rows).toEqual([
+    ['Input', compact(input)],
+    ['Output', compact(output)],
+    ['Cache write, 5 min', compact(cacheWrite)],
+    ['Total', compact(input + output + cacheWrite)],
+    ['Cache read', compact(cacheRead)],
+    ['Reasoning', compact(reasoning)],
+  ])
+  expect(rows[3]?.[1]).toBe(tokens)
+  await expect(panel.locator('.kinds-figure-value')).toHaveText(tokens)
+  // The two kinds apart are named briefly; the note beside the figure says why they stand apart.
+  const note = panel.locator('.kinds-note')
+  await expect(note).toBeVisible()
+  await expect(note).toContainText(/cache reads stand apart/u)
+  await expect(note).toContainText(/reasoning is part of output/u)
+
+  // Ranked with a bar: the counted kinds; after them, with no bar, the two the figure leaves out.
+  const bars = panel.locator('.kinds-bars')
+  await expect(bars.locator('ol .ranked-label')).toHaveText([
+    'Input',
+    'Output',
+    'Cache write, 5 min',
+  ])
+  await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
+  await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
+  // A small chart of each counted kind on one scale, the cache reads apart by their figure.
+  await expect(panel.locator('.kinds-multiples h2')).toHaveText('Per day, by kind')
+  expect(await parts(page), 'parts that spill or overlap').toEqual([])
+
+  // The address gives the section back.
+  await page.reload()
+  await expect(table.locator('tbody tr').first()).toBeVisible()
+  await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveAttribute(
+    'data-section',
+    'token_kind',
+  )
+  await page.locator('.analytics-panel').screenshot(shot(info, 'analytics-kinds-1440.png'))
 })

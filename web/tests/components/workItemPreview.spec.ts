@@ -6,7 +6,7 @@ import { createI18n } from 'vue-i18n'
  * prints, what it leaves out, and the sentences a screen reader hears instead.
  */
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkItemPreview from '@/entities/work-item/components/WorkItemPreview.vue'
 import { useWorkItemPreviewWords } from '@/entities/work-item/composables/useWorkItemPreviewWords.ts'
@@ -14,6 +14,7 @@ import type { WorkItemPreviewSubject } from '@/entities/work-item/composables/us
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { i18n as appI18n, messages, pluralRules } from '@/shared/i18n/index.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { boardItem } from '../fixtures/board.ts'
 
@@ -147,7 +148,6 @@ describe('WorkItemPreview', () => {
   })
 
   it.each([
-    [undefined, 'Reading…'],
     ['failed', 'Could not read the work item.'],
     ['missing', 'Task MAIN-1394 was not found.'],
     ['unavailable', "The work item's store is unavailable right now."],
@@ -156,6 +156,42 @@ describe('WorkItemPreview', () => {
     expect(wrapper.get('.preview-reference').text()).toBe('MAIN-1394')
     expect(wrapper.get('.preview-note').text()).toBe(line)
     expect(wrapper.find('.preview-title').exists()).toBe(false)
+  })
+
+  describe('while its item is read', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('holds its line empty for a read that answers inside the delay, then shows the item', async () => {
+      const wrapper = card({})
+      expect(wrapper.get('.preview-note').text()).toBe('')
+      await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS - 1)
+      expect(wrapper.get('.preview-note').text()).toBe('')
+      await wrapper.setProps({ item: CLAIMED })
+      expect(wrapper.get('.preview-title').text()).toBe(CLAIMED.title)
+      expect(wrapper.find('.preview-note').exists()).toBe(false)
+    })
+
+    it('says the wait once it has lasted, counted from the read, and keeps it long enough to read', async () => {
+      // The read began 120 ms before the card opened: the word is due 180 ms after it.
+      const wrapper = card({ since: Date.now() - 120 })
+      await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS - 121)
+      expect(wrapper.get('.preview-note').text()).toBe('')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(wrapper.get('.preview-note').text()).toBe(messages.en.platform.states.loading)
+      await wrapper.setProps({ item: CLAIMED })
+      // The item that answered just after the word waits until the word has been read.
+      expect(wrapper.get('.preview-note').text()).toBe(messages.en.platform.states.loading)
+      expect(wrapper.find('.preview-title').exists()).toBe(false)
+      await vi.advanceTimersByTimeAsync(LOADING_MIN_SHOWN_MS - 1)
+      expect(wrapper.find('.preview-title').exists()).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(wrapper.get('.preview-title').text()).toBe(CLAIMED.title)
+    })
   })
 
   it('hides its facts from assistive technology and brings hover text only to its controls', () => {
@@ -201,6 +237,8 @@ describe('what a screen reader hears', () => {
     expect(spoken({ reference: 'MAIN-77', item: null, failure: 'missing' })).toBe(
       'Task MAIN-77 was not found.',
     )
-    expect(spoken({ reference: 'MAIN-77', item: null }, 'ru')).toBe('Читаю…')
+    expect(spoken({ reference: 'MAIN-77', item: null }, 'ru')).toBe(
+      messages.ru.platform.states.loading,
+    )
   })
 })

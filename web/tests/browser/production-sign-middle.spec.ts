@@ -263,10 +263,10 @@ for (const locale of ['ru', 'en'] as const) {
       await installBackend(page)
       await serveChain(page, largeChainHere())
       await page.goto(CARD)
-      // The chain stands under Relations.
+      // The chain has a tab of its own.
       await page
         .locator('.drawer')
-        .getByRole('tab', { name: /Relations|Связи/u })
+        .getByRole('tab', { name: /^(Chain|Цепочка)$/u })
         .click()
       const section = page.locator('.drawer section.chain')
       await expect(section).toBeVisible()

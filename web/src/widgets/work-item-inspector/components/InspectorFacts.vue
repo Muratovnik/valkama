@@ -28,6 +28,11 @@
  * at full width under everything else where it is not, within reach of a thumb. The host shows
  * it again in the bar once this one has scrolled away. Under the rows stands how much work the
  * item took, a quiet line of its own and only where there is some.
+ *
+ * A card its address opens stands before its space is read, and two of these come from the
+ * space: the states the item may move to and its parent's reference. Until then the state is
+ * the menu it will be, naming only where the item is, and the parent's row stands with its
+ * label and no value, so neither moves anything when the space answers.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -70,8 +75,10 @@ const props = withDefaults(
     asking?: boolean
     /** The parent by its reference and its kind; the record carries only its id. */
     parent?: Pick<WorkItem, 'kind' | 'reference'> | null
+    /** The space is still being read, so the workflow and the parent are still to come. */
+    spaceReading?: boolean
   }>(),
-  { asking: false, parent: null },
+  { asking: false, parent: null, spaceReading: false },
 )
 
 const emit = defineEmits<{
@@ -137,7 +144,9 @@ const stateOptions = computed(() => [
   ...facetChoices([stateChoice(props.item.state)]).map((here) => ({ ...here, disabled: true })),
   ...moves.value,
 ])
-const movable = computed(() => props.writable && moves.value.length > 0)
+const movable = computed(
+  () => props.writable && (moves.value.length > 0 || (props.spaceReading && !props.workflow)),
+)
 
 /**
  * The chip stays enabled while a write is in flight: disabling the control
@@ -170,6 +179,10 @@ const context = computed(() => ({
 }))
 /** The one fact an item can lack; the others say their own word for having none. */
 const hasParent = computed(() => printsFacet('parent', 'card', props.item, context.value))
+/** The parent's row, held for a parent the space has still to name. */
+const parentRow = computed(
+  () => hasParent.value || (props.spaceReading && Boolean(props.item.parent_id)),
+)
 
 /**
  * An item of the card's space named in the facts — the parent, the blocker a reason waits on —
@@ -450,12 +463,15 @@ defineExpose({ actionCell })
         </div>
       </template>
       <div
-        v-else-if="facet === 'parent' && hasParent"
+        v-else-if="facet === 'parent' && parentRow"
         class="card-row"
       >
         <span class="card-row-label beside-chip trimmed-word">{{ t('workItem.parent') }}</span>
         <div class="card-row-value">
-          <span class="card-fact card-parent">
+          <span
+            v-if="hasParent"
+            class="card-fact card-parent"
+          >
             <FacetMarks
               surface="card"
               :item="item"

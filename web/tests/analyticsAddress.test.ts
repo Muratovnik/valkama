@@ -3,7 +3,7 @@
  * link gives the same view, every part of it, and the read is asked for the period the view
  * names in the browser's own time.
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { comparedPeriod } from '@/pages/analytics/utils/comparedPeriod.ts'
@@ -72,6 +72,7 @@ describe('the Analytics address', () => {
 
   it.each([
     ['the live hour', { period: 'now' }],
+    ['today by the hour', { period: 'today' }],
     ['this week', { period: 'week' }],
     [
       'the past four weeks by executor in tokens',
@@ -166,6 +167,14 @@ describe('the Analytics address', () => {
     expect(breakdownOf({ ...DEFAULT_VIEW, by: 'model' })).toBe('model')
   })
 
+  it('names the section of the tokens by kind, read as the overview is', () => {
+    const kinds = { ...DEFAULT_VIEW, by: 'token_kind' } as const
+    expect(writeAddress(kinds)).toEqual({ by: 'token_kind' })
+    expect(throughTheAddress(kinds)).toEqual(kinds)
+    // The overview's own read: moving between the two asks nothing again.
+    expect(breakdownOf(kinds)).toBe('work_item')
+  })
+
   it('drops what this build cannot read and keeps the rest of the link', () => {
     expect(
       readAddress({
@@ -258,6 +267,61 @@ describe('the live hour «now»', () => {
       to: new Date(2026, 10, 11, 13, 30, 20).toISOString(),
       utcOffset: -now.getTimezoneOffset(),
     })
+  })
+})
+
+describe('today by the hour', () => {
+  const today = { ...DEFAULT_VIEW, period: 'today' } as const
+  const HOUR = 3_600_000
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('is the whole day from its midnight to the next, cut into its hours', () => {
+    const now = new Date(2026, 10, 11, 14, 30)
+    const bounds = periodBounds(today, now)
+    expect(bounds).toEqual({
+      from: '2026-11-11',
+      to: '2026-11-12',
+      utcOffset: -now.getTimezoneOffset(),
+    })
+    expect(stepOf(today)).toBe('hour')
+    // The hours 0 to 23, the ones after the running hour among them: the day's midnights apart.
+    const midnight = (day: string) => Date.parse(`${day}T00:00:00Z`)
+    expect((midnight(bounds?.to ?? '') - midnight(bounds?.from ?? '')) / HOUR).toBe(24)
+  })
+
+  it('is compared with the same hours of yesterday, from its midnight to the same time', () => {
+    const now = new Date(2026, 10, 11, 14, 30, 20)
+    expect(comparedPeriod(today, now)).toEqual({
+      from: new Date(2026, 10, 10).toISOString(),
+      to: new Date(2026, 10, 10, 14, 30, 20).toISOString(),
+      utcOffset: -new Date(2026, 10, 10).getTimezoneOffset(),
+    })
+  })
+
+  it('compares the day after the autumn change with yesterday at its own offset', () => {
+    // Berlin leaves +02:00 for +01:00 on 25 October 2026: the 26th is the first whole day after.
+    vi.stubEnv('TZ', 'Europe/Berlin')
+    const now = new Date('2026-10-26T09:15:00+01:00')
+    expect(now.getTimezoneOffset()).toBe(-60)
+    expect(comparedPeriod(today, now)).toEqual({
+      from: '2026-10-24T22:00:00.000Z',
+      to: '2026-10-25T08:15:00.000Z',
+      utcOffset: 120,
+    })
+    expect(periodBounds(today, now)).toEqual({
+      from: '2026-10-26',
+      to: '2026-10-27',
+      utcOffset: 60,
+    })
+  })
+
+  it('opens an address written before it as before, and reads back a link that names it', () => {
+    expect(readAddress({ period: 'week' }).period).toBe('week')
+    expect(readAddress({ period: 'today' }).period).toBe('today')
+    expect(writeAddress({ ...DEFAULT_VIEW, period: 'today' })).toEqual({ period: 'today' })
   })
 })
 

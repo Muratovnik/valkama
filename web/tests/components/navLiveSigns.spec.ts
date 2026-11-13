@@ -93,9 +93,11 @@ describe('rows with no work moving', () => {
     const quiet = row(wrapper, 'MAIN-14')
     expect(quiet.classList).toContain('muted')
     expect(quiet.querySelector('.nav-row-lead .session-sign-quiet')).not.toBeNull()
-    expect(hintOf(quiet)).toMatch(
+    expect(quiet.querySelector('.nav-row-link')?.getAttribute('aria-label')).toMatch(
       /^MAIN-14 Quiet claim, часть «Structured answers»: молчит с 03 нояб\.?$/u,
     )
+    // The row draws its title and epic, not the quiet date: the hint says the date alone.
+    expect(hintOf(quiet)).toMatch(/^молчит с 03 нояб\.?$/u)
     expect(tooltipOf(quiet)?.clipped).toBe(false)
   })
 
@@ -106,7 +108,10 @@ describe('rows with no work moving', () => {
     expect(idle.classList).toContain('muted')
     expect(idle.querySelector('.nav-row-lead')?.children).toHaveLength(0)
     expect(working.querySelector('.nav-row-lead')?.children).toHaveLength(1)
-    expect(hintOf(idle)).toBe('MAIN-20 Notes for the owner: Pinned · no work now · Backlog')
+    expect(hintOf(idle)).toBe('Pinned · no work now · Backlog')
+    expect(idle.querySelector('.nav-row-link')?.getAttribute('aria-label')).toBe(
+      'MAIN-20 Notes for the owner: Pinned · no work now · Backlog',
+    )
     expect(idle.querySelector('.nav-row-meta')).toBeNull()
     expect(idle.querySelector('.nav-row-pin')?.getAttribute('aria-label')).toBe(
       'Pinned to Work: press to remove the pin',

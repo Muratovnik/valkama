@@ -11,14 +11,19 @@
  * The palette's order is what keeps neighbours apart (`--color-series-*` in `tokens.css`), so the
  * slots are handed out in sequence and none is ever generated or reused. A name past the last
  * slot gets `other`, the neutral a folded tail is drawn in: such series are summed into one
- * "other" series by the caller rather than told apart by a hue they do not have.
+ * "other" series by the caller rather than told apart by a hue they do not have. What is not a
+ * name at all — work with no value, work nobody can place — is `apart`, a second neutral of
+ * another lightness, so it is never taken for the folded tail it can stand on in a stack.
  */
 
 /** How many hues the palette holds: `--color-series-1` to `--color-series-6`. */
 export const SERIES_SLOT_COUNT = 6
 
-/** A palette slot, or the neutral of everything that is not one category. */
-export type SeriesSlot = 1 | 2 | 3 | 4 | 5 | 6 | 'other'
+/**
+ * A palette slot; `other`, the neutral of a folded tail; or `apart`, the darker neutral of what is
+ * not a category at all.
+ */
+export type SeriesSlot = 1 | 2 | 3 | 4 | 5 | 6 | 'apart' | 'other'
 
 function byCodePoint(left: string, right: string) {
   if (left === right) return 0

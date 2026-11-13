@@ -9,12 +9,18 @@
  * format by name a thousand times cost more than the formatting. Who holds an
  * item is the facet registry's to say, so the hover reads the same words the
  * column prints.
+ *
+ * The first word each column prints, in the font it prints in, is what the
+ * widest row of a column is found by (`widestRows.ts`).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import type { WidthColumn } from '@/widgets/work-item-views/utils/widestRows.ts'
+
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
 import { facetMarks } from '@/entities/work-item/utils/facets.ts'
+import type { FacetId } from '@/entities/work-item/utils/facets.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -28,10 +34,12 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
   const { say } = useMarkWords()
   const thisYear = new Date().getFullYear()
 
-  function holder(item: WorkItemBrief): string {
-    const [mark] = facetMarks('holder', 'list', item)
+  /** The first word a row's facet prints. */
+  function facetWord(item: WorkItemBrief, facet: FacetId): string {
+    const [mark] = facetMarks(facet, 'list', item)
     return mark ? say(mark.text) : ''
   }
+  const holder = (item: WorkItemBrief) => facetWord(item, 'holder')
 
   const words = computed(() => {
     const formats = i18n.getDateTimeFormat(i18n.locale.value) as Record<
@@ -57,8 +65,17 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
   const wordsOf = (item: WorkItemBrief): RowWords =>
     words.value.get(item.work_item_id) ?? { holder: '', updated: '' }
 
-  return {
-    holderOf: (item: WorkItemBrief) => wordsOf(item).holder,
-    updatedOf: (item: WorkItemBrief) => wordsOf(item).updated,
-  }
+  const holderOf = (item: WorkItemBrief) => wordsOf(item).holder
+  const updatedOf = (item: WorkItemBrief) => wordsOf(item).updated
+  const widths: WidthColumn<WorkItemBrief>[] = [
+    { font: '--font-line', word: (item) => item.reference },
+    { font: '--font-line', word: (item) => item.title },
+    { font: '--font-field-label', word: (item) => facetWord(item, 'state') },
+    { font: '--font-detail', word: (item) => facetWord(item, 'priority') },
+    { font: '--font-detail', word: holderOf },
+    { font: '--font-detail', word: (item) => facetWord(item, 'steps') },
+    { font: '--font-line', word: updatedOf },
+  ]
+
+  return { holderOf, updatedOf, widths }
 }

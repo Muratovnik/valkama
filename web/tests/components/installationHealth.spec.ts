@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InstallationHealth from '@/pages/settings/components/InstallationHealth.vue'
 
-import { fetchDoctorReport } from '@/shared/api/doctorApi.ts'
+import { fetchDoctorReport, validateDoctorReport } from '@/shared/api/doctorApi.ts'
 import type { DoctorReport } from '@/shared/api/doctorApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
@@ -166,5 +166,40 @@ describe('InstallationHealth resource state', () => {
     expect(finding.get('.health-action').text()).toContain(
       locale === 'en' ? 'reinstall' : 'переустановите',
     )
+  })
+
+  it('sends the reason a refused report is rejected to the developer console', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const refused = {
+      ...report,
+      levels: [
+        {
+          ...report.levels[0],
+          checks: [
+            {
+              ...report.levels[0].checks[0],
+              presentation: {
+                code: 'store-schema-supported',
+                parameters: { stored: Number.NaN },
+              },
+            },
+          ],
+        },
+      ],
+    }
+    vi.mocked(fetchDoctorReport).mockImplementationOnce(async () => validateDoctorReport(refused))
+    try {
+      const wrapper = mountHealth()
+      await flushPromises()
+
+      expect(wrapper.find('.platform-state-panel[data-tone="danger"]').exists()).toBe(true)
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('presentation.parameters.stored: unknown value'),
+        }),
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 })

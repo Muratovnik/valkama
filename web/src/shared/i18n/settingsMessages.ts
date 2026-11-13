@@ -1,5 +1,6 @@
 /* The copy of the Settings page itself; its groups with their own file keep their words there. */
 
+import { accountAliasMessages } from '@/shared/i18n/accountAliasMessages.ts'
 import { kindColorMessages } from '@/shared/i18n/kindColorMessages.ts'
 
 export const settingsMessages = {
@@ -36,6 +37,7 @@ export const settingsMessages = {
         saveFailed: 'Not saved: {reason}',
       },
       kindColors: kindColorMessages.en,
+      accountAliases: accountAliasMessages.en,
       searchOptions: 'Search options',
       noOptions: 'No matching options',
       diagnostics: {
@@ -77,6 +79,7 @@ export const settingsMessages = {
         saveFailed: 'Не сохранено: {reason}',
       },
       kindColors: kindColorMessages.ru,
+      accountAliases: accountAliasMessages.ru,
       searchOptions: 'Поиск по вариантам',
       noOptions: 'Подходящих вариантов нет',
       diagnostics: {

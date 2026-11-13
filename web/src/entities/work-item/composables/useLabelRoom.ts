@@ -28,6 +28,8 @@ import { facetMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetSubject, FacetSurface } from '@/entities/work-item/utils/facets.ts'
 import { chipsThatFit } from '@/entities/work-item/utils/labelRoom.ts'
 
+import { drawnWidth } from '@/shared/lib/textWidth.ts'
+
 /** What every line measures with, read from the first drawn chip and kept for the page. */
 interface ChipMetrics {
   /** The chip's padding and borders, face included, in px. */
@@ -40,12 +42,6 @@ interface ChipMetrics {
 
 const metrics = shallowRef<ChipMetrics | null>(null)
 const textWidths = new Map<string, number>()
-let context: CanvasRenderingContext2D | null | undefined
-
-function measuringContext() {
-  if (context === undefined) context = document.createElement('canvas').getContext('2d')
-  return context
-}
 
 /**
  * Layout places a box on a grid of 1/64 px and rounds a run of text up to it,
@@ -58,10 +54,7 @@ const LAYOUT_UNIT = 64
 function textWidth(text: string, font: string): number {
   const known = textWidths.get(text)
   if (known !== undefined) return known
-  const canvas = measuringContext()
-  if (!canvas) return 0
-  canvas.font = font
-  const width = Math.ceil(canvas.measureText(text).width * LAYOUT_UNIT) / LAYOUT_UNIT
+  const width = Math.ceil(drawnWidth(text, font) * LAYOUT_UNIT) / LAYOUT_UNIT
   textWidths.set(text, width)
   return width
 }

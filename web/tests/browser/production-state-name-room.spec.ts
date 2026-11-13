@@ -352,7 +352,7 @@ async function readSurface(page: Page, surface: Surface, naming: Naming, locale:
     await page.goto(cardRoute())
     const drawer = page.locator('.drawer')
     const facts = await check(drawer.locator('.card-facts'), naming, locale, 'card')
-    await showRelations(page, locale)
+    await showTab(page, locale, 'relations')
     const links = await check(drawer.locator('.relations'), naming, locale, 'relations')
     return { found: [...facts.found, ...links.found], printed: facts.printed + links.printed }
   }
@@ -361,8 +361,7 @@ async function readSurface(page: Page, surface: Surface, naming: Naming, locale:
     const { chain, edges, items } = smallChain()
     await serveChain(page, chain, items, edges)
     await page.goto(cardRoute())
-    await showRelations(page, locale)
-    await expect(page.locator('.drawer section.chain')).toBeVisible()
+    await showTab(page, locale, 'chain')
     return check(page.locator('.drawer section.chain'), naming, locale, where)
   }
   if (surface === 'graph') {
@@ -437,11 +436,14 @@ const cardRoute = () =>
     entity: planningWorkItemEntity(workItemRef),
   })
 
-/** Opens the card's Relations, where its links and its chain stand. */
-async function showRelations(page: Page, locale: string) {
-  const tab = locale === 'ru-RU' ? 'Связи' : 'Relations'
-  await page.locator('.drawer').getByRole('tab', { name: tab, exact: true }).click()
-  await expect(page.locator('.drawer .relations')).toBeVisible()
+/** Opens a tab of the card: Relations, where its links stand, or its Chain. */
+async function showTab(page: Page, locale: string, tab: 'chain' | 'relations') {
+  const names = { chain: ['Chain', 'Цепочка'], relations: ['Relations', 'Связи'] }[tab]
+  const name = locale === 'ru-RU' ? names[1] : names[0]
+  await page.locator('.drawer').getByRole('tab', { name, exact: true }).click()
+  await expect(
+    page.locator(tab === 'chain' ? '.drawer section.chain' : '.drawer .relations'),
+  ).toBeVisible()
 }
 
 /** How each naming reaches the page: the standard names as served, or «Dev» renamed long. */

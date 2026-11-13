@@ -14,7 +14,9 @@
  * takes one line, ends in an ellipsis where it is cut and is said whole in its hint, with what
  * the label leaves out (`detail`); the values stand in one column whatever the names do. In a
  * narrow container the name takes a line of its own over its bar. A `dense` chart, a few rows in
- * a small card, keeps the name and the value on one line and draws a thin bar under both.
+ * a small card, keeps the name and the value on one line and draws a thin bar under both; there
+ * each value is as wide as its own figure, ending where the others end, and the name takes the
+ * rest of its row, so a long figure in one row cuts no name in another.
  */
 import { computed, useId } from 'vue'
 
@@ -274,15 +276,18 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
   }
 }
 
-/* Dense, at any width: the name and the value on one line, the bar a thin line under both. */
+/* Dense, at any width: the name and the value on one line, the bar a thin line under both. Each
+   row lays out its own line, so its value is as wide as its figure and its name has the rest. */
 .ranked-dense {
   & .ranked-grid {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0 var(--space-3);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 
   & .ranked-line {
-    row-gap: var(--space-half);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-half) var(--space-2);
+    padding-block: var(--space-half);
   }
 
   & .ranked-label {

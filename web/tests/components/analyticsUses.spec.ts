@@ -155,6 +155,6 @@ describe('a report that cannot be written', () => {
     const page = mount(AnalyticsView, { global: { plugins: [i18n()] } })
     await flushPromises()
     expect(reports).toHaveLength(1)
-    expect(page.get('[role="status"]').text()).toContain('Nothing was spent in this period')
+    expect(page.get('.data-empty').text()).toContain('Nothing was spent in this period')
   })
 })

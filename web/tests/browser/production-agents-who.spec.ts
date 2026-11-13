@@ -26,6 +26,9 @@ interface Box {
   width: number
 }
 
+/** Which share of a number's width stands on its mark, by the point it says (`PlacedTick.edge`). */
+const POINT: Record<string, number> = { start: 0, middle: 0.5, end: 1 }
+
 /** A box to a tenth of a pixel, for the record the run prints. */
 const tenth = (value: number) => Math.round(value * 10) / 10
 const brief = (box: Box) => `${tenth(box.left)}+${tenth(box.width)}`
@@ -46,6 +49,8 @@ function measureAccounts(root: Element) {
     parts: all('.account-part'),
     marks: all('.account-mark'),
     numbers: all('.chart-tick'),
+    // Which point of its number stands on a mark: its middle unless the mark is near an end.
+    edges: [...root.querySelectorAll<HTMLElement>('.chart-tick')].map((tick) => tick.dataset.edge),
     rows: all('.account-row'),
     changes: all('.account-change'),
   }
@@ -133,7 +138,10 @@ test('the tab opens Analytics filtered to the item, over the days of its work', 
     filters: { work_item: [usage.work_item_id] },
   })
   await expect(analytics.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Task/u)
-  await expect(analytics.locator('.analytics-bar-filters .combo-chip')).toHaveCount(1)
+  // The bar says one filter is set: its chip where the bar has room beside the days, or its count.
+  await expect(
+    analytics.locator('.analytics-bar-filters :is(.combo-chip, .analytics-filter-folded)'),
+  ).toHaveText([/^(Task: .+|Filters: 1)$/u])
   // The page's own read, the period beside the one before, asks for the item's work alone.
   const own = () => asked.filter((query) => query.get('compare') === 'true')
   await expect.poll(() => own().length).toBeGreaterThan(0)
@@ -177,6 +185,13 @@ for (const width of [1440, 1024, 390]) {
       expect(numbers[index].bottom).toBeLessThanOrEqual(strip.top + 0.5)
       expect(numbers[index].left).toBeGreaterThanOrEqual(measured.drawer.left)
       expect(numbers[index].right).toBeLessThanOrEqual(measured.drawer.right)
+      // Never past the strip's ends, and by its point on its mark unless that would hang past.
+      expect(numbers[index].left).toBeGreaterThanOrEqual(strip.left - 0.5)
+      expect(numbers[index].right).toBeLessThanOrEqual(strip.right + 0.5)
+      const point = POINT[measured.edges[index] ?? 'middle'] ?? 0.5
+      const wanted = mark.left + mark.width / 2 - point * numbers[index].width
+      const held = Math.min(Math.max(wanted, strip.left), strip.right - numbers[index].width)
+      expect(Math.abs(numbers[index].left - held), 'a number off its mark').toBeLessThanOrEqual(1)
     }
     for (const row of [...measured.rows, ...measured.changes])
       expect(row.right).toBeLessThanOrEqual(strip.right + 0.5)

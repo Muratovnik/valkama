@@ -1,14 +1,20 @@
 /**
  * How the Analytics page names what it shows: a dimension, and a value of one as a card or the
  * rail already names it — a task by its number and title, a project by its name, a session by
- * its client and the start of its id, an account by the start of its id as an item's card does
- * (`valueDetail` is the whole id). Work with no value — no task, a session's own run — and a
- * value nobody can place say so in words of their own, per dimension: «unknown» is said only of
- * what nobody can place.
+ * the title its client gave it as the live work names it, else by its client and the start of
+ * its id, and an account by the name the owner gave it in Settings, else by the start of its id
+ * as an item's card does. What a name leaves out is its `valueDetail`, which the page says in the
+ * hint or beside the name: a titled session's client and the start of its id, so two of one title
+ * can be told apart, and an account's whole id. Work with no value — no task, a session's own
+ * run — and a value nobody can place say so in words of their own, per dimension: «unknown» is
+ * said only of what nobody can place.
  */
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
-import { named } from '@/pages/analytics/utils/readMoments.ts'
+import type { PerHour } from '@/pages/analytics/utils/panelAnswer.ts'
+import type { OverviewFigures } from '@/pages/analytics/utils/railFigures.ts'
+import { dayOf, named, withinToday } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf } from '@/pages/analytics/utils/usageFigures.ts'
 import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
@@ -19,8 +25,11 @@ import { tokensAnew, useUsageWords } from '@/widgets/work-item-inspector/utils/u
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageGroupValue, UsageStep } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
+import { aliasOf } from '@/shared/lib/accountAliases.ts'
 import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
+import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import { durationAxis } from '@/shared/ui/durationAxis.ts'
+import type { TrendPoint } from '@/shared/ui/MiniTrend.vue'
 
 /** How much of a session's id names it beside its client: enough to tell two apart. */
 const SESSION_PREFIX = 8
@@ -28,8 +37,14 @@ const SESSION_PREFIX = 8
 /** A period shorter than this is named by its clock times, a longer one by its days. */
 const DAY = 24 * 3_600_000
 
+/** A date as a period names its days, «8 Nov». */
+const DATE: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+
 /** A time of the clock, «09:05», «21:25»: the clock the minutes of a chart read on. */
 const CLOCK: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+
+/** A time of the clock on a day not today, with its date: «Nov 10, 09:05», «10 нояб., 09:05». */
+const DATED_CLOCK: Intl.DateTimeFormatOptions = { ...DATE, ...CLOCK }
 
 /** The charts count time in hours (`scale`). */
 const HOUR_SECONDS = 3600
@@ -41,22 +56,36 @@ const HOUR_SECONDS = 3600
  */
 const NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
 
-/**
- * What a value's name leaves out, for its hint and its table: the whole id of an account, which
- * the page names by the start of it; nothing where the name is the whole of what it says.
- */
-function valueDetail(name: UsageDimension, value: UsageGroupValue | null) {
-  const id = value?.id
-  return name === 'account' && id && agentIdStart(id) !== id ? id : undefined
-}
-
 /** The space no line breaks at. */
 const NO_BREAK = '\u{A0}'
+
+/** A share is said in whole percents: what rounds away at either end is said as more or less. */
+const SHARE_STEP = 0.01
+
+/** A session as it is named when its client gave it no title: «claude · 1a2b3c4d». */
+const sessionPlace = (value: UsageGroupValue & { id: string }) =>
+  [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
 
 export function useSpendingWords() {
   const i18n = useI18n()
   const { t } = i18n
   const usage = useUsageWords()
+  const { settings } = storeToRefs(useSettingsStore())
+
+  /** The owner's name for an account, or null where it has none. */
+  const accountName = (id: string) => aliasOf(settings.value.accountAliases, id)
+
+  /**
+   * What a value's name leaves out, for its hint and its table: the client and the start of the id
+   * of a session named by its title; the whole id of an account named by the owner's name or by the
+   * start of its id; nothing where the name is the whole of what it says.
+   */
+  function valueDetail(name: UsageDimension, value: UsageGroupValue | null): string | undefined {
+    const id = value?.id
+    if (!value || !id) return
+    if (name === 'executor') return value.title ? sessionPlace({ ...value, id }) : undefined
+    if (name === 'account' && (accountName(id) !== null || agentIdStart(id) !== id)) return id
+  }
 
   const compact = (value: number) =>
     new Intl.NumberFormat(i18n.locale.value, {
@@ -67,6 +96,17 @@ export function useSpendingWords() {
     new Intl.NumberFormat(i18n.locale.value, { style: 'percent', maximumFractionDigits: 0 }).format(
       Math.abs(ratio),
     )
+
+  /**
+   * A share of a whole in whole percents, never claiming more or less than it holds: «100 %»
+   * only for all of it and «0 %» only for none, so a share a hair under the whole reads «>99 %»
+   * and one a hair over nothing «<1 %».
+   */
+  function share(ratio: number) {
+    if (ratio > 0 && ratio < SHARE_STEP / 2) return `<${percent(SHARE_STEP)}`
+    if (ratio < 1 && ratio >= 1 - SHARE_STEP / 2) return `>${percent(1 - SHARE_STEP)}`
+    return percent(ratio)
+  }
 
   const measure = (name: Measure) => t(`analytics.measures.${name}`)
 
@@ -135,12 +175,15 @@ export function useSpendingWords() {
 
   /**
    * A period as its moments name it: by its first and last day, «2 – 8 Nov», or, shorter than a
-   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds. A line
+   * day, by its clock times, «20:26 – 21:25», the end being the last minute it holds. Clock times
+   * alone read as today's, so a short period not wholly within today names its day before them:
+   * the same hours of yesterday «Today» is compared with are «Nov 10, 00:00 – 15:59». A line
    * breaks only after the dash: never inside a date, and never with the dash starting a line.
    */
   function period(from: string, to: string) {
-    const short = Date.parse(to) - Date.parse(from) < DAY
-    const options: Intl.DateTimeFormatOptions = short ? CLOCK : { day: 'numeric', month: 'short' }
+    let options = DATE
+    if (Date.parse(to) - Date.parse(from) < DAY)
+      options = withinToday(from, to) ? CLOCK : DATED_CLOCK
     return dayFormat(options)
       .formatRange(named(from), named(to, -1))
       .replaceAll(/\s/gu, NO_BREAK)
@@ -196,11 +239,10 @@ export function useSpendingWords() {
         ? [value.reference, value.title].filter(Boolean).join(' ')
         : t('analytics.values.deleted')
     if (name === 'project') return value.name ?? value.id
-    if (name === 'executor')
-      return [value.family, value.id.slice(0, SESSION_PREFIX)].filter(Boolean).join(' · ')
+    if (name === 'executor') return value.title ?? sessionPlace(value)
     if (name === 'role' && i18n.te(`analytics.roles.${value.id}`))
       return t(`analytics.roles.${value.id}`)
-    if (name === 'account') return agentIdStart(value.id)
+    if (name === 'account') return accountName(value.id) ?? agentIdStart(value.id)
     return value.id
   }
 
@@ -246,18 +288,45 @@ export function useSpendingWords() {
   /** A day as the time axis names it, «Mon 9», and in full for the readout and the table. */
   const day = (start: string) =>
     dayFormat({ weekday: 'short', day: 'numeric' }).format(named(start))
-  const fullDay = (start: string) =>
+  const longDay = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long' }).format(named(start))
+
+  /**
+   * A day as a sentence names it after «of» or «за»: by its date first where a weekday would
+   * have to be declined, «11 ноября, ср», and in full where it need not, «Wednesday, November 11».
+   */
+  const fullDay = (start: string) =>
+    t('analytics.drill.dayName', {
+      date: dayFormat({ day: 'numeric', month: 'long' }).format(named(start)),
+      weekday: dayFormat({ weekday: 'short' }).format(named(start)),
+      weekdayLong: dayFormat({ weekday: 'long' }).format(named(start)),
+    })
 
   /** An hour or a minute as the time axis names it, «14:05», and in full with its day. */
   const clock = (start: string) => dayFormat(CLOCK).format(named(start))
   const fullClock = (start: string) =>
     dayFormat({ weekday: 'long', day: 'numeric', month: 'long', ...CLOCK }).format(named(start))
+  /**
+   * A moment of another day as short as a period's hours of that day are named (`period`), its
+   * date and its clock time, «Nov 10, 14:05»: the clock time alone would read as today's.
+   */
+  const datedClock = (start: string) => dayFormat(DATED_CLOCK).format(named(start))
 
-  /** A step of a period by its start, short and in full: a day by its date, else its time. */
+  /**
+   * A step of a period by its start, short and in full: a day by its weekday and date, else its
+   * time. A day carries too its date with the month, «Oct 27», and which month that is, which a
+   * time axis prints where a month starts (`PeriodColumn.dated`); a time needs no month.
+   */
   const stepName = (start: string, step: UsageStep) =>
     step === 'day'
-      ? { label: day(start), fullLabel: fullDay(start) }
+      ? {
+          label: day(start),
+          fullLabel: longDay(start),
+          dated: {
+            label: dayFormat({ day: 'numeric', month: 'short' }).format(named(start)),
+            month: dayOf(start).slice(0, 7),
+          },
+        }
       : { label: clock(start), fullLabel: fullClock(start) }
 
   /** How a chart is cut by its steps: «per day», «per minute». */
@@ -280,7 +349,7 @@ export function useSpendingWords() {
   const axis = (name: Measure) =>
     name === 'time' ? durationAxis(spanWordsOf(t), HOUR_SECONDS) : undefined
 
-  /** What changed in the accounts that worked: «Accounts: a → a, b». */
+  /** What changed in the accounts that worked: «Account change: a → a, b». */
   const accounts = (before: readonly UsageGroupValue[], after: readonly UsageGroupValue[]) =>
     t('analytics.days.accounts', {
       before: before.map((value) => valueLabel('account', value)).join(', '),
@@ -295,18 +364,85 @@ export function useSpendingWords() {
       by: t(`analytics.byDimension.${by}`),
     })
 
+  /**
+   * A figure per hour of agent time beside the period before's, in the page's compact numbers
+   * with the unit said once: «$17.9/h, was 8.1», «1.2M/h, was 800K»; no «was» where the period
+   * before has none. `detail` says what the line is of, the cost's as the estimate it is.
+   */
+  function perHour(name: 'cost' | 'tokens', rate: PerHour) {
+    const now = compact(rate.now)
+    const line =
+      rate.was === null
+        ? t(`analytics.figures.perHour.${name}`, { now })
+        : t(`analytics.figures.perHour.${name}Was`, { now, was: compact(rate.was) })
+    return { line, detail: t(`analytics.figures.perHour.${name}Detail`) }
+  }
+
+  /** A step's figure in the measure's units, or the words for a step with none. */
+  function amount(name: Measure, value: number | null) {
+    if (value === null) return t(`analytics.days.absent.${name}`)
+    return value === 0 && name === 'time' ? t('time.minutes', { count: 0 }) : scale(name, value)
+  }
+
+  /**
+   * A period's steps in words — days, hours, or the minutes of the live hour: the first and the
+   * last, the highest, and the last one's figure; the total alone where no step has one.
+   */
+  function trendWords(name: Measure, figures: OverviewFigures, step: UsageStep) {
+    const steps = figures.trend
+    const label = (key: string) => stepName(key, step).label
+    let top = steps.at(0)
+    for (const one of steps) if ((one.value ?? 0) > (top?.value ?? 0)) top = one
+    const first = steps.at(0)
+    const last = steps.at(-1)
+    if (!first || !last || !top?.value)
+      return t('analytics.figures.trendNone', {
+        measure: measure(name),
+        per: per(step),
+        figure: figure(name, figures.total),
+      })
+    return t('analytics.figures.trend', {
+      measure: measure(name),
+      per: per(step),
+      from: label(first.key),
+      to: label(last.key),
+      top: amount(name, top.value),
+      day: label(top.key),
+      last: [amount(name, last.value), last.incomplete ? t('analytics.days.soFar') : '']
+        .filter(Boolean)
+        .join(' '),
+    })
+  }
+
+  /**
+   * A period's steps as a small trend (`MiniTrend`) with its words: the rail's tile of the
+   * overview and each of the page's figures draw and say it the same way.
+   */
+  const trend = (
+    name: Measure,
+    figures: OverviewFigures,
+    step: UsageStep,
+  ): { label: string; points: TrendPoint[] } => ({
+    label: trendWords(name, figures, step),
+    points: figures.trend,
+  })
+
   return {
     accounts,
     axis,
     change,
     chartTitle,
+    datedClock,
     day,
     fullDay,
     scale,
+    share,
     period,
     per,
+    perHour,
     stepChartTitle,
     stepName,
+    trend,
     dimension,
     figure,
     lineChange,

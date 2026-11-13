@@ -96,6 +96,44 @@ export const UNRECORDED_BETWEEN: TimedStretch[] = [
   { at: on(11), group: { work_item: task(2, 'Two') }, spend: { seconds: 900 } },
 ]
 
+/**
+ * Figures as long as a month of a busy workstation writes them, «21 days 12 h», «594.9M» and
+ * «≈ $9,584.68», in the live hour, so every period up to four weeks holds them; and a table whose
+ * count is long: a hundred tasks with tokens, forty-five with agent time alone and no tokens or
+ * price, and a hundred and thirty-seven that worked only in the week before.
+ */
+export const LONG_FIGURES: TimedStretch[] = [
+  {
+    at: new Date(2026, 10, 11, 14, 20),
+    group: {
+      work_item: task(1, 'Rework the import of very long planning documents'),
+      account: WORK,
+    },
+    spend: { seconds: 21 * 86_400 + 12 * 3600, tokens: 594_900_000, cost: 9584.68 },
+  },
+  ...Array.from({ length: 99 }, (_, index) => ({
+    at: on(9 + (index % 3)),
+    group: { work_item: task(index + 2, `Task with tokens ${index + 2}`), account: WORK },
+    spend: { seconds: 3600, tokens: 1_000_000, cost: 1.25 },
+  })),
+  ...Array.from({ length: 45 }, (_, index) => ({
+    at: on(10),
+    group: {
+      work_item: task(index + 101, `Task with agent time alone ${index + 101}`),
+      account: WORK,
+    },
+    spend: { seconds: 1800 },
+  })),
+  ...Array.from({ length: 137 }, (_, index) => ({
+    at: on(3),
+    group: {
+      work_item: task(index + 146, `Task of the week before ${index + 146}`),
+      account: WORK,
+    },
+    spend: { seconds: 600, tokens: 10_000, cost: 0.1 },
+  })),
+]
+
 /** What the double answers: the work it holds, or a read that never answers, or one that fails. */
 export type Answer = 'failed' | 'hold' | readonly TimedStretch[]
 
@@ -163,6 +201,39 @@ export async function record(info: TestInfo, name: string, measured: unknown) {
     contentType: 'application/json',
   })
   console.log(`${name}: ${JSON.stringify(measured)}`)
+}
+
+/**
+ * How much room each shown element a selector finds lacks for its words, in pixels: the width
+ * of its text laid out whole, measured on a range around it, less its content box. Above zero
+ * the words are cut, by a third of a pixel as surely as by thirty: an ellipsis then takes their
+ * last characters. `scrollWidth`, rounded to whole pixels, sees none of the first.
+ */
+export async function shortfalls(page: Page, selector: string) {
+  return page.evaluate((chosen) => {
+    return [...document.querySelectorAll<HTMLElement>(chosen)]
+      .filter((element) => element.checkVisibility())
+      .map((element) => {
+        const style = getComputedStyle(element)
+        const sides = [
+          'paddingLeft',
+          'paddingRight',
+          'borderLeftWidth',
+          'borderRightWidth',
+        ] as const
+        const box =
+          element.getBoundingClientRect().width -
+          sides.reduce((sum, side) => sum + Number.parseFloat(style[side]), 0)
+        const range = document.createRange()
+        range.selectNodeContents(element)
+        const text = range.getBoundingClientRect().width
+        return {
+          text: element.textContent.trim(),
+          box: Math.round(box * 100) / 100,
+          short: Math.round((text - box) * 100) / 100,
+        }
+      })
+  }, selector)
 }
 
 /** Where each element a selector finds stands, rounded to the pixel. */

@@ -9,39 +9,46 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import { useTabIds } from '@/shared/ui/tabIds.ts'
 
 export type InspectorSection =
-  'activity' | 'agents' | 'execution' | 'memory' | 'overview' | 'relations'
+  'activity' | 'agents' | 'chain' | 'execution' | 'memory' | 'overview' | 'relations'
+
+/** What the card says about itself that decides which sections it offers. */
+interface SectionSources {
+  /** How many agents the card's read names; null until it has answered. */
+  agents: () => number | null
+  /** The item has a chain — children, or work discovered from it; null until that is known. */
+  chained: () => boolean | null
+  projectId: () => string
+  scrollToStart: () => void
+  writable: () => boolean
+}
 
 /**
  * Which section of a card is shown, the strip that chooses it, and the body's
  * scroll that follows the choice.
  *
  * Execution exists only for an item of the primary store, and only once the owner
- * has turned its tab on, and Agents only while the item has any, so the strip offers each
- * only then, and a card that stops offering one steps off it. The setting is read before the
- * card draws anything; the agents are not known until the read has answered, which a card
- * coming back by Back to that tab has to wait for before it can say the tab is gone.
+ * has turned its tab on, Agents only while the item has any, and Chain only where the work
+ * grew into something, so the strip offers each only then, and a card that stops offering one
+ * steps off it. The setting is read before the card draws anything; the agents and the chain
+ * are not known until their reads have answered, which a card coming back by Back to that tab
+ * has to wait for before it can say the tab is gone.
  *
  * A section shows the moment it is chosen, which is what lets the arrows choose as they
  * move: what one reads is read with the card, as its attempts are, and Memory's source
  * with them (`memorySource`).
  */
-export function useInspectorSections(
-  writable: () => boolean,
-  scrollToStart: () => void,
-  projectId: () => string,
-  /** How many agents the card's read names; null until it has answered. */
-  agents: () => number | null,
-) {
+export function useInspectorSections(sources: SectionSources) {
   const { t } = useI18n()
   const { settings } = storeToRefs(useSettingsStore())
-  const offersExecution = computed(() => writable() && settings.value.executionTab)
-  const agentCount = computed(agents)
+  const offersExecution = computed(() => sources.writable() && settings.value.executionTab)
+  const agentCount = computed(sources.agents)
+  const chained = computed(sources.chained)
   const section = ref<InspectorSection>('overview')
-  provideMemorySource(projectId)
+  provideMemorySource(sources.projectId)
 
   // Every tab starts at its own top. The body is one scroller, so a tab opened
   // after reading far down another used to open at that same depth.
-  watch(section, scrollToStart)
+  watch(section, sources.scrollToStart)
 
   const sections = computed<ChoiceOption[]>(() => [
     { value: 'overview' as const, label: t('workItem.overview') },
@@ -52,6 +59,11 @@ export function useInspectorSections(
             label: t('workItem.agents.tab', { count: agentCount.value }),
           },
         ]
+      : []),
+    // In Relations the chain stood after every link and reference, a long scroll down an epic.
+    // A card Back returned to it keeps its tab until the read says there is no chain.
+    ...(chained.value || (chained.value === null && section.value === 'chain')
+      ? [{ value: 'chain' as const, label: t('workItem.chain.title') }]
       : []),
     ...(offersExecution.value
       ? [{ value: 'execution' as const, label: t('workItem.section.execution') }]
@@ -65,9 +77,10 @@ export function useInspectorSections(
   function leaveUnoffered() {
     const executionGone = section.value === 'execution' && !offersExecution.value
     const agentsGone = section.value === 'agents' && agentCount.value === 0
-    if (executionGone || agentsGone) section.value = 'overview'
+    const chainGone = section.value === 'chain' && chained.value === false
+    if (executionGone || agentsGone || chainGone) section.value = 'overview'
   }
-  watch([offersExecution, agentCount], leaveUnoffered)
+  watch([offersExecution, agentCount, chained], leaveUnoffered)
 
   /**
    * The strip's model: any section name it offers, read back as one. A card coming back

@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 
 import { chainResponse, emptyChain, largeEpicChain } from '../fixtures/chain.ts'
-import { deferred, getButton, showRelations, workItemFixture } from '../fixtures/workItem.ts'
+import { deferred, findTab, getButton, showChain, workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
 import { requestUrl, withSecurityBootstrap } from '../support/request.ts'
 
@@ -50,7 +50,7 @@ function serveChain(...answers: Response[]) {
 async function open(item = ROOT, overrides: { writable?: boolean } = {}) {
   const wrapper = mountInspector(item, overrides)
   await flushPromises()
-  await showRelations(wrapper)
+  await showChain(wrapper)
   return wrapper
 }
 
@@ -106,12 +106,13 @@ describe('the chain section of a card', () => {
       'chain-members',
     ])
     expect(chain.findAll('.chain-summary p')).toHaveLength(2)
-    // The heading carries no bare count of its own: the totals line is the
-    // section's one number for the chain, and it says what it counts. The scope
-    // rides the heading's row, and the action its short word under its whole name.
-    expect(chain.get('.section-header').text()).toBe('Chain EpicChainOn graph')
+    // The tab names the section, so it opens on its actions and no heading says «Chain» again;
+    // nor does a bare count: the totals line is the section's one number for the chain, and it
+    // says what it counts. The action wears its short word under its whole name.
+    expect(chain.element.firstElementChild?.classList).toContain('chain-actions')
+    expect(chain.get('.chain-actions').text()).toBe('EpicChainOn graph')
+    expect(chain.find('h3, .section-header').exists()).toBe(false)
     expect(getButton(wrapper, 'On graph').attributes('aria-label')).toBe('Show on graph')
-    expect(chain.find('.section-header-count').exists()).toBe(false)
     // The map's key says what stands where, in the board's own state names —
     // never lowercased keys — each with its figure.
     expect(
@@ -295,17 +296,24 @@ describe('the chain section of a card', () => {
     )
     const wrapper = await open()
     expect(section(wrapper).attributes('aria-busy')).toBe('true')
-    expect(section(wrapper).get('[role="status"]').text()).toBe('Reading the chain…')
+    // The line stands from the start of the read; its word waits for the delay, which a
+    // read answered at once never reaches. A section announces nothing of its own: the
+    // card has one status region for its waits.
+    expect(section(wrapper).get('.chain-quiet').text()).toBe('')
+    expect(section(wrapper).find('[role="status"]').exists()).toBe(false)
     answer.resolve(json(chainResponse(largeEpicChain())))
     await flushPromises()
     expect(section(wrapper).attributes('aria-busy')).toBeUndefined()
-    expect(section(wrapper).find('[role="status"]').exists()).toBe(false)
+    expect(section(wrapper).find('.chain-quiet').exists()).toBe(false)
   })
 
-  it('holds no section for an item with no chain, and shows nothing while it loads', async () => {
+  it('offers no tab for an item with no chain, and shows nothing while it loads', async () => {
     serveChain(json(chainResponse(emptyChain())))
     const leaf = workItemFixture('Leaf', 1)
-    const wrapper = await open(leaf)
+    const wrapper = mountInspector(leaf)
+    expect(wrapper.text()).not.toContain('Chain')
+    await flushPromises()
+    expect(findTab(wrapper, 'Chain')).toBeUndefined()
     expect(section(wrapper).exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Chain')
   })
@@ -345,7 +353,7 @@ describe('the chain section of a card', () => {
     await flushPromises()
     expect(wrapper.emitted('open')).toEqual([
       [reference, expect.objectContaining({ opened: reference, reference: ROOT.reference })],
-      ['MAIN-779', expect.objectContaining({ opened: 'MAIN-779', section: 'relations' })],
+      ['MAIN-779', expect.objectContaining({ opened: 'MAIN-779', section: 'chain' })],
     ])
   })
 
@@ -475,12 +483,14 @@ describe('the chain section of a card', () => {
     expect(section(attached).find('[role="alert"]').exists()).toBe(false)
   })
 
-  it('says the same for an attached item with no children of its own', async () => {
+  it('offers no tab for an attached item with no children, whose chain it cannot read', async () => {
     const asked = serveChain(json(chainResponse(emptyChain())))
     const leaf = workItemFixture('Leaf', 1)
     vi.mocked(fetchWorkItem).mockResolvedValue(leaf)
-    const wrapper = await open(leaf, { writable: false })
+    const wrapper = mountInspector(leaf, { writable: false })
+    await flushPromises()
     expect(asked).toHaveLength(0)
-    expect(section(wrapper).get('.data-empty').text()).toContain('primary store')
+    expect(findTab(wrapper, 'Chain')).toBeUndefined()
+    expect(section(wrapper).exists()).toBe(false)
   })
 })

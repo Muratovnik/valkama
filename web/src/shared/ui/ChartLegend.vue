@@ -3,14 +3,14 @@
  * Which hue is which series, in words: each series' name beside a swatch of its hue, in the
  * stack's order. A chart of two series or more carries one, so a series is never told apart by
  * its hue alone; one series needs none, since the chart's title already says what it is. A chart
- * that outlines a period it is compared with names that outline last (`outline`), beside a short
- * dashed edge as the plot draws it.
+ * that marks a period it is compared with names that mark last (`outline`), beside a short line
+ * as the plot draws it at the height that period reached.
  */
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
 
 defineProps<{
   series: readonly PeriodSeries[]
-  /** The name of the dashed outline the chart draws, when it draws one. */
+  /** The name of the mark of the period compared with, when the chart draws one. */
   outline?: string
 }>()
 </script>
@@ -69,12 +69,12 @@ defineProps<{
   overflow-wrap: anywhere;
 }
 
+/* The mark of the period compared with, as the plot draws it: a short line, an edge in the
+   text's colour that a forced palette inks with the text. */
 .chart-outline {
   flex: none;
   inline-size: var(--space-3);
-  block-size: var(--space-3);
-  border: var(--space-hair) dashed currentcolor;
-  border-block-end: 0;
+  border-block-start: var(--space-half) solid currentcolor;
   color: var(--color-text-muted);
 }
 

@@ -142,9 +142,10 @@ test('«Now» reads itself again every 30 s while the page is seen, and never wh
   await page.clock.install({ time: NOW })
   const { show, reads, count } = await watchPage(page)
   const double = await serveLive(page, HOUR_OF_WORK)
+  // The page's time stops before it opens, so a slow open cannot move the pause into the past.
+  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   const analytics = await openReport(page, 1440, nowAddress)
   await expect(analytics.locator('.analytics-bar-live')).toHaveText('every 30 s')
-  await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
   await settled(count, double)
   expect(roundsOf(await reads())).toBe(1)
 
@@ -254,8 +255,9 @@ test('the bar counts the age of the newest record in seconds, without a read', a
   const { count } = await watchPage(page)
   const double = await serveLive(page, HOUR_OF_WORK)
   double.lastEventAt = new Date(NOW.getTime() - 20_000)
-  const analytics = await openReport(page, 1440, nowAddress)
+  // The page's time stops before it opens, so a slow open cannot move the pause into the past.
   await page.clock.pauseAt(new Date(NOW.getTime() + 10_000))
+  const analytics = await openReport(page, 1440, nowAddress)
   await settled(count, double)
   const fresh = analytics.locator('.analytics-bar-fresh')
   await expect(fresh).toHaveText('Newest record 14:29 · 30\u{A0}s ago')

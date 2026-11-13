@@ -60,7 +60,7 @@ for (const width of [1440, 1024, 390]) {
     // The day not over yet says so; the change of accounts is marked and said.
     await expect(analytics.locator('.spending-days')).toContainText('so far')
     await expect(analytics.locator('.spending-days')).toContainText(
-      'Accounts: 5b0c7e21 → 5b0c7e21, d4e8a1f0',
+      'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0',
     )
 
     const measured = await measure(page)
@@ -125,6 +125,14 @@ test.describe('in Russian', () => {
       await expectNoSilentClipping(page, `analytics ru at ${width}px`, '.analytics-page')
       await page.screenshot(shot(info, `analytics-ru-${width}.png`))
     })
+
+  // Named by its weekday, a day would read «Показать задачи за среда»: it is named by its date.
+  test('a day of the chart is named by its date, so «за» takes no weekday', async ({ page }) => {
+    await serve(page)
+    const analytics = await openReport(page, 1440)
+    const days = analytics.locator('.spending-days button.period-column')
+    await expect(days.last()).toHaveAccessibleName('Показать задачи за 11 ноября, ср')
+  })
 })
 
 /**
@@ -169,10 +177,11 @@ const READ_STATES: {
     answer: UNRECORDED_BETWEEN,
     says: async (analytics, ru) => {
       await expect(analytics.locator('.spending-days')).toContainText(
-        `${ru ? 'Аккаунты' : 'Accounts'}: 5b0c7e21 → d4e8a1f0`,
+        `${ru ? 'Смена аккаунта' : 'Account change'}: 5b0c7e21 → d4e8a1f0`,
       )
-      const notes = analytics.locator('.spending-days :is(.period-note, td)', {
-        hasText: ru ? 'Аккаунты:' : 'Accounts:',
+      // Said where the day is read: its readout over the chart, or its row of the table.
+      const notes = analytics.locator('.spending-days :is(.period-readout, td)', {
+        hasText: ru ? 'Смена аккаунта:' : 'Account change:',
       })
       await expect(notes).toHaveCount(1)
     },
@@ -302,14 +311,17 @@ for (const width of [1440, 390])
     await serve(page)
     const filters = { model: ['model-a'], work_item: [task(1, '').id, task(2, '').id] }
     const analytics = await openReport(page, width, pageAt({ filters: JSON.stringify(filters) }))
-    await analytics.locator('.analytics-filter-add').click()
-    // Each value chosen is a chip twice: on the bar with its dimension, and in its field.
+    // Three long chips have no room on the bar at either width: the first that fit stand there,
+    // and all three are counted on the button that opens the list.
+    const folded = analytics.locator('.analytics-filter-folded')
+    await expect(folded).toHaveText('Filters: 3')
+    await folded.click()
+    // Each value chosen is a chip in its field, and on the bar with its dimension where it fits.
     const named = analytics.locator('.analytics-bar-filters .combo-chip')
-    await expect(named).toHaveText([
-      /^Task: MAIN-1 Rework /u,
-      /^Task: MAIN-2 Rework /u,
-      'Model: model-a',
-    ])
+    const onBar = await named.allTextContents()
+    expect(onBar.length).toBeLessThan(3)
+    const all = [/^Task: MAIN-1 Rework /u, /^Task: MAIN-2 Rework /u, /^Model: model-a$/u]
+    for (const [index, words] of onBar.entries()) expect(words).toMatch(all[index] ?? /^$/u)
     const chips = analytics.locator('.analytics-filter-body .combo-chip')
     await expect(chips).toHaveCount(3)
     await expect(chips.filter({ hasText: 'MAIN-1' })).toHaveCount(1)

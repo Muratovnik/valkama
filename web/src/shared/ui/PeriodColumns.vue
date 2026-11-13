@@ -4,10 +4,11 @@
  * work ran under. The value axis starts at zero and names a few round steps; the time axis
  * names as many periods as it has room for, counted back from the last. A period still running
  * is hatched and says so under its name, so a short last column does not read as a drop; a
- * change at the start of a period (the account switched) is a numbered line up the plot, and
- * the note under the chart says what changed. A period compared with this one (`before`) stands
- * on the same scale as a dashed outline over each column, an edge and not a hue, named in the
- * legend, and the readout says its figure in words. A series with no figure in a period
+ * change at the start of a period (the account switched) is a line up the plot in the gap before
+ * it, and the period's readout, name and table row say what changed: no row of the chart is kept
+ * for it, above the plot or under it. A period compared with this one (`before`) stands
+ * on the same scale as a short mark at its height over each column, an edge and not a hue, named
+ * in the legend, and the readout says its figure in words. A series with no figure in a period
  * (`absent`, such as work with no price) draws nothing there, and the readout and the period's
  * name say so rather than a zero. A period whose figures are not in yet (`pending`) stands as a
  * hatched ground the plot's height, never a column of zero, and the readout and its name say it
@@ -15,11 +16,11 @@
  *
  * Series are told apart by the legend's words and by the hue `seriesSlots()` pinned to each
  * name, never by the hue alone; the line over the plot reads out the period under the pointer
- * or the keyboard, each series by name, and the last period when neither stands on one. That
- * readout is two lines high whatever it says (`usePeriodReadout`), and each note under the
- * chart one (`PeriodNotes`): a longer line ends in an ellipsis and is whole in its hint, in the
- * period's name and in the table, so pointing at a period, leaving it or a new answer moves
- * nothing on the page.
+ * or the keyboard, each series by name, and the last period begun when neither stands on one.
+ * That readout is one line whatever it says (`usePeriodReadout`): a longer line ends in an
+ * ellipsis and is whole in its hint, in the period's name and in the table, so pointing at a
+ * period, leaving it or a new answer moves nothing on the page. The time axis keeps its names
+ * apart, measured in the axis's own font (`dayTicks`).
  *
  * Presentational: data and words come in, a press on a period (`actionable: 'column'`) or on
  * one series in it (`'segment'`) goes out as `select`. A
@@ -28,13 +29,18 @@
  * The periods are one stop for Tab (`useChartCursor`); the arrows move between them, and up
  * and down between the segments of one where segments act.
  *
- * A period that acts is never narrower than a pointer can hit. A span of such periods wider
- * than the chart scrolls sideways inside it, the scale staying in view, and opens on its last
- * periods, the ones nearest now; where nothing acts the periods share the width they are given.
+ * A period that acts is never narrower than a pointer can hit, and no wider than that forces a
+ * span to be: one that fits the chart at that width never scrolls. A span wider than the chart
+ * scrolls sideways inside it, the scale staying in view, opens on its first periods and fades
+ * toward an edge past which periods are hidden; where nothing acts the periods share the width
+ * they are given.
  */
 import { computed, ref, useId } from 'vue'
 
+import { useEventListener } from '@vueuse/core'
+
 import { pressedLast } from '@/shared/lib/pressFocus.ts'
+import { drawnWidth } from '@/shared/lib/textWidth.ts'
 import type {
   PeriodChartProps,
   PeriodSelection,
@@ -42,12 +48,9 @@ import type {
   StackedColumn,
 } from '@/shared/ui/chartGeometry.ts'
 import {
-  changeMarkers,
-  changeNotes,
   columnSummary,
   columnWidth,
   dayTicks,
-  foldChanges,
   roundAxis,
   segmentPlace,
   segmentSummary,
@@ -56,7 +59,6 @@ import {
 import ChartLegend from '@/shared/ui/ChartLegend.vue'
 import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import PeriodNotes from '@/shared/ui/PeriodNotes.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
 import { usePeriodReadout } from '@/shared/ui/usePeriodReadout.ts'
@@ -71,7 +73,7 @@ const emit = defineEmits<{ select: [selection: PeriodSelection] }>()
 
 const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
 const chart = computed(() => stackColumns(props.columns, props.series, props.marks, axis.value))
-/** The name of the outline of a period compared with, where the chart draws one. */
+/** The name of the mark of a period compared with, where the chart draws one. */
 const outline = computed(() =>
   props.columns.some((column) => column.before) ? props.words.before : undefined,
 )
@@ -82,12 +84,21 @@ const acting = computed(() => props.actionable !== null)
 const frame = ref<HTMLElement | null>(null)
 const plot = ref<HTMLElement | null>(null)
 const field = ref<HTMLElement | null>(null)
-const { gutter, reveal, width } = usePlotFrame(
+const { gutter, hidden, reveal, width } = usePlotFrame(
   frame,
   plot,
   field,
   () => `${props.columns.length}:${props.columns[0]?.key ?? ''}:${props.columns.at(-1)?.key ?? ''}`,
 )
+
+/**
+ * The edges of the frame periods are hidden past, as attributes its fade is drawn by: one stands
+ * only where periods are hidden, because the style asks whether it is there, not what it says.
+ */
+const hiddenEdges = computed(() => ({
+  'data-hidden-start': hidden.value.start ? '' : undefined,
+  'data-hidden-end': hidden.value.end ? '' : undefined,
+}))
 
 const scale = computed<PlacedTick[]>(() =>
   chart.value.steps.map((step) => ({
@@ -97,13 +108,24 @@ const scale = computed<PlacedTick[]>(() =>
     edge: 'middle',
   })),
 )
-const days = computed(() => dayTicks(props.columns, width.value, props.words.incomplete))
-
-const notes = computed(() => changeNotes(chart.value.columns))
-const folded = computed(() => foldChanges(notes.value, props.words))
-const markers = computed(() =>
-  changeMarkers(notes.value, props.columns.length, folded.value === null),
+/**
+ * The product's fonts can arrive after the axis was laid out, and its names were then measured in
+ * a fallback: each arrival measures them again.
+ */
+const fontsArrived = ref(0)
+useEventListener(
+  () => (typeof document === 'undefined' ? undefined : document.fonts),
+  'loadingdone',
+  () => (fontsArrived.value += 1),
 )
+
+/** The names of the time axis, each measured in the axis's font (`ChartTicks`, `--font-count`). */
+const days = computed(() => {
+  void fontsArrived.value
+  const font = getComputedStyle(document.documentElement).getPropertyValue('--font-count').trim()
+  const measure = (text: string) => drawnWidth(text, font)
+  return dayTicks(props.columns, width.value, props.words.incomplete, measure)
+})
 
 const { focused, readout, isShown, point, hold } = usePeriodReadout(
   () => chart.value.columns,
@@ -160,10 +182,10 @@ function segmentAttrs(one: StackedColumn, index: number, at: number) {
   }
 }
 
-/** A figure's height on the chart's scale: a stack's total, or the outline of the period before. */
+/** A figure on the chart's scale: a stack's height, or the level a line stands at. */
 const heightOf = (figure: number) => ({ blockSize: `${(figure / chart.value.top) * 100}%` })
+const levelOf = (figure: number) => ({ insetBlockEnd: `${(figure / chart.value.top) * 100}%` })
 const gridClass = (tick: number) => ({ 'period-baseline': tick === 0 })
-const gridStyle = (tick: number) => ({ insetBlockEnd: `${(tick / chart.value.top) * 100}%` })
 
 /** Whether a press acts on what it lands on: a period (`at` null), or a segment of one. */
 const acts = (at: number | null) => (at === null ? props.actionable === 'column' : bySegment.value)
@@ -207,20 +229,20 @@ function key(event: KeyboardEvent, at: number | null) {
         :outline="outline"
       />
       <p
-        v-tooltip.clipped="readout.whole"
-        class="period-readout"
+        v-tooltip.clipped="readout"
+        class="period-readout one-line"
         aria-hidden="true"
         @pointerenter="hold(true)"
         @pointerleave="hold(false)"
       >
-        <span class="one-line">{{ readout.head }}</span>
-        <span class="one-line">{{ readout.series }}</span>
+        {{ readout }}
       </p>
       <div
         ref="frame"
         class="period-frame"
         :class="{ 'period-acting': acting }"
         :style="{ '--period-gutter': gutter }"
+        v-bind="hiddenEdges"
       >
         <div
           ref="plot"
@@ -234,12 +256,6 @@ function key(event: KeyboardEvent, at: number | null) {
             v-if="acting"
             class="period-gutter"
             aria-hidden="true"
-          />
-          <ChartTicks
-            v-if="markers.length"
-            class="period-markers"
-            along="inline"
-            :ticks="markers"
           />
           <ChartTicks
             class="period-scale"
@@ -256,7 +272,7 @@ function key(event: KeyboardEvent, at: number | null) {
               class="period-grid"
               aria-hidden="true"
               :class="gridClass(tick)"
-              :style="gridStyle(tick)"
+              :style="levelOf(tick)"
             />
             <div class="period-bars">
               <div
@@ -313,7 +329,7 @@ function key(event: KeyboardEvent, at: number | null) {
                   v-if="one.column.before"
                   class="period-before"
                   aria-hidden="true"
-                  :style="heightOf(one.column.before ?? 0)"
+                  :style="levelOf(one.column.before ?? 0)"
                 />
                 <span
                   v-if="one.marks.length"
@@ -330,11 +346,6 @@ function key(event: KeyboardEvent, at: number | null) {
           />
         </div>
       </div>
-      <PeriodNotes
-        v-if="notes.length"
-        :notes="notes"
-        :folded="folded"
-      />
     </template>
   </figure>
 </template>

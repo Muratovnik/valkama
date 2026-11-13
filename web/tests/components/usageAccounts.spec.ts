@@ -162,7 +162,7 @@ describe('the organizations an item ran under', () => {
       ]),
     )
     const parts = wrapper.findAll('.account-part')
-    expect(parts[0].attributes('data-slot')).toBe('other')
+    expect(parts[0].attributes('data-slot')).toBe('apart')
     expect(parts[0].classes()).toContain('is-unknown')
     expect(parts[1].attributes('data-slot')).toBe('1')
     expect(parts[1].classes()).not.toContain('is-unknown')

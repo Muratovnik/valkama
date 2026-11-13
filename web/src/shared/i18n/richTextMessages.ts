@@ -42,7 +42,6 @@ export const richTextMessages = {
       showCommit: 'Show commit',
       showMemory: 'Show memory pointer',
       notFound: 'Task {reference} was not found.',
-      loading: 'Looking up the commit…',
       failed: 'Git could not be asked. Try again later.',
       commitMissing:
         "Git did not find this commit in the task's project, the configured document roots or any other registered project.",
@@ -85,7 +84,6 @@ export const richTextMessages = {
       showCommit: 'Показать коммит',
       showMemory: 'Показать ссылку на память',
       notFound: 'Задача {reference} не найдена.',
-      loading: 'Ищу коммит…',
       failed: 'Не удалось спросить git. Попробуйте ещё раз позже.',
       commitMissing:
         'Git не нашёл этот коммит ни в проекте задачи, ни в настроенных корнях документов, ни в других зарегистрированных проектах.',

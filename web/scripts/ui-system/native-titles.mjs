@@ -163,10 +163,6 @@ export function scanNativeTitles(sources, register = NATIVE_TITLES) {
 /** `file <tag> v-tooltip.detail="…"` or `file script [vTooltip, …]` → what it says that the screen does not. */
 export const DETAIL_TOOLTIPS = new Map([
   [
-    'entities/work-item/components/drawMarks.ts script [vTooltip, { text: hint.text, words: hint.words }, undefined, { detail: true }]',
-    'what a priority means; no surface prints it, and beside a glyph alone it says the priority too; while the word beside it is cut, the word comes first, whole',
-  ],
-  [
     `entities/work-item/components/WorkItemCopyButtons.vue <button> v-tooltip.detail="t('workItem.head.copyReferenceHint')"`,
     'that a press copies the number, which reads as a number and not as a control',
   ],
@@ -183,10 +179,6 @@ export const DETAIL_TOOLTIPS = new Map([
     'what a press does and, under it, the state the session is in; the button shows the holder; while its own words are cut, they come first, whole',
   ],
   [
-    'shared/ui/PeriodNotes.vue <span> v-tooltip.detail="folded.whole"',
-    'each change of a chart with too many for a line each, where the line under it only counts them',
-  ],
-  [
     'pages/analytics/components/AnalyticsBar.vue <time> v-tooltip.detail="{ text: fresh.full, words: fresh.words }"',
     'the day and the time of the newest record, where the bar says only how long ago it was; while its own words are cut, they come first, whole',
   ],
@@ -195,12 +187,24 @@ export const DETAIL_TOOLTIPS = new Map([
     'that the period is live, where the bar shows only its mark and how often it reads itself again',
   ],
   [
-    'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: tile.leadDetail, words: tile.lead }"',
+    'pages/analytics/components/RailTile.vue <span> v-tooltip.detail="{ text: leadDetail, words: lead }"',
     'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
+  ],
+  [
+    'pages/analytics/components/SpendingTable.vue <button> v-tooltip.detail="{ text: column.detail, words: column.text }"',
+    "what a crossed column's heading names by a name alone: the client and the start of a session's id, an account's whole id; while the heading is cut, it comes first, whole",
   ],
   [
     'pages/analytics/components/RailTile.vue <MiniShareBar> v-tooltip.detail="tile.shares.label"',
     'every part of the share bar with its share, work on no value and the rest among them, where the tile says only the first',
+  ],
+  [
+    'pages/analytics/components/SpendingTiles.vue <span> v-tooltip.detail="tileOf(option.value)?.rate"',
+    'that the figure per hour is of an hour of agent time, and of the cost that it is an estimate at API prices, where the line says only «/h»; while its own words are cut, they come first, whole',
+  ],
+  [
+    'pages/analytics/components/SpendingTableHead.vue <p> v-tooltip.detail="{ text: summary, words: counts }"',
+    'the whole account of the rows, work on no value by name among them, and the column and way they are sorted, where the line says only how many values spent in the period and before it; while its own words are cut, they come first, whole',
   ],
   [
     `pages/settings/components/SettingsAlerts.vue <ToggleSwitch> v-tooltip.detail="t('alerts.enabledDetail')"`,
@@ -209,6 +213,10 @@ export const DETAIL_TOOLTIPS = new Map([
   [
     `pages/settings/components/SettingsKindColors.vue <input> v-tooltip.detail="t('settings.kindColors.kept')"`,
     'where a chosen colour is kept, which the swatch does not say; it stood as a paragraph over the group',
+  ],
+  [
+    `pages/settings/components/SettingsAccounts.vue <VTextInput> v-tooltip.detail="t('settings.accountAliases.kept')"`,
+    'where an account name is said and where it is kept, which the field does not say',
   ],
   [
     `pages/settings/components/SettingsOpening.vue <small> v-tooltip.detail="t('open.settings.lastPlaceHint')"`,
@@ -252,7 +260,7 @@ export const DETAIL_TOOLTIPS = new Map([
   ],
   [
     'widgets/app-nav/components/NavWorkRow.vue <div> v-tooltip:right.detail="rowHint"',
-    'the whole row in a sentence: what its state means, which its second line says in a word and a row on one line not at all, how long, and its epic or folder whole',
+    'the state with how long on a one-line row, which the row does not draw, and a session’s folder its one line leaves out; a two-line row draws both, so it has none, and a cut title has its own hint',
   ],
   [
     `widgets/app-nav/components/NavWorkTree.vue <span> v-tooltip:right.detail="{ text: t('liveWork.noProject'), words: entry.label }"`,
@@ -265,10 +273,6 @@ export const DETAIL_TOOLTIPS = new Map([
   [
     `widgets/work-item-graph/components/GraphNodeCard.vue <span> v-tooltip.detail="{ text: t('workItem.parent'), words: parentReference }"`,
     'what the reference beside the number is: the item’s epic; while its own words are cut, they come first, whole',
-  ],
-  [
-    'widgets/work-item-inspector/components/AgentsUsageSummary.vue <li> v-tooltip.detail="row.title"',
-    'how a kind of tokens is counted, which the row’s figure does not say',
   ],
   [
     'widgets/work-item-inspector/components/ChainBranchMap.vue <button> v-tooltip.detail="lane.lane.title"',

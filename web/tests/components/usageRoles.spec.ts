@@ -1,8 +1,10 @@
 /**
  * Who did an item's work, on its Agents tab: the session's own agent, each subagent by the class it
  * was launched with, an adviser as a row of its own with the class of the run it advised in, each
- * with the effort it ran at and its time, tokens and cost, in the order the read ranks them. «None» and «unknown» are rows apart and say
- * which they are. The rows add up to the tab's own totals.
+ * with its time, tokens and cost. The effort is the Analytics page's to break down, so rows that
+ * differ only by it are one row here, their figures added up; a row of under a minute with no
+ * tokens says nothing and is left out. «None» and «unknown» are rows apart and say which they
+ * are. The rows add up to the tab's own totals.
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -90,20 +92,103 @@ describe('who did the work', () => {
       ]),
     )
     expect(rolesOf(wrapper)).toEqual([
-      ['Subagent · bero · effort high', '2\u{A0}h', '1K tokens', '≈\u{A0}$30.00'],
-      ['Main agent · no launch class · effort high', '1\u{A0}h', '1K tokens', '≈\u{A0}$12.00'],
-      [
-        'Subagent · launch class unknown · effort unknown',
-        '30\u{A0}min',
-        '1K tokens',
-        '≈\u{A0}$6.00',
-      ],
-      ['Adviser · bero · effort high', 'on the side', '1K tokens', '≈\u{A0}$3.00'],
-      ['Adviser · no launch class · effort high', 'on the side', '1K tokens', '≈\u{A0}$2.00'],
+      ['Subagent · bero', '2\u{A0}h', '1K tokens', '≈\u{A0}$30.00'],
+      ['Main agent · no launch class', '1\u{A0}h', '1K tokens', '≈\u{A0}$12.00'],
+      ['Subagent · launch class unknown', '30\u{A0}min', '1K tokens', '≈\u{A0}$6.00'],
+      ['Adviser · bero', 'on the side', '1K tokens', '≈\u{A0}$3.00'],
+      ['Adviser · no launch class', 'on the side', '1K tokens', '≈\u{A0}$2.00'],
     ])
     expect(wrapper.get('[data-breakdown="roles"]').attributes('aria-label')).toBe(
-      'By role, launch class and effort',
+      'Who did the work',
     )
+  })
+
+  it('adds up the rows that differ by effort alone, and ranks what they add up to', () => {
+    const wrapper = mountSummary(
+      usageOf([
+        role({ role: 'main', effort: value('high'), seconds: 3000, estimated_api_cost_usd: 10 }),
+        role({
+          role: 'subagent',
+          launch_class: value('bero'),
+          effort: value('high'),
+          seconds: 2400,
+          tokens: { ...NO_TOKENS, input: 2000 },
+          estimated_api_cost_usd: 8,
+        }),
+        role({
+          role: 'subagent',
+          launch_class: value('bero'),
+          effort: value('low'),
+          seconds: 1200,
+          tokens: { ...NO_TOKENS, input: 1000 },
+          estimated_api_cost_usd: 4,
+        }),
+        role({
+          role: 'subagent',
+          launch_class: value('bero'),
+          effort: value(null, true),
+          seconds: 0,
+          tokens: { ...NO_TOKENS, input: 3000 },
+          estimated_api_cost_usd: null,
+        }),
+        // Another class at the same effort stays a row of its own.
+        role({
+          role: 'subagent',
+          launch_class: value('alfi'),
+          effort: value('high'),
+          seconds: 600,
+          estimated_api_cost_usd: 2,
+        }),
+      ]),
+    )
+    // 2400 + 1200 + 0 seconds is an hour; 2000 + 1000 + 3000 tokens; $8 + $4, the unpriced
+    // row adding no cost. The hour now ranks above the main agent's fifty minutes.
+    expect(rolesOf(wrapper)).toEqual([
+      ['Subagent · bero', '1\u{A0}h', '6K tokens', '≈\u{A0}$12.00'],
+      ['Main agent · no launch class', '50\u{A0}min', '1K tokens', '≈\u{A0}$10.00'],
+      ['Subagent · alfi', '10\u{A0}min', '1K tokens', '≈\u{A0}$2.00'],
+    ])
+  })
+
+  it('leaves out a row of under a minute with no tokens, and keeps one that has either', () => {
+    const wrapper = mountSummary(
+      usageOf([
+        role({ role: 'main', seconds: 3600 }),
+        role({
+          role: 'subagent',
+          launch_class: value(null, true),
+          effort: value(null, true),
+          seconds: 59,
+          tokens: NO_TOKENS,
+          estimated_api_cost_usd: null,
+        }),
+        // Under a minute and no tokens until the rows of its class add up to one.
+        role({
+          role: 'subagent',
+          launch_class: value('bero'),
+          effort: value('high'),
+          seconds: 40,
+          tokens: NO_TOKENS,
+          estimated_api_cost_usd: null,
+        }),
+        role({
+          role: 'subagent',
+          launch_class: value('bero'),
+          effort: value('low'),
+          seconds: 20,
+          tokens: NO_TOKENS,
+          estimated_api_cost_usd: null,
+        }),
+        // Tokens with no time of its own: an adviser on the side.
+        role({ role: 'advisor', seconds: 0, estimated_api_cost_usd: 1 }),
+      ]),
+    )
+    expect(rolesOf(wrapper).map((row) => row[0])).toEqual([
+      'Main agent · no launch class',
+      'Subagent · bero',
+      'Adviser · no launch class',
+    ])
+    expect(wrapper.text()).not.toContain('launch class unknown')
   })
 
   it('adds up to the tab’s totals: the time of all agents, the cost and the tokens', () => {
@@ -122,9 +207,9 @@ describe('who did the work', () => {
     expect(headFigure(wrapper, 'All agents')).toBe('≈\u{A0}11\u{A0}h\u{A0}14\u{A0}min')
     expect(headFigure(wrapper, 'Cost')).toBe('≈\u{A0}$240.67')
     expect(rolesOf(wrapper).map((row) => row[0])).toEqual([
-      'Subagent · bero · effort high',
-      'Main agent · no launch class · effort unknown',
-      'Adviser · no launch class · effort unknown',
+      'Subagent · bero',
+      'Main agent · no launch class',
+      'Adviser · no launch class',
     ])
   })
 })

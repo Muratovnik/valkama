@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SettingsAccounts from '@/pages/settings/components/SettingsAccounts.vue'
 import SettingsAlerts from '@/pages/settings/components/SettingsAlerts.vue'
 import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
 import SettingsKindColors from '@/pages/settings/components/SettingsKindColors.vue'
@@ -100,6 +101,7 @@ function emitLocale(value: string) {
 
       <SettingsOpening class="settings-general-group" />
 
+      <SettingsAccounts class="settings-general-group" />
       <SettingsQuota class="settings-general-group" />
     </div>
   </section>

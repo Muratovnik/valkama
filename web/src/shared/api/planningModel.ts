@@ -462,6 +462,9 @@ const readModelSchema = strictObject({
   interface_version: z.literal(PLANNING_READ_MODEL, {
     message: `expected ${PLANNING_READ_MODEL}`,
   }),
+  // The digest of everything else the model says, which the space's stream is opened with
+  // so that it does not send this model again; optional, as a server older than it sends none.
+  revision: boundedText(/^[0-9a-f]{64}$/u, 64).optional(),
   planning_spaces: z.array(spaceBriefSchema),
   planning_space: spaceIdentitySchema.nullable(),
   workflow: workflowSchema.nullable(),

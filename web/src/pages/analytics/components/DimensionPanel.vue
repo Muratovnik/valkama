@@ -10,8 +10,12 @@
  * Where the page holds it to the panel's height (`fills`), the figures stay in view at the top and
  * the charts and the table share the rest: the charts up to a little under half of it, scrolling on
  * their own past that, the table the remainder and never less than 14rem. A wheel moves the part
- * it is over and never the panel or the page. Elsewhere, as on a phone, the panel scrolls and the
- * table keeps a frame of its own.
+ * it is over and never the panel or the page. Elsewhere, in the list's place on a narrow page or a
+ * phone, the panel scrolls and the table keeps a frame of its own; where the window is tall enough
+ * that frame stays at the panel's bottom edge while the figures and the charts pass under it, so its
+ * heading row is in view from the start and a wheel over it moves the table alone. How much of the
+ * panel's edge it covers goes up (`cover`), and the page pads its scroll by that, so a part the
+ * browser brings into view, focused or scrolled to, stands over the table and never under it.
  *
  * Held, a button at the table gives it the whole panel under the figures and back (`tableWhole`),
  * which the page keeps for its whole view; unheld, every part is in the panel's scroll anyway. The
@@ -22,8 +26,10 @@
  * and the part of the panel it was pressed in, which says why when it was refused. An answer whose
  * period before could not be read says so above the figures (`SpendingUnread`).
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
@@ -33,6 +39,7 @@ import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
+import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
 import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
@@ -61,9 +68,11 @@ const props = defineProps<{
 }>()
 /**
  * Read the answer again; narrow the view to a value of the answer's dimension, or to a day, as
- * pressed in a part of the panel; cross the table with a second dimension, or with none.
+ * pressed in a part of the panel; cross the table with a second dimension, or with none. `cover`
+ * says how high the table stands over the bottom edge of the scroll the panel is in, 0 for none.
  */
 const emit = defineEmits<{
+  'cover': [height: number]
   'day': [day: string, label: string]
   'narrow': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   'retry': []
@@ -83,8 +92,7 @@ const wholeWords = computed(() =>
  * breakdown is read the last one stays on screen, and its rows name only their own dimension.
  */
 const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
-const figures = computed(() => tileFigures(props.usage))
-const before = computed(() => figures.value.before)
+const before = computed(() => tileFigures(props.usage).before)
 
 /** The second dimension, where it is another than the section's own. */
 const across = computed(() => (props.across && props.across !== by.value ? props.across : null))
@@ -102,6 +110,31 @@ const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
 
 const noticeIn = (part: ReportPart) => refusedIn(props.refused, part)
+
+/** The air left under a part brought into view over the table, room for its focus ring. */
+const RING_ROOM = 8
+
+const table = () => root.value?.querySelector<HTMLElement>('.dimension-table') ?? null
+const cover = ref(0)
+
+/**
+ * How high the table stands over the bottom edge of the panel's scroll while it sticks there, with
+ * room for a ring over it; 0 where it stands in the flow. Its height follows its rows, a crossing
+ * and the window, and whether it sticks follows the window's height and the page's hold.
+ */
+function measureCover() {
+  const sticking = table()
+  const sticks = !props.fills && sticking && getComputedStyle(sticking).position === 'sticky'
+  cover.value = sticks ? Math.ceil(sticking.getBoundingClientRect().height) + RING_ROOM : 0
+}
+useResizeObserver(table, measureCover)
+useEventListener(globalThis, 'resize', measureCover)
+watch(() => props.fills, measureCover, { flush: 'post' })
+watch(cover, (height) => emit('cover', height), { immediate: true })
+onBeforeUnmount(() => emit('cover', 0))
+
+/** Dimmed while a new view is read in place of this answer (`readPending.css`). */
+const pending = useAnewDimmed(usePanelStanding())
 
 /**
  * The values the ranked list leaves out asked for: the table takes the whole panel, as its own
@@ -122,6 +155,7 @@ async function showTable() {
   <div
     ref="root"
     class="dimension-panel"
+    :class="{ 'read-pending': pending }"
     :data-fills="fills"
     :data-whole="whole"
   >
@@ -131,9 +165,8 @@ async function showTable() {
     />
     <SpendingTiles
       v-model:measure="measure"
-      :split="usage.total.tokens"
-      :total="figures.total"
-      :before="before"
+      :usage="usage"
+      :read-at="readAt"
     />
     <div class="dimension-body">
       <div
@@ -171,6 +204,7 @@ async function showTable() {
         />
       </div>
       <SpendingTable
+        class="dimension-table"
         :across="across"
         :by="by"
         :cross="cross.state.value"
@@ -272,9 +306,40 @@ async function showTable() {
   min-width: 0;
 }
 
+/* Unheld, the panel scrolls as a whole. Where the window is tall enough, the table stays at its
+   bottom edge, up to half the window high, on the ground the panel stands on, and what stands
+   above passes under it: its heading row is in view from the start and a wheel over its frame
+   moves the table alone, and the page's scroll padding by its height (`cover`) keeps what is
+   brought into view above it. Scrolled to its end, the panel shows the table in its own place
+   under the day chart, so nothing above it is out of reach. A short window, a phone on its side,
+   keeps the table in the flow, where it would cover what it stands under. */
+@media (height >= 40rem) {
+  /* A part that sticks stays inside its parent's box, which here would start under the figures
+     and hold the table down off the panel's edge until they scroll away: unheld, the charts and
+     the table stand in the panel's own grid, with the same air between them. */
+  .dimension-panel[data-fills='false'] .dimension-body {
+    display: contents;
+  }
+
+  /* A part sticks inside its scroller's padding, and the page leaves the air of --space-6 under
+     the panel's content (`.analytics-panel` in `AnalyticsView.vue`; change both together): held
+     at 0 the table stood that high over the panel's edge, the charts showing through under it. */
+  .dimension-panel[data-fills='false'] .dimension-table {
+    position: sticky;
+    inset-block-end: calc(-1 * var(--space-6));
+    z-index: 4;
+    max-block-size: 50svh;
+    padding-block-start: var(--space-3);
+    background: var(--color-canvas);
+    box-shadow: 0 -1px var(--color-rule);
+  }
+}
+
 @container (width >= 48rem) {
   .dimension-pair {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 </style>
+
+<style scoped src="@/pages/analytics/components/readPending.css"></style>

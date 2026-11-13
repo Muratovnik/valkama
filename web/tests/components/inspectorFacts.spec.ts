@@ -254,7 +254,7 @@ const rowLabels = (wrapper: ReturnType<typeof facts>) =>
   wrapper.findAll('.card-row-label').map((label) => label.text())
 
 describe('the priority as the menu that changes it', () => {
-  it('offers the four priorities, most pressing first, each with what it means', () => {
+  it('offers the four priorities, most pressing first, each as one line of its word', () => {
     const menu = priorityMenu(facts(item()))
     expect(menu.props('modelValue')).toBe('medium')
     expect(menu.props('label')).toBe('Priority: Medium. Change it')
@@ -266,15 +266,13 @@ describe('the priority as the menu that changes it', () => {
       null,
       'priority-low',
     ])
+    // A level carries no note: the menu shows its mark and word only.
+    expect(options.some((option) => 'description' in option)).toBe(false)
     expect(options.map((option) => ({ ...option, mark: undefined }))).toEqual([
-      { value: 'urgent', label: 'Urgent', description: 'blocks work or loses data' },
-      { value: 'high', label: 'High', description: 'serious; could block work' },
-      {
-        value: 'medium',
-        label: 'Medium',
-        description: 'noticeably affects work, with a workaround',
-      },
-      { value: 'low', label: 'Low', description: 'minor' },
+      { value: 'urgent', label: 'Urgent' },
+      { value: 'high', label: 'High' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'low', label: 'Low' },
     ])
   })
 

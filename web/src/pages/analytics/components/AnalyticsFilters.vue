@@ -12,11 +12,14 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useFilterOptions } from '@/pages/analytics/composables/useFilterOptions.ts'
+import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { FilterValues } from '@/pages/analytics/composables/useUsageRead.ts'
 import { filterKey, filterValue } from '@/pages/analytics/utils/usageValues.ts'
 
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type { UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import SearchCombobox from '@/shared/ui/SearchCombobox.vue'
 
 const props = defineProps<{
@@ -35,10 +38,29 @@ const chosen = (dimension: UsageDimension) =>
 
 const removeLabel = (label: string) => t('analytics.filters.remove', { label })
 
+/**
+ * A dimension's values are waited for while they are read. Only a dimension with an active filter
+ * is read at all (`useUsageRead`), so an unread one is not waiting: it is never a wait to announce.
+ */
+const waiting = (dimension: UsageDimension) => props.values[dimension] === 'loading'
+
+/**
+ * Each dimension's wait, shown by its field once it has lasted (`useLoadingPresence`). Made for
+ * every dimension at once, because a field may be drawn for any of them.
+ */
+const waits = Object.fromEntries(
+  USAGE_DIMENSIONS.map((dimension) => [dimension, useLoadingPresence(() => waiting(dimension))]),
+) as Record<UsageDimension, ReturnType<typeof useLoadingPresence>>
+
+/** Whether a field's values are shown as waiting: the page says the word once for all of them. */
+useReadWaitReport(
+  computed(() => props.dimensions.some((dimension) => waits[dimension].shown.value)),
+)
+
 function emptyLabel(dimension: UsageDimension) {
-  const read = props.values[dimension]
-  if (read === 'loading' || read === undefined) return t('analytics.filters.reading')
-  if (read === 'failed') return t('analytics.filters.failed')
+  if (waits[dimension].shown.value) return t('platform.states.loading')
+  if (waiting(dimension)) return ''
+  if (props.values[dimension] === 'failed') return t('analytics.filters.failed')
   return t('analytics.filters.noMatches')
 }
 

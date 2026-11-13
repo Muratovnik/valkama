@@ -3,23 +3,27 @@
  * The period day by day: a column per day of the chosen measure, stacked by the largest values
  * of the dimension and «other» for the rest; work with no value there and unknown work stack
  * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
- * «so far», so its short column does not read as a fall; a numbered line stands where the known
- * accounts that worked changed from the last day a known account worked, with what changed under
- * the chart (`accountChanges`): work whose organization nobody recorded is no account and marks
- * nothing. The marks are the ones read with the answer shown, and a read of the accounts that
- * failed says the marks are not there rather than leaving them out without a word.
+ * «so far», so its short column does not read as a fall; a line stands where the known accounts
+ * with a figure in the measure shown changed from the last day a known account had one, and that
+ * day's readout, name and table row say the change, «Account change: a → b» (`accountChanges`):
+ * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
+ * read with the answer shown, and a read of the accounts that failed says the marks are not there
+ * rather than leaving them out without a word.
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
- * and breaks it down by task: it goes out as `day`, with the day as a custom period names it.
+ * and breaks it down by task: it goes out as `day`, with the day as a custom period names it. The
+ * axis names a day by its weekday, «27 Tue», and the first day it names and the first of each
+ * later month by the date with its month, «Oct 27» (`stepName`, `dayTicks`); the table names each
+ * in full.
  *
  * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
  * each named by its clock time. A minute after the newest record read has no data yet, which it
  * shows and says rather than a zero, and a note under the minutes says their figures are an
  * estimate: each stretch of work shared out by its time in each. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
- * dashed outline on the same scale, named in the legend and said in the readout and the table;
- * while those steps are read there is no outline, and when they could not be read a note under
- * the chart says so. A `brief` chart, standing beside the titles of its tasks, names
+ * short mark at its height on the same scale, named in the legend and said in the readout and the
+ * table; while those steps are read there is no mark, and when they could not be read a note
+ * under the chart says so. A `brief` chart, standing beside the titles of its tasks, names
  * each task by its number alone.
  */
 import { computed } from 'vue'
@@ -49,7 +53,7 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
-  /** The steps of the period before, to outline behind each column; none outlined without. */
+  /** The steps of the period before, to mark over each column; none marked without. */
   before?: BeforeSteps | null
   /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
   brief?: boolean
@@ -103,7 +107,7 @@ const chart = computed<PeriodChartProps>(() => ({
   actionable: byDay.value ? 'column' : null,
   marks:
     typeof props.accounts === 'object'
-      ? accountChanges(props.accounts).map((change) => ({
+      ? accountChanges(props.accounts, props.measure).map((change) => ({
           at: change.at,
           label: words.accounts(change.before, change.after),
         }))
@@ -112,7 +116,6 @@ const chart = computed<PeriodChartProps>(() => ({
     // Time is always counted; tokens and a price can be absent from a day that spent.
     absent: props.measure === 'time' ? undefined : t(`analytics.days.absent.${props.measure}`),
     before: t('analytics.overview.before.word'),
-    changes: (count: number) => t('analytics.days.changes', { count }),
     empty: t('analytics.days.empty'),
     incomplete: t('analytics.days.soFar'),
     note: t('analytics.days.note'),

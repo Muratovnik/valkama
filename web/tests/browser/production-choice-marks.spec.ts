@@ -93,8 +93,8 @@ test('the card’s priority menu draws each priority as its button draws the cho
   expectGlyphs(rows, PRIORITIES)
   // The button's glyph is the same drawing as the chosen row's.
   expect(rows[1].glyph).toBe(chosen.glyph)
-  // What each one means stays under it.
-  await expect(options.nth(0).locator('.choice-note')).not.toBeEmpty()
+  // Each level is its one line: no meaning stands under it.
+  await expect(options.locator('.choice-note')).toHaveCount(0)
 })
 
 test('the card’s state menu draws each state with its dot, as the chip draws the state', async ({
