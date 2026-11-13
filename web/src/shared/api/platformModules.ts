@@ -184,10 +184,11 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     actionGlobal: ['module.settings.open-adapter'],
     actionProject: ['module.settings.configure-project'],
     required_read_models: ['settings'],
-    secondaryGlobal: [],
-    secondaryProject: [],
+    // A task's card opens over the section, and the address names it.
+    secondaryGlobal: ['work-item'],
+    secondaryProject: ['work-item'],
     sse_subscriptions: [],
-    supported_entity_kinds: ['project'],
+    supported_entity_kinds: ['project', 'work-item'],
     feature_capabilities: ['settings.configure'],
   }),
 ])

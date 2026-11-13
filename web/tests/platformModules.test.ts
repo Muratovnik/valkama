@@ -39,7 +39,7 @@ const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
   improvements: { global: ['work-item', 'improvement-case'], project: [] },
   skills: { global: ['skill'], project: ['skill'] },
   memory: { global: ['memory-resource'], project: ['memory-resource', 'work-item'] },
-  settings: { global: [], project: [] },
+  settings: { global: ['work-item'], project: ['work-item'] },
 } as const
 
 test('valkama-modules has exactly four registrations with both operating levels', () => {
@@ -265,7 +265,7 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
   assert.equal(accepts('planning', project, entities.session), false)
 })
 
-test('a task pressed in Analytics is named in the page’s own route; Planning and Settings leave it to the board', () => {
+test('a task pressed in Analytics or Settings is named in the page’s own route; Planning leaves it to the board', () => {
   const manifests = Object.fromEntries(
     OFFLINE_MODULE_FALLBACK.map((manifest) => [manifest.module_id, manifest]),
   ) as Record<ModuleId, ModuleManifest>
@@ -276,32 +276,33 @@ test('a task pressed in Analytics is named in the page’s own route; Planning a
     writable: true,
   }
   const card = planningWorkItemEntity({ space_ref: target.space_ref, reference: target.reference })
-  const state = { by: 'work_item', period: 'week' }
-  for (const scope of [
-    { kind: 'global' as const },
-    { kind: 'project' as const, project_ref: { project_id: 'project-beta' } },
-  ]) {
-    const page: PlatformRoute = { module_id: 'analytics', scope, state }
-    // The module, its scope and its view stay; only the card is named.
-    assert.deepEqual(cardInPlace(manifests.analytics, page, target), { ...page, entity: card })
-    // A card already open gives way to the one pressed.
-    const other = planningWorkItemEntity({ space_ref: target.space_ref, reference: 'MAIN-8' })
-    assert.deepEqual(cardInPlace(manifests.analytics, { ...page, entity: other }, target), {
-      ...page,
-      entity: card,
-    })
-  }
+  const views: [ModuleId, Record<string, string>][] = [
+    ['analytics', { by: 'work_item', period: 'week' }],
+    ['settings', { section: 'diagnostics' }],
+  ]
+  for (const [module_id, state] of views)
+    for (const scope of [
+      { kind: 'global' as const },
+      { kind: 'project' as const, project_ref: { project_id: 'project-beta' } },
+    ]) {
+      const page: PlatformRoute = { module_id, scope, state }
+      // The module, its scope and its view stay; only the card is named.
+      assert.deepEqual(cardInPlace(manifests[module_id], page, target), { ...page, entity: card })
+      // A card already open gives way to the one pressed.
+      const other = planningWorkItemEntity({ space_ref: target.space_ref, reference: 'MAIN-8' })
+      assert.deepEqual(cardInPlace(manifests[module_id], { ...page, entity: other }, target), {
+        ...page,
+        entity: card,
+      })
+    }
   const global = { kind: 'global' as const }
   // The board opens its card in the task's own project, as it did.
   assert.equal(
     cardInPlace(manifests.planning, { module_id: 'planning', scope: global }, target),
     null,
   )
-  // A module whose address cannot name a card leaves the press to the board.
-  assert.equal(
-    cardInPlace(manifests.settings, { module_id: 'settings', scope: global }, target),
-    null,
-  )
+  // A route whose manifest does not admit a card there leaves the press to the board.
+  assert.equal(cardInPlace(manifests.memory, { module_id: 'memory', scope: global }, target), null)
   // A manifest that is not the route's own decides nothing.
   assert.equal(
     cardInPlace(manifests.analytics, { module_id: 'settings', scope: global }, target),

@@ -7,10 +7,18 @@ import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
+/**
+ * The shell's ways to work from anywhere: the finder, the questions waiting, and opening a task.
+ *
+ * `inPlace` is where the module on show opens a task's card itself, over its page, or null where
+ * it does not; a task opened from the finder, the questions or a reference in any text goes
+ * through it, so every way of opening one decides the same way.
+ */
 export function useGlobalWorkActions(
   writeRoute: (route: PlatformRoute) => void,
   questionsAsked: Readonly<Ref<number>>,
   cardQuestionAsked: Readonly<Ref<boolean>>,
+  inPlace: (target: PlanningTarget) => PlatformRoute | null,
 ) {
   const finderOpen = ref(false)
   /** What the finder opens searching for; blank opens it on the search it last held. */
@@ -18,8 +26,9 @@ export function useGlobalWorkActions(
   const requestsOpen = ref(false)
   const pendingRequestCount = ref<PendingCount | null>(null)
 
+  /** A task's card: over the module on show where it opens one, else on the task's board. */
   function openTarget(target: PlanningTarget) {
-    writeRoute(planningTargetRoute(target))
+    writeRoute(inPlace(target) ?? planningTargetRoute(target))
     finderOpen.value = false
     requestsOpen.value = false
   }
