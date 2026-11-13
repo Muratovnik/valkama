@@ -78,8 +78,8 @@ _PLANNING_TOOLS = planning_tools.TOOL_NAMES
 # because it is the one an agent follows in every message it writes.
 PLANNING_INSTRUCTIONS = (
     "Planned work lives in a planning space. A work item moves between the states"
-    " its workflow declares; transition_work_item is how status changes, and the"
-    " state names come from the workflow. A category (active, review, blocked,"
+    " its workflow declares; the transition of apply_work_item_changes is how status"
+    " changes, and the state names come from the workflow. A category (active, review, blocked,"
     " completed, cancelled, queued, backlog) names the one state that has it; a"
     " name the workflow lacks is refused with its states."
     " In a message to the owner write a work item number as a markdown link,"
@@ -101,8 +101,7 @@ PLANNING_INSTRUCTIONS = (
     " claim_ready_work_item is the take-next queue: unclaimed, unblocked, and in a"
     " state work can start from."
     " Guards refuse a transition: an active state needs an executor, a terminal"
-    " state needs every checklist item closed and a set_work_item_summary result, a"
-    " blocked state needs a linked blocker or a stated reason. Work that is not"
+    " state needs every checklist item closed and a summary, a blocked state needs a linked blocker or a stated reason. Work that is not"
     " needed, duplicated or superseded closes in the cancelled state: it needs the"
     " summary but leaves undone steps open."
     " Items that are one change are merged with merge_work_items: the survivor"
@@ -117,11 +116,9 @@ PLANNING_INSTRUCTIONS = (
     " work grew into, its children and what was discovered from them: how much is"
     " closed, open and ready and whether it is growing or converging. Keep a"
     " checklist of your actual steps; when agents split it, each must"
-    " claim_work_item_checklist_item by stable item_id before work and"
-    " tick_work_item_checklist_item on completion. Item and checklist claims are"
-    " independent."
-    " attach_work_item_ref carries commits and AgentMemory record ids materially"
-    " used for the work."
+    " claim_work_item_checklist_item by stable item_id before work and tick it in"
+    " checklist_ticks on completion. Item and checklist claims are independent."
+    " refs carry commits and AgentMemory record ids materially used for the work."
     " Memory refs are one-way Valkama pointers; never infer or write a reverse"
     " relation inside AgentMemory. Valkama records the confirmed session behind"
     " every write and get_work_item lists them, so attach no session id as a ref."
@@ -160,9 +157,6 @@ def catalogue() -> list[dict]:
 # request. These names are read here, at dispatch, and nowhere below: the schemas
 # do not advertise them and the domain never sees one.
 _ARGUMENT_SYNONYMS: dict[str, dict[str, str]] = {
-    "link_work_items": {"from": "id", "to": "other", "target": "other", "type": "kind"},
-    "transition_work_item": {"to": "state", "to_state": "state"},
-    "attach_work_item_ref": {"ref": "value"},
     "create_work_item": {"planning_space_id": "space"},
     "list_work_items": {"planning_space_id": "space"},
     "search_work_items": {"planning_space_id": "space"},
@@ -171,7 +165,7 @@ _ARGUMENT_SYNONYMS: dict[str, dict[str, str]] = {
 }
 # A tool that takes an `id` but has no argument called `ref` or `reference` of
 # its own is read with those two as the item's reference; a table entry above
-# wins where the same name means something else (`ref` is the value to attach).
+# wins where the same name means something else.
 _ITEM_SYNONYMS = {"reference": "id", "ref": "id"}
 # Where `id` is a work item, the field its description names, `work_item_id`, is
 # read as it too. A request's or a space's `id` is not a work item, so not there.
@@ -183,6 +177,9 @@ _WRAPPERS = {"apply_work_item_changes": "changes"}
 _UNWRAPPED_EXAMPLE = '{"id": "MAIN-12", "claim": true, "comment": {"body": "…"}}'
 
 _SCHEMAS: dict[str, dict] = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
+
+# The code of the refusal a call to a tool this build no longer publishes gets.
+REMOVED_TOOL = "removed_tool"
 
 
 def _synonyms(name: str) -> dict[str, str]:
@@ -374,6 +371,14 @@ def _prepared(
         if isinstance(arguments, dict)
         else None
     )
+    replacement = planning_tools.REMOVED_TOOLS.get(name)
+    if replacement is not None:
+        raise planning_api.PlanningHttpError(
+            404,
+            REMOVED_TOOL,
+            f"{name} is no longer a Valkama tool; call {replacement}. This session's tool"
+            " list predates the change: restart the client session to load the current one.",
+        )
     if name not in _OPS:
         raise ValueError(f"unknown tool {name!r}")
     if name in _PLANNING_TOOLS:

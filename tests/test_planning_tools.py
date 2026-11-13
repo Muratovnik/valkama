@@ -50,20 +50,28 @@ class PlanningCatalogueTests(unittest.TestCase):
     def test_the_vocabulary_belongs_to_the_planning_module(self) -> None:
         self.assertTrue(planning_tools.TOOL_NAMES <= mcp_surface._PLANNING_TOOLS)
 
-    def test_update_work_item_schema_accepts_source(self) -> None:
-        schema = next(tool for tool in planning_tools.TOOLS if tool["name"] == "update_work_item")[
-            "inputSchema"
-        ]
-        self.assertIn("source", schema["properties"])
-        self.assertEqual("string", schema["properties"]["source"]["type"])
+    @staticmethod
+    def edit_schema() -> dict:
+        """The properties of the batch's `update`, the one MCP edit of an item's fields."""
+
+        batch = next(t for t in planning_tools.TOOLS if t["name"] == "apply_work_item_changes")
+        return dict(batch["inputSchema"]["properties"]["update"]["properties"])
+
+    def test_the_edit_schema_accepts_source(self) -> None:
+        properties = self.edit_schema()
+        self.assertIn("source", properties)
+        self.assertEqual("string", properties["source"]["type"])
 
     def test_both_write_schemas_define_every_priority_level(self) -> None:
         # A level added to model.PRIORITIES without a definition in the schema
-        # fails here, on both tools that accept it.
-        for name in ("create_work_item", "update_work_item"):
+        # fails here, on both writes that accept it.
+        create = next(t for t in planning_tools.TOOLS if t["name"] == "create_work_item")
+        for name, properties in (
+            ("create_work_item", create["inputSchema"]["properties"]),
+            ("apply_work_item_changes update", self.edit_schema()),
+        ):
             with self.subTest(tool=name):
-                schema = next(tool for tool in planning_tools.TOOLS if tool["name"] == name)
-                priority = schema["inputSchema"]["properties"]["priority"]
+                priority = properties["priority"]
                 self.assertEqual(list(model.PRIORITIES), priority["enum"])
                 for level in model.PRIORITIES:
                     self.assertRegex(priority["description"], rf"\b{level}\b", msg=level)
@@ -135,17 +143,27 @@ class PlanningToolCallTests(unittest.TestCase):
             ],
         )
         self.call("claim_work_item", id="QA-2", author="one")
-        steps = self.call("set_work_item_checklist", id="QA-2", items=["write it"])
-        step = steps["checklist"][0]["item_id"]
+        steps = self.call("apply_work_item_changes", id="QA-2", checklist={"items": ["write it"]})
+        step = steps["applied"]["checklist"][0]["item_id"]
         self.call("claim_work_item_checklist_item", id="QA-2", item_id=step, author="one")
-        self.call("tick_work_item_checklist_item", id="QA-2", item_id=step, author="one")
-        self.call("link_work_items", id="QA-2", other="QA-1", kind="relates-to")
-        self.call("attach_work_item_ref", id="QA-2", kind="commit", value="abc1234")
-        self.call("comment_work_item", id="QA-2", body="a note", author="one")
         self.call(
-            "set_work_item_summary", id="QA-2", summary={"done": "through", "next": "the frontend"}
+            "apply_work_item_changes", id="QA-2", checklist_ticks=[{"item_id": step}], author="one"
         )
-        moved = self.call("transition_work_item", id="QA-2", state="done", author="one")
+        self.call(
+            "apply_work_item_changes", id="QA-2", links=[{"other": "QA-1", "kind": "relates-to"}]
+        )
+        self.call(
+            "apply_work_item_changes", id="QA-2", refs=[{"kind": "commit", "value": "abc1234"}]
+        )
+        self.call("apply_work_item_changes", id="QA-2", comment={"body": "a note"}, author="one")
+        self.call(
+            "apply_work_item_changes",
+            id="QA-2",
+            summary={"done": "through", "next": "the frontend"},
+        )
+        moved = self.call(
+            "apply_work_item_changes", id="QA-2", transition={"state": "done"}, author="one"
+        )
         self.assertTrue(moved["state"]["is_terminal"])
         self.assertEqual(
             {"done": "through", "next": "the frontend"},
@@ -155,7 +173,7 @@ class PlanningToolCallTests(unittest.TestCase):
     def test_a_guard_refusal_reaches_the_caller(self) -> None:
         self.call("create_work_item", space="QA", title="Unclaimed")
         with self.assertRaisesRegex(Exception, r"\[executor\]"):
-            self.call("transition_work_item", id="QA-2", state="dev")
+            self.call("apply_work_item_changes", id="QA-2", transition={"state": "dev"})
 
     def test_claim_ready_answers_with_nothing_when_nothing_is_ready(self) -> None:
         self.call("claim_work_item", id="QA-1", author="one")
@@ -164,12 +182,12 @@ class PlanningToolCallTests(unittest.TestCase):
     def test_an_update_and_a_delete_go_through_the_same_boundary(self) -> None:
         created = self.call("create_work_item", space="QA", title="Temporary")
         renamed = self.call(
-            "update_work_item",
+            "apply_work_item_changes",
             id=created["reference"],
-            title="Renamed",
+            update={"title": "Renamed"},
             expected_revision=created["revision"],
         )
-        self.assertEqual(["title"], renamed["updated"])
+        self.assertEqual(["title"], renamed["applied"]["update"])
         self.assertEqual("Renamed", self.call("get_work_item", id=created["reference"])["title"])
         self.assertTrue(self.call("delete_work_item", id=created["reference"])["deleted"])
         self.assertEqual(1, len(self.call("list_work_items", space="QA")["work_items"]))
@@ -196,15 +214,8 @@ FULL_ONLY = (
 
 ACKNOWLEDGED = (
     "create_work_item",
-    "update_work_item",
-    "transition_work_item",
     "claim_work_item",
-    "set_work_item_checklist",
     "claim_work_item_checklist_item",
-    "tick_work_item_checklist_item",
-    "set_work_item_summary",
-    "report_work_item",
-    "select_work_item_summary",
     "apply_work_item_changes",
     "merge_work_items",
 )
@@ -320,10 +331,14 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             source="docs/plan.md#kb:a7f3",
         )
         self.ref = item["reference"]
-        self.call("set_work_item_checklist", id=self.ref, items=["first", "second"])
-        self.call("comment_work_item", id=self.ref, body="a note", author="one")
-        self.call("attach_work_item_ref", id=self.ref, kind="commit", value="abc1234")
-        self.call("link_work_items", id=self.ref, other="QA-1", kind="relates-to")
+        self.call("apply_work_item_changes", id=self.ref, checklist={"items": ["first", "second"]})
+        self.call("apply_work_item_changes", id=self.ref, comment={"body": "a note"}, author="one")
+        self.call(
+            "apply_work_item_changes", id=self.ref, refs=[{"kind": "commit", "value": "abc1234"}]
+        )
+        self.call(
+            "apply_work_item_changes", id=self.ref, links=[{"other": "QA-1", "kind": "relates-to"}]
+        )
 
     def call(self, name: str, **arguments: object) -> dict:
         answer = mcp_surface.call_tool(self.conn, name, arguments)
@@ -354,22 +369,11 @@ class PlanningAcknowledgementTests(unittest.TestCase):
 
     def arguments_for(self, tool: str) -> dict:
         ref, step = self.ref, self.step
-        if tool == "select_work_item_summary":
-            full = self.call("get_work_item", id=ref)
-            reports = [comment for comment in full["comments"] if comment["kind"] == "report"]
-            if not reports:
-                full = self.call(
-                    "report_work_item", id=ref, report={"done": "d", "next": "n"}, verbose=True
-                )
-                reports = full["comments"]
-            return {
-                "id": ref,
-                "comment_id": reports[-1]["id"],
-                "expected_revision": full["revision"],
-            }
         if tool == "merge_work_items":
             twin = self.call("create_work_item", space="QA", title="Twin", author="one")
-            self.call("comment_work_item", id=twin["reference"], body="same cause")
+            self.call(
+                "apply_work_item_changes", id=twin["reference"], comment={"body": "same cause"}
+            )
             return {
                 "id": ref,
                 "items": [twin["reference"]],
@@ -378,14 +382,8 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             }
         return {
             "create_work_item": {"space": "QA", "title": "Another", "author": "one"},
-            "update_work_item": {"id": ref, "title": "Edited", "labels": ["two"]},
-            "transition_work_item": {"id": ref, "state": "todo", "author": "one"},
             "claim_work_item": {"id": ref, "author": "one"},
-            "set_work_item_checklist": {"id": ref, "items": ["x", "y"], "force": True},
             "claim_work_item_checklist_item": {"id": ref, "item_id": step, "author": "one"},
-            "tick_work_item_checklist_item": {"id": ref, "item_id": step, "author": "one"},
-            "set_work_item_summary": {"id": ref, "summary": {"done": "d", "next": "n"}},
-            "report_work_item": {"id": ref, "report": {"done": "d", "next": "n"}},
             "apply_work_item_changes": {"id": ref, "comment": {"body": "batched"}},
         }[tool]
 
@@ -419,8 +417,6 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                     answer["state"],
                 )
                 for key in FULL_ONLY:
-                    if key == "checklist" and tool == "set_work_item_checklist":
-                        continue
                     self.assertNotIn(key, answer)
 
     def test_a_verbose_answer_is_the_full_item(self) -> None:
@@ -468,89 +464,121 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             {name: created[name] for name in ("title", "kind", "priority")},
         )
 
-        edited = self.call("update_work_item", **self.arguments_for("update_work_item"))
-        self.assertEqual(["title", "labels"], edited["updated"])
-        untouched = self.call("update_work_item", id=self.ref)
-        self.assertEqual([], untouched["updated"])
+        edited = self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            update={"title": "Edited", "labels": ["two"]},
+        )
+        self.assertEqual(["title", "labels"], edited["applied"]["update"])
+        untouched = self.call("apply_work_item_changes", id=self.ref, update={})
+        self.assertEqual([], untouched["applied"]["update"])
         self.assertEqual(edited["revision"], untouched["revision"])
 
         claimed = self.call("claim_work_item", **self.arguments_for("claim_work_item"))
         self.assertEqual("one", claimed["claim_ref"])
 
-        arguments = self.arguments_for("set_work_item_checklist")
-        replaced = self.call("set_work_item_checklist", **arguments)
+        replaced = self.call(
+            "apply_work_item_changes", id=self.ref, checklist={"items": ["x", "y"], "force": True}
+        )["applied"]["checklist"]
         stored = self.call("get_work_item", id=self.ref)["checklist"]
         self.assertEqual(
             [
                 {"item_id": step["id"], "text": step["text"], "done": step["done"]}
                 for step in stored
             ],
-            replaced["checklist"],
+            replaced,
         )
-        self.assertEqual(["x", "y"], [step["text"] for step in replaced["checklist"]])
+        self.assertEqual(["x", "y"], [step["text"] for step in replaced])
 
-        step = replaced["checklist"][0]["item_id"]
+        step = replaced[0]["item_id"]
         held = self.call("claim_work_item_checklist_item", id=self.ref, item_id=step, author="two")
         self.assertEqual(
             {"item_id": step, "done": False, "claimed_by": "two", "done_by": ""}, held["step"]
         )
-        ticked = self.call("tick_work_item_checklist_item", id=self.ref, item_id=step, author="two")
-        self.assertEqual(
-            {"item_id": step, "done": True, "claimed_by": "", "done_by": "two"}, ticked["step"]
+        ticked = self.call(
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist_ticks=[{"item_id": step}],
+            author="two",
         )
+        self.assertEqual([{"item_id": step, "done": True}], ticked["applied"]["checklist_ticks"])
+        [first] = [
+            s for s in self.call("get_work_item", id=self.ref)["checklist"] if s["id"] == step
+        ]
+        self.assertEqual(("", "two"), (first["claimed_by"], first["done_by"]))
         reopened = self.call(
-            "tick_work_item_checklist_item", id=self.ref, item_id=step, done=False, author="two"
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist_ticks=[{"item_id": step, "done": False}],
+            author="two",
         )
-        self.assertFalse(reopened["step"]["done"])
+        self.assertEqual([{"item_id": step, "done": False}], reopened["applied"]["checklist_ticks"])
 
         summarized = self.call(
-            "set_work_item_summary", **self.arguments_for("set_work_item_summary")
+            "apply_work_item_changes", id=self.ref, summary={"done": "d", "next": "n"}
         )
-        self.assertTrue(summarized["summary_recorded"])
+        stored_item = self.call("get_work_item", id=self.ref)
+        self.assertEqual(
+            stored_item["summary_comment_id"],
+            summarized["applied"]["summary"]["summary_comment_id"],
+        )
 
     def test_a_forced_transition_still_reports_the_override(self) -> None:
-        forced = self.call("transition_work_item", id=self.ref, state="dev", force=True)
+        forced = self.call(
+            "apply_work_item_changes", id=self.ref, transition={"state": "dev", "force": True}
+        )
         self.assertEqual("dev", forced["state"]["key"])
         self.assertIn("executor", forced["overridden"])
         # The busy item carries a commit ref; a bare one entering review does not.
         bare = self.call("create_work_item", space="QA", title="Bare")["reference"]
-        warned = self.call("transition_work_item", id=bare, state="review", force=True)
+        warned = self.call(
+            "apply_work_item_changes", id=bare, transition={"state": "review", "force": True}
+        )
         self.assertRegex(warned["warnings"][0], "no session or commit ref")
-        clean = self.call("transition_work_item", id=self.ref, state="review")
+        clean = self.call("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.assertNotIn("overridden", clean)
         self.assertNotIn("warnings", clean)
 
     def test_a_revision_taken_from_an_acknowledgement_is_accepted_by_the_next_write(self) -> None:
         first = self.call("claim_work_item", id=self.ref, author="one")
         second = self.call(
-            "tick_work_item_checklist_item",
+            "apply_work_item_changes",
             id=self.ref,
-            item_id=self.step,
+            checklist_ticks=[{"item_id": self.step}],
             author="one",
             expected_revision=first["revision"],
         )
         self.assertEqual(first["revision"] + 1, second["revision"])
         with self.assertRaises(model.RevisionConflictError):
             self.call(
-                "update_work_item", id=self.ref, title="Late", expected_revision=first["revision"]
+                "apply_work_item_changes",
+                id=self.ref,
+                update={"title": "Late"},
+                expected_revision=first["revision"],
             )
         third = self.call(
-            "update_work_item", id=self.ref, title="On time", expected_revision=second["revision"]
+            "apply_work_item_changes",
+            id=self.ref,
+            update={"title": "On time"},
+            expected_revision=second["revision"],
         )
         self.assertEqual(second["revision"] + 1, third["revision"])
 
-    def test_the_tools_that_already_answer_briefly_are_unchanged(self) -> None:
-        link = self.call("link_work_items", id=self.ref, other="QA-1", kind="relates-to")
-        self.assertEqual({"from", "to", "kind", "removed"}, set(link))
-        ref = self.call("attach_work_item_ref", id=self.ref, kind="commit", value="def5678")
-        self.assertEqual({"work_item", "kind", "value"}, set(ref))
-        comment = self.call("comment_work_item", id=self.ref, body="again")
-        self.assertEqual(
-            {"work_item", "comment_count", "comment_id", "reply_to", "reply_to_request"},
-            set(comment),
+    def test_a_link_a_ref_and_a_comment_are_named_in_applied(self) -> None:
+        other = self.call("create_work_item", space="QA", title="Other")["reference"]
+        link = self.call(
+            "apply_work_item_changes", id=self.ref, links=[{"other": other, "kind": "relates-to"}]
         )
-        # A new root names no parent; a reply names the root it joined.
-        self.assertEqual((None, None), (comment["reply_to"], comment["reply_to_request"]))
+        self.assertEqual({"links": 1}, link["applied"])
+        ref = self.call(
+            "apply_work_item_changes", id=self.ref, refs=[{"kind": "commit", "value": "def5678"}]
+        )
+        self.assertEqual({"refs": 1}, ref["applied"])
+        comment = self.call("apply_work_item_changes", id=self.ref, comment={"body": "again"})
+        written = comment["applied"]["comment"]
+        self.assertEqual({"comment_id", "reply_to", "reply_to_request"}, set(written))
+        # A new root names no parent.
+        self.assertEqual((None, None), (written["reply_to"], written["reply_to_request"]))
 
     def test_the_reads_and_the_take_next_queue_still_answer_in_full(self) -> None:
         full = self.call("get_work_item", id=self.ref)
@@ -616,7 +644,9 @@ class PlanningCompactReadTests(unittest.TestCase):
             labels=["one"],
         )
         self.call("claim_work_item", id=self.child["reference"], author="one")
-        self.call("set_work_item_checklist", id=self.child["reference"], items=["a", "b"])
+        self.call(
+            "apply_work_item_changes", id=self.child["reference"], checklist={"items": ["a", "b"]}
+        )
 
     def call(self, name: str, **arguments: object) -> dict:
         answer = mcp_surface.call_tool(self.conn, name, arguments)
@@ -698,7 +728,11 @@ class PlanningCompactReadTests(unittest.TestCase):
                 self.call(tool, verbose="yes", **arguments)
 
     def test_a_search_answers_rows_and_keeps_why_each_matched(self) -> None:
-        self.call("comment_work_item", id=self.child["reference"], body="the needle is here")
+        self.call(
+            "apply_work_item_changes",
+            id=self.child["reference"],
+            comment={"body": "the needle is here"},
+        )
         answer = self.call("search_work_items", query="needle")
         [row] = answer["work_items"]
         self.assertEqual(self.child["reference"], row["reference"])

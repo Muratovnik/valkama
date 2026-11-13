@@ -82,7 +82,10 @@ class Harness(unittest.TestCase):
         return answer
 
     def comment(self, meta: object, ref: str, body: str, **extra: object) -> int:
-        return int(self.agent("comment_work_item", meta, id=ref, body=body, **extra)["comment_id"])
+        answer = self.agent(
+            "apply_work_item_changes", meta, id=ref, comment={"body": body, **extra}
+        )
+        return int(answer["applied"]["comment"]["comment_id"])
 
     def subscribe(self, meta: object, ref: str, follows: bool) -> str:
         answer = self.agent("apply_work_item_changes", meta, id=ref, subscribe=follows)
@@ -363,14 +366,24 @@ class WhoListensTests(Harness):
 
     def test_what_a_holder_hears_and_what_it_never_does(self) -> None:
         self.set_up_b()
-        steps = self.agent("set_work_item_checklist", AS_B, id=self.held, items=["one", "two"])
+        steps = self.agent(
+            "apply_work_item_changes", AS_B, id=self.held, checklist={"items": ["one", "two"]}
+        )
         self.assertIsNone(self.hook())
         step = service.get_work_item(self.conn, self.held)["checklist"][1]["id"]
         self.agent("claim_work_item_checklist_item", AS_A, id=self.held, item_id=step)
-        self.agent("link_work_items", AS_A, id=self.held, other=self.followed, kind="relates-to")
-        self.agent("update_work_item", AS_A, id=self.held, title="Retitled by A")
         self.agent(
-            "report_work_item", AS_A, id=self.held, report={"done": "Half of it", "next": "More"}
+            "apply_work_item_changes",
+            AS_A,
+            id=self.held,
+            links=[{"other": self.followed, "kind": "relates-to"}],
+        )
+        self.agent("apply_work_item_changes", AS_A, id=self.held, update={"title": "Retitled by A"})
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=self.held,
+            summary={"done": "Half of it", "next": "More"},
         )
         told = self.hook()
         assert told is not None, steps
@@ -631,7 +644,7 @@ class ShownToThePersonTests(Harness):
 
     def test_a_subagent_told_another_agents_news_shows_the_person_nothing(self) -> None:
         self.set_up_b()
-        self.agent("set_work_item_checklist", AS_B, id=self.held, items=["one"])
+        self.agent("apply_work_item_changes", AS_B, id=self.held, checklist={"items": ["one"]})
         step = service.get_work_item(self.conn, self.held)["checklist"][0]["id"]
         self.agent("claim_work_item_checklist_item", AS_CHILD, id=self.held, item_id=step)
         self.assertIsNone(self.answer(CHILD), "its own claim is no news")

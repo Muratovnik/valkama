@@ -17,7 +17,7 @@ import unittest
 from unittest import mock
 
 from server import mcp_surface, store
-from server.planning import calls, model, service
+from server.planning import api, calls, model, service
 
 SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 OTHER = "019a3c2e-6c8e-7c11-9e0f-2f4b6d8a1c3e"
@@ -122,7 +122,7 @@ class HolderWriteTests(unittest.TestCase):
             answer = mcp_surface.call_tool(
                 self.conn, name, {"id": self.reference, **arguments}, meta=meta
             )
-        except model.PlanningError as refusal:
+        except (model.PlanningError, api.PlanningHttpError) as refusal:
             self.conn.rollback()
             return {"refused": str(refusal)}
         self.conn.commit()
@@ -143,18 +143,26 @@ class HolderWriteTests(unittest.TestCase):
         claimed = [event for event in item["events"] if event["action"] == "claimed"]
         self.assertEqual("claude-code", claimed[0]["author"])
 
+    def step(self, item_id: str) -> dict:
+        [found] = [
+            step
+            for step in service.get_work_item(self.conn, self.reference)["checklist"]
+            if step["id"] == item_id
+        ]
+        return found
+
     def test_two_sessions_under_one_name_hold_two_steps_apart(self) -> None:
         first = self.call("claim_work_item_checklist_item", SESSION, item_id=self.steps[0])
         second = self.call("claim_work_item_checklist_item", OTHER, item_id=self.steps[1])
         self.assertEqual(f"codex (session {SESSION})", first["step"]["claimed_by"])
         self.assertEqual(f"codex (session {OTHER})", second["step"]["claimed_by"])
-        refused = self.call("tick_work_item_checklist_item", OTHER, item_id=self.steps[0])
-        self.assertIn(f"claimed by codex (session {SESSION})", refused["refused"])
-        ticked = self.call("tick_work_item_checklist_item", SESSION, item_id=self.steps[0])
-        self.assertEqual(
-            (True, f"codex (session {SESSION})"),
-            (ticked["step"]["done"], ticked["step"]["done_by"]),
+        refused = self.call(
+            "apply_work_item_changes", OTHER, checklist_ticks=[{"item_id": self.steps[0]}]
         )
+        self.assertIn(f"claimed by codex (session {SESSION})", refused["refused"])
+        self.call("apply_work_item_changes", SESSION, checklist_ticks=[{"item_id": self.steps[0]}])
+        ticked = self.step(self.steps[0])
+        self.assertEqual((True, f"codex (session {SESSION})"), (ticked["done"], ticked["done_by"]))
 
     def test_a_step_held_under_a_signature_is_still_its_signers(self) -> None:
         # A step claimed before sessions held steps: by name, with no identity.
@@ -164,13 +172,19 @@ class HolderWriteTests(unittest.TestCase):
         self.assertEqual("codex", legacy["step"]["claimed_by"])
         # A session signing that name is its signer; one signing another is not.
         refused = self.call(
-            "tick_work_item_checklist_item", SESSION, item_id=self.steps[0], author="claude"
+            "apply_work_item_changes",
+            SESSION,
+            checklist_ticks=[{"item_id": self.steps[0]}],
+            author="claude",
         )
         self.assertIn("claimed by codex", refused["refused"])
-        ticked = self.call(
-            "tick_work_item_checklist_item", SESSION, item_id=self.steps[0], author="codex"
+        self.call(
+            "apply_work_item_changes",
+            SESSION,
+            checklist_ticks=[{"item_id": self.steps[0]}],
+            author="codex",
         )
-        self.assertEqual(f"codex (session {SESSION})", ticked["step"]["done_by"])
+        self.assertEqual(f"codex (session {SESSION})", self.step(self.steps[0])["done_by"])
 
 
 if __name__ == "__main__":

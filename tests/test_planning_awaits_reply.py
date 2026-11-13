@@ -55,12 +55,20 @@ class Harness(unittest.TestCase):
 
     def ask(self, meta: object = AS_A, **extra: object) -> int:
         answer = self.agent(
-            "comment_work_item", meta, id=self.ref, body="Which one?", awaits_reply=True, **extra
+            "apply_work_item_changes",
+            meta,
+            id=self.ref,
+            comment={"body": "Which one?", "awaits_reply": True, **extra},
         )
-        return int(answer["comment_id"])
+        return int(answer["applied"]["comment"]["comment_id"])
 
     def reply(self, meta: object, root: int) -> None:
-        self.agent("comment_work_item", meta, id=self.ref, body="This one", reply_to=root)
+        self.agent(
+            "apply_work_item_changes",
+            meta,
+            id=self.ref,
+            comment={"body": "This one", "reply_to": root},
+        )
 
     def person_reply(self, root: int) -> None:
         with calls.bind(calls.browser(), COMMENT):
@@ -94,16 +102,20 @@ class AwaitsReplyTests(Harness):
         self.assertTrue(self.comment(root)["answered"])
 
     def test_an_awaiting_reply_is_answered_only_by_what_comes_after_it(self) -> None:
-        root = self.agent("comment_work_item", AS_B, id=self.ref, body="Started by B")
-        self.reply(AS_B, int(root["comment_id"]))
-        asked = self.ask(reply_to=int(root["comment_id"]))
+        root = self.agent(
+            "apply_work_item_changes", AS_B, id=self.ref, comment={"body": "Started by B"}
+        )
+        self.reply(AS_B, int(root["applied"]["comment"]["comment_id"]))
+        asked = self.ask(reply_to=int(root["applied"]["comment"]["comment_id"]))
         self.assertFalse(self.comment(asked)["answered"], "B's earlier reply came before")
-        self.reply(AS_B, int(root["comment_id"]))
+        self.reply(AS_B, int(root["applied"]["comment"]["comment_id"]))
         self.assertTrue(self.comment(asked)["answered"])
 
     def test_a_plain_comment_carries_neither_key(self) -> None:
-        plain = self.agent("comment_work_item", AS_A, id=self.ref, body="Just so you know")
-        record = self.comment(int(plain["comment_id"]))
+        plain = self.agent(
+            "apply_work_item_changes", AS_A, id=self.ref, comment={"body": "Just so you know"}
+        )
+        record = self.comment(int(plain["applied"]["comment"]["comment_id"]))
         self.assertNotIn("awaits_reply", record)
         self.assertNotIn("answered", record)
 
@@ -133,9 +145,11 @@ class AwaitsReplyTests(Harness):
         before = self.conn.execute(count).fetchone()[0]
         for value in ("yes", 1, None):
             with self.subTest(value=value):
-                arguments = {"id": self.ref, "body": "Hm", "awaits_reply": value}
+                arguments = {"id": self.ref, "comment": {"body": "Hm", "awaits_reply": value}}
                 with self.assertRaises((model.PlanningError, api.PlanningHttpError)):
-                    mcp_surface.call_tool(self.conn, "comment_work_item", arguments, meta=AS_A)
+                    mcp_surface.call_tool(
+                        self.conn, "apply_work_item_changes", arguments, meta=AS_A
+                    )
                 self.conn.rollback()
         self.assertEqual(before, self.conn.execute(count).fetchone()[0])
 

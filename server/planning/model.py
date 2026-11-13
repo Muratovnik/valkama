@@ -38,8 +38,8 @@ WORK_ITEM_KINDS = frozenset({"task", "epic", "bug", "improvement"})
 PRIORITIES = ("low", "medium", "high", "urgent")
 _PRIORITY_SET = frozenset(PRIORITIES)
 
-#: The fields `update_work_item` edits, in the order the tool declares them, and
-#: what the batch's `update` group takes. One that is absent or null changes nothing.
+#: The fields an edit changes, which the batch's `update` group takes and the HTTP
+#: edit accepts. One that is absent or null changes nothing.
 UPDATABLE_FIELDS = (
     "title",
     "description",

@@ -13,7 +13,7 @@ import { openQuestion, question } from './questionBackend.ts'
 type Request = InputRequestEntry['request']
 
 /**
- * The list as the server wrote it under its comment: `comment_work_item` with a `list`, in the
+ * The list as the server wrote it under its comment: a comment with a `list`, in the
  * temporary store `tests/test_web_contract_fixtures.py` answers from. Its field, its id and the
  * comment it names are the server's own; the card the suite opens takes it over.
  */

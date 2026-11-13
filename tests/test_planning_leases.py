@@ -319,7 +319,9 @@ class LeaseStateTests(LeaseTestCase):
 
     def test_the_acknowledgement_names_the_lease_state(self) -> None:
         answer = self.mcp(
-            "update_work_item", {"id": self.reference, "title": "Renamed"}, codex(ONE)
+            "apply_work_item_changes",
+            {"id": self.reference, "update": {"title": "Renamed"}},
+            codex(ONE),
         )
         self.assertEqual((held(ONE), "live"), (answer["claim_ref"], answer["claim_state"]))
 
@@ -332,8 +334,8 @@ class HeartbeatTests(LeaseTestCase):
         self.age(ONE, 20)
         self.assertEqual("stale", self.item()["claim_state"])
         self.mcp(
-            "comment_work_item",
-            {"id": other, "body": "still here"},
+            "apply_work_item_changes",
+            {"id": other, "comment": {"body": "still here"}},
             codex(ONE, THREAD),
             started=True,
         )
@@ -346,7 +348,10 @@ class HeartbeatTests(LeaseTestCase):
         self.claim(codex(ONE), author="codex")
         self.age(ONE, 20)
         self.mcp(
-            "comment_work_item", {"id": self.reference, "body": "who am I"}, None, started=True
+            "apply_work_item_changes",
+            {"id": self.reference, "comment": {"body": "who am I"}},
+            None,
+            started=True,
         )
         self.assertEqual("stale", self.item()["claim_state"])
 
@@ -449,8 +454,8 @@ class ResumedSessionTests(LeaseTestCase):
         self,
     ) -> None:
         self.mcp(
-            "comment_work_item",
-            {"id": self.reference, "body": "still here", "author": "codex"},
+            "apply_work_item_changes",
+            {"id": self.reference, "author": "codex", "comment": {"body": "still here"}},
             codex(ONE),
             started=True,
         )
@@ -461,8 +466,8 @@ class ResumedSessionTests(LeaseTestCase):
 
     def test_an_unconfirmed_write_revives_nothing(self) -> None:
         self.mcp(
-            "comment_work_item",
-            {"id": self.reference, "body": "who am I", "author": "codex"},
+            "apply_work_item_changes",
+            {"id": self.reference, "author": "codex", "comment": {"body": "who am I"}},
             None,
             started=True,
         )
@@ -471,8 +476,8 @@ class ResumedSessionTests(LeaseTestCase):
     def test_a_failed_session_stays_failed(self) -> None:
         self.set_session(ONE, status="failed")
         self.mcp(
-            "comment_work_item",
-            {"id": self.reference, "body": "after the failure", "author": "codex"},
+            "apply_work_item_changes",
+            {"id": self.reference, "author": "codex", "comment": {"body": "after the failure"}},
             codex(ONE),
             started=True,
         )
@@ -581,7 +586,11 @@ class EndedSessionGraceTests(HookedLeaseTestCase):
     def test_a_confirmed_write_within_the_grace_brings_the_claim_back_too(self) -> None:
         self.assertEqual("", self.start_server(END + timedelta(hours=11)))
         with self.clock(END + timedelta(hours=11)):
-            self.mcp("comment_work_item", {"id": self.reference, "body": "back"}, codex(ONE))
+            self.mcp(
+                "apply_work_item_changes",
+                {"id": self.reference, "comment": {"body": "back"}},
+                codex(ONE),
+            )
             self.assertEqual("live", self.item()["claim_state"])
         self.assertEqual([], self.expiry_events())
 

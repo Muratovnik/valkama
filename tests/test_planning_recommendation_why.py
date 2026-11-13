@@ -138,20 +138,23 @@ class RecommendationWhyTests(QuestionCase):
             {"id": "b", "label": "Fix the docs"},
         ]
         written = self.tool(
-            "comment_work_item",
+            "apply_work_item_changes",
             id=self.reference,
-            body="Findings",
-            list={"label": "What to take on", "options": options},
+            comment={"body": "Findings", "list": {"label": "What to take on", "options": options}},
         )
-        self.assertEqual(
-            options, requests.get(self.conn, written["list_request_id"])["fields"][0]["options"]
-        )
-        with self.assertRaisesRegex(model.PlanningError, "option b: why says why"):
+        listed = requests.get(self.conn, written["applied"]["comment"]["list_request_id"])
+        self.assertEqual(options, listed["fields"][0]["options"])
+        with self.assertRaisesRegex(api.PlanningHttpError, "^comment: .*option b: why says why"):
             self.tool(
-                "comment_work_item",
+                "apply_work_item_changes",
                 id=self.reference,
-                body="More",
-                list={"label": "Again", "options": [{"id": "b", "label": "B", "why": "No."}]},
+                comment={
+                    "body": "More",
+                    "list": {
+                        "label": "Again",
+                        "options": [{"id": "b", "label": "B", "why": "No."}],
+                    },
+                },
             )
 
     def test_a_search_finds_a_question_by_its_why(self) -> None:
@@ -164,7 +167,8 @@ class RecommendationWhyTests(QuestionCase):
         schemas = {tool["name"]: tool["inputSchema"] for tool in tools.TOOLS}
         field = schemas["create_work_item_request"]["properties"]["fields"]["items"]
         option = field["properties"]["options"]["items"]
-        listed = schemas["comment_work_item"]["properties"]["list"]["properties"]["options"]
+        comment = schemas["apply_work_item_changes"]["properties"]["comment"]
+        listed = comment["properties"]["list"]["properties"]["options"]
         for name, why in (
             ("field", field["properties"]["why"]),
             ("option", option["properties"]["why"]),

@@ -1,9 +1,9 @@
 """The batch's groups for an item's fields, several comments and questions.
 
-The single tools are the contract: `update_work_item`, `comment_work_item` and
-`create_work_item_request` already say what each write does, so most cases make
-the same write through the single tool on a twin item and compare what both left,
-refusals included. What the batch adds of its own is the order, the all or
+The single writes are the contract: the HTTP edit and comment, and
+`create_work_item_request`, already say what each write does, so most cases make
+the same write alone on a twin item, under the same agent's identity, and compare
+what both left, refusals included. What the batch adds of its own is the order, the all or
 nothing, and the two refusals only a batch can meet: `comment` beside `comments`,
 and a question beside the transition that would close it unanswered.
 
@@ -25,6 +25,9 @@ from tests.test_planning_threads import FIELDS, ThreadTestCase
 SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
 AGENT = {"sessionId": SESSION}
 BATCH = "apply_work_item_changes"
+#: The HTTP writes of one edit and of one comment, which the batch's groups stand for.
+UPDATE = "/api/planning/work-item/update"
+COMMENT = "/api/planning/work-item/comment"
 QUESTION = {"kind": "question", "prompt": "Which path?", "fields": FIELDS}
 SUMMARY = {"done": "The change", "next": "Nothing"}
 
@@ -55,6 +58,26 @@ class BatchCase(ThreadTestCase):
 
     def refused_batch(self, **groups: object) -> dict:
         return self.refused(BATCH, id=self.ref, **groups)
+
+    def single(self, path: str, **payload: object) -> dict:
+        """The one write a group stands for, made alone at its HTTP path as this agent."""
+
+        with calls.bind(calls.verify_mcp(AGENT, None), path):
+            answer = api.handle_post(self.conn, path, payload)
+        self.conn.commit()
+        assert answer is not None and isinstance(answer[1], dict)
+        return answer[1]
+
+    def refused_single(self, path: str, **payload: object) -> dict:
+        """The error body of that write alone, after committing what is left."""
+
+        with self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught:
+            with calls.bind(calls.verify_mcp(AGENT, None), path):
+                api.handle_post(self.conn, path, payload)
+        self.conn.commit()
+        error = api.error_response(caught.exception)[1]["error"]
+        assert isinstance(error, dict)
+        return error
 
     def record(self, reference: str | None = None) -> dict:
         return service.get_work_item(self.conn, reference or self.ref)
@@ -87,7 +110,7 @@ class BatchCase(ThreadTestCase):
 
 
 class UpdateGroupTests(BatchCase):
-    def test_every_field_lands_as_the_single_tool_lands_it(self) -> None:
+    def test_every_field_lands_as_the_single_edit_lands_it(self) -> None:
         parent = self.item("An epic")
         self.conn.commit()
         edit = {
@@ -100,7 +123,7 @@ class UpdateGroupTests(BatchCase):
             "parent": parent,
             "source": "docs/plan.md#kb:a7f3",
         }
-        single = self.agent("update_work_item", id=self.twin, **edit)
+        self.single(UPDATE, id=self.twin, **edit)
 
         answer = self.apply(update=edit)
 
@@ -113,10 +136,10 @@ class UpdateGroupTests(BatchCase):
         # changed label set is the one exception, and the batch records it as the tool does.
         self.assertEqual(["created", "labels_changed"], self.actions())
         self.assertEqual(self.actions(self.twin), self.actions())
-        self.assertEqual(single["updated"], answer["applied"]["update"])
+        self.assertEqual(set(edit), set(answer["applied"]["update"]))
         [row] = self.call_rows()
         [alone] = self.call_rows(self.twin)
-        self.assertEqual((BATCH, "update_work_item"), (row["tool"], alone["tool"]))
+        self.assertEqual((BATCH, UPDATE), (row["tool"], alone["tool"]))
         for name in ("identity_state", "identity_source", "session_id", "reason"):
             self.assertEqual(alone[name], row[name], name)
         self.assertEqual((calls.CONFIRMED, SESSION), (row["identity_state"], row["session_id"]))
@@ -130,13 +153,13 @@ class UpdateGroupTests(BatchCase):
         record = self.record()
         self.assertEqual(("Renamed", None), (record["title"], record["parent_id"]))
 
-    def test_an_edit_of_nothing_answers_as_the_single_tool_does(self) -> None:
+    def test_an_edit_of_nothing_names_nothing_and_writes_nothing(self) -> None:
         before = self.record()["revision"]
         answer = self.apply(update={})
         self.assertEqual([], answer["applied"]["update"])
         self.assertEqual(before, self.record()["revision"])
 
-    def test_a_refused_field_is_refused_as_the_single_tool_refuses_it(self) -> None:
+    def test_a_refused_field_is_refused_as_the_single_edit_refuses_it(self) -> None:
         for edit in (
             {"priority": "someday"},
             {"kind": "chore"},
@@ -147,7 +170,7 @@ class UpdateGroupTests(BatchCase):
             {"parent": "TALK-999"},
         ):
             with self.subTest(edit=edit):
-                single = self.refused("update_work_item", id=self.twin, **edit)
+                single = self.refused_single(UPDATE, id=self.twin, **edit)
                 before = self.untouched()
                 error = self.refused_batch(claim=True, update=edit)
                 self.assertEqual(single["code"], error["code"])
@@ -204,9 +227,11 @@ class CommentsGroupTests(BatchCase):
             {"body": "Under a question", "reply_to_request": asked},
         ]
 
-    def test_each_entry_lands_as_the_single_tool_lands_it_and_is_named_in_applied(self) -> None:
+    def test_each_entry_lands_as_the_single_comment_lands_it_and_is_named_in_applied(
+        self,
+    ) -> None:
         singles = [
-            self.agent("comment_work_item", id=self.twin, author="one", **entry)
+            self.single(COMMENT, id=self.twin, author="one", **entry)
             for entry in self.entries(
                 self.twin_step, self.twin_root, self.twin_reply, self.twin_asked
             )
@@ -266,7 +291,9 @@ class CommentsGroupTests(BatchCase):
         self.assertEqual(api.MAX_APPLY_ENTRIES, len(answer["applied"]["comments"]))
 
     def test_a_parent_the_item_does_not_have_refuses_the_whole_batch_by_its_index(self) -> None:
-        single = self.refused("comment_work_item", id=self.twin, body="Under", reply_to=10_000)
+        single = self.refused(
+            "apply_work_item_changes", id=self.twin, comment={"body": "Under", "reply_to": 10_000}
+        )
         before = self.untouched()
         error = self.refused_batch(
             comments=[{"body": "Written first"}, {"body": "Under", "reply_to": 10_000}]
@@ -511,7 +538,9 @@ class ChecklistTicksGroupTests(BatchCase):
 
     def test_a_forced_tick_completes_another_holders_step_as_the_single_tick_does(self) -> None:
         self.agent(
-            "tick_work_item_checklist_item", id=self.twin, item_id=self.twin_step, force=True
+            "apply_work_item_changes",
+            id=self.twin,
+            checklist_ticks=[{"item_id": self.twin_step, "force": True}],
         )
 
         answer = self.apply(checklist_ticks=[{"item_id": self.step, "force": True}])
@@ -545,7 +574,9 @@ class ChecklistTicksGroupTests(BatchCase):
 
     def test_a_forced_tick_records_the_override_it_carried_as_the_single_tick_does(self) -> None:
         single = self.agent(
-            "tick_work_item_checklist_item", id=self.twin, item_id=self.twin_step, force=True
+            "apply_work_item_changes",
+            id=self.twin,
+            checklist_ticks=[{"item_id": self.twin_step, "force": True}],
         )
 
         answer = self.apply(checklist_ticks=[{"item_id": self.step, "force": True}])
@@ -569,7 +600,11 @@ class ChecklistTicksGroupTests(BatchCase):
         mine = self.unclaimed_step(self.ref)
         self.agent("claim_work_item_checklist_item", id=self.ref, item_id=mine)
 
-        single = self.agent("tick_work_item_checklist_item", id=self.ref, item_id=mine, force=True)
+        single = self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist_ticks=[{"item_id": mine, "force": True}],
+        )
 
         self.assertNotIn("overridden", single)
         self.assertEqual([], self.overridden_events())
@@ -593,7 +628,9 @@ class ChecklistTicksGroupTests(BatchCase):
     def test_without_force_another_holders_step_is_refused_as_the_single_tick_refuses_it(
         self,
     ) -> None:
-        single = self.refused("tick_work_item_checklist_item", id=self.twin, item_id=self.twin_step)
+        single = self.refused_single(
+            "/api/planning/work-item/checklist/tick", id=self.twin, item_id=self.twin_step
+        )
         before = self.untouched()
 
         error = self.refused_batch(
@@ -732,9 +769,7 @@ class OrderTests(BatchCase):
         )
         self.conn.commit()
         rank = {"rank": f"before:{ahead}"}
-        self.assertIn(
-            "its own state", self.refused("update_work_item", id=self.twin, **rank)["message"]
-        )
+        self.assertIn("its own state", self.refused_single(UPDATE, id=self.twin, **rank)["message"])
         answer = self.apply(claim=True, update=rank)
         self.assertEqual("dev", answer["state"]["key"])
         rows = service.list_work_items(self.conn, space="TALK", state_key="dev")
@@ -843,17 +878,13 @@ class PublishedSchemaTests(unittest.TestCase):
         for group in ("comments", "questions"):
             self.assertEqual(api.MAX_APPLY_ENTRIES, properties[group]["maxItems"])
 
-    def test_the_groups_take_the_fields_of_their_single_tools(self) -> None:
+    def test_the_groups_take_what_their_single_writes_take(self) -> None:
         schemas = {entry["name"]: entry["inputSchema"]["properties"] for entry in tools.TOOLS}
         fields = dict(api.APPLY_GROUPS)
         # What is the batch's own, the item and who signs, stays on the batch.
         batch_own = {"id", "author", "expected_revision", "verbose"}
-        self.assertEqual(set(schemas["update_work_item"]) - batch_own, fields["update"])
-        self.assertEqual(set(schemas["comment_work_item"]) - batch_own, fields["comments"])
+        self.assertEqual({*model.UPDATABLE_FIELDS, "mentions"}, fields["update"])
         self.assertEqual(set(schemas["create_work_item_request"]) - batch_own, fields["questions"])
-        self.assertEqual(
-            set(schemas["tick_work_item_checklist_item"]) - batch_own, fields["checklist_ticks"]
-        )
 
     def test_the_description_states_the_order(self) -> None:
         tool = next(entry for entry in tools.TOOLS if entry["name"] == BATCH)

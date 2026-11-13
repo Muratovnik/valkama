@@ -177,7 +177,9 @@ class AskerTests(Wakes):
         root = self.ask()
         self.reply(AS_A_CHILD, root, "C-1")
         self.assertIsNone(self.stop(A), "its own subagent is not an answer")
-        self.agent("resolve_work_item_comment", AS_B, id=self.held, comment_id=root)
+        self.agent(
+            "apply_work_item_changes", AS_B, id=self.held, resolutions=[{"comment_id": root}]
+        )
         self.reply(AS_B, root, "C-2")
         self.assertIsNone(self.stop(A), "the wait ended when the thread was resolved")
         self.assertIn("marker C-2", self.hook(session=A) or "", "told at the next tool call")
@@ -407,11 +409,21 @@ class BlockerTests(Wakes):
     def setUp(self) -> None:
         super().setUp()
         self.blocker = self.item("The parser rewrite")
-        self.agent("link_work_items", AS_A, id=self.blocker, other=self.held, kind="blocks")
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=self.blocker,
+            links=[{"other": self.held, "kind": "blocks"}],
+        )
         self.settle()
 
     def close_as(self, meta: object) -> None:
-        self.agent("transition_work_item", meta, id=self.blocker, state="cancelled", force=True)
+        self.agent(
+            "apply_work_item_changes",
+            meta,
+            id=self.blocker,
+            transition={"state": "cancelled", "force": True},
+        )
 
     def test_a_person_closing_the_blocker_wakes_the_holder_once(self) -> None:
         self.person(TRANSITION, id=self.blocker, state="cancelled", force=True)
@@ -456,7 +468,12 @@ class BlockerTests(Wakes):
         self.assertIsNone(self.stop(B), "and then nothing is left to wake for")
 
     def move_as(self, meta: object, state: str) -> None:
-        self.agent("transition_work_item", meta, id=self.blocker, state=state, force=True)
+        self.agent(
+            "apply_work_item_changes",
+            meta,
+            id=self.blocker,
+            transition={"state": state, "force": True},
+        )
 
     def test_every_state_change_is_told_at_the_next_call_and_only_a_close_wakes(self) -> None:
         self.agent("claim_work_item", AS_A, id=self.blocker)
@@ -522,7 +539,12 @@ class BlockerTests(Wakes):
     def test_a_persons_close_continues_a_holding_subagents_turn(self) -> None:
         held = self.item("Held by the subagent")
         self.agent("claim_work_item", AS_CHILD, id=held)
-        self.agent("link_work_items", AS_A, id=self.blocker, other=held, kind="blocks")
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=self.blocker,
+            links=[{"other": held, "kind": "blocks"}],
+        )
         for agent in (CHILD, None):
             self.hook(agent)
             self.hook(agent, event="stop")
@@ -662,8 +684,18 @@ class CostTests(Wakes):
 
     def test_nothing_new_is_two_indexed_reads_for_a_call_a_stop_and_the_watcher(self) -> None:
         blocker = self.item("Blocks the held item")
-        self.agent("link_work_items", AS_A, id=blocker, other=self.held, kind="blocks")
-        self.agent("transition_work_item", AS_A, id=blocker, state="cancelled", force=True)
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=blocker,
+            links=[{"other": self.held, "kind": "blocks"}],
+        )
+        self.agent(
+            "apply_work_item_changes",
+            AS_A,
+            id=blocker,
+            transition={"state": "cancelled", "force": True},
+        )
         self.subscribe(AS_B, self.followed, True)
         self.ask()
         self.hook(session=B)

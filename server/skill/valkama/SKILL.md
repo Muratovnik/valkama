@@ -75,8 +75,8 @@ sent as that object. `{"items": [...], "force": true}` sends the same steps when
 `force` must carry a refusal through. A step sent with
 the text of one the item has keeps its id, claim and tick, so add steps by
 sending the existing ones first and the new ones after; the acknowledgement
-lists every step's `item_id`. Tick a step by its `item_id` with
-`tick_work_item_checklist_item`, and `done: false` reopens it. Leaving out a
+lists every step's `item_id`. Tick a step by its `item_id` in the batch's
+`checklist_ticks`, and `done: false` reopens it. Leaving out a
 claimed or completed step is refused unless `force`, which discards its state.
 
 **Shared items.** When agents split one item, each claims its step with
@@ -86,9 +86,9 @@ Item and step claims are independent: a step's holder need not hold the item.
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:
 `claim`, `update`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`
-or `comments`, `resolutions`, `questions`, `summary`, `transition`. Each group
-works as its single tool does: `update` as `update_work_item`, `comments` as
-several `comment_work_item` calls, `questions` as `create_work_item_request`.
+or `comments`, `resolutions`, `questions`, `summary`, `transition`. Every write
+to an item's fields, steps, refs, links, discussion, summary and state goes
+through these groups; `questions` takes what `create_work_item_request` does.
 Every group but `claim` and `subscribe` is JSON, never bare text: `comment` is
 `{"body": "…"}`, `summary` `{"done": "…", "next": "…"}`, `transition`
 `{"state": "…"}`. Bare text fails in the client, as input not parsed as JSON. A
@@ -110,7 +110,7 @@ call again exactly as it was, and for the rest of the session send Valkama calls
 a response of their own, with the other tools in the next one. Another client or
 permission mode needs no such care.
 
-**Refs.** `attach_work_item_ref` (or the `refs` group) records a `commit`, a
+**Refs.** The `refs` group records a `commit`, a
 `memory` record id materially used, or a `url`. Your own session needs no ref:
 Valkama records the session of every write.
 
@@ -159,7 +159,7 @@ a holder would, a person's acts there at your next tool call; send `subscribe: f
 item you hold mutes other agents there while you hold it; a person, and the replies
 to your own `awaits_reply` comment, still reach you.
 
-**Comments.** `comment_work_item` is for what the fields have no place for: a
+**Comments.** The batch's `comment` is for what the fields have no place for: a
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a
 comment to a step.
 
@@ -177,18 +177,16 @@ for the owner to choose from, put them under it as `list`: `{"label": "What to
 take on", "options": [{"id": "a", "label": "Widen the check", "recommended":
 true, "why": "Two of the five misses are its."}, …]}`, up to 20 options written as
 a question's options are.
-`comment_work_item`, `report_work_item`, `set_work_item_summary` and the batch's
-`comment`, `comments` and `summary` take it, on a root only, and the comment and
-its list are one write; the answer adds `list_request_id`. It is a question of one
+The batch's `comment`, `comments` and `summary` take it, on a root only, and the
+comment and its list are one write; the answer adds `list_request_id`. It is a question of one
 `multi_choice` field, `items`, which the owner ticks with one button: its answer is
 `{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
 waits for it: it raises no alert and is not among the questions waiting for the
 owner. Read it with the item's questions, where it carries `comment_id`.
 
 **Telling another item.** A number in a text is a link and tells nobody. To tell
-the work on another item, name it in `mentions`: `comment_work_item`,
-`report_work_item`, `set_work_item_summary`, `update_work_item` with a
-`description`, and the batch's `comment`, `comments`, `summary` and `update` take up
+the work on another item, name it in `mentions`: the batch's `comment`,
+`comments`, `summary` and `update` with a `description` take up
 to 5 references, on a root or a reply, and a session names one item at most 3 times
 an hour (`mention_limit` refuses the fourth: write once on that item instead). A
 summary or a description saved again tells only the items the text it replaces did
@@ -201,15 +199,15 @@ nobody will hear it: no holder yet (it waits for whoever takes the item), the it
 is closed, or the call proved no session. Naming the item written on, or an item
 twice, is refused. Tell an item only with news for the work there.
 
-**Resolved threads.** `resolve_work_item_comment` marks a thread's root resolved
-with a one-line decision, and `reopen: true` removes the mark; the `resolutions`
-group does up to 100 roots in one call. Mark a thread only on the owner's
+**Resolved threads.** The batch's `resolutions` mark a thread's root resolved
+with a one-line decision, and `reopen: true` removes the mark, up to 100 roots in
+one call. Mark a thread only on the owner's
 decision, for example while reviewing a digest with them, and write that decision
 in `resolution`. A reply leaves the mark in place, so reopen the discussion of a
 resolved root by writing a new root that names it. A reply and a question's thread
 take no mark.
 
-**Links.** `link_work_items` takes `kind`:
+**Links.** The batch's `links` take `kind`:
 
 - `blocks` carries readiness: an item that something unfinished blocks is not
   ready, and the take-next queue skips it;
@@ -223,8 +221,8 @@ take no mark.
 Steps of the same change stay on the checklist; a link is for separate work.
 
 **Order.** Inside a state, items keep the order the board shows and
-`claim_ready_work_item` takes work in. `update_work_item` and
-`transition_work_item` take `rank`: `first`, `last`, `before:MAIN-12` or
+`claim_ready_work_item` takes work in. The batch's `update` and
+`transition` take `rank`: `first`, `last`, `before:MAIN-12` or
 `after:MAIN-12`, naming an item in the same state. Placing an item first is
 what makes it next; priority only breaks a tie.
 
@@ -290,7 +288,7 @@ it: link it, but do not promise it opens.
 ## Blocked work
 
 When another item blocks the work, link it: `blocks` from the blocking item to
-this one (`link_work_items` with `id` the blocker, `other` this item). When the
+this one (the `links` group on the blocker, `other` this item). When the
 blocker is outside Valkama, transition to the blocked state with a `reason` and
 say what would unblock it in a comment. A transition to a blocked state is
 refused without a linked blocker or a reason.
@@ -348,7 +346,7 @@ or an own variant (`own`): in a `choice` or `boolean` instead of an option, in a
 (`field_notes`). `note` is a comment on the whole question; it no longer stands in
 for a required field, which needs a value or an own variant. A comment over an
 open question is not an answer; to ask about a question, reply in its thread
-(`comment_work_item` with `reply_to_request`).
+(the batch's `comment` with `reply_to_request`).
 
 An answer can change after it was given: a person changes it in Valkama, and an
 agent changes it with `answer_work_item_request` and `change: true`, only when the
@@ -424,8 +422,7 @@ anyone.
 2. Record the summary: `done` (what was done), `next` (what comes next) and
    `why` only when the choice is not obvious. When your instructions ask a
    closing summary for flow friction, give it in `friction` (`none`, or a line
-   per hindrance), never at the end of `done` or `why`. `set_work_item_summary`,
-   or the `summary` group.
+   per hindrance), never at the end of `done` or `why`, in the `summary` group.
 3. Transition to the completed state, or to review when someone must check the
    result first. A state is named by its key or by a category that one state
    has (`completed`, `review`, `cancelled`); a name the workflow lacks is

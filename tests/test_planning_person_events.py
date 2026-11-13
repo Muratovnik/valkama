@@ -98,7 +98,7 @@ class Harness(unittest.TestCase):
 
     def summary(self) -> None:
         self.agent(
-            "set_work_item_summary",
+            "apply_work_item_changes",
             id=self.ref,
             summary={"done": "Did the work", "next": "Nothing"},
         )
@@ -180,7 +180,9 @@ class WhatCountsTests(Harness):
                 self.assertEqual("Which road do we take?", event["text"])
 
     def test_a_reply_says_it_is_one_and_under_which_root(self) -> None:
-        root = self.agent("comment_work_item", id=self.ref, body="Root")["comment_id"]
+        root = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Root"})[
+            "applied"
+        ]["comment"]["comment_id"]
         reply = self.person(
             "/api/planning/work-item/comment", id=self.ref, body="On that", reply_to=root
         )
@@ -206,18 +208,24 @@ class WhatCountsTests(Harness):
         )
 
     def test_a_reply_is_a_comment_a_close_must_not_pass(self) -> None:
-        root = self.agent("comment_work_item", id=self.ref, body="Root")["comment_id"]
+        root = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Root"})[
+            "applied"
+        ]["comment"]["comment_id"]
         self.agent("claim_work_item", id=self.ref)
         self.summary()
         self.person(
             "/api/planning/work-item/comment", id=self.ref, body="Wait for me", reply_to=root
         )
-        message = self.refused_agent("transition_work_item", id=self.ref, state="done")
+        message = self.refused_agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "done"}
+        )
         self.assertIn("[person_spoke]", message)
         self.assertIn("Wait for me", message)
 
     def test_the_resolved_mark_names_its_root_and_quotes_the_decision(self) -> None:
-        root = self.agent("comment_work_item", id=self.ref, body="Root")["comment_id"]
+        root = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Root"})[
+            "applied"
+        ]["comment"]["comment_id"]
         path = "/api/planning/work-item/comment/resolve"
         self.person(path, id=self.ref, comment_id=root, resolution="Not now: later")
         self.person(path, id=self.ref, comment_id=root, reopen=True)
@@ -277,8 +285,10 @@ class WhatCountsTests(Harness):
         self.assertRegex(text, r"; and \d+ more$")
 
     def test_each_thing_a_person_does_to_the_item_is_told(self) -> None:
-        steps = self.agent("set_work_item_checklist", id=self.ref, items=["One", "Two"])
-        one = steps["checklist"][0]["item_id"]
+        steps = self.agent(
+            "apply_work_item_changes", id=self.ref, checklist={"items": ["One", "Two"]}
+        )
+        one = steps["applied"]["checklist"][0]["item_id"]
         ref = self.ref
         other = service.create_work_item(self.conn, space=self.space["key"], title="Other")
         self.conn.commit()
@@ -313,7 +323,9 @@ class WhatCountsTests(Harness):
         ]
         for path, payload, kinds in cases:
             with self.subTest(path=path, payload=payload):
-                self.agent("comment_work_item", id=ref, body="moving the boundary")
+                self.agent(
+                    "apply_work_item_changes", id=ref, comment={"body": "moving the boundary"}
+                )
                 self.person(path, id=ref, **payload)
                 self.assertEqual(kinds, self.kinds())
 
@@ -357,13 +369,15 @@ class WhatCountsTests(Harness):
         self.assertEqual("Decided against it", events[0]["text"])
 
     def test_selecting_an_earlier_report_is_told_on_its_own(self) -> None:
-        reported = self.agent(
-            "report_work_item", id=self.ref, report={"done": "First", "next": "Second"}
+        # Written below every surface: only the person's selection is under test.
+        reported = service.report_work_item(
+            self.conn, self.ref, {"done": "First", "next": "Second"}
         )
+        self.conn.commit()
         self.person(
             "/api/planning/work-item/summary/select",
             id=self.ref,
-            comment_id=reported["comment_id"],
+            comment_id=reported["comments"][-1]["id"],
             expected_revision=reported["revision"],
         )
         self.assertEqual(["summary_selected"], self.kinds())
@@ -388,7 +402,13 @@ class WhoCountsTests(Harness):
             author="user",
         )
         self.assertNotIn("from_person", said)
-        self.agent("comment_work_item", meta=None, id=self.ref, body="Signed", author="user")
+        self.agent(
+            "apply_work_item_changes",
+            meta=None,
+            id=self.ref,
+            comment={"body": "Signed"},
+            author="user",
+        )
         self.assertEqual([], self.window())
         self.agent("claim_work_item", id=self.ref)
         self.summary()
@@ -448,12 +468,14 @@ class TheWindowTests(Harness):
     def test_an_agents_write_moves_it_and_each_event_is_told_once(self) -> None:
         self.agent("claim_work_item", id=self.ref)
         self.says("First")
-        told = self.agent("comment_work_item", id=self.ref, body="Working")
+        told = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Working"})
         self.assertEqual(["First"], [event["text"] for event in told["from_person"]])
-        again = self.agent("comment_work_item", id=self.ref, body="Still working")
+        again = self.agent(
+            "apply_work_item_changes", id=self.ref, comment={"body": "Still working"}
+        )
         self.assertNotIn("from_person", again)
         self.says("Second")
-        third = self.agent("comment_work_item", id=self.ref, body="And now")
+        third = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "And now"})
         self.assertEqual(["Second"], [event["text"] for event in third["from_person"]])
 
     def test_several_events_come_oldest_first(self) -> None:
@@ -466,8 +488,8 @@ class TheWindowTests(Harness):
 
     def test_an_agents_write_that_logs_no_event_moves_it_too(self) -> None:
         for name, arguments in (
-            ("update_work_item", {"title": "Renamed by the agent"}),
-            ("attach_work_item_ref", {"kind": "commit", "value": "abc1234"}),
+            ("apply_work_item_changes", {"update": {"title": "Renamed by the agent"}}),
+            ("apply_work_item_changes", {"refs": [{"kind": "commit", "value": "abc1234"}]}),
         ):
             with self.subTest(name):
                 self.says()
@@ -476,7 +498,7 @@ class TheWindowTests(Harness):
                 self.assertEqual([], self.window())
 
     def test_a_person_editing_after_such_a_write_is_told(self) -> None:
-        self.agent("update_work_item", id=self.ref, title="Agent's title")
+        self.agent("apply_work_item_changes", id=self.ref, update={"title": "Agent's title"})
         self.person("/api/planning/work-item/update", id=self.ref, title="Person's title")
         self.assertEqual(["edited"], self.kinds())
 
@@ -491,7 +513,11 @@ class TheWindowTests(Harness):
         self.person(
             "/api/planning/work-item/comment", id=other["reference"], body="About the far end"
         )
-        self.agent("link_work_items", id=self.ref, other=other["reference"], kind="relates-to")
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            links=[{"other": other["reference"], "kind": "relates-to"}],
+        )
         told = person_events.since_last_agent_write(self.conn, str(other["work_item_id"]))
         self.assertEqual(["About the far end"], [event["text"] for event in told])
 
@@ -499,7 +525,9 @@ class TheWindowTests(Harness):
         other = service.create_work_item(self.conn, space=self.space["key"], title="Elsewhere")
         self.conn.commit()
         self.says()
-        told = self.agent("comment_work_item", id=other["reference"], body="Over here")
+        told = self.agent(
+            "apply_work_item_changes", id=other["reference"], comment={"body": "Over here"}
+        )
         self.assertNotIn("from_person", told)
         self.assertEqual(["comment"], self.kinds())
 
@@ -553,39 +581,43 @@ class ToldOnWriteTests(Harness):
     def test_every_write_to_an_item_carries_it(self) -> None:
         other = service.create_work_item(self.conn, space=self.space["key"], title="Merge me")
         self.conn.commit()
-        steps = self.agent("set_work_item_checklist", id=self.ref, items=["One", "Two"])
-        step = steps["checklist"][0]["item_id"]
-        report = self.agent(
-            "report_work_item", id=self.ref, report={"done": "Earlier", "next": "Later"}
+        steps = self.agent(
+            "apply_work_item_changes", id=self.ref, checklist={"items": ["One", "Two"]}
         )
-        asked = [self.ask()["request_id"] for _ in range(3)]
-        current = lambda: int(service.get_work_item(self.conn, self.ref)["revision"])  # noqa: E731
+        step = steps["applied"]["checklist"][0]["item_id"]
+        asked = [self.ask()["request_id"] for _ in range(2)]
         cases: list[tuple[str, dict]] = [
-            ("update_work_item", {"id": self.ref, "priority": "high"}),
-            ("transition_work_item", {"id": self.ref, "state": "todo"}),
+            ("apply_work_item_changes", {"id": self.ref, "update": {"priority": "high"}}),
+            ("apply_work_item_changes", {"id": self.ref, "transition": {"state": "todo"}}),
             ("claim_work_item", {"id": self.ref}),
-            ("set_work_item_checklist", {"id": self.ref, "items": ["One", "Two", "Three"]}),
-            ("claim_work_item_checklist_item", {"id": self.ref, "item_id": step}),
-            ("tick_work_item_checklist_item", {"id": self.ref, "item_id": step}),
-            ("link_work_items", {"id": self.ref, "other": other["reference"], "kind": "blocks"}),
-            ("attach_work_item_ref", {"id": self.ref, "kind": "commit", "value": "abc1234"}),
             (
-                "set_work_item_summary",
+                "apply_work_item_changes",
+                {"id": self.ref, "checklist": {"items": ["One", "Two", "Three"]}},
+            ),
+            ("claim_work_item_checklist_item", {"id": self.ref, "item_id": step}),
+            ("apply_work_item_changes", {"id": self.ref, "checklist_ticks": [{"item_id": step}]}),
+            (
+                "apply_work_item_changes",
+                {"id": self.ref, "links": [{"other": other["reference"], "kind": "blocks"}]},
+            ),
+            (
+                "apply_work_item_changes",
+                {"id": self.ref, "refs": [{"kind": "commit", "value": "abc1234"}]},
+            ),
+            (
+                "apply_work_item_changes",
                 {"id": self.ref, "summary": {"done": "Done", "next": "Next"}},
             ),
-            ("report_work_item", {"id": self.ref, "report": {"done": "Done", "next": "Next"}}),
-            ("comment_work_item", {"id": self.ref, "body": "Noted"}),
             ("apply_work_item_changes", {"id": self.ref, "comment": {"body": "Noted"}}),
             (
                 "create_work_item_request",
                 {"id": self.ref, "kind": "question", "prompt": "Well?", "fields": QUESTION},
             ),
             ("merge_work_items", {"id": self.ref, "items": [other["reference"]]}),
-            ("decline_work_item_request", {"id": asked[0], "expected_revision": 0}),
-            ("expire_work_item_request", {"id": asked[1], "expected_revision": 0}),
+            ("expire_work_item_request", {"id": asked[0], "expected_revision": 0}),
             (
                 "answer_work_item_request",
-                {"id": asked[2], "answers": {"which": "a"}, "expected_revision": 0},
+                {"id": asked[1], "answers": {"which": "a"}, "expected_revision": 0},
             ),
         ]
         for name, arguments in cases:
@@ -602,16 +634,10 @@ class ToldOnWriteTests(Harness):
                 )
                 self.assertNotIn(
                     "from_person",
-                    self.agent("comment_work_item", id=self.ref, body="Moving on"),
+                    self.agent(
+                        "apply_work_item_changes", id=self.ref, comment={"body": "Moving on"}
+                    ),
                 )
-        self.says("Before select")
-        selected = self.agent(
-            "select_work_item_summary",
-            id=self.ref,
-            comment_id=report["comment_id"],
-            expected_revision=current(),
-        )
-        self.assertEqual("Before select", selected["from_person"][0]["text"])
 
     def test_the_next_item_of_the_queue_comes_with_what_was_said_on_it(self) -> None:
         self.says()
@@ -622,9 +648,8 @@ class ToldOnWriteTests(Harness):
     def test_a_write_with_nothing_to_tell_has_no_key(self) -> None:
         for name, arguments in (
             ("claim_work_item", {"id": self.ref}),
-            ("comment_work_item", {"id": self.ref, "body": "Hello"}),
             ("apply_work_item_changes", {"id": self.ref, "comment": {"body": "Hello"}}),
-            ("update_work_item", {"id": self.ref, "priority": "low"}),
+            ("apply_work_item_changes", {"id": self.ref, "update": {"priority": "low"}}),
         ):
             with self.subTest(name):
                 self.assertNotIn("from_person", self.agent(name, **arguments))
@@ -647,7 +672,7 @@ class ToldOnWriteTests(Harness):
     def test_a_long_window_names_the_newest_and_counts_the_rest(self) -> None:
         for index in range(person_events.MOST_SHOWN + 3):
             self.says(f"Word {index}")
-        answer = self.agent("comment_work_item", id=self.ref, body="Reading")
+        answer = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Reading"})
         self.assertEqual(person_events.MOST_SHOWN, len(answer["from_person"]))
         self.assertEqual(3, answer["from_person_omitted"])
         self.assertEqual(f"Word {person_events.MOST_SHOWN + 2}", answer["from_person"][-1]["text"])
@@ -663,7 +688,9 @@ class ToldOnWriteTests(Harness):
         from server.planning import tools
 
         self.says()
-        answer = tools.OPS["comment_work_item"](self.conn, {"id": self.ref, "body": "Direct"})
+        answer = tools.OPS["apply_work_item_changes"](
+            self.conn, {"id": self.ref, "comment": {"body": "Direct"}}
+        )
         self.assertNotIn("from_person", answer)
 
     def test_a_write_touching_no_item_answers_as_it_did(self) -> None:
@@ -682,7 +709,9 @@ class CloseGuardTests(Harness):
     def test_a_close_over_unread_words_is_refused_naming_them(self) -> None:
         self.worked()
         self.says("Hold on, the requirement changed")
-        message = self.refused_agent("transition_work_item", id=self.ref, state="done")
+        message = self.refused_agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "done"}
+        )
         self.assertIn("[person_spoke]", message)
         self.assertIn("Hold on, the requirement changed", message)
         self.assertEqual("dev", self.status())
@@ -692,19 +721,26 @@ class CloseGuardTests(Harness):
         self.worked()
         self.says()
         self.assertIn(
-            "[person_spoke]", self.refused_agent("transition_work_item", id=self.ref, state="done")
+            "[person_spoke]",
+            self.refused_agent(
+                "apply_work_item_changes", id=self.ref, transition={"state": "done"}
+            ),
         )
         self.assertIn(
             "[person_spoke]",
-            self.refused_agent("transition_work_item", id=self.ref, state="cancelled"),
+            self.refused_agent(
+                "apply_work_item_changes", id=self.ref, transition={"state": "cancelled"}
+            ),
         )
-        answer = self.agent("transition_work_item", id=self.ref, state="review")
+        answer = self.agent("apply_work_item_changes", id=self.ref, transition={"state": "review"})
         self.assertEqual("review", answer["state"]["key"])
 
     def test_force_carries_it_and_records_the_override(self) -> None:
         self.worked()
         self.says()
-        answer = self.agent("transition_work_item", id=self.ref, state="done", force=True)
+        answer = self.agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "done", "force": True}
+        )
         self.assertEqual("done", answer["state"]["key"])
         self.assertEqual(["person_spoke"], answer["overridden"])
         self.assertEqual("Use the other library", answer["from_person"][0]["text"])
@@ -717,10 +753,12 @@ class CloseGuardTests(Harness):
     def test_another_write_first_lets_the_close_through(self) -> None:
         self.worked()
         self.says()
-        self.refused_agent("transition_work_item", id=self.ref, state="done")
-        told = self.agent("comment_work_item", id=self.ref, body="Read it, changed the plan")
+        self.refused_agent("apply_work_item_changes", id=self.ref, transition={"state": "done"})
+        told = self.agent(
+            "apply_work_item_changes", id=self.ref, comment={"body": "Read it, changed the plan"}
+        )
         self.assertEqual(1, len(told["from_person"]))
-        answer = self.agent("transition_work_item", id=self.ref, state="done")
+        answer = self.agent("apply_work_item_changes", id=self.ref, transition={"state": "done"})
         self.assertEqual("done", answer["state"]["key"])
         self.assertNotIn("overridden", answer)
 
@@ -755,7 +793,10 @@ class CloseGuardTests(Harness):
     def test_a_close_with_an_empty_window_is_not_refused(self) -> None:
         self.worked()
         self.assertEqual(
-            "done", self.agent("transition_work_item", id=self.ref, state="done")["state"]["key"]
+            "done",
+            self.agent("apply_work_item_changes", id=self.ref, transition={"state": "done"})[
+                "state"
+            ]["key"],
         )
 
     def test_a_person_closing_is_not_guarded(self) -> None:
@@ -795,7 +836,9 @@ class CloseGuardTests(Harness):
                 other.commit()
 
         self.conn.set_trace_callback(race)
-        message = self.refused_agent("transition_work_item", id=self.ref, state="done")
+        message = self.refused_agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "done"}
+        )
         self.conn.set_trace_callback(None)
         self.assertEqual([True], landed)
         self.assertIn("[person_spoke]", message)
@@ -817,7 +860,7 @@ class CloseGuardTests(Harness):
         other = service.create_work_item(self.conn, space=self.space["key"], title="Merge me")
         self.conn.commit()
         self.person("/api/planning/work-item/comment", id=other["reference"], body="Keep this")
-        self.agent("comment_work_item", id=self.ref, body="Working the survivor")
+        self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Working the survivor"})
         message = self.refused_agent("merge_work_items", id=self.ref, items=[other["reference"]])
         self.assertIn("[person_spoke]", message)
         self.assertIn("Keep this", message)
@@ -835,7 +878,7 @@ class CloseGuardTests(Harness):
 class AfterAPersonClosedTests(Harness):
     def test_the_next_write_on_a_cancelled_item_says_so_once(self) -> None:
         self.agent("claim_work_item", id=self.ref)
-        steps = self.agent("set_work_item_checklist", id=self.ref, items=["One"])
+        steps = self.agent("apply_work_item_changes", id=self.ref, checklist={"items": ["One"]})
         self.person(
             "/api/planning/work-item/summary",
             id=self.ref,
@@ -843,14 +886,17 @@ class AfterAPersonClosedTests(Harness):
         )
         self.person("/api/planning/work-item/transition", id=self.ref, state="cancelled")
         answer = self.agent(
-            "tick_work_item_checklist_item", id=self.ref, item_id=steps["checklist"][0]["item_id"]
+            "apply_work_item_changes",
+            id=self.ref,
+            checklist_ticks=[{"item_id": steps["applied"]["checklist"][0]["item_id"]}],
         )
         told = answer["from_person"]
         self.assertEqual(["report", "status", "released"], [event["kind"] for event in told])
         self.assertTrue(told[1]["text"].startswith("cancelled"))
         self.assertIn("Not needed: we dropped it", told[0]["text"])
         self.assertNotIn(
-            "from_person", self.agent("comment_work_item", id=self.ref, body="Understood")
+            "from_person",
+            self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Understood"}),
         )
 
     def test_a_refused_write_on_it_keeps_the_news_for_the_next_one(self) -> None:
@@ -861,9 +907,11 @@ class AfterAPersonClosedTests(Harness):
             summary={"done": "Dropped", "next": "Nothing"},
         )
         self.person("/api/planning/work-item/transition", id=self.ref, state="cancelled")
-        message = self.refused_agent("transition_work_item", id=self.ref, state="done")
+        message = self.refused_agent(
+            "apply_work_item_changes", id=self.ref, transition={"state": "done"}
+        )
         self.assertIn("[person_spoke]", message)
-        answer = self.agent("comment_work_item", id=self.ref, body="Seen")
+        answer = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Seen"})
         self.assertIn("status", [event["kind"] for event in answer["from_person"]])
 
 
@@ -873,17 +921,21 @@ class OneItemTwoAgentsTests(Harness):
     ) -> None:
         self.agent("claim_work_item", id=self.ref)
         self.says("For whoever does this")
-        told = self.agent("comment_work_item", meta=SUBAGENT, id=self.ref, body="On it")
+        told = self.agent(
+            "apply_work_item_changes", meta=SUBAGENT, id=self.ref, comment={"body": "On it"}
+        )
         self.assertEqual(["For whoever does this"], [e["text"] for e in told["from_person"]])
-        after = self.agent("comment_work_item", id=self.ref, body="Checking in")
+        after = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Checking in"})
         self.assertNotIn("from_person", after)
 
     def test_the_orchestrator_writing_first_is_told_and_then_the_subagent_is_not(self) -> None:
         self.agent("claim_work_item", meta=SUBAGENT, id=self.ref)
         self.says("For whoever does this")
-        told = self.agent("comment_work_item", id=self.ref, body="Passing it on")
+        told = self.agent("apply_work_item_changes", id=self.ref, comment={"body": "Passing it on"})
         self.assertEqual(["For whoever does this"], [e["text"] for e in told["from_person"]])
-        after = self.agent("comment_work_item", meta=SUBAGENT, id=self.ref, body="Understood")
+        after = self.agent(
+            "apply_work_item_changes", meta=SUBAGENT, id=self.ref, comment={"body": "Understood"}
+        )
         self.assertNotIn("from_person", after)
 
     def test_either_of_them_closing_answers_to_the_same_window(self) -> None:
@@ -892,14 +944,24 @@ class OneItemTwoAgentsTests(Harness):
         self.says()
         self.assertIn(
             "[person_spoke]",
-            self.refused_agent("transition_work_item", meta=SUBAGENT, id=self.ref, state="done"),
+            self.refused_agent(
+                "apply_work_item_changes", meta=SUBAGENT, id=self.ref, transition={"state": "done"}
+            ),
         )
         self.assertIn(
-            "[person_spoke]", self.refused_agent("transition_work_item", id=self.ref, state="done")
+            "[person_spoke]",
+            self.refused_agent(
+                "apply_work_item_changes", id=self.ref, transition={"state": "done"}
+            ),
         )
-        self.agent("comment_work_item", meta=SUBAGENT, id=self.ref, body="Handled")
+        self.agent(
+            "apply_work_item_changes", meta=SUBAGENT, id=self.ref, comment={"body": "Handled"}
+        )
         self.assertEqual(
-            "done", self.agent("transition_work_item", id=self.ref, state="done")["state"]["key"]
+            "done",
+            self.agent("apply_work_item_changes", id=self.ref, transition={"state": "done"})[
+                "state"
+            ]["key"],
         )
 
 

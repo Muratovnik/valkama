@@ -92,7 +92,7 @@ class Harness(unittest.TestCase):
 
     def claim_with_a_step_for_the_subagent(self) -> None:
         self.agent("claim_work_item", id=self.ref)
-        self.agent("set_work_item_checklist", id=self.ref, items=["one", "two"])
+        self.agent("apply_work_item_changes", id=self.ref, checklist={"items": ["one", "two"]})
         step = service.get_work_item(self.conn, self.ref)["checklist"][0]["id"]
         self.agent("claim_work_item_checklist_item", SUBAGENT, id=self.ref, item_id=step)
 
@@ -168,7 +168,12 @@ class WhoIsToldTests(Harness):
         self.conn.commit()
         self.agent("claim_work_item", id=other["reference"])
         # Writing there is not holding it: a comment from the subagent claims nothing.
-        self.agent("comment_work_item", SUBAGENT, id=other["reference"], body="Looked at it")
+        self.agent(
+            "apply_work_item_changes",
+            SUBAGENT,
+            id=other["reference"],
+            comment={"body": "Looked at it"},
+        )
         self.says("On the orchestrator's own item", ref=str(other["reference"]))
         self.assertIsNone(self.hook(CHILD))
         told = self.hook()
@@ -180,7 +185,9 @@ class WhoIsToldTests(Harness):
 
         self.claim_with_a_step_for_the_subagent()
         self.says("Seen by whoever writes first")
-        answer = self.agent("comment_work_item", SUBAGENT, id=self.ref, body="On it")
+        answer = self.agent(
+            "apply_work_item_changes", SUBAGENT, id=self.ref, comment={"body": "On it"}
+        )
         self.assertIn("from_person", answer, "the subagent's write answer told it")
         told = self.hook()
         assert told is not None
@@ -194,7 +201,13 @@ class WhoIsToldTests(Harness):
 
     def test_an_agent_signing_user_is_not_a_person(self) -> None:
         self.claim_with_a_step_for_the_subagent()
-        self.agent("comment_work_item", SUBAGENT, id=self.ref, body="Signed", author="user")
+        self.agent(
+            "apply_work_item_changes",
+            SUBAGENT,
+            id=self.ref,
+            comment={"body": "Signed"},
+            author="user",
+        )
         self.assertIsNone(self.hook())
         self.says("A real one")
         self.assertIsNotNone(self.hook(), "positive control")
@@ -218,7 +231,11 @@ class AddressedTests(Harness):
     """Beside the holders, a reply reaches who started the thread, an answer who asked."""
 
     def root_by(self, meta: object, body: str = "My report") -> int:
-        return int(self.agent("comment_work_item", meta, id=self.ref, body=body)["comment_id"])
+        return int(
+            self.agent("apply_work_item_changes", meta, id=self.ref, comment={"body": body})[
+                "applied"
+            ]["comment"]["comment_id"]
+        )
 
     def replies(self, root: int, body: str = "Take the second option") -> None:
         self.person("/api/planning/work-item/comment", id=self.ref, body=body, reply_to=root)
@@ -278,12 +295,14 @@ class AddressedTests(Harness):
 
         self.agent("claim_work_item", id=self.ref)
         listed = self.agent(
-            "comment_work_item",
+            "apply_work_item_changes",
             SUBAGENT,
             id=self.ref,
-            body="Findings",
-            list={"label": "Take on", "options": [{"id": "a", "label": "Widen the check"}]},
-        )["list_request_id"]
+            comment={
+                "body": "Findings",
+                "list": {"label": "Take on", "options": [{"id": "a", "label": "Widen the check"}]},
+            },
+        )["applied"]["comment"]["list_request_id"]
         self.root_by({"sessionId": SESSION, "threadId": STRANGER}, "Another report")
         self.settle(None, CHILD, STRANGER)
         self.person(
@@ -360,7 +379,11 @@ class AddressedTests(Harness):
         self.settle(None, CHILD)
         for meta in (ORCHESTRATOR, {"sessionId": SESSION, "threadId": STRANGER}):
             self.agent(
-                "comment_work_item", meta, id=self.ref, body="Signed", author="user", reply_to=root
+                "apply_work_item_changes",
+                meta,
+                id=self.ref,
+                comment={"body": "Signed", "reply_to": root},
+                author="user",
             )
         self.assertIsNone(self.hook(CHILD))
         self.assertIsNone(self.hook())
@@ -1001,7 +1024,9 @@ class WatcherTests(Harness):
         self.assertIn(b"Through the command", fake.buffer.getvalue())
 
     def test_a_reply_in_a_subagents_thread_wakes_an_idle_orchestrator(self) -> None:
-        root = self.agent("comment_work_item", SUBAGENT, id=self.ref, body="Report")["comment_id"]
+        root = self.agent(
+            "apply_work_item_changes", SUBAGENT, id=self.ref, comment={"body": "Report"}
+        )["applied"]["comment"]["comment_id"]
         self.assertIsNone(self.hook(event="stop"))
         path = "/api/planning/work-item/comment"
 
@@ -1039,9 +1064,11 @@ class StatementsTests(Harness):
         )
         self.conn.commit()
         self.unheld = str(other["reference"])
-        root = self.agent("comment_work_item", SUBAGENT, id=self.unheld, body="Report")
+        root = self.agent(
+            "apply_work_item_changes", SUBAGENT, id=self.unheld, comment={"body": "Report"}
+        )
         self.assertIsNone(self.hook())
-        return int(root["comment_id"])
+        return int(root["applied"]["comment"]["comment_id"])
 
     def test_nothing_new_is_two_reads_and_joins_no_call_rows(self) -> None:
         self.held_and_unheld()

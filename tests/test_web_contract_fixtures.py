@@ -636,7 +636,9 @@ class _Scenario:
         ref = self.reference
         told = self.tool("create_work_item", space=SPACE, title="Told card")["reference"]
         agent_root = self.tool(
-            "comment_work_item", id=ref, body="The export leaves out claims.", awaits_reply=True
+            "apply_work_item_changes",
+            id=ref,
+            comment={"body": "The export leaves out claims.", "awaits_reply": True},
         )
         # A person's reply that tells another card, and that card's description telling this one.
         reply = self.http(
@@ -645,7 +647,7 @@ class _Scenario:
                 "id": ref,
                 "body": f"Only the claims, the steps are there; {told} has them.",
                 "author": "user",
-                "reply_to": agent_root["comment_id"],
+                "reply_to": agent_root["applied"]["comment"]["comment_id"],
                 "mentions": [told],
             },
         )
@@ -654,10 +656,9 @@ class _Scenario:
             {"id": told, "description": f"Waits on {ref} first.", "mentions": [ref]},
         )
         self.tool(
-            "comment_work_item",
+            "apply_work_item_changes",
             id=ref,
-            body="Then the claims go in next.",
-            reply_to=reply["comment_id"],
+            comment={"body": "Then the claims go in next.", "reply_to": reply["comment_id"]},
         )
         resolved = self.http(
             "/api/planning/work-item/comment",
@@ -702,10 +703,12 @@ class _Scenario:
             note="The owner asked for the change.",
         )
         self.tool(
-            "comment_work_item",
+            "apply_work_item_changes",
             id=ref,
-            body="Does the second option include the docs?",
-            reply_to_request=asked["request_id"],
+            comment={
+                "body": "Does the second option include the docs?",
+                "reply_to_request": asked["request_id"],
+            },
         )
         self.http(
             "/api/planning/work-item/comment",
@@ -726,15 +729,17 @@ class _Scenario:
         )
         # A list under an agent's comment: a question with the comment it stands under.
         self.tool(
-            "comment_work_item",
+            "apply_work_item_changes",
             id=ref,
-            body="Two places misfire.",
-            list={
-                "label": "What to take on",
-                "options": [
-                    {"id": "a", "label": "Widen the check", "recommended": True},
-                    {"id": "b", "label": "Fix the docs", "description": "The two pages."},
-                ],
+            comment={
+                "body": "Two places misfire.",
+                "list": {
+                    "label": "What to take on",
+                    "options": [
+                        {"id": "a", "label": "Widen the check", "recommended": True},
+                        {"id": "b", "label": "Fix the docs", "description": "The two pages."},
+                    ],
+                },
             },
         )
         self.subscriber(ref)
@@ -759,7 +764,7 @@ class _Scenario:
             ),
             "mcp-get-work-item": self.tool("get_work_item", id=ref),
             "mcp-get-work-item-thread": self.tool(
-                "get_work_item", id=ref, thread=agent_root["comment_id"]
+                "get_work_item", id=ref, thread=agent_root["applied"]["comment"]["comment_id"]
             ),
             "mcp-get-work-item-unresolved": self.tool("get_work_item", id=ref, unresolved=True),
             **self.documents(),

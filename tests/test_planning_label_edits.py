@@ -3,8 +3,8 @@
 `labels` replaces an item's labels, so an agent that meant to add one sent
 `labels: ["observation"]` and erased the two the item had. `labels_add` and
 `labels_remove` change the set the item has. Every write surface reaches the same
-edit, so each case runs through all four: the single tool and the batch's `update`
-group over MCP, and the two HTTP routes they stand for. Each edit that changes the set,
+edit, so each case runs through all three: the batch's `update` group over MCP, and
+the two HTTP routes, the edit's own and the batch's. Each edit that changes the set,
 by whichever field, leaves one `labels_changed` event with the set before and after;
 one that leaves the set as it was leaves none.
 """
@@ -47,7 +47,6 @@ class LabelEditTests(BatchCase):
             return answer
 
         return {
-            "update_work_item": lambda **edit: self.agent("update_work_item", id=self.ref, **edit),
             "apply_work_item_changes": lambda **edit: self.apply(update=edit),
             "POST work-item/update": lambda **edit: http(
                 "/api/planning/work-item/update", id=self.ref, **edit
@@ -88,18 +87,18 @@ class LabelEditTests(BatchCase):
         # the record of what an edit changed, and here it changed nothing.
         for edit in ({"labels_add": ["bug"]}, {"labels_remove": ["absent"]}, {"labels_add": []}):
             with self.subTest(edit=edit):
-                self.agent("update_work_item", id=self.ref, **edit)
+                self.apply(update=edit)
                 self.assertEqual(BEFORE, self.record()["labels"])
                 self.assertIsNone(self.call_rows()[-1]["reason"])
 
     def test_the_answer_names_the_fields_sent(self) -> None:
-        single = self.agent("update_work_item", id=self.ref, labels_add=["x"], labels_remove=["y"])
-        self.assertEqual(["labels_add", "labels_remove"], single["updated"])
-        batch = self.apply(update={"labels_add": ["z"]})
-        self.assertEqual(["labels_add"], batch["applied"]["update"])
+        both = self.apply(update={"labels_add": ["x"], "labels_remove": ["y"]})
+        self.assertEqual(["labels_add", "labels_remove"], both["applied"]["update"])
+        one = self.apply(update={"labels_add": ["z"]})
+        self.assertEqual(["labels_add"], one["applied"]["update"])
 
     def test_the_call_row_names_the_labels_column_it_changed(self) -> None:
-        self.agent("update_work_item", id=self.ref, labels_add=["observation"])
+        self.agent("apply_work_item_changes", id=self.ref, update={"labels_add": ["observation"]})
         self.assertEqual("labels", self.call_rows()[-1]["reason"])
 
     def test_a_contradictory_or_malformed_edit_is_refused_by_every_surface(self) -> None:
@@ -134,9 +133,6 @@ class LabelEditTests(BatchCase):
 
         for author in ("a" * 129, "two\rlines"):
             writes: dict[str, Callable[[], object]] = {
-                "update_work_item": lambda author=author: self.agent(
-                    "update_work_item", id=self.ref, author=author, **edit
-                ),
                 "apply_work_item_changes": lambda author=author: self.apply(
                     author=author, update=edit
                 ),
@@ -160,7 +156,12 @@ class LabelEditTests(BatchCase):
                     self.assertEqual(before, self.untouched())
 
     def test_the_event_carries_the_author_the_edit_named(self) -> None:
-        self.agent("update_work_item", id=self.ref, author="codex", labels_add=["observation"])
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            author="codex",
+            update={"labels_add": ["observation"]},
+        )
         newest = self.record()["events"][-1]
         self.assertEqual(("labels_changed", "codex"), (newest["action"], newest["author"]))
 
@@ -217,7 +218,7 @@ class LabelEditTests(BatchCase):
                 self.each_surface_records(edit, None)
 
     def test_the_event_stands_in_the_history_under_the_call_that_made_it(self) -> None:
-        self.agent("update_work_item", id=self.ref, labels_add=["observation"])
+        self.agent("apply_work_item_changes", id=self.ref, update={"labels_add": ["observation"]})
         newest = self.record()["events"][-1]
         self.assertEqual("labels_changed", newest["action"])
         self.assertEqual(
@@ -231,7 +232,7 @@ class LabelEditTests(BatchCase):
         old = [f"{n:02d}" + '"' * width for n in range(model.MAX_LABELS)]
         new = [f"{n:02d}" + "\x01" * width for n in range(model.MAX_LABELS)]
         service.update_work_item(self.conn, self.ref, labels=old)
-        self.agent("update_work_item", id=self.ref, labels=new)
+        self.agent("apply_work_item_changes", id=self.ref, update={"labels": new})
         detail = self.label_events()[-1]
         self.assertEqual({"from": old, "to": new}, detail)
         self.assertGreater(len(model.dumps(detail)), service.EVENT_DETAIL_LIMIT)
@@ -247,12 +248,10 @@ class LabelEditTests(BatchCase):
         assert bound is not None
         self.assertEqual(model.LABELS_DETAIL_LIMIT, int(bound.group(1).replace("_", "")))
 
-    def test_the_tool_schemas_declare_the_new_fields_beside_labels(self) -> None:
+    def test_the_tool_schema_declares_the_new_fields_beside_labels(self) -> None:
         declared = {tool["name"]: tool["inputSchema"] for tool in tools.TOOLS}
-        single = declared["update_work_item"]["properties"]
         batch = declared["apply_work_item_changes"]["properties"]["update"]["properties"]
-        for properties in (single, batch):
-            for name in ("labels", "labels_add", "labels_remove"):
-                self.assertEqual("array", properties[name]["type"], name)
-                self.assertEqual({"type": "string"}, properties[name]["items"], name)
-        self.assertEqual(set(single) - {"id", "expected_revision", "author", "verbose"}, set(batch))
+        for name in ("labels", "labels_add", "labels_remove"):
+            self.assertEqual("array", batch[name]["type"], name)
+            self.assertEqual({"type": "string"}, batch[name]["items"], name)
+        self.assertEqual({*model.UPDATABLE_FIELDS, "mentions"}, set(batch))

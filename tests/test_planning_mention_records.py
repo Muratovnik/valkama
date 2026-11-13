@@ -129,7 +129,7 @@ class Harness(unittest.TestCase):
         """The orchestrator claims the target, and its subagent a step there."""
 
         self.agent("claim_work_item", id=self.target)
-        self.agent("set_work_item_checklist", id=self.target, items=["one"])
+        self.agent("apply_work_item_changes", id=self.target, checklist={"items": ["one"]})
         step = service.get_work_item(self.conn, self.target)["checklist"][0]["id"]
         self.agent("claim_work_item_checklist_item", SUBAGENT, id=self.target, item_id=step)
 
@@ -145,11 +145,17 @@ class Harness(unittest.TestCase):
         return str(json.loads(answer)["hookSpecificOutput"]["additionalContext"])
 
     def spoken(self, meta: object = ELSEWHERE, body: str = SAID, **extra: object) -> dict:
-        """An agent's comment on the source, naming the target."""
+        """An agent's comment on the source, naming the target: what the batch says it wrote."""
 
-        return self.agent(
-            "comment_work_item", meta, id=self.source, body=body, mentions=[self.target], **extra
+        author = {"author": extra.pop("author")} if "author" in extra else {}
+        answer = self.agent(
+            "apply_work_item_changes",
+            meta,
+            id=self.source,
+            comment={"body": body, "mentions": [self.target], **extra},
+            **author,
         )
+        return dict(answer["applied"]["comment"])
 
     def marks_path(self) -> str:
         return os.path.join(os.path.dirname(self.path), notify.STATE_DIRECTORY, SESSION + ".marks")
@@ -188,13 +194,17 @@ class PersonMentionTests(Harness):
 
     def test_the_next_write_says_it_and_a_close_waits_for_that_write(self) -> None:
         self.agent("claim_work_item", id=self.target)
-        self.agent("set_work_item_summary", id=self.target, summary=SUMMARY)
+        self.agent("apply_work_item_changes", id=self.target, summary=SUMMARY)
         said = self.tells()
-        error = self.refused_agent("transition_work_item", id=self.target, state="cancelled")
+        error = self.refused_agent(
+            "apply_work_item_changes", id=self.target, transition={"state": "cancelled"}
+        )
         self.assertEqual("workflow_guard", error["code"])
         self.assertIn("[person_spoke]", error["message"])
         self.assertIn(SAID, error["message"])
-        answer = self.agent("comment_work_item", id=self.target, body="Read it; dropping now")
+        answer = self.agent(
+            "apply_work_item_changes", id=self.target, comment={"body": "Read it; dropping now"}
+        )
         [event] = answer["from_person"]
         self.assertEqual(
             {
@@ -206,7 +216,9 @@ class PersonMentionTests(Harness):
             },
             {name: value for name, value in event.items() if name != "at"},
         )
-        closed = self.agent("transition_work_item", id=self.target, state="cancelled")
+        closed = self.agent(
+            "apply_work_item_changes", id=self.target, transition={"state": "cancelled"}
+        )
         self.assertEqual("cancelled", closed["state"]["key"])
 
     def test_the_mention_does_not_move_the_window_of_the_item_written_on(self) -> None:
@@ -310,28 +322,31 @@ class WhoHearsTests(Harness):
         self.agent("claim_work_item", id=self.target)
         self.assertIsNone(self.hook())
         said = self.agent(
-            "comment_work_item", id=self.source, body="Telling my own work", mentions=[self.target]
+            "apply_work_item_changes",
+            id=self.source,
+            comment={"body": "Telling my own work", "mentions": [self.target]},
         )
         self.assertEqual(1, self.events(self.target), "the record is written")
         self.assertEqual(
             [service.get_work_item(self.conn, self.target)["claim_ref"]],
-            said["mentions"][0]["holders"],
+            said["applied"]["comment"]["mentions"][0]["holders"],
         )
         self.assertIsNone(self.hook(), "the one who spoke")
         self.assertEqual([], self.window(self.target), "an agent's words are never a person's")
-        answer = self.agent("comment_work_item", id=self.target, body="Next write")
+        answer = self.agent(
+            "apply_work_item_changes", id=self.target, comment={"body": "Next write"}
+        )
         self.assertNotIn("from_person", answer)
 
-    def test_a_report_and_a_batch_say_who_hears(self) -> None:
+    def test_a_summary_and_comments_say_who_hears(self) -> None:
         reported = self.agent(
-            "report_work_item",
+            "apply_work_item_changes",
             id=self.source,
-            report={"done": SAID, "next": "Drop it"},
-            mentions=[self.target],
+            summary={"done": SAID, "next": "Drop it", "mentions": [self.target]},
         )
         self.assertEqual(
             [{"reference": self.target, "holders": [], "told": mention_records.NO_HOLDER}],
-            reported["mentions"],
+            reported["applied"]["summary"]["mentions"],
         )
         batch = self.agent(
             "apply_work_item_changes",
@@ -343,15 +358,18 @@ class WhoHearsTests(Harness):
         self.assertNotIn("mentions", plain)
         read = self.agent("get_work_item", id=self.target)
         self.assertEqual(2, read["mentions_total"])
-        self.assertEqual(SAID, read["mentions"][0]["quote"], "a report is quoted by its done")
+        self.assertEqual(SAID, read["mentions"][0]["quote"], "a summary is quoted by its done")
 
     def test_an_unproved_call_keeps_the_record_and_tells_nobody(self) -> None:
         self.hold()
         self.assertIsNone(self.hook())
         said = self.agent(
-            "comment_work_item", None, id=self.source, body="Unproved", mentions=[self.target]
+            "apply_work_item_changes",
+            None,
+            id=self.source,
+            comment={"body": "Unproved", "mentions": [self.target]},
         )
-        [heard] = said["mentions"]
+        [heard] = said["applied"]["comment"]["mentions"]
         self.assertEqual("nobody: this call proved no session", heard["told"])
         self.assertTrue(heard["holders"], "the holders are named all the same")
         self.assertEqual(1, self.agent("get_work_item", id=self.target)["mentions_total"])
@@ -391,7 +409,9 @@ class ReadingTests(Harness):
     def test_a_write_answers_with_the_comments_that_named_the_item(self) -> None:
         self.tells()
         claimed = self.person("/api/planning/work-item/claim", id=self.target, author="one")
-        updated = self.agent("update_work_item", id=self.target, priority="high", verbose=True)
+        updated = self.agent(
+            "apply_work_item_changes", id=self.target, update={"priority": "high"}, verbose=True
+        )
         for answer in (claimed, updated):
             self.assertEqual(1, answer["mentions_total"])
             self.assertEqual(
@@ -444,17 +464,20 @@ class TextMentionTests(Harness):
     def test_a_summary_tells_and_its_record_is_the_summary_comment(self) -> None:
         said = {"done": f"Kept the new route; {self.target} can drop the old one", "next": "None"}
         answer = self.agent(
-            "set_work_item_summary", ELSEWHERE, id=self.source, summary=said, mentions=[self.target]
+            "apply_work_item_changes",
+            ELSEWHERE,
+            id=self.source,
+            summary={**said, "mentions": [self.target]},
         )
         self.assertEqual(
             [{"reference": self.target, "holders": [], "told": mention_records.NO_HOLDER}],
-            answer["mentions"],
+            answer["applied"]["summary"]["mentions"],
         )
         [record] = self.records(self.target)
         self.assertEqual(
             {
                 "in": "summary",
-                "comment_id": answer["summary_comment_id"],
+                "comment_id": answer["applied"]["summary"]["summary_comment_id"],
                 "from": self.source,
                 "by_person": False,
                 "quote": said["done"],
@@ -463,7 +486,9 @@ class TextMentionTests(Harness):
         )
         summary = self.agent("get_work_item", id=self.source)
         [comment] = [
-            entry for entry in summary["comments"] if entry["id"] == answer["summary_comment_id"]
+            entry
+            for entry in summary["comments"]
+            if entry["id"] == answer["applied"]["summary"]["summary_comment_id"]
         ]
         self.assertEqual([self.target], comment["mentions"])
 
@@ -472,36 +497,35 @@ class TextMentionTests(Harness):
         self.conn.commit()
         first = {"done": f"Ask {self.target}", "next": "Wait"}
         self.agent(
-            "set_work_item_summary",
+            "apply_work_item_changes",
             ELSEWHERE,
             id=self.source,
-            summary=first,
-            mentions=[self.target],
+            summary={**first, "mentions": [self.target]},
         )
         # One session, four saves of the same words: the hour counts only what told.
         for _ in range(3):
             again = self.agent(
-                "set_work_item_summary",
+                "apply_work_item_changes",
                 ELSEWHERE,
                 id=self.source,
-                summary=first,
-                mentions=[self.target],
+                summary={**first, "mentions": [self.target]},
             )
             self.assertNotIn("mentions", again, "nobody hears it twice")
         both = {"done": f"Ask {self.target} and {other}", "next": "Wait"}
         answer = self.agent(
-            "set_work_item_summary",
+            "apply_work_item_changes",
             ELSEWHERE,
             id=self.source,
-            summary=both,
-            mentions=[self.target, other],
+            summary={**both, "mentions": [self.target, other]},
         )
-        self.assertEqual([other], [entry["reference"] for entry in answer["mentions"]])
+        self.assertEqual(
+            [other], [entry["reference"] for entry in answer["applied"]["summary"]["mentions"]]
+        )
         self.assertEqual((1, 1), (self.events(self.target), self.events(other)))
         # A report made current replaces the summary as well; one that is not is a comment.
-        self.agent(
-            "report_work_item",
-            ELSEWHERE,
+        report = "/api/planning/work-item/report"
+        self.person(
+            report,
             id=self.source,
             report=both,
             make_current=True,
@@ -509,7 +533,7 @@ class TextMentionTests(Harness):
             mentions=[other],
         )
         self.assertEqual(1, self.events(other))
-        self.agent("report_work_item", ELSEWHERE, id=self.source, report=both, mentions=[other])
+        self.person(report, id=self.source, report=both, mentions=[other])
         self.assertEqual(2, self.events(other))
         # Words that stopped naming it make the next save that names it news again.
         plain = {"done": "Nothing to ask", "next": "Wait"}
@@ -585,9 +609,11 @@ class TextMentionTests(Harness):
         many = [self.item(f"Item {index}") for index in range(6)]
         self.conn.commit()
         error = self.refused_agent(
-            "update_work_item", id=self.source, description=" ".join(many), mentions=many
+            "apply_work_item_changes",
+            id=self.source,
+            update={"description": " ".join(many), "mentions": many},
         )
-        self.assertEqual("mentions holds at most 5 items", error["message"])
+        self.assertEqual("update: mentions holds at most 5 items", error["message"])
         self.assertEqual(0, self.events(self.target))
 
     def test_a_persons_description_mention_is_the_persons_act_on_the_item_named(self) -> None:
@@ -639,10 +665,11 @@ class TextMentionTests(Harness):
         """A summary's answer used to carry the item's own records under `mentions`."""
 
         self.tells()
-        summary = self.agent("set_work_item_summary", id=self.target, summary=SUMMARY)
-        report = self.agent("report_work_item", id=self.target, report=SUMMARY)
-        edit = self.agent("update_work_item", id=self.target, description="Plain")
-        for answer in (summary, report, edit):
+        summary = self.agent("apply_work_item_changes", id=self.target, summary=SUMMARY)
+        edit = self.agent(
+            "apply_work_item_changes", id=self.target, update={"description": "Plain"}
+        )
+        for answer in (summary, edit):
             self.assertNotIn("mentions", answer)
 
 
@@ -687,7 +714,7 @@ class AgentMentionTests(Harness):
 
     def test_the_holder_hears_it_at_its_next_tool_call_and_never_at_stop(self) -> None:
         self.agent("claim_work_item", id=self.target)
-        self.agent("set_work_item_summary", id=self.target, summary=SUMMARY)
+        self.agent("apply_work_item_changes", id=self.target, summary=SUMMARY)
         self.assertIsNone(self.hook(), "nothing yet")
         said = self.spoken()
         idle = os.path.join(os.path.dirname(self.marks_path()), SESSION + ".idle")
@@ -706,7 +733,9 @@ class AgentMentionTests(Harness):
         self.assertIsNone(self.hook(), "once")
 
         self.assertEqual([], self.window(self.target), "not in from_person")
-        closed = self.agent("transition_work_item", id=self.target, state="cancelled")
+        closed = self.agent(
+            "apply_work_item_changes", id=self.target, transition={"state": "cancelled"}
+        )
         self.assertEqual("cancelled", closed["state"]["key"], "no person_spoke for an agent")
 
     def test_a_prompt_carries_it_for_claude_and_codex(self) -> None:
@@ -725,10 +754,10 @@ class AgentMentionTests(Harness):
         self.hold()
         # The second subagent wrote on the item, so only holding decides.
         self.agent(
-            "comment_work_item",
+            "apply_work_item_changes",
             {"sessionId": SESSION, "threadId": STRANGER},
             id=self.target,
-            body="Looked at it",
+            comment={"body": "Looked at it"},
         )
         for agent in (None, CHILD, STRANGER):
             self.assertIsNone(self.hook(agent), f"nothing yet: {agent}")
@@ -847,15 +876,23 @@ class AgentLimitTests(Harness):
         many = [self.item(f"Item {index}") for index in range(6)]
         self.conn.commit()
         error = self.refused_agent(
-            "comment_work_item", id=self.source, body="All of them", mentions=many
+            "apply_work_item_changes",
+            id=self.source,
+            comment={"body": "All of them", "mentions": many},
         )
         self.assertEqual(
-            ("invalid_request", "mentions holds at most 5 items"),
+            ("invalid_request", "comment: mentions holds at most 5 items"),
             (error["code"], error["message"]),
         )
         self.assertEqual(0, self.events(many[0]))
-        said = self.agent("comment_work_item", id=self.source, body="Five", mentions=many[:5])
-        self.assertEqual(many[:5], [entry["reference"] for entry in said["mentions"]])
+        said = self.agent(
+            "apply_work_item_changes",
+            id=self.source,
+            comment={"body": "Five", "mentions": many[:5]},
+        )
+        self.assertEqual(
+            many[:5], [entry["reference"] for entry in said["applied"]["comment"]["mentions"]]
+        )
 
     def test_a_fourth_mention_of_one_item_within_an_hour_is_refused(self) -> None:
         # A session's subagents count with it.
@@ -863,12 +900,15 @@ class AgentLimitTests(Harness):
             self.spoken(meta)
         comments = self.conn.execute("SELECT COUNT(*) FROM work_item_comments").fetchone()[0]
         error = self.refused_agent(
-            "comment_work_item", SUBAGENT, id=self.source, body="Again", mentions=[self.target]
+            "apply_work_item_changes",
+            SUBAGENT,
+            id=self.source,
+            comment={"body": "Again", "mentions": [self.target]},
         )
         self.assertEqual(
             (
                 "mention_limit",
-                f"{self.target} was mentioned 3 times in the last hour by this session;"
+                f"comment: {self.target} was mentioned 3 times in the last hour by this session;"
                 " write once there, or wait",
             ),
             (error["code"], error["message"]),

@@ -185,7 +185,7 @@ class WriteTests(Harness):
         self.assertEqual([(SESSION, "", 1)], self.rows())
 
     def test_a_subagent_mutes_only_what_it_holds_itself(self) -> None:
-        self.agent("set_work_item_checklist", id=self.ref, items=["one"])
+        self.agent("apply_work_item_changes", id=self.ref, checklist={"items": ["one"]})
         step = service.get_work_item(self.conn, self.ref)["checklist"][0]["id"]
         self.agent("claim_work_item_checklist_item", SUBAGENT, id=self.ref, item_id=step)
         self.assertEqual(subscriptions.MUTED, self.subscribe(False, SUBAGENT))

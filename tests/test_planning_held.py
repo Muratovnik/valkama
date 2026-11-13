@@ -105,10 +105,10 @@ class HeldTests(unittest.TestCase):
         reference = self.item("Held whole", ("one", "two", "three"))
         self.claim(SESSION, reference)
         self.agent(
-            "tick_work_item_checklist_item",
+            "apply_work_item_changes",
             SESSION,
             reference,
-            item_id=self.step_ids(reference)[0],
+            checklist_ticks=[{"item_id": self.step_ids(reference)[0]}],
         )
         self.assertEqual(
             {

@@ -74,6 +74,27 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 
 `openWorldHint` is `false` throughout, because nothing here leaves the machine.
 
+### Removed tools
+
+The catalogue holds one tool per capability. A write to one item's fields,
+steps, refs, links, discussion, summary or state is a group of
+`apply_work_item_changes` (see
+[Several changes in one call](#several-changes-in-one-call)); the tools that
+made one such write each are no longer published, and the HTTP writes behind
+them are unchanged. A session that started before the change still holds their
+schemas, so a call to one of those names is refused, writing nothing, with
+status 404, the code `removed_tool` and a message that names the call doing its
+work, with an example:
+
+```json
+{"error": {"code": "removed_tool",
+ "message": "<name> is no longer a Valkama tool; call apply_work_item_changes with transition: {\"id\": \"MAIN-12\", \"transition\": {\"state\": \"done\"}}. This session's tool list predates the change: restart the client session to load the current one."}}
+```
+
+It is a refusal, not an alias: the call does nothing, so an agent repeats it in
+the named form. The names and their replacements are listed in the changelog.
+Restarting the client session loads the current list.
+
 ### Tool results
 
 A tool result is one line of JSON text, without indentation. The one
@@ -92,31 +113,22 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 | Tool | Also carries |
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
-| `update_work_item` | `updated`, the names of the fields it edited; `mentions` when its description named other items |
-| `transition_work_item` | `released`, the holder a close released (see [A close ends the claims](#a-close-ends-the-claims)); `warnings` and `overridden`; each when there is one |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
-| `set_work_item_checklist` | `checklist`, the steps as `item_id`, `text` and `done`; `overridden` when `force` discarded an engaged step or completed another holder's |
-| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
-| `set_work_item_summary` | `summary_recorded: true`; `mentions` when it named other items |
-| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
+| `claim_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by`; `overridden` when `force` carried another holder's claim through |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim (see [A close ends the claims](#a-close-ends-the-claims)); `started` from its claim, `overridden` from its steps and its transition, and the `warnings` of both, when there are any; `mentions` when its `update` named other items |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
-**Since 2.5.** `comment_work_item` answers with `work_item`, `comment_count`,
-`comment_id`, and the `reply_to` and `reply_to_request` of the root a reply
-landed under; `resolve_work_item_comment` answers with `work_item`,
-`comment_id` and `resolution`. Both are described in
-[Threads and the resolved mark](#threads-and-the-resolved-mark).
-
-`comment_work_item`, `report_work_item` and `set_work_item_summary` also answer
-with `list_request_id` when the call wrote a [list](#a-list-on-a-comment), and
-`comment_work_item`, `report_work_item`, `set_work_item_summary` and
-`update_work_item` with `mentions` when the call named other items (see
+A comment the batch wrote is named in `applied` by its `comment_id`, and the
+`reply_to` and `reply_to_request` of the root a reply landed under; a resolved
+mark by its `comment_id` and `resolution`. Both are described in
+[Threads and the resolved mark](#threads-and-the-resolved-mark). A comment or a
+summary also carries `list_request_id` when the call wrote a
+[list](#a-list-on-a-comment), and `mentions` when the call named other items (see
 [Mentions](#mentions)).
 
 Every tool that writes to a work item and leaves it standing -- all of the above,
-`claim_ready_work_item`, `link_work_items`, `attach_work_item_ref`,
-`comment_work_item`, `report_work_item`, `select_work_item_summary` and the
-question tools -- also carries `from_person` when a person acted on that item
+`claim_ready_work_item` and the question tools -- also carries `from_person` when
+a person acted on that item
 through the interface since an agent last wrote to it, and only then; see
 [What a person did reaches the agent](#what-a-person-did-reaches-the-agent).
 A `verbose` answer carries it too. `delete_work_item` and `create_planning_space`
@@ -126,8 +138,7 @@ Each of these tools takes an optional boolean `verbose`, false by default. With
 `verbose: true` the answer is the full item with its whole history, as
 `get_work_item` returns it with `full: true` but without `sessions`. The
 reads, `claim_ready_work_item` (the agent needs the item it just took),
-`create_planning_space`, `delete_work_item` and the tools that already answer
-briefly (`link_work_items`, `attach_work_item_ref`, `comment_work_item`) are
+`create_planning_space`, `delete_work_item` and the question tools are
 unchanged, and so is every refusal. The HTTP API is unchanged: it always
 answers with the full item.
 
@@ -215,8 +226,8 @@ refused with `invalid_request` and status 400.
 A workflow's states are rows, so their keys belong to the space: the default
 workflow keys its active state `dev`, and another workflow may call it something
 else. What every workflow shares is the category. Wherever a write names a
-state -- the `state` of `transition_work_item`, of the `transition` group of
-`apply_work_item_changes`, of `create_work_item`, and of their HTTP writes -- it
+state -- the `state` of the `transition` group of `apply_work_item_changes`,
+of `create_work_item`, and of their HTTP writes -- it
 is read, in this order, as:
 
 1. a `state_id` or a key of the item's workflow;
@@ -250,8 +261,9 @@ the workflow's order. The place is the item's `position`, which every store
 already holds, so placing an item changes no store format and a build that
 predates placements reads the same order.
 
-`update_work_item` and `POST /api/planning/work-item/update` take `rank`, which
-places the item among the items of its own state:
+The `update` group of `apply_work_item_changes` and
+`POST /api/planning/work-item/update` take `rank`, which places the item among
+the items of its own state:
 
 | `rank` | Places the item |
 | --- | --- |
@@ -265,8 +277,8 @@ same state of the same planning space. Any other spelling, and an anchor that is
 the item itself, lives in another space or stands in another state, is refused
 with `invalid_request` before anything is written. A placement that names where
 the item already stands writes nothing. Otherwise it is an edit like the other
-fields `update_work_item` takes: guarded by `expected_revision`, one revision,
-no history event, and the acknowledgement's `updated` names `rank`. The call is
+fields `update` takes: guarded by `expected_revision`, one revision, no
+history event, and `applied.update` names `rank`. The call is
 recorded with its identity, as every write is. Placing an item moves no other
 item, except when two neighbours leave no room between them: then the items of
 that state are renumbered in the order they already have, with no revision bump.
@@ -278,13 +290,13 @@ already there is kept once in its place, one the item lacks is ignored, and the
 resulting set is held to the same 32 labels as a whole one. `labels` beside
 either of them is refused with `invalid_request`, because a replacement and a
 change of the set it replaces have no order that is the one the caller meant;
-so is a label named in both. The acknowledgement's `updated` names the fields
-sent, and the call row's `reason` names `labels` only when the set changed.
+so is a label named in both. `applied.update` names the fields sent, and the
+call row's `reason` names `labels` only when the set changed.
 
 A change of the label set is the one edit the history records. Whichever of the
-three fields made it, and through whichever write (`update_work_item`, the
-`update` group of `apply_work_item_changes`, `POST /api/planning/work-item/update`
-or `/apply`), the item gains one `labels_changed` event under the call that made
+three fields made it, and through whichever write (the `update` group of
+`apply_work_item_changes`, `POST /api/planning/work-item/update` or `/apply`),
+the item gains one `labels_changed` event under the call that made
 the edit, its author the edit's `author`. An edit that changes the set therefore
 answers for its `author` as a comment or a claim does: one over 128 characters,
 or holding a carriage return or a NUL, is refused before anything is written,
@@ -315,8 +327,8 @@ whose history held a placement. The call's row in the execution tree (see
 transition that carries `rank` writes its `transitioned` event as before; the
 placement adds none.
 
-`transition_work_item`, `POST /api/planning/work-item/transition` and the
-`transition` group of `apply_work_item_changes` take the same `rank`, which
+`POST /api/planning/work-item/transition` and the `transition` group of
+`apply_work_item_changes` take the same `rank`, which
 places the item in the state it moves to; the anchor must then be in that state.
 Without `rank` a moved item goes last in its new state, as it did before
 placements existed, and a new item goes last in its first state.
@@ -497,19 +509,20 @@ A reply to it, and a reply under a question:
  "resolution": null}
 ```
 
-**Writing a reply.** `comment_work_item`, its HTTP write
-`POST /api/planning/work-item/comment` and the `comment` group of
-`apply_work_item_changes` take two optional fields, `reply_to` (a comment id)
-and `reply_to_request` (a question's `request_id`); naming both is refused with
-`invalid_request`, and so is a parent on another item. The answer adds the root
-the reply landed under, and both keys are `null` for a new root:
+**Writing a reply.** The `comment` group of `apply_work_item_changes`, each
+entry of its `comments`, and the HTTP write `POST /api/planning/work-item/comment`
+take two optional fields, `reply_to` (a comment id) and `reply_to_request` (a
+question's `request_id`); naming both is refused with `invalid_request`, and so
+is a parent on another item. The answer adds the root the reply landed under, in
+`applied.comment` for the batch, and both keys are `null` for a new root; the
+HTTP write answers:
 
 ```json
 {"work_item": "MAIN-12", "comment_count": 9, "comment_id": 46,
  "reply_to": 41, "reply_to_request": null}
 ```
 
-`report_work_item` takes no parent. A reply, like a comment, writes no history
+A report takes no parent. A reply, like a comment, writes no history
 event and changes no revision. A reply in a resolved thread leaves the mark in
 place; to reopen the discussion of a resolved root, write a new root that names
 it.
@@ -517,8 +530,9 @@ it.
 **The resolved mark.** A root comment or report can be marked resolved, with a
 short decision of one line and at most 280 characters, which may be empty. A
 reply cannot, and a question's thread has none: a question has its own status.
-`resolve_work_item_comment` and `POST /api/planning/work-item/comment/resolve`
-take:
+An entry of the `resolutions` group of `apply_work_item_changes` takes
+`comment_id`, `resolution` and `reopen`, and
+`POST /api/planning/work-item/comment/resolve` takes:
 
 ```json
 {"id": "MAIN-12", "comment_id": 41, "resolution": "Moved to MAIN-14", "author": "codex"}
@@ -527,7 +541,8 @@ take:
 `resolution` may be left out, which is a blank decision. `reopen: true` in place of
 `resolution` removes the mark; naming both is refused with `invalid_request`, and so
 is a decision of two lines. The answer names the root and its mark as it now stands,
-`null` after a reopen:
+`null` after a reopen, in `applied.resolutions` for the batch; the HTTP write
+answers:
 
 ```json
 {"work_item": "MAIN-12", "comment_id": 41,
@@ -542,7 +557,7 @@ with `not_found`. The mark is not a field of the item: it changes no revision an
 takes no `expected_revision`. It writes a history event, `comment_resolved`
 with the detail `<comment id>: <decision>`, the id alone for a blank decision, or
 `comment_reopened` with the detail `<comment id>`, so the history says who set
-and removed it and when. The tool is a write like any other, and its answer
+and removed it and when. The mark is a write like any other, and its answer
 carries `from_person`. A mark set in the interface is a person's act and is told
 to the agent working the item (see
 [What a person did reaches the agent](#what-a-person-did-reaches-the-agent)).
@@ -550,8 +565,8 @@ to the agent working the item (see
 ### A comment that waits for a reply
 
 **Since 2.6.** An agent that is about to end its turn to wait for another agent
-asks with `awaits_reply: true` on the comment that asks: `comment_work_item`, its
-HTTP write, and the batch's `comment` and each entry of `comments` take it, on a
+asks with `awaits_reply: true` on the comment that asks: the batch's `comment`
+and each entry of `comments`, and the HTTP write of a comment take it, on a
 root or a reply, beside `mentions` too. Anything but a boolean is refused with
 `invalid_request`. A comment that only informs does not set it.
 
@@ -753,7 +768,7 @@ after 150 ms, which reads as nothing being visible. An on-demand listener answer
 
 ### What a link says about its other end
 
-A `relates-to` link is one link whichever end names it. `link_work_items` from
+A `relates-to` link is one link whichever end names it. Linking it from
 the other end, or again from the same one, adds nothing and writes no history;
 `remove: true` from either end takes it away, and the history of both items says
 so. The store refuses a second record of it. A store in which an earlier build
@@ -1695,39 +1710,43 @@ it with `claim_ref` tells which subscriber holds the item.
 ### Several changes in one call
 
 `apply_work_item_changes` applies several writes to one item in one call, all or
-nothing. It takes `id`, `author`, `expected_revision`, `verbose` and any of
-these groups, and applies them in this order:
+nothing. It is the one MCP tool that edits an item's fields, sets and ticks its
+steps, attaches refs, links it, writes and resolves its discussion, records its
+summary and moves its state. It takes `id`, `author`, `expected_revision`,
+`verbose` and any of these groups, and applies them in this order:
 
-| Group | Shape | Works as |
+| Group | Shape | HTTP write of one step |
 | --- | --- | --- |
-| `claim` | `true` | `claim_work_item`; `false` is no change |
+| `claim` | `true`; `false` is no change | `/claim`, as `claim_work_item` |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
-| `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
-| `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `set_work_item_checklist` |
-| `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `tick_work_item_checklist_item` |
-| `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
-| `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
-| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `comment_work_item` |
-| `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
-| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
-| `summary` | `{done, next, why?, friction?, list?, mentions?}` | `set_work_item_summary` |
-| `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
+| `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `/update` |
+| `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `/checklist` |
+| `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `/checklist/tick` |
+| `refs` | list of `{kind, value, label?}` | `/ref` |
+| `links` | list of `{other, kind, remove?}`, linking from this item | `/link` |
+| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?, mentions?, awaits_reply?}`, or a list of them | `/comment` |
+| `resolutions` | list of `{comment_id, resolution?, reopen?}` | `/comment/resolve` |
+| `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `/request`, as `create_work_item_request` |
+| `summary` | `{done, next, why?, friction?, list?, mentions?}` | `/summary` |
+| `transition` | `{state, reason?, force?, rank?}` | `/transition` |
+
+Each path in the last column is under `POST /api/planning/work-item`.
 
 A summary or a report is `done` and `next`, with `why` only when the choice is not
 obvious and `friction`, what hindered the work itself: `none` or a line per
 hindrance. Each is text of at most 4000 characters, kept apart in every read, so a
 closing summary's friction stands on its own line instead of ending its `done`. The
-same four keys go to `set_work_item_summary`, `report_work_item` and
+same four keys go to `POST /api/planning/work-item/summary` and
 `POST /api/planning/work-item/report`.
 
-Each step is the write its single tool makes, with the same guards, events,
+Each step is the write its HTTP path makes, with the same guards, events,
 revision bumps and refusals, so a closing transition is judged after the ticks
 and the summary sent with it. The call is still one write: what its earlier
 groups wrote does not count as the agent having read what a person did, so a
 `comment` sent beside a closing `transition` does not lift the
 [`person_spoke` guard](#a-close-over-what-a-person-did).
 
-`checklist` sets the steps, as `set_work_item_checklist` does. A step sent
+`checklist` sets the steps. A step sent
 with the text of a step the item has is that step: it keeps its `item_id`, its
 claim, its tick and who made them, and duplicate texts match in order. So steps
 are appended by sending the item's steps and then the new ones, and a step is
@@ -1750,20 +1769,20 @@ refused; both are `invalid_request` before anything is written.
 `expected_revision` is checked once, against the item as the call found it.
 It belongs to the call: `update` takes none of its own.
 
-`update` edits the item as `update_work_item` does: a field that is absent or
+`update` edits the item: a field that is absent or
 null is left alone, `parent: ""` clears the parent, and an edit writes no
 history event. It is applied after the claim, so a `rank` names a place among
 the items of the state the claim started the item in.
 
-`comments` writes up to 100 comments in the order sent, each as
-`comment_work_item` writes it. The older `comment` group, one comment, still
+`comments` writes up to 100 comments in the order sent, each as `comment`
+writes one. The older `comment` group, one comment, still
 works; a call that names both is refused with `invalid_request`. A parent named
 in `reply_to` must already exist when that entry is written: the id of a
 comment the same call writes is not known to the caller, so a reply to it is a
 second call. The same holds for `resolutions`.
 
 `questions` asks up to 100 questions, each with what `create_work_item_request`
-takes and checked by the same rules. Each is the single tool's question: it
+takes and checked by the same rules. Each is that tool's question: it
 waits in the owner's list and raises the owner's alert once the call is
 committed. A call that asks a question and closes the item with its
 `transition` is refused, `invalid_request` on the `transition` step, and
@@ -1790,13 +1809,13 @@ stale revision keeps `expected` and `actual` beside it. The call is recorded as
 one call with its identity, and every row its steps write points to that call.
 
 The acknowledgement's `applied` names only the groups that changed something.
-`update` lists the fields sent, as `update_work_item` answers in `updated`;
+`update` lists the fields sent;
 `comments` and `questions` list every comment and question the call wrote, so
 a reply or a withdrawal needs no read first. A comment or a summary that carried a
 [list](#a-list-on-a-comment) adds its `list_request_id`, and a comment or a summary
 that named other items adds who will hear them as [`mentions`](#mentions). Who will
 hear the items an `update`'s description named stands beside `applied`, as
-`mentions`, where `update_work_item` answers it:
+`mentions`:
 
 ```json
 {"claim": true, "update": ["title", "priority"],
@@ -1807,12 +1826,13 @@ hear the items an `update`'s description named stands beside `applied`, as
  "summary": {"summary_comment_id": 42}, "transition": {"state": "review"}}
 ```
 
-The single tools stay as they are. The batch is also the HTTP write
-`POST /api/planning/work-item/apply`, which takes the same body and answers with
-the full item and `applied`.
+The batch is also the HTTP write `POST /api/planning/work-item/apply`, which
+takes the same body and answers with the full item and `applied`. Each HTTP path
+of one step stays as it is; the MCP tools that made one step each are gone (see
+[Removed tools](#removed-tools)).
 
-**Since 2.5.** The `comment` group takes a parent as `comment_work_item` does,
-and `applied.comment` then carries `reply_to` and `reply_to_request` beside
+**Since 2.5.** The `comment` group takes a parent, and `applied.comment` then
+carries `reply_to` and `reply_to_request` beside
 `comment_id`. The `resolutions` group, applied after `comment` and before
 `summary`, sets or removes the resolved mark on up to 100 roots of the item in
 one call, which is how a digest is reviewed in one write; one refused entry
@@ -1834,12 +1854,12 @@ arguments that act on the item it creates:
 | Argument | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
-| `checklist` | the steps' list or `{items}`, as the batch's group takes it, without `force` | `set_work_item_checklist` |
-| `links` | list of `{other, kind}`, linking from the new item, at most 100 | `link_work_items` |
+| `checklist` | the steps' list or `{items}`, as the batch's group takes it, without `force` | the batch's `checklist` |
+| `links` | list of `{other, kind}`, linking from the new item, at most 100 | the batch's `links` |
 
 They apply in the same transaction as the creation: the item is created, then
-claimed, then given its steps, then linked, each step being the write its
-single tool makes, with its events. The claim starts the new item, so an item
+claimed, then given its steps, then linked, each step being the write the
+batch's group makes, with its events. The claim starts the new item, so an item
 created with `claim: true` answers in its active state with `started`. Work
 found en route is filed in one call this way, linked `discovered-from` the item
 it was found from. A malformed `claim`, `checklist` or `links`, or an entry
@@ -1905,9 +1925,9 @@ steps in all, a workflow with no reachable cancelled state, and an item another
 session holds. A stale lease does not count, and a claim held by the caller is
 its own. `force` carries another session's claim through and is recorded as an
 `overridden` event with the detail `claim` on that item, and it carries a guard
-that refuses the close the way `transition_work_item` does.
+that refuses the close the way a transition does.
 
-Every write is one a single tool makes, with that tool's event: `linked` and
+Every write is one an ordinary write makes, with its event: `linked` and
 `unlinked` on both ends of each link, `checklist_replaced`, `released`,
 `summarized`, `transitioned` and `overridden`. No event action, field or table is
 new, so a build from before merging reads a merge as those ordinary changes. The
@@ -1934,10 +1954,7 @@ unless `verbose` is true. Why it moves what it moves is
 The published schemas name one spelling for each argument. A Planning tool also
 reads a few other spellings, because a caller that no longer has the schema in
 view writes the argument the way it would say it: `reference` or `ref` for an
-`id`; for `link_work_items`, `from`, `to`, `target` and `type` for `id`,
-`other`, `other` and `kind`; `to` or `to_state` for the `state` of
-`transition_work_item`; `ref` for the `value` of `attach_work_item_ref`; and
-`planning_space_id` for the `space` of `create_work_item`, `list_work_items`,
+`id`, and `planning_space_id` for the `space` of `create_work_item`, `list_work_items`,
 `search_work_items` and `get_planning_space` (which also reads `id`). The
 canonical name is used when both are given with the same value. Both given with
 different values is refused. The schemas do not list these spellings, and
@@ -2038,7 +2055,7 @@ makes on its own account, which today is only releasing an expired lease, is
 `confirmed` with source `valkama`, client `valkama` and tool `lease-expiry`, and
 its events are signed `valkama`.
 
-A call row of an edit (`update_work_item`, `POST /api/planning/work-item/update`)
+A call row of an edit (the batch's `update`, `POST /api/planning/work-item/update`)
 names in `reason` the fields it changed, comma-separated, as the columns are
 named: `title`, `description`, `source`, `priority`, `labels`, `kind`,
 `parent_id`. An edit logs no event, so this is the record that a person edited
@@ -2242,8 +2259,8 @@ moves a backlog item to `dev` and then to `review`.
 A claim says somebody is working the item, and nobody works a closed one. So a
 transition into a terminal state -- `completed` or `cancelled`, by
 `is_terminal` -- releases the item's claim in the same write, whoever holds it.
-The rule is in the one transition every surface makes: `transition_work_item`,
-the `transition` group of `apply_work_item_changes`, the HTTP transition, a
+The rule is in the one transition every surface makes: the `transition` group
+of `apply_work_item_changes`, the HTTP transition, a
 drop on the board's Done column and the card's state menu. Closing therefore
 takes one write, and the item stops reading as held at once instead of when its
 lease runs out. `merge_work_items` already released each merged item before
@@ -2405,10 +2422,10 @@ where it is written, and the item it names gets a record that points to it.
 
 | The text | Writes |
 | --- | --- |
-| a comment, a root or a reply alike | `comment_work_item`, `POST /api/planning/work-item/comment`, the `comment` group of `apply_work_item_changes` and each comment where a batch writes several |
-| a report | `report_work_item`, `POST /api/planning/work-item/report` |
-| the summary | `set_work_item_summary`, `POST /api/planning/work-item/summary`, the batch's `summary` |
-| the description | `update_work_item` and `POST /api/planning/work-item/update` beside `description`, the batch's `update` |
+| a comment, a root or a reply alike | `POST /api/planning/work-item/comment`, the `comment` group of `apply_work_item_changes` and each comment where a batch writes several |
+| a report | `POST /api/planning/work-item/report` |
+| the summary | `POST /api/planning/work-item/summary`, the batch's `summary` |
+| the description | `POST /api/planning/work-item/update` beside `description`, the batch's `update` |
 
 The text is not changed and is not read for references.
 
@@ -2971,9 +2988,9 @@ the comment it stands under is its `comment_id`. Answering, changing an answer, 
 own variant, a comment, `by_person`, search and export are a question's. What sets
 a list apart is that nobody waits for it.
 
-**Writing one.** `comment_work_item`, `report_work_item` and
-`set_work_item_summary` take `list`, and so do the `comment` and `summary` groups
-of `apply_work_item_changes` and each comment where a batch writes several:
+**Writing one.** The `comment` and `summary` groups of
+`apply_work_item_changes` and each comment where a batch writes several take
+`list`, and so do the HTTP writes of a comment, a report and the summary:
 
 ```json
 {"id": "MAIN-12", "body": "Found five places where the check misfires.",
