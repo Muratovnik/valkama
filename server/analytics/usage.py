@@ -664,7 +664,7 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
     filters = [(readers[dimension], admitted) for dimension, admitted in request.filters.items()]
     main, earlier = _Window(), _Window()
     steps = [_Tally() for _ in range(len(bounds) - 1 - first)]
-    by_step: list[dict[Value, _Tally]] = [{} for _ in steps]
+    by_step: list[dict[tuple[Value, ...], _Tally]] = [{} for _ in steps]
     for row in rows:
         if not all(reader(row) in admitted for reader, admitted in filters):
             continue
@@ -688,7 +688,7 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
             if interval >= first:
                 steps[interval - first].add(part)
                 if key:
-                    by_step[interval - first].setdefault(key[0], _Tally()).add(part)
+                    by_step[interval - first].setdefault(key, _Tally()).add(part)
     namer = _Namer(conn, request.group_by, [*main.groups, *earlier.groups], projects, seat_names)
     zone = dt.timezone(dt.timedelta(minutes=request.utc_offset))
 
@@ -713,11 +713,10 @@ def _read(conn: sqlite3.Connection, request: UsageQuery) -> dict:
                 "start": at(bounds[first + index]),
                 "end": at(bounds[first + index + 1]),
                 **tally.measures(),
+                # The step by the same groups as `rows`: by the pair when there are two.
                 "groups": [
-                    {"group": {request.group_by[0]: namer.value(0, value)}, **group.measures()}
-                    for (value,), group in sorted(
-                        (((value,), group) for value, group in by_step[index].items()), key=_order
-                    )
+                    {"group": namer.group(key), **group.measures()}
+                    for key, group in sorted(by_step[index].items(), key=_order)
                 ],
             }
             for index, tally in enumerate(steps)

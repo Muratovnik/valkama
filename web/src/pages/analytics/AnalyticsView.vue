@@ -48,6 +48,7 @@ import DimensionPanel from '@/pages/analytics/components/DimensionPanel.vue'
 import OverviewPanel from '@/pages/analytics/components/OverviewPanel.vue'
 import QuotaPanel from '@/pages/analytics/components/QuotaPanel.vue'
 import TokenKindsPanel from '@/pages/analytics/components/TokenKindsPanel.vue'
+import { provideColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { provideLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useLiveRefresh } from '@/pages/analytics/composables/useLiveRefresh.ts'
 import { usePanelRoom } from '@/pages/analytics/composables/usePanelRoom.ts'
@@ -143,9 +144,20 @@ function narrowToPeriod(span: OwnPeriod, label: string, framed = false) {
 
 /** The page's reads, asked once however many of its parts ask them (`useSharedUsage`). */
 const shared = provideSharedUsage({ view: () => view.value, projectId: () => props.projectId })
+/** What the page's colours are ranked over: the period without its filters (`useColourPlaces`). */
+const places = provideColourPlaces({
+  shared,
+  view: () => view.value,
+  projectId: () => props.projectId,
+})
 /** The page's one status region for its read waits: it says the word while any of them shows. */
 const { shown: readWaitShown } = provideReadWaits()
-const read = useUsageRead({ shared, view: () => view.value, projectId: () => props.projectId })
+const read = useUsageRead({
+  places,
+  shared,
+  view: () => view.value,
+  projectId: () => props.projectId,
+})
 
 const today = computed(() => localDay(read.askedAt.value))
 
@@ -265,6 +277,7 @@ const { tiles: usageTiles, refresh: refreshTiles } = useRailTiles({
   dimensions: () => filterDimensions.value,
   overview: () => read.state.value,
   overviewAt: () => read.askedAt.value,
+  places,
   projectId: () => props.projectId,
   shared,
   view: () => view.value,
@@ -277,6 +290,7 @@ const tiles = computed(() => ({ ...usageTiles.value, ...quota.tiles.value }))
 /** The bar's refresh reads the page, every tile of the rail and the quota again, as of now. */
 function refresh() {
   shared.renew()
+  places.renew()
   void read.retry()
   void refreshTiles()
   void quota.refresh()

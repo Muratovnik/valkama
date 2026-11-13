@@ -31,11 +31,16 @@
  * and the table; while those steps are read there is no mark, and when they could not be read a note
  * under the chart says so. A `brief` chart, standing beside the titles of its tasks, names
  * each task by its number alone.
+ *
+ * Split by a second dimension (`across`), the answer is read by both and the stack is of its
+ * pairs, «claude-opus-5-5 · high», each in its hue of the page, the rest folded into «other» as
+ * values are; a pair's segment acts as its first value does.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -61,6 +66,8 @@ const props = defineProps<{
   /** When the answer was asked for, which says which day is not over yet. */
   readAt: Date
   usage: Usage
+  /** The second dimension the section is split by, which `usage` is read by too; null for none. */
+  across?: UsageDimension | null
   /** The steps of the period before, to mark over each column; none marked without. */
   before?: BeforeSteps | null
   /** Whether a task in the stack is named by its number alone, for a chart beside its titles. */
@@ -84,7 +91,9 @@ const words = useSpendingWords()
 /** How the period is cut: by days, by hours or by minutes. */
 const step = computed(() => props.usage.period.step)
 
-const title = computed(() => words.stepChartTitle(props.measure, props.by, step.value))
+const title = computed(() =>
+  words.stepChartTitle(props.measure, props.by, step.value, props.across),
+)
 
 /** The steps of the period before, when they were read. */
 const beforeSteps = computed(() => (Array.isArray(props.before) ? props.before : null))
@@ -102,7 +111,11 @@ function seriesName(line: StackLine['line']) {
   return reference ?? words.lineLabel(props.by, line)
 }
 
-const stacked = computed(() => stackLines(props))
+/** The page's colour keys, which the stack's hues are ranked over (`useColourPlaces`). */
+const places = useColourPlaces()
+const stacked = computed(() =>
+  stackLines({ ...props, places: places.rows(props.by, props.across) }),
+)
 const marks = useLineMarks({
   by: () => props.by,
   lines: () => stacked.value.flatMap((one) => (one.line ? [one.line] : [])),

@@ -1050,7 +1050,7 @@ with.
 | `last_event_at` | the newest transcript record read into the store, of any session, so a screen can say how fresh the numbers are; `null` before anything was read |
 | `total` | the measures of the whole period, and `unpriced_models` as the reads above give it |
 | `rows` | one line per group of values that spent anything, the most time first: `group`, one value per dimension of `group_by`, and the measures. With no `group_by` it is one line with an empty `group` |
-| `series` | one point per step, oldest first, every step present: `start`, `end`, the measures, and `groups`, the step broken down by the first dimension of `group_by`, empty with none |
+| `series` | one point per step, oldest first, every step present: `start`, `end`, the measures, and `groups`, the step broken down by the groups of `rows`: by the one dimension of `group_by`, or by the pair of both with two, each `group` naming every dimension as a row's does; empty with none |
 | `comparison` | with `compare=true`, `period` (`from`, `to`), `total` and `rows` of the preceding period of the same length; otherwise `null` |
 
 The measures are the reads' above: `agent_seconds`, `estimated_seconds`, `quality`

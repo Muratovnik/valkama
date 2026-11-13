@@ -2,7 +2,7 @@
  * The read behind a split section: the answer on show again, broken down by its own dimension and
  * the one it is split by, for exactly the period and the filters that answer was read with — the
  * period by its moments as the answer wrote them, so the two never disagree about where a day
- * starts. Where the answer on show is compared with a period before, that period is read by both
+ * starts, and by the answer's steps, so its days, hours or minutes stand as the answer's do. Where the answer on show is compared with a period before, that period is read by both
  * as well, by the moments the answer names for it, and stands in the crossed answer as its
  * comparison; its pairs are what the table sets beside each pair now.
  *
@@ -15,6 +15,7 @@
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
 
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 
 import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
@@ -36,6 +37,7 @@ export function useCrossRead(options: {
   usage: () => Usage
 }) {
   const shared = useSharedUsage()
+  const places = useColourPlaces()
   const state = shallowRef<CrossRead>({ status: 'off' })
   let reading: AbortController | null = null
 
@@ -57,10 +59,19 @@ export function useCrossRead(options: {
       status: 'reading',
       usage: 'usage' in shown && shown.usage && pairOf(shown.usage) === pair ? shown.usage : null,
     }
-    const { utc_offset: utcOffset } = usage.period
+    const { utc_offset: utcOffset, step } = usage.period
+    const filters = options.filters()
     const ask = ({ from, to }: { from: string; to: string }) =>
       shared.read(
-        { from, to, utcOffset, groupBy: [by, across], filters: options.filters(), compare: false },
+        {
+          from,
+          to,
+          utcOffset,
+          step,
+          groupBy: [by, across],
+          filters,
+          compare: false,
+        },
         controller.signal,
       )
     const { comparison } = usage
@@ -75,7 +86,9 @@ export function useCrossRead(options: {
           ? { period: comparison?.period ?? before.period, total: before.total, rows: before.rows }
           : null,
       }
-      if (!controller.signal.aborted) state.value = { status: 'ready', usage: crossed }
+      if (controller.signal.aborted) return
+      places.take([by, across], now, filters)
+      state.value = { status: 'ready', usage: crossed }
     } catch {
       if (!controller.signal.aborted) state.value = { status: 'failed' }
     }

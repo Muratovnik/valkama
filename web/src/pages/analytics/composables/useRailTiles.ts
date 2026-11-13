@@ -16,6 +16,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useKindWords } from '@/pages/analytics/composables/useKindWords.ts'
 import { useRailReads } from '@/pages/analytics/composables/useRailReads.ts'
 import type { RailRead } from '@/pages/analytics/composables/useRailReads.ts'
@@ -71,6 +72,8 @@ export const standing = (state: RailTileModel['state'], lead: string): RailTileM
 export const reading = () => standing('loading', '')
 
 export function useRailTiles(options: {
+  /** The page's colour keys, which a tile's shares are drawn in and its reads give rows to. */
+  places: ColourPlaces
   /** The page's shared reads, which the dimensions' reads go through. */
   shared: SharedUsage
   /** The dimensions of the rail, each a tile after the overview's. */
@@ -125,7 +128,8 @@ export function useRailTiles(options: {
     const figures = dimensionFigures(read.usage.rows, dimension, measure)
     if (!figures) return { ...noData(), busy: read.refreshing }
     const { first } = figures
-    const slots = rankedSlots(read.usage.rows, dimension, measure)
+    const places = options.places.rows(dimension) ?? read.usage.rows
+    const slots = rankedSlots(places, dimension, measure)
     const parts = figures.parts.map((part) => ({
       key: part.key,
       share: part.share,

@@ -303,17 +303,27 @@ export function useSpendingWords() {
   }
 
   /**
+   * What a breakdown is by: «by task», or by its pairs with a second dimension, «by model and by
+   * effort».
+   */
+  const breakdownBy = (by: UsageDimension, across?: UsageDimension | null) =>
+    across
+      ? t('analytics.panel.split.by', {
+          by: t(`analytics.byDimension.${by}`),
+          across: t(`analytics.byDimension.${across}`),
+        })
+      : t(`analytics.byDimension.${by}`)
+
+  /** What a breakdown's values are called, «Model», or its pairs, «Model · Effort». */
+  const breakdownName = (by: UsageDimension, across?: UsageDimension | null) =>
+    across ? `${dimension(by)} · ${dimension(across)}` : dimension(by)
+
+  /**
    * What a chart of a measure by a dimension is called, «Agent time by task», and by its pairs
    * with a second one, «Agent time by model and by effort».
    */
   const chartTitle = (name: Measure, by: UsageDimension, across?: UsageDimension | null) =>
-    across
-      ? t('analytics.panel.table.crossTitle', {
-          measure: measure(name),
-          by: t(`analytics.byDimension.${by}`),
-          across: t(`analytics.byDimension.${across}`),
-        })
-      : t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
+    t('analytics.chart', { measure: measure(name), by: breakdownBy(by, across) })
 
   /** A day as the time axis names it, «Mon 9», and in full for the hints and the table. */
   const day = (start: string) =>
@@ -386,12 +396,20 @@ export function useSpendingWords() {
       after: after.map((value) => valueLabel('account', value)).join(', '),
     })
 
-  /** The chart of a period step by step: «Agent time per minute, by task». */
-  const stepChartTitle = (name: Measure, by: UsageDimension, step: UsageStep) =>
+  /**
+   * The chart of a period step by step: «Agent time per minute, by task», or by its pairs with a
+   * second dimension, «Agent time per day, by model and by effort».
+   */
+  const stepChartTitle = (
+    name: Measure,
+    by: UsageDimension,
+    step: UsageStep,
+    across?: UsageDimension | null,
+  ) =>
     t('analytics.days.title', {
       measure: measure(name),
       per: per(step),
-      by: t(`analytics.byDimension.${by}`),
+      by: breakdownBy(by, across),
     })
 
   /**
@@ -463,6 +481,8 @@ export function useSpendingWords() {
   return {
     accounts,
     axis,
+    breakdownBy,
+    breakdownName,
     change,
     chartTitle,
     datedClock,

@@ -153,6 +153,12 @@ function lineOfRow(row: UsageRow, breakdown: Breakdown) {
   }
 }
 
+/**
+ * The key of the line a row adds to, or a group of a step, which the read shapes as a row: its
+ * value's key, or its pair's.
+ */
+export const lineKeyOf = (row: UsageRow, breakdown: Breakdown) => lineOfRow(row, breakdown).key
+
 /** Whether no line of a breakdown is folded: each of its dimensions holds a few values. */
 const neverFolded = (breakdown: Breakdown) =>
   (typeof breakdown === 'string' ? [breakdown] : breakdown).every((one) => NEVER_FOLDED.has(one))

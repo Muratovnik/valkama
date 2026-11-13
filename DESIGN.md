@@ -2349,7 +2349,9 @@ draw each leading value's days on one scale; the table lists every value with th
 of the period and of the period before. Work with no value in the dimension — on no task,
 of an unknown model — is ranked where its figure puts it, in the neutral colour. A value
 keeps one colour on the whole page: in its tile, its bar, its small chart and its share of
-a day. The section runs in the panel's one scroll: the cells, the charts at their own height,
+a day. That colour is its place in the period's ranking without the page's filters, so a
+filter that takes values away repaints none of those it leaves; another measure ranks again
+and may. Ranked over what the filter left, every survivor moved up a hue. The section runs in the panel's one scroll: the cells, the charts at their own height,
 and the table at its full height under them, whose heading row and total row stick inside the
 panel's scroll while any of its rows is in view, so what focus brings into view stands clear of
 them. A «To the table» link over the charts, like the ranked bars' line of how many more the

@@ -350,10 +350,13 @@ describe('work with no task', () => {
       ],
     ])
     await follow(host)
-    const read = reads.grouped('project').at(-1)
+    // The view's reads carry the filters; the reads its colours are ranked over carry none.
+    const filtered = (groupBy: string) =>
+      reads.grouped(groupBy).filter((one) => one.has('none') || one.has('model'))
+    const read = filtered('project').at(-1)
     expect(read?.get('none')).toBe('work_item')
     expect(read?.get('model')).toBe('model-01')
-    expect(reads.grouped('project,launch_class').at(-1)?.get('none')).toBe('work_item')
+    expect(filtered('project,launch_class').at(-1)?.get('none')).toBe('work_item')
   })
 
   it('does the same from its row of the table and from the overview’s card of tasks', async () => {

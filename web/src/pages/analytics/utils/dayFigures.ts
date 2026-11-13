@@ -1,6 +1,7 @@
 import {
   breakdownOf,
   figureOf,
+  lineKeyOf,
   measureOf,
   spendingLines,
   spentOf,
@@ -69,9 +70,11 @@ export interface StackLine extends PeriodSeries {
  * another, a step lighter: two greys and no hue, so the two largest parts of a day can be told
  * apart without the hint. The rail's tile, the section's bars, small charts and day chart and the
  * overview's chart all read this one key, so a value has one colour on the page; another measure
- * ranks again and may repaint. Split by `across`, the key is of the pairs, ranked the same way
- * over every pair of the read, so a chart that shows fewer of them paints each as the rest do;
- * a pair with a value that is no category is drawn in the darker neutral, as such a value is.
+ * ranks again and may repaint. The rows are the period's without the page's filters
+ * (`useColourPlaces`), so a filter that takes a value away repaints none of the rest. Split by
+ * `across`, the key is of the pairs, ranked the same way over every pair of the read, so a chart
+ * that shows fewer of them paints each as the rest do; a pair with a value that is no category is
+ * drawn in the darker neutral, as such a value is.
  */
 export function rankedSlots(
   rows: readonly UsageRow[],
@@ -97,26 +100,31 @@ export function rankedSlots(
 const NOT_CATEGORIES = ['none', 'unknown'] as const satisfies readonly ValueKind[]
 
 /**
- * The values a stack names, bottom first, which is also the legend's order: the period's largest
- * categories in the measure, up to `STACKED`, each in its hue of the page's key (`rankedSlots`),
- * then work with no value there and unknown work, each its own series in the darker neutral and
- * never folded; only values with anything to draw. The rest of the period is one «other» series
- * in the lighter neutral, on top.
+ * The values a stack names, bottom first, which is also the legend's order: the answer's largest
+ * categories in the measure that hold a hue of the page's key (`rankedSlots`), up to `STACKED`,
+ * each in that hue, then work with no value there and unknown work, each its own series in the
+ * darker neutral and never folded; only values with anything to draw. The rest of the answer is
+ * one «other» series in the lighter neutral, on top: under a filter a value the key gives no hue
+ * is folded there rather than named in a grey beside it. Split by `across`, the values are the
+ * pairs.
  */
-export function stackLines({ usage, by: dimension, measure, across = null }: StackSource) {
+export function stackLines(source: StackSource) {
+  const { usage, by: dimension, measure, across = null } = source
   // A value with no figure in the measure stays, so its days can say it has none.
   const breakdown = breakdownOf(dimension, across)
   const lines = spendingLines(usage.rows, breakdown, measure, Number.POSITIVE_INFINITY).filter(
     (line) => figureOf(measure, line.spent) !== 0,
   )
+  const slots = rankedSlots(source.places ?? usage.rows, dimension, measure, across)
+  const hued = lines.filter(
+    (line) => line.kind === 'category' && typeof slots.get(line.key) === 'number',
+  )
   const apart = lines.filter((line) => line.kind !== 'category')
-  const categories = lines.filter((line) => line.kind === 'category')
-  const slots = rankedSlots(usage.rows, dimension, measure, across)
-  const named = [...categories.slice(0, STACKED), ...apart]
+  const named = [...hued.slice(0, STACKED), ...apart]
   const series: StackLine[] = named.map((line) => ({
     key: line.key,
     label: '',
-    slot: slots.get(line.key) ?? 'other',
+    slot: slots.get(line.key) ?? (line.kind === 'category' ? 'other' : 'apart'),
     line,
   }))
   if (lines.length > named.length)
@@ -125,33 +133,35 @@ export function stackLines({ usage, by: dimension, measure, across = null }: Sta
 }
 
 /**
- * What a stack is drawn from: the answer, the dimension it breaks down by, the measure, and the
- * dimension its pairs are split by, where the answer is read by both.
+ * What a stack is drawn from: the answer, the dimension it breaks down by, the measure, the
+ * dimension its pairs are split by, where the answer is read by both, and the rows the page's
+ * colour key is ranked over (`useColourPlaces`), the answer's own where none is given.
  */
 export interface StackSource {
   by: UsageDimension
   measure: Measure
   usage: Usage
   across?: UsageDimension | null
+  places?: readonly UsageRow[] | null
 }
 
 /**
- * Each day of the answer as a column of the measure, by the series of the stack. A value that
- * spent in a day with no figure in the measure is absent there, not a zero, and a minute with no
- * data yet (`notYet`) is pending, not a zero either.
+ * Each day of the answer as a column of the measure, by the series of the stack: by its values,
+ * or split, by its pairs. A value that spent in a day with no figure in the measure is absent
+ * there, not a zero, and a minute with no data yet (`notYet`) is pending, not a zero either.
  */
 export function dayColumns(
-  { usage, by: dimension, measure }: StackSource,
+  { usage, by: dimension, measure, across = null }: StackSource,
   series: readonly StackLine[],
   readAt: Date,
 ): Omit<PeriodColumn, 'fullLabel' | 'label'>[] {
   const named = new Set(series.filter((one) => one.line).map((one) => one.key))
+  const breakdown = breakdownOf(dimension, across)
   return usage.series.map((point) => {
     const values: Record<string, number> = {}
     const absent = new Set<string>()
     for (const group of point.groups) {
-      const value = group.group[dimension]
-      const key = value ? valueKey(value) : 'unknown'
+      const key = lineKeyOf(group, breakdown)
       const into = named.has(key) ? key : 'other'
       const figure = figureOf(measure, spentOf(group))
       if (figure === null) absent.add(into)
