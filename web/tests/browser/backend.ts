@@ -51,6 +51,8 @@ import { improvementProfile, signalSummary } from './platformFixtures.ts'
 import { skillMatrixPayload, skillsPayload } from './skillsFixtures.ts'
 
 type BackendOptions = {
+  /** The names Valkama keeps for accounts, by organization id, before the page writes any. */
+  accountNames?: Record<string, string>
   activity?: 'bound' | 'unbound'
   /** The card's item stands in the terminal state, with this outcome. */
   closedWith?: string
@@ -93,6 +95,18 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
   const platformReads: string[] = []
   const prefsWrites: unknown[] = []
   const registrations = moduleRegistrations()
+  /** The names as the server keeps them, and every write of them, as the server takes it. */
+  const accountNames: Record<string, string> = { ...options.accountNames }
+  const accountNameWrites: { names: Record<string, string>; replace?: boolean }[] = []
+  const writeAccountNames = (body: { names: Record<string, string>; replace?: boolean }) => {
+    accountNameWrites.push(body)
+    for (const [id, name] of Object.entries(body.names)) {
+      if (body.replace === false) {
+        if (name && !Object.hasOwn(accountNames, id)) accountNames[id] = name
+      } else if (name) accountNames[id] = name
+      else Reflect.deleteProperty(accountNames, id)
+    }
+  }
   /**
    * The activity feed, as a reference and a presentation.
    *
@@ -218,6 +232,13 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/alerts/presence': () => fulfill({ ok: true }),
         '/api/quota/settings': () =>
           fulfill(request.method() === 'PUT' ? request.postDataJSON() : { poll: false }),
+        '/api/quota/account-names': () => {
+          if (request.method() === 'PUT')
+            writeAccountNames(
+              request.postDataJSON() as { names: Record<string, string>; replace?: boolean },
+            )
+          return fulfill({ names: { ...accountNames } })
+        },
         '/api/doctor': () => fulfill(structuredClone(doctorReport)),
         '/api/execution/history': () => {
           const requested = url.searchParams.get('work_item')
@@ -420,6 +441,8 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
     },
   )
   return {
+    accountNames,
+    accountNameWrites,
     attachCommands,
     legacyRequests,
     platformReads,

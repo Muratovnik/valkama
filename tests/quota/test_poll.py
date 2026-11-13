@@ -310,7 +310,7 @@ class PollerTests(_Profile):
             self.poll_samples(),
         )
         self.assertEqual(
-            [(ORGANIZATION, ACCOUNT, "Max", None)],
+            [(ORGANIZATION, ACCOUNT, "Max")],
             self.conn.execute("SELECT * FROM quota_accounts").fetchall(),
         )
         # Nobody works for the organization: the idle pace.

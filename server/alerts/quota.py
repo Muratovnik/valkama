@@ -17,7 +17,8 @@ A reading with no seat, or whose organization is not known, raises nothing: ther
 account to warn about. The account is the organization and the seat: a seat names one
 account of its organization for the week it names, whether its UUID is known
 (`seats.account_of_seat`) or the seat is still provisional, so the key holds when the UUID
-turns up later.
+turns up later. The toast says the name the owner gave the organization's account
+(`quota.names`), and where there is none it says no name at all.
 
 Freshness. Samples are kept only when a value changed (`quota.samples`), so a series'
 latest sample says when it last moved. One older than `forecast.FRESH_FOR` raises
@@ -49,7 +50,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from ..ops import toast
-from ..quota import forecast, samples, seats
+from ..quota import forecast, names, samples, seats
 from ..quota import store as quota_store
 from . import emit, messages
 from . import settings as alert_settings
@@ -226,16 +227,6 @@ def _keep(conn: sqlite3.Connection, dues: Iterable[_Due], now: dt.datetime) -> l
     return shown
 
 
-def _label(conn: sqlite3.Connection, sample: _Sample) -> str | None:
-    if sample.account_uuid is None:
-        return None
-    row = conn.execute(
-        "SELECT label FROM quota_accounts WHERE organization = ? AND account_uuid = ?",
-        (sample.organization, sample.account_uuid),
-    ).fetchone()
-    return None if row is None or not row[0] else str(row[0])
-
-
 def _tag(sample_series: tuple[str, str, str, str]) -> str:
     """The toast's tag: one per account's window, so a higher level replaces a lower one."""
 
@@ -244,8 +235,8 @@ def _tag(sample_series: tuple[str, str, str, str]) -> str:
 
 
 def _show(
-    conn: sqlite3.Connection,
     due: _Due,
+    account: str | None,
     now: dt.datetime,
     settings: alert_settings.Settings,
     zone: dt.tzinfo | None,
@@ -273,7 +264,7 @@ def _show(
             settings=settings,
             model=sample.model or None,
             runs_out_at=runs_out_at,
-            account=_label(conn, sample),
+            account=account,
             logo=toast.logo_uri(),
         ),
         work_item_id=None,
@@ -297,7 +288,10 @@ def due(
     dues = _dues(conn, moment)
     if not dues:
         return []
-    return [_show(conn, one, moment, settings, zone) for one in _keep(conn, dues, moment)]
+    shown = _keep(conn, dues, moment)
+    # The owner's name for each account's organization, read once for every toast.
+    named = names.names_of(conn, (one.sample.organization for one in shown))
+    return [_show(one, named.get(one.sample.organization), moment, settings, zone) for one in shown]
 
 
 def after_pass(conn: sqlite3.Connection, *, now: dt.datetime | None = None) -> None:

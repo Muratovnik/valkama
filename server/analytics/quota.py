@@ -28,7 +28,7 @@ import sqlite3
 from collections.abc import Iterable
 from typing import TypeAlias
 
-from ..quota import forecast, samples, seats
+from ..quota import forecast, names, samples, seats
 from ..quota import store as quota_store
 from . import usage
 
@@ -68,18 +68,6 @@ class _Clock:
 
     def stored(self, text: str) -> str:
         return self.time(_millis(text))
-
-
-def _name(conn: sqlite3.Connection, organization: str, account_uuid: str | None) -> str | None:
-    """The name the owner gave the account, or None when none is set."""
-
-    if account_uuid is None:
-        return None
-    row = conn.execute(
-        "SELECT label FROM quota_accounts WHERE organization = ? AND account_uuid = ?",
-        (organization, account_uuid),
-    ).fetchone()
-    return None if row is None or row[0] is None else str(row[0])
 
 
 def _plan(conn: sqlite3.Connection, organization: str, account_uuid: str | None) -> str | None:
@@ -178,6 +166,7 @@ def _entry(
     account: _Account,
     windows: dict[_Series, list[seats.AccountSample]],
     clock: _Clock,
+    name: str | None,
 ) -> dict:
     organization, account_uuid, seat = account
     return {
@@ -185,7 +174,7 @@ def _entry(
         "account_uuid": account_uuid,
         "seat": seat,
         "plan": _plan(conn, organization, account_uuid),
-        "name": _name(conn, organization, account_uuid),
+        "name": name,
         "no_source": not windows,
         "windows": [
             _window(kind, model, windows[kind, model], clock)
@@ -214,12 +203,14 @@ def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None =
     for (organization,) in conn.execute(_ORGANIZATIONS_AT_WORK, (since,)):
         if organization not in read_from:
             accounts[str(organization), None, None] = {}
+    # The owner names an organization, so every entry of one has its name; read once.
+    named = names.names_of(conn, (organization for organization, _, _ in accounts))
     return {
         "now": clock.time(clock.now),
         "utc_offset": utc_offset,
         "fresh_for_seconds": forecast.FRESH_FOR // 1000,
         "accounts": [
-            _entry(conn, account, accounts[account], clock)
+            _entry(conn, account, accounts[account], clock, named.get(account[0]))
             for account in sorted(accounts, key=lambda one: tuple(part or "" for part in one))
         ],
     }

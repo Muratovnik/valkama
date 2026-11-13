@@ -24,7 +24,7 @@ from collections.abc import Iterator
 
 from server import http_surface
 from server.analytics import api, quota, usage
-from server.quota import samples
+from server.quota import names, samples
 from tests.analytics_fixtures import START, UsageStore
 
 ORG_A = "org-a"
@@ -170,11 +170,8 @@ class StateTests(_Quota):
 class AccountTests(_Quota):
     def test_an_account_is_its_uuid_or_the_seat_a_reading_without_one_is_on(self) -> None:
         self.poll(ago(hours=1), week(30), plan="Max")
-        self.conn.execute(
-            "UPDATE quota_accounts SET label = 'Work' WHERE organization = ? AND account_uuid = ?",
-            (ORG_A, "acct-a"),
-        )
-        self.conn.commit()
+        # The owner names an organization; its provisional seat has that name too.
+        names.write(self.conn, {"names": {ORG_A: "Work", ORG_C: "Lab"}})
         # A session of A on the seat acct-a's poll names is acct-a's.
         self.working("s-a", ORG_A, ago(days=1))
         self.statusline(ago(minutes=2), "s-a", week(31))
@@ -198,7 +195,7 @@ class AccountTests(_Quota):
         self.assertEqual("statusline", weekly["latest"]["source"])
         provisional = self.account(answer, ORG_C)
         self.assertEqual(
-            (None, SEAT, None, None),
+            (None, SEAT, None, "Lab"),
             (
                 provisional["account_uuid"],
                 provisional["seat"],
@@ -207,6 +204,9 @@ class AccountTests(_Quota):
             ),
         )
         self.assertEqual(["week"], [one["kind"] for one in provisional["windows"]])
+        # A name taken away is no name.
+        names.write(self.conn, {"names": {ORG_C: ""}})
+        self.assertIsNone(self.account(self.quota(), ORG_C)["name"])
 
     def test_a_session_whose_organization_is_not_read_yet_is_no_account(self) -> None:
         self.statusline(ago(minutes=2), "s-unread", week(31))

@@ -10,6 +10,18 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Names for accounts now live in Valkama, not on each device.** Settings → General →
+  Accounts saves a name to the store when its field is left or Enter is pressed, and says
+  while it saves, when a save failed (with a retry) and when a name was cleared. The
+  Analytics page on every device, and the quota alerts, name the account by it, with the
+  id still in the hint. The names a browser or the desktop app kept until now are moved
+  to Valkama once, the first time it opens Settings or Analytics, without overwriting a
+  name Valkama already has, and then leave that device's settings. `GET` and
+  `PUT /api/quota/account-names` read and write them: one line of at most 80 characters
+  per organization, the server refusing a longer name or a bad id and changing nothing.
+
 ### Added
 
 - **The store keeps subscription quota samples and accounts, at store schema 17.**
@@ -17,10 +29,11 @@ checkouts are therefore distinguishable even at the same version.
   status line, the mod, the poll or an import, each named by its organization or its
   session, its seat and its window: five hours, the week, a model's week, extra usage or
   a gateway's spend limit. `quota_accounts` holds an account by its organization and
-  UUID, with its plan and the owner's label, and no e-mail address or name, so a label
-  holds from week to week; a sample without the UUID belongs to the account whose
-  samples name its seat that week. Samples are kept a year and are in every store
-  snapshot. A usage segment's seat is read as a state: the latest sample of each feed
+  UUID, with its plan, and no e-mail address or name, so the account holds from week to
+  week; a sample without the UUID belongs to the account whose samples name its seat
+  that week. `quota_account_names` holds the owner's name for an account, one per
+  organization. Samples and names are kept in every store snapshot, and samples for a
+  year. A usage segment's seat is read as a state: the latest sample of each feed
   at or before it holds until its window resets, its own session's feeds first. The
   upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
   after it.

@@ -67,6 +67,7 @@ import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
 import { focusOnNothing } from '@/shared/lib/focusRight.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -89,6 +90,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 // Once per opening: the stage sets this page up each time it is navigated to.
 reportAnalyticsUse('page_open')
+// The names Valkama keeps for accounts, read again at each opening; until they answer, and if
+// they fail, an account is named by the start of its id as it would be with no name.
+void useAccountNamesStore().read()
 const words = useSpendingWords()
 
 const view = computed(() => readAddress(props.routeState))

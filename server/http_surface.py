@@ -59,6 +59,7 @@ from .planning import service as planning_service
 from .planning import views as planning_views
 from .planning.routing import PlanningRouting
 from .projects import scopes
+from .quota import names as quota_names
 from .quota import poll as quota_poll
 from .quota import settings as quota_settings
 from .refs import resolve_ref
@@ -599,6 +600,10 @@ def _alert_presence_write(call: _Call) -> _Answer | None:
     return 200, {"ok": True}
 
 
+#: The owner's names for accounts, one per organization (`quota.names`).
+_ACCOUNT_NAMES = "/api/quota/account-names"
+
+
 def _quota_settings_read(call: _Call) -> _Answer | None:
     return 200, dict(quota_settings.read(call.store()))
 
@@ -612,6 +617,20 @@ def _quota_settings_write(call: _Call) -> _Answer | None:
 
 def _quota_settings_error(error: Exception) -> _Answer:
     if isinstance(error, quota_settings.SettingsError):
+        return 400, {"error": {"code": "invalid_request", "message": str(error)}}
+    return _generic_failure(500)
+
+
+def _account_names_read(call: _Call) -> _Answer | None:
+    return 200, {"names": quota_names.read(call.store())}
+
+
+def _account_names_write(call: _Call) -> _Answer | None:
+    return 200, {"names": quota_names.write(call.store(), call.payload)}
+
+
+def _account_names_error(error: Exception) -> _Answer:
+    if isinstance(error, quota_names.NamesError):
         return 400, {"error": {"code": "invalid_request", "message": str(error)}}
     return _generic_failure(500)
 
@@ -734,6 +753,12 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.READ_ONLY,
     ),
     _Boundary(
+        exact=frozenset({_ACCOUNT_NAMES}),
+        handler=_account_names_read,
+        errors=_account_names_error,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
         exact=frozenset({"/api/alerts/status"}),
         handler=_alert_status_read,
         errors=_alerts_error,
@@ -827,6 +852,12 @@ _PUT_BOUNDARIES: tuple[_Boundary, ...] = (
         exact=frozenset({"/api/quota/settings"}),
         handler=_quota_settings_write,
         errors=_quota_settings_error,
+        commit=_Commit.DOMAIN,
+    ),
+    _Boundary(
+        exact=frozenset({_ACCOUNT_NAMES}),
+        handler=_account_names_write,
+        errors=_account_names_error,
         commit=_Commit.DOMAIN,
     ),
 )

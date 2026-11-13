@@ -1,4 +1,4 @@
-"""Schema 17: the subscription quota's accounts, samples and the alerts given about them.
+"""Schema 17: the subscription quota's accounts and their names, samples and the alerts.
 
 The sources are stores built from the catalogs the last schema-16 and schema-15 builds
 created, populated as those builds wrote them. What this suite holds the migration to:
@@ -8,7 +8,7 @@ store at 15 the one `preschema16` point that covers schema 16's step as well -- 
 open writes nothing, the recovery point brings the store back and the migration runs
 again, a fresh store has the same catalog directly, and a build that knows only 16
 refuses the result. Then the guarantee the tables are kept for: a snapshot of a store
-holding samples, restored, gives the samples and the accounts back.
+holding samples and names, restored, gives the samples, the accounts and the names back.
 """
 
 from __future__ import annotations
@@ -24,13 +24,15 @@ from pathlib import Path
 from unittest import mock
 
 from server import store, store_backups
+from server.quota import names as account_names
 from server.quota import samples
 from tests import schema9, schema15, schema16
 from tests.test_schema12_migration import _catalog, _columns, _rows, _shape
 
 #: The tables schema 17 adds and their columns, in order.
 ADDED = {
-    "quota_accounts": ["organization", "account_uuid", "plan", "label"],
+    "quota_accounts": ["organization", "account_uuid", "plan"],
+    "quota_account_names": ["organization", "name", "updated_at"],
     "quota_samples": [
         "id",
         "at",
@@ -177,7 +179,7 @@ class _SchemaSeventeen(unittest.TestCase):
 class FromSixteenTests(_SchemaSeventeen):
     """A store the schema-16 build wrote takes the step alone, under `preschema17`."""
 
-    def test_a_snapshot_restored_gives_the_samples_and_accounts_back(self) -> None:
+    def test_a_snapshot_restored_gives_the_samples_accounts_and_names_back(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
         reading = samples.Reading(
@@ -194,6 +196,7 @@ class FromSixteenTests(_SchemaSeventeen):
         )
         with conn:
             self.assertEqual(2, samples.record(conn, reading, now=NOW))
+        account_names.write(conn, {"names": {ORGANIZATION: "Main account"}})
         kept = conn.execute("SELECT * FROM quota_samples ORDER BY id").fetchall()
         accounts = conn.execute("SELECT * FROM quota_accounts").fetchall()
         self.assertEqual(2, len(kept))
@@ -201,6 +204,7 @@ class FromSixteenTests(_SchemaSeventeen):
         with conn:
             conn.execute("DELETE FROM quota_samples")
             conn.execute("DELETE FROM quota_accounts")
+            conn.execute("DELETE FROM quota_account_names")
         conn.close()
         for leftover in (f"{self.path}-wal", f"{self.path}-shm"):
             if os.path.exists(leftover):
@@ -217,9 +221,10 @@ class FromSixteenTests(_SchemaSeventeen):
             [tuple(row) for row in restored.execute("SELECT * FROM quota_accounts")],
         )
         self.assertEqual(
-            [("org-1", "account-1", "Team", None)],
+            [("org-1", "account-1", "Team")],
             [tuple(row) for row in accounts],
         )
+        self.assertEqual({ORGANIZATION: "Main account"}, account_names.read(restored))
 
 
 class FromFifteenTests(_SchemaSeventeen):

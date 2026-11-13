@@ -1,15 +1,21 @@
-"""Quota's own tables: the accounts the owner names, the samples every source records, and
-the alerts the owner was given and the owner's quota settings.
+"""Quota's own tables: the accounts the sources name, the owner's names for them, the
+samples every source records, the alerts the owner was given and the owner's quota
+settings.
 
 Added with schema 17, and additive: `store.connect()` runs this script against an
 upgraded store exactly as against a fresh one, and an upgraded store holds no account
-and no sample until a source records one or history is imported. It imports nothing,
-because the store's bring-up reads it.
+and no sample until a source records one or history is imported, and no name until the
+owner gives one. It imports nothing, because the store's bring-up reads it.
 
 `quota_accounts`: one row per account, an organization and the account's UUID in it, with
-the plan a source named and the label the owner gave it. The UUID does not change from
-week to week, so the label holds across weeks. Only ids, a plan's short name and the
-owner's own label are kept: no e-mail address and no name from a profile.
+the plan a source named. The UUID does not change from week to week, so the row holds
+across weeks. Only ids and a plan's short name are kept: no e-mail address and no name
+from a profile.
+
+`quota_account_names`: the owner's name for an account, one row per organization, written
+from Settings and read by every device and by the quota alerts (`quota.names`). No source
+writes it. A name is one line of 1 to `MAX_NAME_LENGTH` characters; an organization with
+no name has no row.
 
 `quota_samples`: one row per reading of one window that differed from the reading before
 it in its series, never rewritten. A series is what the sample is identified by (the
@@ -62,6 +68,10 @@ RETENTION_DAYS = 365
 #: five-hour window forecast to run out before its reset.
 ALERT_KINDS = ("five_hour", "week", "week_model")
 ALERT_LEVELS = ("75", "90", "exhausted")
+#: The longest name the owner may give an account, and the longest organization id, as
+#: the usage read bounds one.
+MAX_NAME_LENGTH = 80
+MAX_ORGANIZATION_LENGTH = 512
 
 
 def _listed(values: tuple[str, ...]) -> str:
@@ -73,8 +83,12 @@ CREATE TABLE IF NOT EXISTS quota_accounts(
     organization TEXT NOT NULL,
     account_uuid TEXT NOT NULL,
     plan TEXT,
-    label TEXT,
     PRIMARY KEY(organization, account_uuid)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS quota_account_names(
+    organization TEXT PRIMARY KEY CHECK(length(organization) BETWEEN 1 AND {MAX_ORGANIZATION_LENGTH}),
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND {MAX_NAME_LENGTH}),
+    updated_at TEXT NOT NULL
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS quota_samples(
     id INTEGER PRIMARY KEY,
@@ -125,13 +139,21 @@ CREATE TABLE IF NOT EXISTS quota_settings(
 ) WITHOUT ROWID;
 """
 
-SCHEMA_TABLES = ("quota_accounts", "quota_samples", "quota_alerts", "quota_settings")
+SCHEMA_TABLES = (
+    "quota_accounts",
+    "quota_account_names",
+    "quota_samples",
+    "quota_alerts",
+    "quota_settings",
+)
 
 __all__ = [
     "ALERT_KINDS",
     "ALERT_LEVELS",
     "BY_ORGANIZATION",
     "KINDS",
+    "MAX_NAME_LENGTH",
+    "MAX_ORGANIZATION_LENGTH",
     "MONEY_KINDS",
     "RETENTION_DAYS",
     "SCHEMA",

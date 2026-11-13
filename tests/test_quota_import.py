@@ -107,7 +107,7 @@ class ImportTests(unittest.TestCase):
         )  # fmt: skip
         # A line's account makes the account's row, and only such a line does.
         self.assertEqual(
-            [("org-1", "account-1", None, None)],
+            [("org-1", "account-1", None)],
             [tuple(row) for row in self.conn.execute("SELECT * FROM quota_accounts")],
         )
 
