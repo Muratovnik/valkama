@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { fetchQuota, validateQuotaAnswer } from '@/shared/api/analyticsApi.ts'
 import type { Quota } from '@/shared/api/analyticsApi.ts'
+import { uiDegraded } from '@/shared/api/platformUiState.ts'
 
 import { quotaAnswer, quotaAt } from './fixtures/quota.ts'
 import { requestUrl, withSecurityBootstrap } from './support/request.ts'
@@ -123,6 +124,23 @@ describe('the quota read', () => {
     expect(() =>
       read([{ ...work, seat: 'week:2026-11-15T09:00Z' }, night, unread, seated]),
     ).toThrow(/accounts\[0\]\.seat/u)
+  })
+
+  it('gives the moment the page state takes the one form that state checks', async () => {
+    const payload = quotaAnswer({ ...quotaAt(NOW, 0), now: '2026-11-11T11:30:00.629+00:00' })
+    answer(payload)
+    const quota = await fetchQuota(0)
+    expect(() => uiDegraded(quota, quota.now)).not.toThrow()
+    expect(uiDegraded(quota, quota.now)).toMatchObject({
+      status: 'degraded',
+      observed_at: '2026-11-11T11:30:00.629Z',
+    })
+  })
+
+  it('refuses a moment that names no time', () => {
+    expect(() =>
+      validateQuotaAnswer(quotaAnswer({ ...quotaAt(NOW, 0), now: '2026-13-45T99:99:00+00:00' })),
+    ).toThrow(/analytics\.quota\.quota\.now/u)
   })
 
   it('says what failed when the read is refused', async () => {
