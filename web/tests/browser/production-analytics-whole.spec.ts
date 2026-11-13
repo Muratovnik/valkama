@@ -70,7 +70,8 @@ for (const locale of ['ru-RU', 'en-US']) {
           // A plain address shows the rail: beside the section, or as the list on a narrow screen.
           await page.setViewportSize({ width, height: 1000 })
           await page.goto(pageAt({ by }))
-          await expect(page.locator('.analytics-rail-count').first()).toBeVisible()
+          // Every entry keeps its count's room; the words in it come with the figures.
+          await expect(page.locator('.analytics-rail-count-words').first()).toBeVisible()
           await expect(page.locator(`.analytics-rail-entry[data-section="${by}"]`)).toHaveAttribute(
             'aria-current',
             'page',

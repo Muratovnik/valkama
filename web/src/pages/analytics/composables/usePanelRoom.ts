@@ -5,37 +5,57 @@
  *
  * The panel beside the rail must be at least `PANEL_LEAST` wide. Narrower, its charts opened as
  * their tables — at a window 1024 pixels wide the panel was 473 — so the page shows the list of
- * sections and a section in turn instead. The rail's own width is set here too (`railWidth`), so
- * the measure and the layout cannot disagree about it.
+ * sections and a section in turn instead.
+ *
+ * The rail is as wide as its entries need, within a range its own style sets, so its width is
+ * read off the rail as it stands beside the panel rather than assumed: the measure and the layout
+ * cannot disagree about it. Taking turns, the rail is the whole screen, or not shown at all, and
+ * says nothing about its width beside the panel, so the last width it stood at there decides.
+ * The page opens beside, so that width is there from the first measure.
  *
  * The page is measured as it is mounted, so it never shows a frame of the other layout, and
- * again whenever its box changes. Until then it counts as wide, the way it opens on a desktop; a
- * box measured at nothing, as a hidden page's is, decides nothing.
+ * again whenever its box or the rail's changes. Until then it counts as wide, the way it opens on
+ * a desktop; a box measured at nothing, as a hidden page's is, decides nothing.
  */
 import type { Ref } from 'vue'
 import { computed, onMounted, ref } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
-/** The rail's width beside the panel, in the root's ems. */
-const RAIL_EMS = 15
-
 /** The least width of the panel beside the rail, in pixels. */
 const PANEL_LEAST = 640
 
-export function usePanelRoom(page: Ref<HTMLElement | null>) {
-  /** The page's width and the root's font size when it was last measured. */
-  const measured = ref<{ em: number; width: number } | null>(null)
-  function measure(width: number | undefined) {
-    if (!width) return
-    const em = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
-    measured.value = { width, em: Number.isFinite(em) ? em : 16 }
-  }
-  onMounted(() => measure(page.value?.getBoundingClientRect().width))
-  useResizeObserver(page, ([entry]) => measure(entry?.contentRect.width))
-  const narrow = computed(() => {
-    const room = measured.value
-    return room !== null && room.width - RAIL_EMS * room.em < PANEL_LEAST
+/** The page's box, and the rail's component, whose root is the rail's box. */
+export function usePanelRoom(page: Ref<HTMLElement | null>, rail: Ref<{ $el?: unknown } | null>) {
+  const railBox = computed(() => {
+    const root = rail.value?.$el
+    return root instanceof HTMLElement ? root : null
   })
-  return { narrow, railWidth: `${RAIL_EMS}rem` }
+  /** The page's width when it was last measured. */
+  const pageWidth = ref(0)
+  /** The rail's width when it last stood beside the panel. */
+  const railWidth = ref(0)
+
+  const narrow = computed(
+    () =>
+      pageWidth.value > 0 && railWidth.value > 0 && pageWidth.value - railWidth.value < PANEL_LEAST,
+  )
+
+  function measurePage(width: number | undefined) {
+    if (width) pageWidth.value = width
+  }
+  /** The rail's width counts only beside the panel, and a hidden rail's nothing never does. */
+  function measureRail(width: number | undefined) {
+    if (width && !narrow.value) railWidth.value = width
+  }
+
+  onMounted(() => {
+    measureRail(railBox.value?.getBoundingClientRect().width)
+    measurePage(page.value?.getBoundingClientRect().width)
+  })
+  useResizeObserver(page, ([entry]) => measurePage(entry?.contentRect.width))
+  useResizeObserver(railBox, ([entry]) => measureRail(entry?.borderBoxSize[0]?.inlineSize), {
+    box: 'border-box',
+  })
+  return { narrow }
 }

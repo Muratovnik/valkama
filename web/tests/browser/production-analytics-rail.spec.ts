@@ -13,7 +13,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { NARROW_FRAME, pageAt, record, serve } from './analyticsPage.ts'
+import { pageAt, record, serve } from './analyticsPage.ts'
 import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
@@ -106,7 +106,7 @@ test('a new measure changes what the tiles say, in the same boxes, and asks noth
 }) => {
   await serve(page)
   const asked = countReads(page)
-  await page.setViewportSize({ width: NARROW_FRAME + 240, height: 900 })
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(pageAt())
   await settled(page)
   const before = { boxes: await tiles(page), words: await leads(page), reads: asked.length }
