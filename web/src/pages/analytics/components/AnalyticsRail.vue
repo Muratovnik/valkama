@@ -19,6 +19,7 @@
  * entries each lead on to their section, which their chevron says.
  */
 import { computed, ref, useId } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import RailTile from '@/pages/analytics/components/RailTile.vue'
 import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.ts'
@@ -50,6 +51,14 @@ function mark(section: AnalyticsSection) {
 }
 
 const ids = useId()
+
+/**
+ * The room each entry keeps for its count of values, a count of three figures in the reader's
+ * words, held before the figures come: the rail is as wide as its entries need, so a count that
+ * took its room only on arriving would widen the rail and move the panel beside it.
+ */
+const { t } = useI18n()
+const countRoom = computed(() => t('analytics.rail.values', { count: 999 }, 999))
 
 /** The chart a section's tile draws: the overview's days, a window of the quota, or shares. */
 function chartOf(section: AnalyticsSection) {
@@ -88,6 +97,7 @@ defineExpose({ focusSelected })
   <nav
     ref="rail"
     class="analytics-rail"
+    :class="{ 'analytics-rail-whole': list }"
     :aria-label="label"
   >
     <ul class="analytics-rail-list">
@@ -106,14 +116,23 @@ defineExpose({ focusSelected })
         >
           <span class="analytics-rail-head">
             <span
-              :id="section.nameId"
-              class="analytics-rail-name one-line"
-              >{{ section.label }}</span
+              class="analytics-rail-name-room"
+              :data-room="section.label"
             >
+              <span
+                :id="section.nameId"
+                class="analytics-rail-name one-line"
+                >{{ section.label }}</span
+              >
+            </span>
             <span
-              v-if="section.tile?.count"
               class="analytics-rail-count"
-              >{{ section.tile.count }}</span
+              :data-room="countRoom"
+              ><span
+                v-if="section.tile?.count"
+                class="analytics-rail-count-words"
+                >{{ section.tile.count }}</span
+              ></span
             >
             <VIcon
               v-if="list"
@@ -136,8 +155,39 @@ defineExpose({ focusSelected })
 </template>
 
 <style scoped>
+/* A ground on the module's panel, which is what parts the rail from the panel and the bar, and a
+   column that scrolls on its own and holds what it scrolls, a copy for a reader placed out of
+   sight among it too. It keeps its scrollbar's room whether it scrolls or not, so a window too
+   low for its sections narrows no entry. Beside the panel it is as wide as its entries need,
+   within a range: at a constant 15rem an entry's words had 182px, and «Способ запуска» lost its
+   last letters beside its count. Its entries' edge stands on the page's left line, the module
+   name's inset in `AppContextBar.vue` (`AnalyticsView`). */
 .analytics-rail {
-  min-width: 0;
+  position: relative;
+  min-height: 0;
+  min-inline-size: 15rem;
+  max-inline-size: 22rem;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-start-end-radius: var(--radius-card);
+  scrollbar-gutter: stable;
+}
+
+/* The whole screen, as the list of sections: across it, from the page's line to its gutter. */
+.analytics-rail-whole {
+  min-inline-size: 0;
+  max-inline-size: none;
+  padding-inline: var(--space-5) var(--size-page-gutter);
+  border-start-end-radius: 0;
+}
+
+/* The module's name stands a step nearer the edge in a main column of 586px or less. */
+@container main (width <= 586px) {
+  .analytics-rail-whole {
+    padding-inline-start: var(--space-3);
+  }
 }
 
 .analytics-rail-list {
@@ -188,10 +238,15 @@ defineExpose({ focusSelected })
   }
 }
 
+/* Beside the panel the rail is as wide as the widest head asks (`AnalyticsView`): its figures
+   ask for no width of their own and take the column the names leave them. */
+.analytics-rail-tile {
+  contain: inline-size;
+}
+
 /* The name, the count of values at the far end, and on a list the chevron after it. What stands
    between the name and the count is air, which gives way before either: down to the least gap,
-   so «Способ запуска» beside its count keeps its last letter in the rail's width, and only then is
-   the name cut, never the count. */
+   and only then, in a rail held to the most of its range, is the name cut, never the count. */
 .analytics-rail-head {
   display: flex;
   gap: var(--space-1);
@@ -199,18 +254,48 @@ defineExpose({ focusSelected })
   min-width: 0;
 }
 
-.analytics-rail-name {
+/* The name keeps the room of its chosen weight, held by a copy no one sees or reads, so the
+   rail asks the same width whichever entry is chosen and choosing one cuts no name. */
+.analytics-rail-name-room {
+  display: grid;
   flex: 0 1 auto;
   min-width: 0;
   margin-inline-end: auto;
+
+  &::after {
+    content: attr(data-room) / '';
+    grid-area: 1 / 1;
+    block-size: 0;
+    font-weight: 600;
+    visibility: hidden;
+  }
 }
 
+.analytics-rail-name {
+  grid-area: 1 / 1;
+}
+
+/* The count keeps the room of three figures (`countRoom`), held by a copy no one sees or reads,
+   and stands at its end. */
 .analytics-rail-count {
+  display: grid;
   flex: none;
+  justify-items: end;
   color: var(--color-text-muted);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+
+  &::before {
+    content: attr(data-room) / '';
+    grid-area: 1 / 1;
+    block-size: 0;
+    visibility: hidden;
+  }
+}
+
+.analytics-rail-count-words {
+  grid-area: 1 / 1;
 }
 
 .analytics-rail-chevron {
