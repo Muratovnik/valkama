@@ -32,7 +32,9 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import housekeeping, mcp_surface, store, transcripts
+from server.hooks import entry as hook_entry
 from server.hooks import normalize, spool
+from server.hooks import pairs as call_pairs
 from server.ops import configuration, tray
 from server.planning import api as planning_api
 from server.planning import calls as planning_calls
@@ -1061,7 +1063,8 @@ class CallIdentityTests(McpSurfaceTestCase):
     What clients send was recorded from the clients themselves: Codex puts the
     session in `_meta.sessionId` (and a subagent's own thread in `threadId`) on
     every call; Claude Code repeats the hook's `tool_use_id` as
-    `_meta["claudecode/toolUseId"]`, and a `PreToolUse` hook adds `_identity`.
+    `_meta["claudecode/toolUseId"]`, and its `PreToolUse` hook leaves the pair
+    for that id beside the store. An older hook added `_identity` instead.
     """
 
     SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
@@ -1105,6 +1108,118 @@ class CallIdentityTests(McpSurfaceTestCase):
 
     def hook(self, **fields: str) -> dict:
         return {"session_id": self.SESSION, "tool_use_id": self.TOOL_USE, **fields}
+
+    def pre_tool_use(self, tool_use_id: str, **fields: str) -> None:
+        """Run the real `PreToolUse` hook for one call, as Claude Code does before sending it."""
+
+        payload = {
+            "session_id": self.SESSION,
+            "hook_event_name": "PreToolUse",
+            "tool_name": "mcp__valkama__claim_work_item",
+            "tool_input": {"id": self.reference},
+            "tool_use_id": tool_use_id,
+            **fields,
+        }
+        out = io.BytesIO()
+        self.assertEqual(
+            0,
+            hook_entry.main(
+                ["claude", "pre-tool-use"], io.BytesIO(json.dumps(payload).encode()), out
+            ),
+        )
+        self.assertEqual(b"", out.getvalue())
+
+    def pair_files(self) -> list[str]:
+        folder = call_pairs.directory(os.environ["VALKAMA_DB"])
+        return sorted(os.listdir(folder)) if os.path.isdir(folder) else []
+
+    def test_the_pair_the_hook_left_confirms_the_call_and_names_its_agent(self) -> None:
+        self.pre_tool_use(self.TOOL_USE, agent_id="a1b2c3", agent_type="general-purpose")
+        self.claim({"claudecode/toolUseId": self.TOOL_USE})
+        self.assertEqual(
+            {
+                "state": "confirmed",
+                "source": "claude-pair",
+                "session_id": self.SESSION,
+                "agent_id": "a1b2c3",
+            },
+            self.event("claimed")["identity"],
+        )
+        [row] = self.calls()
+        self.assertEqual(
+            ("claude", self.TOOL_USE, "general-purpose"),
+            (row["client"], row["tool_use_id"], row["agent_type"]),
+        )
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(f"claude agent a1b2c3 (session {self.SESSION})", item["claim_ref"])
+        # Taken, so no later call can borrow it.
+        self.assertEqual([], self.pair_files())
+
+    def test_two_calls_of_one_response_each_find_their_own_pair(self) -> None:
+        other = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Other")
+        self.conn.commit()
+        self.pre_tool_use("toolu_first", agent_id="first-agent")
+        self.pre_tool_use("toolu_second", agent_id="second-agent")
+        self.assertEqual(["toolu_first.json", "toolu_second.json"], self.pair_files())
+        answers = self.converse(
+            *(
+                {
+                    "jsonrpc": "2.0",
+                    "id": number,
+                    "method": "tools/call",
+                    "params": {
+                        "_meta": {**META, "claudecode/toolUseId": tool_use},
+                        "name": "comment_work_item",
+                        "arguments": {"id": reference, "body": "Seen"},
+                    },
+                }
+                for number, tool_use, reference in (
+                    (1, "toolu_second", other["reference"]),
+                    (2, "toolu_first", self.reference),
+                )
+            )
+        )
+        self.assertEqual([False, False], [answer["result"]["isError"] for answer in answers])
+        self.assertEqual(
+            [
+                ("toolu_second", "second-agent", "claude-pair"),
+                ("toolu_first", "first-agent", "claude-pair"),
+            ],
+            [(row["tool_use_id"], row["agent_id"], row["identity_source"]) for row in self.calls()],
+        )
+
+    def test_a_resumed_session_is_the_pair_s_not_the_server_environment(self) -> None:
+        # After `--continue` the MCP process's environment names another session
+        # than the hooks do; the hook's is the one the call belongs to.
+        self.pre_tool_use(self.TOOL_USE)
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": "the-startup-session"}):
+            self.claim({"claudecode/toolUseId": self.TOOL_USE})
+        identity = self.event("claimed")["identity"]
+        self.assertEqual(("confirmed", self.SESSION), (identity["state"], identity["session_id"]))
+
+    def test_with_the_key_and_no_pair_the_call_is_unconfirmed_and_says_why(self) -> None:
+        self.pre_tool_use("toolu_someone_elses")
+        self.claim({"claudecode/toolUseId": self.TOOL_USE})
+        self.assertEqual(
+            {
+                "state": "unconfirmed",
+                "source": "claude-no-pair",
+                "session_id": None,
+                "agent_id": None,
+            },
+            self.event("claimed")["identity"],
+        )
+        # Another call's pair is not borrowed and stays for that call.
+        self.assertEqual(["toolu_someone_elses.json"], self.pair_files())
+
+    def test_a_read_takes_its_pair_too(self) -> None:
+        self.pre_tool_use(self.TOOL_USE)
+        result = self.call(
+            "get_work_item", {"id": self.reference}, {"claudecode/toolUseId": self.TOOL_USE}
+        )
+        self.assertFalse(result["isError"], result)
+        self.assertEqual([], self.pair_files())
+        self.assertEqual([], self.calls())
 
     def test_a_codex_call_confirms_the_session_its_meta_names(self) -> None:
         self.claim({"sessionId": self.SESSION, "threadId": self.SESSION, "callId": "call_7"})
@@ -1213,7 +1328,8 @@ class CallIdentityTests(McpSurfaceTestCase):
                     {"claudecode/toolUseId": self.TOOL_USE},
                 )
                 self.assertFalse(result["isError"], result)
-                self.assertEqual(("unconfirmed", "mcp", None), self.last_call())
+                # The client sent the key, so the call says that no pair was found.
+                self.assertEqual(("unconfirmed", "claude-no-pair", None), self.last_call())
 
     def last_call(self) -> tuple:
         row = self.calls()[-1]

@@ -17,6 +17,7 @@ from typing import NamedTuple
 
 from . import housekeeping, launcher, static_assets
 from .alerts import emit as alert_emit
+from .hooks import pairs as call_pairs
 from .ops import configuration, tray
 from .planning import acknowledgements
 from .planning import api as planning_api
@@ -292,15 +293,36 @@ def _client(params: dict) -> _Client:
     )
 
 
+def _store_file(conn: sqlite3.Connection) -> str:
+    """The file of the store this call writes to; empty for a store in memory."""
+
+    try:
+        found = conn.execute("PRAGMA database_list").fetchone()
+    except sqlite3.Error:
+        return ""
+    return str(found[2] or "") if found is not None else ""
+
+
+def _pair(conn: sqlite3.Connection, meta: object) -> object | None:
+    """The pair a Claude Code `PreToolUse` hook left for this call, taken; None for none."""
+
+    tool_use = planning_calls.claude_tool_use(meta)
+    path = _store_file(conn) if tool_use is not None else ""
+    if tool_use is None or not path:
+        return None
+    return call_pairs.take(path, tool_use, now=time.time(), monotonic=time.monotonic())
+
+
 def _prepared(
-    name: str, arguments: dict, meta: object, client: _Client | None
+    name: str, arguments: dict, meta: object, client: _Client | None, paired: object = None
 ) -> tuple[planning_calls.Identity, dict]:
     """Who is calling this tool, and its arguments under their published names.
 
-    `_identity` is what a client's `PreToolUse` hook adds to every call, so it
-    is taken out here, for every tool and before any schema is consulted: no
+    `_identity` is what an older client `PreToolUse` hook adds to every call, so
+    it is taken out here, for every tool and before any schema is consulted: no
     published schema names it, and a tool refusing it would fail every call of
-    a client with the hook installed. It reaches no domain code as an argument.
+    a client with that hook installed. It reaches no domain code as an argument.
+    `paired` is the pair the current hook left instead (`_pair`).
     """
 
     arguments = dict(arguments) if isinstance(arguments, dict) else arguments
@@ -315,7 +337,7 @@ def _prepared(
         arguments = _signed(name, _canonical_arguments(name, arguments or {}))
     client = client or _Client()
     identity = planning_calls.verify_mcp(
-        meta, claimed, client=client.name, client_version=client.version
+        meta, claimed, paired=paired, client=client.name, client_version=client.version
     )
     return identity, arguments or {}
 
@@ -330,7 +352,7 @@ def call_tool(
 ) -> object:
     """Run one tool as one call, under the identity its client proved. The caller commits."""
 
-    identity, prepared = _prepared(name, arguments, meta, client)
+    identity, prepared = _prepared(name, arguments, meta, client, _pair(conn, meta))
     with planning_calls.bind(identity, name):
         return _OPS[name](conn, prepared)
 
@@ -351,7 +373,7 @@ def run_tool_call(
     here waits for a toast.
     """
 
-    identity, prepared = _prepared(name, arguments, meta, client)
+    identity, prepared = _prepared(name, arguments, meta, client, _pair(conn, meta))
     try:
         with planning_calls.bind(identity, name):
             data = _OPS[name](conn, prepared)

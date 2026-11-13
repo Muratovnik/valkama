@@ -28,7 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from server import store
-from server.hooks import entry, ingest, normalize, place, spool
+from server.hooks import entry, ingest, normalize, pairs, place, spool
 
 UID_A = "00000000-0000-4000-8000-0000000000a1"
 UID_B = "00000000-0000-4000-8000-0000000000b2"
@@ -415,24 +415,25 @@ class IdentityPlaceTests(unittest.TestCase):
         "tool_use_id": "toolu_demo",
     }
 
-    def identity(self, opened_in: str) -> dict:
-        output = normalize.identity_output(dict(self.PAYLOAD), opened_in=opened_in)
-        assert output is not None
-        return output["hookSpecificOutput"]["updatedInput"]["_identity"]
+    def pair(self, opened_in: str) -> dict:
+        pair = normalize.call_pair(dict(self.PAYLOAD), opened_in=opened_in)
+        assert pair is not None
+        return pair
 
-    def test_the_identity_names_how_the_session_is_open(self) -> None:
-        self.assertEqual("ide", self.identity("ide")["place"])
-        self.assertNotIn("place", self.identity(""))
-        self.assertNotIn(
-            "place",
-            normalize.identity_output(dict(self.PAYLOAD))["hookSpecificOutput"]["updatedInput"][
-                "_identity"
-            ],
-        )  # type: ignore[index]
+    def test_the_pair_names_how_the_session_is_open(self) -> None:
+        self.assertEqual("ide", self.pair("ide")["place"])
+        self.assertNotIn("place", self.pair(""))
+        self.assertNotIn("place", normalize.call_pair(dict(self.PAYLOAD)) or {})
 
-    def test_the_transform_reads_its_place_from_the_variables_alone(self) -> None:
+    def test_the_pair_reads_its_place_from_the_variables_alone(self) -> None:
+        home = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(home.cleanup)
         out = io.BytesIO()
-        variables = {"CLAUDE_CODE_ENTRYPOINT": "claude-vscode", "TERM_PROGRAM": ""}
+        variables = {
+            "CLAUDE_CODE_ENTRYPOINT": "claude-vscode",
+            "TERM_PROGRAM": "",
+            "VALKAMA_DB": os.path.join(home.name, "valkama.sqlite3"),
+        }
         with (
             mock.patch.dict(os.environ, variables),
             mock.patch.object(place, "ancestors", side_effect=AssertionError("not on a tool call")),
@@ -440,9 +441,10 @@ class IdentityPlaceTests(unittest.TestCase):
             status = entry.main(
                 ["claude", "pre-tool-use"], io.BytesIO(json.dumps(self.PAYLOAD).encode()), out
             )
-        self.assertEqual(0, status)
-        identity = json.loads(out.getvalue())["hookSpecificOutput"]["updatedInput"]["_identity"]
-        self.assertEqual("ide", identity["place"])
+        self.assertEqual((0, b""), (status, out.getvalue()))
+        path = os.path.join(pairs.directory(variables["VALKAMA_DB"]), "toolu_demo.json")
+        with open(path, "rb") as handle:
+            self.assertEqual("ide", json.loads(handle.read())["place"])
 
 
 class PlaceStoreCase(unittest.TestCase):
