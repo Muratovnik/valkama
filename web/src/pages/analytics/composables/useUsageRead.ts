@@ -144,6 +144,22 @@ export function useUsageRead(options: {
    * stands for the period before; null when it was not read.
    */
   const comparedWith = shallowRef<PeriodBounds | null>(null)
+  /**
+   * The empty period on show and the newest record its answer named: the server names the store's
+   * newest record whatever the period holds, and the empty state carries no answer to read it from.
+   */
+  const emptyRead = shallowRef<{ newest: string | null; shown: PlatformUiState<Usage> } | null>(
+    null,
+  )
+  /**
+   * The newest record the answer on show says the store holds, an empty period's too; undefined
+   * while no answer stands on show.
+   */
+  const lastEventAt = computed(() => {
+    const shown = state.value
+    if ('payload' in shown) return shown.payload.last_event_at
+    return emptyRead.value?.shown === shown ? emptyRead.value.newest : undefined
+  })
   /** Whether a new view is read while the last view's answer stays on show. */
   const anew = shallowRef(false)
   /** Whether the last refresh of the view on show failed, what it showed kept on show. */
@@ -289,7 +305,9 @@ export function useUsageRead(options: {
     askedAt.value = answer.at
     anew.value = false
     refreshFailed.value = false
-    state.value = nothingToShow(usage) ? uiEmpty('analytics.empty.title') : ready(usage)
+    const empty = nothingToShow(usage) ? uiEmpty<Usage>('analytics.empty.title') : null
+    emptyRead.value = empty ? { shown: empty, newest: usage.last_event_at } : null
+    state.value = empty ?? ready(usage)
   }
 
   /** Shows a new view's answer as it lands, and its accounts as they follow it. */
@@ -377,6 +395,7 @@ export function useUsageRead(options: {
     bounds,
     comparedWith,
     filterValues,
+    lastEventAt,
     offer,
     readWith,
     retry: read,

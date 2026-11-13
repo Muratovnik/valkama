@@ -57,6 +57,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **The Analytics bar says how old the newest record is beside a period with no work.**
+  The bar's freshness stood empty while the panel said the period spent nothing, though
+  the answer named the store's newest record; it now says its age there too.
 - **The chrome no longer shows interim values at launch.** Until the module list was read
   the context bar said the module's id (`planning`), and until the remembered place was
   restored it said «Global» and marked «Work» as current, whatever the app then came back

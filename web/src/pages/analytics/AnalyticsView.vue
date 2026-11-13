@@ -149,12 +149,6 @@ const read = useUsageRead({ shared, view: () => view.value, projectId: () => pro
 
 const today = computed(() => localDay(read.askedAt.value))
 
-/** The newest record the answer on show says the store holds; undefined with no answer. */
-const lastEventAt = computed(() => {
-  const shown = read.state.value
-  return 'payload' in shown ? shown.payload.last_event_at : undefined
-})
-
 /** The dimensions a person filters on: at a project's scope its project is already chosen. */
 const filterDimensions = computed<UsageDimension[]>(() =>
   USAGE_DIMENSIONS.filter((dimension) => !(props.projectId && dimension === 'project')),
@@ -324,7 +318,7 @@ const emptyDescription = computed(() => {
       class="analytics-page-bar"
       :dimensions="filterDimensions"
       :filters-refused="filtersRefused"
-      :last-event-at="lastEventAt"
+      :last-event-at="read.lastEventAt.value"
       :live="live"
       :today="today"
       :values="read.filterValues.value"
