@@ -74,9 +74,12 @@ for (const width of [1440, 1024, 390]) {
     for (const section of await analytics.locator('.chart-section').all())
       await expect(section).toHaveAttribute('data-shown', narrow ? 'table' : 'chart')
 
-    // The day not over yet says so; the change of accounts is marked and said where its day is
-    // read, in its row of the table or in its day's hint on the chart.
-    await expect(analytics.locator('.spending-days')).toContainText('running')
+    // The day not over yet and the change of accounts are each said where their day is read, in
+    // its row of the table or in its day's hint on the chart; no word stands under a name.
+    await expect.poll(() => daysSaying(analytics, 'running')).toBe(1)
+    await expect(analytics.locator('.spending-days .period-axis:has-text("running")')).toHaveCount(
+      0,
+    )
     await expect
       .poll(() => daysSaying(analytics, 'Account change: 5b0c7e21 → 5b0c7e21, d4e8a1f0'))
       .toBe(1)

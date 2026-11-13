@@ -208,7 +208,7 @@ async function hourGaps(page: Page, chart: string, from: number) {
     await expect
       .poll(async () => {
         const names = await hourNames(page, chart)
-        return names.some((name) => name.text === '15:00running')
+        return names.some((name) => name.text === '15:00')
       })
       .toBe(true)
     const names = await hourNames(page, chart)
@@ -247,7 +247,8 @@ test('«Today» says the running hour, and its hours’ names keep apart at ever
   // neighbour gives way rather than touch it.
   const placed = await hourNames(page, '.overview-chart')
   const names = placed.map((name) => name.text)
-  expect(names).toContain('15:00running')
+  // Named as any hour: its hatching and its hint say it is under way.
+  expect(names).toContain('15:00')
   expect(names).toContain('17:00')
   expect(names).not.toContain('14:00')
 
