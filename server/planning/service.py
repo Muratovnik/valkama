@@ -30,6 +30,7 @@ from . import (
     store,
     subscriptions,
     transitions,
+    words,
 )
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
@@ -297,15 +298,54 @@ def search_work_items(
     bare row, so the reader can see why the item came back. Like
     `list_work_items`, it returns exactly `limit` matches and caps nothing.
 
-    A query that is exactly a reference puts that item first, and every other
-    match keeps its order, newest change first. A query that is a number alone
-    does the same for the item of that number, or across spaces for each
-    space's item of it. The order is decided before the page is cut, so the
-    item a person typed the number of never falls off the page behind the
-    items that only mention it.
+    The query is read as words (`words`): an item matches when it holds every
+    word, each cut to its first five letters and matched as a prefix, wherever
+    the words stand, and the best match comes first, the title weighing three
+    times the rest. Read as one phrase, a query of several words mostly found
+    nothing.
+
+    A query that is exactly a reference or a number alone is still read as a
+    phrase, as before: a reference puts that item first, and every other match
+    keeps its order, newest change first. A number alone does the same for the
+    item of that number, or across spaces for each space's item of it. The
+    order is decided before the page is cut, so the item a person typed the
+    number of never falls off the page behind the items that only mention it.
+    Where the index cannot be read -- a SQLite without FTS5, or an attached store
+    an earlier build wrote -- every query is read as a phrase.
     """
 
     text = model.text_field(query, "query", limit=200)
+    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
+    found = words.stems(text)
+    if found and model.exact_reference(text) is None and model.exact_number(text) is None:
+        rows = words.search_rows(
+            conn,
+            found,
+            space_id=space_id,
+            limit=max(1, int(limit)),
+            offset=model.count_field(offset, "offset"),
+        )
+        if rows is not None:
+            return [_word_hit(conn, row, found) for row in rows]
+    return _phrase_search(conn, text, space_id=space_id, limit=limit, offset=offset)
+
+
+def _word_hit(conn: sqlite3.Connection, row: sqlite3.Row, found: list[str]) -> dict:
+    """One item a word search found, with the lines that say why (`words.hits`)."""
+
+    return {**read_model.present(conn, row), **words.hits(conn, row, found)}
+
+
+def _phrase_search(
+    conn: sqlite3.Connection,
+    text: str,
+    *,
+    space_id: str | None,
+    limit: int,
+    offset: int,
+) -> list[dict]:
+    """The search before the word index: the whole query as one substring."""
+
     like = f"%{text}%"
     questions = _question_hits(conn, like)
     decisions = _decision_hits(conn, like)
@@ -320,9 +360,9 @@ def search_work_items(
     ]
     parameters.extend([like] * 8)
     parameters.append(json.dumps([*questions, *decisions]))
-    if space is not None:
+    if space_id is not None:
         clauses.append("i.planning_space_id = ?")
-        parameters.append(str(_space_row(conn, space)["planning_space_id"]))
+        parameters.append(space_id)
     query = with_clauses(
         "SELECT i.*, ("
         "  SELECT CASE WHEN m.report != '' THEN m.report ELSE m.body END"
@@ -480,6 +520,7 @@ def create_work_item(
         ),
     )
     _log(conn, item_id, "created", str(target["key"]), author)
+    words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, item_id), full=True)
 
 
@@ -571,6 +612,7 @@ def update_work_item(
             author,
             limit=model.LABELS_DETAIL_LIMIT,
         )
+    words.bring_current(conn)
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
@@ -602,6 +644,7 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     conn.execute("DELETE FROM work_items WHERE work_item_id = ?", (identity,))
     # The rows went with the item; a file no other item holds goes once this commits.
     images.release(conn, pictures)
+    words.bring_current(conn)
     return {
         "work_item_id": row["work_item_id"],
         "reference": read_model.reference(conn, row),
@@ -1389,6 +1432,7 @@ def merge_work_items(
         conn.execute("RELEASE planning_merge")
         raise
     conn.execute("RELEASE planning_merge")
+    words.bring_current(conn)
     return answer
 
 
@@ -1789,6 +1833,7 @@ def comment_work_item(
             int(awaits_reply),
         ),
     )
+    words.bring_current(conn)
     # Both parents always: the root a reply joined, and null for a new root.
     return {
         "work_item": read_model.reference(conn, row),
@@ -1886,6 +1931,7 @@ def resolve_comment(
             (comment_id,),
         )
         _log(conn, identity, "comment_reopened", str(comment_id), author)
+    words.bring_current(conn)
     return {
         "work_item": read_model.reference(conn, row),
         "comment_id": comment_id,
@@ -1993,6 +2039,7 @@ def report_work_item(
         conn.execute("RELEASE planning_report")
         raise
     conn.execute("RELEASE planning_report")
+    words.bring_current(conn)
     return read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
 
 
@@ -2024,6 +2071,7 @@ def select_summary(
         conn.execute("RELEASE planning_summary")
         raise
     conn.execute("RELEASE planning_summary")
+    words.bring_current(conn)
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )

@@ -25,6 +25,7 @@ from server import store, store_backups
 from server.planning import service as planning
 from server.planning import store as planning_store
 from tests import schema8, schema9
+from tests.test_word_index_migration import WORD_TABLES
 
 #: Columns schema 10 appends, by table, in the order they are appended.
 ADDED_COLUMNS = {
@@ -59,6 +60,8 @@ ADDED_TABLES = {
     "quota_samples",
     "quota_alerts",
     "quota_settings",
+    # The word index, which raises no schema.
+    *WORD_TABLES,
 }
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {

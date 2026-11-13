@@ -28,6 +28,17 @@ checkouts are therefore distinguishable even at the same version.
   repaint. This asks the server nothing more while no filter is set or when one is set after
   the page was read without it; with a filter set, each refresh asks the period once more
   without it for each dimension the page shows.
+- **A search finds every word, wherever it stands, best match first.** `search_work_items`
+  matched the whole query as one piece of text and listed the newest change first, so a
+  query of several words mostly found nothing. It now reads the query as words: an item
+  matches when it holds every one of them, in any order and across its title, description,
+  labels, summary, comments and questions, each word matched by its first five letters, so
+  `searching` finds `search` and a Russian word finds its other cases. The best match
+  comes first, the title weighing three times the rest. A query that is exactly a
+  reference or a number alone is read as one phrase, as before, and answers that item
+  first. The store keeps an SQLite FTS5 index for it, filled from the items already there
+  on the first open; the schema stays at 17, and a store whose SQLite lacks FTS5 still
+  writes every item and searches by phrase, as before.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context
@@ -85,6 +96,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **Creating an item names the open items that read like it.** The answer of
+  `create_work_item` carries `similar`: up to three open items of the same space whose
+  title or description share the new title's words, best first, by reference and title,
+  so an agent that filed the same change twice sees it at once. It is a hint, not a
+  check: nothing is refused on it.
 - **The work list finds in every row.** A list of 300 rows or more keeps only the rows
   about its window in the page, so the browser's find reached those and missed the rest.
   While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar

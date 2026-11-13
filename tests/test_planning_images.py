@@ -460,7 +460,13 @@ class SchemaFourteenTests(unittest.TestCase):
 
     @staticmethod
     def dump(conn: sqlite3.Connection) -> list[str]:
-        return [line for line in conn.iterdump() if line.startswith("INSERT")]
+        # Without the word index, which the same open adds and fills from these rows.
+        return [
+            line
+            for line in conn.iterdump()
+            if line.startswith("INSERT")
+            and not line.startswith(('INSERT INTO "work_item_search', "INSERT INTO sqlite_master"))
+        ]
 
     def snapshots(self) -> list[Path]:
         return sorted((self.root / "backups").glob("*-preschema14-*.sqlite3"))

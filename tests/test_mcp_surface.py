@@ -2217,6 +2217,8 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
                         "title",
                         "kind",
                         "priority",
+                        # Every creation names the open items reading like it.
+                        "similar",
                     },
                     set(answer),
                 )

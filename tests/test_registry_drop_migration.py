@@ -22,6 +22,7 @@ from server.planning import service as planning
 from server.planning import store as planning_store
 from server.platform import migrations
 from tests import registry_rows, schema8
+from tests.test_word_index_migration import WORD_TABLES
 
 #: What schema 9 no longer has: the registry's tables, the module rows with
 #: their audit, and the integration switches. Stated here rather than read from
@@ -66,6 +67,8 @@ ADDED = {
     "quota_samples",
     "quota_alerts",
     "quota_settings",
+    # The word index, which raises no schema.
+    *WORD_TABLES,
 }
 #: When the schema-8 build wrote the rows below.
 CREATED_AT = "2026-08-09T16:50:36Z"

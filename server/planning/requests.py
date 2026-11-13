@@ -7,7 +7,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 
-from . import calls, model, read_model, request_model, service
+from . import calls, model, read_model, request_model, service, words
 
 #: How many questions a read of one item carries; `questions.total` says the rest.
 ITEM_QUESTIONS = 5
@@ -472,6 +472,7 @@ def create(
                 "a request requires a live work item, live execution and future deadline"
             )
         _event(conn, item["work_item_id"], "request_created", identity, author)
+    words.bring_current(conn)
     return get(conn, identity)
 
 
@@ -545,6 +546,7 @@ def create_list(
             ),
         )
         _event(conn, work_item_id, "request_created", identity, author)
+    words.bring_current(conn)
     return identity
 
 
@@ -592,6 +594,7 @@ def resolve(
         if changed.rowcount != 1:
             raise model.WorkflowGuardError("request is no longer pending")
         _event(conn, row["work_item_id"], f"request_{status}", identity, author)
+    words.bring_current(conn)
     return get(conn, identity)
 
 
@@ -672,6 +675,7 @@ def change(
         if changed.rowcount != 1:  # pragma: no cover - the row was read under the write lock
             raise model.WorkflowGuardError("only an answered question's answer can be changed")
         _event(conn, row["work_item_id"], "request_changed", row["request_id"], author)
+    words.bring_current(conn)
     return get(conn, row["request_id"])
 
 

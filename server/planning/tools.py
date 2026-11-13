@@ -29,6 +29,7 @@ from . import (
     request_model,
     requests,
     service,
+    words,
 )
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
@@ -319,7 +320,11 @@ TOOLS = [
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as its single tool does. A refused step creates nothing and names the"
         " step and the refusal's code. With any of them, the answer adds applied,"
-        " what each changed.",
+        " what each changed. The answer's similar names up to three open items of the"
+        " space whose title or description share the new title's words, best first,"
+        " each by reference and title: read them, and merge the new item into one that"
+        " is the same change. A hint, not a check: nothing is refused on it, and an"
+        " empty list does not prove there is no duplicate.",
         WRITES,
         {
             "space": _SPACE,
@@ -502,13 +507,16 @@ TOOLS = [
     _tool(
         "search_work_items",
         "Search work items",
-        "Match a phrase against titles, descriptions and closing summaries. A query that"
-        " is exactly a reference, such as MAIN-12 in any case, answers that item first;"
-        " a number alone, such as 12, answers the item of that number first in each space."
-        " Comments and questions count too, a question's prompt, field and option text and"
-        " its answer and note."
-        " One compact row per item, with the matching comment line or question when that is"
-        " what matched."
+        "Find the items holding every word of the query, in any order and in any of their"
+        " title, description, labels, summary, comments and questions (a question's prompt,"
+        " field and option text and its answer and note), best match first, the title"
+        " weighing most. Each word matches by its first five letters, so searching finds"
+        " search; two or three telling words find more than a sentence. A query that is"
+        " exactly a reference, such as MAIN-12 in any case, is read as one phrase and"
+        " answers that item first; a number alone, such as 12, answers the item of that"
+        " number first in each space."
+        " One compact row per item, with the comment line or question holding the words"
+        " when that is where they are."
         f" A page holds at most {service.MAX_SEARCH_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -1325,6 +1333,25 @@ def _acknowledged(
     return run
 
 
+def _with_similar(
+    write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A creation that also names the open items reading most like the new one.
+
+    Read after the write, so the links the same call made are known and left out
+    (`words.similar`). The HTTP boundary answers without it: the hint is for an
+    agent that has just filed an item and may have filed it twice.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        answer = write(conn, arguments)
+        if isinstance(answer, dict) and isinstance(answer.get("work_item_id"), str):
+            answer["similar"] = words.similar(conn, answer["work_item_id"])
+        return answer
+
+    return run
+
+
 def _told(
     write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
 ) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
@@ -1607,7 +1634,9 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "list_planning_spaces": _get("/api/planning/spaces"),
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
-    "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
+    "create_work_item": _with_similar(
+        _acknowledged("/api/planning/work-items", acknowledgements.created)
+    ),
     "get_work_item": _work_item,
     "read_work_item_image": _image,
     "list_work_items": _listing(

@@ -91,7 +91,7 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
 | `update_work_item` | `updated`, the names of the fields it edited; `mentions` when its description named other items |
 | `transition_work_item` | `released`, the holder a close released (see [A close ends the claims](#a-close-ends-the-claims)); `warnings` and `overridden`; each when there is one |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
@@ -135,11 +135,21 @@ answers with the full item.
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
 reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 `summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
-A search whose query is exactly a work-item reference -- `MAIN-12`, in any
-case, with surrounding spaces ignored -- answers that item first; every other
-match keeps its order, most recently changed first. A query that is a number
-alone -- `12` -- does the same for the item numbered 12: in a search scoped to
-a space that is one item, and without a space it is each space's item 12.
+A search reads its query as words: an item matches when its title, description,
+labels, source, summary, comments, decisions or questions hold every word, in
+any order and across fields, each word matched by its first five letters as a
+prefix. Words such as `the` or `and` are left out of a query that has others.
+The best match comes first, the title weighing three times the rest, and a tie
+goes to the most recently changed item. `comment_hit`, `question_hit` and
+`summary_hit` then name the newest comment, decision or question holding every
+word, and whether the summary does. A search whose query is exactly a work-item
+reference -- `MAIN-12`, in any case, with surrounding spaces ignored -- is read
+as one phrase, as every query was before words: it answers that item first, and
+every other match keeps its order, most recently changed first. A query that is
+a number alone -- `12` -- does the same for the item numbered 12: in a search
+scoped to a space that is one item, and without a space it is each space's item
+12. A store whose word index cannot be read -- a SQLite without FTS5, or an
+attached store an earlier build wrote -- reads every query as one phrase.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
