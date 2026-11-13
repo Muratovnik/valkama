@@ -7,6 +7,8 @@
  * Each surface chose its headings' sizes on its own, and a drawer set its sections a step
  * smaller than a page: a card's section stood at a group's 15px with its day groups at 15px
  * under it, and in Diagnostics «Needs attention» stood at the 16px of the section over it.
+ * Where the context bar stacks its controls under the module's name, the name stepped down to
+ * a section's 16px, the size of the first section under it.
  *
  * Memory has no screen of its own (its address opens Work); what it shows a person is the
  * card's Memory tab, measured here with the card.
@@ -108,6 +110,16 @@ test('the board names its module and its columns each at their step', async ({ p
     moduleName,
     ['a column head', '.work-item-column .column-name .state-label', 'label'],
   ])
+})
+
+test('the module name keeps its step where the context bar stacks its controls', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installBackend(page)
+  await page.goto(boardRoute())
+  await expect(page.locator('.work-item-board [data-reference]').first()).toBeVisible()
+  await expectScale(page, 'the board at 390px', [moduleName])
 })
 
 test("a card's sections, their groups and its Memory tab stand under the card's name", async ({
