@@ -4,17 +4,19 @@
  * Analytics page. The oracle is the requirement: the module stays the one on show, its address
  * keeps its view and names the card as the board's address does, so Back closes it, and closing it
  * gives the module back as it was left — its section and where it was scrolled to. A modified
- * press on the link is still the link's. Each run prints what it measured.
+ * press on the link is still the link's. A card whose space cannot be read says so in the board's
+ * words and still edits what needs no space. Each run prints what it measured.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
-import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
+import { planningSpaceEntity, planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { pageAt, record, serve, serveTask } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
-import { globalScope, workItem, workItemRef } from './planningFixtures.ts'
+import type { BackendOptions } from './backend.ts'
+import { globalScope, projectScope, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
@@ -39,8 +41,8 @@ async function settingsShown(page: Page) {
 }
 
 /** Settings at a height its frame scrolls in, scrolled down, with one question waiting. */
-async function openSettings(page: Page) {
-  await installBackend(page)
+async function openSettings(page: Page, backend: BackendOptions = {}) {
+  await installBackend(page, backend)
   await installQuestions(page, [asked()])
   await page.setViewportSize({ width: 1280, height: 480 })
   await page.goto(SETTINGS)
@@ -84,6 +86,8 @@ test('a task link pressed in a question over Settings opens its card over Settin
   await expect(dialog).toBeHidden()
   const { drawer, opened } = await expectCardOver(page, 'settings')
   expect(opened.state).toEqual({ section: 'general' })
+  // With its space read, the state is the menu of where the item can go.
+  await expect(drawer.locator('.card-state .choice-trigger')).toHaveCount(1)
   await expect(page.locator('.settings-page')).toBeVisible()
   const under = await settingsShown(page)
 
@@ -95,6 +99,72 @@ test('a task link pressed in a question over Settings opens its card over Settin
   expect(under).toEqual(before)
   expect(after).toEqual(before)
   expect(after.section).toBe('General')
+})
+
+/** The words an element shows, without the space around them. */
+async function words(element: Locator) {
+  const text = await element.textContent()
+  return text?.trim() ?? ''
+}
+
+/** Every read of the space fails, as a server that cannot read it answers; the card's own read stands. */
+async function failSpaceRead(page: Page) {
+  await page.route('**/api/planning?*', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+  )
+}
+
+test('a card over Settings whose space cannot be read says so as the board does, and its priority still edits', async ({
+  page,
+}, info) => {
+  // The board's own words for the same failed read, which the card over a page must say too.
+  await installBackend(page)
+  await failSpaceRead(page)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningSpaceEntity(spaceRef),
+    }),
+  )
+  const boardPanel = page.locator('.platform-state-panel .platform-state-reason')
+  await expect(boardPanel).toBeVisible()
+  const boardSays = await words(boardPanel)
+  expect(boardSays).not.toBe('')
+
+  // The store's record of the task, which the card reads and writes: a field written is what
+  // the next read answers.
+  const held = { priority: workItem.priority as string, revision: 3 }
+  await openSettings(page, { card: (read) => ({ ...read, ...held }) })
+  await failSpaceRead(page)
+  const writes: Record<string, unknown>[] = []
+  await page.route('**/api/planning/work-item/update', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    writes.push(body)
+    if (typeof body.priority === 'string') held.priority = body.priority
+    held.revision += 1
+    await route.fulfill({ json: { ...workItem, ...held } })
+  })
+  const { link } = await questionLink(page)
+  await link.click()
+  const { drawer } = await expectCardOver(page, 'settings')
+
+  // The shell's notice says it, in the words the board says it in.
+  const notice = page.locator('.notice .notice-message')
+  await expect(notice).toBeVisible()
+  const noticeSays = await words(notice)
+  await record(info, 'space unread over settings', { boardSays, noticeSays })
+  expect(noticeSays).toBe(boardSays)
+  // The state is shown, not offered as a menu with nowhere to go.
+  await expect(drawer.locator('.card-state')).toBeVisible()
+  await expect(drawer.locator('.card-state .choice-trigger')).toHaveCount(0)
+
+  // A field the space is not needed for still edits, and the write reaches the store.
+  await drawer.locator('.card-priority .choice-trigger').click()
+  await page.getByRole('option', { name: /^Urgent/u }).click()
+  await expect.poll(() => writes.length).toBe(1)
+  expect(writes[0]).toMatchObject({ id: workItemRef.reference, priority: 'urgent' })
+  await expect(drawer.locator('.card-priority')).toContainText('Urgent')
 })
 
 test('a modified press on a task link in a question over Settings stays a link', async ({
