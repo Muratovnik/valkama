@@ -20,6 +20,7 @@ the format it was written in, and the temporary directory a fixed path.
 
 from __future__ import annotations
 
+import ast
 import http.client
 import json
 import os
@@ -36,7 +37,7 @@ from urllib.parse import urlencode
 
 from server import http_surface, mcp_surface, session_open, sessions, store
 from server.hooks import ingest, normalize
-from server.ops import url_schemes
+from server.ops import doctor, url_schemes
 from server.planning import calls, read_model, service, subscriptions
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
@@ -633,7 +634,37 @@ class _Scenario:
             **self.open_plans(),
             "live-frame": self.live_frame(),
             **self.usage(),
+            "doctor-vocabulary": {"quota": _doctor_quota_codes()},
         }
+
+
+_QUOTA_CHECK = re.compile(r"quota-(?:statusline|mod|poll)")
+_QUOTA_CODE = re.compile(r"quota-(?:statusline|mod|poll)(?:-[a-z]+)+")
+
+
+def _doctor_quota_codes() -> list[str]:
+    """Every presentation code a quota check of `valkama doctor` reports, read from its source.
+
+    Each code is written out whole in `server/ops/doctor.py`, in its check or in the table
+    of the poll's states, and the web holds its texts to this list. A `quota-` string there
+    that is neither a check id nor a whole code is the start of a code built at run time,
+    which a reading of the source would miss, so it stops the generation instead.
+    """
+
+    tree = ast.parse(Path(doctor.__file__).read_text(encoding="utf-8"))
+    texts = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.startswith("quota-")
+    }
+    built = sorted(
+        text for text in texts if not (_QUOTA_CHECK.fullmatch(text) or _QUOTA_CODE.fullmatch(text))
+    )
+    if built:
+        raise ValueError(f"doctor.py builds a quota presentation code at run time: {built}")
+    return sorted(text for text in texts if _QUOTA_CODE.fullmatch(text))
 
 
 def _everything_but_cursor() -> url_schemes.Installed:

@@ -1373,31 +1373,43 @@ def _listener_check(port: int, identity: Mapping[str, object]) -> dict:
     )
 
 
-#: What `valkama doctor` says for each state the quota poll writes, and what to do about it.
-_QUOTA_POLL_STATES: dict[str, tuple[str, str, str]] = {
-    quota_poll.WAITING: ("ok", "switched on, waiting for its first request", ""),
-    quota_poll.OK: ("ok", "working", ""),
+#: What `valkama doctor` says for each state the quota poll writes: the presentation code,
+#: the level, the finding and what to do about it. Each code is written out whole, because
+#: the web's texts are held to the codes this file's source names.
+_QUOTA_POLL_STATES: dict[str, tuple[str, str, str, str]] = {
+    quota_poll.WAITING: (
+        "quota-poll-waiting",
+        "ok",
+        "switched on, waiting for its first request",
+        "",
+    ),
+    quota_poll.OK: ("quota-poll-ok", "ok", "working", ""),
     quota_poll.RATE_LIMITED: (
+        "quota-poll-rate-limited",
         "warn",
         "paused after HTTP 429 from the usage endpoint",
         "Nothing to do: it asks again by itself, waiting longer after each refusal.",
     ),
     quota_poll.REFUSED: (
+        "quota-poll-refused",
         "warn",
         "sign-in refused: the usage endpoint turned the Claude Code sign-in away",
         "Sign in to Claude Code again (/login); the poll tries a new sign-in within a minute.",
     ),
     quota_poll.EXPIRED: (
+        "quota-poll-expired",
         "warn",
         "sign-in refused: the Claude Code sign-in has expired",
         "Use Claude Code once so it renews its sign-in; the poll picks it up within a minute.",
     ),
     quota_poll.NO_LOGIN: (
+        "quota-poll-no-login",
         "warn",
         "no Claude Code sign-in on this machine",
         "Sign in to Claude Code (/login), or switch the poll off in Settings.",
     ),
     quota_poll.FAILING: (
+        "quota-poll-failing",
         "warn",
         "the usage endpoint did not answer with a reading",
         "It retries by itself. If this lasts, the undocumented endpoint may have changed:"
@@ -1457,7 +1469,7 @@ def _quota_poll_checks() -> list[dict]:
                 presentation_code="quota-poll-not-running",
             )
         ]
-    level, said, fix = _QUOTA_POLL_STATES[status.state]
+    code, level, said, fix = _QUOTA_POLL_STATES[status.state]
     facts = [said, f"since {status.at}"]
     if status.last_reading_at is not None:
         facts.append(f"last reading {status.last_reading_at}")
@@ -1472,7 +1484,7 @@ def _quota_poll_checks() -> list[dict]:
             level,
             "; ".join(facts),
             fix,
-            presentation_code=f"quota-poll-{status.state.replace('_', '-')}",
+            presentation_code=code,
             parameters={
                 "state": status.state,
                 "since": status.at,
