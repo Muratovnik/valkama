@@ -38,6 +38,7 @@ import { refusedIn } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
+import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import FieldError from '@/shared/ui/FieldError.vue'
 
@@ -71,7 +72,7 @@ const emit = defineEmits<{
 const measure = defineModel<Measure>('measure', { required: true })
 
 /** The dimension the answer was read by, which the chart stacks: the overview's tasks. */
-const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
+const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')
 
 const cards = computed<OverviewCard[]>(() =>
   OVERVIEW_CARDS.filter((card) => !(props.projectScoped && card === 'project')),

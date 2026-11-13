@@ -25,11 +25,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 import sys
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib import error, request
 
@@ -40,6 +41,8 @@ from ..hooks import ingest, spool
 from ..memory import service as memory_service
 from ..platform import installed
 from ..projects import project_registry
+from ..quota import poll as quota_poll
+from ..quota import settings as quota_settings
 from ..telemetry import journal as telemetry_journal
 from ..telemetry import usage_store
 from ..telemetry.projections import JOURNAL_ADAPTERS
@@ -96,7 +99,7 @@ def _check(
 LEVELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("installation", "Installation", ("configuration", "store", "runtime", "skills")),
     ("projects", "Projects", ("projects",)),
-    ("capabilities", "Capabilities", ("drivers",)),
+    ("capabilities", "Capabilities", ("drivers", "quota", "quota-poll")),
     ("connections", "Connections", ("adapters",)),
 )
 
@@ -114,6 +117,8 @@ def diagnose(*, port: int = 8642, probe: bool = True) -> dict:
         "runtime": _guarded("runtime", "Runtime", lambda: _runtime_checks(port, probe=probe)),
         "skills": _guarded("skills", "Valkama skill", _skill_checks),
         "drivers": _guarded("drivers", "Execution drivers", _driver_checks),
+        "quota": _guarded("quota", "Quota sources", _quota_source_checks),
+        "quota-poll": _guarded("quota-poll", "Quota poll", _quota_poll_checks),
         "adapters": _guarded("adapters", "Adapters", _adapter_checks),
         "projects": _guarded("projects", "Projects", _project_checks),
     }
@@ -863,6 +868,256 @@ _SKILL_FINDINGS = {
 }
 
 
+#: How long a registered status line, or an enabled mod, may go without a reading before
+#: the doctor calls it silent. A reading is kept only when a value changed, and a session
+#: that works changes its five-hour share with every response.
+STATUSLINE_SILENT_DAYS = 3
+#: `valkama statusline` in a status line command, however the command names Valkama:
+#: the stable command, the launcher's shim or a checkout's entry point.
+_STATUSLINE_COMMAND = re.compile(
+    r"""(?:^|[\s/\\'"])(?:valkama|valkama\.cmd|valkama\.py|valkama-launcher\.py)['"]?"""
+    r"\s+statusline(?=\s|$)",
+    re.IGNORECASE,
+)
+
+
+def status_line_command(settings: Path) -> str | None:
+    """The status line command a Claude Code settings file names, or None.
+
+    Read-only. A missing file names none; one that cannot be read or is not a JSON
+    object raises `OSError` or `ValueError`.
+    """
+
+    try:
+        text = settings.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    document = json.loads(text)
+    if not isinstance(document, dict):
+        raise ValueError("the settings file is not a JSON object")
+    status_line = document.get("statusLine")
+    if not isinstance(status_line, dict) or status_line.get("type") != "command":
+        return None
+    command = status_line.get("command")
+    return command if isinstance(command, str) else None
+
+
+def _last_reading(path: str, source: str) -> str | None:
+    """When the latest sample of a live quota source was read, or None."""
+
+    if not os.path.isfile(path):
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT MAX(at) FROM quota_samples WHERE source = ?", (source,)
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row and isinstance(row[0], str) else None
+
+
+def _silent(last: str | None) -> bool:
+    since = datetime.now(UTC) - timedelta(days=STATUSLINE_SILENT_DAYS)
+    return last is None or last < since.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _quota_source_checks() -> list[dict]:
+    """Whether each live source feeds the quota: the status line and the mod."""
+
+    return [_status_line_source_check(), _mod_source_check()]
+
+
+def _status_line_source_check() -> dict:
+    """Whether Claude Code's status line feeds the quota: off, silent or working."""
+
+    settings = skills.client_home("claude") / "settings.json"
+    scope = (
+        f" Only {settings} is read: sessions under WSL or under another CLAUDE_CONFIG_DIR"
+        " are not checked."
+    )
+    title = "Status line quota source"
+    parameters: dict[str, object] = {"settings": str(settings)}
+    try:
+        command = status_line_command(settings)
+    except (OSError, ValueError) as failure:
+        return _check(
+            "quota-statusline",
+            title,
+            "unknown",
+            f"{settings} cannot be read: {failure}.{scope}",
+            "Make the file valid JSON; Claude Code does not read it as it is either.",
+            presentation_code="quota-statusline-unreadable",
+            parameters=parameters,
+        )
+    if command is None or not _STATUSLINE_COMMAND.search(command):
+        return _check(
+            "quota-statusline",
+            title,
+            "warn",
+            "off: Claude Code's status line does not run `valkama statusline`, so no"
+            f" quota is read from it.{scope}",
+            "Make `valkama statusline` the status line command; a status line command"
+            " already set stays shown when it is passed with `--previous`.",
+            presentation_code="quota-statusline-off",
+            parameters=parameters,
+        )
+    last = _last_reading(store.db_path(), "statusline")
+    # A parameter is text, a number or a flag: the page refuses the whole report for a null.
+    parameters = {**parameters, "last": last or "", "days": STATUSLINE_SILENT_DAYS}
+    if _silent(last):
+        return _check(
+            "quota-statusline",
+            title,
+            "warn",
+            "silent: `valkama statusline` is Claude Code's status line, but no status"
+            f" line reading reached the store in {STATUSLINE_SILENT_DAYS} days"
+            f" (last: {last or 'never'}). Claude Code runs the status line only in"
+            " terminal sessions, not in the VS Code extension, and reports the quota only"
+            f" for a subscription account, after a session's first response.{scope}",
+            "Work in a Claude Code terminal session; a reading the store could not take"
+            " waits in the hook spool and arrives with the next hook event.",
+            presentation_code="quota-statusline-silent",
+            parameters=parameters,
+        )
+    return _check(
+        "quota-statusline",
+        title,
+        "ok",
+        f"working: Claude Code's status line runs `valkama statusline`; last reading {last}."
+        f"{scope}",
+        presentation_code="quota-statusline-working",
+        parameters=parameters,
+    )
+
+
+#: Valkama's Claude Code mod, `server/mod/valkama-quota`, by the name its manifest gives it.
+MOD_NAME = "valkama-quota"
+
+
+def _json_object(path: Path) -> dict | None:
+    """A client file read as a JSON object; None when it is missing.
+
+    One that cannot be read or is not a JSON object raises `OSError` or `ValueError`.
+    """
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    document = json.loads(text)
+    if not isinstance(document, dict):
+        raise ValueError(f"{path.name} is not a JSON object")
+    return document
+
+
+def _plugin_name(folder: Path) -> str | None:
+    try:
+        manifest = _json_object(folder / ".claude-plugin" / "plugin.json")
+    except (OSError, ValueError):
+        return None
+    name = manifest.get("name") if manifest else None
+    return name if isinstance(name, str) else None
+
+
+def mod_installation(home: Path) -> tuple[str, str]:
+    """Whether Claude Code loads Valkama's mod for this user: a state and how.
+
+    The state is `on`, `disabled` (installed, not enabled) or `absent`. The mod is on
+    when the user's settings enable `valkama-quota@<marketplace>` and the plugin record
+    has it installed, or when `CLAUDE_CODE_PLUGIN_DIRS` in the settings' `env` names a
+    folder that holds it. Read-only: a settings file or plugin record that cannot be
+    read raises `OSError` or `ValueError`.
+    """
+
+    settings = _json_object(home / "settings.json") or {}
+    record = _json_object(home / "plugins" / "installed_plugins.json") or {}
+    installed = record.get("plugins")
+    keys = [
+        key
+        for key, entries in (installed.items() if isinstance(installed, dict) else ())
+        if isinstance(key, str) and key.partition("@")[0] == MOD_NAME and entries
+    ]
+    enabled = settings.get("enabledPlugins")
+    for key in keys:
+        if isinstance(enabled, dict) and enabled.get(key) is True:
+            return "on", f"installed as {key} and enabled"
+    environment = settings.get("env")
+    folders = environment.get("CLAUDE_CODE_PLUGIN_DIRS") if isinstance(environment, dict) else None
+    for folder in folders.split(os.pathsep) if isinstance(folders, str) else ():
+        if folder.strip() and _plugin_name(Path(folder.strip()).expanduser()) == MOD_NAME:
+            return "on", f"loaded from {folder.strip()} by CLAUDE_CODE_PLUGIN_DIRS"
+    if keys:
+        return "disabled", f"installed as {keys[0]} but not enabled"
+    return "absent", "not installed"
+
+
+def _mod_source_check() -> dict:
+    """Whether Valkama's Claude Code mod feeds the quota: off, silent or working."""
+
+    home = skills.client_home("claude")
+    scope = (
+        f" Only {home} is read, at the user scope: a mod enabled for one project, loaded"
+        " with --plugin-dir or from a shell's CLAUDE_CODE_PLUGIN_DIRS, or under WSL or"
+        " another CLAUDE_CONFIG_DIR is not checked."
+    )
+    title = "Mod quota source"
+    parameters: dict[str, object] = {"config": str(home), "mod": MOD_NAME}
+    try:
+        state, how = mod_installation(home)
+    except (OSError, ValueError) as failure:
+        return _check(
+            "quota-mod",
+            title,
+            "unknown",
+            f"Claude Code's settings or plugin record cannot be read: {failure}.{scope}",
+            "Make the file valid JSON; Claude Code does not read it as it is either.",
+            presentation_code="quota-mod-unreadable",
+            parameters=parameters,
+        )
+    parameters = {**parameters, "state": state}
+    if state != "on":
+        return _check(
+            "quota-mod",
+            title,
+            "warn",
+            f"off: Valkama's Claude Code mod `{MOD_NAME}` is {how}, so no quota is read"
+            f" from it.{scope}",
+            "Install and enable it as the README's section on the mod says; the mod reads"
+            " the quota in every session, the VS Code extension's too.",
+            presentation_code="quota-mod-off",
+            parameters=parameters,
+        )
+    last = _last_reading(store.db_path(), "mod")
+    parameters = {**parameters, "last": last or "", "days": STATUSLINE_SILENT_DAYS}
+    if _silent(last):
+        return _check(
+            "quota-mod",
+            title,
+            "warn",
+            f"silent: Valkama's Claude Code mod is {how}, but no mod reading reached the"
+            f" store in {STATUSLINE_SILENT_DAYS} days (last: {last or 'never'}). The mod"
+            " reads the quota only for a subscription account, after a model response, and"
+            f" hands it to the managed launcher's `valkama statusline --source=mod`.{scope}",
+            "Run `valkama launcher install` if the launcher is missing or pins a release"
+            " from before the mod, and work in a Claude Code session; a reading the store"
+            " could not take waits in the hook spool.",
+            presentation_code="quota-mod-silent",
+            parameters=parameters,
+        )
+    return _check(
+        "quota-mod",
+        title,
+        "ok",
+        f"working: Valkama's Claude Code mod is {how}; last reading {last}.{scope}",
+        presentation_code="quota-mod-working",
+        parameters=parameters,
+    )
+
+
 def _skill_checks() -> list[dict]:
     """Each client's copy of the skill, for the clients this user has."""
 
@@ -1116,6 +1371,128 @@ def _listener_check(port: int, identity: Mapping[str, object]) -> dict:
         presentation_code="listener-stale",
         parameters={"port": port},
     )
+
+
+#: What `valkama doctor` says for each state the quota poll writes: the presentation code,
+#: the level, the finding and what to do about it. Each code is written out whole, because
+#: the web's texts are held to the codes this file's source names.
+_QUOTA_POLL_STATES: dict[str, tuple[str, str, str, str]] = {
+    quota_poll.WAITING: (
+        "quota-poll-waiting",
+        "ok",
+        "switched on, waiting for its first request",
+        "",
+    ),
+    quota_poll.OK: ("quota-poll-ok", "ok", "working", ""),
+    quota_poll.RATE_LIMITED: (
+        "quota-poll-rate-limited",
+        "warn",
+        "paused after HTTP 429 from the usage endpoint",
+        "Nothing to do: it asks again by itself, waiting longer after each refusal.",
+    ),
+    quota_poll.REFUSED: (
+        "quota-poll-refused",
+        "warn",
+        "sign-in refused: the usage endpoint turned the Claude Code sign-in away",
+        "Sign in to Claude Code again (/login); the poll tries a new sign-in within a minute.",
+    ),
+    quota_poll.EXPIRED: (
+        "quota-poll-expired",
+        "warn",
+        "sign-in refused: the Claude Code sign-in has expired",
+        "Use Claude Code once so it renews its sign-in; the poll picks it up within a minute.",
+    ),
+    quota_poll.NO_LOGIN: (
+        "quota-poll-no-login",
+        "warn",
+        "no Claude Code sign-in on this machine",
+        "Sign in to Claude Code (/login), or switch the poll off in Settings.",
+    ),
+    quota_poll.FAILING: (
+        "quota-poll-failing",
+        "warn",
+        "the usage endpoint did not answer with a reading",
+        "It retries by itself. If this lasts, the undocumented endpoint may have changed:"
+        " switch the poll off in Settings.",
+    ),
+}
+
+
+def _quota_poll_checks() -> list[dict]:
+    """Whether the quota poll is off, working, paused or refused, from its setting and status.
+
+    The setting is read from the store and the state from the file the listener's poll
+    writes beside it; neither holds a token or names the account.
+    """
+
+    path = store.db_path()
+    title = "Quota poll"
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            on = quota_settings.read(conn)["poll"]
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return [
+            _check(
+                "quota-poll",
+                title,
+                "unknown",
+                f"its setting could not be read: {failure}",
+                "Open the store once with the current build; it adds the settings table.",
+                presentation_code="quota-poll-unreadable",
+            )
+        ]
+    if not on:
+        return [
+            _check(
+                "quota-poll",
+                title,
+                "ok",
+                "off: the usage endpoint is not asked",
+                "To read the quota from the usage endpoint, switch the poll on in Settings."
+                " The endpoint is undocumented, and Anthropic's terms do not explicitly"
+                " permit this use.",
+                presentation_code="quota-poll-off",
+            )
+        ]
+    status = quota_poll.read_status(path)
+    if status is None or status.state == quota_poll.STOPPED:
+        return [
+            _check(
+                "quota-poll",
+                title,
+                "unknown",
+                "switched on, but no listener is polling",
+                "Start the listener (valkama serve); it starts the poll when it starts.",
+                presentation_code="quota-poll-not-running",
+            )
+        ]
+    code, level, said, fix = _QUOTA_POLL_STATES[status.state]
+    facts = [said, f"since {status.at}"]
+    if status.last_reading_at is not None:
+        facts.append(f"last reading {status.last_reading_at}")
+    if status.next_at is not None:
+        facts.append(f"next request {status.next_at}")
+    if status.http_status is not None and status.state != quota_poll.OK:
+        facts.append(f"HTTP {status.http_status}")
+    return [
+        _check(
+            "quota-poll",
+            title,
+            level,
+            "; ".join(facts),
+            fix,
+            presentation_code=code,
+            parameters={
+                "state": status.state,
+                "since": status.at,
+                "next": status.next_at or "",
+                "last": status.last_reading_at or "",
+            },
+        )
+    ]
 
 
 def _driver_checks() -> list[dict]:

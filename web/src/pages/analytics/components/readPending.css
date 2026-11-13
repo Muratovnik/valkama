@@ -2,7 +2,8 @@
  * The last view's answer while a new period or filter is read (`useReadStanding`): drawn as it
  * stood and dimmed, in its own box, so nothing moves and no mark takes room. This is the one place
  * that says how, read by each host as its own scoped style — the overview (`OverviewPanel`), a
- * dimension's section (`DimensionPanel`) and a tile of the rail (`RailTile`) — which writes
+ * dimension's section (`DimensionPanel`), a tile of the rail (`RailTile`) and what used a quota
+ * window (`QuotaWindowSpend`) — which writes
  * `read-pending` on its root while dimmed.
  *
  * The dim follows a change the reader made, so it eases in; the answer that ends it is drawn at

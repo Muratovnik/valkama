@@ -168,6 +168,62 @@ describe('InstallationHealth resource state', () => {
     )
   })
 
+  it.each([
+    {
+      locale: 'en' as const,
+      titles: ['Status line sends no quota', 'The quota mod is off'],
+      detail: 'in the last 3 days',
+      fix: '/plugin install valkama-quota',
+    },
+    {
+      locale: 'ru' as const,
+      titles: ['Строка состояния не присылает квоту', 'Мод квоты выключен'],
+      detail: 'за последние 3 дн.',
+      fix: '/plugin install valkama-quota',
+    },
+  ])(
+    'says what a quota source finding means in $locale',
+    async ({ locale, titles, detail, fix }) => {
+      const data = structuredClone(report)
+      data.status = 'warn'
+      data.summary = { fail: 0, ok: 0, unknown: 0, warn: 2 }
+      data.levels[0] = { id: 'capabilities', status: 'warn', title: 'Capabilities', checks: [] }
+      data.levels[0].checks = [
+        {
+          id: 'quota-statusline',
+          title: 'Status line quota source',
+          status: 'warn',
+          detail: 'silent: `valkama statusline` is Claude Code status line',
+          fix: 'Work in a Claude Code terminal session',
+          presentation: {
+            code: 'quota-statusline-silent',
+            parameters: { settings: 'C:\\private\\settings.json', last: '', days: 3 },
+          },
+        },
+        {
+          id: 'quota-mod',
+          title: 'Mod quota source',
+          status: 'warn',
+          detail: 'off: the mod is not installed',
+          fix: 'Install and enable it',
+          presentation: {
+            code: 'quota-mod-off',
+            parameters: { config: 'C:\\private\\.claude', mod: 'valkama-quota', state: 'absent' },
+          },
+        },
+      ]
+      vi.mocked(fetchDoctorReport).mockResolvedValueOnce(data)
+      const wrapper = mountHealth(locale)
+      await flushPromises()
+      const findings = wrapper.findAll('.health-finding')
+      expect(findings.map((finding) => finding.get('.health-finding-state').text())).toEqual(titles)
+      expect(findings[0].get('.health-detail').text()).toContain(detail)
+      expect(findings[1].get('.health-action').text()).toContain(fix)
+      expect(wrapper.text()).not.toContain(messages[locale].health.findingFallback.detail)
+      expect(wrapper.text()).not.toContain('C:\\private')
+    },
+  )
+
   it('sends the reason a refused report is rejected to the developer console', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const refused = {

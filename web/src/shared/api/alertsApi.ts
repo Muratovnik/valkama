@@ -17,7 +17,7 @@ const TEST_DEADLINE_MS = 20_000
 /** A presence report is worth nothing late, and must not hold a connection while it waits. */
 const PRESENCE_DEADLINE_MS = 5000
 
-export const ALERT_EVENTS = ['question', 'review', 'launchFailed'] as const
+export const ALERT_EVENTS = ['question', 'review', 'launchFailed', 'quota'] as const
 export const ALERT_CONTENTS = ['generic', 'title', 'prompt'] as const
 
 class AlertsRequestError extends Error {
@@ -45,6 +45,7 @@ const settingsSchema = strictObject({
     question: z.boolean(),
     review: z.boolean(),
     launchFailed: z.boolean(),
+    quota: z.boolean(),
   }),
   content: enumField(ALERT_CONTENTS),
   locale: enumField(['ru', 'en'] as const),

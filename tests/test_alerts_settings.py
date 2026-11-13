@@ -23,7 +23,7 @@ from server.alerts import settings
 
 DEFAULTS_RU = {
     "enabled": True,
-    "events": {"question": True, "review": True, "launchFailed": False},
+    "events": {"question": True, "review": True, "launchFailed": False, "quota": True},
     "content": "title",
     "locale": "ru",
 }
@@ -67,7 +67,7 @@ class AlertSettingsStoreTests(unittest.TestCase):
     def test_a_write_is_read_back_by_the_same_connection(self) -> None:
         wanted = {
             "enabled": False,
-            "events": {"question": True, "review": False, "launchFailed": True},
+            "events": {"question": True, "review": False, "launchFailed": True, "quota": False},
             "content": "prompt",
             "locale": "en",
         }
@@ -122,7 +122,8 @@ class AlertSettingsValidationTests(unittest.TestCase):
     def test_a_partial_events_object_keeps_the_other_defaults(self) -> None:
         result = settings.validate({"events": {"review": False}}, language=russian)
         self.assertEqual(
-            {"question": True, "review": False, "launchFailed": False}, result["events"]
+            {"question": True, "review": False, "launchFailed": False, "quota": True},
+            result["events"],
         )
 
     def test_every_content_and_locale_the_screen_offers_is_accepted(self) -> None:
@@ -156,6 +157,7 @@ class AlertSettingsValidationTests(unittest.TestCase):
         self.assertTrue(settings.wants(on, "question"))
         self.assertTrue(settings.wants(on, "review"))
         self.assertFalse(settings.wants(on, "launchFailed"))
+        self.assertTrue(settings.wants(on, "quota"))
         for event in settings.EVENTS:
             with self.subTest(event=event):
                 self.assertFalse(settings.wants(off, event))

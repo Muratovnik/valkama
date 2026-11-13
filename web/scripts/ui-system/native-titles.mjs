@@ -191,6 +191,14 @@ export const DETAIL_TOOLTIPS = new Map([
     'the whole id of the first value a tile names by the start of it, an account; while the name is cut, it comes first, whole',
   ],
   [
+    'pages/analytics/components/RailTile.vue <WindowBar> v-tooltip.detail="tile.meter.label"',
+    'where steady use from the window start would stand now, which a quota tile draws only as a tick on its bar, with the share and the state the tile says',
+  ],
+  [
+    'pages/analytics/components/QuotaAccount.vue <span> v-tooltip.detail="{ text: detail, words: name }"',
+    'the whole id of the account and of its organization, where the quota panel names the account by the name its owner gave it or the start of its id; while the name is cut, it comes first, whole',
+  ],
+  [
     'pages/analytics/components/SpendingTable.vue <button> v-tooltip.detail="{ text: column.detail, words: column.text }"',
     "what a crossed column's heading names by a name alone: the client and the start of a session's id, an account's whole id; while the heading is cut, it comes first, whole",
   ],

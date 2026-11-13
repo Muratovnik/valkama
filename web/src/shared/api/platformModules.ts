@@ -144,8 +144,8 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     icon_key: 'chart-no-axes-combined',
     // The page's view (`shared/api/analyticsAddress.ts`).
     allowed_keys: ['period', 'from', 'to', 'by', 'measure', 'filters', 'open', 'across'],
-    readGlobal: ['analytics.usage', 'analytics.uses'],
-    readProject: ['analytics.usage', 'analytics.uses'],
+    readGlobal: ['analytics.usage', 'analytics.quota', 'analytics.uses'],
+    readProject: ['analytics.usage', 'analytics.quota', 'analytics.uses'],
     actionGlobal: ['module.analytics.report-use'],
     actionProject: ['module.analytics.report-use'],
     required_read_models: ['usage'],

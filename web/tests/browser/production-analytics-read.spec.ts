@@ -15,7 +15,8 @@ import type { Page } from '@playwright/test'
 
 import { serveUsage, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { LONG_TAIL, openReport, pageAt, record } from './analyticsPage.ts'
+import { quotaAt } from '../fixtures/quota.ts'
+import { LONG_TAIL, openReport, pageAt, record, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { at, NOW as LIVE_NOW, serveLive, settled, watchPage } from './liveDouble.ts'
 import { test } from './test.ts'
@@ -67,6 +68,7 @@ async function serveSwitched(page: Page, world: readonly TimedStretch[]) {
   }
   await page.clock.setSystemTime(NOW)
   await installBackend(page)
+  await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     const query = new URL(route.request().url()).searchParams
     if (answer.failing) {

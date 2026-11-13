@@ -92,12 +92,17 @@ SCHEMA10_TABLES = {
     "usage_runs",
     "usage_segments",
     "usage_requests",
-    # Schema 12's, 13's, 14's and 16's.
+    # Schema 12's, 13's, 14's, 16's and 17's.
     "usage_yields",
     "pinned_work_items",
     "work_item_subscriptions",
     "work_item_images",
     "analytics_surface_uses",
+    "quota_account_names",
+    "quota_accounts",
+    "quota_samples",
+    "quota_alerts",
+    "quota_settings",
 }
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",

@@ -45,6 +45,7 @@ from . import (
 )
 from .federation import federated_spaces
 from .hooks import ingest
+from .hooks.statusline import INTERFACE as STATUSLINE_INTERFACE
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup, skills
@@ -54,6 +55,7 @@ from .planning import views as planning_views
 from .planning.display_links import HOOK_PATH
 from .platform import installed
 from .projects import registry_owner, scopes
+from .quota import history as quota_history
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
 from .store_identity import metadata as store_metadata
@@ -194,6 +196,10 @@ def capabilities_main() -> None:
                 },
             },
             "desktop": {"platform": "windows"},
+            # `valkama statusline`, dispatched before the parser like `hook`. What registers
+            # it as Claude Code's status line checks this first: a release without the
+            # receiver would take the user's status line and show nothing in its place.
+            "statusline": {"command": "statusline", "version": STATUSLINE_INTERFACE},
         },
         "commands": [
             "capabilities",
@@ -577,6 +583,20 @@ def _usage_rebuild_main(parser: argparse.ArgumentParser, options: argparse.Names
         raise SystemExit(1)
 
 
+def _quota_import_main(options: argparse.Namespace) -> None:
+    """Import quota samples from a file and print what was kept; a refusal exits non-zero."""
+
+    try:
+        with (
+            open(options.source, encoding="utf-8") as lines,
+            contextlib.closing(connect()) as conn,
+        ):
+            report = quota_history.import_lines(conn, lines)
+    except (OSError, UnicodeDecodeError, ValueError, sqlite3.Error) as error:
+        raise SystemExit(f"quota import: {error}") from error
+    print(json.dumps(report.as_dict(), ensure_ascii=False, indent=1))
+
+
 def _released_main(options: argparse.Namespace) -> None:
     """Print the open items a release range took commits from; a refusal exits non-zero."""
 
@@ -807,6 +827,14 @@ def main(argv: list[str] | None = None) -> None:
         help="report what a rebuild would change; rebuilds nothing",
     )
     rebuild_cmd.add_argument("--json", action="store_true")
+    quota_cmd = commands.add_parser("quota", help="act on the subscription quota samples")
+    quota_sub = quota_cmd.add_subparsers(dest="quota_command", required=True)
+    quota_import_cmd = quota_sub.add_parser(
+        "import",
+        help="import samples from a JSON-lines file, one window a line; importing again"
+        " keeps nothing twice",
+    )
+    quota_import_cmd.add_argument("--source", required=True, metavar="FILE")
     options = parser.parse_args(argv)
     if options.command == "serve" and options.on_demand:
         # `valkama.py` answers the plain spelling before it imports this module.
@@ -908,6 +936,8 @@ def main(argv: list[str] | None = None) -> None:
         print(transcripts.render_purge(purged))
     elif options.command == "usage":
         _usage_rebuild_main(parser, options)
+    elif options.command == "quota":
+        _quota_import_main(options)
     else:
         mcp_main()
 

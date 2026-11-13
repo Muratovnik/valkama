@@ -1,0 +1,226 @@
+/**
+ * The subscription quota on the Analytics page: its two tiles on the rail and its panel. A share
+ * of a window is always one account's and one window's: no message adds two of them, and none
+ * names money beside a share. A window with no source, a silent one and a fresh 0 % each have
+ * words of their own. `analyticsMessages` holds these under `analytics.quota`.
+ *
+ * What used a window (`spent`) is the one place money is named, apart from the window's share: it
+ * says it is the API price estimate and not quota points, which work it leaves out, and work its
+ * organization did with no account known in words of its own, never counted to the account.
+ */
+export const analyticsQuotaMessages = {
+  en: {
+    sections: {
+      quota_five_hour: 'Five hours',
+      quota_week: 'Week',
+    },
+    windows: {
+      five_hour: 'Five hours',
+      week: 'Week',
+      week_model: 'Week, {model}',
+      extra_usage: 'Usage credits',
+      spend_limit: 'Spend limit',
+    },
+    states: {
+      fresh: 'fresh',
+      silent: 'silent',
+    },
+    sources: {
+      statusline: 'the status line',
+      mod: 'the mod',
+      poll: 'the poll',
+      import: 'an import',
+    },
+    tile: {
+      noSource: 'No source',
+      noAccount: 'No account read',
+      noWindow: 'No reading',
+      reset: 'Reset since read',
+      detail: '{window} of {account}',
+    },
+    used: '{share} used',
+    bar: '{window}: {share} used, steady use {even}, {state}',
+    barNoPace: '{window}: {share} used, {state}',
+    even: 'Steady use would be at {share} now',
+    noPace: 'No pace until the window has a reset',
+    resets: 'Resets {at}, in {in}',
+    reset: 'Reset at {at}, since the last reading',
+    noReset: 'No reset named yet',
+    forecast: {
+      lasts: 'Lasts to the reset',
+      runs_out: 'Runs out at {at}',
+      spent: 'Spent',
+      range: 'By the reset: {low} to {high}',
+      none: 'Too few readings for a forecast',
+    },
+    read: 'Read {ago} from {source}',
+    silentSince: 'No change since {at}, {ago}, from {source}',
+    other: '{window}: {state}, read {ago} from {source}',
+    panel: {
+      heading: 'Each account',
+      intro:
+        'Where each account’s quota stands now, read {ago}. The period and filters above do not apply, and no two accounts or windows are added.',
+      noSource: 'No quota source has read this account’s work in the past seven days.',
+      noWindow: {
+        quota_five_hour: 'No five-hour reading in the past seven days.',
+        quota_week: 'No weekly reading in the past seven days.',
+      },
+      provisional: 'Known by its seat for this week only',
+      seat: 'Seat {seat} of organization {organization}',
+      account: 'Account {account} of organization {organization}',
+      organization: 'Organization {organization}',
+      plan: 'Plan: {plan}',
+      none: 'No account was read in the past seven days.',
+      failed: 'The quota could not be read.',
+      failedAgain: 'Could not read the quota again; these figures are from {ago}.',
+    },
+    table: {
+      name: 'Window',
+      value: 'Used',
+      even: 'Steady use',
+      note: 'State',
+      empty: 'No window',
+      caption: 'Windows of {account}',
+    },
+    spent: {
+      title: 'Where the window went',
+      by: 'Show where {window} went by',
+      breakdowns: {
+        work_item: 'Tasks',
+        project: 'Projects',
+        model: 'Models',
+      },
+      basis:
+        'By API price estimate, not quota points: the work Valkama recorded on this account from {from} to {to}, without the work in claude.ai and the desktop app.',
+      label: 'Where {window} of {account} went {by}, by API price estimate',
+      value: 'API price estimate and its share',
+      share: '{cost} · {share}',
+      none: 'No work was recorded on this account in this window.',
+      unplaced:
+        'No work was recorded on this account in this window. Its organization recorded {cost} of work with the account unknown, which is not counted here.',
+      apart: 'Not counted here: {cost} of work in its organization with the account unknown.',
+      failed: 'What used this window could not be read.',
+      failedAgain: 'Could not read it again; these figures run to {to} and may be behind.',
+    },
+    readings: {
+      label: '{window} of {account} from {from} to {to}: {readings}',
+      reading: '{share} at {at}',
+      text: '{at}: {share}, {source}',
+      caption: 'Readings of {window} of {account}',
+      time: 'Read at',
+      value: 'Used',
+      note: 'Source',
+      empty: 'No readings in this window',
+      top: '{share}',
+      line: 'Used',
+      even: 'Steady use',
+    },
+  },
+  ru: {
+    sections: {
+      quota_five_hour: 'Пять часов',
+      quota_week: 'Неделя',
+    },
+    windows: {
+      five_hour: 'Пять часов',
+      week: 'Неделя',
+      week_model: 'Неделя, {model}',
+      extra_usage: 'Кредиты сверх лимита',
+      spend_limit: 'Лимит расходов',
+    },
+    states: {
+      fresh: 'свежее',
+      silent: 'молчит',
+    },
+    sources: {
+      statusline: 'строка состояния',
+      mod: 'мод',
+      poll: 'опрос',
+      import: 'импорт',
+    },
+    tile: {
+      noSource: 'Нет источника',
+      noAccount: 'Ни один аккаунт не прочитан',
+      noWindow: 'Нет показаний',
+      reset: 'Сброшено после чтения',
+      detail: '{window}, {account}',
+    },
+    used: 'израсходовано {share}',
+    bar: '{window}: израсходовано {share}, при ровном расходе {even}, {state}',
+    barNoPace: '{window}: израсходовано {share}, {state}',
+    even: 'При ровном расходе сейчас было бы {share}',
+    noPace: 'Темпа нет, пока окно не назвало сброс',
+    resets: 'Сброс {at}, через {in}',
+    reset: 'Сброс был в {at}, после последнего показания',
+    noReset: 'Сброс ещё не назван',
+    forecast: {
+      lasts: 'Хватит до сброса',
+      runs_out: 'Кончится в {at}',
+      spent: 'Израсходовано',
+      range: 'К сбросу: от {low} до {high}',
+      none: 'Мало показаний для прогноза',
+    },
+    read: 'Прочитано {ago}, источник: {source}',
+    silentSince: 'Без изменений с {at}, {ago}, источник: {source}',
+    other: '{window}: {state}, прочитано {ago}, источник: {source}',
+    panel: {
+      heading: 'По аккаунтам',
+      intro:
+        'Где квота каждого аккаунта сейчас, прочитано {ago}. Период и фильтры выше к ней не относятся; аккаунты и окна не складываются.',
+      noSource: 'Ни один источник квоты не читал работу этого аккаунта последние семь дней.',
+      noWindow: {
+        quota_five_hour: 'Нет показаний пятичасового окна за последние семь дней.',
+        quota_week: 'Нет недельных показаний за последние семь дней.',
+      },
+      provisional: 'Известен по месту только на эту неделю',
+      seat: 'Место {seat} организации {organization}',
+      account: 'Аккаунт {account} организации {organization}',
+      organization: 'Организация {organization}',
+      plan: 'План: {plan}',
+      none: 'Ни один аккаунт не прочитан за последние семь дней.',
+      failed: 'Не удалось прочитать квоту.',
+      failedAgain: 'Не удалось прочитать квоту снова; цифры — {ago}.',
+    },
+    table: {
+      name: 'Окно',
+      value: 'Израсходовано',
+      even: 'Ровный расход',
+      note: 'Состояние',
+      empty: 'Нет окна',
+      caption: 'Окна: {account}',
+    },
+    spent: {
+      title: 'На что ушло окно',
+      by: 'Разбивка окна «{window}»',
+      breakdowns: {
+        work_item: 'Задачи',
+        project: 'Проекты',
+        model: 'Модели',
+      },
+      basis:
+        'По оценке API-цены, не в пунктах квоты: работа, которую Valkama записала на этом аккаунте с {from} до {to}, без работы в claude.ai и настольном приложении.',
+      label: 'На что ушло окно «{window}», {account}, {by}, по оценке API-цены',
+      value: 'Оценка API-цены и её доля',
+      share: '{cost} · {share}',
+      none: 'На этом аккаунте в этом окне работа не записана.',
+      unplaced:
+        'На этом аккаунте в этом окне работа не записана. Его организация записала работу на {cost} без известного аккаунта; здесь она не учтена.',
+      apart: 'Здесь не учтено: работа организации на {cost} без известного аккаунта.',
+      failed: 'Не удалось прочитать, на что ушло это окно.',
+      failedAgain: 'Не удалось прочитать снова; цифры — до {to}, они могут отставать.',
+    },
+    readings: {
+      label: '{window}, {account}, с {from} до {to}: {readings}',
+      reading: '{share} в {at}',
+      text: '{at}: {share}, {source}',
+      caption: 'Показания: {window}, {account}',
+      time: 'Прочитано в',
+      value: 'Израсходовано',
+      note: 'Источник',
+      empty: 'В этом окне нет показаний',
+      top: '{share}',
+      line: 'Израсходовано',
+      even: 'Ровный расход',
+    },
+  },
+} as const

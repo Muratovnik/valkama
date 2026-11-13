@@ -51,10 +51,12 @@ export interface RailTileModel {
   trend: { label: string; points: TrendPoint[] } | null
   /** What the lead leaves out, for its hint: an account's whole id. */
   leadDetail?: string
+  /** A window of the quota as a thin bar: its share spent, its pace and whether it is fresh. */
+  meter?: { even: number | null; held: boolean; label: string; used: number } | null
 }
 
 /** A tile that stands at something other than its figures: words where the figures go. */
-const standing = (state: RailTileModel['state'], lead: string): RailTileModel => ({
+export const standing = (state: RailTileModel['state'], lead: string): RailTileModel => ({
   state,
   lead,
   quiet: true,
@@ -66,7 +68,7 @@ const standing = (state: RailTileModel['state'], lead: string): RailTileModel =>
 })
 
 /** A first read's tile: no words of its own, the wait is said by the tile once it has lasted. */
-const reading = () => standing('loading', '')
+export const reading = () => standing('loading', '')
 
 export function useRailTiles(options: {
   /** The page's shared reads, which the dimensions' reads go through. */

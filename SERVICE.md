@@ -59,6 +59,8 @@ argument parser exits 2, which Claude Code reads from a prompt or tool hook as
 blocking the prompt or the call. The shim therefore answers `valkama hook`
 itself, with exit status 0 and nothing on stdout, whenever the pinned release
 has no `server/hooks/entry.py`; every other command still reaches the release.
+It answers `valkama statusline` the same way, a blank status line, when the
+release has no `server/hooks/statusline.py`.
 The shim is written by the launcher code that runs `launcher install`, so roll
 back with a build that has this guard -- the stable command of the current
 release, or a checkout at least that new -- not with the older release's own

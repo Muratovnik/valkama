@@ -44,6 +44,7 @@ from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
 from .federation import federated_search, federated_spaces
+from .hooks import ingest as hook_ingest
 from .memory import api as memory_api
 from .ops import configuration, desktop_app, doctor
 from .planning import agents as planning_agents
@@ -58,10 +59,13 @@ from .planning import service as planning_service
 from .planning import views as planning_views
 from .planning.routing import PlanningRouting
 from .projects import scopes
+from .quota import names as quota_names
+from .quota import poll as quota_poll
+from .quota import settings as quota_settings
 from .refs import resolve_ref
 from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
-from .store import connect, connect_for_read, db_path, open_read_only
+from .store import STORE_SCHEMA_VERSION, connect, connect_for_read, db_path, open_read_only
 from .store_identity.primitives import ContractError
 
 CLIENT_DISCONNECT_ERRORS = (
@@ -596,6 +600,41 @@ def _alert_presence_write(call: _Call) -> _Answer | None:
     return 200, {"ok": True}
 
 
+#: The owner's names for accounts, one per organization (`quota.names`).
+_ACCOUNT_NAMES = "/api/quota/account-names"
+
+
+def _quota_settings_read(call: _Call) -> _Answer | None:
+    return 200, dict(quota_settings.read(call.store()))
+
+
+def _quota_settings_write(call: _Call) -> _Answer | None:
+    settings = quota_settings.write(call.store(), call.payload)
+    # The listener's own poll starts or stops at once; any other process has none.
+    quota_poll.apply_setting(settings["poll"])
+    return 200, dict(settings)
+
+
+def _quota_settings_error(error: Exception) -> _Answer:
+    if isinstance(error, quota_settings.SettingsError):
+        return 400, {"error": {"code": "invalid_request", "message": str(error)}}
+    return _generic_failure(500)
+
+
+def _account_names_read(call: _Call) -> _Answer | None:
+    return 200, {"names": quota_names.read(call.store())}
+
+
+def _account_names_write(call: _Call) -> _Answer | None:
+    return 200, {"names": quota_names.write(call.store(), call.payload)}
+
+
+def _account_names_error(error: Exception) -> _Answer:
+    if isinstance(error, quota_names.NamesError):
+        return 400, {"error": {"code": "invalid_request", "message": str(error)}}
+    return _generic_failure(500)
+
+
 def _alerts_error(error: Exception) -> _Answer:
     if isinstance(error, (alert_settings.SettingsError, alert_presence.PresenceError)):
         return 400, {"error": {"code": "invalid_request", "message": str(error)}}
@@ -708,6 +747,18 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.READ_ONLY,
     ),
     _Boundary(
+        exact=frozenset({"/api/quota/settings"}),
+        handler=_quota_settings_read,
+        errors=_quota_settings_error,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
+        exact=frozenset({_ACCOUNT_NAMES}),
+        handler=_account_names_read,
+        errors=_account_names_error,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
         exact=frozenset({"/api/alerts/status"}),
         handler=_alert_status_read,
         errors=_alerts_error,
@@ -795,6 +846,18 @@ _PUT_BOUNDARIES: tuple[_Boundary, ...] = (
         exact=frozenset({"/api/alerts/settings"}),
         handler=_alert_settings_write,
         errors=_alerts_error,
+        commit=_Commit.DOMAIN,
+    ),
+    _Boundary(
+        exact=frozenset({"/api/quota/settings"}),
+        handler=_quota_settings_write,
+        errors=_quota_settings_error,
+        commit=_Commit.DOMAIN,
+    ),
+    _Boundary(
+        exact=frozenset({_ACCOUNT_NAMES}),
+        handler=_account_names_write,
+        errors=_account_names_error,
         commit=_Commit.DOMAIN,
     ),
 )
@@ -1666,6 +1729,15 @@ class Handler(BaseHTTPRequestHandler):
         self._send(405, b"method not allowed", "text/plain", headers={"Allow": "GET, POST, PUT"})
 
 
+def _quota_poll_store() -> sqlite3.Connection:
+    """The poll thread's own connection: one that commits nothing by itself."""
+
+    conn = hook_ingest.open_light(db_path(), STORE_SCHEMA_VERSION)
+    # Nobody waits for that thread, so it may wait for a writer.
+    conn.execute("PRAGMA busy_timeout = 5000")
+    return conn
+
+
 def serve_main(
     port: int,
     *,
@@ -1697,6 +1769,7 @@ def serve_main(
         maintenance = housekeeping.start_up(startup)
         # Unbounded, so beside the listener rather than before it.
         housekeeping.start_sweep(startup, lambda line: print(line, file=sys.stderr))  # noqa: T201
+        poll_on = quota_settings.read(startup)["poll"]
     finally:
         startup.close()
     for line in maintenance:
@@ -1714,7 +1787,19 @@ def serve_main(
         daemon=True,
     ).start()
     pulse = housekeeping.start_pulse(lambda line: print(line, file=sys.stderr))  # noqa: T201
-    usage = housekeeping.start_usage(lambda line: print(line, file=sys.stderr))  # noqa: T201
+    usage = housekeeping.start_usage(
+        lambda line: print(line, file=sys.stderr),  # noqa: T201
+        alerts=server.server_port == configuration.listener_port(),
+    )
+    # The quota poll runs only where the owner switched it on, and from then on a
+    # write of the setting starts or stops it here without a restart.
+    poll = quota_poll.Supervisor(
+        db_path(),
+        lambda line: print(line, file=sys.stderr),  # noqa: T201
+        open_store=_quota_poll_store,
+    )
+    quota_poll.SUPERVISOR = poll
+    poll.apply(poll_on)
     # Handler reads only this immutable startup capture. The mutable dist tree
     # can be rebuilt for the next process without changing this listener.
     server.runtime_snapshot = runtime_snapshot
@@ -1730,4 +1815,6 @@ def serve_main(
     finally:
         pulse.stop()
         usage.set()
+        quota_poll.SUPERVISOR = None
+        poll.stop()
         server.server_close()

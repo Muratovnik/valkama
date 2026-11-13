@@ -1000,8 +1000,8 @@ MCP tool reads it, for the same reason as above.
 | `from`, `to` | required. A date, `2030-03-04`, meaning the start of that day at `utc_offset`, or a time with its own offset, `2030-03-04T09:00:00Z` or `2030-03-04T09:00:00%2B03:00`: in a query string a `+` reads as a space, so it is sent as `%2B`. `to` is not included and must be later than `from`. Both, and with `compare` the period before too, lie between 1970 and the start of 9999 |
 | `step` | `day` (the default), `hour` or `minute` |
 | `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day, an hour or a minute of the series starts at the caller's midnight, full hour or full minute. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
-| `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment` |
-| a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id` |
+| `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment`, `seat` |
+| a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id`, a seat by its `id` |
 | `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
 
@@ -1056,7 +1056,8 @@ with.
 The measures are the reads' above: `agent_seconds`, `estimated_seconds`, `quality`
 (`observed`, `estimated`, `mixed`, or `null` when no time was counted), `tokens` by
 kind, `estimated_api_cost_usd` and `unpriced_tokens`, each with the meaning given
-there. The answer holds no subscription quota and no percentage of any limit.
+there. The answer holds no subscription quota and no percentage of any limit: `seat`
+says only which account the work was spent on.
 
 Seconds here are `agent_seconds` only: the sum of each stretch of work's own seconds.
 Two agents working one hour side by side spent two hours, a subagent's time counts
@@ -1095,6 +1096,7 @@ item, and for `launch_class` a session's own run, are groups of their own too, w
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |
 | `model`, `effort`, `environment` | as the usage rows hold them | — |
+| `seat` | the subscription account of its organization the work was spent on, read from the quota samples when the answer is made: a stretch is on the seat the latest sample of each feed at or before it says, until that window resets, its own session's feeds first. The `id` is the organization, a `/` and the account's UUID, or, for a seat no sample with a UUID names in that organization that week, the seat's key for the week, `week:2030-03-08T09:00Z`, which does not hold across weeks. The same UUID in two organizations is two accounts. Unknown where the work names no organization or no sample of it says where it was: one group, never counted to an account | `organization`, `account_uuid` and `seat_key`, the parts of the `id`; all `null` when unknown |
 
 The answer carries ids, the names and numbers a card already shows, times and counts.
 It holds no path and no folder. The one text from a transcript is an executor's
@@ -1104,8 +1106,10 @@ from the file's tail, where the live work reads it, and keeps it nowhere. Anothe
 client's transcript is not read, so a Codex session's `title` is `null`. A transcript is
 read once per answer and again only after it changed, so a period of many sessions
 costs the status of their files once each has been read. Because a person can rename a
-session, the `title` is the one value in the answer that two reads of the same rows may
-give differently.
+session, the `title` is one of two values in the answer that two reads of the same rows may
+give differently. The other is `seat`: a quota sample that arrives later, such as imported
+history, can say where earlier work was, and one that names an account's UUID turns a seat's
+key into its account.
 
 ### How often each analytics surface is opened
 
@@ -1162,6 +1166,275 @@ refused as above.
 
 `total` names every kind, `0` for one not counted in the period; `days` lists each day
 with a count, oldest first, with every kind. No MCP tool counts or reads uses.
+
+### Subscription quota samples and accounts
+
+Analytics will read the subscription quota from samples the store keeps, beside the
+usage rows and apart from them. This is what a sample and an account hold, what writes
+them, and how a usage segment is given its seat. `GET /api/analytics/quota` reads them
+under `valkama-analytics-api` and keeps this section's rules
+([Each account's subscription quota](#each-accounts-subscription-quota)); no MCP tool
+reads them.
+
+A sample is one reading of one window of one account. It holds:
+
+| Field | What it holds |
+| --- | --- |
+| `at` | when the source read it, UTC to the millisecond: `2030-03-04T09:00:00.000Z` |
+| `source` | `statusline`, the Claude Code status line command; `mod`, the Claude Code mod; `poll`, the poll of the usage endpoint; `import`, history imported from a file |
+| `organization` | the organization's id, for `poll` and `import` |
+| `session_id` | the session the reading came through, for `statusline` and `mod`. Its organization is not written: it is read when the sample is read, from the session's usage rows at `at` |
+| `account_uuid` | the account's UUID, where the source gave it: the poll, and imported history that carries it. `null` otherwise, and always for `statusline` and `mod`, whose readings name no account; such a sample's account is read from its seat |
+| `seat` | `week:` and the week's reset to the nearest ten minutes, `week:2030-03-08T09:00Z`; `null` when the reading showed no week, or imported history named none. It tells the seats of one organization apart within one week. A sample without a seat belongs to no seat's series, and a forecast does not read it |
+| `kind` | the window: `five_hour`, `week`, `week_model` (the week of one model), `extra_usage` (usage credits past the plan's limits) or `spend_limit` (a gateway's spend limit) |
+| `model` | the model of a `week_model` window as the source names it; `null` for every other kind |
+| `percent` | the share of the window spent, from 0; above 100 only where the source reports an overrun. Required except for `extra_usage` |
+| `resets_at` | when the window resets, as `at` is written; `null` when the source did not say |
+| `amount`, `currency` | money spent, for `extra_usage` and `spend_limit` only. A currency the source did not state is `null`: not recorded, never assumed |
+
+Every source names its windows its own way, and each name is one kind here:
+
+| Source | Its window | Kind |
+| --- | --- | --- |
+| `statusline` | `rate_limits.five_hour`, `rate_limits.seven_day`, `rate_limits.spend_limit` | `five_hour`, `week`, `spend_limit` |
+| `mod` | `five_hour`, `seven_day` | `five_hour`, `week` |
+| `poll` | `limits[].kind` `session`, `weekly_all`, `weekly_scoped` (its model apart); the older buckets `five_hour`, `seven_day`; `spend` | `five_hour`, `week`, `week_model`; `five_hour`, `week`; `extra_usage` |
+
+Every source writes through one function, `server.quota.samples.record`, with a reading:
+its source, its time, its windows, its seat, its organization or its session, and the
+account's UUID when an organization's source knows it. A
+source that sees the week passes the seat `samples.seat_of` gives for its windows; the
+seat is never filled in for it. A window is kept only when it differs, in its percent,
+reset, amount or currency, from the latest sample of its series at or before the
+reading. The series is the organization or the session, the account's UUID, the seat, the
+kind and the model, whatever the source. So a gap between two samples means the value did not
+change, a reading given twice keeps nothing the second time, and history imported
+again adds nothing. A sample is never rewritten. Samples older than a year are deleted
+when a server starts.
+
+An account is an organization and the account's UUID in it. Its row holds the plan a
+source named, and nothing else of a profile: no e-mail address and no name. A reading that
+names an organization and an account's UUID makes the row if it is not there yet, and a
+plan it names replaces the one there; a plan comes only with the UUID. The UUID does not
+change when a week resets, so the row and whatever is kept against the account hold from
+week to week. The name the owner gives an account is kept apart, by its organization
+([The owner's names for accounts](#the-owners-names-for-accounts)), and no source writes it.
+
+A seat key comes from the week's reset, so it changes every week, and two seats whose
+weeks reset within the same ten minutes cannot be told apart by it and share one key. A
+sample without an account's UUID belongs to the account whose samples in the same
+organization name the same seat: a key names one week's reset, so the same key is the same
+week. A seat no sample with a UUID names, or that samples of two accounts name, is
+provisional: it is known for its week and its account is not. Without a source that gives
+the UUID, seats are told apart only within a week.
+
+A usage segment holds its organization and no seat, because a change of seat leaves no
+trace in a transcript. Its seat is read from the samples, and a sample that arrives
+later rewrites nothing. Samples are kept only when a value changes, so a quiet stretch
+has none and the last sample still says where things stand: the seat is a state, not the
+sample nearest in time.
+
+1. A feed is the samples with a seat that one identity made of one window: one session,
+   or the organization's poll and imports, and one kind with its model. A feed's latest
+   sample at or before a moment is its state then. The state holds until that sample's
+   window resets, or the week its seat names ends when that comes first; the next sample
+   of the feed replaces it.
+2. The feeds whose latest sample at or before the segment's end still holds at the
+   segment's start count, and of them the most recent sample names the seat. A sample
+   after the segment's end does not.
+3. The feeds of the segment's own session come first, and a session's feed counts only
+   while that session was working for the segment's organization at its latest sample's
+   time.
+4. Without one, the feeds of the organization count: its poll's and imports', and another
+   session's while that session was working for it.
+5. With none, the seat is unknown. A segment with no organization is on a seat unknown too.
+6. The account is the naming sample's UUID, or else the one the seat belongs to by the
+   rule above; a provisional seat has none.
+
+The read says which rule named the seat: `session` or `organization`, with that sample's
+time, and the account's UUID or none for a provisional seat.
+
+Percentages and money never share a figure. No answer carries a sum of percentages: a
+percentage belongs to one account and one window, and the percentages of different
+accounts are never added. Money stays with its window and is never added to the API-price
+estimate of the usage reads.
+
+`valkama quota import --source FILE` imports history from a file of JSON lines, one
+sample a line:
+
+```json
+{"organization": "6f1c2a8e-0000-4000-8000-000000000001", "at": "2030-03-04T09:00:00Z",
+ "kind": "week", "percent": 42, "resets_at": "2030-03-08T09:00:00Z",
+ "seat": "week:2030-03-08T09:00Z", "account_uuid": "0b7d4e19-0000-4000-8000-000000000002"}
+```
+
+`organization`, `at` and `kind` are required, and the other fields of a sample may be
+left out. Each line is kept through the same function, as the `import` source, oldest
+first, in one transaction. A line's seat and account's UUID are kept as the line gives
+them and never derived from its reset. Any other field, a line that is not such an object, or a value a sample
+cannot hold refuses the whole file, naming the line, and writes nothing. The command
+prints the lines read, how many were added, how many matched the sample before them
+(`unchanged`) or were older than a year (`expired`), and each organization's first and
+last time.
+
+### Each account's subscription quota
+
+`GET /api/analytics/quota` answers, under `interface_version` `valkama-analytics-api`,
+where every account's quota windows stand now, from the samples above. It is answered as
+the usage read is, to the page and to a local tool alike, and writes nothing. A later
+build only adds fields, kinds and sources to this answer. No MCP tool reads it.
+
+Its one parameter is `utc_offset`, the caller's offset from UTC in minutes, from `-840`
+to `840`, `0` by default, at which every time in the answer is written. Any other
+parameter, a repeated one or an offset out of its range is refused with `400` and
+`{"error": {"code": "invalid_request", "message": …}}`, as the usage read refuses it. An
+empty store answers with no account. A sample or a stretch of work dated after `now`, as a
+source whose clock runs ahead could write, is left out until `now` reaches it.
+
+```json
+{"interface_version": "valkama-analytics-api",
+ "quota": {
+   "now": "2030-03-06T13:00:00.000+03:00", "utc_offset": 180, "fresh_for_seconds": 900,
+   "accounts": [
+     {"organization": "org-a", "account_uuid": "acct-a", "seat": null, "plan": "Max",
+      "name": null, "no_source": false,
+      "windows": [
+        {"kind": "five_hour", "model": null, "state": "fresh",
+         "resets_at": "2030-03-06T16:00:00.000+03:00",
+         "latest": {"at": "2030-03-06T12:55:00.000+03:00", "source": "poll",
+                    "used_percent": 50.0},
+         "started_at": "2030-03-06T11:00:00.000+03:00", "even_percent": 40.0,
+         "readings": [{"at": "2030-03-06T12:00:00.000+03:00", "used_percent": 20.0,
+                       "source": "poll"},
+                      {"at": "2030-03-06T12:55:00.000+03:00", "used_percent": 50.0,
+                       "source": "poll"}],
+         "forecast": {"outcome": "runs_out",
+                      "runs_out_at": "2030-03-06T13:40:00.000+03:00", "basis": "blend"}},
+        {"kind": "week", "model": null, "state": "fresh",
+         "resets_at": "2030-03-08T12:00:00.000+03:00",
+         "latest": {"…": "as above", "used_percent": 41.0},
+         "started_at": "2030-03-01T12:00:00.000+03:00", "even_percent": 72.02,
+         "readings": ["…"],
+         "forecast": {"low_percent": 56.93, "high_percent": 61.2}}]},
+     {"organization": "org-b", "account_uuid": null, "seat": null, "plan": null,
+      "name": null, "no_source": true, "windows": []},
+     {"organization": "org-c", "account_uuid": null, "seat": "week:2030-03-08T09:00Z",
+      "plan": null, "name": null, "no_source": false,
+      "windows": [
+        {"kind": "spend_limit", "model": null, "state": "silent", "resets_at": null,
+         "latest": {"at": "2030-03-06T12:00:00.000+03:00", "source": "statusline"}}]}]}}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `now` | the moment the answer was worked out; every pace and state is as of it |
+| `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
+| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. A provisional seat whose week has ended is left out, and its organization is not then an entry with no source. Ordered by organization, then account |
+| `organization` | the organization's id |
+| `account_uuid` | the account's UUID: the sample's own, or the one its seat belongs to by the rule above; `null` for a provisional seat and for an organization with no sample |
+| `seat` | the provisional seat the samples without a UUID are on, `null` when the UUID is known. A provisional seat is known for one week, so once its week has ended it is no entry: the same machine read across a reset is the next week's seat alone, not two accounts |
+| `plan` | the plan a source named for the account, or `null` |
+| `name` | the name the owner gave the account's organization, as the next section says, or `null` when none is set. Every entry of one organization has its name |
+| `no_source` | `true` for an organization whose work no quota source has read in the seven days; its `windows` are empty. An account with samples is `false` |
+| `windows` | the account's windows, in the kinds' order above, a model's week by model: one per `kind` and `model` its samples have |
+
+A window that is a share of a limit, `five_hour`, `week` or `week_model`, holds:
+
+| Field | What it holds |
+| --- | --- |
+| `kind`, `model` | the window, as a sample names it |
+| `state` | `fresh` while its latest sample is at most `fresh_for_seconds` old, `silent` once it is older. Samples are kept only when a value changed, so a silent window has not moved since; it does not say the source stopped. A fresh `0.0` is a value, not a missing one |
+| `latest` | the window's latest sample: `at`, `source` (`statusline`, `mod`, `poll` or `import`) and `used_percent`, the share of the window it said was spent |
+| `resets_at` | when the window resets, as its latest sample said; `null` when the window has not started |
+| `started_at` | its reset less its length, five hours or seven days; `null` without a reset |
+| `even_percent` | how much of the window steady use from its start would have spent by `now`: the pace tick. `null` without a reset or once the reset has passed |
+| `readings` | its samples since `started_at` that name this reset, oldest first, each with `at`, `used_percent` and `source`, for a step line. The samples of every source of the account are in it, so one source's reading can be lower than another's before it |
+| `forecast` | `null` while the window has too little history or its reset has passed. The five-hour window gives its point answer: `outcome` `lasts`, `runs_out` with `runs_out_at`, or `spent`, and `basis`, the pace it read (`recent`, `blend` or `window`; `null` when spent). A week, and a model's week, give only a range: `low_percent` and `high_percent`, the share of the week the slower and the faster of its paces would have spent by the reset, above 100 when the week runs out first. A week never has a point forecast here |
+
+A window of `extra_usage` or `spend_limit` is its own kind and holds `kind`, `model`,
+`state`, `resets_at` and `latest` with `at` and `source` alone: no percent, no amount
+and no forecast. The answer holds no money.
+
+No field is a sum or a total of percentages. A percentage belongs to one window of one
+account: the windows of an account are not added, and neither are two accounts'
+percentages, of one organization or of two. A reading whose organization is not known
+yet, because the session's transcript has not been read that far, or that names neither
+an account's UUID nor a seat, belongs to no account and is not in the answer.
+
+### The owner's names for accounts
+
+The usage rows and the quota samples hold an account's organization id and nothing that
+names it, so the owner names it, and Valkama keeps one name per organization in the store's
+`quota_account_names` table: `organization`, `name` and `updated_at`, the UTC time of the
+write to the millisecond. An organization with no name has no row. Settings writes the
+name; the Analytics page on every device and the quota alerts read it, and the store's
+snapshots and restore carry it with the other quota tables. Other server modules read it
+through `server.quota.names.names_of(conn, organizations)`, which answers the names of any
+number of organizations in one query, by organization, leaving out one with none.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/quota/account-names` | every name: `{"names": {"<organization>": "<name>"}}`, `{"names": {}}` until one is given |
+| `PUT /api/quota/account-names` | `{"names": {"<organization>": "<name>"}, "replace": true}` names each account given, or with an empty name takes its name away, in one transaction, and answers every name then stored in the read's shape. `replace` may be left out and is `true`; with `false` a name is stored only for an organization that has none, and an empty one changes nothing |
+
+A name is one line: its runs of spaces and line breaks are collapsed to one space and its
+ends trimmed, and what is left is at most 80 characters, counted as characters rather
+than UTF-16 units, with no control character. An organization is 1 to 512 characters with
+no NUL. A write that breaks either rule, names more than 1000 accounts, or carries a field
+other than `names` and `replace` is refused whole with `400`,
+`{"error": {"code": "invalid_request", "message": "<why>"}}`, and changes nothing. The read
+answers under the `Host` rule alone; the write takes the browser's credential, as the
+quota settings do.
+
+A device that kept names of its own, as builds before this one did in the settings each
+browser and the desktop app keep, writes them once with `"replace": false` the first time
+it opens Settings or Analytics, so a name given since on another device stays, and drops
+them once the write succeeded. A write that failed leaves them for the next open.
+
+A quota alert names the account by its organization's name where there is one, before the
+share spent, and says no name where there is none, nor where the owner chose notifications
+whose text reveals nothing of the work.
+
+### The poll of the usage endpoint
+
+The `poll` source asks the usage endpoint Claude Code's `/usage` reads, for the account
+Claude Code is signed in to on this machine. It is off on a clean install and runs only
+after the owner of the installation switches it on in Settings: the endpoint is
+undocumented, and Anthropic's terms do not explicitly permit this use of it. Only the
+listener runs it, and switching it on or off there takes effect at once, with no restart.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/quota/settings` | the owner's quota settings: `{"poll": false}` until switched on |
+| `PUT /api/quota/settings` | replaces them and starts or stops the poll in the listener; an unknown key is refused and a missing one takes its default |
+
+The read answers under the `Host` rule alone; the write takes the browser's credential,
+as the notification settings do.
+
+- **The sign-in.** The token is read from Claude Code's `.credentials.json` in its home
+  (`CLAUDE_CONFIG_DIR`, else `~/.claude`) for each request and held only for that
+  request. It is sent in one header to `api.anthropic.com` over HTTPS, no redirect is
+  followed, and it is written nowhere: not to the store, a log, the doctor's answer or an
+  error's text. The poll never refreshes a sign-in. The Claude desktop app's sign-in is
+  not read.
+- **What is kept.** A reading is recorded as the `poll` source, by the organization the
+  profile names, with the account's UUID and the plan. The profile's e-mail address and
+  name are never read out of the answer.
+- **The pace.** Five minutes while a usage segment of the organization ended in the last
+  ten minutes, fifteen otherwise, each lengthened by up to a tenth at random. After a 429,
+  ten minutes, doubled for each one in a row up to thirty, or the server's `Retry-After`
+  when that is longer; after any other failure the same from one minute. A sign-in that
+  was refused (401 or 403), has expired, or is missing is looked at again each minute,
+  and a refused one is tried again only once the file has changed.
+- **Beside the session readings.** While a `statusline` or `mod` reading of a session of
+  the organization is under ten minutes old, the poll waits out the fifteen minutes from
+  its last request.
+
+`valkama doctor` reports the poll under Capabilities as `quota-poll`: off, working,
+paused after a 429, sign-in refused (a 401 or 403, or an expired sign-in), no sign-in, a
+failing endpoint, or switched on with no listener polling, each with what to do. It reads
+the setting from the store and the poll's state from `<store>.quota-poll.json`, which the
+listener writes and which names no account.
 
 ### The space's stream
 
