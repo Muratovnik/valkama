@@ -18,6 +18,7 @@ import time
 import unittest
 from collections.abc import Iterator
 from pathlib import Path
+from unittest import mock
 
 from server import store_lock
 from tests import machine_lock
@@ -172,9 +173,15 @@ class LockTests(LockCase):
                 store_lock.unlock(handle)
 
     def test_the_machine_lock_is_outside_the_checkout_and_the_store(self) -> None:
-        path = machine_lock.lock_path().resolve()
+        # A release coordinator runs the checks with a TEMP inside the checkout; the lock
+        # must not follow it there, or it would hold only the runs given that TEMP.
+        given = str(ROOT / ".git" / "relkit" / "tmp" / "candidate")
+        with mock.patch.dict(os.environ, {"TMP": given, "TEMP": given, "TMPDIR": given}):
+            with mock.patch.object(tempfile, "tempdir", given):
+                path = machine_lock.lock_path().resolve()
         self.assertFalse(path.is_relative_to(ROOT))
         self.assertFalse(path.is_relative_to(Path.home() / ".valkama"))
+        self.assertEqual(path, machine_lock.lock_path().resolve())
 
 
 class CommandTests(LockCase):

@@ -11,7 +11,11 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { validateUsageAnswer } from '@/shared/api/analyticsApi.ts'
+import {
+  pageDimensionOf,
+  validateQuotaAnswer,
+  validateUsageAnswer,
+} from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
 import {
   validateDocument,
@@ -41,6 +45,7 @@ import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+import { messages } from '@/shared/i18n/index.ts'
 
 const STEP_KINDS = [
   'focus-folder',
@@ -57,7 +62,9 @@ const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${n
 
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
+  'analytics-quota.json': validateQuotaAnswer,
   'analytics-usage.json': validateUsageAnswer,
+  'analytics-usage-seat.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
@@ -89,8 +96,9 @@ const readers: Record<string, (value: unknown) => unknown> = {
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
-  // The server's closed lists, which the test below holds the web's to.
+  // The server's closed lists, which the tests below hold the web's to.
   'open-vocabulary.json',
+  'doctor-vocabulary.json',
   'mcp-get-work-item.json',
   'mcp-get-work-item-thread.json',
   'mcp-get-work-item-unresolved.json',
@@ -117,6 +125,23 @@ describe('the server fixtures', () => {
       states: [...PLAN_STATES],
       steps: [...STEP_KINDS],
     })
+  })
+
+  it('give every quota code the doctor reports a title and a detail in each language', () => {
+    // Read from the server's source, so a code the server adds fails here until it has words.
+    const { quota } = read('doctor-vocabulary.json') as { quota: string[] }
+    expect(quota.length).toBeGreaterThan(0)
+    const missing = (['en', 'ru'] as const).flatMap((locale) => {
+      const findings: Record<string, { detail?: unknown; title?: unknown } | undefined> =
+        messages[locale].health.finding
+      return quota
+        .filter((code) => {
+          const words = findings[code]
+          return typeof words?.title !== 'string' || typeof words.detail !== 'string'
+        })
+        .map((code) => `${locale}: ${code}`)
+    })
+    expect(missing).toEqual([])
   })
 
   it('name the executor at the claim, each step and each agent of a card', () => {
@@ -156,6 +181,29 @@ describe('the server fixtures', () => {
     expect(
       validateSessionUsageAnswer(read('usage-session.json')).by_item.at(-1)?.unpriced_tokens,
     ).toBe(0)
+  })
+
+  it('name the seat of the work, which the page reads without taking it for its own', () => {
+    const usage = validateUsageAnswer(read('analytics-usage-seat.json'))
+    expect(usage.rows.map(({ group }) => group.seat)).toEqual([
+      {
+        id: 'org-fixture/acct-fixture',
+        unknown: false,
+        organization: 'org-fixture',
+        account_uuid: 'acct-fixture',
+        seat_key: null,
+      },
+      {
+        id: 'org-fixture/week:2026-11-17T19:00Z',
+        unknown: false,
+        organization: 'org-fixture',
+        account_uuid: null,
+        seat_key: 'week:2026-11-17T19:00Z',
+      },
+      { id: null, unknown: true, organization: null, account_uuid: null, seat_key: null },
+    ])
+    expect(pageDimensionOf(usage)).toBeNull()
+    expect(pageDimensionOf(validateUsageAnswer(read('analytics-usage.json')))).toBe('work_item')
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

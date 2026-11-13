@@ -1,13 +1,16 @@
 /**
  * The browser double of the live period «Now»: a clock that stands still five seconds into a
- * minute, usage answered from work a test may change, the page's visibility as the test sets it,
- * and the usage reads the page asked, kept in the page as it asks them.
+ * minute, usage answered from work a test may change, the quota of four made-up accounts, the
+ * page's visibility as the test sets it, and the usage reads the page asked, kept in the page as
+ * it asks them.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { serveUsage } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
+import { quotaAt } from '../fixtures/quota.ts'
+import { serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 
 /** Wednesday afternoon, five seconds into a minute: the live hour runs from 13:31. */
@@ -28,6 +31,7 @@ export async function serveLive(page: Page, world: readonly TimedStretch[]): Pro
   const double: Double = { asked: [], world }
   await page.clock.setSystemTime(NOW)
   await installBackend(page)
+  await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     const query = new URL(route.request().url()).searchParams
     double.asked.push(query)

@@ -8,6 +8,7 @@ import { commentStepsMessages } from '@/shared/i18n/commentStepsMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
+import { doctorQuotaMessages } from '@/shared/i18n/doctorQuotaMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
@@ -493,6 +494,7 @@ export const en = {
         detail: 'Neither Claude Code nor Codex is set up for this user.',
       },
       ...doctorLoginMessages.en,
+      ...doctorQuotaMessages.en,
       'listener-offline': {
         title: 'Local server is not running',
         detail: 'Nothing is answering on port {port}.',

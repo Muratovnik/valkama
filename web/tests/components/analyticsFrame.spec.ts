@@ -78,13 +78,15 @@ afterEach(() => {
 })
 
 describe('the rail of sections', () => {
-  it('lists the overview first, then every dimension, inside a navigation landmark', async () => {
+  it('lists the overview first, the token kinds and the quota, then every dimension, inside a navigation landmark', async () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics()
     expect(page.get('nav.analytics-rail').attributes('aria-label')).toBe('Sections of the usage')
     expect(names(page)).toEqual([
       'Overview',
       'Token kinds',
+      'Five hours',
+      'Week',
       'Account',
       'Project',
       'Task',
@@ -98,6 +100,8 @@ describe('the rail of sections', () => {
     expect(entries(page).map((one) => one.attributes('data-section'))).toEqual([
       'overview',
       'token_kind',
+      'quota_five_hour',
+      'quota_week',
       ...USAGE_DIMENSIONS,
     ])
     // The plain address is the overview, where the page opens.
@@ -113,6 +117,8 @@ describe('the rail of sections', () => {
     expect(entries(page).map((one) => one.attributes('data-section'))).toEqual([
       'overview',
       'token_kind',
+      'quota_five_hour',
+      'quota_week',
       ...USAGE_DIMENSIONS.filter((dimension) => dimension !== 'project'),
     ])
   })

@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from server import app_shell, mcp_surface, store, watchers
+from server.analytics import api as analytics_api
 from server.platform import migrations as platform_migrations
 from server.platform import modules as platform_modules
 from server.store_identity.metadata import read_store_metadata
@@ -226,6 +227,25 @@ class ModuleRegistryTests(unittest.TestCase):
         allowed = analytics["state_schema"]["allowed_keys"]
         self.assertLessEqual(set(written), set(allowed))
         self.assertEqual(len(allowed), len(set(allowed)))
+
+    def test_each_analytics_read_model_is_a_read_its_api_serves(self) -> None:
+        """Analytics declares the usage, the quota and the uses reads, at both scopes.
+
+        A read model is `analytics.<name>` for the route `/api/analytics/<name>`, so a
+        read the page asks is declared, and a declared one is answered.
+        """
+
+        analytics = next(
+            item for item in platform_modules.module_manifests() if item["module_id"] == "analytics"
+        )
+        served = [analytics_api.USAGE_PATH, analytics_api.QUOTA_PATH, analytics_api.USES_PATH]
+        declared = ["analytics.usage", "analytics.quota", "analytics.uses"]
+        for scope in ("global", "project"):
+            with self.subTest(scope=scope):
+                self.assertEqual(declared, analytics["semantics"][scope]["read_models"])
+        self.assertEqual(
+            [f"/api/analytics/{name.removeprefix('analytics.')}" for name in declared], served
+        )
 
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
         """The four modules, enabled and fixed, the same from every door."""

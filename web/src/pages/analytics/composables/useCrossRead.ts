@@ -14,6 +14,7 @@ import { onScopeDispose, shallowRef, watch } from 'vue'
 
 import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 
+import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 
 export type CrossRead =
@@ -40,7 +41,7 @@ export function useCrossRead(options: {
     reading = null
     const usage = options.usage()
     const across = options.across()
-    const by = usage.group_by[0]
+    const by = pageDimensionOf(usage)
     if (!across || !by || across === by) {
       state.value = { status: 'off' }
       return

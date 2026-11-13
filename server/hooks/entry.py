@@ -68,15 +68,17 @@ def main(
     # A hook never fails its client: whatever went wrong is reported where the
     # client does not read it, and the session goes on.
     except Exception as error:  # noqa: BLE001
-        _note(f"{type(error).__name__}: {error}")
+        note(f"{type(error).__name__}: {error}")
         return 0
     return 2 if status == 2 else 0
 
 
-def _note(message: str) -> None:
+def note(message: str, command: str = "hook") -> None:
+    """One diagnostic line on stderr, `valkama <command>: <message>`; it never raises."""
+
     # Bytes: under `-I` stderr takes the console's code page, and a path or a
     # message it cannot encode would raise from this very handler.
-    line = f"valkama hook: {message}\n"
+    line = f"valkama {command}: {message}\n"
     try:
         buffer = getattr(sys.stderr, "buffer", None)
         if buffer is None:
@@ -90,7 +92,7 @@ def _note(message: str) -> None:
 
 def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     if len(arguments) != 2:
-        _note(USAGE)
+        note(USAGE)
         return 0
     client, event = arguments
     raw = stdin.read(MAX_INPUT_BYTES + 1)
@@ -126,7 +128,7 @@ def _stage(action: Callable[..., T], *arguments: object) -> T | None:
     try:
         return action(*arguments)
     except Exception as error:  # noqa: BLE001 -- a hook never fails its client
-        _note(f"{type(error).__name__}: {error}")
+        note(f"{type(error).__name__}: {error}")
         return None
 
 
@@ -170,7 +172,7 @@ def _lifecycle(client: str, event: str, payload: dict | None) -> None:
     from . import normalize
 
     if event not in normalize.CLIENT_EVENTS.get(client, frozenset()):
-        _note(f"no {event!r} event for {client!r}; {USAGE}")
+        note(f"no {event!r} event for {client!r}; {USAGE}")
         return
     if payload is None:
         return

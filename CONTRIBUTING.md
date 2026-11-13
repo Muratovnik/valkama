@@ -193,12 +193,15 @@ first on `PATH` for each stage — and never a same-named tool found elsewhere o
 `PATH`. Before the first stage it verifies that every package
 `requirements-dev.txt` pins is installed there at that version, and refuses at
 once, naming the interpreter, each missing or mismatched package and what to
-run, when one is not. It then runs `npm ci` in `web` and `desktop`, so it verifies
-what the lockfiles pin and needs the network or an npm cache; it refuses a
-`node_modules` that is a link, because `npm ci` through a link empties its target.
+run, when one is not. It then runs `npm ci` for `web` and `desktop`, so it verifies
+what the lockfiles pin and needs the network or an npm cache. It installs into a
+temporary copy of the sources and runs every npm stage there, never in the checkout:
+`npm ci` empties the tree it installs into, and other worktrees may link their
+`node_modules` to the checkout's. The checkout's own `node_modules` is left as it is.
 `build` needs npm and no Python tool, and `smoke` runs the
 server, which needs only the standard library. The web build that `check` runs
-rewrites `web/dist`; commit it only when `web/src` changed.
+in the copy replaces `web/dist` in the checkout; commit it only when `web/src`
+changed.
 
 ## Reporting a bug
 

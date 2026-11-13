@@ -1,0 +1,22 @@
+{
+  "quota": [
+    "quota-mod-off",
+    "quota-mod-silent",
+    "quota-mod-unreadable",
+    "quota-mod-working",
+    "quota-poll-expired",
+    "quota-poll-failing",
+    "quota-poll-no-login",
+    "quota-poll-not-running",
+    "quota-poll-off",
+    "quota-poll-ok",
+    "quota-poll-rate-limited",
+    "quota-poll-refused",
+    "quota-poll-unreadable",
+    "quota-poll-waiting",
+    "quota-statusline-off",
+    "quota-statusline-silent",
+    "quota-statusline-unreadable",
+    "quota-statusline-working"
+  ]
+}

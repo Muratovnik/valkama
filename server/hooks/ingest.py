@@ -1,14 +1,14 @@
 """Writing hook events into the store, directly or from the spool.
 
-The direct write is a light open of a store that is already current: no
-migration lock, no adoption, no integrity check, and never a new file. A hook
-process does not bring a store up; the next full `store.connect()` does, and
-until then events wait in the spool.
+The direct write is a light open of a store that is already current (`light`).
 
 One event is one `execution_events` row plus what it says about its session.
 The row's `event_uid` is the emitter's, so delivering the same event twice --
 a drain that committed and then died before deleting its file -- inserts
-nothing the second time and changes no session.
+nothing the second time and changes no session. A spool file may also hold a
+quota reading the status line command could not write (`statusline` or `mod`); it is
+delivered through `quota.samples.record`, which keeps nothing of a reading
+given twice.
 """
 
 from __future__ import annotations
@@ -17,19 +17,16 @@ import os
 import sqlite3
 import time
 from dataclasses import dataclass
-from urllib.parse import quote
 
 from .. import sessions, transcripts
-from . import spool
+from ..quota import samples
+from . import light, spool
+from .light import UnwritableError, open_light
 from .normalize import AGENT_LAUNCH, HookEvent
 
 #: A hook event is the client's own report about its own session.
 IDENTITY_STATE = "confirmed"
 IDENTITY_SOURCE = "hook"
-
-#: How long a hook waits for a writer before it spools: far under the shortest
-#: client hook timeout (Codex gives `SessionEnd` three seconds).
-BUSY_TIMEOUT_SECONDS = 1.0
 
 #: What a hook drains after its own write, so the client is not kept waiting
 #: behind a backlog; the server's start-up drain takes the rest.
@@ -53,53 +50,6 @@ _SUBAGENT_KINDS = frozenset({"subagent_start", "subagent_stop"})
 #: the shell has got to. `startup`, `resume` and `fork` are starts of a process or of a
 #: new session, whose `cwd` is where that happened.
 _SAME_RUN_SOURCES = frozenset({sessions.COMPACTED_START, "clear"})
-
-
-class UnwritableError(Exception):
-    """The store cannot take a direct write now; `reason` says why, for the spool line."""
-
-    def __init__(self, reason: str, detail: str = "") -> None:
-        super().__init__(f"{reason}: {detail}" if detail else reason)
-        self.reason = reason
-
-
-def _uri(path: str) -> str:
-    """A read-write URI for an existing file: SQLite refuses rather than creating one."""
-
-    absolute = os.path.abspath(path).replace(os.sep, "/")
-    if not absolute.startswith("/"):
-        absolute = "/" + absolute
-    return f"file://{quote(absolute, safe='/:')}?mode=rw"
-
-
-def open_light(path: str, schema_version: int) -> sqlite3.Connection:
-    """Open a store that exists and is at `schema_version`, or raise `UnwritableError`."""
-
-    if not os.path.isfile(path):
-        raise UnwritableError("missing")
-    try:
-        conn = sqlite3.connect(
-            _uri(path), uri=True, timeout=BUSY_TIMEOUT_SECONDS, isolation_level=None
-        )
-    except sqlite3.Error as error:
-        raise UnwritableError("error", str(error)) from error
-    try:
-        stored = int(conn.execute("PRAGMA user_version").fetchone()[0])
-        if stored != schema_version:
-            raise UnwritableError("schema", f"store {stored}, hook {schema_version}")
-        conn.execute("PRAGMA foreign_keys=ON")
-    except sqlite3.Error as error:
-        conn.close()
-        raise UnwritableError(_reason(error), str(error)) from error
-    except UnwritableError:
-        conn.close()
-        raise
-    return conn
-
-
-def _reason(error: sqlite3.Error) -> str:
-    text = str(error).lower()
-    return "busy" if "locked" in text or "busy" in text else "error"
 
 
 def record(
@@ -206,14 +156,19 @@ def _apply_to_sessions(conn: sqlite3.Connection, event: HookEvent) -> None:
 
 
 def write(
-    conn: sqlite3.Connection, events: list[tuple[HookEvent, str | None]], *, delivery: str
+    conn: sqlite3.Connection,
+    events: list[tuple[HookEvent | samples.Reading, str | None]],
+    *,
+    delivery: str,
 ) -> int:
-    """Record events in one transaction and return how many were new."""
+    """Record events and readings in one transaction and return how many were new."""
 
     conn.execute("BEGIN IMMEDIATE")
     try:
         inserted = sum(
-            record(conn, event, delivery=delivery, spooled_at=spooled_at)
+            bool(samples.record(conn, event))
+            if isinstance(event, samples.Reading)
+            else record(conn, event, delivery=delivery, spooled_at=spooled_at)
             for event, spooled_at in events
         )
         conn.commit()
@@ -321,9 +276,13 @@ def deliver(
             inserted = write(conn, [(event, None)], delivery="direct")
         except sqlite3.Error as error:
             spool.write(
-                directory, event, occurred_ns=occurred_ns, spooled_at=now, reason=_reason(error)
+                directory,
+                event,
+                occurred_ns=occurred_ns,
+                spooled_at=now,
+                reason=light.reason(error),
             )
-            return _reason(error)
+            return light.reason(error)
         if inserted:
             _archive(conn, event, store_path, deadline=started + transcripts.HOOK_SECONDS)
         drain(conn, directory, max_files=HOOK_DRAIN_FILES, seconds=HOOK_DRAIN_SECONDS)

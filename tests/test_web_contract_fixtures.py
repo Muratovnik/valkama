@@ -20,25 +20,30 @@ the format it was written in, and the temporary directory a fixed path.
 
 from __future__ import annotations
 
+import ast
 import http.client
 import json
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 import threading
 import unittest
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
 from server import http_surface, mcp_surface, session_open, sessions, store
+from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
-from server.ops import url_schemes
+from server.ops import doctor, url_schemes
 from server.planning import calls, read_model, service, subscriptions
 from server.projects import project_registry
+from server.quota import samples
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
@@ -353,6 +358,7 @@ class _Scenario:
                         None if cost is None else "2026-11-10",
                     ),
                 )
+            self.seats(conn)
             conn.commit()
         finally:
             conn.close()
@@ -377,7 +383,134 @@ class _Scenario:
                     }
                 )
             ),
+            # The day after, by the seat: an account, a seat no account names, unknown.
+            "analytics-usage-seat": self.http(
+                "/api/analytics/usage?"
+                + urlencode(
+                    {
+                        "from": "2026-11-12",
+                        "to": "2026-11-13",
+                        "utc_offset": "180",
+                        "group_by": "seat",
+                    }
+                )
+            ),
         }
+
+    @staticmethod
+    def seats(conn: sqlite3.Connection) -> None:
+        """A session's work on 2026-11-12, after the days the reads above cover: on the seat
+        an account's poll names, then on one no account names, then for no organization.
+        Its run's last record is the card's, so the reads above say the same."""
+
+        session, organization = "sess-seat", "org-fixture"
+        run = conn.execute(
+            "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+            " read_at) VALUES (?, '', 'claude', 'seat.jsonl', ?, ?, ?)",
+            (session, *("2026-11-10T10:00:00.000Z",) * 2, "2026-11-10T11:00:00.000Z"),
+        ).lastrowid
+        for start, end, held in (
+            # What the session worked for, before the day read.
+            ("2026-11-11T20:00:00.000Z", "2026-11-11T20:00:00.000Z", organization),
+            ("2026-11-12T09:00:00.000Z", "2026-11-12T09:10:00.000Z", organization),
+            ("2026-11-12T09:20:00.000Z", "2026-11-12T09:30:00.000Z", organization),
+            ("2026-11-12T09:40:00.000Z", "2026-11-12T09:50:00.000Z", None),
+        ):
+            conn.execute(
+                "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+                " ended_at, seconds, input_tokens, output_tokens, estimated_api_cost_usd,"
+                " price_book, quality, organization)"
+                " VALUES (?, ?, '', 'claude-opus-5-5', ?, ?, 600, 10, 1, 0.01, '2026-11-10',"
+                " 'observed', ?)",
+                (run, session, start, end, held),
+            )
+        for at, source, owner, account, seat in (
+            ("2026-11-12T08:00:00.000Z", "poll", organization, "acct-fixture", "week:2026-11-16T09:00Z"),
+            ("2026-11-12T08:30:00.000Z", "mod", None, None, "week:2026-11-16T09:00Z"),
+            ("2026-11-12T09:15:00.000Z", "mod", None, None, "week:2026-11-17T19:00Z"),
+        ):  # fmt: skip
+            conn.execute(
+                "INSERT INTO quota_samples(at, source, organization, session_id, account_uuid,"
+                " seat, kind, percent) VALUES (?, ?, ?, ?, ?, ?, 'week', 40)",
+                (at, source, owner, None if owner else session, account, seat),
+            )
+
+    def quota(self) -> dict:
+        """The quota read as of a fixed moment: every kind of window, no source, a seat.
+
+        One account read by the poll: its five hours twice and fresh, its week and a
+        model's week silent, and its usage credits. An organization that worked with no
+        source, and a session's account known by its seat alone. The read is held at
+        `moment`, which every reading is placed before, so its paces stay the same.
+        """
+
+        moment = datetime(2026, 11, 10, 10, 0, tzinfo=UTC)
+
+        def ago(**span: float) -> str:
+            return (moment - timedelta(**span)).isoformat()
+
+        five_reset = (moment + timedelta(hours=2)).isoformat()
+        week_reset = (moment + timedelta(days=3)).isoformat()
+        week_seat = samples.seat_for_week(week_reset)
+        seat_reset = (moment + timedelta(days=5)).isoformat()
+        organization = "6f1c2a8e-0000-4000-8000-0000000000a1"
+        account = "0b7d4e19-0000-4000-8000-0000000000a2"
+        conn = store.connect()
+        try:
+            run = conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                " read_at) VALUES ('sess-quota', '', 'claude', 'quota.jsonl', ?, ?, ?)",
+                (ago(hours=3), ago(hours=1), ago(hours=1)),
+            ).lastrowid
+            for session, worked_for in (
+                ("sess-quota", "6f1c2a8e-0000-4000-8000-0000000000b1"),
+                ("sess-seat", "6f1c2a8e-0000-4000-8000-0000000000c1"),
+            ):
+                conn.execute(
+                    "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+                    " ended_at, seconds, organization, quality)"
+                    " VALUES (?, ?, '', 'model-a', ?, ?, 600, ?, 'observed')",
+                    (run, session, ago(hours=3), ago(hours=1), worked_for),
+                )
+            readings = (
+                samples.Reading(
+                    "poll",
+                    ago(hours=1),
+                    (
+                        samples.Window("five_hour", 20.0, five_reset),
+                        samples.Window("week", 41.0, week_reset),
+                        samples.Window("week_model", 12.5, week_reset, model="model-a"),
+                        samples.Window("extra_usage", None, None, amount=4.0, currency="USD"),
+                    ),
+                    week_seat,
+                    organization=organization,
+                    account_uuid=account,
+                    plan="Max",
+                ),
+                samples.Reading(
+                    "poll",
+                    ago(minutes=5),
+                    (samples.Window("five_hour", 50.0, five_reset),),
+                    week_seat,
+                    organization=organization,
+                    account_uuid=account,
+                    plan="Max",
+                ),
+                samples.Reading(
+                    "statusline",
+                    ago(minutes=2),
+                    (samples.Window("week", 64.0, seat_reset),),
+                    samples.seat_for_week(seat_reset),
+                    session_id="sess-seat",
+                ),
+            )
+            for reading in readings:
+                samples.record(conn, reading, now=moment)
+            conn.commit()
+        finally:
+            conn.close()
+        with mock.patch.object(analytics_quota, "read", partial(analytics_quota.read, now=moment)):
+            return self.http("/api/analytics/quota?utc_offset=180")
 
     def live_frame(self) -> dict:
         """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
@@ -633,7 +766,38 @@ class _Scenario:
             **self.open_plans(),
             "live-frame": self.live_frame(),
             **self.usage(),
+            "doctor-vocabulary": {"quota": _doctor_quota_codes()},
+            "analytics-quota": self.quota(),
         }
+
+
+_QUOTA_CHECK = re.compile(r"quota-(?:statusline|mod|poll)")
+_QUOTA_CODE = re.compile(r"quota-(?:statusline|mod|poll)(?:-[a-z]+)+")
+
+
+def _doctor_quota_codes() -> list[str]:
+    """Every presentation code a quota check of `valkama doctor` reports, read from its source.
+
+    Each code is written out whole in `server/ops/doctor.py`, in its check or in the table
+    of the poll's states, and the web holds its texts to this list. A `quota-` string there
+    that is neither a check id nor a whole code is the start of a code built at run time,
+    which a reading of the source would miss, so it stops the generation instead.
+    """
+
+    tree = ast.parse(Path(doctor.__file__).read_text(encoding="utf-8"))
+    texts = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.startswith("quota-")
+    }
+    built = sorted(
+        text for text in texts if not (_QUOTA_CHECK.fullmatch(text) or _QUOTA_CODE.fullmatch(text))
+    )
+    if built:
+        raise ValueError(f"doctor.py builds a quota presentation code at run time: {built}")
+    return sorted(text for text in texts if _QUOTA_CODE.fullmatch(text))
 
 
 def _everything_but_cursor() -> url_schemes.Installed:

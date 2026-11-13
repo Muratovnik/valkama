@@ -11,13 +11,14 @@ transaction:
 - deliver the hook spool: events a hook process could not write because the
   store was busy, missing or at another schema version;
 - release the Planning leases past their grace that no write met, and drop the
-  subscriptions whose session lapsed by the same rule.
+  subscriptions whose session lapsed by the same rule;
+- delete the quota samples past their year (`quota.samples.prune`).
 
 The spool goes first, because a delivered event can move a session's
-heartbeat forward and keep its lease from lapsing. Both steps share one budget,
+heartbeat forward and keep its lease from lapsing. The steps share one budget,
 `START_UP_SECONDS`, because a client waits for the MCP server it started and
 gives up after its own timeout: the drain stops starting files when its share
-is spent, and every lock either step asks for is given up after
+is spent, and every lock a step asks for is given up after
 `START_UP_BUSY_MS` instead of the connection's own busy timeout. A store
 another writer holds is an ordinary state; what was not done runs at the next
 start.
@@ -39,7 +40,9 @@ agent at work has an MCP process, so one of them runs whenever work can be obser
 first, then the runs an older reading left stale), on its own connection in the
 background, a bounded amount per pass. Only the listener runs it: it
 alone answers the reads of those rows, and anything an MCP process would do here
-another one would be doing too.
+another one would be doing too. After each pass the listener on the owner's port also
+decides the quota alerts (`alerts.quota`): a pass is what learns the organization a
+session's quota reading belongs to, and the listener runs with no window open.
 """
 
 from __future__ import annotations
@@ -53,9 +56,11 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 from . import store, transcripts
+from .alerts import quota as quota_alerts
 from .hooks import ingest, spool
 from .planning import service as planning_service
 from .planning import subscriptions as planning_subscriptions
+from .quota import samples as quota_samples
 from .telemetry import liveness, usage_reread
 
 #: The whole budget of what runs before the first request. A client gives an
@@ -89,6 +94,7 @@ class Report:
 
     spool: ingest.DrainResult = field(default_factory=ingest.DrainResult)
     expired_leases: int = 0
+    pruned_samples: int = 0
     #: The step that could not finish and why; the steps after it still ran.
     failures: list[str] = field(default_factory=list)
 
@@ -102,8 +108,9 @@ def run(conn: sqlite3.Connection, *, seconds: float = START_UP_SECONDS) -> Repor
 
     report = Report()
     deadline = time.monotonic() + seconds
-    # What the lease expiry after the drain may still need: its own lock wait.
-    reserve = START_UP_BUSY_MS / 1000 * 2
+    # What the two steps after the drain may still need: the lease expiry's lock wait and
+    # the quota retention's, each with as much again to spare.
+    reserve = START_UP_BUSY_MS / 1000 * 4
     with _short_busy_timeout(conn):
         try:
             report.spool = drain_spool(conn, seconds=max(0.0, seconds - reserve))
@@ -116,6 +123,13 @@ def run(conn: sqlite3.Connection, *, seconds: float = START_UP_SECONDS) -> Repor
             report.expired_leases = expire_leases(conn)
         except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
             report.failures.append(f"lease expiry: {_describe(error)}")
+        if time.monotonic() >= deadline:
+            report.failures.append("quota retention: no time left; it runs at the next start")
+            return report
+        try:
+            report.pruned_samples = prune_quota_samples(conn)
+        except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
+            report.failures.append(f"quota retention: {_describe(error)}")
     return report
 
 
@@ -193,6 +207,19 @@ def expire_leases(conn: sqlite3.Connection) -> int:
     return expired
 
 
+def prune_quota_samples(conn: sqlite3.Connection) -> int:
+    """Delete the quota samples past their retention, in one transaction; how many."""
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        pruned = quota_samples.prune(conn)
+    except BaseException:
+        conn.rollback()
+        raise
+    conn.commit()
+    return pruned
+
+
 def start_sweep(conn: sqlite3.Connection, report: Callable[[str], None]) -> threading.Thread | None:
     """Start the transcript sweep in the background when the archive may owe or hold anything.
 
@@ -266,18 +293,27 @@ def _pulse(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
             return
 
 
-def start_usage(report: Callable[[str], None]) -> threading.Event:
-    """Read transcripts into usage rows in the background until the event this returns is set."""
+def start_usage(report: Callable[[str], None], *, alerts: bool = False) -> threading.Event:
+    """Read transcripts into usage rows in the background until the event this returns is set.
+
+    `alerts` is whether each pass is followed by the quota alerts: only on the owner's
+    listener, as for the alerts of a launch that ended (`watchers`).
+    """
 
     stop = threading.Event()
     thread = threading.Thread(
-        target=_usage, args=(store.db_path(), stop, report), name=USAGE_THREAD, daemon=True
+        target=_usage,
+        args=(store.db_path(), stop, report, alerts),
+        name=USAGE_THREAD,
+        daemon=True,
     )
     thread.start()
     return stop
 
 
-def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> None:
+def _usage(
+    path: str, stop: threading.Event, report: Callable[[str], None], alerts: bool = False
+) -> None:
     """Pass after pass. A store that cannot be opened or written now is tried again later."""
 
     if stop.wait(USAGE_START_SECONDS):
@@ -301,6 +337,9 @@ def _usage(path: str, stop: threading.Event, report: Callable[[str], None]) -> N
                 if text != said:
                     report(f"usage reader did not finish a pass: {text}")
                     said = text
+            if alerts and conn is not None:
+                # Never raises: a failure is a line in the alerts log.
+                quota_alerts.after_pass(conn)
             pause = USAGE_BACKLOG_PAUSE_SECONDS if backlog else USAGE_PAUSE_SECONDS
             if stop.wait(pause):
                 return

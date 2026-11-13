@@ -966,6 +966,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   running is hatched, and a forced palette draws the marks in its ink and the floor, the rest and
   an empty track in its quiet ink. Neither acts or moves under the pointer, and each keeps its
   height with nothing to draw, so the tile around it never moves when its figures arrive.
+  Two forms draw one window of a limit, a share of it spent and never a sum of two:
+  `WindowBar`, the share as a fill on a track of the series hue's own tint, a tick across the
+  bar where steady use from the window's start would stand now, and the share and the state in
+  words beside it; and `StepLine`, the window's readings as steps from its start to its reset,
+  flat until the next reading and never a slope between two, with steady use as a thin diagonal
+  in the text ink and the reading under the pointer said over the plot in a box that keeps its
+  size. A window no longer fresh is hatched, a 0 % has no fill, and a window with no figure draws
+  the track alone; the fill stands apart from the ground and the track by lightness, so both read
+  in grayscale and under a forced palette in its inks. Their table twins are `WindowBarTable`
+  and `StepLineTable`.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, takes the height the
@@ -2139,9 +2149,9 @@ Records reach the store in batches, so the bar says the newest record's
 age in seconds and the minutes after it are hatched as «no data yet» rather than drawn
 as a drop; the minute chart says under itself that its figures are an estimate.
 
-The rail holds a tile for the overview, one for the token kinds and one for each dimension
-of the read: account, project, task, executor, role, launch class, model, effort and
-environment. A tile is a summary of its own — the leading value, its share, how many values
+The rail holds a tile for the overview, one for the token kinds, two for the subscription
+quota — «Five hours» and «Week» — and one for each dimension of the read: account, project,
+task, executor, role, launch class, model, effort and environment. A tile is a summary of its own — the leading value, its share, how many values
 have a figure in the chosen measure and one bar of the split — so every breakdown is in view
 before any is opened, and choosing a tile opens its section in the panel. Opening a section,
 from its tile or a card's heading, is a step of the history, so Back returns to where it was;
@@ -2193,6 +2203,36 @@ and the kinds are reached by the table's own sideways scroll.
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
 
+The quota's two sections read where each account's quota stands now, which no period or
+filter changes, and read it again on the live interval whatever the period. Each tile names
+the tightest window of its kind across accounts — the most spent of those whose reset is still
+ahead, a fresh one before a silent one at the same share — by its account's name, with its
+share, its state in words beside the section's name and a thin `WindowBar`. A tile with no
+window to name says why: no source read the work, the windows reset since they were read, or
+no reading. The panel has a row per account, by the name its owner gave it or the start of its
+id, the whole id in its hint, and for each window its bar, when it resets in absolute and
+relative time, its forecast — the five hours a point, lasting to the reset or running out at a
+time; a week a range, said as a range — where steady use would stand, how old its latest
+reading is and who read it, and the `StepLine` of its readings. An account no source read says
+so and draws no window; a silent window is hatched and says since when it has not changed; a
+fresh 0 % draws an empty track and says «0% used» and «fresh». A window of money past a limit
+is a line of its state, its age and its source, with no figure. No share is added to another,
+of two windows or two accounts, and no dollar stands beside one.
+
+Under each window that names its start stands «Where the window went»: the work Valkama
+recorded on that account from the window's start to the answer's moment, held to the last five
+minutes, as the section's ranked bars or their table — the first five items by the API price
+estimate, each with its share of the account's estimate, and one line for the rest. It opens by
+task and offers projects and models; the choice holds for that window when the panel turns to
+its table. Its words say it is the API price estimate and not quota points, name the period, and
+say that work in claude.ai and the desktop app, which the window's share counts, is not in it. It
+is read by the account's seat, one window at a time and only for the windows shown, so another
+account's work is never in it; work its organization recorded with no account known is a quiet
+line of its own, never counted to the account. No work, only such work, a wait and a read that
+failed, with its retry, each say so in the block, and the quota's own figures stand meanwhile.
+The block starts at the account's edge, under the window's bar and readings, on no axis of
+theirs.
+
 A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
 are counted apart from the tokens processed anew and never summed into them.
 
@@ -2218,8 +2258,12 @@ chosen. A plain task has no glyph anywhere, so its row is its word. Accounts hol
 row per account the past year's work was billed to, the most agent time first: its
 whole id with its share of that time, a name field whose placeholder says what Analytics
 shows without one, and a clear; an account named before that the year did not see keeps
-its row, so its name can still be taken away. Analytics says an account by that name and
-a session by the title its client gave it, with the id in the hint.
+its row, so its name can still be taken away. A name is saved when its field is left or
+Enter is pressed, and the group's status line, where its reads say they are under way or
+failed, says the save under way, a save that failed with a retry beside it, a saved name
+and a cleared one; a field keeps what was typed until its save holds. Analytics says an
+account by that name and a session by the title its client gave it, with the id in the
+hint.
 
 ## Accessibility
 

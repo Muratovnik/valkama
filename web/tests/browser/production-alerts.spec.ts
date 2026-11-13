@@ -104,6 +104,8 @@ test('the whole group answers to the keyboard, and keeps focus through every pre
   await expect(boxes(page).nth(1)).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(boxes(page).nth(2)).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(boxes(page).nth(3)).toBeFocused()
 
   await page.keyboard.press('Tab')
   const content = page.getByRole('combobox', { name: 'What to show' })

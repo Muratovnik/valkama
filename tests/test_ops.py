@@ -535,6 +535,270 @@ class DoctorHookTests(unittest.TestCase):
         self.assertEqual(["unknown"], [check["status"] for check in checks])
 
 
+class DoctorStatusLineTests(unittest.TestCase):
+    """Whether Claude Code's status line feeds the quota: off, silent or working.
+
+    The settings live in a synthetic `CLAUDE_CONFIG_DIR`; the doctor only reads them.
+    """
+
+    def setUp(self) -> None:
+        self.claude = isolate_home(self) / ".claude"
+        self.claude.mkdir()
+        self.settings = self.claude / "settings.json"
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "valkama.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def write_settings(self, command: str | None, **extra: object) -> None:
+        document: dict[str, object] = dict(extra)
+        if command is not None:
+            document["statusLine"] = {"type": "command", "command": command, "padding": 2}
+        self.settings.write_text(json.dumps(document), encoding="utf-8")
+
+    def check(self) -> dict:
+        [only] = [c for c in doctor._quota_source_checks() if c["id"] == "quota-statusline"]
+        self.assertIn("WSL", only["detail"])
+        self.assertIn("CLAUDE_CONFIG_DIR", only["detail"])
+        return only
+
+    def reading(self, at: str) -> None:
+        from server.quota import samples
+
+        conn = store.connect()
+        try:
+            with conn:
+                samples.record(
+                    conn,
+                    samples.Reading(
+                        "statusline",
+                        at,
+                        (samples.Window("five_hour", 12.0, None),),
+                        None,
+                        session_id="session-1",
+                    ),
+                )
+        finally:
+            conn.close()
+
+    def test_without_a_status_line_running_valkama_the_source_is_off(self) -> None:
+        for name, setting in (
+            ("no settings file", None),
+            ("no status line", "absent"),
+            ("another status line", "jq -r .model.display_name"),
+            ("a command that only resembles it", "myvalkama statusline"),
+        ):
+            with self.subTest(case=name):
+                if setting is None:
+                    self.settings.unlink(missing_ok=True)
+                else:
+                    self.write_settings(None if setting == "absent" else setting)
+                found = self.check()
+                self.assertEqual(
+                    ("warn", "quota-statusline-off"),
+                    (found["status"], found["presentation"]["code"]),
+                )
+                self.assertTrue(found["detail"].startswith("off:"))
+
+    def test_registered_without_a_recent_reading_the_source_is_silent(self) -> None:
+        self.write_settings(
+            "C:/Python/python.exe -I -S D:/Valkama/bin/valkama-launcher.py"
+            " statusline --previous=Y2F0"
+        )
+        for name, at in (("never", None), ("four days ago", time.time() - 4 * 86400)):
+            with self.subTest(case=name):
+                if at is not None:
+                    self.reading(time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(at)))
+                found = self.check()
+                self.assertEqual(
+                    ("warn", "quota-statusline-silent"),
+                    (found["status"], found["presentation"]["code"]),
+                )
+                self.assertIn(
+                    "only in terminal sessions, not in the VS Code extension", found["detail"]
+                )
+                if at is None:
+                    # Text, not null: the page refuses a whole report with a null in it.
+                    self.assertEqual("", found["presentation"]["parameters"]["last"])
+
+    def test_registered_with_a_recent_reading_the_source_is_working(self) -> None:
+        self.write_settings("~/.local/bin/valkama statusline")
+        self.reading(time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 3600)))
+        found = self.check()
+        self.assertEqual(
+            ("ok", "quota-statusline-working"), (found["status"], found["presentation"]["code"])
+        )
+
+    def test_unreadable_settings_leave_the_source_unknown(self) -> None:
+        self.settings.write_text("{not json", encoding="utf-8")
+        found = self.check()
+        self.assertEqual(
+            ("unknown", "quota-statusline-unreadable"),
+            (found["status"], found["presentation"]["code"]),
+        )
+
+    def test_the_doctor_only_reads_the_settings(self) -> None:
+        self.write_settings("valkama statusline", theme="dark")
+        before = (self.settings.read_bytes(), self.settings.stat().st_mtime_ns)
+        doctor.diagnose(probe=False)
+        self.assertEqual(before, (self.settings.read_bytes(), self.settings.stat().st_mtime_ns))
+        self.assertEqual(["settings.json"], sorted(path.name for path in self.claude.iterdir()))
+
+
+class DoctorModTests(unittest.TestCase):
+    """Whether Valkama's Claude Code mod feeds the quota: off, silent or working.
+
+    The client state is a synthetic `CLAUDE_CONFIG_DIR` written in the shapes Claude Code
+    keeps: `enabledPlugins` and `env` in `settings.json`, and the install record
+    `plugins/installed_plugins.json` (version 2, a list of installs per
+    `<plugin>@<marketplace>`). The doctor only reads them.
+    """
+
+    KEY = "valkama-quota@valkama"
+
+    def setUp(self) -> None:
+        self.home = isolate_home(self)
+        self.claude = self.home / ".claude"
+        (self.claude / "plugins").mkdir(parents=True)
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "valkama.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def write(
+        self, *, enabled: dict | None = None, installed: list | None = None, env: dict | None = None
+    ) -> None:
+        settings: dict[str, object] = {"theme": "dark"}
+        if enabled is not None:
+            settings["enabledPlugins"] = enabled
+        if env is not None:
+            settings["env"] = env
+        (self.claude / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+        record = {
+            "version": 2,
+            "plugins": {
+                key: [{"scope": "user", "installPath": "/x", "version": "unknown"}]
+                for key in installed or ()
+            },
+        }
+        (self.claude / "plugins" / "installed_plugins.json").write_text(
+            json.dumps(record), encoding="utf-8"
+        )
+
+    def plugin_folder(self, name: str) -> pathlib.Path:
+        folder = self.home / "mods" / name
+        (folder / ".claude-plugin").mkdir(parents=True)
+        (folder / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": name}), encoding="utf-8"
+        )
+        return folder
+
+    def check(self) -> dict:
+        [only] = [c for c in doctor._quota_source_checks() if c["id"] == "quota-mod"]
+        self.assertEqual("Mod quota source", only["title"])
+        return only
+
+    def reading(self, source: str, hours_ago: float) -> None:
+        from server.quota import samples
+
+        at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - hours_ago * 3600))
+        conn = store.connect()
+        try:
+            with conn:
+                samples.record(
+                    conn,
+                    samples.Reading(
+                        source,
+                        at,
+                        (samples.Window("five_hour", 12.0, None),),
+                        None,
+                        session_id="session-1",
+                    ),
+                )
+        finally:
+            conn.close()
+
+    def assert_state(self, status: str, code: str) -> dict:
+        found = self.check()
+        self.assertEqual((status, code), (found["status"], found["presentation"]["code"]))
+        return found
+
+    def test_a_mod_not_installed_or_not_enabled_is_off(self) -> None:
+        other = self.plugin_folder("another-mod")
+        for name, state in (
+            ("no client state", None),
+            ("another plugin enabled", {"enabled": {"x@y": True}, "installed": ["x@y"]}),
+            ("installed, disabled", {"enabled": {self.KEY: False}, "installed": [self.KEY]}),
+            ("installed, never enabled", {"enabled": {}, "installed": [self.KEY]}),
+            ("enabled, not installed", {"enabled": {self.KEY: True}}),
+            ("a plugin folder of another mod", {"env": {"CLAUDE_CODE_PLUGIN_DIRS": str(other)}}),
+            (
+                "a name that only starts like it",
+                {
+                    "enabled": {"valkama-quota-x@valkama": True},
+                    "installed": ["valkama-quota-x@valkama"],
+                },
+            ),
+        ):
+            with self.subTest(case=name):
+                for path in (
+                    self.claude / "settings.json",
+                    self.claude / "plugins" / "installed_plugins.json",
+                ):
+                    path.unlink(missing_ok=True)
+                if state is not None:
+                    self.write(**state)
+                found = self.assert_state("warn", "quota-mod-off")
+                self.assertTrue(found["detail"].startswith("off:"), found["detail"])
+                self.assertIn("project", found["detail"])
+        self.write(enabled={self.KEY: False}, installed=[self.KEY])
+        self.assertIn("installed as valkama-quota@valkama but not enabled", self.check()["detail"])
+
+    def test_an_enabled_mod_without_a_recent_mod_reading_is_silent(self) -> None:
+        self.write(enabled={self.KEY: True}, installed=[self.KEY])
+        self.reading("statusline", 1)
+        never = self.assert_state("warn", "quota-mod-silent")
+        self.assertEqual("", never["presentation"]["parameters"]["last"])
+        self.reading("mod", 4 * 24)
+        found = self.assert_state("warn", "quota-mod-silent")
+        self.assertIn("valkama launcher install", found["fix"])
+
+    def test_an_enabled_mod_with_a_recent_reading_is_working(self) -> None:
+        self.write(enabled={self.KEY: True}, installed=[self.KEY])
+        self.reading("mod", 1)
+        found = self.assert_state("ok", "quota-mod-working")
+        self.assertIn("installed as valkama-quota@valkama and enabled", found["detail"])
+
+    def test_a_mod_loaded_from_a_plugin_folder_counts_as_on(self) -> None:
+        folder = self.plugin_folder("valkama-quota")
+        other = self.plugin_folder("another-mod")
+        self.write(env={"CLAUDE_CODE_PLUGIN_DIRS": os.pathsep.join([str(other), str(folder)])})
+        self.reading("mod", 1)
+        found = self.assert_state("ok", "quota-mod-working")
+        self.assertIn("CLAUDE_CODE_PLUGIN_DIRS", found["detail"])
+
+    def test_unreadable_client_state_leaves_the_source_unknown(self) -> None:
+        for name in ("settings.json", "plugins/installed_plugins.json"):
+            with self.subTest(file=name):
+                self.write(enabled={self.KEY: True}, installed=[self.KEY])
+                (self.claude / name).write_text("{not json", encoding="utf-8")
+                self.assert_state("unknown", "quota-mod-unreadable")
+
+    def test_the_doctor_only_reads_the_client_state(self) -> None:
+        self.write(enabled={self.KEY: True}, installed=[self.KEY])
+        files = [self.claude / "settings.json", self.claude / "plugins" / "installed_plugins.json"]
+        before = [(path.read_bytes(), path.stat().st_mtime_ns) for path in files]
+        doctor.diagnose(probe=False)
+        self.assertEqual(before, [(path.read_bytes(), path.stat().st_mtime_ns) for path in files])
+        self.assertEqual(
+            ["plugins", "settings.json"], sorted(path.name for path in self.claude.iterdir())
+        )
+
+
 class DoctorUsagePriceTests(unittest.TestCase):
     """A model with tokens and no price is a finding, not a cost of zero."""
 

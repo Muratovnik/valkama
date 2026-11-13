@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 
-import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
+import { useAccountNamesStore } from '@/shared/stores/accountNamesStore.ts'
 
 import { analyticsI18n } from '../support/analyticsReads.ts'
 
@@ -191,7 +191,7 @@ describe('the name of an executor and an account', () => {
   it('names an account by the owner’s name for it, with its whole id in the hint', () => {
     const words = wordsIn('ru')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
-    useSettingsStore().settings.accountAliases = { [account.id]: 'Основной' }
+    useAccountNamesStore().names = { [account.id]: 'Основной' }
     expect(words.valueLabel('account', account)).toBe('Основной')
     expect(words.valueDetail('account', account)).toBe(account.id)
     expect(words.accounts([account], [account, { id: 'b7', unknown: false }])).toBe(
@@ -200,7 +200,7 @@ describe('the name of an executor and an account', () => {
   })
 
   it('names an account the owner left unnamed by the start of its id', () => {
-    useSettingsStore().settings.accountAliases = { other: 'Other' }
+    useAccountNamesStore().names = { other: 'Other' }
     const words = wordsIn('en')
     expect(words.valueLabel('account', account)).toBe('f0f0f0f0')
     expect(words.valueDetail('account', account)).toBe(account.id)

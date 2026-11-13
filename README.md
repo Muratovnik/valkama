@@ -33,9 +33,9 @@ directory, and the MCP server only exists while a client is talking to it.
 - **Names for accounts.** The usage records hold only the id of the organization work
   was billed to. Under Settings → General → Accounts, each account the past year saw is
   listed with its id and its share of agent time, and you can give it a name or clear
-  one. Analytics then labels the account by that name, with the id in the hint. Names are
-  kept in `localStorage` like the colours, so a browser and the desktop app each
-  remember their own.
+  one. Analytics then labels the account by that name, with the id in the hint, and quota
+  alerts say it. Names are kept in Valkama's store, so every browser and the desktop app
+  say the same one; names a device kept on its own before are moved there once.
 - **Questions and decisions** in the task's discussion and a shared inbox. Agents
   create typed requests; the owner answers, in their own words if they prefer, or
   declines the exact request, and can change an answer while the task is open.
@@ -959,6 +959,51 @@ never a variable's value
 allowlisted set of fields is kept: never the prompt, tool arguments other than an
 Agent call's short description, or assistant text.
 
+`valkama statusline` is the command Claude Code runs as its status line. It
+records the `rate_limits` the status line input carries, the five-hour window
+and the week, as quota samples of that session, through the same store-or-spool
+path, and prints nothing of its own. A status line command the user already had
+is passed as `--previous=<base64 of its UTF-8 text>`; it then runs with the same
+input through the same shell, and its output is what the status line shows.
+Only terminal sessions run a status line; the VS Code extension does not.
+`valkama statusline --help` states the interface, and
+[the hook contract](docs/hook-contract.md#the-status-line-command) says how to
+write and restore the setting.
+
+```
+valkama statusline                       < statusline-input.json
+valkama statusline --previous=Y2F0       < statusline-input.json
+valkama statusline --source=mod          < mod-reading.json
+```
+
+The same quota comes from Valkama's Claude Code mod, `valkama-quota` in
+`server/mod/valkama-quota`, in every session, the VS Code extension's included.
+After each model response, and when a window moves during a turn, the mod hands
+the session's reading to `valkama statusline --source=mod` through the managed
+launcher, as the same JSON fields the status line sends; the reading is recorded
+under the source `mod`. The hand-over runs after the hook has answered, one at a
+time, and is stopped after 10 seconds, so a missing, slow or failing Valkama
+costs the reading and never a turn. The repository is a Claude Code marketplace
+named `valkama`. With the launcher installed from a release that has
+`--source=mod` (`valkama statusline --help` lists it), install the mod at the
+prompt of a Claude Code terminal session:
+
+```
+/plugin install valkama-quota --marketplace Muratovnik/valkama
+```
+
+or from a checkout, in a shell:
+
+```
+claude plugin marketplace add <checkout>
+claude plugin install valkama-quota@valkama
+```
+
+`claude plugin disable valkama-quota@valkama` switches it off. Its own tests run
+with `claude plugin test server/mod/valkama-quota`, and
+[the hook contract](docs/hook-contract.md#the-mod) says what it hands over and
+when.
+
 The same hooks tell a working agent what a person did in the interface on the
 work its session holds. `post-tool-use`, `user-prompt-submit` and `stop` answer
 with a short notice when there is news: a comment, an answer, a status change, a
@@ -1071,6 +1116,16 @@ When an agent asks you a question or asks for a decision, or moves work to revie
 Valkama shows a Windows notification, so you need not watch the board or the chats. It
 works with Valkama's window closed, because the process that wrote the event shows it.
 A launch from Valkama that fails can notify you too; that one is off until you turn it on.
+
+Valkama also warns before a subscription quota window runs out: a week, and a model's own
+week, at 75 % and again at 90 % spent, and the five-hour window when its forecast says it
+runs out before its reset. That warning comes from the listener, after each pass of its
+usage reader, so it needs the listener running, which `launcher autostart` keeps; the
+window may be closed. Each level is given once per window, a restart included, and a new
+reset starts the levels again. A reading older than fifteen minutes, or one whose session
+the reader has not yet tied to an organization, warns of nothing until a fresh one comes.
+The notification names the level, the reset, how old its data is and what to do, and a
+click on it opens nothing.
 
 **What it needs:**
 
@@ -1185,7 +1240,8 @@ files and process memory.
 | Path | Owns |
 | --- | --- |
 | `valkama.py` | the source entry point — it prepares `sys.path` and hands off to `server/cli.py`, or for `hook` to `server/hooks/entry.py` and for `serve --on-demand` to `server/on_demand.py` before the command line is imported |
-| `server/` | the Python server, managed launcher, domain modules, and CLI/HTTP/MCP surfaces |
+| `server/` | the Python server, managed launcher, domain modules, and CLI/HTTP/MCP surfaces; the skill clients install (`server/skill/`) and the Claude Code mod (`server/mod/`) |
+| `.claude-plugin/` | the marketplace file that makes the repository a Claude Code marketplace listing the mod |
 | `web/` | the Vue application, its build and its tests |
 | `desktop/` | the Electron window — its own npm package, tests and release output |
 | `windows/` | what exists only because the host is Windows: the tray script, the icon, its generator, the installer |

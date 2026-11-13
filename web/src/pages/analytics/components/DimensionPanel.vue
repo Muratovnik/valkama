@@ -46,6 +46,7 @@ import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
+import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
 import ToggleChip from '@/shared/ui/ToggleChip.vue'
 
@@ -91,7 +92,7 @@ const wholeWords = computed(() =>
  * The dimension the answer was read by, not the one the page now asks for: while a new
  * breakdown is read the last one stays on screen, and its rows name only their own dimension.
  */
-const by = computed<UsageDimension>(() => props.usage.group_by[0] ?? 'work_item')
+const by = computed<UsageDimension>(() => pageDimensionOf(props.usage) ?? 'work_item')
 const before = computed(() => tileFigures(props.usage).before)
 
 /** The second dimension, where it is another than the section's own. */

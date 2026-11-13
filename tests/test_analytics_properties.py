@@ -7,6 +7,10 @@ holds the read to is the contract's: what a stretch has spent by a moment is its
 count times the share of its time before that moment, rounded half up, and what it
 spends between two moments is the difference.
 
+A stretch's seat is held to a reference of its own, written from the seat rule as the
+contract states it (`quota.seats`) over the samples the test wrote, in milliseconds
+rather than the stored text the read compares.
+
 Each property is a function made inside its test, so every run builds a new one: one
 Hypothesis test shared by every instance unittest makes of the case fails its
 `differing_executors` health check the second time the case runs in one process.
@@ -71,6 +75,25 @@ STRETCHES = st.lists(
     ),
     max_size=10,
 )
+#: Seats whose weeks end inside the stretches' days or after them, as `week:<reset>`.
+SEATS = ["week:2030-03-05T09:00Z", "week:2030-03-06T19:00Z", "week:2030-03-12T05:00Z"]
+#: Quota samples: a session's, or an organization's poll with an account or not.
+QUOTA = st.lists(
+    st.fixed_dictionaries(
+        {
+            "who": st.sampled_from(["s-1", "s-2", "s-3", "org-a", "org-b"]),
+            "at": st.integers(min_value=-8 * DAY * 1000, max_value=4 * DAY * 1000),
+            "kind": st.sampled_from(["five_hour", "week"]),
+            "seat": st.sampled_from(SEATS),
+            # Milliseconds after the sample to its window's reset; none says only the seat.
+            "resets": st.sampled_from([None, 1, 3_600_000, 18_000_000, 3 * DAY * 1000]),
+            "account": st.sampled_from([None, "acct-1", "acct-2"]),
+        }
+    ),
+    max_size=8,
+)
+#: The longest a sample's seat can hold: a week, and the five minutes its key is rounded by.
+LONGEST_HOLD = (7 * DAY + 300) * 1000
 
 
 def at(local_day: str, offset: int) -> Fraction:
@@ -120,6 +143,74 @@ def falls_in(stretch: Mapping, low: Fraction, high: Fraction) -> bool:
     start = Fraction(stretch["start"], 1000)
     end = start + Fraction(stretch["length"], 1000)
     return low <= start < high if start == end else start < high and end > low
+
+
+def week_end(seat: str) -> int:
+    """Milliseconds after START of the reset a seat's key names."""
+
+    moment = dt.datetime.fromisoformat(seat.removeprefix("week:").replace("Z", "+00:00"))
+    return (moment - START) // dt.timedelta(milliseconds=1)
+
+
+def seat_of(stretch: Mapping, stretches: list[dict], quota: list[dict]) -> tuple[str | None, bool]:
+    """The seat value the contract gives a stretch, by the rule of `quota.seats` read anew.
+
+    Of each feed, a session's or an organization's in one window, its latest sample at or
+    before the stretch's end (and within the longest hold of its start) is its state. It
+    counts while its window has not reset by the start, and when the feed's identity worked
+    for the stretch's organization then: an organization's own, and a session's as its
+    latest main-run stretch begun by the sample says. The stretch's own session's feeds come
+    first; the most recent of those holding names the seat. The account is the naming
+    sample's, or else the one account the organization's samples of that seat name.
+    """
+
+    organization = stretch["organization"]
+    if organization is None:
+        return None, True
+    start, end = stretch["start"], stretch["start"] + stretch["length"]
+
+    def worked_for(sample: Mapping) -> str | None:
+        if sample["who"].startswith("org-"):
+            return sample["who"]
+        begun = [
+            (other["start"], number)
+            for number, other in enumerate(stretches)
+            if other["session"] == sample["who"]
+            and other["agent"] == ""
+            and other["start"] <= sample["at"]
+        ]
+        return stretches[max(begun)[1]]["organization"] if begun else None
+
+    def holds(sample: Mapping) -> bool:
+        reset = week_end(sample["seat"])
+        if sample["resets"] is not None:
+            reset = min(reset, sample["at"] + sample["resets"])
+        return reset > start and worked_for(sample) == organization
+
+    latest: dict[tuple[str, str], tuple[int, Mapping]] = {}
+    for number, sample in sorted(enumerate(quota), key=lambda pair: (pair[1]["at"], pair[0])):
+        if start - LONGEST_HOLD <= sample["at"] <= end:
+            latest[sample["who"], sample["kind"]] = (number, sample)
+    own = [pair for (who, _), pair in latest.items() if who == stretch["session"]]
+    others = [pair for (who, _), pair in latest.items() if who != stretch["session"]]
+    for feeds in (own, others):
+        holding = [pair for pair in feeds if holds(pair[1])]
+        if holding:
+            _, naming = max(holding, key=lambda pair: (pair[1]["at"], pair[0]))
+            break
+    else:
+        return None, True
+    accounts = {
+        sample["account"]
+        for sample in quota
+        if sample["who"] == organization
+        and sample["seat"] == naming["seat"]
+        and sample["account"] is not None
+    }
+    account = naming["account"] if naming["who"].startswith("org-") else None
+    if account is None and len(accounts) == 1:
+        account = next(iter(accounts))
+    return f"{organization}/{account or naming['seat']}", False
 
 
 def group_of(value: Mapping) -> tuple[str | None, bool]:
@@ -198,10 +289,25 @@ class ReferenceTests(UsageStore):
         self.session("s-1", self.beta_root / "src")
         self.session("s-2", self.root / "elsewhere")
 
-    def write(self, stretches: list[dict]) -> None:
+    def write(self, stretches: list[dict], quota: list[dict]) -> None:
         self.conn.execute("DELETE FROM usage_segments")
         self.conn.execute("DELETE FROM usage_runs")
+        self.conn.execute("DELETE FROM quota_samples")
         self.runs.clear()
+        self.stretches, self.quota = stretches, quota
+        for sample in quota:
+            session = None if sample["who"].startswith("org-") else sample["who"]
+            self.quota_sample(
+                sample["at"] / 1000,
+                sample["seat"],
+                session=session,
+                organization=None if session else sample["who"],
+                account=None if session else sample["account"],
+                kind=sample["kind"],
+                resets_at=None
+                if sample["resets"] is None
+                else stamp((sample["at"] + sample["resets"]) / 1000),
+            )
         for stretch in stretches:
             begin = stretch["start"] / 1000
             self.segment(
@@ -241,6 +347,8 @@ class ReferenceTests(UsageStore):
             if stretch["advisor"]:
                 return "advisor", False
             return ("main" if stretch["agent"] == "" else "subagent"), False
+        if dimension == "seat":
+            return seat_of(stretch, self.stretches, self.quota)
         found = {
             "account": stretch["organization"],
             "executor": stretch["session"],
@@ -254,12 +362,15 @@ class ReferenceTests(UsageStore):
         @EXAMPLES
         @given(
             stretches=STRETCHES,
+            quota=QUOTA,
             offset=st.sampled_from([0, 180, -330, 840]),
             step=st.sampled_from(["minute", "hour", "day"]),
             early=st.integers(min_value=0, max_value=59_999),
         )
-        def check(stretches: list[dict], offset: int, step: str, early: int) -> None:
-            self.write(stretches)
+        def check(
+            stretches: list[dict], quota: list[dict], offset: int, step: str, early: int
+        ) -> None:
+            self.write(stretches, quota)
             begin, end = at(day(0), offset), at(day(3), offset)
             if step == "minute":
                 # Three days by the minute are more steps than a period may hold, and the
@@ -315,9 +426,9 @@ class ReferenceTests(UsageStore):
 
     def test_a_periods_figures_do_not_depend_on_how_it_is_cut(self) -> None:
         @EXAMPLES
-        @given(stretches=STRETCHES, offset=st.sampled_from([0, 180, -330]))
-        def check(stretches: list[dict], offset: int) -> None:
-            self.write(stretches)
+        @given(stretches=STRETCHES, quota=QUOTA, offset=st.sampled_from([0, 180, -330]))
+        def check(stretches: list[dict], quota: list[dict], offset: int) -> None:
+            self.write(stretches, quota)
 
             def read(begin: int, end: int, **more: str) -> dict:
                 return self.read(
@@ -337,6 +448,17 @@ class ReferenceTests(UsageStore):
             self.assertEqual(
                 Figures.of(compared["comparison"]["total"]),
                 Figures.summed(Figures.of(row) for row in compared["comparison"]["rows"]),
+            )
+            # By seat beside the period before, each period's seats add up to its total.
+            seated = read(1, 2, compare="true", group_by="seat")
+            for part in (seated, seated["comparison"]):
+                self.assertEqual(
+                    Figures.of(part["total"]),
+                    Figures.summed(Figures.of(row) for row in part["rows"]),
+                    "by seat",
+                )
+            self.assertEqual(
+                Figures.of(read(0, 1)["total"]), Figures.of(seated["comparison"]["total"])
             )
             self.assertEqual(
                 whole,

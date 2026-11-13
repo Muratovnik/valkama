@@ -15,6 +15,10 @@
  * page wrote before it had sections, when the plain page was the breakdown by task, therefore
  * opens the overview, the period's figures with that breakdown's first values among them.
  *
+ * The two sections of the subscription quota, its five hours and its week, are no dimension
+ * either and read no usage of their own: they stand on the period's overview, which the rail's
+ * first tiles read, so opening one asks no usage again.
+ *
  * A preset is kept as its name, not as its dates: «this week» in a link opened next week is
  * next week's week, as the words say, «today» is the day it is opened on, and «now» is the hour
  * up to whenever it is opened.
@@ -43,15 +47,29 @@ export const OVERVIEW = 'overview'
  */
 export const TOKEN_KINDS_SECTION = 'token_kind'
 
-/** A section of the page: the overview, the tokens by kind, or a dimension of the work. */
-export type AnalyticsSection = UsageDimension | typeof OVERVIEW | typeof TOKEN_KINDS_SECTION
+/**
+ * The sections of each account's subscription quota: its five hours, and its week with each
+ * model's week. Spelled apart from every dimension, so no dimension of the read takes the name.
+ */
+export const QUOTA_SECTIONS = ['quota_five_hour', 'quota_week'] as const
+export type QuotaSection = (typeof QUOTA_SECTIONS)[number]
+
+export const isQuotaSection = (value: unknown): value is QuotaSection =>
+  QUOTA_SECTIONS.includes(value as QuotaSection)
+
+/**
+ * A section of the page: the overview, the tokens by kind, a section of the quota, or a dimension
+ * of the work.
+ */
+export type AnalyticsSection =
+  UsageDimension | typeof OVERVIEW | typeof TOKEN_KINDS_SECTION | QuotaSection
 
 export interface AnalyticsView {
   /** The second dimension a section's table crosses its own with; null for none. */
   across: UsageDimension | null
   /**
-   * The section on show: the overview, the tokens by kind, or the dimension the bars and the
-   * stacks break work down by.
+   * The section on show: the overview, the tokens by kind, a section of the quota, or the
+   * dimension the bars and the stacks break work down by.
    */
   by: AnalyticsSection
   filters: UsageFilters
@@ -79,14 +97,17 @@ export const DEFAULT_VIEW: AnalyticsView = {
 }
 
 const isSection = (value: unknown): value is AnalyticsSection =>
-  value === OVERVIEW || value === TOKEN_KINDS_SECTION || isUsageDimension(value)
+  value === OVERVIEW ||
+  value === TOKEN_KINDS_SECTION ||
+  isQuotaSection(value) ||
+  isUsageDimension(value)
 
 /**
  * The dimension a view's reads break work down by: its section's, or the overview's tasks, which
- * the tokens by kind read too, so moving between those two asks nothing again.
+ * the tokens by kind and the quota's sections read too, so moving among them asks nothing again.
  */
 export const breakdownOf = (view: AnalyticsView): UsageDimension =>
-  view.by === OVERVIEW || view.by === TOKEN_KINDS_SECTION ? OVERVIEW_BREAKDOWN : view.by
+  isUsageDimension(view.by) ? view.by : OVERVIEW_BREAKDOWN
 
 type RouteState = Readonly<Record<string, string | number | boolean>>
 

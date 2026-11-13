@@ -308,6 +308,14 @@ force, and the gates hold each:
   preserve any pre-existing staged state. Push only when the user explicitly
   requests it.
 
+## Web platform guidance
+
+When the `modern-web-guidance` skill is available, use its guides as a reference
+for web platform APIs, browser support and fallbacks. They do not override this
+repository's own decisions: DESIGN.md and the rules in this file take precedence
+where they differ. Do not append the skill's `### Modern Web Guidance` section to
+replies.
+
 ## Artifact placement
 
 - Durable owner-private plans, research and acceptance records belong in the

@@ -161,6 +161,37 @@ class UsageStore(unittest.TestCase):
         )
         self.conn.commit()
 
+    def quota_sample(
+        self,
+        at: float,
+        seat: str,
+        *,
+        session: str | None = None,
+        organization: str | None = None,
+        account: str | None = None,
+        kind: str = "week",
+        resets_at: str | None = None,
+        percent: float = 40.0,
+    ) -> None:
+        """A quota sample with a seat, of a session or else of an organization's poll."""
+
+        self.conn.execute(
+            "INSERT INTO quota_samples(at, source, organization, session_id, account_uuid, seat,"
+            " kind, percent, resets_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                stamp(at),
+                "mod" if session is not None else "poll",
+                organization,
+                session,
+                account,
+                seat,
+                kind,
+                percent,
+                resets_at,
+            ),
+        )
+        self.conn.commit()
+
     def answer(self, **parameters: str) -> tuple[int, dict]:
         try:
             found = api.handle_get(

@@ -54,6 +54,11 @@ ADDED_TABLES = {
     "work_item_subscriptions",
     "work_item_images",
     "analytics_surface_uses",
+    "quota_account_names",
+    "quota_accounts",
+    "quota_samples",
+    "quota_alerts",
+    "quota_settings",
 }
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {

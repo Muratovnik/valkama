@@ -252,7 +252,8 @@ class SettingsOverHttpTests(Listener):
         status, answer = self.call("GET", "/api/alerts/settings", credentials=False)
         self.assertEqual(200, status)
         self.assertEqual(
-            {"question": True, "review": True, "launchFailed": False}, answer["events"]
+            {"question": True, "review": True, "launchFailed": False, "quota": True},
+            answer["events"],
         )
         self.assertTrue(answer["enabled"])
         self.assertEqual("title", answer["content"])
@@ -261,7 +262,7 @@ class SettingsOverHttpTests(Listener):
     def test_a_put_is_stored_and_read_back(self) -> None:
         wanted = {
             "enabled": False,
-            "events": {"question": True, "review": False, "launchFailed": True},
+            "events": {"question": True, "review": False, "launchFailed": True, "quota": False},
             "content": "prompt",
             "locale": "en",
         }

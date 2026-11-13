@@ -22,11 +22,17 @@ panel that lists them.
 `Tag` is the item's reference and `Group` is `valkama`, so a newer toast about
 the same item replaces the older one in the action centre and either can be
 removed by the pair.
+
+A toast about the quota (`quota`) is about no item, and the desktop app takes no
+address of a quota screen, so it carries no click: what to do is in its text. Its tag
+names the account's window, so the 90% toast of a week takes the place of the 75% one,
+and it leaves the action centre at the window's reset, when it stops being true.
 """
 
 from __future__ import annotations
 
 import html
+import math
 import re
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -83,6 +89,59 @@ _HEADINGS = {
 }
 _EVENTS = ("question", "review", "launchFailed")
 _KINDS = ("question", "decision")
+
+_QUOTA = {
+    "ru": {
+        "week": "Valkama: недельная квота перешла {level}%",
+        "week_model": "Valkama: недельная квота {model} перешла {level}%",
+        "short": "Valkama: пятичасовая квота кончится около {at}",
+        "spent": "Valkama: пятичасовая квота исчерпана",
+        "state": "Израсходовано {percent}% · обновится {reset}",
+        "today": "в {time}",
+        "later": "{day} {month} в {time}",
+        "now": "Данные получены только что.",
+        "age": "Данные получены {minutes} мин назад.",
+        "75": "Распределите остаток до конца недели или перенесите работу на другой аккаунт.",
+        "90": "Оставьте остаток на самое нужное или перенесите работу на другой аккаунт.",
+        "exhausted": "Сбавьте темп до обновления или перенесите работу на другой аккаунт.",
+        "spentAction": "Дождитесь обновления или перенесите работу на другой аккаунт.",
+    },
+    "en": {
+        "week": "Valkama: the week's quota passed {level}%",
+        "week_model": "Valkama: the week's {model} quota passed {level}%",
+        "short": "Valkama: the five-hour quota runs out at about {at}",
+        "spent": "Valkama: the five-hour quota is spent",
+        "state": "{percent}% used · resets {reset}",
+        "today": "at {time}",
+        "later": "on {month} {day} at {time}",
+        "now": "Data from just now.",
+        "age": "Data from {minutes} min ago.",
+        "75": "Pace the rest of the week, or move work to another account.",
+        "90": "Keep the rest for what matters most, or move work to another account.",
+        "exhausted": "Slow down until the reset, or move work to another account.",
+        "spentAction": "Wait for the reset, or move work to another account.",
+    },
+}
+_MONTHS = {
+    "ru": (
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря",
+    ),
+    "en": ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+}
+#: The quota alert's levels by window: a week's share spent, or the five-hour window
+#: forecast to run out before it resets.
+_QUOTA_LEVELS = {"week": ("75", "90"), "week_model": ("75", "90"), "five_hour": ("exhausted",)}
 
 
 class Message(TypedDict):
@@ -143,18 +202,21 @@ def _attribute(value: str) -> str:
     return f'"{html.escape(value, quote=True)}"'
 
 
-def _toast(launch: str, lines: Sequence[str], logo: str | None, header: str | None = None) -> str:
+def _toast(
+    launch: str | None, lines: Sequence[str], logo: str | None, header: str | None = None
+) -> str:
     image = f'<image placement="appLogoOverride" src={_attribute(logo)}/>' if logo else ""
     text = "".join(f"<text>{html.escape(line, quote=False)}</text>" for line in lines)
     # The schema gives a header's own click the same two kinds of activation a toast has.
     head = (
         f"<header id={_attribute(QUESTIONS)} title={_attribute(header)}"
         f' arguments={_attribute(launch)} activationType="protocol"/>'
-        if header
+        if header and launch
         else ""
     )
+    opens = f' launch={_attribute(launch)} activationType="protocol"' if launch else ""
     return (
-        f'<toast launch={_attribute(launch)} activationType="protocol">{head}'
+        f"<toast{opens}>{head}"
         f'<visual><binding template="ToastGeneric">{text}{image}</binding></visual>'
         "</toast>"
     )
@@ -258,4 +320,77 @@ def summary(
             header=phrases["panel"] if questions else None,
         ),
         "expires_at": None,
+    }
+
+
+def _clock(value: datetime, now: datetime, language: str) -> str:
+    """A time as the owner reads it: the clock alone today, the day and the clock later."""
+
+    words = _QUOTA[language]
+    time = value.strftime("%H:%M")
+    if value.date() == now.date():
+        return words["today"].format(time=time)
+    month = _MONTHS[language][value.month - 1]
+    return words["later"].format(day=value.day, month=month, time=time)
+
+
+def quota(
+    level: str,
+    *,
+    tag: str,
+    window: str,
+    percent: float,
+    resets_at: datetime,
+    sample_at: datetime,
+    now: datetime,
+    settings: Mapping[str, object],
+    model: str | None = None,
+    runs_out_at: datetime | None = None,
+    account: str | None = None,
+    logo: str | None = None,
+) -> Message:
+    """The toast that warns of one quota window running out.
+
+    `window` is `week`, `week_model` (with `model`) or `five_hour`; `level` is `75` or
+    `90` for a week and `exhausted` for the five-hour window, with `runs_out_at` when the
+    forecast says when and without it when the window is spent already. `percent` is the
+    share spent as the reading says, shown rounded down, so it never reads as a level it
+    has not reached. The times are aware, in the zone to show them in; `now` is when the
+    alert was decided and `sample_at` when the reading it rests on was made. `account` is
+    the owner's name for the account, shown unless `content` is `generic`.
+
+    Only `settings["content"]` and `settings["locale"]` are read.
+    """
+
+    if level not in _QUOTA_LEVELS.get(window, ()) or (window == "week_model") != bool(model):
+        raise ValueError(f"no quota alert for {window!r} at {level!r}")
+    _phrases(settings)  # refuses a language with no texts
+    language = str(settings["locale"])
+    words = _QUOTA[language]
+    content = settings.get("content")
+    if content not in ("generic", "title", "prompt"):
+        raise ValueError(f"no alert content {content!r}")
+    if window == "five_hour":
+        heading = (
+            words["spent"]
+            if runs_out_at is None
+            else words["short"].format(at=runs_out_at.strftime("%H:%M"))
+        )
+        action = words["spentAction" if runs_out_at is None else "exhausted"]
+    else:
+        heading = words[window].format(level=level, model=_one_line(model or ""))
+        action = words[level]
+    state = words["state"].format(
+        percent=math.floor(percent), reset=_clock(resets_at, now, language)
+    )
+    if account and content != "generic":
+        state = f"{_cut(_one_line(account), TITLE_LIMIT)} · {state}"
+    minutes = max(0, int((now - sample_at).total_seconds() // 60))
+    age = words["now"] if minutes == 0 else words["age"].format(minutes=minutes)
+    return {
+        "aumid": AUMID,
+        "tag": tag,
+        "group": GROUP,
+        "xml": _toast(None, [heading, state, f"{age} {action}"], logo),
+        "expires_at": _expiry(resets_at.isoformat()),
     }

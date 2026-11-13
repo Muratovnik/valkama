@@ -259,11 +259,13 @@ class TheLoopTests(ReaperHarness):
 
 
 class WhichListenerTests(ReaperHarness):
-    """`serve_main` hands the reaper its answer from the port it really holds."""
+    """`serve_main` hands the reaper and the usage reader, which raises the quota alerts,
+    their answer from the port it really holds."""
 
-    def served_with(self, *, port: int, expected: str) -> bool:
+    def served_with(self, *, port: int, expected: str) -> tuple[bool, bool]:
         server = mock.Mock(server_port=port)
         started: list[dict] = []
+        usage = mock.Mock()
 
         def thread(**options: object) -> mock.Mock:
             started.append(options)
@@ -276,16 +278,16 @@ class WhichListenerTests(ReaperHarness):
             mock.patch.object(http_surface.housekeeping, "start_up", return_value=[]),
             mock.patch.object(http_surface.housekeeping, "start_sweep"),
             mock.patch.object(http_surface.housekeeping, "start_pulse"),
-            mock.patch.object(http_surface.housekeeping, "start_usage"),
+            mock.patch.object(http_surface.housekeeping, "start_usage", usage),
             contextlib.redirect_stderr(io.StringIO()),
         ):
             http_surface.serve_main(port)
         (options,) = started
         self.assertEqual(watchers.WATCHERS.run, options["target"])
-        return bool(options["kwargs"]["alerts"])
+        return bool(options["kwargs"]["alerts"]), bool(usage.call_args.kwargs["alerts"])
 
     def test_the_listener_on_the_expected_port_alerts(self) -> None:
-        self.assertTrue(self.served_with(port=18642, expected="18642"))
+        self.assertEqual((True, True), self.served_with(port=18642, expected="18642"))
 
     def test_a_listener_on_another_port_does_not(self) -> None:
-        self.assertFalse(self.served_with(port=18643, expected="18642"))
+        self.assertEqual((False, False), self.served_with(port=18643, expected="18642"))

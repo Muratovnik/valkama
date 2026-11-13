@@ -108,8 +108,94 @@ checkouts are therefore distinguishable even at the same version.
   again only after it changes.
 - **Names for accounts.** The usage records hold only an organization id, so Settings →
   General → Accounts lists each account the past year saw, with its id and its share of
-  agent time, and lets you name it or clear the name. Analytics labels the account by
-  that name, with the id in the hint. Names are kept on the device, like task type colours.
+  agent time, and lets you name it or clear the name. The name is saved to the store when
+  its field is left or Enter is pressed, and the field says while it saves, when a save
+  failed (with a retry) and when a name was cleared. The Analytics page on every device,
+  and the quota alerts, name the account by it, with the id still in the hint. `GET` and
+  `PUT /api/quota/account-names` read and write the names: one line of at most 80
+  characters per organization, the server refusing a longer name or a bad id and changing
+  nothing.
+- **The Analytics page shows the subscription quota.** Two tiles, «Five hours» and
+  «Week», stand on the rail after the token kinds and name the tightest account's window
+  with its share and whether it is fresh or silent. Each opens a panel with a row per
+  account: for every window a bar with a tick where steady use would stand, when it
+  resets, its forecast (a time it runs out at for the five hours, a range for a week),
+  how old its reading is and which source read it, and its readings as a step line, each
+  with a table view. No source, a silent window and a fresh 0 % read differently, and no
+  percentage is added to another or shown beside dollars.
+- **The quota panel says where each window went.** Under each window of an account, five
+  hours, the week or a model's week, «Where the window went» ranks the work Valkama recorded
+  on that account since the window started by its API price estimate, each item with its
+  share of that estimate, by task, project or model, the first five and one line for the
+  rest. It says it is the API price estimate and not quota points, and that work in
+  claude.ai and the desktop app is not in it. It reads `GET /api/analytics/usage` by the
+  account's `seat`, for the windows shown, so no other account's work is counted; work of
+  the organization with no account known is said apart. No work, such work alone, a wait
+  and a failed read with its retry each say so in the block, and the quota's figures stand
+  meanwhile.
+- **`GET /api/analytics/quota`: each account's subscription quota windows as they stand
+  now.** One entry per account with a quota sample in the last seven days, by its UUID or
+  the provisional seat a reading without one is on, with its plan and name, and one per
+  organization that worked in that span with no source. A provisional seat whose week has
+  ended is left out, so a machine read across a week's reset is one account. Each window of five hours, the
+  week or a model's week gives its latest percent with that reading's time and source, its
+  reset and start, where steady use would stand now, its readings since its start, and a
+  forecast: the five-hour window's point answer, a week only as a range. A window is
+  `fresh` within the fifteen minutes the quota alerts read, and `silent` after; the usage
+  credits and a gateway's spend limit are their own kinds, with no percent and no money.
+  No field adds percentages, within an account or across accounts.
+- **`GET /api/analytics/usage` breaks work down by `seat`**, the subscription account of
+  its organization a stretch was spent on: the account's UUID where a quota sample names
+  it, else the seat's key for its week, and one unknown group for work no sample speaks
+  for or that names no organization. It groups, filters and compares like the other
+  dimensions, and its groups add up to the total. The seats of a read are worked out in
+  one pass over the samples it needs. The Analytics page does not offer it yet.
+- **`valkama statusline`**, Claude Code's status line command, is the first live quota
+  source. It records the five-hour window, the week and a gateway's spend limit from the
+  status line input as samples of the session, straight into the store or through the
+  hook spool, and prints nothing of its own. A status line the user had is passed with
+  `--previous=<base64>` and still shows: it runs with the same input through the same
+  shell, and is stopped after 10 seconds. `doctor` reports the source as off, silent or
+  working. `valkama capabilities` names the command and its interface version under
+  `interfaces.statusline`, so whatever registers it can tell a release that has it.
+- **The quota source `mod`: Valkama's Claude Code mod `valkama-quota`.** It reads the
+  five-hour window and the week inside every Claude Code session, the VS Code
+  extension's included, which runs no status line: at a session's start, when a window
+  moves during a turn and after each response. It hands the reading to the new
+  `valkama statusline --source=mod` through the managed launcher, as the status line's
+  own JSON fields, so the reading takes the status line's parser, store-or-spool path
+  and refusals. The hand-over runs after the hook answers, one at a time, and is stopped
+  after 10 seconds, so a missing, slow or failing Valkama costs the reading, never a
+  turn. The repository is now a Claude Code marketplace, `valkama`: install the mod with
+  `/plugin install valkama-quota --marketplace Muratovnik/valkama`, or with
+  `claude plugin marketplace add <checkout>` and
+  `claude plugin install valkama-quota@valkama`. `doctor` reports the mod as off
+  (not installed or not enabled), silent (no `mod` reading in three days) or working.
+- **The quota source `poll`, off until the owner switches it on.** Settings carries the
+  switch, with the warning that the usage endpoint is undocumented and that Anthropic's
+  terms do not explicitly permit this use; `GET` and `PUT /api/quota/settings` read and
+  write it, and the listener starts or stops the poll at once. The poll reads Claude
+  Code's sign-in for each request, sends it only to `api.anthropic.com` over HTTPS and
+  keeps it nowhere, and keeps no e-mail address or name from the profile. It asks every
+  five minutes while the organization works and every fifteen otherwise, backs off after
+  a 429, leaves a refused or expired sign-in alone until it changes, and waits while
+  status line or mod readings of the organization are fresh. `valkama doctor` says
+  whether it is off, working, paused or refused, and what to do.
+- **`valkama quota import --source FILE`** imports quota history from JSON lines, one
+  sample a line, all or nothing. Importing the same file again adds nothing.
+- **The store keeps subscription quota samples and accounts, at store schema 17.**
+  `quota_samples` holds one row per reading of one window that changed, from the
+  status line, the mod, the poll or an import, each named by its organization or its
+  session, its seat and its window: five hours, the week, a model's week, extra usage or
+  a gateway's spend limit. `quota_accounts` holds an account by its organization and
+  UUID, with its plan, and no e-mail address or name, so the account holds from week to
+  week; a sample without the UUID belongs to the account whose samples name its seat
+  that week. `quota_account_names` holds the owner's name for an account, one per
+  organization. Samples and names are kept in every store snapshot, and samples for a
+  year. A usage segment's seat is read as a state: the latest sample of each feed
+  at or before it holds until its window resets, its own session's feeds first. The
+  upgrade takes the recovery point `preschema17`, and a build at 16 refuses the store
+  after it.
 
 ### Fixed
 
@@ -128,6 +214,13 @@ checkouts are therefore distinguishable even at the same version.
   history. A store that holds such pairs keeps the earlier record of each when it
   is opened, after a verified recovery point; `blocks`, `discovered-from` and
   `duplicates` are left as they are.
+- **The release check leaves the checkout's `node_modules` alone.** It no longer installs
+  npm packages in the checkout it releases from, where the install emptied the
+  `node_modules` other worktrees link theirs to. It copies
+  the sources Git tracks or would add, never a `node_modules`, into a temporary
+  directory, runs `npm ci` and every npm stage there, puts the web build in `web/dist`
+  as before, and removes the copy when it ends, on a failure too. A `node_modules` in
+  the checkout, a directory or a link, is left as it is and no longer refused.
 
 ## [2.8.0](https://github.com/Muratovnik/valkama/compare/v2.7.0...v2.8.0) - 2026-11-11
 

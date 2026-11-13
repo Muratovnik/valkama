@@ -1,6 +1,6 @@
 /**
- * The owner's names for accounts, as the settings keep them: what a stored value may be, how a
- * name is written and taken away, and that a name never changes another account's.
+ * The owner's names for accounts: what a stored value or the server's answer may be, and how a
+ * name is said, by the rule the server holds a write to as well.
  */
 import assert from 'node:assert/strict'
 
@@ -8,9 +8,9 @@ import { describe, test } from 'vitest'
 
 import {
   aliasOf,
+  cleanAlias,
   MAX_ACCOUNT_ALIAS_LENGTH,
   readAccountAliases,
-  withAlias,
 } from '@/shared/lib/accountAliases.ts'
 import { DEFAULT_SETTINGS, mergeSettings } from '@/shared/lib/settings.ts'
 
@@ -49,15 +49,16 @@ describe('the stored names', () => {
   })
 })
 
-describe('naming an account', () => {
-  test('sets its name, changes no other, and an empty name takes it away', () => {
-    const named = withAlias({ 'org-1': 'One' }, 'f0f0f0f0', ' Main ')
-    assert.deepEqual(named, { 'org-1': 'One', 'f0f0f0f0': 'Main' })
-    assert.equal(aliasOf(named, 'f0f0f0f0'), 'Main')
-    const renamed = withAlias(named, 'f0f0f0f0', 'Work')
-    assert.deepEqual(renamed, { 'org-1': 'One', 'f0f0f0f0': 'Work' })
-    const cleared = withAlias(renamed, 'f0f0f0f0', '  ')
-    assert.deepEqual(cleared, { 'org-1': 'One' })
-    assert.equal(aliasOf(cleared, 'f0f0f0f0'), null)
+describe('saying a name', () => {
+  test('is one line with its spaces collapsed, and nothing but spaces is no name', () => {
+    assert.equal(cleanAlias('  Main\n\t account '), 'Main account')
+    assert.equal(cleanAlias('   '), '')
+  })
+
+  test('cuts at the bound by characters, as the server counts them, never inside one', () => {
+    // Each of these is one character and two UTF-16 units.
+    const said = cleanAlias('\u{1F600}'.repeat(MAX_ACCOUNT_ALIAS_LENGTH + 1))
+    assert.equal(Array.from(said).length, MAX_ACCOUNT_ALIAS_LENGTH)
+    assert.equal(said, '\u{1F600}'.repeat(MAX_ACCOUNT_ALIAS_LENGTH))
   })
 })
