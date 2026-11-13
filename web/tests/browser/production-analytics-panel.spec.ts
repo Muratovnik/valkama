@@ -3,8 +3,9 @@
  * under the next, and the table stands at its full height in the panel's one scroll: a wheel over
  * it scrolls the panel, the document standing still, and at the end of that scroll its heading
  * row, its names and its total row are still in view. On a phone the names stay in view
- * while the table scrolls sideways. A second dimension chosen over the table crosses it, is the
- * address and outlives a reload, and the file downloaded is the table crossed; with the measure
+ * while the table scrolls sideways. A second dimension chosen in the section's heading splits the
+ * table into pairs, is the address and outlives a reload, and the file downloaded is a row per
+ * pair; with the measure
  * tokens, the table and the file split the tokens by kind. At 1440 pixels the ranked list and the
  * small charts beside it are titled in one line each, and so is the line over the table that
  * counts its rows, in Russian as in English; on a phone no name in a chart's table breaks inside a
@@ -307,7 +308,7 @@ async function download(page: Page) {
   return { name: file.suggestedFilename(), text: await readFile(await file.path(), 'utf8') }
 }
 
-test('a second dimension crosses the table, is the address, outlives a reload and downloads', async ({
+test('a split chosen in the section heading makes the table pairs, is the address, outlives a reload and downloads', async ({
   page,
 }, info) => {
   await serve(page)
@@ -316,33 +317,31 @@ test('a second dimension crosses the table, is the address, outlives a reload an
   const table = page.locator('.spending-table')
   await expect(table.locator('tbody tr').first()).toBeVisible()
 
-  await table.locator('.spending-table-across .choice-trigger').click()
+  await page.locator('.dimension-section .dimension-split .choice-trigger').click()
   await page.getByRole('option', { name: 'Model' }).click()
-  await expect(table.locator('h2')).toHaveText('Agent time by task and by model')
+  await expect(table.locator('h2')).toHaveText('Spending by task and by model')
   await expect
     .poll(() => page.url().slice(new URL(page.url()).origin.length))
     .toBe(pageAt({ by: 'work_item', across: 'model' }))
   await page.reload()
-  await expect(table.locator('h2')).toHaveText('Agent time by task and by model')
-  const headings = await table.locator('thead th').allInnerTexts()
-  await record(info, 'analytics panel crossed', { url: page.url(), headings })
-  // Work on no task and work nobody can place ran under no known model: a column apart.
-  expect(headings.map((one) => one.trim())).toEqual([
-    'Task',
-    'model-a',
-    'model-b',
-    'Unknown',
-    'Total',
-  ])
+  await expect(table.locator('h2')).toHaveText('Spending by task and by model')
+  const names = await table.locator('tbody th').allInnerTexts()
+  await record(info, 'analytics panel split', { url: page.url(), names })
+  // Every row is a pair, the task first and the model after it.
+  expect(names.length).toBeGreaterThan(0)
+  for (const name of names) expect(name).toContain(' · ')
   expect(await parts(page), 'parts that spill or overlap').toEqual([])
 
   const file = await download(page)
   expect(file.name).toBe('agent-usage-2026-11-09-to-2026-11-11-by-work_item-and-model.csv')
   const [header, first] = file.text.split('\r\n')
-  expect(header).toBe(
-    '\u{FEFF}breakdown,across,measure,value_id,value_reference,value_name,value_kind,model-a,model-b,Unknown,total,period_from,period_to,filters',
-  )
-  expect(first?.startsWith('work_item,model,time_seconds,')).toBe(true)
+  expect(
+    header?.startsWith(
+      '\u{FEFF}breakdown,value_id,value_reference,value_name,value_kind,split,split_id,split_reference,split_name,split_kind,time_seconds,',
+    ),
+  ).toBe(true)
+  expect(first?.startsWith('work_item,')).toBe(true)
+  expect(first).toContain(',model,')
 })
 
 test('with the measure tokens the table and its file split the tokens by kind', async ({

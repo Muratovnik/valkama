@@ -1,4 +1,5 @@
 import {
+  breakdownOf,
   figureOf,
   measureOf,
   spendingLines,
@@ -68,31 +69,32 @@ export interface StackLine extends PeriodSeries {
  * another, a step lighter: two greys and no hue, so the two largest parts of a day can be told
  * apart without the hint. The rail's tile, the section's bars, small charts and day chart and the
  * overview's chart all read this one key, so a value has one colour on the page; another measure
- * ranks again and may repaint.
+ * ranks again and may repaint. Split by `across`, the key is of the pairs, ranked the same way
+ * over every pair of the read, so a chart that shows fewer of them paints each as the rest do;
+ * a pair with a value that is no category is drawn in the darker neutral, as such a value is.
  */
 export function rankedSlots(
   rows: readonly UsageRow[],
   dimension: UsageDimension,
   measure: Measure,
+  across: UsageDimension | null = null,
 ): Map<string, SeriesSlot> {
+  const breakdown = breakdownOf(dimension, across)
+  const lines = spendingLines(rows, breakdown, measure, Number.POSITIVE_INFINITY)
   const slots = rankSlots(
-    rankedCategories(rows, dimension, measure).map((line) => line.key),
+    lines
+      .filter((line) => line.kind === 'category' && figureOf(measure, line.spent) !== 0)
+      .map((line) => line.key),
     STACKED,
   )
   // The folded rest takes no entry: a key with none is `other`, wherever the key is read.
   for (const kind of NOT_CATEGORIES) slots.set(kind, 'apart')
+  for (const line of lines) if (line.kind !== 'category') slots.set(line.key, 'apart')
   return slots
 }
 
 /** The keys of what is not a category: work with no value in the dimension, unknown work. */
 const NOT_CATEGORIES = ['none', 'unknown'] as const satisfies readonly ValueKind[]
-
-/** The categories with a figure in the measure, largest first. */
-function rankedCategories(rows: readonly UsageRow[], dimension: UsageDimension, measure: Measure) {
-  return spendingLines(rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
-    (line) => line.kind === 'category' && figureOf(measure, line.spent) !== 0,
-  )
-}
 
 /**
  * The values a stack names, bottom first, which is also the legend's order: the period's largest
@@ -101,14 +103,15 @@ function rankedCategories(rows: readonly UsageRow[], dimension: UsageDimension, 
  * never folded; only values with anything to draw. The rest of the period is one «other» series
  * in the lighter neutral, on top.
  */
-export function stackLines({ usage, by: dimension, measure }: StackSource) {
+export function stackLines({ usage, by: dimension, measure, across = null }: StackSource) {
   // A value with no figure in the measure stays, so its days can say it has none.
-  const lines = spendingLines(usage.rows, dimension, measure, Number.POSITIVE_INFINITY).filter(
+  const breakdown = breakdownOf(dimension, across)
+  const lines = spendingLines(usage.rows, breakdown, measure, Number.POSITIVE_INFINITY).filter(
     (line) => figureOf(measure, line.spent) !== 0,
   )
   const apart = lines.filter((line) => line.kind !== 'category')
   const categories = lines.filter((line) => line.kind === 'category')
-  const slots = rankedSlots(usage.rows, dimension, measure)
+  const slots = rankedSlots(usage.rows, dimension, measure, across)
   const named = [...categories.slice(0, STACKED), ...apart]
   const series: StackLine[] = named.map((line) => ({
     key: line.key,
@@ -121,11 +124,15 @@ export function stackLines({ usage, by: dimension, measure }: StackSource) {
   return series
 }
 
-/** What a stack is drawn from: the answer, the dimension it breaks down by, the measure. */
+/**
+ * What a stack is drawn from: the answer, the dimension it breaks down by, the measure, and the
+ * dimension its pairs are split by, where the answer is read by both.
+ */
 export interface StackSource {
   by: UsageDimension
   measure: Measure
   usage: Usage
+  across?: UsageDimension | null
 }
 
 /**

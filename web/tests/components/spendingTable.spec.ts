@@ -7,9 +7,9 @@
  * largest first in the chosen measure, a tie by name; and a period before that was not read said
  * once, with this period alone. With the measure «tokens» each value's tokens by kind follow, as
  * the read reports them. A heading sorts by its column, the total of every column stands under
- * the rows, and a line under the table says how many rows it shows and in what order. Crossed
- * with a second dimension, each value has a column per leading value of it, «other» and the
- * total, from the read by both.
+ * the rows, and a line under the table says how many rows it shows and in what order. With the
+ * section split by a second dimension each row is a pair, named by both values, beside the same
+ * pair in the period before, from the read by both.
  */
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
@@ -60,8 +60,8 @@ const answer = (before: Stretch[] | null) =>
     before,
   }).usage
 
-/** A table that is not crossed, and may be crossed with any dimension. */
-const UNCROSSED = { across: null, cross: { status: 'off' } as const, dimensions: [] }
+/** A table of a section that is not split. */
+const UNCROSSED = { across: null, cross: { status: 'off' } as const }
 
 function table(measure: Measure, before: Stretch[] | null = BEFORE, locale: 'en' | 'ru' = 'en') {
   return mount(SpendingTable, {
@@ -377,7 +377,7 @@ describe('the breakdown beside the period before', () => {
   })
 })
 
-/** Alpha and Beta by model: two models and a third that folds into «other» beyond the fifth. */
+/** Alpha and Beta by model, nine pairs in all: the table folds none of them. */
 const CROSSED: Stretch[] = [
   { day: 0, group: { work_item: ALPHA, model: value('model-a') }, spend: { seconds: 3600 } },
   { day: 0, group: { work_item: ALPHA, model: value('model-b') }, spend: { seconds: 1800 } },
@@ -389,15 +389,18 @@ const CROSSED: Stretch[] = [
     spend: { seconds: 600 - index * 60 },
   })),
 ]
+/** The period before: Alpha ran model-a for half an hour. */
+const CROSSED_BEFORE: Stretch[] = [
+  { day: 0, group: { work_item: ALPHA, model: value('model-a') }, spend: { seconds: 1800 } },
+]
 
-/** The table crossed with model, in the state of its crossed read. */
+/** The table of the section split by model, in the state of its crossed read. */
 const crossedTable = (cross: CrossRead) =>
   mount(SpendingTable, {
     props: {
       across: 'model' as const,
       by: 'work_item' as const,
       cross,
-      dimensions: ['work_item', 'model', 'role'] as const,
       filters: {},
       measure: 'time' as const,
       usage: answer(BEFORE),
@@ -405,44 +408,38 @@ const crossedTable = (cross: CrossRead) =>
     global: { plugins: [analyticsI18n()] },
   })
 
-describe('the breakdown crossed with a second dimension', () => {
+describe('the table of a section split by a second dimension', () => {
   const read = usageAnswer({
     first: new Date(2026, 10, 9),
     days: 3,
     groupBy: ['work_item', 'model'],
     stretches: CROSSED,
+    before: CROSSED_BEFORE,
   }).usage
 
-  it('holds a column per leading value of the second, «other» and the total', () => {
+  it('holds a row per pair, named by both values, beside the same pair before', () => {
     const wrapper = crossedTable({ status: 'ready', usage: read })
-    expect(words(wrapper.get('h2').text())).toBe('Agent time by task and by model')
-    expect(headings(wrapper)).toEqual([
-      'Task',
-      'model-b',
-      'model-a',
-      'model-c',
-      'model-d',
-      'model-e',
-      'Other, 2 more',
-      'Total',
+    expect(words(wrapper.get('h2').text())).toBe('Spending by task and by model')
+    const shown = rows(wrapper)
+    // Largest first in agent time, every pair of the read, none folded.
+    expect(shown.map((row) => row[0])).toEqual([
+      'MAIN-2 Beta · model-b',
+      'MAIN-1 Alpha · model-a',
+      'MAIN-1 Alpha · model-b',
+      'No task · model-a',
+      'MAIN-2 Beta · model-c',
+      'MAIN-2 Beta · model-d',
+      'MAIN-2 Beta · model-e',
+      'MAIN-2 Beta · model-f',
+      'MAIN-2 Beta · model-g',
     ])
-    expect(rows(wrapper)).toEqual([
-      // A pair that spent nothing is an empty cell, not a zero.
-      ['MAIN-2 Beta', '2 h', '—', '10 min', '9 min', '8 min', '13 min', '2 h 40 min'],
-      ['MAIN-1 Alpha', '30 min', '1 h', '—', '—', '—', '—', '1 h 30 min'],
-      ['No task', '—', '15 min', '—', '—', '—', '—', '15 min'],
-    ])
-    expect(wrapper.findAll('tfoot th, tfoot td').map((cell) => words(cell.text()))).toEqual([
-      'Total',
-      '2 h 30 min',
-      '1 h 15 min',
-      '10 min',
-      '9 min',
-      '8 min',
-      '13 min',
-      '4 h 25 min',
-    ])
-    // The unread note is the table beside the period before: a crossed table has no period before.
+    // Alpha's model-a: an hour now, half an hour before, so its change is a rise of 100 %.
+    const alpha = shown[1] ?? []
+    expect(alpha[1]).toBe('1 h')
+    expect(alpha).toContain('30 min')
+    // The total is the read's own: the pairs add up to 4 h 25 min.
+    expect(words(wrapper.get('tfoot td[data-measure="time"]').text())).toBe('4 h 25 min')
+    // Its period before was read, so no note says otherwise.
     expect(wrapper.find('.spending-table-note').exists()).toBe(false)
   })
 
@@ -458,16 +455,11 @@ describe('the breakdown crossed with a second dimension', () => {
     expect(failed.emitted('reread')).toHaveLength(1)
   })
 
-  it('offers every dimension but its own as the second, and «none»', () => {
-    const wrapper = crossedTable({ status: 'ready', usage: read })
-    const choice = wrapper.getComponent({ name: 'ChoiceSelect' })
-    expect((choice.props('options') as { label: string }[]).map((option) => option.label)).toEqual([
-      'No second dimension',
-      'Model',
-      'Role',
-    ])
-    choice.vm.$emit('update:modelValue', 'role')
-    choice.vm.$emit('update:modelValue', 'none')
-    expect(wrapper.emitted('update:across')).toEqual([['role'], [null]])
+  it('holds no choice of its own: the split is the section’s', () => {
+    expect(
+      crossedTable({ status: 'ready', usage: read })
+        .findComponent({ name: 'ChoiceSelect' })
+        .exists(),
+    ).toBe(false)
   })
 })

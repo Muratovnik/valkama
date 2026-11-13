@@ -1,13 +1,11 @@
 /**
- * What the table of a dimension's panel holds, as words and numbers to sort by, in one of two
- * shapes:
+ * What the table of a dimension's panel holds, as words and numbers to sort by: every value of
+ * either period, none folded, with its three measures now, the chosen one before and its change
+ * (`comparedLines`), as the page has always tabled it. With the section split by a second
+ * dimension each row is a pair, «claude-opus-5-5 · high», a value of the table as any other, read
+ * from the answer by both.
  *
- * - beside the period before: every value of either period, none folded, with its three measures
- *   now, the chosen one before and its change (`comparedLines`), as the page has always tabled it;
- * - crossed with a second dimension (`crossOf`): every value of the section's dimension against the
- *   leading values of the second, «other», no value and unknown, and the row's total.
- *
- * With the measure «tokens» both add the tokens of each value by kind (`kindsByValue`), so what the
+ * With the measure «tokens» it adds the tokens of each value by kind (`kindsByValue`), so what the
  * tiles say of the kinds stands value by value. Under the rows is the total of every column, from
  * the read's own total. A cell carries the number it sorts by: the figure in its measure, null
  * where the read holds none, which sorts after every figure whichever way the column runs.
@@ -16,7 +14,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { crossOf } from '@/pages/analytics/utils/crossFigures.ts'
 import { kindsByValue, kindsOf, TOKEN_KINDS } from '@/pages/analytics/utils/tokenKinds.ts'
 import type { TokenKind } from '@/pages/analytics/utils/tokenKinds.ts'
 import {
@@ -27,7 +24,7 @@ import {
   spentAnything,
   spentOf,
 } from '@/pages/analytics/utils/usageFigures.ts'
-import type { Change, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { Change, SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
 
 import { MEASURES } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -58,7 +55,10 @@ export interface TableLine {
   name: string
   /** Whether the line is no value of the dimension: work with no value there, or unknown. */
   rest: boolean
+  /** The value of the section's dimension, the first of a pair, which pressing the name acts on. */
   value: UsageGroupValue
+  /** That value's own name, which a pair's name begins with and an action on the value says. */
+  valueName: string
   /**
    * When the line spent: in this period with a figure above zero in the measure; in this period
    * but nothing there (`elsewhere`: the adviser's tokens are no agent time, work with no price is
@@ -105,20 +105,19 @@ function whenOf(measure: Measure, now: Spent, before: Spent | null): TableLine['
   return before && spentAnything(before) ? 'before' : 'neither'
 }
 
-/** Where the table's figures come from: the answer on show, and the crossed read when there is one. */
+/**
+ * Where the table's figures come from: the answer on show, or with a split the answer by both
+ * dimensions and the dimension it is split by.
+ */
 export interface TableSource {
   by: UsageDimension
   measure: Measure
   usage: Usage
-  /** The second dimension and the read by both, when the table is crossed. */
-  cross?: { across: UsageDimension; usage: Usage } | null
+  across?: UsageDimension | null
 }
 
-/** A kind the read does not report is absent, not zero; so is a crossed pair that spent nothing. */
+/** A kind the read does not report is absent, not zero. */
 const ABSENT = '—'
-
-/** A crossed pair with no cell spent nothing in the measure: an empty cell, not a zero. */
-const emptyCell = (key: string): TableCell => ({ key, chosen: false, text: ABSENT, sort: 0 })
 
 /** How a change sorts: by its share; from nothing as the largest rise; with no figure, never. */
 function changeRank(change: Change | null): number | null {
@@ -160,31 +159,30 @@ export function useTableModel(source: () => TableSource) {
         }))
       : []
 
-  /** A line of the table, and when it spent (`whenOf`). */
+  /** A line of the table, a value or a pair, and when it spent (`whenOf`). */
   const lineOf = (
-    value: UsageGroupValue,
-    key: string,
-    kind: string,
+    line: { key: string; kind: string; value: UsageGroupValue; second?: SpendingLine['second'] },
     [cells, when]: [TableCell[], TableLine['when']],
   ): TableLine => {
     const { by } = source()
     return {
-      key,
-      value,
+      key: line.key,
+      value: line.value,
       cells,
       when,
-      rest: kind !== 'category',
-      name: words.valueLabel(by, value),
-      detail: words.valueDetail(by, value),
+      rest: line.kind !== 'category',
+      name: words.pairLabel(by, line.value, line.second),
+      valueName: words.valueLabel(by, line.value),
+      detail: words.valueDetail(by, line.value),
     }
   }
 
-  /** Beside the period before: the three measures, the chosen one before and its change. */
+  /** The three measures, the chosen one before and its change, of each value or pair. */
   function besideBefore() {
-    const { by, measure, usage } = source()
+    const { by, measure, usage, across = null } = source()
     const { comparison } = usage
     const period = comparison ? words.period(comparison.period.from, comparison.period.to) : ''
-    const kinds = kindsByValue(usage.rows, by)
+    const kinds = kindsByValue(usage.rows, by, across)
     const columns: TableColumn[] = [
       ...MEASURES.map((key) => ({
         key,
@@ -227,8 +225,9 @@ export function useTableModel(source: () => TableSource) {
       dimension: by,
       measure,
       name: (value) => words.valueLabel(by, value),
+      across,
     }).map((line) =>
-      lineOf(line.value, line.key, line.kind, [
+      lineOf(line, [
         cellsOf(line.now, line.before, kindsOf(kinds, line.key)),
         whenOf(measure, line.now, line.before),
       ]),
@@ -239,56 +238,13 @@ export function useTableModel(source: () => TableSource) {
       usage.total.tokens,
     )
     // The period compared with is named in its column's heading, so the title need not say it.
-    const title = t('analytics.table.title', { by: t(`analytics.byDimension.${by}`) })
+    const title = across
+      ? t('analytics.table.crossTitle', {
+          by: t(`analytics.byDimension.${by}`),
+          across: t(`analytics.byDimension.${across}`),
+        })
+      : t('analytics.table.title', { by: t(`analytics.byDimension.${by}`) })
     return { title, columns, lines, total, firstSort: measure as string }
-  }
-
-  /** Crossed: a column per leading value of the second dimension, then the row's total. */
-  function crossed(across: UsageDimension, read: Usage) {
-    const { by, measure } = source()
-    const { columns, rows, total } = crossOf(read, by, across, measure)
-    const kinds = kindsByValue(read.rows, by)
-    const cellsOf = (
-      cells: (key: string) => Spent | undefined,
-      all: Spent,
-      tokens: UsageTokens,
-    ) => [
-      ...columns.map((column) => {
-        const spent = cells(column.key)
-        return spent ? figureCell(column.key, measure, spent, false) : emptyCell(column.key)
-      }),
-      figureCell('total', measure, all, true),
-      ...kindCells(tokens),
-    ]
-    const lines = rows.map((row) =>
-      lineOf(row.value, row.key, row.kind, [
-        cellsOf((key) => row.cells.get(key), row.total, kindsOf(kinds, row.key)),
-        whenOf(measure, row.total, null),
-      ]),
-    )
-    const byColumn = new Map(columns.map((column) => [column.key, column.spent]))
-    const headings: TableColumn[] = [
-      ...columns.map((column) => ({
-        key: column.key,
-        text: words.lineLabel(across, column),
-        // What the heading's name leaves out, as a row's would: a session's id, an account's.
-        detail: words.valueDetail(across, column.value),
-        chosen: false,
-      })),
-      { key: 'total', text: t('analytics.panel.table.total'), chosen: true },
-      ...kindColumns(),
-    ]
-    return {
-      title: t('analytics.panel.table.crossTitle', {
-        measure: words.measure(measure),
-        by: t(`analytics.byDimension.${by}`),
-        across: t(`analytics.byDimension.${across}`),
-      }),
-      columns: headings,
-      lines,
-      total: cellsOf((key) => byColumn.get(key), total, read.total.tokens),
-      firstSort: 'total',
-    }
   }
 
   /**
@@ -312,8 +268,7 @@ export function useTableModel(source: () => TableSource) {
   }
 
   return computed(() => {
-    const { cross } = source()
-    const model = cross ? crossed(cross.across, cross.usage) : besideBefore()
+    const model = besideBefore()
     return { ...model, counts: countWords(model.lines) }
   })
 }

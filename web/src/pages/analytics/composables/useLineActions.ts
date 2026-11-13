@@ -139,11 +139,16 @@ export function useLineMarks(options: {
   const words = useSpendingWords()
   const byKey = computed(() => new Map(options.lines().map((line) => [line.key, line])))
 
+  /** What a press on a line acts on is called: its value, the first of a pair, which it acts as. */
+  const actedOn = (line: SpendingLine, label: string) =>
+    line.second && line.value ? words.valueLabel(options.by(), line.value) : label
+
   function markOf(line: SpendingLine, label = words.lineLabel(options.by(), line)): MarkAction {
     const href = actions.taskLink(options.by(), line.value)?.href
     if (href) return { href }
     if (actions.narrowsTo(options.by(), line.value) === undefined) return {}
-    return { actionable: true, action: actions.narrowName(options.by(), line.value, label) }
+    const name = actedOn(line, label)
+    return { actionable: true, action: actions.narrowName(options.by(), line.value, name) }
   }
 
   /** A value's link pressed: the task opened, in place where the page answers it. */
@@ -156,7 +161,8 @@ export function useLineMarks(options: {
   function select(key: string) {
     const line = byKey.value.get(key)
     const value = actions.narrowsTo(options.by(), line?.value ?? null)
-    if (line && value !== undefined) options.narrow(value, words.lineLabel(options.by(), line))
+    if (line && value !== undefined)
+      options.narrow(value, actedOn(line, words.lineLabel(options.by(), line)))
   }
 
   return { follow, markOf, select }

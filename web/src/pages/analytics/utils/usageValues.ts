@@ -29,3 +29,20 @@ export function valueKey(value: UsageGroupValue): string {
   const kind = valueKind(value)
   return kind === 'category' ? filterKey(value.id) : kind
 }
+
+/**
+ * The key of a pair, a value of the section's dimension with one of the dimension it is split by:
+ * both keys, in that order, as one text no single value's key can be, whatever an id holds.
+ */
+export const pairKey = (first: UsageGroupValue, second: UsageGroupValue) =>
+  JSON.stringify([valueKey(first), valueKey(second)])
+
+/**
+ * What a pair is to the page: a category while both its values are, and otherwise what the first
+ * value that is not one is — «claude-opus-5-5 · unknown» is work nobody can place by its effort,
+ * drawn in the neutral as unknown work is.
+ */
+export function pairKind(first: UsageGroupValue, second: UsageGroupValue): ValueKind {
+  const kind = valueKind(first)
+  return kind === 'category' ? valueKind(second) : kind
+}

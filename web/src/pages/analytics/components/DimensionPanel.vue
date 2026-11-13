@@ -4,8 +4,15 @@
  * period's figures, which also choose the measure (`SpendingTiles`); then every value ranked
  * (`SpendingBars`) beside a small chart of the period for each leading value on one scale
  * (`SpendingMultiples`), and the period day by day (`SpendingDays`); under them the table
- * (`SpendingTable`), which a second dimension chosen over it crosses with the first. A value has
- * one hue in the bars, the small charts and the day chart (`valueSlots`), and its name beside it.
+ * (`SpendingTable`). A value has one hue in the bars, the small charts and the day chart
+ * (`valueSlots`), and its name beside it.
+ *
+ * «Split by» in the section's heading chooses a second dimension, or none, and the address keeps
+ * it (`across`). Split, the section is read by both (`useCrossRead`), and the ranked bars and the
+ * table read its pairs, «claude-opus-5-5 · high», each a value with its own hue in the fixed order
+ * of their rank over every pair of the read, the tail past the hues in the neutral of «other». The
+ * small charts and the day chart stay by the section's own dimension: the read gives each period
+ * by its first dimension alone. While the pairs are first read the bars keep the values.
  *
  * It runs in the panel's one scroll: the figures, the charts at their own height and the table at
  * its full height under them, nothing scrolling up and down on its own. A «To the table» line over
@@ -43,13 +50,14 @@ import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
 import type { Usage, UsageDimension, UsageFilters } from '@/shared/api/analyticsApi.ts'
+import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 const props = defineProps<{
   /** The period by account behind the answer, for where the accounts that worked changed. */
   accounts: AccountsRead
-  /** The second dimension the table is crossed with, as the address holds it; null for none. */
+  /** The second dimension the section is split by, as the address holds it; null for none. */
   across: UsageDimension | null
-  /** The dimensions the table may be crossed with. */
+  /** The dimensions the section may be split by, its own aside. */
   dimensions: readonly UsageDimension[]
   /** The filters the answer was read with. */
   filters: UsageFilters
@@ -61,7 +69,7 @@ const props = defineProps<{
 }>()
 /**
  * Read the answer again; narrow the view to a value of the answer's dimension, or to a period
- * pressed or framed in a part of the panel; cross the table with a second dimension, or with none.
+ * pressed or framed in a part of the panel; split the section by a second dimension, or by none.
  */
 const emit = defineEmits<{
   'frame': [span: OwnPeriod, label: string]
@@ -97,6 +105,39 @@ const slots = computed(() =>
   valueSlots({ usage: props.usage, by: by.value, measure: measure.value }),
 )
 
+/** The answer by both dimensions on show, once there is one for the split chosen. */
+const crossed = computed(() => {
+  const read = cross.state.value
+  return across.value && 'usage' in read && read.usage ? read.usage : null
+})
+/** What the ranked bars read: the pairs, while split and read, or the section's own values. */
+const ranked = computed(() =>
+  crossed.value
+    ? {
+        rows: crossed.value.rows,
+        across: across.value,
+        slots: valueSlots({
+          usage: crossed.value,
+          by: by.value,
+          measure: measure.value,
+          across: across.value,
+        }),
+      }
+    : { rows: props.usage.rows, across: null, slots: slots.value },
+)
+
+/** «Split by»: none, or any dimension of the page but the section's own. */
+const NONE = 'none'
+const splitOptions = computed(() => [
+  { value: NONE, label: t('analytics.panel.split.none') },
+  ...props.dimensions
+    .filter((dimension) => dimension !== by.value)
+    .map((dimension) => ({ value: dimension, label: words.dimension(dimension) })),
+])
+function chooseSplit(value: string) {
+  emit('update:across', props.dimensions.find((dimension) => dimension === value) ?? null)
+}
+
 const root = ref<HTMLElement | null>(null)
 const narrow = useNarrowCharts(root)
 
@@ -123,6 +164,21 @@ const showTable = () => table.value?.reveal()
       :title="title"
       :about="about"
     >
+      <template #actions="{ size }">
+        <span
+          class="dimension-split-label"
+          aria-hidden="true"
+          >{{ t('analytics.panel.split.label') }}</span
+        >
+        <ChoiceSelect
+          class="dimension-split"
+          :size="size"
+          :label="t('analytics.panel.split.label')"
+          :model-value="across ?? NONE"
+          :options="splitOptions"
+          @update:model-value="chooseSplit"
+        />
+      </template>
       <PanelLevel
         level="group"
         as="div"
@@ -151,11 +207,12 @@ const showTable = () => table.value?.reveal()
         <div class="dimension-pair">
           <SpendingBars
             :by="by"
+            :across="ranked.across"
             :measure="measure"
             :narrow="narrow"
             :notice="noticeIn('bars')"
-            :rows="usage.rows"
-            :slots="slots"
+            :rows="ranked.rows"
+            :slots="ranked.slots"
             @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
             @more="showTable"
           />
@@ -186,14 +243,12 @@ const showTable = () => table.value?.reveal()
         :across="across"
         :by="by"
         :cross="cross.state.value"
-        :dimensions="dimensions"
         :filters="filters"
         :measure="measure"
         :notice="noticeIn('table')"
         :usage="usage"
         @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
         @reread="cross.retry"
-        @update:across="(next) => emit('update:across', next)"
       />
     </PanelLevel>
   </div>
@@ -224,6 +279,13 @@ const showTable = () => table.value?.reveal()
   gap: var(--space-4);
   align-items: start;
   min-width: 0;
+}
+
+/* «Split by» names the choice beside it, in the quiet ink of a control's own words. */
+.dimension-split-label {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  white-space: nowrap;
 }
 
 /* The line starts on the column's edge, its fill reaching past it under the pointer. */

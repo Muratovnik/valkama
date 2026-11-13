@@ -1,14 +1,17 @@
 /**
- * The read behind a crossed table: the answer on show again, broken down by its own dimension and
- * a second one, for exactly the period and the filters that answer was read with — the period by
- * its moments as the answer wrote them, so the two never disagree about where a day starts.
+ * The read behind a split section: the answer on show again, broken down by its own dimension and
+ * the one it is split by, for exactly the period and the filters that answer was read with — the
+ * period by its moments as the answer wrote them, so the two never disagree about where a day
+ * starts. Where the answer on show is compared with a period before, that period is read by both
+ * as well, by the moments the answer names for it, and stands in the crossed answer as its
+ * comparison; its pairs are what the table sets beside each pair now.
  *
  * It is asked whenever the answer on show is replaced or the second dimension changes, and drops
  * the read it replaces, so a slow one never draws over a later one. While it asks, the last crossed
  * answer of the same two dimensions stays on screen; a read that fails says so and may be asked
  * again (`retry`). With no second dimension, or one the section already breaks down by, nothing is
- * asked. It goes through the page's shared reads (`useSharedUsage`), so a crossing chosen again
- * for the same view takes the answer it had.
+ * asked. It goes through the page's shared reads (`useSharedUsage`), so a split chosen again for
+ * the same view takes the answer it had.
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
 
@@ -54,13 +57,25 @@ export function useCrossRead(options: {
       status: 'reading',
       usage: 'usage' in shown && shown.usage && pairOf(shown.usage) === pair ? shown.usage : null,
     }
-    const { from, to, utc_offset: utcOffset } = usage.period
-    try {
-      const crossedUsage = await shared.read(
+    const { utc_offset: utcOffset } = usage.period
+    const ask = ({ from, to }: { from: string; to: string }) =>
+      shared.read(
         { from, to, utcOffset, groupBy: [by, across], filters: options.filters(), compare: false },
         controller.signal,
       )
-      if (!controller.signal.aborted) state.value = { status: 'ready', usage: crossedUsage }
+    const { comparison } = usage
+    try {
+      const [now, before] = await Promise.all([
+        ask(usage.period),
+        comparison ? ask(comparison.period) : null,
+      ])
+      const crossed: Usage = {
+        ...now,
+        comparison: before
+          ? { period: comparison?.period ?? before.period, total: before.total, rows: before.rows }
+          : null,
+      }
+      if (!controller.signal.aborted) state.value = { status: 'ready', usage: crossed }
     } catch {
       if (!controller.signal.aborted) state.value = { status: 'failed' }
     }

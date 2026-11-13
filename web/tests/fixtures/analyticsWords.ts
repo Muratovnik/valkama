@@ -74,6 +74,7 @@ export const ANALYTICS_WORDS: Record<string, WordKind> = {
   'analytics.overview.cards.empty': 'value',
   'analytics.panel.bars.more': 'value',
   'analytics.panel.multiples': 'label',
+  'analytics.panel.split': 'label',
   'analytics.panel.table': 'label',
   'analytics.panel.table.counts': 'value',
   'analytics.panel.table.sorted': 'value',

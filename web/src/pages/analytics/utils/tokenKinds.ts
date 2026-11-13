@@ -4,7 +4,7 @@
  * output — and leaves the cache reads apart; reasoning is a part of output. Split by kind, nothing
  * of that is lost, and a kind no request reported stays absent rather than a zero.
  */
-import { valueKey } from '@/pages/analytics/utils/usageValues.ts'
+import { pairKey, valueKey } from '@/pages/analytics/utils/usageValues.ts'
 
 import type { Usage, UsageDimension, UsageGroupValue, UsageRow } from '@/shared/api/analyticsApi.ts'
 import type { UsageTokens } from '@/shared/api/planningUsageApi.ts'
@@ -43,14 +43,19 @@ function addTokens(left: UsageTokens, right: UsageTokens): UsageTokens {
 
 const UNPLACED: UsageGroupValue = { id: null, unknown: true }
 
-/** Each value's tokens by kind, by the value's key, summed over every row that names it. */
+/**
+ * Each value's tokens by kind, by the value's key, summed over every row that names it; with
+ * `across`, each pair's, by the pair's key.
+ */
 export function kindsByValue(
   rows: readonly UsageRow[],
   dimension: UsageDimension,
+  across: UsageDimension | null = null,
 ): Map<string, UsageTokens> {
   const kinds = new Map<string, UsageTokens>()
   for (const row of rows) {
-    const key = valueKey(row.group[dimension] ?? UNPLACED)
+    const value = row.group[dimension] ?? UNPLACED
+    const key = across ? pairKey(value, row.group[across] ?? UNPLACED) : valueKey(value)
     kinds.set(key, addTokens(kinds.get(key) ?? NONE, row.tokens))
   }
   return kinds

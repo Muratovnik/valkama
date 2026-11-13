@@ -4,9 +4,9 @@
  * Beside the period before (`spendingCsv`): one row per value — its id, a task's reference, its
  * name — with what it spent in this period and in the period before, and on every row the bounds
  * of both periods, the dimension and the filters, so the file says what it is of wherever it goes;
- * then its tokens of this period by kind. Crossed with a second dimension (`crossCsv`): one row
- * per value of the section's dimension, a column per column of the table in the chosen measure,
- * its total, its tokens by kind when the measure is tokens, and the bounds and the filters.
+ * then its tokens of this period by kind. With the section split by a second dimension each row
+ * is a pair, and after the cells of its first value stand the second dimension and the cells of
+ * its second value, the same four.
  *
  * The file is for a spreadsheet, which takes what it reads literally:
  * - numbers are plain — no thousands separator, a dot before the decimals — in seconds, tokens
@@ -27,11 +27,11 @@
  *   the id column of such a value is not the id the read gives it;
  * - it starts with a byte order mark, so a spreadsheet reads it as UTF-8 and Cyrillic stands.
  */
-import { crossOf } from '@/pages/analytics/utils/crossFigures.ts'
 import { dayOf, lastDayBefore } from '@/pages/analytics/utils/readMoments.ts'
 import { kindsByValue, kindsOf, TOKEN_KINDS } from '@/pages/analytics/utils/tokenKinds.ts'
 import { comparedLines, spentAnything } from '@/pages/analytics/utils/usageFigures.ts'
-import type { SpendingLine, Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import type { Spent } from '@/pages/analytics/utils/usageFigures.ts'
+import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { orderFilters } from '@/shared/api/analyticsAddress.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -45,13 +45,14 @@ import type {
 /** The columns of each kind of token, by the names a script reading the file finds them by. */
 const KIND_HEADER = TOKEN_KINDS.map((kind) => `${kind}_tokens`)
 
-/** The columns, by the names a script reading the file finds them by. */
-const HEADER = [
-  'breakdown',
-  'value_id',
-  'value_reference',
-  'value_name',
-  'value_kind',
+/** The columns that say which value a row is of, after the dimension it is of. */
+const VALUE_HEADER = ['value_id', 'value_reference', 'value_name', 'value_kind']
+
+/** The same of a pair's second value, after the dimension the section is split by. */
+const SPLIT_HEADER = ['split', 'split_id', 'split_reference', 'split_name', 'split_kind']
+
+/** The columns of the figures and of what the file is of. */
+const FIGURES_HEADER = [
   'time_seconds',
   'tokens',
   'cost_usd',
@@ -67,9 +68,6 @@ const HEADER = [
   'filters',
   ...KIND_HEADER,
 ]
-
-/** What a crossed file's figures are, by the unit they are in. */
-const MEASURE_UNITS = { time: 'time_seconds', tokens: 'tokens', cost: 'cost_usd' } as const
 
 const BYTE_ORDER_MARK = '\u{FEFF}'
 const LINE_END = '\r\n'
@@ -118,24 +116,18 @@ function figures(spent: Spent | null): string[] {
   ]
 }
 
-/** One measure's figure, in its unit, by the rule `figures` holds every figure to. */
-function amount(measure: Measure, spent: Spent): string {
-  const [seconds = '', tokens = '', cost = ''] = figures(spent)
-  return { time: seconds, tokens, cost }[measure]
-}
-
-const NOTHING: Spent = { seconds: 0, tokens: null, cost: null, unpriced: 0 }
-
 interface CsvSource {
   by: UsageDimension
   /** The filters the answer was read with, its scope's project among them. */
   filters: UsageFilters
   measure: Measure
   usage: Usage
+  /** The second dimension the section is split by; `usage` is then the read by `by` and it. */
+  across?: UsageDimension | null
   /** The keys of the values in the order the table shows them; the read's own order otherwise. */
   order?: readonly string[]
-  /** A value as the page names it. */
-  name: (value: UsageGroupValue) => string
+  /** A value of a dimension, the section's where none is said, as the page names it. */
+  name: (value: UsageGroupValue, dimension?: UsageDimension) => string
 }
 
 /** Items in the order their keys stand in `order`, any other after them as they came. */
@@ -173,8 +165,12 @@ const valueCells = (value: UsageGroupValue, kind: string, named: string) => [
   text(kind),
 ]
 
-/** The file beside the period before: the header and a row per value, in the table's order. */
-export function spendingCsv({ by, filters, measure, usage, name, order }: CsvSource): string {
+/**
+ * The file beside the period before: the header and a row per value, or per pair while split, in
+ * the table's order.
+ */
+export function spendingCsv(source: CsvSource): string {
+  const { by, across = null, filters, measure, usage, name, order } = source
   const { comparison } = usage
   const bounds = [
     usage.period.from,
@@ -182,19 +178,32 @@ export function spendingCsv({ by, filters, measure, usage, name, order }: CsvSou
     comparison?.period.from ?? '',
     comparison?.period.to ?? '',
   ]
-  const kinds = kindsByValue(usage.rows, by)
+  const kinds = kindsByValue(usage.rows, by, across)
   const lines = comparedLines({
     rows: usage.rows,
     before: comparison?.rows ?? null,
     dimension: by,
     measure,
-    name,
+    name: (value) => name(value, by),
+    across,
   })
+  const header = ['breakdown', ...VALUE_HEADER, ...(across ? SPLIT_HEADER : []), ...FIGURES_HEADER]
   const rows = ordered(lines, order).map((line) => {
     const tokens = kindsOf(kinds, line.key)
+    const second = line.second
     return [
       text(by),
-      ...valueCells(line.value, line.kind, name(line.value)),
+      ...valueCells(line.value, valueKind(line.value), name(line.value, by)),
+      ...(second
+        ? [
+            text(second.dimension),
+            ...valueCells(
+              second.value,
+              valueKind(second.value),
+              name(second.value, second.dimension),
+            ),
+          ]
+        : []),
       ...figures(line.now),
       ...figures(line.before),
       ...bounds.map((bound) => text(bound)),
@@ -202,80 +211,20 @@ export function spendingCsv({ by, filters, measure, usage, name, order }: CsvSou
       ...TOKEN_KINDS.map((kind) => count(tokens[kind])),
     ]
   })
-  return fileOf([HEADER, ...rows])
-}
-
-interface CrossCsvSource extends CsvSource {
-  /** The second dimension; `usage` is then the read by `by` and it. */
-  across: UsageDimension
-  /** A column of the table as the page names it. */
-  column: (line: SpendingLine) => string
-}
-
-/**
- * The crossed table as a file: a row per value of `by` with its figure in the chosen measure in
- * each column the table shows, under the column's name, then its total; with the measure tokens,
- * its tokens by kind after them.
- */
-function crossCsv(source: CrossCsvSource): string {
-  const { by, across, filters, measure, usage, name, column, order } = source
-  const { columns, rows } = crossOf(usage, by, across, measure)
-  const kinds = measure === 'tokens' ? kindsByValue(usage.rows, by) : null
-  const header = [
-    'breakdown',
-    'across',
-    'measure',
-    'value_id',
-    'value_reference',
-    'value_name',
-    'value_kind',
-    ...columns.map((line) => text(column(line))),
-    'total',
-    ...(kinds ? KIND_HEADER : []),
-    'period_from',
-    'period_to',
-    'filters',
-  ]
-  const lines = ordered(rows, order).map((row) => {
-    const tokens = kinds ? kindsOf(kinds, row.key) : null
-    return [
-      text(by),
-      text(across),
-      MEASURE_UNITS[measure],
-      ...valueCells(row.value, row.kind, name(row.value)),
-      ...columns.map((line) => amount(measure, row.cells.get(line.key) ?? NOTHING)),
-      amount(measure, row.total),
-      ...(tokens ? TOKEN_KINDS.map((kind) => count(tokens[kind])) : []),
-      text(usage.period.from),
-      text(usage.period.to),
-      filterCell(filters),
-    ]
-  })
-  return fileOf([header, ...lines])
+  return fileOf([header, ...rows])
 }
 
 /** What the file is called: the period's first and last day, and the dimension or the two. */
-export function csvFileName(usage: Usage, by: UsageDimension, across?: UsageDimension): string {
+export function csvFileName(
+  usage: Usage,
+  by: UsageDimension,
+  across?: UsageDimension | null,
+): string {
   const of = across ? `${by}-and-${across}` : by
   return `agent-usage-${dayOf(usage.period.from)}-to-${lastDayBefore(usage.period.to)}-by-${of}.csv`
 }
 
-interface TableFileSource extends CsvSource {
-  /** The second dimension and the read by both, while the table is crossed; null otherwise. */
-  cross: { across: UsageDimension; usage: Usage } | null
-  /** A column of a crossed table, a value of the second dimension, as the page names it. */
-  column: (across: UsageDimension, line: SpendingLine) => string
-}
-
-/** The file of the table on show, and its name: crossed while it is, beside the period before else. */
-export function tableFile({ cross, column, ...source }: TableFileSource) {
-  const text = cross
-    ? crossCsv({
-        ...source,
-        across: cross.across,
-        usage: cross.usage,
-        column: (line) => column(cross.across, line),
-      })
-    : spendingCsv(source)
-  return { name: csvFileName(source.usage, source.by, cross?.across), text }
+/** The file of the table on show, and its name: of its pairs while split, of its values else. */
+export function tableFile(source: CsvSource) {
+  return { name: csvFileName(source.usage, source.by, source.across), text: spendingCsv(source) }
 }

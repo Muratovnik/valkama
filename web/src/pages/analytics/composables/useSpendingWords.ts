@@ -262,10 +262,22 @@ export function useSpendingWords() {
     return categoryLabel(name, value as UsageGroupValue & { id: string })
   }
 
-  /** A line of a breakdown by its name: a value, or the folded tail with how many it holds. */
+  /**
+   * A value by its name, or a pair by both, the section's value first: «claude-opus-5-5 · high».
+   */
+  const pairLabel = (
+    name: UsageDimension,
+    value: UsageGroupValue,
+    second?: SpendingLine['second'],
+  ) =>
+    second
+      ? `${valueLabel(name, value)} · ${valueLabel(second.dimension, second.value)}`
+      : valueLabel(name, value)
+
+  /** A line of a breakdown by its name: a value or a pair, or the folded tail with how many it holds. */
   const lineLabel = (name: UsageDimension, line: SpendingLine) =>
     line.value
-      ? valueLabel(name, line.value)
+      ? pairLabel(name, line.value, line.second)
       : t('analytics.values.other', { count: line.folded }, line.folded)
 
   /**
@@ -290,9 +302,18 @@ export function useSpendingWords() {
       : leavingOut(name, said, now.unpriced + before.unpriced)
   }
 
-  /** What a chart of a measure by a dimension is called: «Agent time by task». */
-  const chartTitle = (name: Measure, by: UsageDimension) =>
-    t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
+  /**
+   * What a chart of a measure by a dimension is called, «Agent time by task», and by its pairs
+   * with a second one, «Agent time by model and by effort».
+   */
+  const chartTitle = (name: Measure, by: UsageDimension, across?: UsageDimension | null) =>
+    across
+      ? t('analytics.panel.table.crossTitle', {
+          measure: measure(name),
+          by: t(`analytics.byDimension.${by}`),
+          across: t(`analytics.byDimension.${across}`),
+        })
+      : t('analytics.chart', { measure: measure(name), by: t(`analytics.byDimension.${by}`) })
 
   /** A day as the time axis names it, «Mon 9», and in full for the hints and the table. */
   const day = (start: string) =>
@@ -464,6 +485,7 @@ export function useSpendingWords() {
     lineLabel,
     measure,
     noneLabel,
+    pairLabel,
     tokenKinds,
     unpriced,
     valueDetail,
