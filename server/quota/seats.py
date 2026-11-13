@@ -32,7 +32,10 @@ the seat is known for that week and its account is not.
 from __future__ import annotations
 
 import datetime as dt
+import json
+import operator
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
 
@@ -63,14 +66,18 @@ class Seat:
 UNKNOWN = Seat(None, None, None)
 
 
+#: The organization a session was working for at a moment: the latest of its main run's
+#: segments begun by then names it.
+_WORKING_FOR = (
+    "SELECT u.organization FROM usage_segments u WHERE u.session_id = {session}"
+    " AND u.agent_id = '' AND u.started_at <= {at} ORDER BY u.started_at DESC, u.id DESC LIMIT 1"
+)
+
+
 def organization_at(conn: sqlite3.Connection, session_id: str, at: str) -> str | None:
     """The organization a session was working for at `at`, as its usage rows say; or None."""
 
-    row = conn.execute(
-        "SELECT organization FROM usage_segments WHERE session_id = ? AND agent_id = ''"
-        " AND started_at <= ? ORDER BY started_at DESC, id DESC LIMIT 1",
-        (session_id, at),
-    ).fetchone()
+    row = conn.execute(_WORKING_FOR.format(session="?", at="?"), (session_id, at)).fetchone()
     return None if row is None else row[0]
 
 
@@ -116,14 +123,145 @@ class _Sample(NamedTuple):
         return week_end if self.resets_at is None else min(self.resets_at, week_end)
 
 
-#: Every sample with a seat of the feeds a read looks at, in the order they were made.
-_FEED_SAMPLES = (
-    "SELECT id, at, organization, session_id, kind, model, seat, resets_at, account_uuid"
-    " FROM quota_samples WHERE seat IS NOT NULL AND at BETWEEN ? AND ? AND ({})"
+class Segment(NamedTuple):
+    """A usage segment as the seat rule reads it: its session, its organization, and its
+    times in the store's form, `2030-03-04T09:00:00.000Z`, as the usage rows keep them."""
+
+    session_id: str
+    organization: str | None
+    started_at: str
+    ended_at: str
+
+
+#: Every sample with a seat a read of these segments can look at, in the order they were
+#: made, with the organization its identity worked for at its moment: an organization's
+#: own, and a session's as `organization_at` says.
+_SAMPLES_WORKING_FOR = (
+    "SELECT id, at, organization, session_id, kind, model, seat, resets_at, account_uuid,"
+    " CASE WHEN session_id IS NULL THEN organization ELSE ({working}) END"
+    " FROM quota_samples q WHERE seat IS NOT NULL AND at BETWEEN ? AND ?"
+    " AND (session_id IS NOT NULL OR organization IN (SELECT value FROM json_each(?)))"
     " ORDER BY at, id"
 )
-_OWN = _FEED_SAMPLES.format("session_id = ?")
-_OTHERS = _FEED_SAMPLES.format("organization = ? OR (session_id IS NOT NULL AND session_id != ?)")
+_SAMPLES = _SAMPLES_WORKING_FOR.format(
+    working=_WORKING_FOR.format(session="q.session_id", at="q.at")
+)
+#: Every account a sample with a UUID names in these organizations, by its seat.
+_ACCOUNTS = (
+    "SELECT DISTINCT organization, seat, account_uuid FROM quota_samples"
+    " WHERE account_uuid IS NOT NULL AND seat IS NOT NULL"
+    " AND organization IN (SELECT value FROM json_each(?))"
+)
+
+
+class _State(NamedTuple):
+    """A feed's sample with what deciding whether it holds at a segment needs, worked out
+    once: the organization its identity worked for, and the two moments it holds between."""
+
+    sample: _Sample
+    working_for: str | None
+    lapses_at: str
+    #: The last start its seat can still be read for: `_LONGEST_HOLD` after it.
+    reaches: str
+
+
+def _most_recent_holding(
+    feeds: dict[tuple, _State], start: str, organization: str, besides: str | None = None
+) -> _Sample | None:
+    """Of these feeds' latest samples, the most recent one still holding at `start` whose
+    identity worked for `organization`, and is not the session `besides`; or None."""
+
+    for state in reversed(feeds.values()):
+        if state.reaches < start:
+            # The feeds stand the most recent last: none before this one reaches.
+            return None
+        if (
+            state.lapses_at > start
+            and state.working_for == organization
+            and (besides is None or state.sample.session_id != besides)
+        ):
+            return state.sample
+    return None
+
+
+def _later(moment: str, by: dt.timedelta) -> str:
+    """A moment in the store's form, `by` later, in the same form."""
+
+    later = dt.datetime.fromisoformat(moment).astimezone(dt.UTC) + by
+    return later.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _accounts(cursor: sqlite3.Cursor, organizations: Sequence[str]) -> dict[tuple, str | None]:
+    """`account_of_seat` for every seat of these organizations a UUID names, in one read."""
+
+    named: dict[tuple[str, str], set[str]] = {}
+    for organization, seat, account in cursor.execute(_ACCOUNTS, (json.dumps(organizations),)):
+        named.setdefault((organization, seat), set()).add(str(account))
+    return {key: next(iter(uuids)) if len(uuids) == 1 else None for key, uuids in named.items()}
+
+
+def seats_of_segments(conn: sqlite3.Connection, segments: Sequence[Segment]) -> list[Seat]:
+    """The seat of each segment, in their order, by the rule `seat_of_segment` states.
+
+    Two reads serve any number of segments: the samples their weeks hold, each with the
+    organization its identity worked for then, and the accounts their seats name. The
+    segments are then taken in the order they end and the samples in the order they were
+    made, so each feed's latest sample is known at each segment's end.
+    """
+
+    found = [UNKNOWN] * len(segments)
+    asked = sorted(
+        (
+            (segment.ended_at, index, segment)
+            for index, segment in enumerate(segments)
+            if segment.organization is not None
+        ),
+        key=operator.itemgetter(0),
+    )
+    if not asked:
+        return found
+    organizations = sorted({str(segment.organization) for *_, segment in asked})
+    earliest = _later(min(segment.started_at for *_, segment in asked), -_LONGEST_HOLD)
+    # Plain tuples: a named row costs more than the rest of the read of a sample.
+    cursor = conn.cursor()
+    cursor.row_factory = None
+    states = [
+        _State(sample, row[-1], sample.lapses_at, _later(sample.at, _LONGEST_HOLD))
+        for row in cursor.execute(_SAMPLES, (earliest, asked[-1][0], json.dumps(organizations)))
+        for sample in (_Sample(*row[:-1]),)
+    ]
+    accounts = _accounts(cursor, organizations)
+    latest: dict[tuple, _State] = {}
+    # Each feed's latest sample, the most recent last: by the organization its identity
+    # worked for, and a session's by its session too.
+    holding: dict[str | None, dict[tuple, _State]] = {}
+    own: dict[str, dict[tuple, _State]] = {}
+    taken = 0
+    for end, index, segment in asked:
+        while taken < len(states) and states[taken].sample.at <= end:
+            state = states[taken]
+            taken += 1
+            feed, session = state.sample.feed, state.sample.session_id
+            before = latest.get(feed)
+            if before is not None:
+                holding[before.working_for].pop(feed)
+                if session is not None:
+                    own[session].pop(feed)
+            latest[feed] = state
+            holding.setdefault(state.working_for, {})[feed] = state
+            if session is not None:
+                own.setdefault(session, {})[feed] = state
+        organization, start = str(segment.organization), segment.started_at
+        mine = own.get(segment.session_id, {})
+        naming, basis = _most_recent_holding(mine, start, organization), "session"
+        if naming is None:
+            others = holding.get(organization, {})
+            naming = _most_recent_holding(others, start, organization, segment.session_id)
+            basis = "organization"
+        if naming is not None:
+            account = naming.account_uuid or accounts.get((organization, naming.seat))
+            found[index] = Seat(naming.seat, basis, naming.at, account)
+    return found
 
 
 def seat_of_segment(
@@ -136,36 +274,18 @@ def seat_of_segment(
 ) -> Seat:
     """The seat of one usage segment, from the feeds holding at it; `UNKNOWN` with none."""
 
-    if organization is None:
-        return UNKNOWN
-    start, end = samples.instant(started_at), samples.instant(ended_at)
-    since = samples.instant((dt.datetime.fromisoformat(start) - _LONGEST_HOLD).isoformat())
-
-    def holding(query: str, values: tuple[str, ...], basis: str) -> Seat | None:
-        latest: dict[tuple[str | None, str | None, str, str | None], _Sample] = {}
-        for row in conn.execute(query, (since, end, *values)):
-            sample = _Sample(*row)
-            latest[sample.feed] = sample
-        found: _Sample | None = None
-        for sample in latest.values():
-            if sample.lapses_at <= start:
-                continue
-            if sample.session_id is not None and (
-                organization_at(conn, sample.session_id, sample.at) != organization
-            ):
-                continue
-            if found is None or (sample.at, sample.id) > (found.at, found.id):
-                found = sample
-        if found is None:
-            return None
-        account = found.account_uuid or account_of_seat(conn, organization, found.seat)
-        return Seat(found.seat, basis, found.at, account)
-
-    return (
-        holding(_OWN, (session_id,), "session")
-        or holding(_OTHERS, (organization, session_id), "organization")
-        or UNKNOWN
+    segment = Segment(
+        session_id, organization, samples.instant(started_at), samples.instant(ended_at)
     )
+    return seats_of_segments(conn, [segment])[0]
 
 
-__all__ = ["UNKNOWN", "Seat", "account_of_seat", "organization_at", "seat_of_segment"]
+__all__ = [
+    "UNKNOWN",
+    "Seat",
+    "Segment",
+    "account_of_seat",
+    "organization_at",
+    "seat_of_segment",
+    "seats_of_segments",
+]

@@ -1000,8 +1000,8 @@ MCP tool reads it, for the same reason as above.
 | `from`, `to` | required. A date, `2030-03-04`, meaning the start of that day at `utc_offset`, or a time with its own offset, `2030-03-04T09:00:00Z` or `2030-03-04T09:00:00%2B03:00`: in a query string a `+` reads as a space, so it is sent as `%2B`. `to` is not included and must be later than `from`. Both, and with `compare` the period before too, lie between 1970 and the start of 9999 |
 | `step` | `day` (the default), `hour` or `minute` |
 | `utc_offset` | the caller's offset from UTC in minutes, from `-840` to `840`; `0` by default. A day, an hour or a minute of the series starts at the caller's midnight, full hour or full minute. The server has no time-zone database: a period across a change of daylight saving time is cut at one offset, so a caller that minds asks for it in two |
-| `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment` |
-| a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id` |
+| `group_by` | none, one or two dimensions, separated by a comma: `account`, `project`, `work_item`, `executor`, `role`, `launch_class`, `model`, `effort`, `environment`, `seat` |
+| a dimension's name | a filter: the values admitted, separated by a comma, up to 100 of 1 to 512 characters; `role` takes only `main`, `subagent` and `advisor`. A work item is named by its `work_item_id`, an executor by its session id, a project by its `project_id`, a seat by its `id` |
 | `none` | the dimensions, separated by a comma, whose missing value a filter admits: work on no item for `work_item`, a session's own run for `launch_class`, an unknown value for the rest. `none=launch_class` does not admit a subagent's run whose launch class is unknown, and `none=role` admits nothing, since every stretch has a role. Alone it keeps only the work with no value there |
 | `compare` | `true` adds the preceding period of the same length; `false` by default |
 
@@ -1056,7 +1056,8 @@ with.
 The measures are the reads' above: `agent_seconds`, `estimated_seconds`, `quality`
 (`observed`, `estimated`, `mixed`, or `null` when no time was counted), `tokens` by
 kind, `estimated_api_cost_usd` and `unpriced_tokens`, each with the meaning given
-there. The answer holds no subscription quota and no percentage of any limit.
+there. The answer holds no subscription quota and no percentage of any limit: `seat`
+says only which account the work was spent on.
 
 Seconds here are `agent_seconds` only: the sum of each stretch of work's own seconds.
 Two agents working one hour side by side spent two hours, a subagent's time counts
@@ -1095,6 +1096,7 @@ item, and for `launch_class` a session's own run, are groups of their own too, w
 | `role` | who spent it: `main`, a session's own run; `subagent`, a subagent's run; `advisor`, an adviser the agent consulted, in whichever run it was. Never unknown. An adviser's row keeps the launch class, effort and model its segment has, so `role` beside `launch_class` or `model` tells whose adviser it was and which model advised | — |
 | `launch_class` | how a subagent's run was launched, as the usage rows hold it. A session's own run is launched by no one, so it has none (`unknown` `false`); a subagent's run that does not say is unknown | — |
 | `model`, `effort`, `environment` | as the usage rows hold them | — |
+| `seat` | the subscription account of its organization the work was spent on, read from the quota samples when the answer is made: a stretch is on the seat the latest sample of each feed at or before it says, until that window resets, its own session's feeds first. The `id` is the organization, a `/` and the account's UUID, or, for a seat no sample with a UUID names in that organization that week, the seat's key for the week, `week:2030-03-08T09:00Z`, which does not hold across weeks. The same UUID in two organizations is two accounts. Unknown where the work names no organization or no sample of it says where it was: one group, never counted to an account | `organization`, `account_uuid` and `seat_key`, the parts of the `id`; all `null` when unknown |
 
 The answer carries ids, the names and numbers a card already shows, times and counts.
 It holds no path and no folder. The one text from a transcript is an executor's
@@ -1104,8 +1106,10 @@ from the file's tail, where the live work reads it, and keeps it nowhere. Anothe
 client's transcript is not read, so a Codex session's `title` is `null`. A transcript is
 read once per answer and again only after it changed, so a period of many sessions
 costs the status of their files once each has been read. Because a person can rename a
-session, the `title` is the one value in the answer that two reads of the same rows may
-give differently.
+session, the `title` is one of two values in the answer that two reads of the same rows may
+give differently. The other is `seat`: a quota sample that arrives later, such as imported
+history, can say where earlier work was, and one that names an account's UUID turns a seat's
+key into its account.
 
 ### How often each analytics surface is opened
 
