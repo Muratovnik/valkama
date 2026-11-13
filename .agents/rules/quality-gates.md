@@ -106,9 +106,9 @@ and `gates` refuses the step there, so neither reads as a pass.
 
 An npm gate on modules its lockfile does not pin fails in a way that reads as a
 defect in the code, so neither runner lets that happen, each in its own way.
-`windows/release.py check` runs `npm ci` in `web` and `desktop` ahead of every
-stage, because Release Kit runs it in the main checkout's working tree and a
-release must verify what the lockfile pins. `tests/isolated.py gates` installs
+`windows/release.py check` runs `npm ci` for `web` and `desktop` ahead of every
+stage, because a release must verify what the lockfile pins, whatever the
+checkout's `node_modules` holds. `tests/isolated.py gates` installs
 nothing: before each npm step it compares `node_modules/.package-lock.json` with
 `package-lock.json` and refuses that step, saying where `npm ci` is needed, on a
 missing tree, a difference or a comparison it could not make. A refused step does
@@ -117,13 +117,17 @@ and `integrity` agree; the rest of an entry and the top of the file are npm's
 bookkeeping. The hidden file has no root entry and leaves out optional packages
 this platform skips, so only an entry marked `optional` may be missing from it.
 
-`npm ci` through a linked `node_modules` empties the link's target and then
-replaces the link with a directory, so a worktree linking the main checkout's
-modules would strip them from every checkout sharing them. `check` refuses a link,
-and a gate's refusal says to remove it first. `gates` still reads through a link,
-so a worktree may share modules as long as they match its own lockfile. The other
-side of sharing: a release's `npm ci` in the main checkout replaces what those
-worktrees run on while it lasts.
+`npm ci` empties the `node_modules` it installs into, through a link as well,
+and then replaces the link with a directory. Worktrees link their modules to the
+main checkout's, so an install in either strips them from every checkout sharing
+them; a release check run in the main checkout once did, and then failed on a
+file a running process held. So `check` installs nowhere in the checkout: it
+copies the sources Git tracks or would add, never a `node_modules`, into a
+temporary directory, runs `npm ci` and every npm stage there, puts the web build
+back in `web/dist`, and removes the copy without entering a link in it. A gate's
+refusal says to remove a link before running `npm ci` in a worktree. `gates`
+still reads through a link, so a worktree may share modules as long as they match
+its own lockfile.
 
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.

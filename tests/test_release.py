@@ -11,6 +11,13 @@ the real one: every tool resolves inside the running interpreter's own
 environment, and an environment that lacks a pinned tool is refused before the
 first stage with a message saying what to run.
 
+The npm stages are held against a checkout made here, with npm played by a fake
+that touches a disk the way npm does: `npm ci` empties the `node_modules` it
+finds, through a link too. A release check once did that to the modules every
+worktree on the machine shared. The check now runs npm only in a temporary copy
+of the checkout's sources, so the checkout's own modules, a directory or a link,
+come through unchanged, and the copy is gone when the check ends.
+
 The price stage is held the same way, against a hand-written document in the
 shape of LiteLLM's list and never the network: an equal price passes, a
 different one fails naming both values, and a list that cannot be read is
@@ -22,7 +29,9 @@ from __future__ import annotations
 import importlib.util
 import io
 import os
+import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -79,6 +88,107 @@ def link_directory(link: Path, target: Path) -> None:
         _winapi.CreateJunction(str(target), str(link))
     else:
         link.symlink_to(target, target_is_directory=True)
+
+
+#: The real `subprocess.run`, for the Git calls a fake stage runner lets through, and Git
+#: found before a test narrows PATH to the scripts it lays down.
+_real_run = subprocess.run
+_GIT = shutil.which("git") or "git"
+
+
+def files(top: Path) -> dict[str, bytes]:
+    """Every file below `top`, read through a link at the top, by its path relative to it."""
+
+    found = {}
+    for parent, _directories, names in os.walk(top):
+        for name in names:
+            path = Path(parent) / name
+            found[path.relative_to(top).as_posix()] = path.read_bytes()
+    return found
+
+
+#: The checkout's working tree as Git reports it, which is what the npm stages check:
+#: committed files, a file edited since, and one not yet added. Nothing ignored.
+SOURCES = {
+    ".gitignore": b"node_modules/\ntest-results/\n",
+    "web/package.json": b'{"name": "web"}\n',
+    "web/package-lock.json": b'{"lockfileVersion": 3}\n',
+    "web/src/main.ts": b"edited in the working tree\n",
+    "web/src/new.ts": b"not added yet\n",
+    "web/dist/index.html": b"the committed bundle\n",
+    "web/dist/stale.js": b"a chunk the next build no longer writes\n",
+    "desktop/package.json": b'{"name": "desktop"}\n',
+    "desktop/package-lock.json": b'{"lockfileVersion": 3}\n',
+    "desktop/main.js": b"main\n",
+    # The desktop tests read their samples beside the package, not inside it.
+    "tests/fixtures/samples.json": b"[]\n",
+}
+
+
+def make_checkout(checkout: Path) -> Path:
+    """A Git checkout holding `SOURCES` in its working tree, an ignored file, and no modules."""
+
+    for name, content in SOURCES.items():
+        path = checkout / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"committed\n" if name == "web/src/main.ts" else content)
+    git = (_GIT, "-C", str(checkout))
+    # Staged, never committed: a commit would run whatever hooks this machine installs.
+    _real_run((*git, "init", "-q"), check=True, capture_output=True)
+    added = (name for name in SOURCES if name != "web/src/new.ts")
+    _real_run((*git, "add", "--", *added), check=True, capture_output=True)
+    (checkout / "web/src/main.ts").write_bytes(SOURCES["web/src/main.ts"])
+    (checkout / "web/test-results").mkdir()
+    (checkout / "web/test-results/report.txt").write_bytes(b"ignored output\n")
+    return checkout
+
+
+class FakeStages:
+    """`subprocess.run` for `check`: Git runs for real, every other call is recorded and faked.
+
+    npm is played as it touches a disk. `ci` empties the `node_modules` it finds,
+    through a link as well, which is what emptied the shared modules, and installs
+    one that holds a link out of the package, as an install may. `run build`
+    empties `dist` and writes a bundle there. `fail` names the npm arguments that
+    exit non-zero instead, before touching anything.
+    """
+
+    def __init__(self, outside: Path, fail: tuple[str, ...] | None = None) -> None:
+        self.outside = outside
+        self.fail = fail
+        self.calls: list = []
+        self.copied: dict[str, bytes] | None = None
+
+    def __call__(self, command: tuple[str, ...], **kwargs: object) -> object:
+        if command[0] == "git":
+            return _real_run((_GIT, *command[1:]), **kwargs)
+        self.calls.append(mock.call(command, **kwargs))
+        if command[0] == release.NPM:
+            cwd = Path(str(kwargs["cwd"]))
+            if command[1:] == self.fail:
+                raise subprocess.CalledProcessError(1, command)
+            if self.copied is None:
+                # What the first npm stage found beside it is what every one checks.
+                self.copied = files(cwd.parent)
+            if command[1:] == ("ci",):
+                self.install(cwd / "node_modules")
+            elif command[1:] == ("run", "build"):
+                shutil.rmtree(cwd / "dist", ignore_errors=True)
+                (cwd / "dist").mkdir()
+                (cwd / "dist" / "index.html").write_bytes(b"built from " + cwd.name.encode())
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    def install(self, modules: Path) -> None:
+        if modules.exists():
+            for entry in list(modules.iterdir()):
+                if entry.is_dir():
+                    shutil.rmtree(entry)
+                else:
+                    entry.unlink()
+        else:
+            modules.mkdir()
+        (modules / ".package-lock.json").write_bytes(b"{}")
+        link_directory(modules / "linked", self.outside)
 
 
 class FakeEnvironment:
@@ -202,23 +312,45 @@ class ReleaseToolchainTests(unittest.TestCase):
         run.assert_not_called()
         version.assert_not_called()
 
-    def checked_commands(self, checkout: Path) -> list:
-        """Every stage `check` ran in `checkout`, none of them for real."""
+    def outside(self) -> Path:
+        """A directory outside every checkout and copy, which nothing the check removes enters."""
+
+        outside = self.root / "outside"
+        if not outside.is_dir():
+            outside.mkdir()
+            (outside / "kept").write_bytes(b"kept")
+        return outside
+
+    @property
+    def temporary(self) -> Path:
+        """Where `check` makes its temporary directories, under the temporary root set here."""
+
+        return (self.root / "local" / "Temp" / "codex").resolve()
+
+    def checked(self, checkout: Path, stages: FakeStages) -> None:
+        """Run `check` on `checkout`, `stages` standing in for every process but Git."""
 
         (self.root / "local" / "Temp").mkdir(parents=True, exist_ok=True)
         with (
             mock.patch.object(release, "ROOT", checkout),
-            mock.patch.object(release.subprocess, "run") as run,
+            mock.patch.object(release.subprocess, "run", side_effect=stages),
             mock.patch.object(release, "version"),
             mock.patch.object(release, "require_version"),
             mock.patch.object(release.sys, "stdout", io.StringIO()),
             mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.root / "local")}),
+            mock.patch.object(release.tempfile, "tempdir", str(self.root / "local" / "Temp")),
         ):
             release.check(self.environment.interpreter(), PINS)
-        return run.call_args_list
+
+    def checked_commands(self, checkout: Path | None = None) -> list:
+        """Every call but Git's that `check` made on a checkout of `SOURCES`, none for real."""
+
+        stages = FakeStages(self.outside())
+        self.checked(checkout or make_checkout(self.root / "checkout"), stages)
+        return stages.calls
 
     def test_check_runs_each_python_stage_from_the_interpreters_environment(self) -> None:
-        calls = self.checked_commands(self.root / "checkout")
+        calls = self.checked_commands()
         inside = (str(self.environment.executable), str(self.environment.scripts))
         python_stages = [call for call in calls if call.args[0][0] != release.NPM]
         self.assertEqual(10, len(python_stages))
@@ -232,29 +364,30 @@ class ReleaseToolchainTests(unittest.TestCase):
     # -- the modules the npm stages run on ------------------------------------
 
     def test_check_installs_from_each_lockfile_before_any_stage_uses_it(self) -> None:
-        checkout = self.root / "checkout"
-        calls = self.checked_commands(checkout)
+        calls = self.checked_commands()
 
-        stages = [(call.args[0], call.kwargs["cwd"]) for call in calls]
+        stages = [(call.args[0], Path(call.kwargs["cwd"])) for call in calls]
         npm = [(command[1:], cwd) for command, cwd in stages if command[0] == release.NPM]
+        copy = npm[0][1].parent
         self.assertEqual(
             [
-                (("ci",), checkout / "web"),
-                (("ci",), checkout / "desktop"),
-                (("test",), checkout / "web"),
-                (("run", "typecheck"), checkout / "web"),
-                (("run", "build"), checkout / "web"),
-                (("test",), checkout / "desktop"),
+                (("ci",), copy / "web"),
+                (("ci",), copy / "desktop"),
+                (("test",), copy / "web"),
+                (("run", "typecheck"), copy / "web"),
+                (("run", "build"), copy / "web"),
+                (("test",), copy / "desktop"),
             ],
             npm,
         )
+        self.assertEqual(self.temporary, copy.parent.resolve())
         # Ahead of the Python stages too: a release once ran 1102 s and then failed here.
         self.assertEqual([release.NPM, release.NPM], [command[0] for command, _ in stages[:2]])
 
     def test_check_compares_prices_right_after_the_installs(self) -> None:
         # A price source that cannot be reached is a network failure like a registry's,
         # so it is met before the suite rather than after it.
-        checkout = self.root / "checkout"
+        checkout = make_checkout(self.root / "checkout")
         third = self.checked_commands(checkout)[2]
         command, cwd = third.args[0], third.kwargs["cwd"]
         self.assertEqual(
@@ -264,41 +397,114 @@ class ReleaseToolchainTests(unittest.TestCase):
         self.assertEqual(checkout, cwd)
 
     def test_a_failed_install_stops_the_check_before_any_other_stage(self) -> None:
-        failure = release.subprocess.CalledProcessError(1, "npm ci")
-        checkout = self.root / "checkout"
-        with (
-            mock.patch.object(release, "ROOT", checkout),
-            mock.patch.object(release.subprocess, "run", side_effect=failure) as run,
-            mock.patch.object(release, "version"),
-            mock.patch.object(release, "require_version"),
-            mock.patch.object(release.sys, "stdout", io.StringIO()),
-            self.assertRaises(release.subprocess.CalledProcessError),
-        ):
-            release.check(self.environment.interpreter(), PINS)
-        run.assert_called_once()
+        stages = FakeStages(self.outside(), fail=("ci",))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.checked(make_checkout(self.root / "checkout"), stages)
+        self.assertEqual(1, len(stages.calls))
+        self.assertEqual([], list(self.temporary.iterdir()))
 
-    def test_check_refuses_modules_linked_from_elsewhere_before_any_stage_runs(self) -> None:
-        # `npm ci` through the link would empty the other checkout's modules.
-        checkout = self.root / "worktree"
-        for package in ("web", "desktop"):
-            with self.subTest(package=package):
-                shared = self.root / "main" / package / "node_modules"
-                shared.mkdir(parents=True)
-                (shared / "dependency").mkdir()
-                (checkout / package).mkdir(parents=True)
-                link_directory(checkout / package / "node_modules", shared)
+    def test_the_checkouts_own_modules_come_through_the_npm_stages_unchanged(self) -> None:
+        # npm ci empties the node_modules it runs on, through a link as well. Run in
+        # the checkout other worktrees link their modules to, it emptied theirs.
+        layouts = {
+            "directories": ("directory", "directory"),
+            "web linked": ("link", "directory"),
+            "desktop linked": ("directory", "link"),
+        }
+        for name, kinds in layouts.items():
+            with self.subTest(layout=name):
+                checkout = make_checkout(self.root / name / "checkout")
+                links = {}
+                for package, kind in zip(release.NPM_PACKAGES, kinds, strict=True):
+                    modules = checkout / package / "node_modules"
+                    if kind == "link":
+                        target = self.root / name / "shared" / package
+                        target.mkdir(parents=True)
+                        link_directory(modules, target)
+                        links[package] = target.resolve()
+                    else:
+                        modules.mkdir()
+                    (modules / "sentinel").write_bytes(f"{package} modules".encode())
+                packages = release.NPM_PACKAGES
+                before = {
+                    package: files(checkout / package / "node_modules") for package in packages
+                }
+                stages = FakeStages(self.outside())
+
+                self.checked(checkout, stages)
+
+                after = {
+                    package: files(checkout / package / "node_modules") for package in packages
+                }
+                self.assertEqual(before, after)
+                for package, target in links.items():
+                    self.assertEqual(target, release.linked_modules(checkout / package), package)
+                npm = [
+                    Path(call.kwargs["cwd"]).resolve()
+                    for call in stages.calls
+                    if call.args[0][0] == release.NPM
+                ]
+                self.assertEqual(6, len(npm))
+                for cwd in npm:
+                    self.assertTrue(cwd.is_relative_to(self.temporary), cwd)
+                    self.assertFalse(cwd.is_relative_to(checkout.resolve()), cwd)
+                # What they ran on is the working tree's sources, an edit and a file not yet
+                # added included; ignored output and every node_modules left out.
+                self.assertEqual(SOURCES, stages.copied)
+                # The copy is gone, and the link the install left in it was not entered.
+                self.assertEqual([], list(self.temporary.iterdir()))
+                self.assertEqual({"kept": b"kept"}, files(self.outside()))
+
+    def test_the_web_build_replaces_the_checkouts_bundle_and_nothing_else(self) -> None:
+        # Release Kit's clean-tree check after the checks is what finds a committed bundle
+        # that its sources no longer build, so what the copy built lands in the checkout.
+        checkout = make_checkout(self.root / "checkout")
+        before = files(checkout)
+
+        self.checked(checkout, FakeStages(self.outside()))
+
+        self.assertEqual({"index.html": b"built from web"}, files(checkout / "web" / "dist"))
+        after = files(checkout)
+        for tree in (before, after):
+            for name in [name for name in tree if name.startswith(("web/dist/", ".git/"))]:
+                del tree[name]
+        self.assertEqual(before, after)
+
+    def test_a_failed_npm_stage_still_removes_the_copy(self) -> None:
+        checkout = make_checkout(self.root / "checkout")
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.checked(checkout, FakeStages(self.outside(), fail=("run", "typecheck")))
+        self.assertEqual([], list(self.temporary.iterdir()))
+        self.assertEqual({"kept": b"kept"}, files(self.outside()))
+        self.assertEqual(
+            SOURCES["web/dist/index.html"], (checkout / "web" / "dist" / "index.html").read_bytes()
+        )
+
+    def test_a_copy_that_cannot_be_removed_is_named_and_a_stage_failure_kept(self) -> None:
+        remove = shutil.rmtree
+
+        def held(path: str, *args: object, **kwargs: object) -> None:
+            if Path(path).name.startswith("valkama-npm-"):
+                raise PermissionError(13, "in use", str(path))
+            remove(path, *args, **kwargs)
+
+        for fail in (("test",), None):
+            with self.subTest(fail=fail):
+                checkout = make_checkout(self.root / f"checkout-{bool(fail)}")
+                stages = FakeStages(self.outside(), fail=fail)
+                errors = io.StringIO()
+                expected = subprocess.CalledProcessError if fail else RuntimeError
                 with (
-                    mock.patch.object(release, "ROOT", checkout),
-                    mock.patch.object(release.subprocess, "run") as run,
-                    self.assertRaises(release.ToolchainError) as refused,
+                    mock.patch.object(release.shutil, "rmtree", side_effect=held),
+                    mock.patch.object(release.sys, "stderr", errors),
+                    self.assertRaises(expected) as raised,
                 ):
-                    release.check(self.environment.interpreter(), PINS)
-                run.assert_not_called()
-                self.assertIn(str(checkout / package / "node_modules"), str(refused.exception))
-                self.assertIn(str(shared.resolve()), str(refused.exception))
-                self.assertIn("Remove the link", str(refused.exception))
-                self.assertTrue((shared / "dependency").is_dir())
-                (checkout / package / "node_modules").unlink()
+                    self.checked(checkout, stages)
+                [left] = list(self.temporary.iterdir())
+                said = errors.getvalue() if fail else str(raised.exception)
+                self.assertIn(str(left), said)
+                self.assertIn("in use", said)
+                remove(left)
 
     def test_modules_are_linked_only_when_they_are_somewhere_else(self) -> None:
         package = self.root / "package"
