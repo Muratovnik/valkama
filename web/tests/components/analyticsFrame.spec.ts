@@ -138,7 +138,7 @@ describe('the rail of sections', () => {
     stubAnalyticsReads((query) => serveUsage(WORLD, query))
     const page = await mountAnalytics({ routeState: { by: 'model', measure: 'tokens' } })
     expect(current(page)).toEqual(['Model'])
-    expect(page.get('.spending-bars h2').text()).toBe('Tokens by model')
+    expect(page.get('.spending-bars h3').text()).toBe('Tokens by model')
 
     // The overview is the plain address, so choosing it writes no section.
     await entry(page, 'overview').trigger('click')

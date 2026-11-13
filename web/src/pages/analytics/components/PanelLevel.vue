@@ -6,8 +6,9 @@
  * of a group 16px and the lines of a block 8px. Its heading takes the type the scale gives its
  * level, 16px over a section, 15px over a group and 14px over a block, from the one stylesheet
  * every heading of a level reads (`headingLevels.css`), so no heading is the size of the level
- * over it. The panel shows one section at a time, so the 36px between two sections has no place
- * on it yet.
+ * over it. The heading's element is not the level's but its place in the outline, one rank under
+ * the heading of the level around it (`usePanelOutline`). The panel shows one section at a time,
+ * so the 36px between two sections has no place on it yet.
  *
  * The heading row holds the heading, what stands beside it (`beside`: a plan, a fact) and the
  * controls that act on the whole level, each at the one size a heading's control takes. A caveat
@@ -22,6 +23,8 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useLevelHeading } from '@/pages/analytics/composables/usePanelOutline.ts'
 
 import InfoTip from '@/shared/ui/InfoTip.vue'
 import LineEnd from '@/shared/ui/LineEnd.vue'
@@ -45,8 +48,6 @@ const props = withDefaults(
     /** The narrowest a part stands in `fit` columns. */
     columnMin?: string
     columns?: 'one' | 'pair' | 'fit'
-    /** Where the heading sits in the document outline, which the surface decides. */
-    headingAs?: 'h2' | 'h3' | 'h4'
     /** Whether the level stands on a surface of its own. */
     surface?: boolean
     /** The heading's words; a heading with more than words takes the `heading` slot. */
@@ -55,7 +56,6 @@ const props = withDefaults(
   {
     as: 'section',
     title: '',
-    headingAs: 'h2',
     bodyAs: 'div',
     columns: 'one',
     columnMin: '20rem',
@@ -78,6 +78,8 @@ const slots = defineSlots<{
 const { t } = useI18n()
 
 const headed = computed(() => props.title !== '' || Boolean(slots.heading))
+/** The heading's element is its place in the outline, one under the level around it. */
+const headingAs = useLevelHeading(() => headed.value)
 /** The «ⓘ» stands at a heading: a level with no heading has no line for it to end. */
 const caveats = computed(() => (headed.value ? props.about : []))
 </script>

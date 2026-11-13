@@ -111,7 +111,7 @@ test('a new measure changes what the tiles say, in the same boxes, and asks noth
   await settled(page)
   const before = { boxes: await tiles(page), words: await leads(page), reads: asked.length }
   await page.locator('.spending-tiles .segmented-option').nth(1).click()
-  await expect(page.locator('.spending-days h2')).toContainText('Tokens')
+  await expect(page.locator('.spending-days h3')).toContainText('Tokens')
   await expect.poll(() => leads(page)).not.toEqual(before.words)
   expect(await tiles(page)).toEqual(before.boxes)
   expect(asked, 'reads asked for a measure').toHaveLength(before.reads)
@@ -133,7 +133,7 @@ test('one change of the view asks a read a dimension, and none for a measure or 
     .getByRole('navigation', { name: 'Sections of the usage' })
     .getByRole('button', { name: 'Model', exact: true })
     .click()
-  await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
+  await expect(page.locator('.spending-bars h3')).toHaveText('Agent time by model')
   await settled(page)
   const section = groups(from)
 

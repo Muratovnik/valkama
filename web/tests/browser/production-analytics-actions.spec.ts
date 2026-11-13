@@ -209,7 +209,7 @@ for (const lang of ['en', 'ru'] as const)
             frame,
             download,
             names: names.at(-1),
-            heading: await table.locator('h2').textContent(),
+            heading: await table.locator('h3').textContent(),
           })
           expectWhole(measured)
           expect(frame?.x).toBeGreaterThanOrEqual(0)

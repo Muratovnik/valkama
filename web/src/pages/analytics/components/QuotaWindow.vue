@@ -111,7 +111,6 @@ const readingsCaption = computed(() =>
   <PanelLevel
     class="quota-window"
     level="block"
-    heading-as="h4"
     :title="name"
     :data-window="window.kind"
     :data-state="window.state"

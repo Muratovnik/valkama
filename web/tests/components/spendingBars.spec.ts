@@ -270,7 +270,7 @@ describe('the bars on the page', () => {
     const page = await mountAnalytics({ routeState: { by: 'work_item', measure: 'tokens' } })
     await flushPromises()
     const rows = page.getComponent(RankedBars).props('rows') as RankedRow[]
-    expect(page.get('.spending-bars h2').text()).toBe('Tokens by task')
+    expect(page.get('.spending-bars h3').text()).toBe('Tokens by task')
     expect(sum(rows)).toBe(tokensOf(STRETCHES))
     expect(page.get('.tile-figure[data-measure="tokens"]').text()).toBe('55.5K')
   })

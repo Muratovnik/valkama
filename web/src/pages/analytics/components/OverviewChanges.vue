@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useLineActions } from '@/pages/analytics/composables/useLineActions.ts'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
+import { useHeadingUnder } from '@/pages/analytics/composables/usePanelOutline.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { mostMoved } from '@/pages/analytics/utils/overviewFigures.ts'
 import type { MovedLine } from '@/pages/analytics/utils/overviewFigures.ts'
@@ -41,6 +42,9 @@ const { t } = useI18n()
 const words = useSpendingWords()
 const overviewWords = useOverviewWords()
 const actions = useLineActions()
+/** The card's heading one under the level it stands in, and each way of change one under that. */
+const headingAs = useHeadingUnder()
+const wayAs = useHeadingUnder(2)
 
 const comparison = computed(() => props.usage.comparison)
 const period = computed(() =>
@@ -121,9 +125,12 @@ function follow(key: string, event: MouseEvent) {
     class="overview-changes"
     :aria-label="label"
   >
-    <h3 class="overview-changes-head">
+    <component
+      :is="headingAs"
+      class="overview-changes-head"
+    >
       {{ t('analytics.overview.changes.title') }}
-    </h3>
+    </component>
     <div
       v-if="!comparison"
       class="overview-changes-unread"
@@ -152,9 +159,12 @@ function follow(key: string, event: MouseEvent) {
         v-for="group in groups"
         :key="group.way"
       >
-        <h4 class="visually-hidden">
+        <component
+          :is="wayAs"
+          class="visually-hidden"
+        >
           {{ group.heading }}
-        </h4>
+        </component>
         <ul class="overview-changes-list">
           <li
             v-for="line in group.lines"

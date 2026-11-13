@@ -74,7 +74,7 @@ test('work with no task on the card of tasks breaks down by project and launch c
     .toBe(pageAt({ by: 'project', filters: '{"work_item":[null]}', across: 'launch_class' }))
   await expect(page.locator('.analytics-rail [aria-current="page"]')).toHaveText(/^Project/u)
   const table = page.locator('.spending-table')
-  await expect(table.locator('h2')).toHaveText('Agent time by project and by launch class')
+  await expect(table.locator('h3')).toHaveText('Agent time by project and by launch class')
   await expect(table.locator('tbody th')).toHaveText(['alpha', 'beta'])
   const headings = await table.locator('thead th').allTextContents()
   await record(info, 'analytics no task breakdown', { url: path(page), headings })

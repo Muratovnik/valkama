@@ -382,9 +382,9 @@ export async function measure(page: Page) {
       // edge of the panel.
       edges: [
         '.spending-tiles',
-        '.spending-bars h2',
-        '.spending-days h2',
-        '.spending-table h2',
+        '.spending-bars h3',
+        '.spending-days h3',
+        '.spending-table h3',
       ].map((selector) => box(document.querySelector(selector))?.x ?? null),
       // The bar's content and its first control, the period, which starts it.
       bar: [

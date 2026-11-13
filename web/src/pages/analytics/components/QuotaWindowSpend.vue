@@ -17,6 +17,7 @@
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useHeadingUnder } from '@/pages/analytics/composables/usePanelOutline.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -44,6 +45,8 @@ const props = defineProps<{
 const { t } = useI18n()
 const words = useSpendingWords()
 const quotaWords = useQuotaWords()
+/** Its heading one under its window's. */
+const headingAs = useHeadingUnder()
 
 const { by, read, retry } = useWindowSpend({
   account: () => props.account,
@@ -159,12 +162,13 @@ const failedAgain = computed(() =>
     :aria-labelledby="titleId"
   >
     <div class="window-spend-head">
-      <h5
+      <component
+        :is="headingAs"
         :id="titleId"
         class="window-spend-title"
       >
         {{ heading }}
-      </h5>
+      </component>
       <SegmentedControl
         size="compact"
         :model-value="by"
