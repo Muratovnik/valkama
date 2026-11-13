@@ -435,8 +435,8 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                     if k not in ("questions", "images")
                 }
                 # A transition also reports what the guards said about it, a
-                # claim the state it started the item in, and a batch what each
-                # of its groups changed.
+                # claim the state it started the item in, a batch what each
+                # of its groups changed, and a creation the items reading like it.
                 self.assertEqual(
                     stored,
                     {
@@ -450,6 +450,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                             "requeued",
                             "merged",
                             "overridden",
+                            "similar",
                         )
                     },
                 )

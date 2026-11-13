@@ -48,6 +48,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **Creating an item names the open items that read like it.** The answer of
+  `create_work_item` carries `similar`: up to three open items of the same space whose
+  title or description share the new title's words, best first, by reference and title,
+  so an agent that filed the same change twice sees it at once. It is a hint, not a
+  check: nothing is refused on it.
 - **The work list finds in every row.** A list of 300 rows or more keeps only the rows
   about its window in the page, so the browser's find reached those and missed the rest.
   While the list is what the page shows, Ctrl+F (⌘F) now opens the list's own find bar

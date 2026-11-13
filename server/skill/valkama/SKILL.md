@@ -50,6 +50,10 @@ splitting one, or handing items to other agents.
    whose scope covers it as `parent`. A decision the owner must make is a
    question on the new item (see Asking the owner), with each option, what it
    costs and your recommendation, not a list of options in the description.
+   The answer's `similar` names up to three open items of the space that read
+   like the new one: open each, and when one is the same change, merge the new
+   item into it (`merge_work_items`); when one is related, link it. It is a
+   hint, not a check: an empty `similar` does not prove there is no duplicate.
 4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
    take the next ready item of a space. A claim is atomic and refuses naming
    the holder when someone else has the item. It also starts the work: an

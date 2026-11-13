@@ -91,7 +91,7 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
+| `create_work_item` | `title`, `kind`, `priority`; `similar`, up to three open items of the space that read like the new one, each `{reference, title}`, best first and possibly empty; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
 | `update_work_item` | `updated`, the names of the fields it edited; `mentions` when its description named other items |
 | `transition_work_item` | `released`, the holder a close released (see [A close ends the claims](#a-close-ends-the-claims)); `warnings` and `overridden`; each when there is one |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued`, `warnings` and `overridden` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |

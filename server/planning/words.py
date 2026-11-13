@@ -4,7 +4,8 @@ One row per item holds three columns: its title, its description, and `notes` --
 its labels, source and summary, and the text of its comments, their decisions and
 its questions with their current answers. `search_work_items` matches every word
 of a query anywhere in that row and ranks the hits with the title weighing three
-times the rest.
+times the rest; `similar` names the open items of a space whose title or
+description share the words of a new item's title.
 
 A word is cut to its first five letters and matched as a prefix, a crude stand-in
 for Russian morphology that serves English too: `searching` and `search` meet at
@@ -160,6 +161,25 @@ ORDER BY bm25(work_item_search, 3.0, 1.0, 1.0), i.updated_at DESC, i.work_item_i
 LIMIT ? OFFSET ?
 """
 
+#: The open items of a space reading like one item, by title and description only:
+#: what was said under an item is not what it is about. The item itself, its parent
+#: and the items it is linked with are left out, since the caller knows them.
+_SIMILAR = """
+SELECT p.key, i.number, i.title FROM work_item_search
+JOIN work_item_search_rows d ON d.id = work_item_search.rowid
+JOIN work_items i ON i.work_item_id = d.work_item_id
+JOIN workflow_states s ON s.state_id = i.state_id
+JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id
+WHERE work_item_search MATCH ? AND i.planning_space_id = ? AND s.is_terminal = 0
+  AND i.work_item_id != ? AND i.work_item_id IS NOT ?
+  AND i.work_item_id NOT IN (
+    SELECT to_id FROM work_item_links WHERE from_id = ?
+    UNION SELECT from_id FROM work_item_links WHERE to_id = ?
+  )
+ORDER BY bm25(work_item_search, 3.0, 1.0, 0.0), i.updated_at DESC
+LIMIT ?
+"""
+
 
 def _unreachable(error: sqlite3.OperationalError) -> bool:
     """Whether an error says the index cannot be reached here, rather than that it failed.
@@ -269,21 +289,26 @@ _STOP = frozenset(
 MAX_WORDS = 24
 #: How long a stem is: the first five letters of a word.
 STEM = 5
+#: How many words of a title make a query of their own; a shorter title takes the
+#: first words of the description after its own.
+_TITLE_WORDS = 5
+#: How many similar items a new item's answer names.
+SIMILAR_LIMIT = 3
 
 
 def _fold(text: str) -> str:
     return text.lower().replace("ё", "е")  # noqa: RUF001 - the Cyrillic letters
 
 
-def stems(text: str) -> list[str]:
+def stems(text: str, *, shortest: int = 1) -> list[str]:
     """The stems a query matches: each word's first five letters, in order, once.
 
-    Common words go when the query has others, so `fix the search` asks for `fix` and
-    `searc`, while `the` alone still asks for `the`.
+    Common words, and words shorter than `shortest`, go when the query has others, so
+    `fix the search` asks for `fix` and `searc`, while `the` alone still asks for `the`.
     """
 
     words = _WORD.findall(_fold(text))
-    meaningful = [word for word in words if word not in _STOP] or words
+    meaningful = [word for word in words if word not in _STOP and len(word) >= shortest] or words
     return list(dict.fromkeys(word[:STEM] for word in meaningful))[:MAX_WORDS]
 
 
@@ -437,6 +462,44 @@ def search_rows(
         return None
 
 
+def similar(
+    conn: sqlite3.Connection, work_item_id: str, *, limit: int = SIMILAR_LIMIT
+) -> list[dict]:
+    """The open items of an item's space that read most like it: reference and title.
+
+    The words are its title's, and the description's first words after them when the
+    title is short; any of them counts, and the rank weighs a candidate's title three
+    times its description. A hint, not a guard: nothing is refused on it, and where
+    the index cannot be read it names nothing. Measured on pairs of items a person
+    later merged as duplicates, description words added to a title of five words or
+    more found fewer of the pairs, not more.
+    """
+
+    row = conn.execute(
+        "SELECT title, description, planning_space_id, parent_id FROM work_items"
+        " WHERE work_item_id = ?",
+        (work_item_id,),
+    ).fetchone()
+    if row is None:
+        return []
+    # A two-letter word is noise in a query any of whose words counts.
+    found = stems(str(row[0]), shortest=3)
+    if len(found) < _TITLE_WORDS:
+        found = stems(f"{row[0]} {row[1]}", shortest=3)[:_TITLE_WORDS]
+    if not found:
+        return []
+    match = "{title description} : (" + _expression(found, " OR ") + ")"
+    try:
+        rows = conn.execute(
+            _SIMILAR, (match, row[2], work_item_id, row[3], work_item_id, work_item_id, limit)
+        ).fetchall()
+    except sqlite3.OperationalError as error:
+        if not _unreachable(error):
+            raise
+        return []
+    return [{"reference": f"{key}-{number}", "title": str(title)} for key, number, title in rows]
+
+
 __all__ = [
     "INDEX",
     "ROWS",
@@ -447,5 +510,6 @@ __all__ = [
     "migrate",
     "migration_needed",
     "search_rows",
+    "similar",
     "stems",
 ]

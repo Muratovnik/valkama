@@ -29,6 +29,7 @@ from . import (
     request_model,
     requests,
     service,
+    words,
 )
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
@@ -301,7 +302,11 @@ TOOLS = [
         " nothing: it is created, then claimed, then given its steps, then linked,"
         " each as its single tool does. A refused step creates nothing and names the"
         " step and the refusal's code. With any of them, the answer adds applied,"
-        " what each changed.",
+        " what each changed. The answer's similar names up to three open items of the"
+        " space whose title or description share the new title's words, best first,"
+        " each by reference and title: read them, and merge the new item into one that"
+        " is the same change. A hint, not a check: nothing is refused on it, and an"
+        " empty list does not prove there is no duplicate.",
         WRITES,
         {
             "space": _SPACE,
@@ -1302,6 +1307,25 @@ def _acknowledged(
     return run
 
 
+def _with_similar(
+    write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A creation that also names the open items reading most like the new one.
+
+    Read after the write, so the links the same call made are known and left out
+    (`words.similar`). The HTTP boundary answers without it: the hint is for an
+    agent that has just filed an item and may have filed it twice.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        answer = write(conn, arguments)
+        if isinstance(answer, dict) and isinstance(answer.get("work_item_id"), str):
+            answer["similar"] = words.similar(conn, answer["work_item_id"])
+        return answer
+
+    return run
+
+
 def _told(
     write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
 ) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
@@ -1584,7 +1608,9 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "list_planning_spaces": _get("/api/planning/spaces"),
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
-    "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
+    "create_work_item": _with_similar(
+        _acknowledged("/api/planning/work-items", acknowledgements.created)
+    ),
     "get_work_item": _work_item,
     "read_work_item_image": _image,
     "list_work_items": _listing(

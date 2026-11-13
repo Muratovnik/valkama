@@ -190,5 +190,55 @@ class WordSearchTests(_Store):
         self.assertEqual([], self.found("two together"))
 
 
+class SimilarTests(_Store):
+    def create(self, **arguments: object) -> dict:
+        from server import mcp_surface
+
+        answer = mcp_surface.call_tool(self.conn, "create_work_item", {"space": "WRD", **arguments})
+        assert isinstance(answer, dict)
+        return answer
+
+    def test_a_new_item_names_the_open_items_reading_like_it(self) -> None:
+        close = self.item("Search finds nothing for three words")
+        nearer = self.item("Search finds nothing for three words or two")
+        closed = self.item("Search finds nothing for three words, closed")
+        service.transition_work_item(self.conn, closed["reference"], "cancelled", force=True)
+        for number in range(3):
+            self.item(f"Search unrelated {number}")
+        self.item("Something else entirely")
+        answer = self.create(title="Search finds nothing for three words or more")
+        references = [entry["reference"] for entry in answer["similar"]]
+        self.assertEqual(words.SIMILAR_LIMIT, len(references))
+        self.assertEqual({nearer["reference"], close["reference"]}, set(references[:2]))
+        self.assertNotIn(closed["reference"], references)
+        self.assertNotIn(answer["reference"], references)
+        self.assertEqual(
+            {"reference", "title"}, {key for entry in answer["similar"] for key in entry}
+        )
+
+    def test_a_linked_item_or_another_space_is_not_news(self) -> None:
+        linked = self.item("Calibrate the hygrometer")
+        service.create_planning_space(self.conn, project_id="other", name="Other", key="OTH")
+        service.create_work_item(self.conn, space="OTH", title="Calibrate the hygrometer")
+        answer = self.create(
+            title="Calibrate the hygrometer again",
+            links=[{"other": linked["reference"], "kind": "discovered-from"}],
+        )
+        self.assertEqual([], answer["similar"])
+
+    def test_nothing_alike_names_nothing_and_creates_anyway(self) -> None:
+        self.item("Calibrate the hygrometer")
+        answer = self.create(title="Paint the fence")
+        self.assertEqual([], answer["similar"])
+        self.assertEqual(
+            "Paint the fence", service.get_work_item(self.conn, answer["reference"])["title"]
+        )
+
+    def test_a_short_title_borrows_the_description_words(self) -> None:
+        wanted = self.item("Quarterly reconciliation of the ledger")
+        answer = self.create(title="Ledger", description="quarterly reconciliation is late")
+        self.assertEqual([wanted["reference"]], [entry["reference"] for entry in answer["similar"]])
+
+
 if __name__ == "__main__":
     unittest.main()
