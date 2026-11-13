@@ -191,6 +191,15 @@ export function useSpendingWords() {
   }
 
   /**
+   * The reader's own period between two local moments as the bar names it, `2030-03-04T10:00`
+   * each: by its date and clock times, «13 нояб., 10:00–13:00», «Nov 12, 22:00 – Nov 13, 01:00»,
+   * the end being the moment it ends at. The date stands even for today's hours, since nothing
+   * beside the bar's period says which day they are of.
+   */
+  const span = (from: string, to: string) =>
+    dayFormat(DATED_CLOCK).formatRange(new Date(`${from}Z`), new Date(`${to}Z`))
+
+  /**
    * How a measure's figure moved, against the period it is compared with; with a figure absent,
    * which period has none — no price, no token counted — and no change at all.
    */
@@ -437,6 +446,7 @@ export function useSpendingWords() {
     fullDay,
     scale,
     share,
+    span,
     period,
     per,
     perHour,
