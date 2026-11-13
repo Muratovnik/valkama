@@ -2,9 +2,10 @@ import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
+import { inspectorView } from '@/pages/planning/utils/inspectorView.ts'
 
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
@@ -117,6 +118,11 @@ const context = {
   ],
   ui_prefs: null,
 } as PlatformContextReady
+
+// The app downloads this view when it is first drawn; a test mounts it resident.
+beforeAll(async () => {
+  await inspectorView.load()
+})
 
 beforeEach(() => {
   vi.stubGlobal(

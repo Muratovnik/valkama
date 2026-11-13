@@ -5,18 +5,22 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
-import { projectScope } from './planningFixtures.ts'
+import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
 /**
- * The code the board does not draw downloads when it is needed: the graph and
- * Settings. These are the states that boundary can be in on a real page — not
- * needed yet, downloading, slow, failed and retried — read from the built
- * bundle, because only the bundle has chunks to delay or lose.
+ * The code the board does not draw downloads when it is needed: the graph,
+ * Settings, the card and the questions waiting for an answer. These are the states
+ * that boundary can be in on a real page — not needed yet, downloading, slow,
+ * failed and retried — read from the built bundle, because only the bundle has
+ * chunks to delay or lose.
  */
 
 const GRAPH_CHUNK = /\/assets\/GraphView-[\w-]+\.js$/
 const SETTINGS_CHUNK = /\/assets\/SettingsView-[\w-]+\.js$/
+const CARD_CHUNK = /\/assets\/WorkItemInspector-[\w-]+\.js$/
+const QUESTIONS_CHUNK = /\/assets\/RequestList-[\w-]+\.js$/
 
 function shot(info: TestInfo, name: string) {
   return { path: info.outputPath(name), animations: 'disabled' as const }
@@ -31,8 +35,10 @@ function chunkRequests(page: Page, chunk: RegExp) {
   return seen
 }
 
-async function openBoard(page: Page) {
+/** The board, with `prepare` adding routes of the test's own over the backend's. */
+async function openBoard(page: Page, prepare?: () => Promise<unknown>) {
   await installBackend(page)
+  await prepare?.()
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
@@ -139,6 +145,92 @@ test('a failed graph download says so in the stage, and Retry downloads it again
   await expect(failure).toHaveCount(0)
   // The browser asked again rather than replaying the failed module fetch.
   expect(graph.length).toBeGreaterThan(attempts)
+})
+
+/** Whether a loading or failure panel ever stood in the card's drawer after this call. */
+async function watchDrawerPanels(page: Page) {
+  await page.evaluate(() => {
+    const host = window as unknown as { drawerPanelSeen?: boolean }
+    host.drawerPanelSeen = false
+    new MutationObserver(() => {
+      if (document.querySelector('.drawer .platform-state-panel')) host.drawerPanelSeen = true
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+  return () =>
+    page.evaluate(() => (window as unknown as { drawerPanelSeen?: boolean }).drawerPanelSeen)
+}
+
+const openTile = (page: Page) =>
+  page.locator('.work-item-tile').filter({ hasText: workItemRef.reference }).first().click()
+
+test('the board stands without the card or the questions, and the card downloads after it', async ({
+  page,
+}) => {
+  const card = chunkRequests(page, CARD_CHUNK)
+  const questions = chunkRequests(page, QUESTIONS_CHUNK)
+  // The questions' code never arrives: nothing on the first screen may wait for it.
+  await page.route(QUESTIONS_CHUNK, () => {})
+  const downloaded = page.waitForResponse(CARD_CHUNK)
+  await openBoard(page)
+  await expect(page.locator('.workspace-stage .platform-state-panel')).toHaveCount(0)
+  const header = await page.locator('.workspace-head').boundingBox()
+
+  // Once the board stands, the card downloads with nobody waiting for it ...
+  await downloaded
+  expect(card).toHaveLength(1)
+  expect(questions).toHaveLength(0)
+  // ... so opening one has nothing to wait for.
+  const panelSeen = await watchDrawerPanels(page)
+  await openTile(page)
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  expect(await panelSeen()).toBe(false)
+  expect(card).toHaveLength(1)
+  expect(questions).toHaveLength(0)
+  expect(await page.locator('.workspace-head').boundingBox()).toEqual(header)
+})
+
+test('a card opened before its code arrives says so in the drawer, then shows the card', async ({
+  page,
+}, info) => {
+  let held: Route | undefined
+  await page.route(CARD_CHUNK, (route) => {
+    held = route
+  })
+  await openBoard(page)
+  await openTile(page)
+
+  const drawer = page.locator('.drawer')
+  const loading = drawer.locator('[aria-busy="true"]')
+  await expect(loading).toContainText('Loading')
+  await expect(page.getByRole('heading', { name: workItem.title })).toHaveCount(0)
+  await drawer.screenshot(shot(info, 'w-bundle-card-loading.png'))
+
+  await expect.poll(() => held !== undefined).toBe(true)
+  await held?.continue()
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  await expect(loading).toHaveCount(0)
+})
+
+test('the questions opened before their code arrives say so in the dialog, then show', async ({
+  page,
+}, info) => {
+  let held: Route | undefined
+  await page.route(QUESTIONS_CHUNK, (route) => {
+    held = route
+  })
+  await openBoard(page, () => installQuestions(page, [asked()]))
+  await page.getByRole('button', { name: /^Needs my answer/u }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
+  const loading = dialog.locator('[aria-busy="true"]')
+  await expect(loading).toContainText('Loading')
+  await expect(dialog.locator('.request-card')).toHaveCount(0)
+  await dialog.screenshot(shot(info, 'w-bundle-questions-loading.png'))
+
+  await expect.poll(() => held !== undefined).toBe(true)
+  await held?.continue()
+  await expect(dialog.locator('.request-card').first()).toBeVisible()
+  await expect(dialog.locator('.platform-state-panel')).toHaveCount(0)
 })
 
 test('a link to Settings whose code fails to download offers Retry in the module frame', async ({

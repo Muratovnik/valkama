@@ -1,4 +1,5 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, shallowRef } from 'vue'
+import type { ShallowRef } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
@@ -10,11 +11,15 @@ import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPrese
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
 
-/** A stand-in for the downloaded view: it shows the prop it was handed and calls back. */
+/**
+ * A stand-in for the downloaded view: it shows the prop it was handed, calls back, and
+ * exposes what it shows to a host holding a ref on it.
+ */
 const Downloaded = defineComponent({
   props: { label: { type: String, required: true } },
   emits: ['pick'],
-  setup(props, { emit, slots }) {
+  setup(props, { emit, expose, slots }) {
+    expose({ shown: () => props.label })
     return () =>
       h('button', { class: 'downloaded', onClick: () => emit('pick', props.label) }, [
         props.label,
@@ -33,6 +38,16 @@ function controlledLoader() {
       }),
   )
   return { calls, loader }
+}
+
+type Exposed = Partial<{ shown: () => string }>
+
+/** A host holding a template ref on the view it draws, as the Planning surface does. */
+function mountHost(component: object, target: ShallowRef<Exposed | null>) {
+  return mount(
+    { render: () => h(component, { label: 'Graph', ref: target }) },
+    { global: { plugins: [i18n] } },
+  )
 }
 
 function mountView(component: object, onPick = vi.fn()) {
@@ -203,5 +218,36 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     calls[1]?.resolve()
     await flushPromises()
     expect(wrapper.find('.downloaded').exists()).toBe(true)
+  })
+
+  it('downloads an idle prefetch only once the page is idle, and only once', async () => {
+    const { calls, loader } = controlledLoader()
+    const view = lazyView(loader)
+
+    view.prefetchWhenIdle()
+    expect(loader).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(loader).toHaveBeenCalledTimes(1)
+    calls[0]?.resolve()
+    await flushPromises()
+    view.prefetchWhenIdle()
+    vi.runAllTimers()
+    expect(loader).toHaveBeenCalledTimes(1)
+  })
+
+  // A host that asks the view it draws something — the card about its drafts — holds a
+  // ref on the boundary, so the ref has to reach the downloaded view's own members.
+  it('a template ref reaches what the downloaded view exposes, and nothing before', async () => {
+    const { calls, loader } = controlledLoader()
+    const target = shallowRef<Exposed | null>(null)
+    mountHost(lazyView(loader).component, target)
+
+    expect(target.value).not.toBeNull()
+    expect(target.value?.shown).toBeUndefined()
+    expect('shown' in (target.value ?? {})).toBe(false)
+    calls[0]?.resolve()
+    await flushPromises()
+    expect('shown' in (target.value ?? {})).toBe(true)
+    expect(target.value?.shown?.()).toBe('Graph')
   })
 })

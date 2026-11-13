@@ -600,6 +600,16 @@ and only fades the end of a strip that scrolls on past it.
   code is not a read, and the board's own read wait is the rule above, unchanged.
   `web/tests/startupSkeleton.test.ts` holds the two pages to one set of rules, and
   `production-first-launch.spec.ts` holds each part to the shell's box within half a pixel.
+- The first screen downloads what the shell and the board draw, and nothing else. The
+  card, the list of questions waiting for an answer, the graph, Settings and Analytics
+  each download behind `web/src/shared/ui/lazyView.ts`: the card once the board stands and
+  the page is idle, because opening one is the board's first action; the questions when
+  their dialog first opens, beside the read that opening starts. One opened before its
+  code has arrived says so with the panel's wait in the place it will stand — the drawer,
+  the dialog, the stage — after the same delay, and is never an empty panel. Only what is
+  drawn inside such a place goes behind that boundary: a component that stands closed
+  beside the shell, such as a dialog with its frame, would draw that wait in the shell's
+  flow. `production-lazy.spec.ts` holds each of them.
 - A read wait has one word, the panel's: «Загрузка», "Loading". The surfaces that each
   said what they were reading — «Читаем цепочку…», «Ищу коммит…», «Поиск…» — gave one
   state five names. «Строим граф…» is not a read but the layout of what was read: it keeps

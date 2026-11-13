@@ -22,6 +22,12 @@ checkouts are therefore distinguishable even at the same version.
   motion nothing in it moves. The window remembers the rail's width beside the language
   whenever the reader changes either and as the window closes, so the next start draws
   the rail where it was left; a window that has never heard a width draws the default.
+- **The first screen downloads a sixth less.** The card and the list of questions waiting
+  for an answer no longer ship with the board: the code the first screen loads before it
+  can draw falls from 443 KiB to 367 KiB compressed. The card downloads once the board
+  stands, so opening one still waits for nothing; the questions download as their dialog
+  opens, beside the read it starts. Opened before its code has arrived, either says
+  «Loading» in its drawer or dialog after the usual delay rather than standing empty.
 
 ### Fixed
 

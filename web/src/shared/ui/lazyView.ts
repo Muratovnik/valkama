@@ -13,7 +13,12 @@
  *   rejected request and hands it to every later mount, so nothing short of a
  *   reload could ever try again.
  * - The download can start before the view is drawn: `prefetch` on intent, such
- *   as hovering the control that will open it, so the switch itself is instant.
+ *   as hovering the control that will open it, so the switch itself is instant,
+ *   or `prefetchWhenIdle` once the first screen is drawn, for a view that is
+ *   opened often but not on that screen.
+ * - A template ref on the view reaches what the loaded component exposes, and
+ *   nothing until its code is resident: a host types that ref as `Partial` of the
+ *   component's instance and answers for a member that is not there yet.
  *
  * The holder is module-level on purpose: the code is downloaded once per page,
  * so whether it is resident is one fact shared by every place that draws it.
@@ -43,6 +48,18 @@ export interface LazyView<C extends Component> {
   load: () => Promise<Component>
   /** Start the download for a view the operator is about to open. */
   prefetch: () => void
+  /** Start the download once the page has nothing more urgent to do. */
+  prefetchWhenIdle: () => void
+}
+
+/**
+ * Run a task once the page is idle, so it does not compete with drawing the
+ * screen it was asked from. A page without `requestIdleCallback` runs it after
+ * the current task.
+ */
+function whenIdle(task: () => void) {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(task)
+  else setTimeout(task, 0)
 }
 
 /** Wrap a dynamic import as a view that loads on demand. */
@@ -78,11 +95,27 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
     })
   }
 
+  function prefetchWhenIdle() {
+    if (resident === null && pending === null) whenIdle(prefetch)
+  }
+
   const component = defineComponent({
     name: 'LazyView',
     inheritAttrs: false,
-    setup(_props, { attrs, slots }) {
+    setup(_props, { attrs, slots, expose }) {
       const view = shallowRef<Component | null>(resident)
+      /** The loaded component's instance: a ref on this view reads its members through it. */
+      const inner = shallowRef<object | null>(null)
+      expose(
+        new Proxy(
+          {},
+          {
+            get: (_target, key) =>
+              inner.value === null ? undefined : Reflect.get(inner.value, key),
+            has: (_target, key) => inner.value !== null && key in inner.value,
+          },
+        ),
+      )
       const failure = shallowRef<PlatformUiState | null>(null)
       const downloading = shallowRef(false)
       // The delay is the download's, not this boundary's: one drawn after its download
@@ -121,12 +154,12 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
 
       return () => {
         if (presence.shown.value) return h(PlatformStatePanel, { state: LOADING, since })
-        if (view.value !== null) return h(view.value, attrs, slots)
+        if (view.value !== null) return h(view.value, { ...attrs, ref: inner }, slots)
         if (failure.value === null) return null
         return h(PlatformStatePanel, { state: failure.value, onRetry: attempt })
       }
     },
   })
 
-  return { component: component as unknown as C, ready, load, prefetch }
+  return { component: component as unknown as C, ready, load, prefetch, prefetchWhenIdle }
 }
