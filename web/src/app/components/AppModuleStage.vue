@@ -113,6 +113,7 @@ defineExpose({ openCardId, refresh })
     :scope="scope"
     @entity="(entity) => emit('entity', entity)"
     @go="(next) => emit('go', next)"
+    @notice="(message) => emit('notice', message)"
     @question-taken="emit('question-taken')"
   />
 </template>

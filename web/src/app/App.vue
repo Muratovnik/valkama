@@ -34,7 +34,6 @@ import SessionContext from '@/features/session-open/SessionContext.vue'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
 
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
-import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
@@ -83,8 +82,11 @@ const {
 // The destination an address names starts downloading before the module list settles.
 watch(activeModule, prefetchModule, { immediate: true })
 
+// A task opened from the finder, the questions or a text: see the composable.
 const { finderOpen, finderText, findText, requestsOpen, pendingRequestCount, openTarget } =
-  useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked)
+  useGlobalWorkActions(writeRoute, questionsAsked, cardQuestionAsked, (target) =>
+    cardInPlace(activeManifest.value, route.value, target),
+  )
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
   mainContent.value?.focus()
@@ -254,20 +256,11 @@ const { documentView, openDocument } = useAppDocuments([
 // What a path written in free text can do from here: see the composable.
 useDocumentOpening(say, openDocument)
 provideOpenNotice(say)
-/**
- * A task pressed in the text of a module opens its card over that module where its address can
- * name the card, so the page stays under it and Back closes it; elsewhere on its board.
- */
-function openPressedTask(target: PlanningTarget) {
-  const here = cardInPlace(activeManifest.value, route.value, target)
-  if (here) writeRoute(here)
-  else openTarget(target)
-}
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
   projects: () => contextReady.value?.projects ?? [],
   primaryScope: () => contextReady.value?.primary.data_scope_id,
-  openTarget: openPressedTask,
+  openTarget,
   openSession: (id) => void openSession(id),
   say,
 })

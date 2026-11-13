@@ -103,7 +103,7 @@ test('the inspector reads no extension registry', () => {
 test('a plan anchor is asked about under the exact Planning space of its card', () => {
   assert.match(planningSurface, /boundSpaceResourceRef/)
   assert.match(planningSurface, /planningSpaceEntity\(space\)/)
-  assert.match(planningSurface, /:resource-ref="boundSpaceResourceRef"/)
+  assert.match(planningSurface, /resourceRef: boundSpaceResourceRef\.value/)
   assert.match(inspector, /:resource-ref="resourceRef"/)
   // The head's icon stands outside the card's layer of links, so it asks for its
   // own on the same space. What pressing it does is `inspectorSource.spec.ts`.

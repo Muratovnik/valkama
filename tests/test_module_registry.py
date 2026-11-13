@@ -29,7 +29,7 @@ _EXPECTED_SECONDARY_CONTEXTS = {
     },
     "analytics": {"global": ["work-item"], "project": ["work-item"]},
     "memory": {"global": ["memory-resource"], "project": ["memory-resource", "work-item"]},
-    "settings": {"global": [], "project": []},
+    "settings": {"global": ["work-item"], "project": ["work-item"]},
 }
 
 

@@ -49,11 +49,11 @@ import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPo
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
 import { usePlanningRouteSelection } from '@/pages/planning/composables/usePlanningRouteSelection.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
-import PlanningCardDrawer from '@/pages/planning/PlanningCardDrawer.vue'
+import PlanningCardPanel from '@/pages/planning/PlanningCardPanel.vue'
+import type { PlanningCardProps } from '@/pages/planning/PlanningCardPanel.vue'
 import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
-import { WorkItemInspector } from '@/pages/planning/utils/inspectorView.ts'
 import { readingModel } from '@/pages/planning/utils/readingModel.ts'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
@@ -183,14 +183,8 @@ function spaceAnswered(drawn: boolean) {
 /** Moves when an agent changed: an open card reads again, and nothing else does. */
 const agentsVersion = ref(0)
 
-const {
-  canGoBack,
-  closeItem,
-  goBack,
-  openItem,
-  reset: resetTrail,
-  returning,
-} = usePlanningCardTrail({ open: () => open.value, show })
+const trail = usePlanningCardTrail({ open: () => open.value, show })
+const { closeItem, openItem, reset: resetTrail } = trail
 const composerOpen = ref(false)
 
 const planningKey = computed(() =>
@@ -233,17 +227,37 @@ const {
 })
 
 const { openRecord, parent } = useOpenCardModel(model, open)
-/**
- * The card on show: every way of closing the panel asks it about its drafts first. Until
- * its code is resident it has none to ask about, so the panel just closes.
- */
-const card = useTemplateRef<Partial<InstanceType<typeof WorkItemInspector>>>('card')
-const closePanel = () => (card.value?.close ? card.value.close() : closeItem())
+/** The card on show, in the panel every host of a card shares. */
+const panel = useTemplateRef<InstanceType<typeof PlanningCardPanel>>('panel')
 /** The workspace owns the filter; the card's label chips reach it here. */
 const workspace = useTemplateRef<{ toggleFilter: (token: WorkFilterToken) => void }>('workspace')
 const filterFromCard = (token: WorkFilterToken) => workspace.value?.toggleFilter(token)
 
 const selectedId = computed(() => openRecord.value?.work_item_id ?? null)
+
+/** What the open card is read and written with here, from the space the board holds. */
+const shownCard = computed((): PlanningCardProps | null =>
+  open.value && boundSpaceResourceRef.value
+    ? {
+        reference: open.value,
+        resourceRef: boundSpaceResourceRef.value,
+        projectId: inspectorProjectId.value,
+        refreshToken: cardVersion.value,
+        agentsToken: agentsVersion.value,
+        workflow: model.value?.workflow ?? null,
+        spaceReading: reading.value,
+        writable: writable.value,
+        parent: parent.value,
+        ownChain: ownChain.value,
+        kind: openRecord.value?.kind,
+        questionAsked: props.questionAsked,
+        onChanged: loadPlanning,
+        onChain: showChain,
+        onFilter: filterFromCard,
+        onQuestionTaken: () => emit('question-taken'),
+      }
+    : null,
+)
 
 /**
  * Whether the page holds this space, or its read failed. The stream waits for the read
@@ -392,8 +406,7 @@ usePlanningReferenceLinks(boundSpace, model, openFromPage)
  * card answers for leaving itself: its draft guard first, then Back to where it was left.
  */
 function openFromPage(reference: string) {
-  if (!card.value?.openFrom) openItem(reference)
-  else if (reference !== open.value) card.value.openFrom(reference)
+  if (!panel.value?.openFrom(reference)) openItem(reference)
 }
 
 /** Another view of the same field: a chain the route names narrows that one too. */
@@ -482,39 +495,13 @@ defineExpose({ refresh, selectedId })
       @view="setView"
     />
 
-    <PlanningCardDrawer
-      :content-key="openIdentity"
-      :open="Boolean(open && boundSpaceResourceRef)"
+    <PlanningCardPanel
+      ref="panel"
+      :identity="openIdentity"
       :label="openRecord?.title || open || ''"
-      @close="closePanel"
-    >
-      <WorkItemInspector
-        v-if="open && boundSpaceResourceRef"
-        ref="card"
-        :key="openIdentity"
-        :reference="open"
-        :resource-ref="boundSpaceResourceRef"
-        :project-id="inspectorProjectId"
-        :can-go-back="canGoBack"
-        :return-to="returning"
-        :refresh-token="cardVersion"
-        :agents-token="agentsVersion"
-        :workflow="model?.workflow ?? null"
-        :space-reading="reading"
-        :writable="writable"
-        :parent="parent"
-        :own-chain="ownChain"
-        :kind="openRecord?.kind"
-        :question-asked="questionAsked"
-        @back="goBack"
-        @changed="loadPlanning"
-        @chain="showChain"
-        @close="closeItem"
-        @filter="filterFromCard"
-        @open="(reference, left) => openItem(reference, true, left)"
-        @question-taken="emit('question-taken')"
-      />
-    </PlanningCardDrawer>
+      :trail="trail"
+      :card="shownCard"
+    />
   </div>
   <main
     v-else

@@ -59,3 +59,6 @@ export function usePlanningCardTrail(options: TrailOptions) {
     returning,
   }
 }
+
+/** One host's walk through cards, which its card panel wires the card's Back and links to. */
+export type PlanningCardTrail = ReturnType<typeof usePlanningCardTrail>

@@ -12,20 +12,24 @@
  * the page's own where it does, else the first that does, as a reference press found it. A space
  * no project maps opens nothing, as it would open nothing on the board.
  *
+ * A space that cannot be read is said as the board says it, in the board's words, and the card
+ * stays: it reads and writes its own record without the space, so a field such as the priority
+ * keeps working, and the state, whose moves only the space knows, is shown and not offered.
+ *
  * What only the board has stays there. A chain shown on the graph goes to the board's graph, and
  * a label pressed on the card, which narrows the board, narrows nothing here.
  */
 import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useOpenCardModel } from '@/pages/planning/composables/useOpenCardModel.ts'
 import { usePlanningCardTrail } from '@/pages/planning/composables/usePlanningCardTrail.ts'
 import { withBranch, withChain } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
-import PlanningCardDrawer from '@/pages/planning/PlanningCardDrawer.vue'
+import PlanningCardPanel from '@/pages/planning/PlanningCardPanel.vue'
+import type { PlanningCardProps } from '@/pages/planning/PlanningCardPanel.vue'
 
-import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
-
-import { fetchPlanning } from '@/shared/api/planningApi.ts'
+import { CutoverPendingError, fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
@@ -36,6 +40,7 @@ import {
   resolvePlanningRouteSelection,
 } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 
 const props = defineProps<{
   context: PlatformContextReady | null
@@ -52,8 +57,12 @@ const emit = defineEmits<{
   'entity': [entity?: EntityRef]
   /** A place only the board has, such as a chain on its graph. */
   'go': [route: PlatformRoute]
+  /** The card's space could not be read, in the words the board says it with. */
+  'notice': [message: string]
   'question-taken': []
 }>()
+
+const { t } = useI18n()
 
 /** The card the entity names, in the project that maps its space. */
 const bound = computed(() => {
@@ -109,14 +118,22 @@ async function readSpace() {
   reading.value = true
   try {
     const next = await fetchPlanning({ project: target.projectId, ...target.item.space_ref })
-    if (asked === generation) model.value = next.planning_space ? next : null
-  } catch {
-    // The card reads its own record, and its writes do not wait for the space: without the
-    // space it moves no state from its menu, and says so by offering none.
-    if (asked === generation) model.value = null
+    if (asked !== generation) return
+    model.value = next.planning_space ? next : null
+    if (!next.planning_space) emit('notice', t('workItem.noSpace'))
+  } catch (error) {
+    if (asked !== generation) return
+    model.value = null
+    emit('notice', spaceUnread(error))
   } finally {
     if (asked === generation) reading.value = false
   }
+}
+/** Why the space could not be read, as the board says it of the same read. */
+function spaceUnread(error: unknown): string {
+  if (error instanceof CutoverPendingError) return t('workItem.cutoverPending')
+  const message = failureMessage(typedFailure(error))
+  return t(message.key, message.params ?? {})
 }
 watch(
   spaceKey,
@@ -138,21 +155,17 @@ function show(reference: string | null) {
       : planningWorkItemEntity({ space_ref: at, reference }),
   )
 }
-const { canGoBack, closeItem, goBack, openItem, reset, returning } = usePlanningCardTrail({
-  open: () => open.value,
-  show,
-})
+const trail = usePlanningCardTrail({ open: () => open.value, show })
 // Closed from outside the card, by Back or by another module: the walk ends with it.
 watch(open, (reference) => {
-  if (reference === null) reset()
+  if (reference === null) trail.reset()
 })
 
-const card = useTemplateRef<InstanceType<typeof WorkItemInspector>>('card')
-const closePanel = () => card.value?.close()
+const panel = useTemplateRef<InstanceType<typeof PlanningCardPanel>>('panel')
 
 // References to the card's space open in the card, through its departure and onto its trail.
 usePlanningReferenceLinks(space, model, (reference) => {
-  if (reference !== open.value) card.value?.openFrom(reference)
+  if (!panel.value?.openFrom(reference)) trail.openItem(reference)
 })
 
 /** The chain on the board's graph, in the card's project: the overlay has no graph of its own. */
@@ -170,38 +183,37 @@ function showChain(chain: WorkItemChain, branch: string | null) {
 
 /** The work item whose card is on show, by the id a sender of alerts knows it by. */
 const selectedId = computed(() => openRecord.value?.work_item_id ?? null)
+
+/** What the open card is read and written with here, from the one read of its space. */
+const shownCard = computed((): PlanningCardProps | null =>
+  open.value && resourceRef.value && bound.value
+    ? {
+        reference: open.value,
+        resourceRef: resourceRef.value,
+        projectId: bound.value.projectId,
+        refreshToken: 0,
+        workflow: model.value?.workflow ?? null,
+        spaceReading: reading.value,
+        writable: writable.value,
+        parent: parent.value,
+        kind: openRecord.value?.kind,
+        questionAsked: props.questionAsked,
+        onChanged: readSpace,
+        onChain: showChain,
+        onQuestionTaken: () => emit('question-taken'),
+      }
+    : null,
+)
+
 defineExpose({ selectedId })
 </script>
 
 <template>
-  <PlanningCardDrawer
-    :content-key="identity"
-    :open="Boolean(open && resourceRef)"
+  <PlanningCardPanel
+    ref="panel"
+    :identity="identity"
     :label="openRecord?.title || open || ''"
-    @close="closePanel"
-  >
-    <WorkItemInspector
-      v-if="open && resourceRef && bound"
-      ref="card"
-      :key="identity"
-      :reference="open"
-      :resource-ref="resourceRef"
-      :project-id="bound.projectId"
-      :can-go-back="canGoBack"
-      :return-to="returning"
-      :refresh-token="0"
-      :workflow="model?.workflow ?? null"
-      :space-reading="reading"
-      :writable="writable"
-      :parent="parent"
-      :kind="openRecord?.kind"
-      :question-asked="questionAsked"
-      @back="goBack"
-      @changed="readSpace"
-      @chain="showChain"
-      @close="closeItem"
-      @open="(reference, left) => openItem(reference, true, left)"
-      @question-taken="emit('question-taken')"
-    />
-  </PlanningCardDrawer>
+    :trail="trail"
+    :card="shownCard"
+  />
 </template>
