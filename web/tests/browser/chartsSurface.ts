@@ -248,8 +248,9 @@ const stepPoints: StepPoint[] = [
   }
 })
 const stepWords: StepWords = {
-  start: '11:00',
-  end: '16:00',
+  ahead: 'To now and the forecast',
+  whole: 'Whole window',
+  views: 'Span of the readings',
   top: '100%',
   time: 'Time',
   value: 'Used',
@@ -261,6 +262,8 @@ const stepProps = {
   from: STEP_START,
   to: STEP_START + 5 * STEP_HOUR,
   end: STEP_START + 3.5 * STEP_HOUR,
+  moment: (at: number) =>
+    `${String(new Date(at).getUTCHours()).padStart(2, '0')}:${String(new Date(at).getUTCMinutes()).padStart(2, '0')}`,
   points: stepPoints,
   words: stepWords,
   even: true,

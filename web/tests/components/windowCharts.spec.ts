@@ -7,7 +7,10 @@
  * readings as steps — flat to the next reading and up or down there, never a slope — held to the
  * moment the answer was read, beside a line of steady pace from nothing to the whole; each
  * reading says itself in a hint over the step it holds, one Tab stop walked by the arrows, and no
- * line stands over the plot. Each table holds every figure its chart draws.
+ * line stands over the plot. A running window opens on its start to now and a third as long past
+ * it, now at three quarters of the plot, and its switch shows the whole window; a frame stretched
+ * with Shift and an arrow narrows the line to the readings it covers, and the switch takes it
+ * back. Each table holds every figure its chart draws.
  */
 import { nextTick } from 'vue'
 
@@ -111,8 +114,9 @@ const point = (key: string, hours: number, value: number): StepPoint => ({
   noteText: 'the poll',
 })
 const WORDS: StepWords = {
-  start: '11:00',
-  end: '16:00',
+  ahead: 'To now and the forecast',
+  whole: 'Whole window',
+  views: 'Span of the readings',
   top: '100%',
   time: 'Time',
   value: 'Used',
@@ -120,7 +124,11 @@ const WORDS: StepWords = {
   empty: 'No readings',
 }
 
-function stepLine(points: StepPoint[], end = START + 3 * HOUR) {
+/** A moment as the axis names it: the hours since the window's start, «h3». */
+const moment = (at: number) => `h${(at - START) / HOUR}`
+
+/** A window of five hours, read three hours in, as it opens: to now and the forecast. */
+function openLine(points: StepPoint[], end = START + 3 * HOUR) {
   return mount(StepLine, {
     attachTo: document.body,
     props: {
@@ -128,6 +136,7 @@ function stepLine(points: StepPoint[], end = START + 3 * HOUR) {
       from: START,
       to: START + 5 * HOUR,
       end,
+      moment,
       points,
       words: WORDS,
       even: true,
@@ -136,10 +145,21 @@ function stepLine(points: StepPoint[], end = START + 3 * HOUR) {
   })
 }
 
+/** The span a step line shows, as the radio of its switch that is checked says it. */
+const checked = (line: ReturnType<typeof openLine>) =>
+  line.findAll('[role="radio"]').map((one) => [one.text(), one.attributes('aria-checked')])
+
+/** The same window switched to the whole of it, which the geometry below is worked out over. */
+async function stepLine(points: StepPoint[], end = START + 3 * HOUR) {
+  const line = openLine(points, end)
+  await line.get('[role="radio"]:nth-child(2)').trigger('click')
+  return line
+}
+
 describe('the step line', () => {
-  it('draws readings as steps held to the moment read, never a slope between them', () => {
+  it('draws readings as steps held to the moment read, never a slope between them', async () => {
     // Over five hours on a plot 300 wide and 100 high: an hour is 60 across, a percent 1 up.
-    const line = stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
+    const line = await stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
     expect(line.get('.step-path').attributes('d')).toBe('M60.00,80.00 H90.00 V50.00 H180.00')
     // The pace runs from nothing at the start to the whole at the reset.
     const even = line.get('.step-even')
@@ -157,15 +177,15 @@ describe('the step line', () => {
     ])
   })
 
-  it('sets its top at the highest reading where one ran past the whole', () => {
-    const line = stepLine([point('12:00', 1, 50), point('13:00', 2, 125)])
+  it('sets its top at the highest reading where one ran past the whole', async () => {
+    const line = await stepLine([point('12:00', 1, 50), point('13:00', 2, 125)])
     // 50 of 125 stands at 60 of 100; 125 at the top.
     expect(line.get('.step-path').attributes('d')).toBe('M60.00,60.00 H120.00 V0.00 H180.00')
   })
 
   // A line over the plot once said one reading at a time; each reading now has its own hint.
   it('gives each reading a hint over the whole step it holds, and no line over the plot', async () => {
-    const line = stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
+    const line = await stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
     expect(line.find('.step-readout').exists()).toBe(false)
     const reach = line.findAll('.step-reach')
     expect(reach.map((one) => one.attributes('data-tooltip'))).toEqual(['12:00: 20%', '12:30: 50%'])
@@ -183,7 +203,11 @@ describe('the step line', () => {
   })
 
   it('makes its readings one Tab stop, the latest, walked with the arrows', async () => {
-    const line = stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50), point('13:00', 2, 60)])
+    const line = await stepLine([
+      point('12:00', 1, 20),
+      point('12:30', 1.5, 50),
+      point('13:00', 2, 60),
+    ])
     const stops = () => line.findAll('.step-reach').map((one) => one.attributes('tabindex'))
     expect(stops()).toEqual(['-1', '-1', '0'])
     const last = line.get('[data-reading="2"]')
@@ -198,10 +222,54 @@ describe('the step line', () => {
     line.unmount()
   })
 
-  it('with no reading draws its floor alone and says so', () => {
-    const line = stepLine([])
+  it('with no reading draws its floor alone and says so', async () => {
+    const line = await stepLine([])
     expect(line.find('.step-path').exists()).toBe(false)
     expect(line.get('.step-empty').text()).toBe('No readings')
+  })
+
+  it('opens a running window on its start to now and a third past it, now at three quarters', () => {
+    const line = openLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
+    expect(checked(line)).toEqual([
+      ['To now and the forecast', 'true'],
+      ['Whole window', 'false'],
+    ])
+    // Four hours across 300: an hour is 75, so now, three hours in, stands at 225 of 300.
+    expect(line.get('.step-path').attributes('d')).toBe('M75.00,80.00 H112.50 V50.00 H225.00')
+    // Steady use at the span's end, four hours of five, is 80 %.
+    const even = line.get('.step-even')
+    expect([even.attributes('y1'), even.attributes('y2')]).toEqual(['100', '20'])
+    expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h4'])
+    line.unmount()
+  })
+
+  it('opens a window past its reset on the whole window, with nothing to switch', () => {
+    const line = openLine([point('12:00', 1, 20)], START + 5 * HOUR)
+    expect(line.find('[role="radiogroup"]').exists()).toBe(false)
+    expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h5'])
+    line.unmount()
+  })
+
+  it('narrows to the readings a frame stretched with Shift covers, and switches back', async () => {
+    const line = openLine([point('12:00', 1, 20), point('12:30', 1.5, 50), point('13:00', 2, 60)])
+    const first = line.get('[data-reading="0"]')
+    ;(first.element as HTMLElement).focus()
+    await first.trigger('keydown', { key: 'ArrowRight', shiftKey: true })
+    await nextTick()
+    // While Shift is held the frame stands over the two readings and nothing is narrowed yet.
+    expect(line.find('.step-span').exists()).toBe(true)
+    expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h4'])
+    await line.get('[data-reading="1"]').trigger('keyup', { key: 'Shift' })
+    // From the first reading to the third, where the second's step ends.
+    expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h1', 'h2'])
+    expect(line.find('.step-span').exists()).toBe(false)
+    expect(checked(line)).toEqual([
+      ['To now and the forecast', 'false'],
+      ['Whole window', 'false'],
+    ])
+    await line.get('[role="radio"]:nth-child(2)').trigger('click')
+    expect(line.findAll('.step-axis span').map((one) => one.text())).toEqual(['h0', 'h5'])
+    line.unmount()
   })
 
   it('as a table holds every reading, oldest first', () => {

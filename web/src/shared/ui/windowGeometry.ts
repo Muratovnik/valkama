@@ -43,18 +43,23 @@ export interface StepPoint {
   valueText: string
 }
 
-/** The words around a step line: its two ends, its top, its table's headings and empty state. */
+/**
+ * The words around a step line: its top, the switch of the span it shows, its table's headings
+ * and empty state.
+ */
 export interface StepWords {
+  /** The span from the window's start to now and the forecast past it: «To now and the forecast». */
+  ahead: string
   empty: string
-  /** The moment it ends, «16:00». */
-  end: string
   note: string
-  /** The moment the line starts, «11:00». */
-  start: string
   time: string
   /** The value the top of the plot stands for, «100%». */
   top: string
   value: string
+  /** The switch between the two spans, as its name: «Span of the readings». */
+  views: string
+  /** The span of the whole window, up to its reset: «Whole window». */
+  whole: string
 }
 
 /** The plot's box in its own units, which the drawing stretches to its host's width. */
@@ -67,6 +72,44 @@ export interface StepFrame {
   to: number
   top: number
 }
+
+/** A span of a step line, in ms since the epoch. */
+export interface StepSpan {
+  from: number
+  to: number
+}
+
+/**
+ * How much of the span a running window opens on lies past now, as a share of the time from its
+ * start to now: a third, so now stands at three quarters of the plot and the readings before it
+ * take that much of its width, the rest the forecast's.
+ */
+const AHEAD = 1 / 3
+
+/**
+ * The span a running window's step line opens on: from its start to now and as far past now as
+ * a third of the time since its start, never past its reset. Drawn to the reset, a week begun
+ * two days ago left its readings the first third of the plot.
+ */
+export const aheadSpan = (from: number, to: number, now: number): StepSpan => ({
+  from,
+  to: Math.min(to, Math.max(now, from) + (Math.max(now, from) - from) * AHEAD),
+})
+
+/**
+ * The readings a span shows: those inside it, and the one before it that holds at its start,
+ * which the line carries in from the span's edge and which has no mark of its own there.
+ */
+export function readingsIn(span: StepSpan, points: readonly StepPoint[]) {
+  const inside = points.filter((point) => point.at >= span.from && point.at <= span.to)
+  let before: StepPoint | undefined
+  for (const point of points) if (point.at < span.from) before = point
+  return { inside, held: before ? [before, ...inside] : inside }
+}
+
+/** Where steady use from a window's start to its reset stands at a moment, in percent. */
+export const evenAt = (window: StepSpan, at: number) =>
+  ((at - window.from) / Math.max(1, window.to - window.from)) * 100
 
 /** A moment's place across the plot, from 0 at `from` to `STEP_WIDTH` at `to`, held inside. */
 export function stepX(frame: StepFrame, at: number) {

@@ -20,6 +20,7 @@ import { useI18n } from 'vue-i18n'
 import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
+import { momentAtOffset } from '@/pages/analytics/utils/readMoments.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
 import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
@@ -68,8 +69,8 @@ const facts = computed(() => {
 
 /**
  * The span the line runs over: the window's start to its reset. A window that has named neither
- * runs from its first reading to the answer's moment. Its ends are said from the answer's own
- * times, which are written on the reader's clock.
+ * runs from its first reading to the answer's moment. The line opens on the window's start to now
+ * and the forecast past it, and has a switch to the whole of this span (`StepLine`).
  */
 const span = computed(() => {
   const { window, today } = props
@@ -77,12 +78,16 @@ const span = computed(() => {
   const reset = window.resets_at ?? today
   const from = Date.parse(start)
   const to = Math.max(Date.parse(reset), from + 1)
-  return { from, to, end: Math.min(Date.parse(today), to), start, reset }
+  return { from, to, end: Math.min(Date.parse(today), to) }
 })
 
+/** A moment of the line's axis, said as the answer's own times are, on the reader's clock. */
+const stepMoment = (at: number) => words.moment(momentAtOffset(at), props.today)
+
 const stepWords = computed<StepWords>(() => ({
-  start: words.moment(span.value.start, props.today),
-  end: words.moment(span.value.reset, props.today),
+  ahead: t('analytics.quota.readings.ahead'),
+  whole: t('analytics.quota.readings.whole'),
+  views: t('analytics.quota.readings.views', { window: name.value }),
   top: t('analytics.quota.readings.top', { share: words.share(stepTop(points.value)) }),
   time: t('analytics.quota.readings.time'),
   value: t('analytics.quota.readings.value'),
@@ -139,6 +144,7 @@ const readingsCaption = computed(() =>
       :end="span.end"
       :points="points"
       :words="stepWords"
+      :moment="stepMoment"
       :even="paced"
       :legend="legend"
     />
