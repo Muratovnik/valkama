@@ -11,6 +11,9 @@
  * Its first wait, a first read that failed and an answer with no account stand in the product's
  * shared state panel. While it is read again the answer on show stays; a read again that failed
  * keeps it and says from when its figures are.
+ *
+ * What used each window is read by the window's own block, to the answer's moment; the panel
+ * holds those reads for its chart and its table alike (`provideWindowSpend`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +23,7 @@ import QuotaAccount from '@/pages/analytics/components/QuotaAccount.vue'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import type { QuotaRead } from '@/pages/analytics/composables/useQuotaRead.ts'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
+import { provideWindowSpend } from '@/pages/analytics/composables/useWindowSpend.ts'
 import { accountKey } from '@/pages/analytics/utils/quotaFigures.ts'
 
 import type { QuotaSection } from '@/shared/api/analyticsAddress.ts'
@@ -54,6 +58,8 @@ const state = computed<PlatformUiState<Quota>>(() => {
     )
   return read.refreshing ? uiDegraded(quota, quota.now) : uiReady(quota)
 })
+
+provideWindowSpend(() => (props.read.status === 'ready' ? props.read.quota : null))
 
 const title = computed(() => words.sectionName(props.section))
 /** What the panel shows and how old it is; the period and the filters do not apply to it. */

@@ -2195,8 +2195,21 @@ reading is and who read it, and the `StepLine` of its readings. An account no so
 so and draws no window; a silent window is hatched and says since when it has not changed; a
 fresh 0 % draws an empty track and says «0% used» and «fresh». A window of money past a limit
 is a line of its state, its age and its source, with no figure. No share is added to another,
-of two windows or two accounts, and no dollar stands beside one. Each window's grid keeps an
-area after its readings for what used the window, empty until the read answers it.
+of two windows or two accounts, and no dollar stands beside one.
+
+Under each window that names its start stands «Where the window went»: the work Valkama
+recorded on that account from the window's start to the answer's moment, held to the last five
+minutes, as the section's ranked bars or their table — the first five items by the API price
+estimate, each with its share of the account's estimate, and one line for the rest. It opens by
+task and offers projects and models; the choice holds for that window when the panel turns to
+its table. Its words say it is the API price estimate and not quota points, name the period, and
+say that work in claude.ai and the desktop app, which the window's share counts, is not in it. It
+is read by the account's seat, one window at a time and only for the windows shown, so another
+account's work is never in it; work its organization recorded with no account known is a quiet
+line of its own, never counted to the account. No work, only such work, a wait and a read that
+failed, with its retry, each say so in the block, and the quota's own figures stand meanwhile.
+The block starts at the account's edge, under the window's bar and readings, on no axis of
+theirs.
 
 A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
 are counted apart from the tokens processed anew and never summed into them.

@@ -24,6 +24,16 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **The quota panel says where each window went.** Under each window of an account, five
+  hours, the week or a model's week, «Where the window went» ranks the work Valkama recorded
+  on that account since the window started by its API price estimate, each item with its
+  share of that estimate, by task, project or model, the first five and one line for the
+  rest. It says it is the API price estimate and not quota points, and that work in
+  claude.ai and the desktop app is not in it. It reads `GET /api/analytics/usage` by the
+  account's `seat`, for the windows shown, so no other account's work is counted; work of
+  the organization with no account known is said apart. No work, such work alone, a wait
+  and a failed read with its retry each say so in the block, and the quota's figures stand
+  meanwhile.
 - **`GET /api/analytics/usage` breaks work down by `seat`**, the subscription account of
   its organization a stretch was spent on: the account's UUID where a quota sample names
   it, else the seat's key for its week, and one unknown group for work no sample speaks

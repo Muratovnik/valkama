@@ -62,6 +62,8 @@ async function settled(page: Page) {
     0,
   )
   await expect(page.locator('.quota-account')).toHaveCount(4)
+  // What used each window is read after the quota, by each window's own block.
+  await expect(page.locator('.window-spend[data-state="loading"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 
@@ -103,8 +105,13 @@ for (const colorScheme of ['light', 'dark'] as const)
       await choose(page, 'quota_five_hour')
       await settled(page)
       await expect(page.locator('.quota-panel h2')).toHaveText('Five hours')
-      const panelText = await page.locator('.quota-panel').textContent()
-      expect(panelText, 'no money beside a share').not.toContain('$')
+      // What used a window is a block of its own under the readings
+      // (`production-analytics-quota-spent.spec.ts`); nothing that says a share names money.
+      const shares = await page
+        .locator('.quota-account-head, .window-bar, .quota-window-facts, .step-line')
+        .allTextContents()
+      expect(shares.length).toBeGreaterThan(0)
+      expect(shares.join(' '), 'no money beside a share').not.toContain('$')
       // Every part of an account starts at one edge: its name, and each window's name, bar,
       // facts and readings, within a pixel.
       expect(await edges(page), 'every part at its account edge').toEqual([])

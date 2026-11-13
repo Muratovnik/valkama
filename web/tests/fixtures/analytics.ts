@@ -5,12 +5,13 @@
  *
  * `role` is a dimension the read is gaining; until the server answers by it, it is here.
  */
-import { isUsageDimension, USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
+import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
 import type {
   Usage,
   UsageDimension,
   UsageGroupValue,
   UsageMeasures,
+  UsageReadDimension,
   UsageRow,
 } from '@/shared/api/analyticsApi.ts'
 
@@ -99,14 +100,17 @@ export const task = (number: number, title: string): UsageGroupValue => ({
 /** One stretch of work: the day of the period it fell in, what it was by, what it spent. */
 export interface Stretch {
   day: number
-  group: Partial<Record<UsageDimension, UsageGroupValue>>
+  group: Partial<Record<UsageReadDimension, UsageGroupValue>>
   spend: Spend
 }
 
 const keyOf = (group: Stretch['group']) => JSON.stringify(group)
 
 /** The stretches by the dimensions asked, each a row: a stretch says only what was asked. */
-function rowsOf(stretches: readonly Stretch[], dimensions: readonly UsageDimension[]): UsageRow[] {
+function rowsOf(
+  stretches: readonly Stretch[],
+  dimensions: readonly UsageReadDimension[],
+): UsageRow[] {
   const rows = new Map<string, UsageRow>()
   for (const stretch of stretches) {
     const { spend } = stretch
@@ -154,12 +158,17 @@ function instant(text: string, offset: number) {
 }
 
 /** The dimensions whose «none» is work with no value there; elsewhere it is an unknown value. */
-const NONE_IS_NO_VALUE: ReadonlySet<UsageDimension> = new Set(['work_item', 'launch_class'])
+const NONE_IS_NO_VALUE: ReadonlySet<UsageReadDimension> = new Set(['work_item', 'launch_class'])
+
+/** Every dimension a read may filter and group by: the page's, and the quota account's `seat`. */
+const READ_DIMENSIONS: readonly UsageReadDimension[] = [...USAGE_DIMENSIONS, 'seat']
+const isReadDimension = (name: string): name is UsageReadDimension =>
+  READ_DIMENSIONS.includes(name as UsageReadDimension)
 
 /** Whether every filter of the query admits a stretch, `none` as the contract reads it. */
 function admits(query: URLSearchParams, group: Stretch['group']) {
   const none = new Set(query.get('none')?.split(',') ?? [])
-  return USAGE_DIMENSIONS.every((dimension) => {
+  return READ_DIMENSIONS.every((dimension) => {
     const named = query.get(dimension)?.split(',') ?? []
     if (!named.length && !none.has(dimension)) return true
     const value = group[dimension] ?? unknownValue
@@ -203,7 +212,7 @@ export function serveUsage(
   const asked = query.get('step')
   const step = asked === 'hour' || asked === 'minute' ? asked : 'day'
   const edges = dayEdges(from, to, offset, STEP[step])
-  const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isUsageDimension)
+  const groupBy = (query.get('group_by')?.split(',') ?? []).filter(isReadDimension)
   const within = (start: number, end: number) =>
     stretches
       .filter((one) => one.at.getTime() >= start && one.at.getTime() < end)
@@ -244,7 +253,7 @@ type Answer = { interface_version: 'valkama-analytics-api'; usage: Usage }
  */
 function answerOf(options: {
   edges: readonly number[]
-  groupBy: UsageDimension[]
+  groupBy: UsageReadDimension[]
   offset: number
   stretches: readonly Stretch[]
   before?: readonly Stretch[] | null

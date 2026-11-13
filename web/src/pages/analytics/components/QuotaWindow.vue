@@ -10,13 +10,16 @@
  * forecasts a range, and says it as one. A silent window is hatched, says «silent» and when its
  * reading last changed; a fresh 0 % is a bar with no fill that says «0% used» and «fresh».
  *
- * The window's own grid leaves an area after its readings for what used the window, which the
- * quota read does not answer yet; nothing stands there until it does.
+ * Under its readings stands what used the window (`QuotaWindowSpend`): the work Valkama recorded
+ * on the account since the window's start, by its API price estimate, on an axis of its own. A
+ * window that names no start has no span to read it over, and shows none.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
+import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
 
 import type { QuotaAccount, QuotaShareWindow } from '@/shared/api/analyticsApi.ts'
 import StepLine from '@/shared/ui/StepLine.vue'
@@ -49,6 +52,8 @@ const bar = computed(() => ({
 /** Whether the window has a pace: it named its start and its reset. */
 const paced = computed(() => props.window.even_percent !== null)
 const points = computed(() => words.points(props.window, props.today))
+/** Whether what used the window can be read: the account has a seat and the window a start. */
+const spends = computed(() => seatOf(props.account) !== null && props.window.started_at !== null)
 
 const facts = computed(() => {
   const { window, now, today } = props
@@ -143,12 +148,19 @@ const readingsCaption = computed(() =>
       :points="points"
       :words="stepWords"
     />
+    <QuotaWindowSpend
+      v-if="spends"
+      class="quota-window-uses"
+      :account="account"
+      :window="window"
+      :today="today"
+      :shown="shown"
+    />
   </section>
 </template>
 
 <style scoped>
-/* The name, the bar, the facts and the readings one under the next. The area after the
-   readings is the one what used the window will take. */
+/* The name, the bar, the facts, the readings and what used the window one under the next. */
 .quota-window {
   display: grid;
   grid-template-areas:
@@ -186,5 +198,9 @@ const readingsCaption = computed(() =>
 
 .quota-window-readings {
   grid-area: readings;
+}
+
+.quota-window-uses {
+  grid-area: uses;
 }
 </style>
