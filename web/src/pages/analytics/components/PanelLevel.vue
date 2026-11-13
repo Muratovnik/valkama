@@ -230,7 +230,7 @@ const caveats = computed(() => (headed.value ? props.about : []))
 
 .level-group {
   & > .level-head > :is(.level-heading, .level-about) {
-    font: var(--font-panel-title);
+    font: var(--font-group-title);
   }
 
   & > .level-body {

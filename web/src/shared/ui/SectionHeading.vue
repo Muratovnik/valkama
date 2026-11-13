@@ -57,7 +57,7 @@ withDefaults(
 }
 
 .rank-group {
-  font: var(--font-panel-title);
+  font: var(--font-group-title);
 }
 
 /* A panel title shares its row with controls. Colour still belongs to the
