@@ -309,4 +309,18 @@ describe('the bar', () => {
     expect(page.get('.analytics-filter-add').text()).toBe('Добавить фильтр')
     expect(names(page)[0]).toBe('Обзор')
   })
+
+  // The server names the store's newest record whatever the period holds, so a period with no
+  // work, which the panel says is empty, still has an age to say.
+  it('says how old the newest record is beside a period with no work', async () => {
+    stubAnalyticsReads((query) => {
+      const answer = serveUsage([], query)
+      answer.usage.last_event_at = momentAt(new Date(2026, 10, 11, 12, 5))
+      return answer
+    })
+    const page = await mountAnalytics()
+    expect(page.text()).toContain('Nothing was spent in this period')
+    const fresh = page.get('.analytics-bar-fresh time')
+    expect(fresh.text()).toBe('Newest record 12:05 · 2\u{A0}h\u{A0}25\u{A0}min ago')
+  })
 })

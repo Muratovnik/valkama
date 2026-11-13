@@ -2261,9 +2261,15 @@ the first part still changed as the record aged. A line short of room gives up i
 words, then the air between its parts, then the word around the age, «● 15 s», in the room of
 the widest span, and never a day of the reader's own period, whose fields are as wide as a date of
 the widest figures needs: beside a span of days in Russian the line ran «Refresh» 92px past the
-bar's end at 1200px. Below a bar 50rem wide, a window under about 1107px beside the expanded
-navigation, the bar is two rows of one height whatever period is chosen: the periods and the
-filters, then the ends of the reader's own period at the start of the second row and the
+bar's end at 1200px. The last thing a line gives up is itself: one that still runs past its end
+becomes the two rows below, with its words back and a failed refresh said in full on the second
+row, and a bar with room for one line keeps one line. Beside a span of days with a failure, in
+Russian, the line needed a 1300px window; at 1108px «Refresh» ran 188px past the bar's end, and
+pressing it scrolled the bar sideways. There, choosing such a span moves the panel down by the
+second row: one line wherever it fits was chosen over a bar of one height for every period.
+Below a bar 50rem wide, a window under about 1107px beside the expanded navigation, the bar is
+two rows of one height whatever period is chosen: the periods and the filters, then the ends of
+the reader's own period at the start of the second row and the
 freshness with the refresh at its end. One row cannot hold them there: at 1024px the line is
 about 712px, and the periods and two date fields alone take 693px of it in Russian. Standing
 beside the periods, the ends pushed the filters and then the freshness onto a third row, and the
