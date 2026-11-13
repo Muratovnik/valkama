@@ -126,6 +126,30 @@ class ClaimStartsWorkTests(ClaimMoveTestCase):
         self.assertEqual(queued, picked["reference"])
         self.assertEqual({"from": "todo", "to": "dev"}, picked["started"])
 
+    def test_a_forced_takeover_records_the_override_beside_the_takeover(self) -> None:
+        held = self.item()
+        service.claim_work_item(self.conn, held, author="first", move_state=False)
+        taken = service.claim_work_item(
+            self.conn, held, author="second", force=True, move_state=False
+        )
+        self.assertEqual(["claim"], taken["overridden"])
+        self.assertEqual(["taken_over", "overridden"], [a for a, _, _ in self.events(held)][-2:])
+
+    def test_a_forced_release_of_a_claim_held_by_another_records_the_override(self) -> None:
+        held = self.item()
+        service.claim_work_item(self.conn, held, author="first", move_state=False)
+        released = service.claim_work_item(
+            self.conn, held, author="second", release=True, force=True, move_state=False
+        )
+        self.assertEqual(["claim"], released["overridden"])
+        self.assertEqual(["released", "overridden"], [a for a, _, _ in self.events(held)][-2:])
+
+    def test_a_forced_claim_of_an_unheld_item_records_no_override(self) -> None:
+        free = self.item()
+        claimed = service.claim_work_item(self.conn, free, author="first", force=True)
+        self.assertNotIn("overridden", claimed)
+        self.assertNotIn("overridden", [a for a, _, _ in self.events(free)])
+
     def test_the_first_active_state_the_workflow_lets_it_reach_is_the_one(self) -> None:
         # `pairing` comes before `dev` in the workflow, so it is the first active state.
         self.add_state("pairing", "active", 2)
