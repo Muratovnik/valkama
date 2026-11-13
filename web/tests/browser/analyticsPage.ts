@@ -13,7 +13,8 @@ import { noTask, serveUsage, task, unknownTask, value } from '../fixtures/analyt
 import type { Stretch, TimedStretch } from '../fixtures/analytics.ts'
 import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { installBackend } from './backend.ts'
-import { globalScope } from './planningFixtures.ts'
+import type { BackendOptions } from './backend.ts'
+import { globalScope, projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
 
 export const pageAt = (state: Record<string, string> = {}) =>
   serializePlatformRoute({ module_id: 'analytics', scope: globalScope, state })
@@ -151,10 +152,17 @@ const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') 
  * a press with the moment its handler was attached, and Vue drops such a press when it reaches a
  * second handler on its way up, as a press on a day's coloured stack does on its way to the day.
  * Nothing here needs the moment held: a run takes seconds of a Wednesday afternoon.
+ *
+ * `backend` is what the rest of the app's double answers, a task's card among it.
  */
-export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore = false) {
+export async function serve(
+  page: Page,
+  answer: Answer = WORLD,
+  failWeekBefore = false,
+  backend: BackendOptions = {},
+) {
   await page.clock.setSystemTime(NOW)
-  await installBackend(page)
+  await installBackend(page, backend)
   await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     if (answer === 'hold') return
@@ -168,6 +176,47 @@ export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore =
       body: JSON.stringify(serveUsage(answer, query)),
     })
   })
+}
+
+/** The app's search finds the task by its reference; each count of a use is kept. */
+export async function serveTask(page: Page) {
+  await page.route('**/api/modules/planning/search?*', (route) =>
+    route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-search',
+        query: workItemRef.reference,
+        limit: 50,
+        has_more: false,
+        items: [
+          {
+            target: {
+              project_id: projectId,
+              space_ref: spaceRef,
+              reference: 'MAIN-264',
+              writable: true,
+            },
+            item: {
+              work_item_id: workItem.work_item_id,
+              planning_space_id: workItem.planning_space_id,
+              reference: 'MAIN-264',
+              title: workItem.title,
+              state: { name: 'Dev' },
+              claim_ref: '',
+            },
+          },
+        ],
+        coverage: [
+          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
+        ],
+      },
+    }),
+  )
+  const uses: string[] = []
+  await page.route('**/api/analytics/uses', async (route) => {
+    uses.push((route.request().postDataJSON() as { kind: string }).kind)
+    await route.fulfill({ status: 204 })
+  })
+  return uses
 }
 
 /**
