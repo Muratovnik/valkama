@@ -11,6 +11,8 @@ import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
+
 import { serveUsage, task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
 import { mountAnalytics, stubAnalyticsReads } from '../support/analyticsReads.ts'
@@ -154,7 +156,7 @@ describe('a new view', () => {
     await flushPromises()
     expect(time(page)).toBe('3 h')
     expect(dimmed()).toBe(false)
-    await wait(300)
+    await wait(LOADING_DELAY_MS)
     expect(dimmed()).toBe(true)
     expect(time(page)).toBe('3 h')
     holding = false
