@@ -966,7 +966,8 @@ def _status_line_source_check() -> dict:
             parameters=parameters,
         )
     last = _last_reading(store.db_path(), "statusline")
-    parameters = {**parameters, "last": last, "days": STATUSLINE_SILENT_DAYS}
+    # A parameter is text, a number or a flag: the page refuses the whole report for a null.
+    parameters = {**parameters, "last": last or "", "days": STATUSLINE_SILENT_DAYS}
     if _silent(last):
         return _check(
             "quota-statusline",
@@ -1091,7 +1092,7 @@ def _mod_source_check() -> dict:
             parameters=parameters,
         )
     last = _last_reading(store.db_path(), "mod")
-    parameters = {**parameters, "last": last, "days": STATUSLINE_SILENT_DAYS}
+    parameters = {**parameters, "last": last or "", "days": STATUSLINE_SILENT_DAYS}
     if _silent(last):
         return _check(
             "quota-mod",

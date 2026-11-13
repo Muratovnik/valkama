@@ -619,6 +619,9 @@ class DoctorStatusLineTests(unittest.TestCase):
                 self.assertIn(
                     "only in terminal sessions, not in the VS Code extension", found["detail"]
                 )
+                if at is None:
+                    # Text, not null: the page refuses a whole report with a null in it.
+                    self.assertEqual("", found["presentation"]["parameters"]["last"])
 
     def test_registered_with_a_recent_reading_the_source_is_working(self) -> None:
         self.write_settings("~/.local/bin/valkama statusline")
@@ -758,7 +761,8 @@ class DoctorModTests(unittest.TestCase):
     def test_an_enabled_mod_without_a_recent_mod_reading_is_silent(self) -> None:
         self.write(enabled={self.KEY: True}, installed=[self.KEY])
         self.reading("statusline", 1)
-        self.assert_state("warn", "quota-mod-silent")
+        never = self.assert_state("warn", "quota-mod-silent")
+        self.assertEqual("", never["presentation"]["parameters"]["last"])
         self.reading("mod", 4 * 24)
         found = self.assert_state("warn", "quota-mod-silent")
         self.assertIn("valkama launcher install", found["fix"])
