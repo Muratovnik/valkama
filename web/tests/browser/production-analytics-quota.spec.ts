@@ -31,6 +31,20 @@ const boxes = (page: Page) =>
     })
   })
 
+/** The parts of the panel whose left edge strays more than a pixel from their account's name. */
+const edges = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.quota-account')].flatMap((account) => {
+      const edge = account.querySelector('.quota-account-name')?.getBoundingClientRect().left ?? 0
+      const parts = account.querySelectorAll(
+        '.quota-window > *, .quota-account-none, .quota-account-others',
+      )
+      return [...parts]
+        .map((part) => ({ part: part.className, left: part.getBoundingClientRect().left }))
+        .filter(({ left }) => Math.abs(left - edge) > 1)
+    }),
+  )
+
 const entry = (page: Page, section: string) =>
   page.locator(`.analytics-rail-entry[data-section="${section}"]`)
 
@@ -91,6 +105,9 @@ for (const colorScheme of ['light', 'dark'] as const)
       await expect(page.locator('.quota-panel h2')).toHaveText('Five hours')
       const panelText = await page.locator('.quota-panel').textContent()
       expect(panelText, 'no money beside a share').not.toContain('$')
+      // Every part of an account starts at one edge: its name, and each window's name, bar,
+      // facts and readings, within a pixel.
+      expect(await edges(page), 'every part at its account edge').toEqual([])
       await expectNoSilentClipping(page, `five hours at ${width}px`, '.analytics-panel')
       await page
         .locator('.analytics-panel')
