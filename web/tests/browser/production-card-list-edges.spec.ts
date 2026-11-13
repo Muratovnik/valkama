@@ -84,8 +84,12 @@ async function openCard(
   await installBackend(page, options)
   await own()
   await page.goto(CARD)
+  const drawer = page.locator('.drawer')
+  // The drawer stands while the card's code is still on its way, so its slide says nothing
+  // about the card: the lists are measured once the card has drawn its record.
+  await expect(drawer.locator('.card-facts')).toBeVisible()
   // Reduced, the slide still takes a frame, and on a loaded machine the first read lands in it.
-  await expect(page.locator('.drawer')).toHaveCSS('transform', 'none')
+  await expect(drawer).toHaveCSS('transform', 'none')
 }
 
 /** Nine under way, so the group stops after a screenful and offers the rest. */
