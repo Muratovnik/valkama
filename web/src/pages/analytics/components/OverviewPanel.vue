@@ -24,6 +24,7 @@ import { useResizeObserver } from '@vueuse/core'
 
 import OverviewChanges from '@/pages/analytics/components/OverviewChanges.vue'
 import OverviewTop from '@/pages/analytics/components/OverviewTop.vue'
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
@@ -155,57 +156,68 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
     :class="{ 'read-pending': pending }"
     :style="{ '--overview-field-height': `${FLOOR + grow}px`, '--overview-air': `${air}px` }"
   >
-    <SpendingTiles
-      v-model:measure="measure"
-      :usage="usage"
-      :read-at="readAt"
-    />
-    <div
-      ref="chartColumn"
-      class="overview-chart"
+    <PanelLevel
+      level="section"
+      as="div"
     >
-      <SpendingDays
-        :accounts="accounts"
-        :before="beforeSteps"
-        :by="by"
-        :measure="measure"
-        :narrow="narrow"
-        :notice="noticeIn('days')"
+      <SpendingTiles
+        v-model:measure="measure"
+        :usage="usage"
         :read-at="readAt"
-        :usage="usage"
-        brief
-        @day="(day, label) => emit('day', day, label)"
       />
-    </div>
-    <FieldError
-      v-if="noticeIn('bars')"
-      role="alert"
-    >
-      {{ noticeIn('bars') }}
-    </FieldError>
-    <div class="overview-cards">
-      <OverviewChanges
-        :measure="measure"
-        :usage="usage"
-        @retry="emit('retry')"
-      />
-      <OverviewTop
-        v-for="card in cards"
-        :key="card"
-        :dimension="card"
-        :measure="measure"
-        :read="top.reads.value[card] ?? 'loading'"
-        @open="emit('open', card)"
-        @narrow="(value, label) => emit('narrow', card, value, label, 'bars')"
-      />
-    </div>
+      <div
+        ref="chartColumn"
+        class="overview-chart"
+      >
+        <SpendingDays
+          :accounts="accounts"
+          :before="beforeSteps"
+          :by="by"
+          :measure="measure"
+          :narrow="narrow"
+          :notice="noticeIn('days')"
+          :read-at="readAt"
+          :usage="usage"
+          brief
+          @day="(day, label) => emit('day', day, label)"
+        />
+      </div>
+      <FieldError
+        v-if="noticeIn('bars')"
+        role="alert"
+      >
+        {{ noticeIn('bars') }}
+      </FieldError>
+      <PanelLevel
+        class="overview-cards"
+        level="group"
+        as="div"
+        columns="fit"
+        column-min="10rem"
+      >
+        <OverviewChanges
+          :measure="measure"
+          :usage="usage"
+          @retry="emit('retry')"
+        />
+        <OverviewTop
+          v-for="card in cards"
+          :key="card"
+          :dimension="card"
+          :measure="measure"
+          :read="top.reads.value[card] ?? 'loading'"
+          @open="emit('open', card)"
+          @narrow="(value, label) => emit('narrow', card, value, label, 'bars')"
+        />
+      </PanelLevel>
+    </PanelLevel>
   </div>
 </template>
 
 <style scoped>
-/* The figures across the panel, the chart across it under them, and the cards — what changed
-   first — in one row under the chart while they fit, as many to a line as fit otherwise, and
-   one to a line on a phone. */
+/* A section of the panel (`PanelLevel`): the figures across it, the chart across it under them,
+   and the cards — what changed first — in one row under the chart while they fit, as many to a
+   line as fit otherwise, and one to a line on a phone, a block's air apart. */
 .overview-panel {
   /* The chart's drawing field: its floor, and what it adds to fill the panel's box (`fit`). */
   --overview-field-height: 200px;
@@ -213,9 +225,6 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   /* The air under the content the panel gives up rather than scroll by it alone (`fit`). */
   --overview-air: 0px;
 
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
   min-width: 0;
   margin-block-end: calc(-1 * var(--overview-air));
   container-type: inline-size;
@@ -228,12 +237,6 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
   & :deep(.period-field) {
     block-size: var(--overview-field-height, 200px);
   }
-}
-
-.overview-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-  gap: var(--space-5);
 }
 </style>
 

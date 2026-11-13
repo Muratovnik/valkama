@@ -4,24 +4,34 @@
  * narrow page starts on the table, which a phone reads where a plot of columns does not; a
  * person's own choice stands until the page is left. Why a press in it did nothing stands under
  * its title, said to a screen reader as it comes (`notice`).
+ *
+ * It is a block of the panel, a chart under its heading, unless it says it is a whole section, as
+ * the quota's is (`PanelLevel`).
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
+
 import FieldError from '@/shared/ui/FieldError.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 
 type Shown = 'chart' | 'table'
 
-const props = defineProps<{
-  /** Whether the page is too narrow to read a chart, which makes the table the first view. */
-  narrow: boolean
-  title: string
-  /** Why the last press in the chart did nothing, in words; empty otherwise. */
-  notice?: string
-}>()
-defineSlots<{ chart: () => unknown; table: () => unknown }>()
+const props = withDefaults(
+  defineProps<{
+    /** Whether the page is too narrow to read a chart, which makes the table the first view. */
+    narrow: boolean
+    title: string
+    level?: 'section' | 'block'
+    /** A list's name, when what the chart holds is a list: the quota's accounts. */
+    listLabel?: string
+    /** Why the last press in the chart did nothing, in words; empty otherwise. */
+    notice?: string
+  }>(),
+  { notice: '', level: 'block', listLabel: undefined },
+)
+defineSlots<{ chart: () => unknown; lead?: () => unknown; table: () => unknown }>()
 
 const { t } = useI18n()
 
@@ -33,29 +43,35 @@ const options = computed(() =>
 function choose(value: Shown) {
   chosen.value = value
 }
+/** A list of groups is a list. */
+const bodyAs = computed(() => (props.listLabel ? 'ul' : 'div'))
 const switchLabel = computed(() => t('analytics.shown.label', { chart: props.title }))
 </script>
 
 <template>
-  <section
+  <PanelLevel
     class="chart-section"
+    :level="level"
     :data-shown="shown"
+    :title="title"
+    :body-as="bodyAs"
+    :body-label="listLabel"
   >
-    <SectionHeader
-      as="h2"
-      level="page"
-      :title="title"
+    <template
+      v-if="$slots.lead"
+      #lead
     >
-      <template #actions="{ size }">
-        <SegmentedControl
-          :model-value="shown"
-          :size="size"
-          :label="switchLabel"
-          :options="options"
-          @update:model-value="choose"
-        />
-      </template>
-    </SectionHeader>
+      <slot name="lead" />
+    </template>
+    <template #actions="{ size }">
+      <SegmentedControl
+        :model-value="shown"
+        :size="size"
+        :label="switchLabel"
+        :options="options"
+        @update:model-value="choose"
+      />
+    </template>
     <FieldError
       v-if="notice"
       role="alert"
@@ -70,14 +86,5 @@ const switchLabel = computed(() => t('analytics.shown.label', { chart: props.tit
       v-else
       name="table"
     />
-  </section>
+  </PanelLevel>
 </template>
-
-<style scoped>
-.chart-section {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  min-width: 0;
-}
-</style>

@@ -17,6 +17,7 @@
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import { tableCounts } from '@/pages/analytics/composables/useTableModel.ts'
 import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
@@ -24,7 +25,6 @@ import type { TableLine } from '@/pages/analytics/composables/useTableModel.ts'
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension } from '@/shared/api/analyticsApi.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
-import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -98,10 +98,10 @@ const downloadNote = computed(() => (nothing.value ? nothingId : undefined))
 
 <template>
   <div class="spending-table-head">
-    <SectionHeader
+    <PanelLevel
       class="spending-table-title"
-      as="h2"
-      level="page"
+      level="block"
+      as="div"
       :title="title"
     />
     <div class="spending-table-controls">

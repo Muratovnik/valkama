@@ -17,6 +17,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import QuotaWindowSpend from '@/pages/analytics/components/QuotaWindowSpend.vue'
 import { useQuotaWords } from '@/pages/analytics/composables/useQuotaWords.ts'
 import { seatOf } from '@/pages/analytics/utils/windowSpend.ts'
@@ -102,14 +103,14 @@ const readingsCaption = computed(() =>
 </script>
 
 <template>
-  <section
+  <PanelLevel
     class="quota-window"
+    level="block"
+    heading-as="h4"
+    :title="name"
     :data-window="window.kind"
     :data-state="window.state"
   >
-    <h4 class="quota-window-name">
-      {{ name }}
-    </h4>
     <WindowBar
       v-if="shown === 'chart'"
       class="quota-window-bar"
@@ -156,51 +157,18 @@ const readingsCaption = computed(() =>
       :today="today"
       :shown="shown"
     />
-  </section>
+  </PanelLevel>
 </template>
 
 <style scoped>
-/* The name, the bar, the facts, the readings and what used the window one under the next. */
-.quota-window {
-  display: grid;
-  grid-template-areas:
-    'name'
-    'bar'
-    'facts'
-    'readings'
-    'uses';
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.quota-window-name {
-  grid-area: name;
-  margin: 0;
-  font: var(--font-name);
-}
-
-.quota-window-bar {
-  grid-area: bar;
-}
-
 .quota-window-facts {
   display: flex;
   flex-wrap: wrap;
-  grid-area: facts;
   gap: var(--space-1) var(--space-4);
   padding: 0;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
   list-style: none;
-}
-
-.quota-window-readings {
-  grid-area: readings;
-}
-
-.quota-window-uses {
-  grid-area: uses;
 }
 </style>

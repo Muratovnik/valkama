@@ -163,7 +163,7 @@ describe('where a window went', () => {
     // Another account's block still breaks down by task.
     expect(radio(blockOf(page, '7e6d5c4b'), 'Tasks').attributes('aria-checked')).toBe('true')
 
-    await radio(page.get('.quota-panel .section-header'), 'Table').trigger('click')
+    await radio(page.get('.quota-panel .chart-section > .level-head'), 'Table').trigger('click')
     await flushPromises()
     const table = blockOf(page, 'Work')
     expect(table.find('.ranked-bars').exists()).toBe(false)

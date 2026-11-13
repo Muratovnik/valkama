@@ -19,6 +19,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PanelLevel from '@/pages/analytics/components/PanelLevel.vue'
 import SpendingBars from '@/pages/analytics/components/SpendingBars.vue'
 import SpendingDays from '@/pages/analytics/components/SpendingDays.vue'
 import SpendingMultiples from '@/pages/analytics/components/SpendingMultiples.vue'
@@ -104,77 +105,89 @@ const showTable = () => table.value?.reveal()
     class="dimension-panel"
     :class="{ 'read-pending': pending }"
   >
-    <SpendingUnread
-      v-if="!before"
-      @retry="emit('retry')"
-    />
-    <SpendingTiles
-      v-model:measure="measure"
-      :usage="usage"
-      :read-at="readAt"
-    />
-    <div class="dimension-charts">
-      <SpendingTableLink
-        class="dimension-to-table"
-        @press="showTable"
+    <PanelLevel
+      class="dimension-section"
+      level="section"
+      as="div"
+    >
+      <PanelLevel
+        level="group"
+        as="div"
       >
-        {{ t('analytics.panel.table.toTable') }}
-      </SpendingTableLink>
-      <div class="dimension-pair">
-        <SpendingBars
-          :by="by"
-          :measure="measure"
-          :narrow="narrow"
-          :notice="noticeIn('bars')"
-          :rows="usage.rows"
-          :slots="slots"
-          @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
-          @more="showTable"
+        <SpendingUnread
+          v-if="!before"
+          @retry="emit('retry')"
         />
-        <SpendingMultiples
-          :by="by"
-          :measure="measure"
-          :narrow="narrow"
-          :slots="slots"
+        <SpendingTiles
+          v-model:measure="measure"
           :usage="usage"
+          :read-at="readAt"
         />
-      </div>
-      <SpendingDays
-        :accounts="accounts"
+      </PanelLevel>
+      <PanelLevel
+        class="dimension-charts"
+        level="group"
+        as="div"
+      >
+        <SpendingTableLink
+          class="dimension-to-table"
+          @press="showTable"
+        >
+          {{ t('analytics.panel.table.toTable') }}
+        </SpendingTableLink>
+        <div class="dimension-pair">
+          <SpendingBars
+            :by="by"
+            :measure="measure"
+            :narrow="narrow"
+            :notice="noticeIn('bars')"
+            :rows="usage.rows"
+            :slots="slots"
+            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
+            @more="showTable"
+          />
+          <SpendingMultiples
+            :by="by"
+            :measure="measure"
+            :narrow="narrow"
+            :slots="slots"
+            :usage="usage"
+          />
+        </div>
+        <SpendingDays
+          :accounts="accounts"
+          :by="by"
+          :measure="measure"
+          :narrow="narrow"
+          :notice="noticeIn('days')"
+          :read-at="readAt"
+          :usage="usage"
+          @day="(day, label) => emit('day', day, label)"
+        />
+      </PanelLevel>
+      <SpendingTable
+        ref="table"
+        :across="across"
         :by="by"
+        :cross="cross.state.value"
+        :dimensions="dimensions"
+        :filters="filters"
         :measure="measure"
-        :narrow="narrow"
-        :notice="noticeIn('days')"
-        :read-at="readAt"
+        :notice="noticeIn('table')"
         :usage="usage"
-        @day="(day, label) => emit('day', day, label)"
+        @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
+        @reread="cross.retry"
+        @update:across="(next) => emit('update:across', next)"
       />
-    </div>
-    <SpendingTable
-      ref="table"
-      :across="across"
-      :by="by"
-      :cross="cross.state.value"
-      :dimensions="dimensions"
-      :filters="filters"
-      :measure="measure"
-      :notice="noticeIn('table')"
-      :usage="usage"
-      @narrow="(value, label) => emit('narrow', by, value, label, 'table')"
-      @reread="cross.retry"
-      @update:across="(next) => emit('update:across', next)"
-    />
+    </PanelLevel>
   </div>
 </template>
 
 <style scoped>
-/* The figures, the charts and the table one under the next, each as tall as what it holds, in the
-   panel's one scroll. Its width says whether two charts stand side by side. */
+/* A section of the panel: the figures, the charts and the table one under the next, each as tall
+   as what it holds, in the panel's one scroll (`PanelLevel`). Its width says whether two charts
+   stand side by side. */
 .dimension-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-section);
-  align-content: start;
   min-width: 0;
   container-type: inline-size;
 }
@@ -183,18 +196,18 @@ const showTable = () => table.value?.reveal()
    side by side where both read well, the list first, then the day chart. The air at the sides
    holds what a chart reaches past its column (a focus ring, a pressed fill), so nothing in it
    stands wider than its box. */
-.dimension-charts,
-.dimension-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-section);
-  align-items: start;
-  min-width: 0;
-}
-
 .dimension-charts {
   padding-inline: var(--space-2);
   margin-inline: calc(-1 * var(--space-2));
+}
+
+/* The two charts are blocks of the charts' group, its air apart. */
+.dimension-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
 }
 
 /* The line starts on the column's edge, its fill reaching past it under the pointer. */

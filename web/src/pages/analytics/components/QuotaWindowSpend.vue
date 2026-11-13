@@ -257,14 +257,13 @@ const failedAgain = computed(() =>
 <style scoped src="@/pages/analytics/components/readPending.css"></style>
 
 <style scoped>
-/* Under the window's readings, apart by air and on an axis of its own: its title and its
+/* Under the window's readings, a line of its block on an axis of its own: its title and its
    breakdowns on one line, its words, then its bars. */
 .window-spend {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
   min-width: 0;
-  margin-block-start: var(--space-3);
 }
 
 .window-spend-head {
