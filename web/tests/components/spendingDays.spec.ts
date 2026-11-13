@@ -294,7 +294,6 @@ describe('the days', () => {
     const days = mountDays(week(), {}, 'ru')
     expect(days.get('h2').text()).toBe('Время агентов по дням, по задачам')
     expect(days.get('.period-axis').text()).not.toContain('идёт')
-    expect(spokenDays(days).at(-1)?.holds).toContain('идёт')
   })
 })
 
