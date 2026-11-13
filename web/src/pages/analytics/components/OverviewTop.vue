@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
+import { useHeadingUnder } from '@/pages/analytics/composables/usePanelOutline.ts'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useReadWaitReport } from '@/pages/analytics/composables/useReadWaits.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -42,6 +43,8 @@ const emit = defineEmits<{ narrow: [value: string | null, label: string]; open: 
 const { t } = useI18n()
 const words = useSpendingWords()
 const overviewWords = useOverviewWords()
+/** The card's heading one under the level it stands in. */
+const headingAs = useHeadingUnder()
 
 /** How many values a card names. */
 const FIRST = 5
@@ -96,7 +99,10 @@ const barWords = computed(() => ({
     class="overview-top"
     :data-card="dimension"
   >
-    <h3 class="overview-top-head">
+    <component
+      :is="headingAs"
+      class="overview-top-head"
+    >
       <button
         type="button"
         class="overview-top-open"
@@ -109,7 +115,7 @@ const barWords = computed(() => ({
           :size="14"
         />
       </button>
-    </h3>
+    </component>
     <!-- A wait shown keeps the card's wait for its minimum, whatever arrives meanwhile. -->
     <RankedBars
       v-if="values && !shown"

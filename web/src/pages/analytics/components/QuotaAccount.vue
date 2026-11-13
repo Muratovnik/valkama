@@ -73,7 +73,6 @@ const tableWords = computed<WindowWords>(() => ({
     class="quota-account"
     level="group"
     as="li"
-    heading-as="h3"
     columns="fit"
     column-min="24rem"
     :data-account="name"

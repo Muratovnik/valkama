@@ -111,7 +111,7 @@ for (const width of [1440, 1024, 390]) {
     const tokens = { by: 'work_item', measure: 'tokens' }
     const chosen = pageAt(width < NARROW_FRAME ? { ...tokens, open: 'section' } : tokens)
     await expect.poll(() => page.url().slice(new URL(page.url()).origin.length)).toBe(chosen)
-    await expect(analytics.locator('.spending-bars h2')).toHaveText('Tokens by task')
+    await expect(analytics.locator('.spending-bars h3')).toHaveText('Tokens by task')
   })
 }
 
@@ -133,7 +133,7 @@ test.describe('in Russian', () => {
     test(`the page stands whole at ${width}px`, async ({ page }, info) => {
       await serve(page)
       const analytics = await openReport(page, width)
-      await expect(analytics.locator('.spending-bars h2')).toContainText('по задачам')
+      await expect(analytics.locator('.spending-bars h3')).toContainText('по задачам')
       const measured = await measure(page)
       const names = await scrolledNames(page)
       await record(info, `analytics ru layout ${width}`, {

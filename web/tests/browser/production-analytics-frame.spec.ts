@@ -281,16 +281,16 @@ test('a section chosen on the rail is the address, and a reload keeps it', async
   await expect(current).toHaveText('Overview')
   await rail.getByRole('button', { name: 'Model' }).click()
   await expect.poll(() => path(page)).toBe(pageAt({ by: 'model' }))
-  await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
+  await expect(page.locator('.spending-bars h3')).toHaveText('Agent time by model')
   await page.reload()
   await expect(current).toHaveText('Model')
-  await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by model')
+  await expect(page.locator('.spending-bars h3')).toHaveText('Agent time by model')
 
   // From the keyboard: the task section, named in the address as every dimension is.
   await rail.getByRole('button', { name: 'Task' }).focus()
   await page.keyboard.press('Enter')
   await expect.poll(() => path(page)).toBe(pageAt({ by: 'work_item' }))
-  await expect(page.locator('.spending-bars h2')).toHaveText('Agent time by task')
+  await expect(page.locator('.spending-bars h3')).toHaveText('Agent time by task')
 
   // And back to the overview, the plain address, which shows the period at a glance.
   await rail.getByRole('button', { name: 'Overview' }).focus()
@@ -322,7 +322,7 @@ test('an address the page wrote before it had sections opens the same view', asy
     page.locator('.analytics-rail [aria-current="page"] .analytics-rail-name'),
   ).toHaveText('Model')
   await expect(page.locator('.analytics-bar-filters .combo-chip')).toHaveText(['Model: model-a'])
-  await expect(page.locator('.spending-bars h2')).toHaveText('Tokens by model')
+  await expect(page.locator('.spending-bars h3')).toHaveText('Tokens by model')
   expect(path(page)).toBe(released)
 })
 

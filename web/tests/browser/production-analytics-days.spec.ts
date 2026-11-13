@@ -305,7 +305,7 @@ test('a span wider than the chart keeps its start, the reader’s place and the 
     return place.scale.right - widened.scale.right
   }
   await analytics.locator('.spending-tiles .segmented-option').nth(1).click()
-  await expect(days.locator('h2')).toContainText('Tokens')
+  await expect(days.locator('h3')).toContainText('Tokens')
   await expect
     .poll(scaleMoved, { message: 'the scale kept its width, so this run measures nothing' })
     .not.toBe(0)

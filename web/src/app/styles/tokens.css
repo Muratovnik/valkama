@@ -304,11 +304,14 @@
   --font-note: 400 var(--font-size-dense)/var(--line-height-normal) var(--font-family-interface);
   --font-editor: 400 var(--font-size-emphasis)/var(--line-height-reading)
     var(--font-family-interface);
-  --font-panel-title: 600 var(--font-size-emphasis)/var(--line-height-normal)
-    var(--font-family-interface);
 
-  /* What names something else: a heading, a label, a title in a list. */
+  /* What names something else: a heading, a label, a title in a list. A heading of the type
+     scale is named by the level it heads (DESIGN.md, System rules): a section, then a group a
+     step under it. The group's was named for a panel, which said where it first stood and not
+     what it heads. `--font-group-heading` below is another thing, the label over a group of rows. */
   --font-section-title: 600 var(--font-size-section)/var(--line-height-normal)
+    var(--font-family-interface);
+  --font-group-title: 600 var(--font-size-emphasis)/var(--line-height-normal)
     var(--font-family-interface);
   --font-drawer-title: 400 var(--font-size-module)/var(--line-height-snug)
     var(--font-family-interface);

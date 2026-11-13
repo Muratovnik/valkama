@@ -279,7 +279,7 @@ describe('the Analytics page', () => {
     holding = true
     await page.setProps({ routeState: { by: 'model', filters: main } })
     await flushPromises()
-    expect(page.get('.spending-days h2').text()).toContain('by model')
+    expect(page.get('.spending-days h3').text()).toContain('by model')
     expect(page.findAll('.period-mark')).toHaveLength(0)
     const [accounts] = reads.held
     accounts?.release(serveUsage(WORLD, accounts.query))

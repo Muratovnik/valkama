@@ -120,7 +120,7 @@ test('a figure chooses the measure, pressed by a check, from the keyboard, into 
   await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'true')
   await expect(radios.nth(1).locator('.tile-chosen')).toBeVisible()
   await expect(figures.locator('.tile-chosen')).toHaveCount(1)
-  await expect(panel.locator('.spending-days h2')).toHaveText('Tokens per day, by task')
+  await expect(panel.locator('.spending-days h3')).toHaveText('Tokens per day, by task')
   // The cards and what changed say the measure chosen.
   await expect(panel.locator('[data-card="model"] .ranked-value').first()).toHaveText('1.3M')
   await page.reload()
@@ -286,7 +286,7 @@ test('a single day stands as its hours beside the day before', async ({ page }, 
   const day = pageAt({ period: 'custom', from: '2026-11-10', to: '2026-11-10' })
   const panel = await openOverview(page, 1440, 900, day)
   const days = panel.locator('.spending-days')
-  await expect(days.locator('h2')).toHaveText('Agent time per hour, by task')
+  await expect(days.locator('h3')).toHaveText('Agent time per hour, by task')
   await expect(days.locator('.period-slot')).toHaveCount(24)
   // The day is past, so each of its hours has begun and narrows the view to itself, as a day does.
   await expect(days.locator('button.period-column')).toHaveCount(24)

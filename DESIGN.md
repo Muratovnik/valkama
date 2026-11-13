@@ -2311,7 +2311,10 @@ pointer's, and as an entry pushed out of its column. One stylesheet owns the mod
 The page's levels are the four of the spacing rule: a section of the panel, a group in it such
 as an account of the quota, a block such as a chart or a window, and the block's lines, with
 the headings the type scale gives each level (System rules); the quota's section and the
-account in it both stood at 16px and the same weight.
+account in it both stood at 16px and the same weight. A heading's element follows how the levels
+nest, not its size: under the module's name, the page's `h1`, a section's heading is an `h2` and
+each heading one rank under the heading of the level around it. A section's heading and its
+charts' and table's all stood at `h2`, and a screen reader's list of headings read them as peers.
 
 The overview answers «how much, and is that more than before»: three cells — agent time,
 tokens and the cost estimate at API prices — each with its change against the period

@@ -1,0 +1,23 @@
+/*
+ * The one place a heading's level gives its type, read by each component that draws a heading of
+ * the type scale as its own scoped style (DESIGN.md, System rules): a section at the `section`
+ * step, a group a step under it at `emphasis`, and a block at `interface`, so no heading is the
+ * size of the level over it. The module's name over them is the context bar's, and the label over
+ * a block's lines belongs to the block that writes it.
+ *
+ * `SectionHeading` heads a section or a group anywhere, and the Analytics panel's `PanelLevel`
+ * heads all three and draws its «ⓘ» in the same font, so the mark stands on the heading's line.
+ * Each chose its sizes on its own, and two answers to "how large is a group's heading" can drift
+ * apart without either saying so.
+ */
+.heading-section {
+  font: var(--font-section-title);
+}
+
+.heading-group {
+  font: var(--font-group-title);
+}
+
+.heading-block {
+  font: var(--font-name);
+}

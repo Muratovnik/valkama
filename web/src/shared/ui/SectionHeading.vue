@@ -6,7 +6,8 @@
  * 15, 16 and 18px, at weights 400, 500, 600 and 700, under nine different class
  * names. Naming the type as a token stopped the duplication but left every one of
  * those files still choosing, which is what a primitive is for — the answer moves
- * here and there is one of it.
+ * here and there is one of it. The type each rank takes is the scale's, which the
+ * Analytics panel's levels read too (`headingLevels.css`).
  *
  * The size is the heading's rank, and the rank is its place in what the module
  * lays out: a section, or a group inside one. It used to be the surface — a drawer
@@ -37,27 +38,20 @@ withDefaults(
   <component
     :is="as"
     class="section-heading"
-    :class="[`level-${level}`, `rank-${rank}`]"
+    :class="[`level-${level}`, `heading-${rank}`]"
   >
     <slot />
   </component>
 </template>
+
+<!-- The type of each rank is the scale's, which every heading of a level reads from one place. -->
+<style scoped src="@/shared/ui/headingLevels.css"></style>
 
 <style scoped>
 /* `base.css` already resets a heading's size and weight to inherit, so the margin
    is the only thing left to say besides the type. */
 .section-heading {
   margin: 0;
-}
-
-/* The type scale's two steps under the module name (DESIGN.md, System rules): a section
-   at `section`, a group a step under it at `emphasis`. */
-.rank-section {
-  font: var(--font-section-title);
-}
-
-.rank-group {
-  font: var(--font-panel-title);
 }
 
 /* A panel title shares its row with controls. Colour still belongs to the

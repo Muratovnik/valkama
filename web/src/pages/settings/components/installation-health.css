@@ -184,7 +184,7 @@
 /* Its toggle stands in a head of the attention section's inset and fill, the levels under it,
    and it heads the same level the attention's heading does: a group, at the group's step. */
 .health-passed {
-  --font-disclosure: var(--font-panel-title);
+  --font-disclosure: var(--font-group-title);
   --space-disclosure-gap: 0px;
   --space-disclosure-inset: var(--space-4);
   --color-disclosure-head: var(--color-surface-muted);

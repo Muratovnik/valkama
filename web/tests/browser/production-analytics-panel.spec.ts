@@ -160,12 +160,12 @@ test('at 1440 pixels the ranked list and the small charts beside it are titled i
   await serve(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(TASK_REPORT)
-  await expect(page.locator('.spending-multiples h2')).toBeVisible()
+  await expect(page.locator('.spending-multiples h3')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
 
   const headings = await page.evaluate(() =>
     ['.spending-bars', '.spending-multiples'].map((part) => {
-      const heading = document.querySelector(`${part} h2`)
+      const heading = document.querySelector(`${part} h3`)
       if (!heading) throw new Error(`${part} has no heading`)
       const { height } = heading.getBoundingClientRect()
       const line = Number.parseFloat(getComputedStyle(heading).lineHeight)
@@ -271,8 +271,8 @@ test.describe('in Russian', () => {
         }
       }
       return {
-        bars: fit('.spending-bars h2'),
-        multiples: fit('.spending-multiples h2'),
+        bars: fit('.spending-bars h3'),
+        multiples: fit('.spending-multiples h3'),
         count: fit('.spending-table-summary'),
       }
     })
@@ -319,12 +319,12 @@ test('a split chosen in the section heading makes the table pairs, is the addres
 
   await page.locator('.dimension-section .dimension-split .choice-trigger').click()
   await page.getByRole('option', { name: 'Model' }).click()
-  await expect(table.locator('h2')).toHaveText('Spending by task and by model')
+  await expect(table.locator('h3')).toHaveText('Spending by task and by model')
   await expect
     .poll(() => page.url().slice(new URL(page.url()).origin.length))
     .toBe(pageAt({ by: 'work_item', across: 'model' }))
   await page.reload()
-  await expect(table.locator('h2')).toHaveText('Spending by task and by model')
+  await expect(table.locator('h3')).toHaveText('Spending by task and by model')
   const names = await table.locator('tbody th').allInnerTexts()
   await record(info, 'analytics panel split', { url: page.url(), names })
   // Every row is a pair, the task first and the model after it.
@@ -456,7 +456,7 @@ test('the tokens by kind are a panel whose counted kinds add up to the Â«TokensÂ
   await expect(bars.locator('.ranked-rest .ranked-label')).toHaveText(['Cache read', 'Reasoning'])
   await expect(bars.locator('.ranked-rest .ranked-bar')).toHaveCount(0)
   // A small chart of each counted kind on one scale, the cache reads apart by their figure.
-  await expect(panel.locator('.kinds-multiples h2')).toHaveText('Per day, by kind')
+  await expect(panel.locator('.kinds-multiples h3')).toHaveText('Per day, by kind')
   expect(await parts(page), 'parts that spill or overlap').toEqual([])
 
   // The address gives the section back.
