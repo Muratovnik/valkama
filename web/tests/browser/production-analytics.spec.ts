@@ -311,8 +311,9 @@ test('a custom period shows its two date fields whole at 390px', async ({ page }
   for (const field of measured.dateInputs) {
     expect(field.x).toBeGreaterThanOrEqual(0)
     expect(field.x + field.width).toBeLessThanOrEqual(390)
-    // A date field leaves its date and its picker room.
-    expect(field.width).toBeGreaterThanOrEqual(140)
+    // A date field leaves its date and its picker room: «28.08.2026», of the widest figures, ran
+    // under the picker's icon at 124px and stood whole beside it at 132px.
+    expect(field.width).toBeGreaterThanOrEqual(132)
   }
   expect(measured.days).toBe(10)
   await expectNoSilentClipping(page, 'analytics custom period at 390px', '.analytics-page')
