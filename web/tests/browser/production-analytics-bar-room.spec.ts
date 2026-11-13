@@ -14,6 +14,11 @@
  * parts and the word around the age, and never a day. At each width the bar's controls stand
  * where they stood when the age was 5 s, however old it grows: the freshness is one width.
  *
+ * Below 50rem, at 1024, 1100 and 1106px, the bar beside that span is the two rows of a preset's,
+ * in either language and at an age of 5 s or 59 min: the periods and the filters, then the ends at
+ * the second row's start and the read again at its end, the days whole, the bar as high as the
+ * week's and «Now»'s and the panel where it was.
+ *
  * The age is measured where its letters are drawn, against every box that would hide what it
  * covers, rather than by a box's scroll width, which misses a cut of a fraction of a pixel.
  */
@@ -22,7 +27,7 @@ import type { Page } from '@playwright/test'
 
 import { task } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { pageAt, record } from './analyticsPage.ts'
+import { openReport, pageAt, record } from './analyticsPage.ts'
 import { at, NOW, serveLive } from './liveDouble.ts'
 import { test } from './test.ts'
 
@@ -301,5 +306,128 @@ for (const lang of ['en', 'ru'] as const)
           expect(old?.parts, `${width}px: the bar's parts at 59 min`).toEqual(young?.parts)
         }
         await record(info, `bar-own ${lang} ${own}`, seen)
+      })
+  })
+
+/**
+ * Windows the bar is two rows in beside the app's navigation: 1024px, where the periods and two
+ * days alone take nearly all of the line, and 1106px, the widest, its bar just under 50rem.
+ */
+const TWO_ROWS = [1024, 1100, 1106] as const
+
+/** Where the bar's parts stand down the page and across it, its height and the panel's top. */
+const rowsOf = (page: Page) =>
+  page.evaluate(() => {
+    const box = (selector: string) => {
+      const found = document.querySelector(selector)?.getBoundingClientRect()
+      return found
+        ? { top: found.top, bottom: found.bottom, left: found.left, right: found.right }
+        : null
+    }
+    return {
+      bar: document.querySelector('.analytics-bar')?.getBoundingClientRect().height ?? 0,
+      panel: document.querySelector('.analytics-panel')?.getBoundingClientRect().top ?? 0,
+      line: box('.analytics-bar-line'),
+      periods: box('.analytics-period'),
+      filters: box('.analytics-bar-filters'),
+      own: box('.analytics-bar-own'),
+      refresh: box('.analytics-refresh'),
+      days: [...document.querySelectorAll('.analytics-bar input[type="date"]')].map((field) => {
+        const { left, right } = field.getBoundingClientRect()
+        return { left, right }
+      }),
+    }
+  })
+
+type Rows = Awaited<ReturnType<typeof rowsOf>>
+/** Halfway down a box. */
+const middle = (box: { bottom: number; top: number } | null) =>
+  box ? (box.top + box.bottom) / 2 : Number.NaN
+
+/** Opens an address with its section on show and lets the bar's words and room settle. */
+async function openSection(page: Page, width: number, address: Record<string, string>) {
+  await openReport(page, width, pageAt(address))
+  await expect(page.locator('.analytics-bar-fresh time')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  )
+}
+
+/**
+ * The bar of the reader's own period is the two rows of a preset's: the periods and the filters,
+ * then the ends at the second row's start and the read again at its end, the bar as high as the
+ * week's and «Now»'s, and the panel where it was.
+ */
+function expectTwoRows(name: string, own: Rows, week: Rows, now: Rows) {
+  expect(own.bar, `${name}: the bar's height against the week's`).toBe(week.bar)
+  expect(own.bar, `${name}: the bar's height against «Now»'s`).toBe(now.bar)
+  expect(own.panel, `${name}: the panel's top`).toBe(week.panel)
+  const line = own.line ?? { left: Number.NaN, right: Number.NaN }
+  // The filters beside the periods, on the first row.
+  expect(
+    Math.abs(middle(own.filters) - middle(own.periods)),
+    `${name}: the filters' row`,
+  ).toBeLessThanOrEqual(0.5)
+  // The ends under the periods, at the second row's start.
+  expect(own.own?.top, `${name}: the ends beside the periods`).toBeGreaterThanOrEqual(
+    own.periods?.bottom ?? Number.NaN,
+  )
+  expect(
+    Math.abs((own.own?.left ?? Number.NaN) - line.left),
+    `${name}: the ends' start`,
+  ).toBeLessThanOrEqual(0.5)
+  // The read again on that row, at its end.
+  expect(
+    Math.abs(middle(own.refresh) - middle(own.own)),
+    `${name}: the read again's row`,
+  ).toBeLessThanOrEqual(0.5)
+  expect(
+    Math.abs((own.refresh?.right ?? Number.NaN) - line.right),
+    `${name}: the read again's end against the line's`,
+  ).toBeLessThanOrEqual(0.5)
+  // Each day as wide as a date of the widest figures needs beside its picker, and inside the line.
+  for (const day of own.days) {
+    expect(day.right - day.left, `${name}: a day's field`).toBeGreaterThanOrEqual(132)
+    expect(day.left, `${name}: a day before the line`).toBeGreaterThanOrEqual(line.left - 0.5)
+    expect(day.right, `${name}: a day past the line`).toBeLessThanOrEqual(line.right + 0.5)
+  }
+}
+
+for (const lang of ['en', 'ru'] as const)
+  test.describe(`the bar below 50rem beside an own period, ${lang}`, () => {
+    test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
+
+    for (const [own, address] of Object.entries(OWN))
+      test(`is the two rows of a preset's, the ends under the periods, by ${own}`, async ({
+        page,
+      }, info) => {
+        await page.clock.install({ time: NOW })
+        const double = await serveLive(page, DAYS)
+        const seen: Record<string, unknown> = {}
+        for (const width of TWO_ROWS) {
+          double.lastEventAt = new Date(NOW.getTime() - SPREAD[0])
+          await openSection(page, width, {})
+          const week = await rowsOf(page)
+          await openSection(page, width, { period: 'now' })
+          const now = await rowsOf(page)
+          const at: BarParts[] = []
+          for (const back of SPREAD) {
+            double.lastEventAt = new Date(NOW.getTime() - back)
+            await openSection(page, width, address)
+            const name = `${width}px, ${back / 1000} s`
+            const rows = await rowsOf(page)
+            const parts = await barParts(page)
+            const drawn = await agePlace(page)
+            seen[name] = { week, now, rows, age: drawn }
+            expectOnLine(name, parts)
+            expectWholeAge(drawn)
+            expectTwoRows(name, rows, week, now)
+            at.push(parts)
+          }
+          const [young, old] = at
+          expect(old?.parts, `${width}px: the bar's parts at 59 min`).toEqual(young?.parts)
+        }
+        await record(info, `bar-own-rows ${lang} ${own}`, seen)
       })
   })
