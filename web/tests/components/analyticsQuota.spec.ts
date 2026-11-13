@@ -254,17 +254,24 @@ describe('the quota panel', () => {
     expect(work.get('.step-line').attributes('aria-label')).toMatch(
       /^Five hours of Work from .+ to .+: 10% at .+, 35% at .+, 62% at .+$/u,
     )
-    // The line runs from the window's start to its reset, said on the reader's clock: the five
-    // hours reset two hours after 14:30.
+    // The running window opens on its start to now and a third of that past it, said on the
+    // reader's clock: 11:30 to 14:30, and an hour of forecast to 15:30.
+    expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '15:30'])
+    // The whole window runs to its reset, two hours after 14:30.
+    await work.findAll('.step-views [role="radio"]')[1]?.trigger('click')
     expect(work.findAll('.step-axis span').map((one) => one.text())).toEqual(['11:30', '16:30'])
-    await page.get('.quota-panel [role="radio"]:not([aria-checked="true"])').trigger('click')
+    // The panel's own switch, not a line's span, turns the readings into a table.
+    const table = page
+      .findAll('.quota-panel [role="radio"]:not([aria-checked="true"])')
+      .find((one) => one.element.closest('.step-views') === null)
+    await table?.trigger('click')
     await flushPromises()
-    const table = accountNamed(page, 'Work')
-    expect(table.find('.step-line').exists()).toBe(false)
-    expect(table.findAll('.quota-window-readings tbody tr').map((row) => row.text())).toHaveLength(
-      3,
-    )
-    expect(table.get('.quota-window-readings tbody tr').text()).toContain('the poll')
+    const readings = accountNamed(page, 'Work')
+    expect(readings.find('.step-line').exists()).toBe(false)
+    expect(
+      readings.findAll('.quota-window-readings tbody tr').map((row) => row.text()),
+    ).toHaveLength(3)
+    expect(readings.get('.quota-window-readings tbody tr').text()).toContain('the poll')
   })
 
   it('says the quota could not be read, and that an organization with no source has nothing more', async () => {

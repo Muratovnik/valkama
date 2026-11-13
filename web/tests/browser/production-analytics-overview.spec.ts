@@ -288,8 +288,8 @@ test('a single day stands as its hours beside the day before', async ({ page }, 
   const days = panel.locator('.spending-days')
   await expect(days.locator('h2')).toHaveText('Agent time per hour, by task')
   await expect(days.locator('.period-slot')).toHaveCount(24)
-  // An hour narrows to nothing further: no column is a control.
-  await expect(days.locator('button.period-column')).toHaveCount(0)
+  // The day is past, so each of its hours has begun and narrows the view to itself, as a day does.
+  await expect(days.locator('button.period-column')).toHaveCount(24)
   // The day before worked at ten, the hour this day did too.
   await expect(days.locator('.period-slot[data-key*="T10:00"] .period-before')).toHaveCount(1)
   await expect(days.locator('.period-before')).toHaveCount(1)

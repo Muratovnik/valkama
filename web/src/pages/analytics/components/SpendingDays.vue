@@ -10,16 +10,20 @@
  * read with the answer shown, and a read of the accounts that failed says the marks are not there
  * rather than leaving them out without a word.
  *
- * Each day is a control, in the chart and in its table, that narrows the view to that day alone
- * and breaks it down by task: it goes out as `day`, with the day as a custom period names it. A
+ * Each period that has begun is a control, in the chart and in its table, that narrows the view to
+ * that period alone and breaks it down by task: a day, an hour of a single day or a minute of the
+ * live hour, each going out as `step` with the reader's own period it names (`stepsSpan`). A
+ * frame along the chart (`frames`) goes out as `frame` with the span of the periods it covers, the
+ * moments they run between or their days, and leaves the breakdown as it is. A
  * value's segment, legend entry and figure in the table do what its row does (`useLineMarks`): a
  * task opens its card, a value the read can filter by goes out as `narrow`. The
  * axis names a day by its weekday, «27 Tue», and the first day it names and the first of each
  * later month by the date with its month, «Oct 27» (`stepName`, `dayTicks`); the table names each
  * in full.
  *
- * A single day stands as its hours and the live hour as its minutes, which narrow nothing further,
- * each named by its clock time. A minute after the newest record read has no data yet, which it
+ * A single day stands as its hours and the live hour as its minutes, each named by its clock time;
+ * an hour or a minute still to come has nothing to narrow to, and only shows. A minute after the
+ * newest record read has no data yet, which it
  * shows and says rather than a zero, and a note under the minutes says their figures are an
  * estimate: each stretch of work shared out by its time in each. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
@@ -36,9 +40,10 @@ import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import { stepsSpan } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { accountChanges, dayColumns, stackLines } from '@/pages/analytics/utils/dayFigures.ts'
 import type { StackLine } from '@/pages/analytics/utils/dayFigures.ts'
-import { dayOf } from '@/pages/analytics/utils/readMoments.ts'
 import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
@@ -63,18 +68,21 @@ const props = defineProps<{
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
-/** A day pressed to narrow the view to it: `2030-03-04`, and its name in full; or a value. */
+/**
+ * A period pressed to narrow the view to it, or the periods a frame covers, as the reader's own
+ * period they name and its name in full; or a value pressed.
+ */
 const emit = defineEmits<{
-  day: [day: string, label: string]
+  frame: [span: OwnPeriod, label: string]
   narrow: [value: string | null, label: string]
+  step: [span: OwnPeriod, label: string]
 }>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
 
-/** How the period is cut: by days, which narrow the view, or by hours or minutes, which do not. */
+/** How the period is cut: by days, by hours or by minutes. */
 const step = computed(() => props.usage.period.step)
-const byDay = computed(() => step.value === 'day')
 
 const title = computed(() => words.stepChartTitle(props.measure, props.by, step.value))
 
@@ -109,6 +117,34 @@ const series = computed(() =>
   })),
 )
 
+/** The steps' names in full, as a press of one says what it narrows to. */
+function spanName(first: number, last: number) {
+  const [from, to] = [props.usage.series[first], props.usage.series[last]]
+  if (!from || !to) return ''
+  if (step.value === 'day')
+    return first === last
+      ? words.fullDay(from.start)
+      : `${words.fullDay(from.start)} – ${words.fullDay(to.start)}`
+  return t('analytics.drill.clock', {
+    from: words.stepName(from.start, step.value).label,
+    to: words.stepName(to.end, step.value).label,
+  })
+}
+
+/**
+ * What pressing the period at `index` does, as its name: narrow the view to it. An hour or a
+ * minute still to come, as an hour of «Today» after the one running, has nothing yet and only
+ * shows.
+ */
+function actionOf(index: number) {
+  const start = props.usage.series[index]?.start
+  if (!start) return {}
+  if (step.value === 'day')
+    return { action: t('analytics.drill.day', { day: spanName(index, index) }) }
+  if (Date.parse(start) > props.readAt.getTime()) return {}
+  return { action: t('analytics.drill.step', { span: spanName(index, index) }) }
+}
+
 const chart = computed<PeriodChartProps>(() => ({
   label: title.value,
   series: series.value,
@@ -116,9 +152,7 @@ const chart = computed<PeriodChartProps>(() => ({
     ...column,
     ...words.stepName(column.key, step.value),
     ...beforeOf(index),
-    ...(byDay.value
-      ? { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }
-      : {}),
+    ...actionOf(index),
   })),
   formatShare: words.markShare,
   marks:
@@ -143,8 +177,21 @@ const chart = computed<PeriodChartProps>(() => ({
   valueAxis: words.axis(props.measure),
 }))
 
-function day(column: string) {
-  emit('day', dayOf(column), words.fullDay(column))
+/** The places of the periods keyed `first` and `last` in the answer's steps. */
+const placeOf = (key: string) => props.usage.series.findIndex((point) => point.start === key)
+
+/** A period pressed, in the chart or its table: the view narrowed to it. */
+function period(key: string) {
+  const at = placeOf(key)
+  const span = stepsSpan(props.usage, at, at)
+  if (span) emit('step', span, spanName(at, at))
+}
+
+/** The periods a frame covers: the page's period set to them. */
+function frame(firstKey: string, lastKey: string) {
+  const [first, last] = [placeOf(firstKey), placeOf(lastKey)]
+  const span = stepsSpan(props.usage, first, last)
+  if (span) emit('frame', span, spanName(first, last))
 }
 </script>
 
@@ -158,7 +205,9 @@ function day(column: string) {
     <template #chart>
       <PeriodColumns
         v-bind="chart"
-        @period="day"
+        frames
+        @period="period"
+        @span="frame"
         @series="marks.select"
         @follow="marks.follow"
       />
@@ -184,7 +233,7 @@ function day(column: string) {
     <template #table>
       <PeriodColumnsTable
         v-bind="chart"
-        @period="day"
+        @period="period"
         @series="marks.select"
         @follow="marks.follow"
       />

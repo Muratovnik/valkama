@@ -116,6 +116,9 @@ export const analyticsQuotaMessages = {
       top: '{share}',
       line: 'Used',
       even: 'Steady use',
+      ahead: 'To now and the forecast',
+      whole: 'Whole window',
+      views: 'Span of the readings of {window}',
     },
   },
   ru: {
@@ -222,6 +225,9 @@ export const analyticsQuotaMessages = {
       top: '{share}',
       line: 'Израсходовано',
       even: 'Ровный расход',
+      ahead: 'До сейчас и прогноз',
+      whole: 'Всё окно',
+      views: 'Отрезок показаний: {window}',
     },
   },
 } as const

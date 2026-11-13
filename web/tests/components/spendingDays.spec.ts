@@ -201,9 +201,9 @@ describe('the days', () => {
       [null, 'No task'],
       [null, 'No task'],
     ])
-    expect(days.emitted('day')).toBeUndefined()
+    expect(days.emitted('step')).toBeUndefined()
     await days.get('button.period-column').trigger('click')
-    expect(days.emitted('day')).toHaveLength(1)
+    expect(days.emitted('step')).toHaveLength(1)
   })
 
   it('mark the day not over yet as running, and only that day', () => {

@@ -32,7 +32,13 @@
  * one that fits the chart at that width never scrolls. A span wider than the chart scrolls
  * sideways inside it, the scale staying in view, opens on its first periods and fades toward an
  * edge past which periods are hidden. The plot's x scale is one share of its width per period,
- * from the field's start (`field`, `--period-count`), for what a frame drawn along it needs.
+ * from the field's start (`field`, `--period-count`).
+ *
+ * A chart that `frames` takes a span of its periods as well as one: a frame dragged along the
+ * plot with a mouse or a pen, or stretched from the period the keyboard stands on with Shift and
+ * an arrow, covers whole periods (`usePeriodFrame`), and goes out as `span` with the keys of its
+ * first and last period once the pointer or Shift lets it go. A press that does not drag stays
+ * the press of what it landed on, and Escape lets a frame go.
  */
 import { computed, ref } from 'vue'
 
@@ -64,18 +70,27 @@ import ChartTicks from '@/shared/ui/ChartTicks.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { periodHint, segmentHint, seriesHint } from '@/shared/ui/markHints.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import { FRAME_KEYS } from '@/shared/ui/useAxisFrame.ts'
 import { cellId, useChartCursor } from '@/shared/ui/useChartCursor.ts'
+import { usePeriodFrame } from '@/shared/ui/usePeriodFrame.ts'
 import { usePlotFrame } from '@/shared/ui/usePlotFrame.ts'
 
-const props = withDefaults(defineProps<PeriodChartProps>(), {
-  formatShare: undefined,
-  marks: () => [],
-})
+const props = withDefaults(
+  defineProps<
+    PeriodChartProps & {
+      /** Whether a frame along the plot takes a span of its periods (`span`). */
+      frames?: boolean
+    }
+  >(),
+  { formatShare: undefined, marks: () => [], frames: false },
+)
 
 const emit = defineEmits<{
   follow: [series: string, press: MouseEvent]
   period: [key: string]
   series: [key: string]
+  /** A span of periods framed: the keys of its first and its last, in the order of time. */
+  span: [first: string, last: string]
 }>()
 
 const axis = computed(() => props.valueAxis ?? roundAxis(props.formatValue))
@@ -139,6 +154,28 @@ const days = computed(() => {
 const segmentActs = (segment: StackSegment) => markActs(segment.series)
 const { move, standOn, tabStop } = useChartCursor(() => chart.value.columns, segmentActs, field)
 
+/** A span of periods, by their places, sent out by their keys. */
+function sendSpan(first: number, last: number) {
+  const [from, to] = [chart.value.columns[first], chart.value.columns[last]]
+  if (from && to) emit('span', from.column.key, to.column.key)
+}
+
+const { framed, release, stretch } = usePeriodFrame({
+  count: () => chart.value.columns.length,
+  done: sendSpan,
+  field,
+  frames: () => props.frames,
+  standOn,
+})
+const framedStyle = (span: { first: number; last: number }) => ({
+  gridColumn: `${span.first + 1} / ${span.last + 2}`,
+})
+
+/** A key on a period or a segment of it: a frame stretched, or a move as the chart makes one. */
+function press(event: KeyboardEvent, index: number) {
+  if (!stretch(event, index)) void move(event)
+}
+
 /** What each legend entry says in its hint: its series over the span, and its share. */
 const legendHints = computed(() => {
   const hints = new Map(
@@ -152,7 +189,6 @@ const legendHints = computed(() => {
   return hints
 })
 
-/** A period's own element: a button where it acts, else a named image the keyboard stands on. */
 /** A period that acts is a button; one that only shows is a picture of what it holds. */
 const periodTag = (one: StackedColumn) => (one.column.action ? 'button' : 'div')
 
@@ -164,6 +200,7 @@ function columnAttrs(one: StackedColumn, index: number) {
     'aria-label': one.column.action ?? columnSummary(one, props.words, props.formatValue),
     'tabindex': tabStop(index, null),
     'data-cell': cellId(index, null),
+    'aria-keyshortcuts': props.frames ? FRAME_KEYS : undefined,
   }
 }
 
@@ -293,7 +330,8 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                   v-bind="columnAttrs(one, index)"
                   @click="pressPeriod(one)"
                   @focus="(event: FocusEvent) => focus(event, index, null)"
-                  @keydown="move"
+                  @keydown="(event: KeyboardEvent) => press(event, index)"
+                  @keyup="release"
                 />
                 <span
                   class="period-stack"
@@ -313,7 +351,8 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                     @click="(event: MouseEvent) => pressSeries(segment.series, event)"
                     @auxclick="(event: MouseEvent) => pressSeriesAside(segment.series, event)"
                     @focus="(event: FocusEvent) => focus(event, index, at)"
-                    @keydown="move"
+                    @keydown="(event: KeyboardEvent) => press(event, index)"
+                    @keyup="release"
                   />
                 </span>
                 <span
@@ -328,6 +367,16 @@ function focus(event: FocusEvent, index: number, at: number | null) {
                   aria-hidden="true"
                 />
               </div>
+            </div>
+            <div
+              v-if="framed"
+              class="period-spans"
+              aria-hidden="true"
+            >
+              <span
+                class="axis-frame"
+                :style="framedStyle(framed)"
+              />
             </div>
           </div>
           <ChartTicks
@@ -344,6 +393,8 @@ function focus(event: FocusEvent, index: number, at: number | null) {
 <style scoped src="@/shared/ui/seriesFill.css"></style>
 
 <style scoped src="@/shared/ui/periodPlot.css"></style>
+
+<style scoped src="@/shared/ui/axisFrame.css"></style>
 
 <style scoped>
 .period-columns {

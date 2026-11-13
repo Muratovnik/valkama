@@ -37,7 +37,7 @@ import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/u
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useTopValues } from '@/pages/analytics/composables/useTopValues.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
-import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
+import type { OwnPeriod, PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { refusedIn } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
 
@@ -65,13 +65,14 @@ const props = defineProps<{
 }>()
 /**
  * Read the answer again; open a dimension's section; narrow the view to a value of a dimension,
- * or to a day, as pressed in a part of the overview.
+ * to a period pressed or to the periods framed in the overview's chart.
  */
 const emit = defineEmits<{
-  day: [day: string, label: string]
+  frame: [span: OwnPeriod, label: string]
   narrow: [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   open: [dimension: UsageDimension]
   retry: []
+  step: [span: OwnPeriod, label: string]
 }>()
 const measure = defineModel<Measure>('measure', { required: true })
 const { t } = useI18n()
@@ -188,7 +189,8 @@ useResizeObserver(() => (panel.value ? scroller(panel.value) : null), fit)
           :read-at="readAt"
           :usage="usage"
           brief
-          @day="(day, label) => emit('day', day, label)"
+          @frame="(span, label) => emit('frame', span, label)"
+          @step="(span, label) => emit('step', span, label)"
           @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
         />
       </div>

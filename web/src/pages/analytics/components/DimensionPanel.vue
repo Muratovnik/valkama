@@ -35,6 +35,7 @@ import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/u
 import { useSectionCaveats } from '@/pages/analytics/composables/useSectionCaveats.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
+import type { OwnPeriod } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import { valueSlots } from '@/pages/analytics/utils/dayMultiples.ts'
 import { refusedIn, tileFigures } from '@/pages/analytics/utils/panelAnswer.ts'
 import type { Refusal, ReportPart } from '@/pages/analytics/utils/panelAnswer.ts'
@@ -59,13 +60,14 @@ const props = defineProps<{
   usage: Usage
 }>()
 /**
- * Read the answer again; narrow the view to a value of the answer's dimension, or to a day, as
- * pressed in a part of the panel; cross the table with a second dimension, or with none.
+ * Read the answer again; narrow the view to a value of the answer's dimension, or to a period
+ * pressed or framed in a part of the panel; cross the table with a second dimension, or with none.
  */
 const emit = defineEmits<{
-  'day': [day: string, label: string]
+  'frame': [span: OwnPeriod, label: string]
   'narrow': [dimension: UsageDimension, value: string | null, label: string, part: ReportPart]
   'retry': []
+  'step': [span: OwnPeriod, label: string]
   'update:across': [across: UsageDimension | null]
 }>()
 const { t } = useI18n()
@@ -174,7 +176,8 @@ const showTable = () => table.value?.reveal()
           :notice="noticeIn('days')"
           :read-at="readAt"
           :usage="usage"
-          @day="(day, label) => emit('day', day, label)"
+          @frame="(span, label) => emit('frame', span, label)"
+          @step="(span, label) => emit('step', span, label)"
           @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
         />
       </PanelLevel>

@@ -177,6 +177,10 @@ for (const colorScheme of ['light', 'dark'] as const)
     await page.goto(HARNESS)
     const figure = page.locator('[data-harness="step"] .step-line')
     await figure.scrollIntoViewIfNeeded()
+    // The window is running, so it opens on its start to now and the forecast; the readings are
+    // placed here against the whole five hours.
+    await figure.getByRole('radio', { name: 'Whole window' }).click()
+    await expect(figure.locator('.step-axis span')).toHaveText(['11:00', '16:00'])
     const before = await stepLine(page)
     await testInfo.attach(`step-line-${colorScheme}`, {
       body: JSON.stringify(before, null, 2),
