@@ -135,11 +135,21 @@ answers with the full item.
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
 reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 `summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
-A search whose query is exactly a work-item reference -- `MAIN-12`, in any
-case, with surrounding spaces ignored -- answers that item first; every other
-match keeps its order, most recently changed first. A query that is a number
-alone -- `12` -- does the same for the item numbered 12: in a search scoped to
-a space that is one item, and without a space it is each space's item 12.
+A search reads its query as words: an item matches when its title, description,
+labels, source, summary, comments, decisions or questions hold every word, in
+any order and across fields, each word matched by its first five letters as a
+prefix. Words such as `the` or `and` are left out of a query that has others.
+The best match comes first, the title weighing three times the rest, and a tie
+goes to the most recently changed item. `comment_hit`, `question_hit` and
+`summary_hit` then name the newest comment, decision or question holding every
+word, and whether the summary does. A search whose query is exactly a work-item
+reference -- `MAIN-12`, in any case, with surrounding spaces ignored -- is read
+as one phrase, as every query was before words: it answers that item first, and
+every other match keeps its order, most recently changed first. A query that is
+a number alone -- `12` -- does the same for the item numbered 12: in a search
+scoped to a space that is one item, and without a space it is each space's item
+12. A store whose word index cannot be read -- a SQLite without FTS5, or an
+attached store an earlier build wrote -- reads every query as one phrase.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with

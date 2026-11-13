@@ -31,9 +31,14 @@ splitting one, or handing items to other agents.
    `list_planning_spaces` and pick the one whose project is the repository you
    work in. A space is named by its key (`MAIN`), its name or its id.
 2. **Find the item before filing one.** `search_work_items` with the words of
-   the change; a query that is exactly a reference (`MAIN-12`), or a number
-   alone (`12`) with `space`, answers that item first. `list_work_items` filters by `state`, `category`, `kind`,
-   `parent` and `owner`. Claim the item that already covers the work.
+   the change: an item matches when it holds every word, in any order and any
+   field, each word matched by its first five letters, so `searching` finds
+   `search`; the best match comes first. Ask with two or three telling words
+   rather than a sentence, since every word must be there. A query that is
+   exactly a reference (`MAIN-12`), or a number alone (`12`) with `space`, is
+   read as one phrase and answers that item first. `list_work_items` filters by
+   `state`, `category`, `kind`, `parent` and `owner`. Claim the item that
+   already covers the work.
 3. **File it only when none does.** `create_work_item` with `space`, `title`
    and a `description` that is the brief: goal, context, constraints, the
    "done when" and its verify command. A plan in the repository is referenced

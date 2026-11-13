@@ -21,6 +21,7 @@ from unittest import mock
 
 from server import store, store_backups
 from tests import schema9, schema10
+from tests.test_word_index_migration import WORD_TABLES
 
 ADDED_TABLES = {"usage_runs", "usage_segments", "usage_requests"}
 #: Schema 12's to 17's: the chain runs on to this build's own schema in the same open.
@@ -35,6 +36,8 @@ LATER_TABLES = {
     "quota_samples",
     "quota_alerts",
     "quota_settings",
+    # The word index, which raises no schema.
+    *WORD_TABLES,
 }
 LATER_COLUMNS = {"work_item_requests": {"comment_id"}, "work_item_comments": {"awaits_reply"}}
 ADDED_INDEXES = {

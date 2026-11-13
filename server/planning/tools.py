@@ -483,13 +483,16 @@ TOOLS = [
     _tool(
         "search_work_items",
         "Search work items",
-        "Match a phrase against titles, descriptions and closing summaries. A query that"
-        " is exactly a reference, such as MAIN-12 in any case, answers that item first;"
-        " a number alone, such as 12, answers the item of that number first in each space."
-        " Comments and questions count too, a question's prompt, field and option text and"
-        " its answer and note."
-        " One compact row per item, with the matching comment line or question when that is"
-        " what matched."
+        "Find the items holding every word of the query, in any order and in any of their"
+        " title, description, labels, summary, comments and questions (a question's prompt,"
+        " field and option text and its answer and note), best match first, the title"
+        " weighing most. Each word matches by its first five letters, so searching finds"
+        " search; two or three telling words find more than a sentence. A query that is"
+        " exactly a reference, such as MAIN-12 in any case, is read as one phrase and"
+        " answers that item first; a number alone, such as 12, answers the item of that"
+        " number first in each space."
+        " One compact row per item, with the comment line or question holding the words"
+        " when that is where they are."
         f" A page holds at most {service.MAX_SEARCH_PAGE} items." + _PAGING,
         READ_ONLY,
         {

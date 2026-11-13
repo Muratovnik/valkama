@@ -30,6 +30,7 @@ from server.planning import service as planning
 from server.planning import store as planning_store
 from server.platform import migrations
 from tests import schema9
+from tests.test_word_index_migration import WORD_TABLES
 
 #: Columns the step appends, by table.
 ADDED_COLUMNS = {
@@ -103,6 +104,8 @@ SCHEMA10_TABLES = {
     "quota_samples",
     "quota_alerts",
     "quota_settings",
+    # The word index, which raises no schema.
+    *WORD_TABLES,
 }
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",

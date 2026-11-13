@@ -32,6 +32,7 @@ from .ops import configuration
 from .planning import images as planning_images
 from .planning import migration as planning_migration
 from .planning import store as planning_store
+from .planning import words as planning_words
 from .platform import core as platform_core
 from .platform import migrations as platform_migrations
 from .platform import relations as platform_relations
@@ -899,6 +900,16 @@ def connect() -> sqlite3.Connection:
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preidentity", locate=backup_location
                 )
+            # The word index adds tables and triggers and changes no row, so it takes
+            # its own recovery point only when nothing above took one for this open.
+            if (
+                source_identity is None
+                and pretable_backup is None
+                and planning_words.migration_needed(conn)
+            ):
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "prewords", locate=backup_location
+                )
 
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
@@ -956,6 +967,8 @@ def connect() -> sqlite3.Connection:
             _migrate_session_place(conn)
             # Schema 16: the usage columns, and one row per request in the whole store.
             usage_store.migrate(conn)
+            # The word index, after every step that adds a column its triggers name.
+            planning_words.migrate(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)
