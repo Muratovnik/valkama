@@ -196,7 +196,7 @@ def _lifecycle(client: str, event: str, payload: dict | None) -> None:
     )
     if record is None:
         return
-    # Only here: the identity transform and the notice must not load the store.
+    # Only here: the call pair and the notice must not load the store.
     from .. import store
     from . import ingest
 

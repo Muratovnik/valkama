@@ -27,10 +27,10 @@ store, and an internal error:
 - **Exit status 0.** A hook never fails or blocks its client because of
   Valkama. The one exception is deliberate: `claude watch` exits 2 to wake its
   session (see [the watcher](#the-watcher)).
-- **Stdout carries one JSON answer or nothing.** The answers are the identity
-  output of `claude pre-tool-use` and a notice from `post-tool-use`,
-  `user-prompt-submit` or `stop` (see
-  [Telling the agent what a person did](#telling-the-agent-what-a-person-did)).
+- **Stdout carries one JSON answer or nothing.** The one answer is a notice from
+  `post-tool-use`, `user-prompt-submit` or `stop` (see
+  [Telling the agent what a person did](#telling-the-agent-what-a-person-did));
+  `claude pre-tool-use` prints nothing (see [the call pair](#the-call-pair)).
   Claude Code adds `SessionStart` stdout to the model's context, and Codex reads
   stdout of `Stop` and `SubagentStop` as JSON, so a stray line there changes the
   session. Diagnostics go to stderr, as UTF-8.
@@ -48,7 +48,7 @@ store, and an internal error:
 | `pre-compact` | `PreCompact` | `compact` | yes | yes |
 | `notification` | `Notification` | `attention` | yes | no such hook |
 | `post-tool-use` | `PostToolUse` | `agent_launch`, for the Agent tool only | yes | nothing recorded |
-| `pre-tool-use` | `PreToolUse` | nothing: the identity transform | yes | not needed |
+| `pre-tool-use` | `PreToolUse` | nothing in the store: [the call pair](#the-call-pair) | yes | not needed |
 | `watch` | `UserPromptSubmit` and `Stop`, with `asyncRewake` | nothing: [the watcher](#the-watcher) | yes | no such mechanism |
 
 `post-tool-use`, `user-prompt-submit` and `stop` may also answer with a notice;
@@ -304,63 +304,101 @@ characters cut and given a hash), and then `opened_folder` and `cwd`. So a row
 written before the exceptions above heals without a migration.
 
 **Tool calls.** A client can resume a session without `SessionStart`. For
-Claude Code, the identity transform reads the same variables, never the process
-snapshot, and adds `"place": "<opened_in>"` to `_identity` when it is known. A
-confirmed call whose `place` differs from the row's changes `opened_in` and
-nothing else: the variables tell how a session is open, not in which product. A
-`place` outside the values above is ignored, and the call stays confirmed. A
-server that predates places ignores the key. Codex has no transform, and its
-sessions are placed by `SessionStart` alone.
+Claude Code, the call pair reads the same variables, never the process
+snapshot, and carries `"place": "<opened_in>"` when it is known, as `_identity`
+did before it. A confirmed call whose `place` differs from the row's changes
+`opened_in` and nothing else: the variables tell how a session is open, not in
+which product. A `place` outside the values above is ignored, and the call stays
+confirmed. A server that predates places ignores the key. Codex has no call
+pair, and its sessions are placed by `SessionStart` alone.
 
 **The spool.** A line that carries a place is version 2 and has the three
 fields; only a session start has them. Every other line is version 1, the shape
 a build that predates places reads, and this build reads both. Such a build
 sets a version 2 line aside as `*.rejected`.
 
-## The identity transform
+## The call pair
 
-`valkama hook claude pre-tool-use` is a pure stdin-to-stdout transform for
-Claude Code's `PreToolUse` hook on Valkama's MCP tools (`mcp__valkama__*`). It
-never opens the store and never spools, because it runs on every Valkama tool
-call. For an MCP tool call it prints:
+`valkama hook claude pre-tool-use` runs as Claude Code's `PreToolUse` hook on
+Valkama's MCP tools (`mcp__valkama__*`). It tells the server which session makes
+each call, and it leaves the call alone: it prints nothing, so there is no
+`updatedInput` and no `permissionDecision`, and auto mode reviews the response
+as the model wrote it. It never opens the store and never spools, because it
+runs on every Valkama tool call, reads included.
+
+**What it leaves.** For each call it writes one file, `calls/<tool_use_id>.json`
+beside the store (so it follows `VALKAMA_DB` the way the spool does), through a
+temporary name and a rename, so the server never reads half of one:
 
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "updatedInput": {
-      "...": "the call's original arguments, unchanged",
-      "_identity": {
-        "session_id": "<session_id>",
-        "tool_use_id": "<tool_use_id>",
-        "agent_id": "<agent_id, inside a subagent>",
-        "agent_type": "<agent_type, when reported>"
-      }
-    }
-  }
-}
+{"session_id": "<session_id>", "tool_use_id": "<tool_use_id>",
+ "agent_id": "<agent_id, inside a subagent>", "agent_type": "<agent_type, when reported>",
+ "place": "<opened_in, when known>"}
 ```
 
-`updatedInput` replaces the whole input, so it carries every original argument.
-An `_identity` that the model wrote itself is replaced. The output has no
-`permissionDecision`: changing the input does not need one, and `allow` would
-skip the prompt for a tool no rule covers. In Claude Code 2.1.318 a deny or ask
-rule still applies over a hook's `allow`, and `allow` does not keep auto mode's
-review of a call that runs after the changed one in the same response: a live
-probe refused that call the same way with and without it.
+The values come from the hook input; the call's arguments are never read. The
+hook creates only `calls/`, and only in a store directory that exists, for the
+reason given under [the spool](#otherwise-into-the-spool). It leaves nothing for
+input that is not a JSON object, a tool that is not an MCP tool, a missing
+`session_id` or `tool_use_id`, a `tool_use_id` that is not 1 to 128 letters,
+digits, `_` or `-`, or a store protected in this environment; the call then
+proceeds and is recorded as unconfirmed.
 
-The argument is meant for a server that removes `_identity` before it validates
-arguments and checks `tool_use_id` against the call's own metadata. A server
-that does not refuses the call with an unknown-argument error, so register this
-hook only together with such a server.
+**How the server reads it.** Claude Code repeats the call's `tool_use_id` in the
+call's `params._meta["claudecode/toolUseId"]`. The server reads the file of that
+id before it handles the call, deletes it, and confirms the session and agent
+the pair names (`claude-pair`). A pair counts only for the call whose id it
+carries, so two Valkama calls of one response each find their own, and a model,
+which cannot know the id of the call it is about to make, cannot leave one. The
+server's environment is never read for this: after `--continue` it names the
+startup session, and the pair names the session the hooks see.
 
-The transform prints nothing for anything it cannot use: input that is not a
-JSON object, a tool that is not an MCP tool, arguments that are not an object, or
-a missing `session_id` or `tool_use_id`. The call then proceeds and is recorded
-as unconfirmed.
+**Why a file and not the store.** A row would make the hook wait for another
+writer and spool when the store is busy, and a spooled pair would arrive after
+the call it names. A row would also move `PRAGMA data_version` on every read,
+waking every watcher and stream. There is no race to wait out either: Claude
+Code sends the call only after the hook has exited, and the rename makes the
+pair visible before that. A pair that is not there when its call arrives is not
+coming, so the server does not wait for one.
 
-Codex needs no transform. It sends the session and thread in the `_meta` of
-every MCP call.
+**Pruning.** A pair is deleted when its call takes it. A pair no call took,
+because the call was refused, interrupted or arrived without the key, is
+deleted by the first server that looks once it is an hour old; each server
+looks when it handles its first call and then at most every ten minutes.
+`valkama doctor` counts the pairs older than a minute that are still there.
+
+**When there is no pair.** The call is verified as calls were before the pair,
+and its row records which way it went, as the
+[call identity](connection-contract.md#call-identity) table lists:
+
+- an `_identity` argument, which the hook of an earlier release added to the
+  call's input, is verified against `claudecode/toolUseId`, so a session that
+  still runs that hook keeps its confirmation until it restarts;
+- with no `_identity` either, the call is unconfirmed: `claude-no-pair` when
+  the client sent `claudecode/toolUseId`, `mcp` when it did not.
+
+`valkama doctor` warns when an agent write of the last day found no confirmed
+session and names the way it went, so a client that stops sending the key, which
+Claude Code does not document, shows up there.
+
+An earlier release returned `updatedInput` with `_identity` added to every
+Valkama call. In Claude Code 2.1.322 in auto mode, a call that needs the
+classifier's review and shares a response with a call whose input a hook
+rewrote gets no verdict ("another call in this response was changed by a
+hook"). In a probe a PowerShell call beside a rewritten MCP call was refused in
+three runs of three; with a hook that only left the pair, both ran in three of
+three, and so did two MCP calls with PowerShell beside them. In each case the
+server received `claudecode/toolUseId` equal to the hook's `tool_use_id`,
+inside a subagent and after `--continue` too, and the pair was written 22 to
+42 ms before the call arrived.
+
+### What identifies a Codex call
+
+A Codex call is identified by its own `_meta`, as it was before the call pair:
+`sessionId` is the session, `threadId` the agent when it differs from
+`sessionId`, and `callId` the tool use id (`codex-meta`). No Codex hook writes a
+pair or changes a call, `valkama hook codex pre-tool-use` records nothing, and
+the server never looks up a pair for a call that carries `sessionId`.
 
 ## Telling the agent what a person did
 
@@ -386,7 +424,7 @@ The work of a session is what it holds: the claim of an item and the steps on
 its checklist, held by the session or by one of its agents. A holder is read
 from the store, never from who signed a write. Only a claim made by a call that
 proved its session holds as that session, so Claude Code needs
-[the identity transform](#the-identity-transform) registered: without it its
+[the call pair](#the-call-pair) registered: without it its
 claims are held by a name, and no hook of that session is ever told anything.
 Codex proves its session in every call.
 
@@ -1433,7 +1471,9 @@ empty conversation.
 
 | Detail | Read by | When it stops answering |
 | --- | --- | --- |
-| `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_HOST_SESSION_ID`, `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` | a session start and the identity transform ([Where a session is open](#where-a-session-is-open)) | the session is not placed and opens in the fallback place |
+| `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_HOST_SESSION_ID`, `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` | a session start and the call pair ([Where a session is open](#where-a-session-is-open)) | the session is not placed and opens in the fallback place |
+| `tool_use_id` in Claude Code's `PreToolUse` input, and the same id in a call's `_meta["claudecode/toolUseId"]` | [the call pair](#the-call-pair) | the call is unconfirmed (`claude-no-pair` or `mcp`) and its claims hold by author; `doctor` warns |
+| `sessionId`, `threadId` and `callId` in a Codex call's `_meta` | [the call identity](connection-contract.md#call-identity) | the call is unconfirmed (`mcp`); `doctor` warns |
 | The executable names above the hook: `Code.exe` and its forks, a JetBrains `…64.exe`, `WindowsTerminal.exe`, `OpenConsole.exe`, `ChatGPT.exe` | a session start on Windows | the IDE is taken for VS Code, and a Codex app session is not placed |
 | The last `entrypoint` in a Claude Code transcript, and `payload.originator` on the first line of a Codex rollout | the open plan, for a session recorded before places were | the session is not placed |
 | The mod API, which Claude Code calls early access: the events `session.start`, `session.measure` and `turn.complete`, `$.session.usage().rateLimits`, `$.fs.read` and `$.process.run` | [the mod](#the-mod) | the mod hands nothing over, and `doctor` calls the `mod` source silent; `claude plugin test server/mod/valkama-quota` shows which call moved |

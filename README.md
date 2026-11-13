@@ -948,7 +948,9 @@ The events are `session-start`, `session-end`, `subagent-start`,
 clients, plus `notification` and `post-tool-use` for Claude Code. Each one updates
 the session row that `GET /api/session` and work-item context read.
 `claude post-tool-use` names the agent an Agent tool call started. `claude
-pre-tool-use` adds the session identity to a Valkama tool call. `session-start`
+pre-tool-use` leaves, beside the store, the pair that tells the server which
+session and agent make a Valkama tool call; it prints nothing and leaves the call
+as it is ([details](docs/hook-contract.md#the-call-pair)). `session-start`
 also records where the session is open — an IDE extension, its terminal, a
 terminal, Claude Desktop or the Codex app — from a few named environment
 variables and, on Windows, the names of the programs above the hook, which is

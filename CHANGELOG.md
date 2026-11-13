@@ -34,6 +34,18 @@ checkouts are therefore distinguishable even at the same version.
   «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
   card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
   own will, so nothing moves when the card arrives.
+- **Valkama's Claude Code hook leaves each Valkama call as the model wrote it.** The
+  `PreToolUse` hook no longer adds an `_identity` argument to the call: it prints nothing
+  and leaves a small file named by the call's id in `calls/` beside the store, and the
+  server reads the session and the agent from that file, so a call is confirmed as before,
+  with the source `claude-pair`. A call that finds no such file is recorded as
+  `claude-no-pair` when Claude Code sent the call's id and as `mcp` when it did not. An
+  `_identity` from the earlier hook is still verified when no file is found. A Valkama
+  server process without the stdio front that started before the update reads only
+  `_identity`, so the calls of its session are unconfirmed until that session restarts.
+  `valkama doctor` now warns when an agent write of the last day found no confirmed
+  session, names the way each such write went and what to do about it, and counts the
+  files no call took. See [the hook contract](docs/hook-contract.md#the-call-pair).
 
 ### Added
 
@@ -57,6 +69,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **In Claude Code's auto mode a Valkama call no longer makes the calls beside it fail.**
+  A Bash, PowerShell, other MCP or Agent call sent in the same response as a Valkama call
+  used to get no verdict and fail with "another call in this response was changed by a
+  hook", and had to be sent again; it now gets auto mode's review like any other call.
+  The skill no longer asks for Valkama calls in a response of their own, and says what to
+  do when that failure still shows up because an older release is installed.
 - **The Analytics bar no longer runs past its end beside a span of your own days.** In a
   window from about 1108 to 1300px beside the navigation, the bar's one line with every
   word and gap given up still ran «Refresh» up to 188px past its end, and pressing it
