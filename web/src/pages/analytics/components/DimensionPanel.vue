@@ -13,6 +13,9 @@
  * with its own hue in the fixed order of their rank over every pair of the read, the tail past the
  * hues in the neutral of «other». While the pairs are first read the charts keep the values.
  *
+ * The hues are ranked over the period without the page's filters (`useColourPlaces`), the values'
+ * and the pairs' alike, so a filter that takes some away leaves the rest the hues they had.
+ *
  * It runs in the panel's one scroll: the figures, the charts at their own height and the table at
  * its full height under them, nothing scrolling up and down on its own. A «To the table» line over
  * the charts, like the line under the ranked list that counts the values it leaves out, brings the
@@ -35,6 +38,7 @@ import SpendingTable from '@/pages/analytics/components/SpendingTable.vue'
 import SpendingTableLink from '@/pages/analytics/components/SpendingTableLink.vue'
 import SpendingTiles from '@/pages/analytics/components/SpendingTiles.vue'
 import SpendingUnread from '@/pages/analytics/components/SpendingUnread.vue'
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useCrossRead } from '@/pages/analytics/composables/useCrossRead.ts'
 import { useNarrowCharts } from '@/pages/analytics/composables/useNarrowCharts.ts'
 import { useAnewDimmed, usePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
@@ -100,8 +104,14 @@ const cross = useCrossRead({
   filters: () => props.filters,
 })
 
+const places = useColourPlaces()
 const slots = computed(() =>
-  valueSlots({ usage: props.usage, by: by.value, measure: measure.value }),
+  valueSlots({
+    usage: props.usage,
+    by: by.value,
+    measure: measure.value,
+    places: places.rows(by.value),
+  }),
 )
 
 /** The answer by both dimensions on show, once there is one for the split chosen. */
@@ -123,6 +133,7 @@ const ranked = computed(() =>
           by: by.value,
           measure: measure.value,
           across: across.value,
+          places: places.rows(by.value, across.value),
         }),
       }
     : { usage: props.usage, across: null, slots: slots.value },

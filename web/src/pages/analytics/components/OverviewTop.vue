@@ -5,7 +5,8 @@
  * work nobody can place are ranked by their figure among the values, since they can be most of
  * the period: their bar is the neutral, their name in the quiet ink, and they lead nowhere. The
  * folded tail is no answer to «which ones», and the dimension's own section lists it. A value's
- * bar is in its hue of the page (`rankedSlots`), the one its tile and charts draw it in.
+ * bar is in its hue of the page (`rankedSlots`, over the period without the page's filters,
+ * `useColourPlaces`), the one its tile and charts draw it in.
  *
  * The heading opens that section. A row acts as a bar of the breakdown does (`useRankedLines`):
  * a task is a link to its card, a value the read can filter by narrows the view to it, sent out
@@ -15,6 +16,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useOverviewWords } from '@/pages/analytics/composables/useOverviewWords.ts'
 import type { OverviewCard } from '@/pages/analytics/composables/useOverviewWords.ts'
 import { useHeadingUnder } from '@/pages/analytics/composables/usePanelOutline.ts'
@@ -73,8 +75,11 @@ const lines = computed(() =>
         .slice(0, FIRST)
     : [],
 )
+const places = useColourPlaces()
 const slots = computed(() =>
-  values.value ? rankedSlots(values.value, props.dimension, props.measure) : new Map(),
+  values.value
+    ? rankedSlots(places.rows(props.dimension) ?? values.value, props.dimension, props.measure)
+    : new Map(),
 )
 const { rows, follow, select } = useRankedLines({
   by: () => props.dimension,

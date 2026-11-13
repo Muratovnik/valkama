@@ -21,6 +21,13 @@ checkouts are therefore distinguishable even at the same version.
   the small charts and the day columns of an Analytics section now show the same pairs as its
   ranked bars and its table, «claude-opus-5-5 · high», named the same way and each in one hue
   across the three charts, where they used to stay by the section's own values.
+- **A filter on the Analytics page repaints nothing it leaves.** A value's colour, or a pair's,
+  is now its place in the period's ranking without the page's filters, so a filter that takes
+  the largest value away leaves every other value the colour it had in its tile, its bar, its
+  small chart and the day columns, where each used to move up a hue. Another measure may still
+  repaint. This asks the server nothing more while no filter is set or when one is set after
+  the page was read without it; with a filter set, each refresh asks the period once more
+  without it for each dimension the page shows.
 - **The first launch opens on the shell itself.** The desktop window used to show a small
   line of text on a black ground and then cut to the whole shell. It now draws the shell's
   chrome from its first frame — the rail with the mark and its first entries, the context

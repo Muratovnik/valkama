@@ -11,6 +11,7 @@
  */
 import { onScopeDispose, ref, watch } from 'vue'
 
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
@@ -28,6 +29,7 @@ export function useTopValues(options: {
   usage: () => Usage
 }) {
   const shared = useSharedUsage()
+  const places = useColourPlaces()
   const reads = ref<Partial<Record<UsageDimension, TopRead>>>({})
   let reading: AbortController | null = null
 
@@ -38,18 +40,21 @@ export function useTopValues(options: {
   ) {
     const held = reads.value[dimension]
     if (!Array.isArray(held)) reads.value[dimension] = 'loading'
+    const filters = options.filters()
     try {
       const answer = await shared.read(
         {
           ...asked.period,
           groupBy: [dimension],
-          filters: options.filters(),
+          filters,
           compare: false,
           step: asked.usage.period.step,
         },
         signal,
       )
-      if (!signal.aborted) reads.value[dimension] = answer.rows
+      if (signal.aborted) return
+      places.take([dimension], answer, filters)
+      reads.value[dimension] = answer.rows
     } catch {
       if (!signal.aborted) reads.value[dimension] = 'failed'
     }

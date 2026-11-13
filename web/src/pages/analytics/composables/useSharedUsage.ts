@@ -22,7 +22,11 @@ import type { InjectionKey } from 'vue'
 
 import type { AnalyticsView } from '@/shared/api/analyticsAddress.ts'
 import { fetchUsage, usageParameters } from '@/shared/api/analyticsApi.ts'
-import type { Usage, UsageQuery } from '@/shared/api/analyticsApi.ts'
+import type { Usage, UsageFilters, UsageQuery } from '@/shared/api/analyticsApi.ts'
+
+/** The filter of a scope alone: its project, or nothing at the top. */
+export const scopeFilters = (projectId: string | null): UsageFilters =>
+  projectId ? { project: [projectId] } : {}
 
 export interface SharedUsage {
   /** The moment the view on show is read as of: the one its first read took. */

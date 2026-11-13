@@ -20,8 +20,10 @@
  */
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 
+import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { beforeStepsQuery } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { providePanelStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 import type { PeriodBounds } from '@/pages/analytics/utils/analyticsPeriod.ts'
@@ -124,6 +126,8 @@ function compared(usage: Usage, before: Usage | null | undefined): Usage {
 }
 
 export function useUsageRead(options: {
+  /** The page's colour keys, which take in each answer of the period as it lands. */
+  places: ColourPlaces
   shared: SharedUsage
   /** The project the page is scoped to, which every read is filtered to; null at the top. */
   projectId: () => string | null
@@ -151,10 +155,7 @@ export function useUsageRead(options: {
   providePanelStanding({ anew, failed: refreshFailed })
 
   /** The scope's own filter: its project, or nothing at the top. */
-  const scope = computed<UsageFilters>(() => {
-    const project = options.projectId()
-    return project ? { project: [project] } : {}
-  })
+  const scope = computed<UsageFilters>(() => scopeFilters(options.projectId()))
 
   /** The filters the reads carry: the page's, and the scope's project over its own. */
   const filters = computed<UsageFilters>(() => ({ ...options.view().filters, ...scope.value }))
@@ -268,6 +269,7 @@ export function useUsageRead(options: {
       return
     }
     if (signal.aborted) return
+    options.places.take([by], usage, askedWith)
     const answer = {
       at,
       compared: comparedBounds(usage, period, before),
@@ -352,7 +354,9 @@ export function useUsageRead(options: {
             { ...period, groupBy: [dimension], filters: scope.value, compare: false },
             signal,
           )
-          if (!signal.aborted) filterValues.value[dimension] = usage.rows
+          if (signal.aborted) return
+          filterValues.value[dimension] = usage.rows
+          options.places.take([dimension], usage, scope.value)
         } catch {
           if (!signal.aborted) filterValues.value[dimension] = 'failed'
         }

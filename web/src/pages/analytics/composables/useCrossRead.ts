@@ -15,6 +15,7 @@
  */
 import { onScopeDispose, shallowRef, watch } from 'vue'
 
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useSharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 
 import { pageDimensionOf } from '@/shared/api/analyticsApi.ts'
@@ -36,6 +37,7 @@ export function useCrossRead(options: {
   usage: () => Usage
 }) {
   const shared = useSharedUsage()
+  const places = useColourPlaces()
   const state = shallowRef<CrossRead>({ status: 'off' })
   let reading: AbortController | null = null
 
@@ -58,6 +60,7 @@ export function useCrossRead(options: {
       usage: 'usage' in shown && shown.usage && pairOf(shown.usage) === pair ? shown.usage : null,
     }
     const { utc_offset: utcOffset, step } = usage.period
+    const filters = options.filters()
     const ask = ({ from, to }: { from: string; to: string }) =>
       shared.read(
         {
@@ -66,7 +69,7 @@ export function useCrossRead(options: {
           utcOffset,
           step,
           groupBy: [by, across],
-          filters: options.filters(),
+          filters,
           compare: false,
         },
         controller.signal,
@@ -83,7 +86,9 @@ export function useCrossRead(options: {
           ? { period: comparison?.period ?? before.period, total: before.total, rows: before.rows }
           : null,
       }
-      if (!controller.signal.aborted) state.value = { status: 'ready', usage: crossed }
+      if (controller.signal.aborted) return
+      places.take([by, across], now, filters)
+      state.value = { status: 'ready', usage: crossed }
     } catch {
       if (!controller.signal.aborted) state.value = { status: 'failed' }
     }

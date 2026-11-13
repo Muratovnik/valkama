@@ -40,6 +40,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import { useColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
@@ -110,7 +111,11 @@ function seriesName(line: StackLine['line']) {
   return reference ?? words.lineLabel(props.by, line)
 }
 
-const stacked = computed(() => stackLines(props))
+/** The page's colour keys, which the stack's hues are ranked over (`useColourPlaces`). */
+const places = useColourPlaces()
+const stacked = computed(() =>
+  stackLines({ ...props, places: places.rows(props.by, props.across) }),
+)
 const marks = useLineMarks({
   by: () => props.by,
   lines: () => stacked.value.flatMap((one) => (one.line ? [one.line] : [])),

@@ -19,7 +19,9 @@
  */
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
+import type { ColourPlaces } from '@/pages/analytics/composables/useColourPlaces.ts'
 import { provideRailStanding } from '@/pages/analytics/composables/useReadStanding.ts'
+import { scopeFilters } from '@/pages/analytics/composables/useSharedUsage.ts'
 import type { SharedUsage } from '@/pages/analytics/composables/useSharedUsage.ts'
 import { periodBounds, stepOf } from '@/pages/analytics/utils/analyticsPeriod.ts'
 
@@ -37,6 +39,8 @@ export type RailRead =
   | { refreshing: boolean; status: 'ready'; usage: Usage }
 
 export function useRailReads(options: {
+  /** The page's colour keys, which take in each tile's answer as it lands. */
+  places: ColourPlaces
   shared: SharedUsage
   /** The dimensions of the rail, a read each. */
   dimensions: () => readonly UsageDimension[]
@@ -57,10 +61,10 @@ export function useRailReads(options: {
   let shownFor: Partial<Record<UsageDimension, string>> = {}
 
   /** The filters the reads carry: the page's, and the scope's project over its own. */
-  const filters = computed<UsageFilters>(() => {
-    const project = options.projectId()
-    return { ...options.view().filters, ...(project ? { project: [project] } : {}) }
-  })
+  const filters = computed<UsageFilters>(() => ({
+    ...options.view().filters,
+    ...scopeFilters(options.projectId()),
+  }))
 
   const asked = computed(() => {
     const { period, from, to } = options.view()
@@ -119,6 +123,7 @@ export function useRailReads(options: {
             signal,
           )
           if (signal.aborted) return
+          options.places.take([dimension], usage, asking)
           shownFor[dimension] = key
           settle(dimension, { status: 'ready', usage, refreshing: false })
         } catch {
