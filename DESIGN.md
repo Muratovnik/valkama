@@ -1441,9 +1441,31 @@ wide as all the rows need wherever it scrolls; a sort and a filter act on every
 row; ↑/↓, Home/End and Page Up/Page Down move by a row's place in the whole list
 and bring the row into view; the Tab stop and the row focus is in stay in the
 page wherever the list scrolls; the table tells a reader how many rows it has
-and each row where it stands; and a printed list prints every row. The cost, for
-now: on a list that long, find in page and a screen reader's browse mode reach
-only the rows in the page.
+and each row where it stands; a printed list prints every row; and Ctrl+F finds
+in every row, as the next rule says. The cost, for now: on a list that long, a
+screen reader's browse mode reaches only the rows in the page.
+The list has a find of its own, because the browser's reached only the rows in
+the page. While the list is what the page shows, with no card, dialog or finder
+over it, Ctrl+F (⌘F) opens the list's bar in place of the browser's; over a card
+and on every other screen Ctrl+F stays the browser's. The bar floats over the
+list's top end corner under the sticky head and clear of the scroll bar, so the
+sorts stay in reach and opening it moves nothing; it is a named search landmark,
+and its count, «3 of 12» or «No matches», is a polite status that describes the
+field and is as wide as its widest form, so a step moves no button. The find
+reads the words each row prints, at the list's width and in its language, and
+nothing a reader does not see: a priority folded to its glyph is not found by its
+word. Case does not count, nor white space beyond one space; «ё» is «е», a Latin
+letter is itself without its marks and a stress over a Cyrillic vowel does not
+count, but a letter a mark makes stays itself, «й» apart from «и»; no match spans
+two cells. Enter and Shift+Enter, F3 and Shift+F3 walk the matches in the list's
+order, round past either end, and a match out of sight comes to the middle of the
+room under the head, not to its edge. The drawn matches are marked through the CSS
+Custom Highlight API: every match keeps its ink on a quarter of the find's yellow,
+the current one is the whole yellow with dark ink, and a forced palette draws them
+in Mark and Highlight. The count and the current match follow the stream, a filter
+and an order: the current match stays on its row while the row still matches, and
+only the reader's own step moves the list. Escape closes the bar and gives focus
+back to where it was, without scrolling the list back to it.
 A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
 row leads its reference with the kind (but a task) in one fixed glyph slot, so
