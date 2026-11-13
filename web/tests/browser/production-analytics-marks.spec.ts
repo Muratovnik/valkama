@@ -8,7 +8,7 @@
  * run prints what it measured.
  */
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -98,7 +98,7 @@ test('a segment, a ranked row and a day the keyboard stands on each say themselv
     expect(now, `moved under ${name}`).toEqual(still)
 })
 
-test('with no line over the plot, the drawing field at 1440×900 is at least as tall as it was', async ({
+test('with no line over the plot, the drawing field at 1440×900 takes the room the panel leaves', async ({
   page,
 }, info) => {
   await serve(page, WORLD)
@@ -106,12 +106,18 @@ test('with no line over the plot, the drawing field at 1440×900 is at least as 
   const field = (selector: string) =>
     page.locator(selector).evaluate((element) => element.getBoundingClientRect().height)
   const overview = await field('.overview-chart .period-field')
+  const overviewScroll = await page
+    .locator('.analytics-panel')
+    .evaluate((panel) => panel.scrollHeight - panel.clientHeight)
   await openReport(page, 1440, pageAt({ by: 'work_item' }))
   await page.setViewportSize({ width: 1440, height: 900 })
   const section = await field('.spending-days .period-field')
-  await record(info, 'analytics field heights', { overview, section })
-  // The heights the field had while a line of words stood over the plot, with this same world.
-  expect(overview).toBeGreaterThanOrEqual(225)
+  await record(info, 'analytics field heights', { overview, overviewScroll, section })
+  // The overview's field fills what the panel leaves under the cards, never under its floor, so
+  // the room a line over the plot took goes to the field and the panel does not scroll.
+  expect(overview).toBeGreaterThanOrEqual(200)
+  expect(overviewScroll).toBeLessThanOrEqual(1)
+  // The section's field: the height it had while a line of words stood over the plot.
   expect(section).toBeGreaterThanOrEqual(160)
 })
 
@@ -127,8 +133,8 @@ const HELD_WORLD: TimedStretch[] = [
 /** A period other than the page's own default, so that keeping it says something. */
 const VIEW = { by: 'work_item', period: 'weeks4' }
 
-/** What the page shows of its view: the section the rail marks, the period chosen, the scrolls. */
-async function viewShown(page: Page, charts: Locator) {
+/** What the page shows of its view: the section the rail marks, the period chosen, the scroll. */
+async function viewShown(page: Page) {
   const section = page.locator('.analytics-rail [aria-current="page"] .analytics-rail-name')
   const period = page.getByRole('radiogroup', { name: 'Period' }).getByRole('radio', {
     checked: true,
@@ -137,7 +143,6 @@ async function viewShown(page: Page, charts: Locator) {
     section: await section.evaluate((node) => node.textContent?.trim()),
     period: await period.evaluate((node) => node.textContent?.trim()),
     panel: await page.locator('.analytics-panel').evaluate((panel) => panel.scrollTop),
-    charts: await charts.evaluate((element) => element.scrollTop),
   }
 }
 
@@ -153,9 +158,9 @@ test('a task’s segment opens its card over the page, which closes back to the 
   await expect(days).toHaveAttribute('data-shown', 'chart')
   const segment = days.locator('a.period-segment[href="/open/MAIN-264"]').last()
   await segment.scrollIntoViewIfNeeded()
-  const charts = analytics.locator('.dimension-charts')
-  const before = await viewShown(page, charts)
-  expect(before.charts, 'the charts scrolled to the day chart').toBeGreaterThan(0)
+  // The panel is the page's one scroll, so reaching the day chart scrolls the panel.
+  const before = await viewShown(page)
+  expect(before.panel, 'the panel scrolled to the day chart').toBeGreaterThan(0)
 
   await segment.click()
   const drawer = page.locator('.drawer')
@@ -171,7 +176,7 @@ test('a task’s segment opens its card over the page, which closes back to the 
   await drawer.locator('.drawer-frame-close').click()
   await expect(drawer).toBeHidden()
   await expect.poll(() => path(page)).toBe(address)
-  const after = await viewShown(page, charts)
+  const after = await viewShown(page)
   await record(info, 'analytics segment card', { before, after })
   expect(after).toEqual(before)
   expect(after.period).toBe('Past 4 weeks')
