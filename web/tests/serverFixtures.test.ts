@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { validateUsageAnswer } from '@/shared/api/analyticsApi.ts'
+import { pageDimensionOf, validateUsageAnswer } from '@/shared/api/analyticsApi.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/commentWriteModel.ts'
 import {
   validateDocument,
@@ -58,6 +58,7 @@ const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${n
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
   'analytics-usage.json': validateUsageAnswer,
+  'analytics-usage-seat.json': validateUsageAnswer,
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
@@ -156,6 +157,29 @@ describe('the server fixtures', () => {
     expect(
       validateSessionUsageAnswer(read('usage-session.json')).by_item.at(-1)?.unpriced_tokens,
     ).toBe(0)
+  })
+
+  it('name the seat of the work, which the page reads without taking it for its own', () => {
+    const usage = validateUsageAnswer(read('analytics-usage-seat.json'))
+    expect(usage.rows.map(({ group }) => group.seat)).toEqual([
+      {
+        id: 'org-fixture/acct-fixture',
+        unknown: false,
+        organization: 'org-fixture',
+        account_uuid: 'acct-fixture',
+        seat_key: null,
+      },
+      {
+        id: 'org-fixture/week:2026-11-17T19:00Z',
+        unknown: false,
+        organization: 'org-fixture',
+        account_uuid: null,
+        seat_key: 'week:2026-11-17T19:00Z',
+      },
+      { id: null, unknown: true, organization: null, account_uuid: null, seat_key: null },
+    ])
+    expect(pageDimensionOf(usage)).toBeNull()
+    expect(pageDimensionOf(validateUsageAnswer(read('analytics-usage.json')))).toBe('work_item')
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

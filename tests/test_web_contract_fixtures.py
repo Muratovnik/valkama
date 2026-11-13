@@ -24,6 +24,7 @@ import http.client
 import json
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -353,6 +354,7 @@ class _Scenario:
                         None if cost is None else "2026-11-10",
                     ),
                 )
+            self.seats(conn)
             conn.commit()
         finally:
             conn.close()
@@ -377,7 +379,57 @@ class _Scenario:
                     }
                 )
             ),
+            # The day after, by the seat: an account, a seat no account names, unknown.
+            "analytics-usage-seat": self.http(
+                "/api/analytics/usage?"
+                + urlencode(
+                    {
+                        "from": "2026-11-12",
+                        "to": "2026-11-13",
+                        "utc_offset": "180",
+                        "group_by": "seat",
+                    }
+                )
+            ),
         }
+
+    @staticmethod
+    def seats(conn: sqlite3.Connection) -> None:
+        """A session's work on 2026-11-12, after the days the reads above cover: on the seat
+        an account's poll names, then on one no account names, then for no organization.
+        Its run's last record is the card's, so the reads above say the same."""
+
+        session, organization = "sess-seat", "org-fixture"
+        run = conn.execute(
+            "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+            " read_at) VALUES (?, '', 'claude', 'seat.jsonl', ?, ?, ?)",
+            (session, *("2026-11-10T10:00:00.000Z",) * 2, "2026-11-10T11:00:00.000Z"),
+        ).lastrowid
+        for start, end, held in (
+            # What the session worked for, before the day read.
+            ("2026-11-11T20:00:00.000Z", "2026-11-11T20:00:00.000Z", organization),
+            ("2026-11-12T09:00:00.000Z", "2026-11-12T09:10:00.000Z", organization),
+            ("2026-11-12T09:20:00.000Z", "2026-11-12T09:30:00.000Z", organization),
+            ("2026-11-12T09:40:00.000Z", "2026-11-12T09:50:00.000Z", None),
+        ):
+            conn.execute(
+                "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+                " ended_at, seconds, input_tokens, output_tokens, estimated_api_cost_usd,"
+                " price_book, quality, organization)"
+                " VALUES (?, ?, '', 'claude-opus-5-5', ?, ?, 600, 10, 1, 0.01, '2026-11-10',"
+                " 'observed', ?)",
+                (run, session, start, end, held),
+            )
+        for at, source, owner, account, seat in (
+            ("2026-11-12T08:00:00.000Z", "poll", organization, "acct-fixture", "week:2026-11-16T09:00Z"),
+            ("2026-11-12T08:30:00.000Z", "mod", None, None, "week:2026-11-16T09:00Z"),
+            ("2026-11-12T09:15:00.000Z", "mod", None, None, "week:2026-11-17T19:00Z"),
+        ):  # fmt: skip
+            conn.execute(
+                "INSERT INTO quota_samples(at, source, organization, session_id, account_uuid,"
+                " seat, kind, percent) VALUES (?, ?, ?, ?, ?, ?, 'week', 40)",
+                (at, source, owner, None if owner else session, account, seat),
+            )
 
     def live_frame(self) -> dict:
         """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
