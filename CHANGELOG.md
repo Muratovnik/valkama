@@ -60,7 +60,8 @@ checkouts are therefore distinguishable even at the same version.
 - **`GET /api/analytics/quota`: each account's subscription quota windows as they stand
   now.** One entry per account with a quota sample in the last seven days, by its UUID or
   the provisional seat a reading without one is on, with its plan and name, and one per
-  organization that worked in that span with no source. Each window of five hours, the
+  organization that worked in that span with no source. A provisional seat whose week has
+  ended is left out, so a machine read across a week's reset is one account. Each window of five hours, the
   week or a model's week gives its latest percent with that reading's time and source, its
   reset and start, where steady use would stand now, its readings since its start, and a
   forecast: the five-hour window's point answer, a week only as a range. A window is
