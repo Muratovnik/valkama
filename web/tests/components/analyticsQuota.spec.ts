@@ -238,8 +238,13 @@ describe('the quota panel', () => {
     expect(accountNamed(five, '9f8e7d6c').get('[data-state="no-source"]').text()).toBe(
       'No quota source has read this account’s work in the past seven days.',
     )
-    // No money stands beside a share anywhere in the panel, and no share is a total.
-    expect(five.get('.quota-panel').text()).not.toMatch(/\$|total/iu)
+    // No money stands beside a share, and no share is a total: what used a window is a block of
+    // its own under the readings (`analyticsQuotaSpent.spec.ts`).
+    const shares = five.findAll(
+      '.quota-account-head, .window-bar, .quota-window-facts, .step-line, .quota-account-others',
+    )
+    expect(shares.length).toBeGreaterThan(0)
+    for (const part of shares) expect(part.text()).not.toMatch(/\$|total/iu)
   })
 
   it('draws each window’s readings as steps, and as a table of when, how much and who read it', async () => {

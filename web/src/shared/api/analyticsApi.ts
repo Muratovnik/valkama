@@ -36,10 +36,12 @@ export const isUsageDimension = (value: unknown): value is UsageDimension =>
   USAGE_DIMENSIONS.includes(value as UsageDimension)
 
 /**
- * Every dimension an answer may name: the page's, and `seat`, the quota account a stretch was
- * spent on, which the read answers and no screen offers yet.
+ * Every dimension an answer may name and a read may ask by: the page's, and `seat`, the quota
+ * account a stretch was spent on. No filter or breakdown of the page offers it; the quota panel
+ * reads one account's work by it.
  */
 const ANSWER_DIMENSIONS = [...USAGE_DIMENSIONS, 'seat'] as const
+export type UsageReadDimension = (typeof ANSWER_DIMENSIONS)[number]
 
 const VALUE = /^[^\u{0}]{1,512}$/u
 /** A moment with its own offset, as the read writes it: `2030-03-04T00:00:00+03:00`. */
@@ -137,10 +139,11 @@ export type UsageFilters = Partial<Record<UsageDimension, readonly (string | nul
 
 export interface UsageQuery {
   compare: boolean
-  filters: UsageFilters
+  /** The page's filters, and for the quota panel a `seat`'s. */
+  filters: Partial<Record<UsageReadDimension, readonly (string | null)[]>>
   /** A date, the start of that day at `utcOffset`, or a time with its own offset. */
   from: string
-  groupBy: readonly UsageDimension[]
+  groupBy: readonly UsageReadDimension[]
   /** Not included; a date or a time, as `from`. */
   to: string
   utcOffset: number
@@ -157,8 +160,8 @@ export function usageParameters(query: UsageQuery): URLSearchParams {
     utc_offset: String(query.utcOffset),
   })
   if (query.groupBy.length) parameters.set('group_by', query.groupBy.join(','))
-  const none: UsageDimension[] = []
-  for (const dimension of USAGE_DIMENSIONS) {
+  const none: UsageReadDimension[] = []
+  for (const dimension of ANSWER_DIMENSIONS) {
     const admitted = query.filters[dimension] ?? []
     const values = admitted.filter((value) => value !== null)
     if (values.length) parameters.set(dimension, values.join(','))
