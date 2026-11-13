@@ -3,7 +3,7 @@ import { defineComponent, h } from 'vue'
 /**
  * How the Analytics page says a span of agent time and a period, held to the requirement: exactly
  * nothing reads «0 min», more than nothing and under a minute «under a minute», a minute «1 min»,
- * the same in a figure (cards, table, tiles) and on the chart's scale (its readout), in both
+ * the same in a figure (cards, table, tiles) and on the chart's scale and in its hints, in both
  * languages; a period breaks only after its dash, never inside a date.
  */
 import { mount } from '@vue/test-utils'
@@ -50,7 +50,7 @@ describe('a span of agent time', () => {
         [60, minute],
       ] as const) {
         expect(words.figure('time', spent(seconds)), `${seconds} s`).toBe(said)
-        // The readout says a column's hours.
+        // The chart's scale and hints say a column's hours.
         expect(words.scale('time', seconds / 3600), `${seconds} s`).toBe(said)
       }
     })
@@ -118,7 +118,7 @@ describe('a day in a sentence', () => {
     expect(wordsIn('en').fullDay(WEDNESDAY)).toBe('Wednesday, November 11')
   })
 
-  it('leaves the readout and the table their day in full', () => {
+  it('leaves the hints and the table their day in full', () => {
     expect(wordsIn('ru').stepName(WEDNESDAY, 'day').fullLabel).toBe('среда, 11 ноября')
   })
 

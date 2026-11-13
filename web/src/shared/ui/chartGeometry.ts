@@ -24,29 +24,48 @@ const drawable = (value: number | undefined) =>
  */
 type RankedRowKind = 'category' | 'other' | 'none' | 'unknown'
 
-export interface RankedRow {
+/**
+ * What pressing a mark of a chart does, the same as its row of the table: where it leads, or what
+ * it opens. A mark with neither only shows: its hint says what it holds and a press does nothing.
+ */
+export interface MarkAction {
+  /**
+   * What pressing the mark does, as its accessible name in place of its label: "Show the tasks
+   * of opus". The label and the figures stay what is drawn; they describe the control.
+   */
+  action?: string
+  /** Whether pressing the mark opens what it names. */
+  actionable?: boolean
+  /**
+   * Where the mark leads, on this origin: the mark is then a link, which a press hands out as
+   * `follow` and a modified or middle press takes elsewhere as any link is taken.
+   */
+  href?: string
+}
+
+/** The type of the element `markTag` draws: a button's, where the mark is not a link. */
+export const markType = (mark: MarkAction) => (mark.href ? undefined : 'button')
+
+/** The element a mark is drawn as: a link where it leads, a button where it opens, else `shown`. */
+export function markTag<T extends string>(mark: MarkAction, shown: T): 'a' | 'button' | T {
+  if (mark.href) return 'a'
+  return mark.actionable ? 'button' : shown
+}
+
+/** Whether a press on the mark does anything. */
+export const markActs = (mark: MarkAction) => Boolean(mark.href) || mark.actionable === true
+
+export interface RankedRow extends MarkAction {
   key: string
   label: string
   value: number
   /** The value as the reader reads it: formatted by the caller, units and all. */
   valueText: string
   /**
-   * What pressing the row does, as its accessible name in place of its label: "Show the tasks
-   * of opus". The label and the value stay what is drawn; the value describes the control.
-   */
-  action?: string
-  /** Whether pressing the row opens what it names. */
-  actionable?: boolean
-  /**
    * What the label leaves out, said in its hint: the whole id of a value the label names by
    * the start of it.
    */
   detail?: string
-  /**
-   * Where the row leads, on this origin: the row is then a link, which a press hands out as
-   * `follow` and a modified or middle press takes elsewhere as any link is taken.
-   */
-  href?: string
   kind?: RankedRowKind
   /**
    * Whether a row ranked among the categories names no value, such as work on no task in a list
@@ -116,7 +135,8 @@ export function rankRows(
   return { ranked, rest }
 }
 
-export interface PeriodSeries {
+/** A series of a chart of periods; pressing its segment or its legend entry does `MarkAction`. */
+export interface PeriodSeries extends MarkAction {
   key: string
   label: string
   slot: SeriesSlot
@@ -189,8 +209,11 @@ export interface PeriodWords {
   pending?: string
 }
 
-/** What a press in a period chart opens: a period, or one series in it. */
-/** What `PeriodColumns` and `PeriodColumnsTable` both take: one set of periods, drawn or tabled. */
+/**
+ * What `PeriodColumns` and `PeriodColumnsTable` both take: one set of periods, drawn or tabled. A
+ * period acts where it names its `action`, and a series where it says what pressing it does
+ * (`MarkAction`); the rest only show.
+ */
 export interface PeriodChartProps {
   columns: readonly PeriodColumn[]
   /** What the chart shows, as its accessible name and its table's caption. */
@@ -198,15 +221,15 @@ export interface PeriodChartProps {
   /** Bottom of the stack first; give them in the order `seriesSlots()` handed out. */
   series: readonly PeriodSeries[]
   words: PeriodWords
-  /** What a press opens, if anything: a whole period, or one series in it. */
-  actionable?: 'column' | 'segment' | null
   marks?: readonly PeriodMark[]
   /**
    * The value axis, where its steps are other than round steps said as `formatValue` says a
    * value: a span of time in one unit (`durationAxis`).
    */
   valueAxis?: ValueAxis
-  /** A value as the reader reads it, for the scale, the readout, the names and the table. */
+  /** A share of a whole as the reader reads it, for the hints: «42 % of the total». */
+  formatShare?: (ratio: number) => string
+  /** A value as the reader reads it, for the scale, the hints, the names and the table. */
   formatValue: (value: number) => string
 }
 
@@ -218,11 +241,6 @@ export interface AxisStep {
 
 /** The steps of a value axis from zero up to the first one at or past `largest`. */
 export type ValueAxis = (largest: number) => AxisStep[]
-
-export interface PeriodSelection {
-  column: string
-  series: string | null
-}
 
 export interface StackSegment {
   end: number
@@ -429,7 +447,9 @@ export function dayTicks(
 
 type Format = (value: number) => string
 
-const periodName = (stacked: StackedColumn) => stacked.column.fullLabel ?? stacked.column.label
+/** A period named in full, as its accessible name and its hint name it. */
+export const periodName = (stacked: StackedColumn) =>
+  stacked.column.fullLabel ?? stacked.column.label
 
 /** What a period holds, in words: its sum, each series in it, and what is said of it. */
 export function columnSummary(stacked: StackedColumn, words: PeriodWords, format: Format): string {
@@ -444,7 +464,7 @@ export function columnSummary(stacked: StackedColumn, words: PeriodWords, format
 }
 
 /** A period's name and sum, and the period compared with beside the sum. */
-function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) {
+export function columnHead(stacked: StackedColumn, words: PeriodWords, format: Format) {
   const before = stacked.column.before
   const compared =
     words.before && typeof before === 'number' ? `, ${words.before} ${format(before)}` : ''
@@ -462,34 +482,9 @@ function sumWords(stacked: StackedColumn, words: PeriodWords, format: Format) {
   return `${words.total} ${format(stacked.total)}${running}`
 }
 
-const seriesParts = (segments: readonly StackSegment[], format: Format) =>
+/** Each segment as its series and its figure: «opus 2 h». */
+export const seriesParts = (segments: readonly StackSegment[], format: Format) =>
   segments.map((segment) => `${segment.series.label} ${format(segment.value)}`)
-
-/**
- * A period as the one line of the readout over its chart: its name, sum and the period compared
- * with, what is said of it — such as a change of account at its start — and then each series in
- * it, the largest first, so what a narrow line cuts is the tail of the series.
- */
-export function readoutLine(stacked: StackedColumn, words: PeriodWords, format: Format) {
-  const largest = [...stacked.segments].sort((left, right) => right.value - left.value)
-  const series = seriesParts(largest, format).join(', ')
-  return [
-    columnHead(stacked, words, format),
-    ...columnNotes(stacked, words, { withSum: true }),
-    ...(series ? [series] : []),
-  ].join('. ')
-}
-
-/**
- * The period the readout says while neither the pointer nor the keyboard stands on one: the last
- * period begun, which is the one still running where one is, so a day read by its hours says the
- * hour under way rather than the last hour of the day, still to come; the last period otherwise.
- */
-export function lastBegun(columns: readonly StackedColumn[]): number {
-  for (let index = columns.length - 1; index >= 0; index -= 1)
-    if (columns[index]?.column.incomplete) return index
-  return columns.length - 1
-}
 
 /** One segment in words, with the sum of the period it stands in. */
 export function segmentSummary(
@@ -522,46 +517,55 @@ export function columnNotes(
   return [...running, ...pending, ...absent, ...stacked.marks]
 }
 
-/** A place the keyboard can stand on: a column, and in it a segment when segments act. */
+/** A place the keyboard can stand on: a period, or one of its segments that acts. */
 export interface ChartCursor {
   column: number
   segment: number | null
 }
 
 /**
- * Where an arrow key takes the keyboard. Left and right move between periods; up and down
- * between the segments of one, up being higher in the stack. Moving sideways keeps to the same
- * series where the next period has it. Where segments act, a period with nothing in it has
- * nothing to stand on and is passed over. Null for a key that moves nothing.
+ * The places the keyboard can stand on in one period, from the bottom up: the period itself
+ * (null), then each of its segments that acts (`acts`), in the stack's order.
+ */
+function placesIn(one: StackedColumn, acts: (segment: StackSegment) => boolean) {
+  return [null, ...one.segments.flatMap((segment, at) => (acts(segment) ? [at] : []))]
+}
+
+/**
+ * Where an arrow key takes the keyboard. Left and right move between periods, Home and End to the
+ * first and the last; up and down between the period and the segments of it that act, up being
+ * higher in the stack. Every period is a place to stand, since its hint says what it holds;
+ * moving sideways from a segment keeps to the same series where the next period has it acting,
+ * else to the nearest segment of it that acts, else the period. Null for a key that moves nothing.
  */
 export function nextCursor(
   columns: readonly StackedColumn[],
   cursor: ChartCursor,
   key: string,
+  acts: (segment: StackSegment) => boolean = () => false,
 ): ChartCursor | null {
-  const bySegment = cursor.segment !== null
-  const standable = columns
-    .map((one, index) => ({ one, index }))
-    .filter(({ one }) => !bySegment || one.segments.length > 0)
-  const at = standable.findIndex(({ index }) => index === cursor.column)
-  if (at === -1) return null
+  const here = columns[cursor.column]
+  if (!here) return null
   const land = (to: number): ChartCursor => {
-    const target = standable[Math.min(standable.length - 1, Math.max(0, to))]
-    if (!bySegment) return { column: target.index, segment: null }
-    const series = columns[cursor.column].segments[cursor.segment ?? 0]?.series.key
-    const same = target.one.segments.findIndex((segment) => segment.series.key === series)
-    const nearest = Math.min(cursor.segment ?? 0, target.one.segments.length - 1)
-    return { column: target.index, segment: same === -1 ? nearest : same }
+    const column = Math.min(columns.length - 1, Math.max(0, to))
+    const level = cursor.segment
+    if (level === null) return { column, segment: null }
+    const target = columns[column]
+    const places = placesIn(target, acts).filter((at) => at !== null)
+    const series = here.segments[level]?.series.key
+    const same = target.segments.findIndex((segment) => segment.series.key === series)
+    if (places.includes(same)) return { column, segment: same }
+    const below = places.filter((at) => at <= level)
+    const nearest = below.at(-1) ?? places[0]
+    return { column, segment: nearest ?? null }
   }
-  if (key === 'ArrowRight') return land(at + 1)
-  if (key === 'ArrowLeft') return land(at - 1)
+  if (key === 'ArrowRight') return land(cursor.column + 1)
+  if (key === 'ArrowLeft') return land(cursor.column - 1)
   if (key === 'Home') return land(0)
-  if (key === 'End') return land(standable.length - 1)
-  if (!bySegment || (key !== 'ArrowUp' && key !== 'ArrowDown')) return null
-  const count = columns[cursor.column].segments.length
-  const step = key === 'ArrowUp' ? 1 : -1
-  return {
-    column: cursor.column,
-    segment: Math.min(count - 1, Math.max(0, (cursor.segment ?? 0) + step)),
-  }
+  if (key === 'End') return land(columns.length - 1)
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return null
+  const places = placesIn(here, acts)
+  const at = places.indexOf(cursor.segment)
+  const next = places[Math.min(places.length - 1, Math.max(0, at + (key === 'ArrowUp' ? 1 : -1)))]
+  return { column: cursor.column, segment: next ?? null }
 }

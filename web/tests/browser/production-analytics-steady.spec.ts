@@ -1,14 +1,14 @@
 /**
  * Nothing on the Analytics page moves under the pointer. Pointing at a day of the day chart
- * changes the line over it that reads the day out, and pointing at a bar lights the bar; neither
- * may change the size or the place of the chart, of any section of the page or of the page's
- * height, before, while or after the pointer stands there.
+ * shows its hint over the page, and pointing at a bar lights the bar; neither may change the size
+ * or the place of the chart, of any section of the page or of the page's height, before, while or
+ * after the pointer stands there.
  *
- * The days read out at very different lengths — one short task, a day of six tasks with long
- * titles, a day of two — which is what made the readout take one line on one day and three on
- * the next and pushed everything under it. Accounts change from day to day, so their lines up the
- * plot are there too, and the breakdown has work on no task and unknown work after every task,
- * and its small charts a chart of «other».
+ * The days say themselves at very different lengths — one short task, a day of six tasks with
+ * long titles, a day of two — which is what once made a line of words over the plot take one line
+ * on one day and three on the next and push everything under it. Accounts change from day to day,
+ * so their lines up the plot are there too, and the breakdown has work on no task and unknown work
+ * after every task, and its small charts a chart of «other».
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -67,7 +67,7 @@ const layout = (page: Page) =>
       '.chart-section',
       '.spending-table',
       '.period-columns',
-      '.period-readout',
+      '.period-field',
       '.period-frame',
       '.ranked-bars',
     ]
@@ -132,18 +132,25 @@ for (const width of WIDTHS)
       ),
     ).toHaveCount(2)
 
+    // No line of words stands over the plot: each day says itself in its hint.
+    await expect(page.locator('.period-readout')).toHaveCount(0)
     await page.mouse.move(0, 0)
     const before = await layout(page)
-    const readouts: string[] = []
+    const hints: string[] = []
     const moved: string[] = []
+    const hint = page.getByRole('tooltip')
 
     const hold = async (name: string) => {
       moved.push(...moves(name, before, await layout(page)))
     }
 
+    // A day is pointed at over its stack, where no segment of it stands.
     for (let index = 0; index < 3; index += 1) {
-      await columns.nth(index).hover()
-      readouts.push((await page.locator('.spending-days .period-readout').textContent()) ?? '')
+      await page.mouse.move(0, 0)
+      await expect(hint).toBeHidden()
+      await columns.nth(index).hover({ position: { x: 2, y: 2 } })
+      await expect(hint).toBeVisible()
+      hints.push((await hint.textContent()) ?? '')
       await hold(`day ${index + 1}`)
     }
     const barCount = await bars.count()
@@ -151,27 +158,21 @@ for (const width of WIDTHS)
       await bars.nth(index).hover()
       await hold(`bar ${index + 1}`)
     }
-    // The longest day, cut to its one line, is whole in the readout's hint: the pointer goes
-    // from that day up to the readout, which keeps saying that day.
-    const readout = page.locator('.spending-days .period-readout')
-    const lengths = readouts.map((text) => text.trim().length)
-    await columns.nth(lengths.indexOf(Math.max(...lengths))).hover()
-    const whole = (await readout.getAttribute('data-tooltip')) ?? ''
-    await readout.hover()
-    await expect(page.getByRole('tooltip')).toHaveText(whole)
-    expect(whole).toBe(((await readout.textContent()) ?? '').trim())
-    expect(await readout.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
-      true,
-    )
-    expect(whole.split(', ').length).toBeGreaterThan(2)
-    await hold('readout')
-    // One line of the detail type, reserved whatever the day says.
-    const lines = await readout.evaluate(
-      (element) =>
-        element.getBoundingClientRect().height /
-        Number.parseFloat(getComputedStyle(element).lineHeight),
-    )
-    expect(lines).toBeCloseTo(1, 1)
+    // The longest day is whole in its hint, a line for each of its facts, none of it cut.
+    const lengths = hints.map((text) => text.trim().length)
+    await columns.nth(lengths.indexOf(Math.max(...lengths))).hover({ position: { x: 2, y: 2 } })
+    await expect(hint).toBeVisible()
+    expect(((await hint.textContent()) ?? '').split('\n').length).toBeGreaterThan(2)
+    // The box the reader sees, which holds the text the hint names itself by.
+    const shown = page.locator('.tooltip-hint')
+    expect(
+      await shown.evaluate(
+        (element) =>
+          element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
+      ),
+      'the longest hint cut',
+    ).toBe(false)
+    await hold('longest')
     await page.mouse.move(0, 0)
     await hold('after')
 

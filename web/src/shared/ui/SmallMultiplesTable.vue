@@ -4,10 +4,13 @@
  * then the ones apart in the quiet ink — with its amount in each period and its figure for the
  * whole span. A period with no figure says so with a dash, and with `words.absent` to a screen
  * reader. It is the chart's accessible equivalent and may stand beside it or instead of it; wider
- * than its column, it scrolls in its own frame with each row's name in view (`ChartTable`).
+ * than its column, it scrolls in its own frame with each row's name in view (`ChartTable`). A name
+ * that acts in the chart acts here as well: a link sent out as `follow` with the press, a button
+ * as `select` with the key.
  */
 import { computed } from 'vue'
 
+import { markActs, markTag, markType } from '@/shared/ui/chartGeometry.ts'
 import ChartTable from '@/shared/ui/ChartTable.vue'
 import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
 import type {
@@ -25,6 +28,18 @@ const props = defineProps<{
   /** A value as the reader reads it, for each period's amount. */
   formatValue: (value: number) => string
 }>()
+
+const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
+
+function press(one: SmallMultiple, event: MouseEvent) {
+  if (one.href) emit('follow', one.key, event)
+  else if (one.actionable) emit('select', one.key)
+}
+
+/** A middle press on a link opens it elsewhere, and is a press on it all the same. */
+function pressAside(one: SmallMultiple, event: MouseEvent) {
+  if (one.href && event.button === 1) emit('follow', one.key, event)
+}
 
 /** What an absent figure reads as: a dash, with the words beside it for a screen reader. */
 const ABSENT = '—'
@@ -85,7 +100,19 @@ const rows = computed(() => {
           scope="row"
           class="chart-cell chart-name"
         >
-          {{ row.label }}
+          <component
+            :is="markTag(row, 'span')"
+            v-if="markActs(row)"
+            class="chart-press"
+            :type="markType(row)"
+            :href="row.href"
+            :aria-description="row.action"
+            @click="(event: MouseEvent) => press(row, event)"
+            @auxclick="(event: MouseEvent) => pressAside(row, event)"
+          >
+            {{ row.label }}
+          </component>
+          <template v-else>{{ row.label }}</template>
         </th>
         <td
           v-for="cell in row.cells"

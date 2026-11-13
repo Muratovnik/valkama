@@ -106,7 +106,8 @@ test('a session is named by its title and an account by the owner’s name, the 
   const executors = await open(page, { by: 'executor' })
   const bars = await texts(executors.locator('.ranked-label'))
   expect(bars).toEqual(['Fix the rail', 'Review the overview', 'codex · 9f8e7d6c'])
-  await expect(executors.locator('.ranked-label').first()).toHaveAttribute(
+  // The id is in the hint of the bar's row, the mark the name stands in.
+  await expect(executors.locator('.ranked-line').first()).toHaveAttribute(
     'data-tooltip',
     /claude · 1a2b3c4d/u,
   )
@@ -135,7 +136,10 @@ test('a name typed in Settings is the name Analytics gives the account', async (
   const accounts = await open(page, { by: 'account' })
   const labels = accounts.locator('.ranked-label')
   await expect(labels.nth(1)).toHaveText('Night shift')
-  await expect(labels.nth(1)).toHaveAttribute('data-tooltip', new RegExp(SIDE_ID, 'u'))
+  await expect(accounts.locator('.ranked-line').nth(1)).toHaveAttribute(
+    'data-tooltip',
+    new RegExp(SIDE_ID, 'u'),
+  )
 
   // Cleared, the account reads as before.
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: globalScope }))

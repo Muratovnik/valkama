@@ -1,6 +1,8 @@
 /**
  * What pressing a value of a breakdown does on the Analytics page, wherever it stands — a bar, a
- * row of a chart's table, a row of the table beside the period before.
+ * segment of a period, a legend entry, a small chart's name, a row of a chart's table, a row of
+ * the table beside the period before. The charts are told it through `useLineMarks`, which gives
+ * each value's mark what it does and answers the press its mark sends out.
  *
  * - By task, a task's value is a link to the task, opened the way a reference to it opens
  *   anywhere in the app (`useReferenceLinks`): its address is the task's short one, and a plain
@@ -17,10 +19,12 @@
  * Every opening of a task from the page is counted once, as `task_open`, a press the browser
  * takes to another tab included; a count that cannot be written costs nothing.
  */
-import { inject, provide } from 'vue'
+import { computed, inject, provide } from 'vue'
 import type { InjectionKey } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
+import type { SpendingLine } from '@/pages/analytics/utils/usageFigures.ts'
 import { valueKind } from '@/pages/analytics/utils/usageValues.ts'
 
 import { USAGE_DIMENSIONS } from '@/shared/api/analyticsApi.ts'
@@ -29,6 +33,7 @@ import { reportAnalyticsUse } from '@/shared/api/analyticsUses.ts'
 import { opensInPlace } from '@/shared/lib/linkPress.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { ReferenceLink } from '@/shared/lib/referenceLinks.ts'
+import type { MarkAction } from '@/shared/ui/chartGeometry.ts'
 
 /** The breakdown a narrowed view shows: its section, and the dimension its table crosses it with. */
 interface NarrowedBreakdown {
@@ -115,4 +120,44 @@ export function useLineActions() {
   }
 
   return { follow, narrowName, narrowsTo, taskLink }
+}
+
+/**
+ * The marks of a breakdown's values in a chart, by the key of each value's line: what pressing
+ * one does, as the mark carries it (`markOf`) — a task's a link to its card, a value the read can
+ * filter by a control that narrows the view to it, the folded tail and unknown work nothing —
+ * and the press its mark sends out, a link's `follow` or a control's `select`, answered here: the
+ * task opened in place where the page answers it, the narrowing sent to `narrow` with its name.
+ */
+export function useLineMarks(options: {
+  by: () => UsageDimension
+  lines: () => readonly SpendingLine[]
+  /** A value pressed to narrow the view to it: its filter value, and its name. */
+  narrow: (value: string | null, label: string) => void
+}) {
+  const actions = useLineActions()
+  const words = useSpendingWords()
+  const byKey = computed(() => new Map(options.lines().map((line) => [line.key, line])))
+
+  function markOf(line: SpendingLine, label = words.lineLabel(options.by(), line)): MarkAction {
+    const href = actions.taskLink(options.by(), line.value)?.href
+    if (href) return { href }
+    if (actions.narrowsTo(options.by(), line.value) === undefined) return {}
+    return { actionable: true, action: actions.narrowName(options.by(), line.value, label) }
+  }
+
+  /** A value's link pressed: the task opened, in place where the page answers it. */
+  function follow(key: string, event: MouseEvent) {
+    const link = actions.taskLink(options.by(), byKey.value.get(key)?.value ?? null)
+    if (link) actions.follow(link, event)
+  }
+
+  /** A value pressed to narrow the view to it. */
+  function select(key: string) {
+    const line = byKey.value.get(key)
+    const value = actions.narrowsTo(options.by(), line?.value ?? null)
+    if (line && value !== undefined) options.narrow(value, words.lineLabel(options.by(), line))
+  }
+
+  return { follow, markOf, select }
 }

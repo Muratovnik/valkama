@@ -6,8 +6,9 @@
  * the tick stand apart from each other and the fill from the ground by a contrast a reader can see
  * — a contrast of lightness, so the bar reads in grayscale too; a window that is not fresh is
  * hatched and a fresh one is not; no word is cut. The step line draws only flat and upright
- * strokes, a mark at each reading where its moment and value put it, and its readout says another
- * reading under the pointer without moving anything. A forced palette draws them in its inks.
+ * strokes, a mark at each reading where its moment and value put it, and the reading under the
+ * pointer says itself in a hint over the plot without moving anything, with no line over the plot.
+ * A forced palette draws them in its inks.
  * Each theme attaches what it measured.
  */
 import { expect } from '@playwright/test'
@@ -135,13 +136,12 @@ for (const colorScheme of ['light', 'dark'] as const)
     await expect(table.locator('tbody tr').first()).toContainText('62%')
   })
 
-/** The step line as drawn: its path, its marks against the field, and its readout's box. */
+/** The step line as drawn: its path, its marks against the field, and the boxes of its parts. */
 function stepLine(page: Page) {
   return page.evaluate(() => {
     const figure = document.querySelector('[data-harness="step"] .step-line')
     const field = figure?.querySelector('.step-field')
-    const readout = figure?.querySelector('.step-readout')
-    if (!figure || !field || !readout) throw new Error('the step line is not drawn')
+    if (!figure || !field) throw new Error('the step line is not drawn')
     const area = field.getBoundingClientRect()
     const plot = figure.querySelector('.step-plot')?.getBoundingClientRect() ?? area
     const { height } = figure.getBoundingClientRect()
@@ -157,8 +157,10 @@ function stepLine(page: Page) {
           y: (area.bottom - (top + bottom) / 2) / area.height,
         }
       }),
-      readout: readout.textContent,
-      readoutBox: readout.getBoundingClientRect().toJSON() as Record<string, number>,
+      readouts: figure.querySelectorAll('.step-readout').length,
+      boxes: ['.step-head', '.step-plot', '.step-axis'].map(
+        (part) => figure.querySelector(part)?.getBoundingClientRect().toJSON() as unknown,
+      ),
       height,
       // A fifth of the way across the plot, halfway up: where the first reading still holds.
       early: { x: plot.left + plot.width * 0.2, y: plot.top + plot.height / 2 },
@@ -195,12 +197,13 @@ for (const colorScheme of ['light', 'dark'] as const)
       expect(Math.abs((before.marks[index]?.x ?? 0) - x), `mark ${index} across`).toBeLessThan(0.01)
       expect(Math.abs((before.marks[index]?.y ?? 0) - y), `mark ${index} up`).toBeLessThan(0.03)
     }
-    expect(before.readout).toBe('14:00, 58%, the poll')
-    // Under the pointer a fifth of the way across, the first reading holds; nothing moves.
+    expect(before.readouts, 'a line over the plot').toBe(0)
+    // Under the pointer a fifth of the way across, the first reading holds and says so in its
+    // hint; nothing moves.
     await page.mouse.move(before.early.x, before.early.y)
+    await expect(page.getByRole('tooltip')).toHaveText('11:30, 10%, the poll')
     const pointed = await stepLine(page)
-    expect(pointed.readout).toBe('11:30, 10%, the poll')
-    expect(pointed.readoutBox).toEqual(before.readoutBox)
+    expect(pointed.boxes).toEqual(before.boxes)
     expect(pointed.height).toBe(before.height)
     await expect(page.locator('[data-harness="step-table"] tbody tr')).toHaveCount(4)
   })

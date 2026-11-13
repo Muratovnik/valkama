@@ -1,14 +1,15 @@
 /**
  * The harness page for the chart primitives and their tables, drawn with the product
  * stylesheet at whatever width the test sets: names long enough to wrap, a month of days with a
- * change and a day still running, a day of hours that opens by the hour, an empty chart, and a
+ * change and a day still running whose accounts but the automation one act, a day of hours that
+ * opens by the hour, an empty chart, and a
  * week of small multiples whose longest name is cut to one line; and the two small charts a tile
  * draws, a trend and a share bar, at a tile's width on its ground. A window of a limit in every
  * state its bar draws — spent part of the way, past the whole, a fresh nothing, not fresh, no
  * figure, and thin in a tile — on the panel's ground, with a window's readings as a step line and
  * both as their tables.
  * What a press sent is written into one line, so a test reads the event the way a page would
- * receive it.
+ * receive it; the window's one hint host shows each mark's hint, as the app's does.
  */
 import { h, ref } from 'vue'
 
@@ -16,7 +17,6 @@ import { seriesSlots } from '@/shared/lib/seriesColors.ts'
 import type { SeriesSlot } from '@/shared/lib/seriesColors.ts'
 import type {
   PeriodColumn,
-  PeriodSelection,
   PeriodSeries,
   PeriodWords,
   RankedRow,
@@ -37,6 +37,7 @@ import SmallMultiples from '@/shared/ui/SmallMultiples.vue'
 import SmallMultiplesTable from '@/shared/ui/SmallMultiplesTable.vue'
 import StepLine from '@/shared/ui/StepLine.vue'
 import StepLineTable from '@/shared/ui/StepLineTable.vue'
+import TooltipHost from '@/shared/ui/TooltipHost.vue'
 import WindowBar from '@/shared/ui/WindowBar.vue'
 import WindowBarTable from '@/shared/ui/WindowBarTable.vue'
 import type { StepPoint, StepWords, WindowRow, WindowWords } from '@/shared/ui/windowGeometry.ts'
@@ -75,10 +76,12 @@ const rankedWords: RankedWords = {
 }
 
 const accountSlots = seriesSlots(['ci', 'personal', 'work'])
+/** Each account narrows to itself but the automation one, whose segments only show. */
 const series: PeriodSeries[] = ['personal', 'work', 'ci'].map((key) => ({
   key,
   label: key === 'ci' ? 'ci (automation)' : key,
   slot: accountSlots.get(key) ?? 'other',
+  ...(key === 'ci' ? {} : { actionable: true, action: `Show the work of ${key}` }),
 }))
 
 /** A month of days in a fixed pattern, the last one still running. */
@@ -109,6 +112,7 @@ const hourSeries: PeriodSeries[] = [
 const hours: PeriodColumn[] = Array.from({ length: 24 }, (_, hour) => ({
   key: `h${hour}`,
   label: `${String(hour).padStart(2, '0')}:00`,
+  action: `Show ${String(hour).padStart(2, '0')}:00`,
   values:
     hour < 8 || hour > 21
       ? {}
@@ -275,12 +279,24 @@ export function chartsSurface() {
   const onRow = (key: string) => {
     selected.value = `row ${key}`
   }
-  const onPeriod = (selection: PeriodSelection) => {
-    selected.value = `period ${selection.column} ${selection.series ?? '-'}`
+  const onPeriod = (key: string) => {
+    selected.value = `period ${key}`
   }
-  const periodProps = { series, words: periodWords, formatValue: minutes }
+  const onSeries = (key: string) => {
+    selected.value = `series ${key}`
+  }
+  const periodProps = {
+    series,
+    words: periodWords,
+    formatValue: minutes,
+    formatShare: (ratio: number) => `${Math.round(ratio * 100)}% of the day`,
+    onPeriod,
+    onSeries,
+  }
   return () =>
     h('main', { 'class': 'charts-harness', 'data-harness': 'charts' }, [
+      // The one hint host the app mounts, which every mark's hint shows through.
+      h(TooltipHost),
       h(
         'output',
         { 'class': 'charts-harness-selected', 'data-harness': 'selected' },
@@ -300,8 +316,6 @@ export function chartsSurface() {
           label: 'Time per day by account',
           columns: days,
           marks,
-          actionable: 'segment',
-          onSelect: onPeriod,
         }),
       ]),
       section('hours', [
@@ -310,8 +324,6 @@ export function chartsSurface() {
           label: 'Time per hour',
           columns: hours,
           series: hourSeries,
-          actionable: 'column',
-          onSelect: onPeriod,
         }),
       ]),
       section('empty', [
@@ -345,8 +357,6 @@ export function chartsSurface() {
           label: 'Time per day by account',
           columns: days,
           marks,
-          actionable: 'segment',
-          onSelect: onPeriod,
         }),
       ]),
       section('multiples', [

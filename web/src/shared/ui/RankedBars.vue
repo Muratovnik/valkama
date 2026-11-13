@@ -10,9 +10,11 @@
  * Presentational: rows and words come in, a press on a row that opens something goes out as
  * `select` with the row's key, and a press on a row that leads somewhere (`href`) as `follow`
  * with the press, for the host to open it in place or leave it to the browser. A row that acts
- * is named by what it does (`action`) or by its label, and its value describes it. A row's name
- * takes one line, ends in an ellipsis where it is cut and is said whole in its hint, with what
- * the label leaves out (`detail`); the values stand in one column whatever the names do. In a
+ * is named by what it does (`action`) or by its label, and its value describes it. A row is a
+ * mark of its chart: its hint, under the pointer or the keyboard, says what it does not print —
+ * its share of the whole where the caller says how a share reads (`formatShare`), and what the
+ * label leaves out (`detail`). A row's name takes one line, ends in an ellipsis where it is cut
+ * and is then said whole first in that hint (`markHints.ts`); the values stand in one column whatever the names do. In a
  * narrow container the name takes a line of its own over its bar. A `dense` chart, a few rows in
  * a small card, keeps the name and the value on one line and draws a thin bar under both; there
  * each value is as wide as its own figure, ending where the others end, and the name takes the
@@ -21,8 +23,9 @@
 import { computed, useId } from 'vue'
 
 import type { PlacedRow, RankedRow, RankedWords } from '@/shared/ui/chartGeometry.ts'
-import { rankRows } from '@/shared/ui/chartGeometry.ts'
+import { markTag, rankRows } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { namedHint } from '@/shared/ui/markHints.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -34,11 +37,24 @@ const props = defineProps<{
   dense?: boolean
   /** Rank work with no value and unknown work by their figures, with a bar (`rankRows`). */
   rankAll?: boolean
+  /** What the shares are of, where the rows are not all of it; what the rows add up to otherwise. */
+  whole?: number
+  /** A share of the whole as the reader reads it, «42 % of the total», for each row's hint. */
+  formatShare?: (ratio: number) => string
 }>()
 
 const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
 const placed = computed(() => rankRows(props.rows, props.rankAll))
+/** What each row's hint says its share of: the whole given, else what every row adds up to. */
+const whole = computed(
+  () =>
+    props.whole ??
+    props.rows.reduce(
+      (sum, row) => sum + (Number.isFinite(row.value) ? Math.max(0, row.value) : 0),
+      0,
+    ),
+)
 
 /** The ranked categories as an ordered list, and the rows that are not ranked after them. */
 const groups = computed(() =>
@@ -51,15 +67,6 @@ const groups = computed(() =>
 const ids = useId()
 /** The id of a row's value, which describes the row where the row is a control. */
 const valueId = (row: PlacedRow) => `${ids}-${row.key}`
-
-/**
- * A row that leads somewhere is a link, one that opens something a button, and one that does
- * neither a line of the chart.
- */
-function lineTag(row: PlacedRow) {
-  if (row.href) return 'a'
-  return row.actionable ? 'button' : 'div'
-}
 
 /** A row that acts is named by what it does, or by its name, and described by its value. */
 function lineAttrs(row: PlacedRow) {
@@ -117,7 +124,8 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
           :data-kind="row.kind"
         >
           <component
-            :is="lineTag(row)"
+            :is="markTag(row, 'div')"
+            v-tooltip.detail="namedHint(row, whole, formatShare)"
             class="ranked-line"
             :data-key="row.key"
             v-bind="lineAttrs(row)"
@@ -125,7 +133,6 @@ function pressAside(row: PlacedRow, event: MouseEvent) {
             @auxclick="(event: MouseEvent) => pressAside(row, event)"
           >
             <span
-              v-tooltip.detail="{ text: row.detail, words: row.label }"
               class="ranked-label one-line"
               :class="{ 'ranked-quiet': row.quiet }"
               >{{ row.label }}</span

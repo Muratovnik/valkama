@@ -23,7 +23,7 @@ import ChartSection from '@/pages/analytics/components/ChartSection.vue'
 import SpendingTableLink from '@/pages/analytics/components/SpendingTableLink.vue'
 import { useRankedLines } from '@/pages/analytics/composables/useRankedLines.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
-import { rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
+import { measureOf, rankedLines } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { UsageDimension, UsageRow } from '@/shared/api/analyticsApi.ts'
@@ -56,6 +56,10 @@ const all = computed(() =>
   rankedLines(props.rows, props.by, props.measure, Number.POSITIVE_INFINITY),
 )
 const lines = computed(() => all.value.slice(0, LISTED))
+/** What every value adds up to, listed or not: what each bar's hint says its share of. */
+const whole = computed(() =>
+  all.value.reduce((sum, line) => sum + (measureOf(props.measure, line.spent) ?? 0), 0),
+)
 /** How many values the list leaves to the table; none while it lists them all. */
 const unlisted = computed(() => all.value.length - lines.value.length)
 const moreWords = computed(() =>
@@ -96,6 +100,8 @@ const barWords = computed(() => ({
         :label="title"
         :rows="bars"
         :words="barWords"
+        :whole="whole"
+        :format-share="words.markShare"
         rank-all
         @follow="follow"
         @select="select"

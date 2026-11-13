@@ -5,10 +5,12 @@
  * words; a fresh 0 % draws the track and its tick and no fill, a window that is not fresh is
  * hatched rather than drawn as live, and one with no figure the track alone. A step line draws
  * readings as steps — flat to the next reading and up or down there, never a slope — held to the
- * moment the answer was read, beside a line of steady pace from nothing to the whole; its
- * readout says the latest reading until the pointer names another. Each table holds every figure
- * its chart draws.
+ * moment the answer was read, beside a line of steady pace from nothing to the whole; each
+ * reading says itself in a hint over the step it holds, one Tab stop walked by the arrows, and no
+ * line stands over the plot. Each table holds every figure its chart draws.
  */
+import { nextTick } from 'vue'
+
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
@@ -146,9 +148,13 @@ describe('the step line', () => {
       '300',
       '0',
     ])
-    expect(line.attributes('role')).toBe('img')
     expect(line.attributes('aria-label')).toBe('Five hours of Work')
     expect(line.findAll('.step-mark')).toHaveLength(2)
+    // Each reading is named by its words, so the plot is no image a reader cannot enter.
+    expect(line.findAll('[role="img"]').map((one) => one.attributes('aria-label'))).toEqual([
+      '12:00: 20%',
+      '12:30: 50%',
+    ])
   })
 
   it('sets its top at the highest reading where one ran past the whole', () => {
@@ -157,23 +163,45 @@ describe('the step line', () => {
     expect(line.get('.step-path').attributes('d')).toBe('M60.00,60.00 H120.00 V0.00 H180.00')
   })
 
-  it('says the latest reading until the pointer names another', async () => {
+  // A line over the plot once said one reading at a time; each reading now has its own hint.
+  it('gives each reading a hint over the whole step it holds, and no line over the plot', async () => {
     const line = stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50)])
-    expect(line.get('.step-readout').text()).toBe('12:30: 50%')
-    const plot = line.get('.step-plot')
-    const box = plot.element as HTMLElement
-    box.getBoundingClientRect = () => ({ left: 0, width: 300 }) as DOMRect
-    // A fifth of the way across is an hour in: the first reading holds there.
-    await plot.trigger('pointermove', { clientX: 66 })
-    expect(line.get('.step-readout').text()).toBe('12:00: 20%')
-    await plot.trigger('pointerleave')
-    expect(line.get('.step-readout').text()).toBe('12:30: 50%')
+    expect(line.find('.step-readout').exists()).toBe(false)
+    const reach = line.findAll('.step-reach')
+    expect(reach.map((one) => one.attributes('data-tooltip'))).toEqual(['12:00: 20%', '12:30: 50%'])
+    expect(reach.map((one) => one.attributes('data-tooltip-kind'))).toEqual(['detail', 'detail'])
+    // An hour in to half past, and half past to the moment read, of a five-hour plot.
+    expect(reach.map((one) => one.attributes('style'))).toEqual([
+      'inset-inline-start: 20%; inline-size: 10%;',
+      'inset-inline-start: 30%; inline-size: 30%;',
+    ])
+    await reach[0]?.trigger('pointerenter')
+    expect(line.findAll('.step-mark').map((one) => one.classes('step-shown'))).toEqual([
+      true,
+      false,
+    ])
+  })
+
+  it('makes its readings one Tab stop, the latest, walked with the arrows', async () => {
+    const line = stepLine([point('12:00', 1, 20), point('12:30', 1.5, 50), point('13:00', 2, 60)])
+    const stops = () => line.findAll('.step-reach').map((one) => one.attributes('tabindex'))
+    expect(stops()).toEqual(['-1', '-1', '0'])
+    const last = line.get('[data-reading="2"]')
+    ;(last.element as HTMLElement).focus()
+    await last.trigger('keydown', { key: 'Home' })
+    await nextTick()
+    expect((document.activeElement as HTMLElement).dataset.reading).toBe('0')
+    expect(stops()).toEqual(['0', '-1', '-1'])
+    await line.get('[data-reading="0"]').trigger('keydown', { key: 'ArrowRight' })
+    await nextTick()
+    expect((document.activeElement as HTMLElement).dataset.reading).toBe('1')
+    line.unmount()
   })
 
   it('with no reading draws its floor alone and says so', () => {
     const line = stepLine([])
     expect(line.find('.step-path').exists()).toBe(false)
-    expect(line.get('.step-readout').text()).toBe('No readings')
+    expect(line.get('.step-empty').text()).toBe('No readings')
   })
 
   it('as a table holds every reading, oldest first', () => {

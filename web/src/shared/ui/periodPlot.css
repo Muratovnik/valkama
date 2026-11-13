@@ -169,7 +169,7 @@
 }
 
 /* A change at the start of a period: a line up the plot in the gap before the period, a shape
-   and not a hue, which takes no row of its own; the period's readout and name say what changed. */
+   and not a hue, which takes no row of its own; the period's hint and name say what changed. */
 .period-mark {
   position: absolute;
   inset-block: 0;
@@ -183,17 +183,6 @@
     background: CanvasText;
     forced-color-adjust: none;
   }
-}
-
-/* One line whatever the period under the pointer holds, reserved from the start, so nothing
-   under it moves as the pointer passes: a longer line ends in an ellipsis (`.one-line`) and the
-   readout's hint says it whole (`usePeriodReadout`). */
-.period-readout {
-  block-size: 1lh;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  font-variant-numeric: tabular-nums;
 }
 
 /* Hairlines at the scale's steps, recessive; the line at zero is the baseline the columns

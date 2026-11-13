@@ -5,13 +5,15 @@
  * apart, as in the bars, and never inside «other». The day not over yet is hatched and says
  * «so far», so its short column does not read as a fall; a line stands where the known accounts
  * with a figure in the measure shown changed from the last day a known account had one, and that
- * day's readout, name and table row say the change, «Account change: a → b» (`accountChanges`):
+ * day's hint, name and table row say the change, «Account change: a → b» (`accountChanges`):
  * work whose organization nobody recorded is no account and marks nothing. The marks are the ones
  * read with the answer shown, and a read of the accounts that failed says the marks are not there
  * rather than leaving them out without a word.
  *
  * Each day is a control, in the chart and in its table, that narrows the view to that day alone
- * and breaks it down by task: it goes out as `day`, with the day as a custom period names it. The
+ * and breaks it down by task: it goes out as `day`, with the day as a custom period names it. A
+ * value's segment, legend entry and figure in the table do what its row does (`useLineMarks`): a
+ * task opens its card, a value the read can filter by goes out as `narrow`. The
  * axis names a day by its weekday, «27 Tue», and the first day it names and the first of each
  * later month by the date with its month, «Oct 27» (`stepName`, `dayTicks`); the table names each
  * in full.
@@ -21,8 +23,8 @@
  * shows and says rather than a zero, and a note under the minutes says their figures are an
  * estimate: each stretch of work shared out by its time in each. Given the steps of the period
  * before (`before`), each column carries the figure of the step it is compared with, drawn as a
- * short mark at its height on the same scale, named in the legend and said in the readout and the
- * table; while those steps are read there is no mark, and when they could not be read a note
+ * short mark at its height on the same scale, named in the legend and said in the period's hint
+ * and the table; while those steps are read there is no mark, and when they could not be read a note
  * under the chart says so. A `brief` chart, standing beside the titles of its tasks, names
  * each task by its number alone.
  */
@@ -30,6 +32,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChartSection from '@/pages/analytics/components/ChartSection.vue'
+import { useLineMarks } from '@/pages/analytics/composables/useLineActions.ts'
 import type { BeforeSteps } from '@/pages/analytics/composables/usePeriodBefore.ts'
 import { useSpendingWords } from '@/pages/analytics/composables/useSpendingWords.ts'
 import type { AccountsRead } from '@/pages/analytics/composables/useUsageRead.ts'
@@ -40,7 +43,7 @@ import { figureOf, spentOf } from '@/pages/analytics/utils/usageFigures.ts'
 
 import type { Measure } from '@/shared/api/analyticsAddress.ts'
 import type { Usage, UsageDimension } from '@/shared/api/analyticsApi.ts'
-import type { PeriodChartProps, PeriodSelection } from '@/shared/ui/chartGeometry.ts'
+import type { PeriodChartProps } from '@/shared/ui/chartGeometry.ts'
 import PeriodColumns from '@/shared/ui/PeriodColumns.vue'
 import PeriodColumnsTable from '@/shared/ui/PeriodColumnsTable.vue'
 
@@ -60,8 +63,11 @@ const props = defineProps<{
   /** Why the last press here did not narrow the view, in words; empty otherwise. */
   notice?: string
 }>()
-/** A day pressed to narrow the view to it: `2030-03-04`, and its name in full. */
-const emit = defineEmits<{ day: [day: string, label: string] }>()
+/** A day pressed to narrow the view to it: `2030-03-04`, and its name in full; or a value. */
+const emit = defineEmits<{
+  day: [day: string, label: string]
+  narrow: [value: string | null, label: string]
+}>()
 
 const { t } = useI18n()
 const words = useSpendingWords()
@@ -88,8 +94,19 @@ function seriesName(line: StackLine['line']) {
   return reference ?? words.lineLabel(props.by, line)
 }
 
+const stacked = computed(() => stackLines(props))
+const marks = useLineMarks({
+  by: () => props.by,
+  lines: () => stacked.value.flatMap((one) => (one.line ? [one.line] : [])),
+  narrow: (value, label) => emit('narrow', value, label),
+})
+
 const series = computed(() =>
-  stackLines(props).map((one) => ({ ...one, label: seriesName(one.line) })),
+  stacked.value.map((one) => ({
+    ...one,
+    label: seriesName(one.line),
+    ...(one.line ? marks.markOf(one.line) : {}),
+  })),
 )
 
 const chart = computed<PeriodChartProps>(() => ({
@@ -103,8 +120,7 @@ const chart = computed<PeriodChartProps>(() => ({
       ? { action: t('analytics.drill.day', { day: words.fullDay(column.key) }) }
       : {}),
   })),
-  // An hour or a minute narrows to the day it is already of, so only a day acts.
-  actionable: byDay.value ? 'column' : null,
+  formatShare: words.markShare,
   marks:
     typeof props.accounts === 'object'
       ? accountChanges(props.accounts, props.measure).map((change) => ({
@@ -127,7 +143,7 @@ const chart = computed<PeriodChartProps>(() => ({
   valueAxis: words.axis(props.measure),
 }))
 
-function select({ column }: PeriodSelection) {
+function day(column: string) {
   emit('day', dayOf(column), words.fullDay(column))
 }
 </script>
@@ -142,7 +158,9 @@ function select({ column }: PeriodSelection) {
     <template #chart>
       <PeriodColumns
         v-bind="chart"
-        @select="select"
+        @period="day"
+        @series="marks.select"
+        @follow="marks.follow"
       />
       <p
         v-if="before === 'failed'"
@@ -166,7 +184,9 @@ function select({ column }: PeriodSelection) {
     <template #table>
       <PeriodColumnsTable
         v-bind="chart"
-        @select="select"
+        @period="day"
+        @series="marks.select"
+        @follow="marks.follow"
       />
       <p
         v-if="accounts === 'failed'"

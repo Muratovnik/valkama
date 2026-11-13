@@ -9,16 +9,27 @@
  * numbers as a table.
  *
  * A column is drawn in its value's hue (`seriesFill.css`), the one the value has wherever the page
- * draws it, and a name always stands beside it: a hue never speaks alone. Presentational: nothing
- * in it acts, so it is no stop for the keyboard.
+ * draws it, and a name always stands beside it: a hue never speaks alone.
+ *
+ * Every mark has its hint (`markHints.ts`): a chart's name says its share of the whole where the
+ * caller says how a share reads (`formatShare`), and while the name is cut says it whole first; a
+ * period of a chart, where the caller names the periods (`periods`), says its name and its figure.
+ * Presentational: a name whose value acts (`MarkAction`) is pressed as its value's row is, a link
+ * sent out as `follow` with the press, a button as `select` with the key; the rest only show.
  */
 import { computed } from 'vue'
 
-import { roundAxis } from '@/shared/ui/chartGeometry.ts'
+import { markTag, roundAxis } from '@/shared/ui/chartGeometry.ts'
 import type { ValueAxis } from '@/shared/ui/chartGeometry.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { namedHint } from '@/shared/ui/markHints.ts'
 import { placeMultiples } from '@/shared/ui/multiplesGeometry.ts'
-import type { MultiplesWords, SmallMultiple } from '@/shared/ui/multiplesGeometry.ts'
+import type {
+  MultiplePeriod,
+  MultiplesWords,
+  PlacedMultiple,
+  SmallMultiple,
+} from '@/shared/ui/multiplesGeometry.ts'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
 const props = defineProps<{
@@ -26,16 +37,60 @@ const props = defineProps<{
   label: string
   multiples: readonly SmallMultiple[]
   words: MultiplesWords
+  /** The periods the columns stand for, in order, for each column's hint. */
+  periods?: readonly MultiplePeriod[]
   /** The scale, where its top is other than a round step said as `formatValue` says it. */
   valueAxis?: ValueAxis
-  /** A value as the reader reads it, for the scale's top. */
+  /** A share of the whole as the reader reads it, «42 % of the total», for each name's hint. */
+  formatShare?: (ratio: number) => string
+  /** A value as the reader reads it, for the scale's top and each period's hint. */
   formatValue: (value: number) => string
 }>()
+
+const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
 
 const placed = computed(() =>
   placeMultiples(props.multiples, props.valueAxis ?? roundAxis(props.formatValue)),
 )
 const top = computed(() => placed.value.topText)
+
+/** A chart's figure over the span: what its periods add up to. */
+const figureOf = (one: SmallMultiple) =>
+  one.values.reduce<number>(
+    (sum, value) => sum + (value !== null && Number.isFinite(value) && value > 0 ? value : 0),
+    0,
+  )
+
+/** What every chart adds up to, of which each name's hint says its share. */
+const whole = computed(() => props.multiples.reduce((sum, one) => sum + figureOf(one), 0))
+
+const nameHint = (one: PlacedMultiple) =>
+  namedHint({ label: one.label, value: figureOf(one) }, whole.value, props.formatShare)
+
+/** A period of a chart in its hint: its name and its figure, where the periods are named. */
+function periodHint(one: PlacedMultiple, index: number) {
+  const period = props.periods?.[index]
+  const value = one.values[index]
+  const figure =
+    value === null || value === undefined ? (props.words.absent ?? '—') : props.formatValue(value)
+  return period ? `${one.label}\n${period.label}: ${figure}` : undefined
+}
+
+/** A name that acts is named by what it does, where it says so, else by its words. */
+const nameAttrs = (one: PlacedMultiple) =>
+  one.href || one.actionable
+    ? { 'href': one.href, 'type': one.href ? undefined : 'button', 'aria-label': one.action }
+    : {}
+
+function press(one: PlacedMultiple, event: MouseEvent) {
+  if (one.href) emit('follow', one.key, event)
+  else if (one.actionable) emit('select', one.key)
+}
+
+/** A middle press on a link opens it elsewhere, and is a press on it all the same. */
+function pressAside(one: PlacedMultiple, event: MouseEvent) {
+  if (one.href && event.button === 1) emit('follow', one.key, event)
+}
 
 const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
 </script>
@@ -61,10 +116,14 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
           :data-key="one.key"
           :data-kind="one.kind"
         >
-          <span
-            v-tooltip.clipped="one.label"
+          <component
+            :is="markTag(one, 'span')"
+            v-tooltip.detail="nameHint(one)"
             class="multiple-name one-line"
-            >{{ one.label }}</span
+            v-bind="nameAttrs(one)"
+            @click="(event: MouseEvent) => press(one, event)"
+            @auxclick="(event: MouseEvent) => pressAside(one, event)"
+            >{{ one.label }}</component
           >
           <span class="multiple-value">{{ one.valueText }}</span>
           <span
@@ -74,6 +133,7 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
             <span
               v-for="(height, index) in one.heights"
               :key="index"
+              v-tooltip.detail="periodHint(one, index)"
               class="multiple-period"
             >
               <span
@@ -97,10 +157,14 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
           :data-key="one.key"
           :data-kind="one.kind"
         >
-          <span
-            v-tooltip.clipped="one.label"
+          <component
+            :is="markTag(one, 'span')"
+            v-tooltip.detail="nameHint(one)"
             class="multiple-name one-line"
-            >{{ one.label }}</span
+            v-bind="nameAttrs(one)"
+            @click="(event: MouseEvent) => press(one, event)"
+            @auxclick="(event: MouseEvent) => pressAside(one, event)"
+            >{{ one.label }}</component
           >
           <span class="multiple-value">{{ one.valueText }}</span>
         </li>
@@ -143,9 +207,27 @@ const columnStyle = (height: number) => ({ blockSize: `${height * 100}%` })
   min-width: 0;
 }
 
+/* A name that acts is a line of the chart, not a control standing in it: the same words, with
+   the pointer's hand and an underline as a name that opens something in a table has. */
 .multiple-name {
+  padding: 0;
+  border: 0;
   color: var(--color-text);
   font: var(--font-detail);
+  text-align: start;
+  text-decoration: none;
+  background: none;
+
+  &:is([type='button'], [href]) {
+    text-decoration: underline;
+    text-decoration-color: var(--color-rule-strong);
+    text-underline-offset: var(--space-half);
+    cursor: pointer;
+
+    &:hover {
+      text-decoration-color: currentcolor;
+    }
+  }
 }
 
 .multiple-value {

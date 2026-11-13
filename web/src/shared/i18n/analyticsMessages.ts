@@ -88,6 +88,7 @@ export const analyticsMessages = {
           'The accounts that worked could not be read, so their changes are not marked.',
         absent: { tokens: 'No tokens counted', cost: 'No price' },
       },
+      marks: { share: '{share} of the total' },
       shown: {
         label: 'Show {chart} as',
         chart: 'Chart',
@@ -274,6 +275,7 @@ export const analyticsMessages = {
           'Не удалось прочитать, какие аккаунты работали, поэтому их смены не отмечены.',
         absent: { tokens: 'Токены не учтены', cost: 'Нет цены' },
       },
+      marks: { share: '{share} от всего' },
       shown: {
         label: 'Показать «{chart}» как',
         chart: 'График',

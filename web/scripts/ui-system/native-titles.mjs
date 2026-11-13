@@ -247,8 +247,36 @@ export const DETAIL_TOOLTIPS = new Map([
     'that a folded edge holds a pane and how to bring it back; the edge is a line; while the pane’s name on it is cut, the name comes first, whole',
   ],
   [
-    'shared/ui/RankedBars.vue <span> v-tooltip.detail="{ text: row.detail, words: row.label }"',
-    'the whole id of a value its row names by the start of it, an account; while the name is cut, it comes first, whole',
+    'shared/ui/ChartLegend.vue <component> v-tooltip.detail="hintOf(one.key)"',
+    'a legend entry prints its series’ name; its figure over the span and its share are on no mark',
+  ],
+  [
+    `shared/ui/ChartLegend.vue <span> v-tooltip.detail="hintOf('outline')"`,
+    'the entry names the mark of the period compared with; that period’s sum is on no mark',
+  ],
+  [
+    'shared/ui/PeriodColumns.vue <component> v-tooltip.detail="periodHint(one, words, formatValue)"',
+    'a period prints nothing of itself: its sum against the period before, what changed and its series are its hint',
+  ],
+  [
+    'shared/ui/PeriodColumns.vue <component> v-tooltip.detail="segmentHint(one, segment, props)"',
+    'a segment is a block of hue: its series, its value and its share of the period are its hint',
+  ],
+  [
+    'shared/ui/RankedBars.vue <component> v-tooltip.detail="namedHint(row, whole, formatShare)"',
+    'a row prints its name and figure; its share of the whole and the whole id of a value it names by the start are on no mark; while the name is cut, it comes first, whole',
+  ],
+  [
+    'shared/ui/SmallMultiples.vue <component> v-tooltip.detail="nameHint(one)"',
+    'a small chart prints its name and figure; its share of the whole is on no mark; while the name is cut, it comes first, whole',
+  ],
+  [
+    'shared/ui/SmallMultiples.vue <span> v-tooltip.detail="periodHint(one, index)"',
+    'a small chart’s column has no name or figure on the screen: its period and figure are its hint',
+  ],
+  [
+    'shared/ui/StepLine.vue <span> v-tooltip.detail="point.text"',
+    'a reading is a dot on a line: its moment, its share and its source are its hint',
   ],
   [
     'shared/ui/RichInlines.vue <a> v-tooltip.detail="hoverTitle(node.reference)"',

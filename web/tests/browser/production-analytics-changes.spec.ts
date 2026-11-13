@@ -1,14 +1,14 @@
 /**
- * A change of account is said where its day is read — the readout over the chart, the day's name
- * and its row of the table — and marked by a line up the plot in its column: no footnote under
- * the chart and no row of numbers over it, so two changes, or twelve, leave the plot the height
- * it has with none. The readout is one line in either language at 1440 and 1920 pixels, cut and
- * whole in its hint, and nothing moves as the pointer walks the days. «Today», read by its hours
- * at 15:30, says the running hour and not 23:00, and its hours' names never touch: the axis
+ * A change of account is said where its day is read — the day's hint, its name and its row of
+ * the table — and marked by a line up the plot in its column: no footnote under the chart and no
+ * line of words over it, so two changes, or twelve, leave the plot the height it has with none.
+ * Each day's hint says it whole in either language at 1440 and 1920 pixels, and nothing moves as
+ * the pointer walks the days. «Today», read by its hours at 15:30, says the running hour as under
+ * way and stops Tab on it rather than on 23:00, and its hours' names never touch: the axis
  * stepping back from 23:00 by three names 14:00, which used to run into the running 15:00.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
@@ -36,8 +36,8 @@ const worked = (
 
 /**
  * The week to Wednesday afternoon and the Monday a week before, the second account joining on
- * Tuesday and alone on Wednesday: two changes. Tuesday holds five tasks and the change, so at
- * 1440 its readout is longer than its line.
+ * Tuesday and alone on Wednesday: two changes. Tuesday holds five tasks and the change, so its
+ * hint runs to many lines.
  */
 const TWO: TimedStretch[] = [
   worked(9, FIRST, 5, 1),
@@ -63,7 +63,7 @@ async function openOverview(page: Page, width: number, height: number, address =
   return chart
 }
 
-/** The overview chart's plot field, readout and frame, and whatever stands under the chart. */
+/** The overview chart's plot field and frame, any line over it, and whatever stands under it. */
 const plotParts = (page: Page) =>
   page.evaluate(() => {
     const chart = document.querySelector('.overview-chart')
@@ -73,14 +73,27 @@ const plotParts = (page: Page) =>
     }
     return {
       field: box('.period-field'),
-      readout: box('.period-readout'),
+      readouts: chart?.querySelectorAll('.period-readout').length ?? -1,
       frame: box('.period-frame'),
       notes: chart?.querySelectorAll('.period-notes, .period-markers').length ?? -1,
       marks: chart?.querySelectorAll('.period-mark').length ?? -1,
     }
   })
 
-test('two account changes leave the overview plot as tall as none at 1440×900, said in the readout', async ({
+/**
+ * Points at a day over its stack, where no segment of it stands, and waits for its hint, once the
+ * hint of a day pointed at before is gone.
+ */
+async function pointAt(page: Page, column: Locator) {
+  const hint = page.getByRole('tooltip')
+  await page.mouse.move(0, 0)
+  await expect(hint).toBeHidden()
+  await column.hover({ position: { x: 2, y: 2 } })
+  await expect(hint).toBeVisible()
+  return hint
+}
+
+test('two account changes leave the overview plot as tall as none at 1440×900, said in the hint', async ({
   page,
 }, info) => {
   await serve(page, NONE)
@@ -97,12 +110,16 @@ test('two account changes leave the overview plot as tall as none at 1440×900, 
   expect(two.notes).toBe(0)
   expect(two.field?.height).toBe(none.field?.height)
   expect(two.frame?.height).toBe(none.frame?.height)
+  expect(two.readouts).toBe(0)
 
-  // Wednesday, read with no day pointed at, says its change; Tuesday says its own when pointed at.
-  const readout = chart.locator('.period-readout')
-  await expect(readout).toContainText('Account change: f0f0f0f0, 2a2a2a2a → 2a2a2a2a')
-  await chart.locator('.period-slot').nth(1).hover()
-  await expect(readout).toContainText('Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a')
+  // Each day says its own change in its hint, Wednesday and Tuesday.
+  const columns = chart.locator('.period-column')
+  await expect(await pointAt(page, columns.last())).toContainText(
+    'Account change: f0f0f0f0, 2a2a2a2a → 2a2a2a2a',
+  )
+  await expect(await pointAt(page, columns.nth(1))).toContainText(
+    'Account change: f0f0f0f0 → f0f0f0f0, 2a2a2a2a',
+  )
   await expect(chart.locator('.period-slot').nth(1).locator('.period-mark')).toHaveCount(1)
 
   // The table keeps saying each change in its day's row.
@@ -131,59 +148,44 @@ test('twelve account changes are twelve lines up the plot and no line under it',
   await days.getByRole('radio', { name: 'Chart' }).click()
   await expect(days.locator('.period-mark')).toHaveCount(12)
   await expect(days.locator('.period-notes, .period-markers')).toHaveCount(0)
-  await days.locator('.period-slot:has(.period-mark)').first().hover()
-  await expect(days.locator('.period-readout')).toContainText('Account change:')
+  // Each day here is a full stack, so a day is read by the keyboard: the one before the latest,
+  // stood on with an arrow, says its change in its hint.
+  await days.locator('.period-column[tabindex="0"]').focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.getByRole('tooltip')).toContainText('Account change:')
 })
 
 for (const lang of ['en', 'ru'] as const)
-  test.describe(`the readout in ${lang === 'ru' ? 'Russian' : 'English'}`, () => {
+  test.describe(`the hint of a day in ${lang === 'ru' ? 'Russian' : 'English'}`, () => {
     test.use({ locale: lang === 'ru' ? 'ru-RU' : 'en-US' })
     for (const width of [1440, 1920])
-      test(`is one line at ${width}px, never wrapped, and moves nothing`, async ({
-        page,
-      }, info) => {
+      test(`says each day whole at ${width}px and moves nothing`, async ({ page }, info) => {
         await serve(page, TWO)
         const chart = await openOverview(page, width, 900)
-        const readout = chart.locator('.period-readout')
-        const slots = chart.locator('.period-slot')
+        const columns = chart.locator('.period-column')
         await page.mouse.move(0, 0)
         const still = await plotParts(page)
         const seen: { cut: boolean; lines: number; text: string }[] = []
-        for (let index = 0; index < (await slots.count()); index += 1) {
-          await slots.nth(index).hover()
+        for (let index = 0; index < (await columns.count()); index += 1) {
+          const hint = await pointAt(page, columns.nth(index))
           const parts = await plotParts(page)
-          expect(parts.readout, `day ${index + 1}`).toEqual(still.readout)
           expect(parts.field, `day ${index + 1}`).toEqual(still.field)
-          seen.push(
-            await readout.evaluate((element) => ({
-              text: element.textContent?.trim() ?? '',
-              lines:
-                element.getBoundingClientRect().height /
-                Number.parseFloat(getComputedStyle(element).lineHeight),
-              cut: element.scrollWidth > element.clientWidth,
-            })),
-          )
+          expect(parts.frame, `day ${index + 1}`).toEqual(still.frame)
+          const text = (await hint.textContent()) ?? ''
+          const cut = await page
+            .locator('.tooltip-hint')
+            .evaluate(
+              (element) =>
+                element.scrollWidth > element.clientWidth ||
+                element.scrollHeight > element.clientHeight,
+            )
+          seen.push({ text, lines: text.split('\n').length, cut })
         }
-        await record(info, `readout-${lang}-${width}`, seen)
-        for (const one of seen) expect(one.lines).toBeCloseTo(1, 1)
-        await expect(readout).toHaveCSS('white-space', 'nowrap')
+        await record(info, `hint-${lang}-${width}`, seen)
+        for (const one of seen) expect(one.cut, one.text).toBe(false)
+        // Tuesday, five tasks and a change, says each on a line of its own.
+        expect(seen[1]?.lines).toBeGreaterThan(5)
       })
-
-    // Tuesday, five tasks and a change, is longer than its line at 1440: cut, and whole in its
-    // hint, which the pointer reaches from the day.
-    test('cuts a longer line at 1440px and says it whole in its hint', async ({ page }) => {
-      await serve(page, TWO)
-      const chart = await openOverview(page, 1440, 900)
-      const readout = chart.locator('.period-readout')
-      await chart.locator('.period-slot').nth(1).hover()
-      const said = await readout.evaluate((element) => ({
-        cut: element.scrollWidth > element.clientWidth,
-        text: element.textContent?.trim() ?? '',
-      }))
-      expect(said.cut).toBe(true)
-      await readout.hover()
-      await expect(page.getByRole('tooltip')).toHaveText(said.text)
-    })
   })
 
 /** The names of the hours of the day chart under `chart`, left to right, with their edges. */
@@ -234,14 +236,13 @@ test('«Today» says the running hour, and its hours’ names keep apart at ever
   await page.clock.setSystemTime(HALF_PAST_THREE)
   const chart = await openOverview(page, 1440, 900, pageAt({ period: 'today' }))
   await expect(chart.locator('.period-slot')).toHaveCount(24)
-  // 15:30 on Wednesday: 15:00 is under way and 16:00 to 23:00 are still to come.
-  await expect(chart.locator('.period-readout')).toHaveText(
+  // 15:30 on Wednesday: 15:00 is under way and 16:00 to 23:00 are still to come. Its hint says
+  // so, and Tab stops on it rather than on 23:00.
+  const running = chart.locator('.period-slot[data-key*="T15:00"] .period-column')
+  await expect(await pointAt(page, running)).toHaveText(
     /^Wednesday, November 11 at 15:00: total 0\smin so far/u,
   )
-  await expect(chart.locator('.period-slot[data-shown="true"]')).toHaveAttribute(
-    'data-key',
-    /T15:00/u,
-  )
+  await expect(running).toHaveAttribute('tabindex', '0')
   // The axis steps back from 23:00 by three and so names 14:00, beside the running 15:00: the
   // neighbour gives way rather than touch it.
   const placed = await hourNames(page, '.overview-chart')
@@ -256,7 +257,8 @@ test('«Today» says the running hour, and its hours’ names keep apart at ever
   await openReport(page, 1440, pageAt({ by: 'work_item', period: 'today' }))
   const days = page.locator('.analytics-panel .spending-days')
   await days.getByRole('radio', { name: 'Chart' }).click()
-  await expect(days.locator('.period-readout')).toHaveText(/^Wednesday, November 11 at 15:00/u)
+  const hour = days.locator('.period-slot[data-key*="T15:00"] .period-column')
+  await expect(await pointAt(page, hour)).toHaveText(/^Wednesday, November 11 at 15:00/u)
   // From 1200 up: under it the page takes turns between its list of sections and one section.
   const section = await hourGaps(page, '.analytics-panel .spending-days', 1200)
 

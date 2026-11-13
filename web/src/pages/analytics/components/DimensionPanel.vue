@@ -152,6 +152,7 @@ const showTable = () => table.value?.reveal()
             :narrow="narrow"
             :slots="slots"
             :usage="usage"
+            @narrow="(value, label) => emit('narrow', by, value, label, 'bars')"
           />
         </div>
         <SpendingDays
@@ -163,6 +164,7 @@ const showTable = () => table.value?.reveal()
           :read-at="readAt"
           :usage="usage"
           @day="(day, label) => emit('day', day, label)"
+          @narrow="(value, label) => emit('narrow', by, value, label, 'days')"
         />
       </PanelLevel>
       <SpendingTable

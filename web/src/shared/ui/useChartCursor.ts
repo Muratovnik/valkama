@@ -1,16 +1,27 @@
 /**
- * The one place Tab lands in a chart whose periods or segments act, and where the arrows take
- * it from there (`nextCursor`). A chart of thirty days is one stop for Tab rather than thirty;
- * the stop is the place last stood on while it is still there, else the latest period, which
- * is the one a reader comes for. A press stands on what it pressed, so the next Tab returns
- * there. A move after a key is ringed, as `moveFocus` rings what the keyboard reached.
+ * The one place Tab lands in a chart of periods, and where the arrows take it from there
+ * (`nextCursor`): every period, and each segment of one that acts. A chart of thirty days is one
+ * stop for Tab rather than thirty; the stop is the place last stood on while it is still there,
+ * else the latest period begun (`lastBegun`), which is the one a reader comes for. A press stands on what it pressed,
+ * so the next Tab returns there. A move after a key is ringed, as `moveFocus` rings what the
+ * keyboard reached.
  */
 import type { Ref } from 'vue'
 import { computed, nextTick, ref } from 'vue'
 
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import type { ChartCursor, StackedColumn } from '@/shared/ui/chartGeometry.ts'
+import type { ChartCursor, StackedColumn, StackSegment } from '@/shared/ui/chartGeometry.ts'
 import { nextCursor } from '@/shared/ui/chartGeometry.ts'
+
+/**
+ * The last period begun: the one still running where one is, so a day read by its hours stops on
+ * the hour under way rather than on the last hour of the day, still to come; the last otherwise.
+ */
+function lastBegun(columns: readonly StackedColumn[]): number {
+  for (let index = columns.length - 1; index >= 0; index -= 1)
+    if (columns[index]?.column.incomplete) return index
+  return columns.length - 1
+}
 
 /** The attribute value the element a cursor names carries, for the move to find it. */
 export function cellId(column: number, segment: number | null) {
@@ -19,23 +30,19 @@ export function cellId(column: number, segment: number | null) {
 
 export function useChartCursor(
   columns: () => readonly StackedColumn[],
-  bySegment: () => boolean,
+  acts: (segment: StackSegment) => boolean,
   root: Ref<HTMLElement | null>,
 ) {
   const cursor = ref<ChartCursor | null>(null)
-  const standsOn = (index: number) => !bySegment() || (columns()[index]?.segments.length ?? 0) > 0
 
   const active = computed<ChartCursor | null>(() => {
     const all = columns()
     const wanted = cursor.value
-    if (wanted && wanted.column < all.length && standsOn(wanted.column)) {
-      const count = all[wanted.column]?.segments.length ?? 0
-      const segment = bySegment() ? Math.min(wanted.segment ?? 0, count - 1) : null
-      return { column: wanted.column, segment }
-    }
-    for (let index = all.length - 1; index >= 0; index -= 1)
-      if (standsOn(index)) return { column: index, segment: bySegment() ? 0 : null }
-    return null
+    if (!all.length) return null
+    if (!wanted || wanted.column >= all.length) return { column: lastBegun(all), segment: null }
+    const segment =
+      wanted.segment === null ? undefined : all[wanted.column]?.segments[wanted.segment]
+    return segment && acts(segment) ? wanted : { column: wanted.column, segment: null }
   })
 
   function tabStop(column: number, segment: number | null) {
@@ -50,7 +57,7 @@ export function useChartCursor(
   async function move(event: KeyboardEvent) {
     const at = active.value
     if (!at) return
-    const next = nextCursor(columns(), at, event.key)
+    const next = nextCursor(columns(), at, event.key, acts)
     if (!next) return
     event.preventDefault()
     cursor.value = next

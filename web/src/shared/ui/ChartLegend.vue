@@ -5,14 +5,44 @@
  * its hue alone; one series needs none, since the chart's title already says what it is. A chart
  * that marks a period it is compared with names that mark last (`outline`), beside a short line
  * as the plot draws it at the height that period reached.
+ *
+ * An entry is a mark of its chart: its hint says what the name does not (`hints`, by series key,
+ * `outline` for the mark of the period compared with), and a series that acts (`MarkAction`) is
+ * pressed here as on its segments: a link sent out as `follow` with the press, a button as
+ * `select` with its key. The rest only show.
  */
 import type { PeriodSeries } from '@/shared/ui/chartGeometry.ts'
+import { markTag, markType } from '@/shared/ui/chartGeometry.ts'
+import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
 
-defineProps<{
+const props = defineProps<{
   series: readonly PeriodSeries[]
+  /** What each entry says in its hint, by series key; `outline` for the period compared with. */
+  hints?: ReadonlyMap<string, string>
   /** The name of the mark of the period compared with, when the chart draws one. */
   outline?: string
 }>()
+
+const emit = defineEmits<{ follow: [key: string, press: MouseEvent]; select: [key: string] }>()
+
+function press(one: PeriodSeries, event: MouseEvent) {
+  if (one.href) emit('follow', one.key, event)
+  else if (one.actionable) emit('select', one.key)
+}
+
+/** A middle press on a link opens it elsewhere, and is a press on it all the same. */
+function pressAside(one: PeriodSeries, event: MouseEvent) {
+  if (one.href && event.button === 1) emit('follow', one.key, event)
+}
+
+/** An entry that acts is named by what it does, where it says so, else by its name. */
+const keyAttrs = (one: PeriodSeries) =>
+  one.href || one.actionable
+    ? { 'href': one.href, 'type': markType(one), 'aria-label': one.action }
+    : {}
+
+/** What an entry says that its name does not, by its series' key. */
+const hintOf = (key: string) => props.hints?.get(key)
 </script>
 
 <template>
@@ -20,26 +50,40 @@ defineProps<{
     <li
       v-for="one in series"
       :key="one.key"
-      class="chart-key"
-      :data-series="one.key"
+      class="chart-entry"
     >
-      <span
-        class="chart-swatch series-fill"
-        aria-hidden="true"
-        :data-slot="one.slot"
-      />
-      <span class="chart-key-name">{{ one.label }}</span>
+      <component
+        :is="markTag(one, 'span')"
+        v-tooltip.detail="hintOf(one.key)"
+        class="chart-key"
+        :data-series="one.key"
+        v-bind="keyAttrs(one)"
+        @click="(event: MouseEvent) => press(one, event)"
+        @auxclick="(event: MouseEvent) => pressAside(one, event)"
+      >
+        <span
+          class="chart-swatch series-fill"
+          aria-hidden="true"
+          :data-slot="one.slot"
+        />
+        <span class="chart-key-name">{{ one.label }}</span>
+      </component>
     </li>
     <li
       v-if="outline"
-      class="chart-key"
-      data-series="outline"
+      class="chart-entry"
     >
       <span
-        class="chart-outline"
-        aria-hidden="true"
-      />
-      <span class="chart-key-name">{{ outline }}</span>
+        v-tooltip.detail="hintOf('outline')"
+        class="chart-key"
+        data-series="outline"
+      >
+        <span
+          class="chart-outline"
+          aria-hidden="true"
+        />
+        <span class="chart-key-name">{{ outline }}</span>
+      </span>
     </li>
   </ul>
 </template>
@@ -58,11 +102,33 @@ defineProps<{
   list-style: none;
 }
 
+.chart-entry {
+  display: flex;
+  min-width: 0;
+}
+
+/* An entry that acts is a line of the legend, not a control standing in it: the same box and
+   words as one that does not, with the pointer's hand. */
 .chart-key {
   display: inline-flex;
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  background: none;
+
+  &:is([type='button'], [href]) {
+    cursor: pointer;
+
+    &:hover .chart-key-name {
+      text-decoration: underline;
+    }
+  }
 }
 
 .chart-key-name {
