@@ -37,6 +37,9 @@ WEEK_RESET = "2030-03-08T09:00:00Z"
 FIVE_RESET = "2030-03-06T13:00:00Z"
 EARLIER_FIVE_RESET = "2030-03-06T08:00:00Z"
 SEAT = samples.seat_for_week(WEEK_RESET)
+#: The week before it, which ended on 2030-03-01 09:00, and the seat its readings named.
+ENDED_RESET = "2030-03-01T09:00:00Z"
+ENDED_SEAT = samples.seat_for_week(ENDED_RESET)
 
 
 def at(text: str) -> dt.datetime:
@@ -207,6 +210,28 @@ class AccountTests(_Quota):
         # A name taken away is no name.
         names.write(self.conn, {"names": {ORG_C: ""}})
         self.assertIsNone(self.account(self.quota(), ORG_C)["name"])
+
+    def test_a_provisional_seat_whose_week_has_ended_is_left_out(self) -> None:
+        # One machine whose readings name no account, read before and after its week reset
+        # on 2030-03-01 09:00: the seat key changes with the week, so the two weeks are two
+        # provisional seats. The week that has ended is no account any more, and the
+        # organization is not said to have no source, since a source read it.
+        self.working("s-c", ORG_C, ago(days=6))
+        self.statusline(ago(days=5, hours=2), "s-c", week(96, ENDED_RESET), seat=ENDED_SEAT)
+        self.statusline(ago(minutes=3), "s-c", week(12))
+        answer = self.quota()
+        self.assertEqual([SEAT], [one["seat"] for one in answer["accounts"]])
+        current = self.account(answer, ORG_C)
+        self.assertFalse(current["no_source"])
+        self.assertEqual(12.0, self.window(current, "week")["latest"]["used_percent"])
+
+    def test_a_provisional_seat_of_an_ended_week_alone_is_no_entry(self) -> None:
+        # Read only in the week that has ended: nothing of it stands now, and the
+        # organization's work was read by a source, so it is not an entry with no source.
+        self.working("s-c", ORG_C, ago(days=6))
+        self.statusline(ago(days=5, hours=2), "s-c", week(96, ENDED_RESET), seat=ENDED_SEAT)
+        self.working("s-c", ORG_C, ago(days=1))
+        self.assertEqual([], self.quota()["accounts"])
 
     def test_a_session_whose_organization_is_not_read_yet_is_no_account(self) -> None:
         self.statusline(ago(minutes=2), "s-unread", week(31))

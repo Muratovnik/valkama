@@ -5,7 +5,10 @@ every organization whose work has a usage segment in that span but no such sampl
 has no source. An account is an organization and its account's UUID, or, for samples
 without one, the provisional seat `seats.account_of_seat` leaves them on. The samples are
 read through `seats.account_samples`, the read the alerts take, so both see one account
-where the other does.
+where the other does. A provisional seat is known for its week alone, so one whose week
+has ended is left out: the same machine read across a week's reset is otherwise two
+accounts, the week gone and the week running. Its organization is not then an entry with
+no source, because a source did read it.
 
 A window is one kind of an account, and for a model's week one model. Its latest sample
 says how much of it is spent, when and by which source; the window's start is its reset
@@ -193,6 +196,13 @@ def _by_account(
     return accounts
 
 
+def _ended(account: _Account, clock: _Clock) -> bool:
+    """Whether an account is a provisional seat whose week has ended by the answer's moment."""
+
+    seat = account[2]
+    return seat is not None and _millis(seats.week_end(seat)) <= clock.now
+
+
 def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None = None) -> dict:
     """Every account's quota windows at `now`, the times at `utc_offset` minutes from UTC."""
 
@@ -200,6 +210,8 @@ def read(conn: sqlite3.Connection, utc_offset: int, *, now: dt.datetime | None =
     since = samples.instant((_EPOCH + dt.timedelta(milliseconds=clock.now) - LOOKBACK).isoformat())
     accounts = _by_account(seats.account_samples(conn, since, quota_store.KINDS))
     read_from = {organization for organization, _, _ in accounts}
+    for account in [one for one in accounts if _ended(one, clock)]:
+        del accounts[account]
     for (organization,) in conn.execute(_ORGANIZATIONS_AT_WORK, (since,)):
         if organization not in read_from:
             accounts[str(organization), None, None] = {}

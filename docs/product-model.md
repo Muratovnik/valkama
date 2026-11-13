@@ -78,12 +78,13 @@ each module's manifest inside a registration that keeps the wire's `state`,
 is `mutable`, and `updated_at` is when the list last changed. Memory
 contributes references inside work-item context rather than a standalone
 navigation destination. Analytics is the destination for the usage of agent
-work — time, tokens and an API-price estimate. It declares two read models:
-`analytics.usage`, what agent work spent in a period, by up to two of its
-dimensions, served as `GET /api/analytics/usage`; and `analytics.uses`, how often
-each analytics surface was opened, by day and kind, served as
-`GET /api/analytics/uses`. Its one action, `module.analytics.report-use`, counts an
-opening with `POST /api/analytics/uses`. All three are described in
+work — time, tokens, an API-price estimate and the subscription quota. It
+declares three read models: `analytics.usage`, what agent work spent in a period,
+by up to two of its dimensions, served as `GET /api/analytics/usage`;
+`analytics.quota`, where each account's quota windows stand now, served as
+`GET /api/analytics/quota`; and `analytics.uses`, how often each analytics surface
+was opened, by day and kind, served as `GET /api/analytics/uses`. Its one action, `module.analytics.report-use`, counts an
+opening with `POST /api/analytics/uses`. All four are described in
 `connection-contract.md`. Improvements, Skills, and standalone Sessions registrations,
 pages, and APIs are retired, as are the flow-metrics Analytics dashboards and
 exports that an earlier build registered under the same id.

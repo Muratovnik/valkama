@@ -208,6 +208,18 @@
   border-radius: var(--radius-card);
 }
 
+/* The window bars and step line stand on the panel's own ground, as the quota panel shows them. */
+.charts-harness-section[data-ground='canvas'] {
+  background: var(--color-canvas);
+}
+
+/* The window bars one under another, at a panel's column width. */
+.charts-harness-windows {
+  display: grid;
+  gap: var(--space-4);
+  inline-size: min(100%, 32rem);
+}
+
 /* The small charts at the width a tile of the rail gives them. */
 .charts-harness-mini {
   display: grid;

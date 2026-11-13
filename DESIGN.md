@@ -944,6 +944,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   running is hatched, and a forced palette draws the marks in its ink and the floor, the rest and
   an empty track in its quiet ink. Neither acts or moves under the pointer, and each keeps its
   height with nothing to draw, so the tile around it never moves when its figures arrive.
+  Two forms draw one window of a limit, a share of it spent and never a sum of two:
+  `WindowBar`, the share as a fill on a track of the series hue's own tint, a tick across the
+  bar where steady use from the window's start would stand now, and the share and the state in
+  words beside it; and `StepLine`, the window's readings as steps from its start to its reset,
+  flat until the next reading and never a slope between two, with steady use as a thin diagonal
+  in the text ink and the reading under the pointer said over the plot in a box that keeps its
+  size. A window no longer fresh is hatched, a 0 % has no fill, and a window with no figure draws
+  the track alone; the fill stands apart from the ground and the track by lightness, so both read
+  in grayscale and under a forced palette in its inks. Their table twins are `WindowBarTable`
+  and `StepLineTable`.
   A value keeps one hue in every chart of a panel — its bar, its small chart and its share of a
   day — and its name beside it.
   A table that is the subject of its panel, as a dimension's breakdown, takes the height the
@@ -2117,9 +2127,9 @@ Records reach the store in batches, so the bar says the newest record's
 age in seconds and the minutes after it are hatched as «no data yet» rather than drawn
 as a drop; the minute chart says under itself that its figures are an estimate.
 
-The rail holds a tile for the overview, one for the token kinds and one for each dimension
-of the read: account, project, task, executor, role, launch class, model, effort and
-environment. A tile is a summary of its own — the leading value, its share, how many values
+The rail holds a tile for the overview, one for the token kinds, two for the subscription
+quota — «Five hours» and «Week» — and one for each dimension of the read: account, project,
+task, executor, role, launch class, model, effort and environment. A tile is a summary of its own — the leading value, its share, how many values
 have a figure in the chosen measure and one bar of the split — so every breakdown is in view
 before any is opened, and choosing a tile opens its section in the panel. Opening a section,
 from its tile or a card's heading, is a step of the history, so Back returns to where it was;
@@ -2170,6 +2180,23 @@ and the kinds are reached by the table's own sideways scroll.
 
 The token kinds are a section of the same shape, a kind for a value: the kinds the tokens
 figure counts add up to it, cache reads stand beside them and reasoning is part of output.
+
+The quota's two sections read where each account's quota stands now, which no period or
+filter changes, and read it again on the live interval whatever the period. Each tile names
+the tightest window of its kind across accounts — the most spent of those whose reset is still
+ahead, a fresh one before a silent one at the same share — by its account's name, with its
+share, its state in words beside the section's name and a thin `WindowBar`. A tile with no
+window to name says why: no source read the work, the windows reset since they were read, or
+no reading. The panel has a row per account, by the name its owner gave it or the start of its
+id, the whole id in its hint, and for each window its bar, when it resets in absolute and
+relative time, its forecast — the five hours a point, lasting to the reset or running out at a
+time; a week a range, said as a range — where steady use would stand, how old its latest
+reading is and who read it, and the `StepLine` of its readings. An account no source read says
+so and draws no window; a silent window is hatched and says since when it has not changed; a
+fresh 0 % draws an empty track and says «0% used» and «fresh». A window of money past a limit
+is a line of its state, its age and its source, with no figure. No share is added to another,
+of two windows or two accounts, and no dollar stands beside one. Each window's grid keeps an
+area after its readings for what used the window, empty until the read answers it.
 
 A cost is always an estimate at API prices and is written as one, with «≈»; cached reads
 are counted apart from the tokens processed anew and never summed into them.

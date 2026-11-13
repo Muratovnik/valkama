@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * The figures of one section under its name on the rail: a line of words — the total and how it
- * moved, or the first value and its share — over a small chart, the overview's days
- * (`MiniTrend`) or a dimension's first shares (`MiniShareBar`).
+ * moved, the first value and its share, or the account of the tightest window of the quota and
+ * its share — over a small chart, the overview's days (`MiniTrend`), a dimension's first shares
+ * (`MiniShareBar`) or that one window with its pace (`WindowBar`).
  *
  * Every state takes the same box: the line is one line, cut with an ellipsis and whole in its
  * hint, and the chart's place is kept at its height while there is no chart to draw, so a tile
@@ -22,10 +23,11 @@ import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import MiniShareBar from '@/shared/ui/MiniShareBar.vue'
 import MiniTrend from '@/shared/ui/MiniTrend.vue'
 import { vTooltip } from '@/shared/ui/tooltipAnchors.ts'
+import WindowBar from '@/shared/ui/WindowBar.vue'
 
 const props = defineProps<{
   /** The chart the tile draws, which sets the height kept for it in every state. */
-  chart: 'shares' | 'trend'
+  chart: 'shares' | 'trend' | 'window'
   tile: RailTileModel
 }>()
 
@@ -85,6 +87,15 @@ const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
         :label="tile.shares.label"
         :parts="tile.shares.parts"
       />
+      <WindowBar
+        v-else-if="tile.meter && !shown"
+        v-tooltip.detail="tile.meter.label"
+        :label="tile.meter.label"
+        :used="tile.meter.used"
+        :even="tile.meter.even"
+        :held="tile.meter.held"
+        compact
+      />
     </span>
   </span>
 </template>
@@ -135,6 +146,11 @@ const pending = useAnewDimmed(usePageStanding(), () => props.tile.busy)
 
   &[data-chart='shares'] {
     block-size: var(--space-2);
+  }
+
+  /* A thin window and the pace tick that stands over and under it. */
+  &[data-chart='window'] {
+    block-size: var(--space-3);
   }
 }
 </style>

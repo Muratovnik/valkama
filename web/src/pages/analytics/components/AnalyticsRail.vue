@@ -10,7 +10,9 @@
  *
  * Each entry is a tile: the section's name and, under it, its figures in the page's measure
  * (`RailTile`) — the overview's total, its change and its days; a dimension's count of values, its
- * first value with that value's share and the shares of the first few. The name is the entry's
+ * first value with that value's share and the shares of the first few; a section of the quota,
+ * beside its name the state of its tightest window, under it that window's account and share over
+ * a thin bar of it. The name is the entry's
  * name to a reader and the figures its description, so the name stays what a voice command says.
  *
  * On a screen too narrow for the rail beside the panel the rail is the whole screen, a list whose
@@ -21,7 +23,7 @@ import { computed, ref, useId } from 'vue'
 import RailTile from '@/pages/analytics/components/RailTile.vue'
 import type { RailTileModel } from '@/pages/analytics/composables/useRailTiles.ts'
 
-import { OVERVIEW } from '@/shared/api/analyticsAddress.ts'
+import { isQuotaSection, OVERVIEW } from '@/shared/api/analyticsAddress.ts'
 import type { AnalyticsSection } from '@/shared/api/analyticsAddress.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -49,6 +51,12 @@ function mark(section: AnalyticsSection) {
 
 const ids = useId()
 
+/** The chart a section's tile draws: the overview's days, a window of the quota, or shares. */
+function chartOf(section: AnalyticsSection) {
+  if (section === OVERVIEW) return 'trend' as const
+  return isQuotaSection(section) ? ('window' as const) : ('shares' as const)
+}
+
 /**
  * The sections with the figures each has, if any, the ids that name an entry by its name and
  * describe it by its figures, and the chart its tile draws: the overview's days, a dimension's
@@ -62,7 +70,7 @@ const entries = computed(() =>
       tile,
       nameId: `${ids}-${section.value}-name`,
       tileId: tile ? `${ids}-${section.value}-tile` : undefined,
-      chart: section.value === OVERVIEW ? ('trend' as const) : ('shares' as const),
+      chart: chartOf(section.value),
     }
   }),
 )

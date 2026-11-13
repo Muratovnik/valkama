@@ -1328,10 +1328,10 @@ empty store answers with no account.
 | --- | --- |
 | `now` | the moment the answer was worked out; every pace and state is as of it |
 | `fresh_for_seconds` | how old a window's latest sample may be and still be fresh: 900, the span the quota alerts read too |
-| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. Ordered by organization, then account |
+| `accounts` | one entry per account with a sample in the last seven days, and one per organization with a usage segment in that span and no such sample. A provisional seat whose week has ended is left out, and its organization is not then an entry with no source. Ordered by organization, then account |
 | `organization` | the organization's id |
 | `account_uuid` | the account's UUID: the sample's own, or the one its seat belongs to by the rule above; `null` for a provisional seat and for an organization with no sample |
-| `seat` | the provisional seat the samples without a UUID are on, `null` when the UUID is known. A provisional seat is known for one week, so a provisional account comes back as another entry the next week |
+| `seat` | the provisional seat the samples without a UUID are on, `null` when the UUID is known. A provisional seat is known for one week, so once its week has ended it is no entry: the same machine read across a reset is the next week's seat alone, not two accounts |
 | `plan` | the plan a source named for the account, or `null` |
 | `name` | the name the owner gave the account's organization, as the next section says, or `null` when none is set. Every entry of one organization has its name |
 | `no_source` | `true` for an organization whose work no quota source has read in the seven days; its `windows` are empty. An account with samples is `false` |

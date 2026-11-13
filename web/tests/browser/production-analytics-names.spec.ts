@@ -14,7 +14,8 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { serveUsage, task, value } from '../fixtures/analytics.ts'
 import type { TimedStretch } from '../fixtures/analytics.ts'
-import { pageAt } from './analyticsPage.ts'
+import { quotaAt } from '../fixtures/quota.ts'
+import { pageAt, serveQuota } from './analyticsPage.ts'
 import { installBackend } from './backend.ts'
 import { globalScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -58,6 +59,7 @@ const HEX_ONLY = /^[\da-f]{6,}$/u
 async function serve(page: Page, names: Record<string, string> = {}) {
   await page.clock.setSystemTime(NOW)
   const backend = await installBackend(page, { accountNames: names })
+  await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     const query = new URL(route.request().url()).searchParams
     await route.fulfill({

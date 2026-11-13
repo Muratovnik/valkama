@@ -1,14 +1,17 @@
 /**
  * The Analytics page's browser double and measurements: the work the double holds, how it
- * answers `/api/analytics/usage` by what each read asks, and where the page's parts stand.
+ * answers `/api/analytics/usage` by what each read asks and `/api/analytics/quota` with the
+ * quota of four made-up accounts, and where the page's parts stand.
  */
 import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
 
+import type { Quota } from '@/shared/api/analyticsApi.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { noTask, serveUsage, task, unknownTask, value } from '../fixtures/analytics.ts'
 import type { Stretch, TimedStretch } from '../fixtures/analytics.ts'
+import { quotaAnswer, quotaAt } from '../fixtures/quota.ts'
 import { installBackend } from './backend.ts'
 import { globalScope } from './planningFixtures.ts'
 
@@ -152,6 +155,7 @@ const weekBefore = (query: URLSearchParams) => query.get('from')?.includes('T') 
 export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore = false) {
   await page.clock.setSystemTime(NOW)
   await installBackend(page)
+  await serveQuota(page, quotaAt(NOW))
   await page.route('**/api/analytics/usage?*', async (route) => {
     if (answer === 'hold') return
     const query = new URL(route.request().url()).searchParams
@@ -162,6 +166,23 @@ export async function serve(page: Page, answer: Answer = WORLD, failWeekBefore =
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify(serveUsage(answer, query)),
+    })
+  })
+}
+
+/**
+ * Answers the quota read with `quota`, or fails it. A later call stands over an earlier one, so a
+ * test that served the page can give the quota another answer.
+ */
+export async function serveQuota(page: Page, quota: Quota | 'failed') {
+  await page.route('**/api/analytics/quota?*', async (route) => {
+    if (quota === 'failed') {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(quotaAnswer(quota)),
     })
   })
 }

@@ -31,16 +31,19 @@ import tempfile
 import threading
 import unittest
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
 from server import http_surface, mcp_surface, session_open, sessions, store
+from server.analytics import quota as analytics_quota
 from server.hooks import ingest, normalize
 from server.ops import doctor, url_schemes
 from server.planning import calls, read_model, service, subscriptions
 from server.projects import project_registry
+from server.quota import samples
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
@@ -432,6 +435,83 @@ class _Scenario:
                 (at, source, owner, None if owner else session, account, seat),
             )
 
+    def quota(self) -> dict:
+        """The quota read as of a fixed moment: every kind of window, no source, a seat.
+
+        One account read by the poll: its five hours twice and fresh, its week and a
+        model's week silent, and its usage credits. An organization that worked with no
+        source, and a session's account known by its seat alone. The read is held at
+        `moment`, which every reading is placed before, so its paces stay the same.
+        """
+
+        moment = datetime(2026, 11, 10, 10, 0, tzinfo=UTC)
+
+        def ago(**span: float) -> str:
+            return (moment - timedelta(**span)).isoformat()
+
+        five_reset = (moment + timedelta(hours=2)).isoformat()
+        week_reset = (moment + timedelta(days=3)).isoformat()
+        week_seat = samples.seat_for_week(week_reset)
+        seat_reset = (moment + timedelta(days=5)).isoformat()
+        organization = "6f1c2a8e-0000-4000-8000-0000000000a1"
+        account = "0b7d4e19-0000-4000-8000-0000000000a2"
+        conn = store.connect()
+        try:
+            run = conn.execute(
+                "INSERT INTO usage_runs(session_id, agent_id, client, path, first_at, last_at,"
+                " read_at) VALUES ('sess-quota', '', 'claude', 'quota.jsonl', ?, ?, ?)",
+                (ago(hours=3), ago(hours=1), ago(hours=1)),
+            ).lastrowid
+            for session, worked_for in (
+                ("sess-quota", "6f1c2a8e-0000-4000-8000-0000000000b1"),
+                ("sess-seat", "6f1c2a8e-0000-4000-8000-0000000000c1"),
+            ):
+                conn.execute(
+                    "INSERT INTO usage_segments(run_id, session_id, agent_id, model, started_at,"
+                    " ended_at, seconds, organization, quality)"
+                    " VALUES (?, ?, '', 'model-a', ?, ?, 600, ?, 'observed')",
+                    (run, session, ago(hours=3), ago(hours=1), worked_for),
+                )
+            readings = (
+                samples.Reading(
+                    "poll",
+                    ago(hours=1),
+                    (
+                        samples.Window("five_hour", 20.0, five_reset),
+                        samples.Window("week", 41.0, week_reset),
+                        samples.Window("week_model", 12.5, week_reset, model="model-a"),
+                        samples.Window("extra_usage", None, None, amount=4.0, currency="USD"),
+                    ),
+                    week_seat,
+                    organization=organization,
+                    account_uuid=account,
+                    plan="Max",
+                ),
+                samples.Reading(
+                    "poll",
+                    ago(minutes=5),
+                    (samples.Window("five_hour", 50.0, five_reset),),
+                    week_seat,
+                    organization=organization,
+                    account_uuid=account,
+                    plan="Max",
+                ),
+                samples.Reading(
+                    "statusline",
+                    ago(minutes=2),
+                    (samples.Window("week", 64.0, seat_reset),),
+                    samples.seat_for_week(seat_reset),
+                    session_id="sess-seat",
+                ),
+            )
+            for reading in readings:
+                samples.record(conn, reading, now=moment)
+            conn.commit()
+        finally:
+            conn.close()
+        with mock.patch.object(analytics_quota, "read", partial(analytics_quota.read, now=moment)):
+            return self.http("/api/analytics/quota?utc_offset=180")
+
     def live_frame(self) -> dict:
         """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
 
@@ -687,6 +767,7 @@ class _Scenario:
             "live-frame": self.live_frame(),
             **self.usage(),
             "doctor-vocabulary": {"quota": _doctor_quota_codes()},
+            "analytics-quota": self.quota(),
         }
 
 

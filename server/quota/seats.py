@@ -175,7 +175,7 @@ def account_samples(
     return known
 
 
-def _week_end(seat: str) -> str:
+def week_end(seat: str) -> str:
     """The reset a seat names, as the store writes a time: `week:…T09:00Z` is 09:00:00.000Z."""
 
     return seat.removeprefix("week:").removesuffix("Z") + ":00.000Z"
@@ -202,8 +202,8 @@ class _Sample(NamedTuple):
     def lapses_at(self) -> str:
         """When its state stops holding: its window's reset, or its seat's week's end."""
 
-        week_end = _week_end(self.seat)
-        return week_end if self.resets_at is None else min(self.resets_at, week_end)
+        ends = week_end(self.seat)
+        return ends if self.resets_at is None else min(self.resets_at, ends)
 
 
 class Segment(NamedTuple):
@@ -373,4 +373,5 @@ __all__ = [
     "organization_at",
     "seat_of_segment",
     "seats_of_segments",
+    "week_end",
 ]
