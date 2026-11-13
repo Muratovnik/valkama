@@ -123,6 +123,46 @@ test('a task pressed on the overview opens its card over the page, which edits a
   expect(after.period).toBe('Past 4 weeks')
 })
 
+for (const width of [1440, 390])
+  test(`the card stands over the page at the window's right edge, above everything there, at ${width}px`, async ({
+    page,
+  }, info) => {
+    await serveStore(page)
+    await serveTask(page)
+    await page.setViewportSize({ width, height: 800 })
+    // A phone shows the section rather than the list of sections; the address says which.
+    await page.goto(pageAt({ ...VIEW, open: 'section' }))
+    const row = page.locator('[data-card="work_item"] a.ranked-line[href="/open/MAIN-264"]')
+    await expect(row).toBeVisible()
+    await row.click()
+    const drawer = page.locator('.drawer')
+    await expect(drawer).toContainText(workItem.title)
+    await expect(drawer.locator('.card-priority')).toBeVisible()
+    // The card slides in from the right edge: it is measured where it comes to rest.
+    await expect(drawer).toHaveCSS('transform', 'none')
+    const placed = await drawer.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      const middle = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      return {
+        left: Math.round(box.left),
+        right: Math.round(box.right),
+        top: Math.round(box.top),
+        bottom: Math.round(box.bottom),
+        window: { width: innerWidth, height: innerHeight },
+        onTop: middle !== null && element.contains(middle),
+      }
+    })
+    await record(info, `analytics card overlay placed ${width}`, placed)
+    // At the window's right edge and inside it, and what is pressed in its middle is the card's.
+    expect(Math.abs(placed.right - placed.window.width)).toBeLessThanOrEqual(1)
+    expect(placed.left).toBeGreaterThanOrEqual(0)
+    expect(placed.top).toBeGreaterThanOrEqual(0)
+    expect(placed.bottom).toBeLessThanOrEqual(placed.window.height)
+    expect(placed.onTop).toBe(true)
+    // The page is still there under it.
+    await expect(page.locator('.analytics-page')).toBeAttached()
+  })
+
 test('Back closes the card over the page, and a modified press stays a link', async ({ page }) => {
   await serveStore(page)
   await serveTask(page)
