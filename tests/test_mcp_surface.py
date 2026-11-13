@@ -1790,6 +1790,58 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertIn("events", answer)
         self.assertEqual(["comment"], list(answer["applied"]))
 
+    def test_the_checklist_group_takes_the_steps_as_a_bare_list(self) -> None:
+        answer = self.answer(
+            "apply_work_item_changes",
+            {
+                "id": self.reference,
+                "author": "one",
+                "claim": True,
+                "checklist": ["one", "two", {"text": "three", "done": True}],
+            },
+        )
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(
+            [("one", False), ("two", False), ("three", True)],
+            [(step["text"], step["done"]) for step in item["checklist"]],
+        )
+        # The steps the item had keep their ids, as the object form keeps them.
+        self.assertEqual(self.steps, [step["id"] for step in item["checklist"]][:2])
+        self.assertEqual(
+            [step["id"] for step in item["checklist"]],
+            [step["item_id"] for step in answer["applied"]["checklist"]],
+        )
+
+    def test_force_is_taken_only_in_the_checklist_object_form(self) -> None:
+        planning_service.tick_checklist_item(self.conn, self.reference, self.steps[1])
+        self.conn.commit()
+        error = self.refusal(
+            "apply_work_item_changes", {"id": self.reference, "checklist": ["one"]}
+        )
+        self.assertEqual({"group": "checklist", "index": 0}, error["step"])
+        self.assertEqual(
+            2, len(planning_service.get_work_item(self.conn, self.reference)["checklist"])
+        )
+        self.answer(
+            "apply_work_item_changes",
+            {"id": self.reference, "checklist": {"items": ["one"], "force": True}},
+        )
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(["one"], [step["text"] for step in item["checklist"]])
+
+    def test_the_skill_and_the_tool_show_the_same_checklist_list(self) -> None:
+        form = '["first step", {"text": "…", "done": true}]'
+        with open(
+            os.path.join(ROOT, "server", "skill", "valkama", "SKILL.md"), encoding="utf-8"
+        ) as handle:
+            skill = handle.read()
+        self.assertIn(f"`checklist: {form}`", skill)
+        [tool] = [
+            tool for tool in mcp_surface.catalogue() if tool["name"] == "apply_work_item_changes"
+        ]
+        self.assertIn(form, tool["inputSchema"]["properties"]["checklist"]["description"])
+        self.assertIn('{"items": [...], "force": true}', skill)
+
     def test_an_object_parameter_named_like_text_shows_its_form(self) -> None:
         """A bare-text value for an object parameter fails in the client, before this server.
 
@@ -1912,6 +1964,16 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         # The refused item's number was not spent: the next one takes it.
         number = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Next")
         self.assertEqual(f"{SPACE_KEY}-3", number["reference"])
+
+    def test_the_new_items_steps_may_be_a_bare_list_or_the_object(self) -> None:
+        for checklist in (["a", {"text": "b", "done": True}], {"items": ["a", "b"]}):
+            with self.subTest(type(checklist).__name__):
+                answer = self.answer(
+                    "create_work_item",
+                    {"space": SPACE_KEY, "title": "Steps", "checklist": checklist},
+                )
+                item = planning_service.get_work_item(self.conn, answer["reference"])
+                self.assertEqual(["a", "b"], [step["text"] for step in item["checklist"]])
 
     def test_the_item_is_created_claimed_and_linked_in_one_call(self) -> None:
         answer = self.answer("create_work_item", self.discovered(), {"sessionId": self.SESSION})

@@ -69,8 +69,10 @@ send no release after the closing transition.
 ## Work the item
 
 **Checklist.** Keep the steps you actually take. Send them with the claim in one
-call (`apply_work_item_changes` with `claim: true` and `checklist`), and send
-a step that is already done as `{"text": "…", "done": true}`. A step sent with
+call: `apply_work_item_changes` with `claim: true` and
+`checklist: ["first step", {"text": "…", "done": true}]`, a step already done
+sent as that object. `{"items": [...], "force": true}` sends the same steps when
+`force` must carry a refusal through. A step sent with
 the text of one the item has keeps its id, claim and tick, so add steps by
 sending the existing ones first and the new ones after; the acknowledgement
 lists every step's `item_id`. Tick a step by its `item_id` with

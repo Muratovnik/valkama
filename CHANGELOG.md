@@ -48,6 +48,12 @@ checkouts are therefore distinguishable even at the same version.
   `required` and `options`, the refusal now ends with one valid `choice` field with two
   options, written as the JSON to send, and the id refusal says what an identifier may
   hold: a-z first, then a-z, 0-9, `_` or `-`, at most 64.
+- **A checklist group may be the list of steps itself.** The `checklist` of
+  `apply_work_item_changes` and of `create_work_item` now takes
+  `["first step", {"text": "…", "done": true}]` as well as `{"items": [...]}`, where a bare
+  list used to be refused with «checklist must be an object». `force` stays in the object
+  form, `{"items": [...], "force": true}`. The skill shows the list form first, and the
+  tool descriptions say both.
 
 ### Added
 

@@ -1703,7 +1703,7 @@ these groups, and applies them in this order:
 | `claim` | `true` | `claim_work_item`; `false` is no change |
 | `subscribe` | `true` or `false` | [Subscriptions](#subscriptions); only here |
 | `update` | `{title?, description?, labels?, labels_add?, labels_remove?, priority?, rank?, kind?, parent?, source?, mentions?}` | `update_work_item` |
-| `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
+| `checklist` | the steps' list, or `{items, force?}`; each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?, force?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
@@ -1834,7 +1834,7 @@ arguments that act on the item it creates:
 | Argument | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
-| `checklist` | `{items}`, as the batch's group takes it, without `force` | `set_work_item_checklist` |
+| `checklist` | the steps' list or `{items}`, as the batch's group takes it, without `force` | `set_work_item_checklist` |
 | `links` | list of `{other, kind}`, linking from the new item, at most 100 | `link_work_items` |
 
 They apply in the same transaction as the creation: the item is created, then

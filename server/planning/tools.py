@@ -349,7 +349,8 @@ TOOLS = [
             "checklist": {
                 "type": "object",
                 "description": "The new item's steps, as set_work_item_checklist takes"
-                " them; applied after the claim and before the links.",
+                ' them: the list alone, ["first step", {"text": "…", "done": true}], or'
+                ' {"items": [...]}; applied after the claim and before the links.',
                 "properties": {"items": _STEPS},
                 "required": ["items"],
             },
@@ -900,7 +901,9 @@ TOOLS = [
             "checklist": {
                 "type": "object",
                 "description": "Set the steps as set_work_item_checklist does, after"
-                " the claim and before the ticks: a repeated step keeps its item_id"
+                ' the claim and before the ticks: the list alone, ["first step",'
+                ' {"text": "…", "done": true}], or {"items": [...], "force": true} when'
+                " force must carry a refusal through. A repeated step keeps its item_id"
                 " and state, and a new one gets a new item_id, which checklist_ticks in"
                 " the same call cannot name: send it done=true instead."
                 " applied.checklist lists every item_id.",
