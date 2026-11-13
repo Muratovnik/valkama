@@ -68,6 +68,7 @@ defineExpose({
         :id="titleId"
         as="h4"
         level="panel"
+        rank="group"
         >{{ title }}</SectionHeading
       >
       <VButton

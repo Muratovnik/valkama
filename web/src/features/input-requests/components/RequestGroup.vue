@@ -37,6 +37,7 @@ const bodyId = `${id}-body`
     <SectionHeading
       as="h4"
       level="panel"
+      rank="group"
       class="request-group-heading"
     >
       <button

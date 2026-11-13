@@ -223,6 +223,7 @@ function evidence(attempt: Execution): string {
         <SectionHeading
           as="h4"
           level="panel"
+          rank="group"
           >{{ groupLabel(group.date) }}</SectionHeading
         >
         <ol class="attempt-list">
