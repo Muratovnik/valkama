@@ -19,6 +19,9 @@
  * - A template ref on the view reaches what the loaded component exposes, and
  *   nothing until its code is resident: a host types that ref as `Partial` of the
  *   component's instance and answers for a member that is not there yet.
+ * - A view that draws its own frame around its own waits, as the card does, hands
+ *   that frame over as `frame`, and the download's wait and failure stand in it: in
+ *   the column the view's own wait will take, not a frame's inset outside it.
  *
  * The holder is module-level on purpose: the code is downloaded once per page,
  * so whether it is resident is one fact shared by every place that draws it.
@@ -33,6 +36,16 @@ import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
 const LOADING = uiLoading()
 const FAILURE_REASON = 'platform.failures.viewDownloadFailed'
+
+export interface LazyViewOptions {
+  /**
+   * What the download's wait and failure stand in, for a view that brings its own
+   * frame: drawn from the first frame of the download with the props and listeners
+   * the view is given, so it can show what the view's frame shows before its record
+   * is read and answer the same close. The panel is its default slot.
+   */
+  frame?: Component
+}
 
 export interface LazyView<C extends Component> {
   /**
@@ -63,7 +76,10 @@ function whenIdle(task: () => void) {
 }
 
 /** Wrap a dynamic import as a view that loads on demand. */
-export function lazyView<C extends Component>(loader: () => Promise<{ default: C }>): LazyView<C> {
+export function lazyView<C extends Component>(
+  loader: () => Promise<{ default: C }>,
+  { frame }: LazyViewOptions = {},
+): LazyView<C> {
   const ready = shallowRef(false)
   let resident: Component | null = null
   let pending: Promise<Component> | null = null
@@ -152,11 +168,17 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
         mounted = false
       })
 
-      return () => {
+      function panel() {
         if (presence.shown.value) return h(PlatformStatePanel, { state: LOADING, since })
-        if (view.value !== null) return h(view.value, { ...attrs, ref: inner }, slots)
         if (failure.value === null) return null
         return h(PlatformStatePanel, { state: failure.value, onRetry: attempt })
+      }
+
+      return () => {
+        if (view.value !== null && !presence.shown.value)
+          return h(view.value, { ...attrs, ref: inner }, slots)
+        if (frame === undefined) return panel()
+        return h(frame, attrs, { default: panel })
       }
     },
   })

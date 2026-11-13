@@ -1,5 +1,5 @@
 import { defineComponent, h, shallowRef } from 'vue'
-import type { ShallowRef } from 'vue'
+import type { FunctionalComponent, ShallowRef } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
@@ -27,6 +27,21 @@ const Downloaded = defineComponent({
       ])
   },
 })
+
+/**
+ * A frame a view brings around its own waits: it shows the view's prop and answers its
+ * listener. A function, as a frame may be.
+ */
+const Frame: FunctionalComponent<{ label: string }, { pick: (from: string) => void }> = (
+  props,
+  { emit, slots },
+) =>
+  h('section', { class: 'frame' }, [
+    h('button', { class: 'frame-close', onClick: () => emit('pick', 'frame') }, props.label),
+    slots.default?.(),
+  ])
+Frame.props = ['label']
+Frame.emits = ['pick']
 
 /** A loader the test settles by hand, counting how often the network was asked. */
 function controlledLoader() {
@@ -249,5 +264,48 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     await flushPromises()
     expect('shown' in (target.value ?? {})).toBe(true)
     expect(target.value?.shown?.()).toBe('Graph')
+  })
+
+  // The card brings its own frame and waits inside it; its download has to wait there too,
+  // or the wait stands a frame's inset outside the column and jumps when the card arrives.
+  it('draws the frame a view brings from the start of its download, with its wait inside it', async () => {
+    const { calls, loader } = controlledLoader()
+    const onPick = vi.fn()
+    const wrapper = mountView(lazyView(loader, { frame: Frame }).component, onPick)
+
+    // At once, with what the view is given and answering its listeners; the view's own
+    // slot is the view's.
+    expect(wrapper.get('.frame').text()).toBe('Graph')
+    await wrapper.get('.frame-close').trigger('click')
+    expect(onPick).toHaveBeenCalledWith('frame')
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
+    await flushPromises()
+    expect(wrapper.get('.frame [aria-busy="true"]').text()).toContain('Loading')
+
+    calls[0]?.resolve()
+    await flushPromises()
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS)
+    await flushPromises()
+    expect(wrapper.find('.frame').exists()).toBe(false)
+    expect(wrapper.get('.downloaded').text()).toBe('Graph slot')
+  })
+
+  it('reports a failed download inside the frame, and Retry there downloads it again', async () => {
+    const { calls, loader } = controlledLoader()
+    const wrapper = mountView(lazyView(loader, { frame: Frame }).component)
+
+    calls[0]?.reject(new Error('Failed to fetch dynamically imported module'))
+    await flushPromises()
+    const alert = wrapper.get('.frame [role="alert"]')
+    expect(alert.text()).toContain('Could not load this view')
+
+    await alert.get('button').trigger('click')
+    expect(loader).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find('.frame').exists()).toBe(true)
+    calls[1]?.resolve()
+    await flushPromises()
+    expect(wrapper.find('.frame').exists()).toBe(false)
+    expect(wrapper.get('.downloaded').text()).toBe('Graph slot')
   })
 })

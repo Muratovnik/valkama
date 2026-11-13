@@ -179,7 +179,73 @@ test('the board stands without the card or the questions, and the card downloads
   expect(await page.locator('.workspace-head').boundingBox()).toEqual(header)
 })
 
-test('a card opened before its code arrives says so in the drawer, then shows the card', async ({
+/** The card's own read, which the backend answers once a test lets each request go on. */
+const CARD_READ = '**/api/modules/planning/work-item?*'
+
+/** Where an element stands inside the drawer, so the drawer sliding in moves nothing. */
+async function placeInDrawer(page: Page, selector: string) {
+  return page.locator(selector).evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const drawer = element.closest('.drawer')?.getBoundingClientRect()
+    return {
+      left: box.left - (drawer?.left ?? 0),
+      top: box.top - (drawer?.top ?? 0),
+      width: box.width,
+    }
+  })
+}
+
+interface DotsPlace {
+  /** Drawn by the card's own wait for its record, rather than by the wait for its code. */
+  card: boolean
+  left: number
+  top: number
+}
+
+/**
+ * Runs in the page: from now on, note each place in the drawer where a wait's dots were
+ * painted, on every mutation and every frame, so a place held for one frame is caught.
+ * The dots' row is measured, not a dot, whose pulse lifts it by two pixels.
+ */
+async function watchDrawerDots(page: Page) {
+  await page.evaluate(() => {
+    const places: DotsPlace[] = []
+    ;(window as unknown as { drawerDots?: DotsPlace[] }).drawerDots = places
+    const sample = () => {
+      for (const dots of document.querySelectorAll('.drawer [aria-busy="true"] .work-dots')) {
+        if (!dots.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue
+        const box = dots.getBoundingClientRect()
+        const drawer = dots.closest('.drawer')?.getBoundingClientRect()
+        const place = {
+          card: dots.closest('.inspector-scope') !== null,
+          left: Math.round((box.left - (drawer?.left ?? 0)) * 10) / 10,
+          top: Math.round((box.top - (drawer?.top ?? 0)) * 10) / 10,
+        }
+        if (!places.some((seen) => JSON.stringify(seen) === JSON.stringify(place)))
+          places.push(place)
+      }
+    }
+    new MutationObserver(sample).observe(document, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+    const frame = () => {
+      sample()
+      requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  })
+  return () =>
+    page.evaluate(() =>
+      structuredClone((window as unknown as { drawerDots?: DotsPlace[] }).drawerDots ?? []),
+    )
+}
+
+// The card draws its frame from its first frame and waits for its record inside it, in
+// the drawer's column. The wait for its code stood on the drawer's bare ground, a frame's
+// inset to the left of that column, and jumped there when the card took over.
+test('a card opened before its code arrives waits where the card will wait, then shows the card', async ({
   page,
 }, info) => {
   let held: Route | undefined
@@ -187,6 +253,11 @@ test('a card opened before its code arrives says so in the drawer, then shows th
     held = route
   })
   await openBoard(page)
+  const reads: Route[] = []
+  await page.route(CARD_READ, (route) => {
+    reads.push(route)
+  })
+  const places = await watchDrawerDots(page)
   await openTile(page)
 
   const drawer = page.locator('.drawer')
@@ -197,8 +268,75 @@ test('a card opened before its code arrives says so in the drawer, then shows th
 
   await expect.poll(() => held !== undefined).toBe(true)
   await held?.continue()
+  // The card takes over and waits for its record in the same drawer.
+  await expect(drawer.locator('.inspector-scope [aria-busy="true"]')).toContainText('Loading')
+  await drawer.screenshot(shot(info, 'w-bundle-card-own-wait.png'))
+  for (const read of reads) await read.fallback()
+  await page.unroute(CARD_READ)
   await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
   await expect(loading).toHaveCount(0)
+
+  const seen = await places()
+  const [own, ...more] = seen.filter((place) => place.card)
+  const waits = seen.filter((place) => !place.card)
+  expect(more).toEqual([])
+  expect(waits.length).toBeGreaterThan(0)
+  for (const wait of waits) {
+    expect(Math.abs(wait.left - (own?.left ?? Number.NaN))).toBeLessThanOrEqual(1)
+    expect(Math.abs(wait.top - (own?.top ?? Number.NaN))).toBeLessThanOrEqual(1)
+  }
+})
+
+test('a card whose code fails to download says so where the card will wait, and Retry shows the card', async ({
+  page,
+}, info) => {
+  const card = chunkRequests(page, CARD_CHUNK)
+  await page.route(CARD_CHUNK, (route) => route.abort('failed'))
+  await openBoard(page)
+  const reads: Route[] = []
+  await page.route(CARD_READ, (route) => {
+    reads.push(route)
+  })
+  await openTile(page)
+
+  const drawer = page.locator('.drawer')
+  const failure = drawer.locator('[role="alert"]')
+  await expect(failure).toContainText('Could not load this view')
+  await drawer.screenshot(shot(info, 'w-bundle-card-failed.png'))
+  const failed = await placeInDrawer(page, '.drawer [role="alert"]')
+
+  const attempts = card.length
+  await page.unroute(CARD_CHUNK)
+  await failure.getByRole('button', { name: 'Retry', exact: true }).click()
+  // The card's own wait for its record stands in the column the failure had to stand in.
+  await expect(drawer.locator('.inspector-scope [aria-busy="true"]')).toContainText('Loading')
+  const own = await placeInDrawer(page, '.drawer .inspector-scope [aria-busy="true"]')
+  expect(Math.abs(failed.left - own.left)).toBeLessThanOrEqual(1)
+  expect(Math.abs(failed.top - own.top)).toBeLessThanOrEqual(1)
+  expect(Math.abs(failed.width - own.width)).toBeLessThanOrEqual(1)
+
+  for (const read of reads) await read.fallback()
+  await page.unroute(CARD_READ)
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  await expect(failure).toHaveCount(0)
+  expect(card.length).toBeGreaterThan(attempts)
+})
+
+test('a card waiting for its code closes from its bar and with Escape', async ({ page }) => {
+  await page.route(CARD_CHUNK, () => {})
+  await openBoard(page)
+  const drawer = page.locator('.drawer')
+  const loading = drawer.locator('[aria-busy="true"]')
+
+  await openTile(page)
+  await expect(loading).toContainText('Loading')
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(drawer).toHaveCount(0)
+
+  await openTile(page)
+  await expect(loading).toContainText('Loading')
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
 })
 
 test('the questions opened before their code arrives say so in the dialog, then show', async ({

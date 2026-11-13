@@ -27,7 +27,9 @@ checkouts are therefore distinguishable even at the same version.
   can draw falls from 443 KiB to 367 KiB compressed. The card downloads once the board
   stands, so opening one still waits for nothing; the questions download as their dialog
   opens, beside the read it starts. Opened before its code has arrived, either says
-  «Loading» in its drawer or dialog after the usual delay rather than standing empty.
+  «Loading» in its drawer or dialog after the usual delay rather than standing empty; the
+  card's drawer shows its bar with Close at once, and its «Loading» stands where the card's
+  own will, so nothing moves when the card arrives.
 
 ### Fixed
 

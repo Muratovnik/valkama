@@ -606,7 +606,13 @@ and only fades the end of a strip that scrolls on past it.
   the page is idle, because opening one is the board's first action; the questions when
   their dialog first opens, beside the read that opening starts. One opened before its
   code has arrived says so with the panel's wait in the place it will stand — the drawer,
-  the dialog, the stage — after the same delay, and is never an empty panel. Only what is
+  the dialog, the stage — after the same delay, and is never an empty panel. A view that
+  draws its own frame around its own waits hands that frame to the boundary (`frame`), and
+  the download's wait and failure stand in it: the card's stand in the headless frame it
+  draws while its record is read (`InspectorWaitFrame`), with its bar and Close from the
+  first frame, so the dots stand in the card's column and do not move when the card's own
+  wait takes over. On the drawer's bare ground they stood a frame's inset, 24 px, to the
+  left of that column. Only what is
   drawn inside such a place goes behind that boundary: a component that stands closed
   beside the shell, such as a dialog with its frame, would draw that wait in the shell's
   flow. `production-lazy.spec.ts` holds each of them.
