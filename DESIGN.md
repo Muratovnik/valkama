@@ -2303,7 +2303,9 @@ column's line, and a state changes only its ground, its ink and the mark inside 
 draws a box past the column. Every rail entry is a box at rest, not only the chosen one, and
 the chosen entry's mark stands inside its box. Drawn for the chosen entry alone — a ground, a
 3px line on its start edge and corners rounded on one side only — the box read as the
-pointer's, and as an entry pushed out of its column.
+pointer's, and as an entry pushed out of its column. One stylesheet owns the model,
+`rowStates.css`, which each list and table reads as its own scoped style;
+`production-analytics-row-states.spec.ts` holds the rail to it in both languages.
 
 The page's levels are the four of the spacing rule: a section of the panel, a group in it such
 as an account of the quota, a block such as a chart or a window, and the block's lines, with

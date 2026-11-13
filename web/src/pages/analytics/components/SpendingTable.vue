@@ -248,6 +248,7 @@ defineExpose({ reveal })
         <tr
           v-for="line in lines"
           :key="line.key"
+          class="row-state tabular"
           :class="{ 'chart-rest': line.rest }"
           :data-key="line.key"
         >
@@ -293,6 +294,8 @@ defineExpose({ reveal })
 </template>
 
 <style scoped src="@/shared/ui/chartTable.css"></style>
+
+<style scoped src="@/shared/ui/rowStates.css"></style>
 
 <style scoped>
 /* The heading row, the notes and the frame, top to bottom, each as tall as it is. Its headings

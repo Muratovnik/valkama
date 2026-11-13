@@ -111,15 +111,29 @@ async function tabTo(page: Page, target: Locator) {
   throw new Error(`the keys never reached the control: ${keys.join(' ')}`)
 }
 
-/** The focused control: whether its ring shows, and where it and the ring stand. */
+/**
+ * The focused control: whether its ring shows, and where it and the ring stand. The one control
+ * a table row holds has its ring drawn by the row, inside the row's cells (`rowStates.css`), so
+ * there the ring and its box are the row's, as much of it as the table's frame shows: a table
+ * wider than its frame scrolls in it, and its row's name stays at the frame's start.
+ */
 const focusRing = (target: Locator) =>
   target.evaluate((element) => {
-    const { x, y, width, height } = element.getBoundingClientRect()
     const style = getComputedStyle(element)
+    const row = element.closest('.row-state.tabular')
+    const cell = row?.firstElementChild
+    const byRow = row && cell && getComputedStyle(cell).boxShadow.includes('inset') ? row : null
+    const rowRing = Number.parseFloat(style.getPropertyValue('--size-focus-ring'))
+    const drawn = (byRow ?? element).getBoundingClientRect()
+    const frame = byRow?.closest('.chart-table-frame')?.getBoundingClientRect()
+    const x = frame ? Math.max(drawn.left, frame.left) : drawn.left
+    const width = (frame ? Math.min(drawn.right, frame.right) : drawn.right) - x
+    const { y, height } = drawn
+    const ownRing = style.outlineStyle === 'none' ? 0 : Number.parseFloat(style.outlineWidth)
     return {
       visible: element.matches(':focus-visible'),
-      ring: style.outlineStyle === 'none' ? 0 : Number.parseFloat(style.outlineWidth),
-      offset: Number.parseFloat(style.outlineOffset),
+      ring: byRow ? rowRing : ownRing,
+      offset: byRow ? -rowRing : Number.parseFloat(style.outlineOffset),
       box: {
         x: Math.round(x),
         y: Math.round(y),
