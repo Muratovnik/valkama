@@ -267,6 +267,18 @@ _GROUPS: dict[int, _Group] = {
     WEEK: _Group(lookback=24 * HOUR, min_history=MIN_HISTORY_WEEK, from_reset=True),
 }
 
+#: How old a series' latest reading may be and still say how fast its window is being
+#: spent now: the five-hour pace's own recent span. Samples are kept only when a value
+#: changed, so the latest one says when the window last moved; one older than this is
+#: silent. Alerts raise nothing on a silent series, and a page says it is silent.
+FRESH_FOR = _GROUPS[FIVE_HOURS].lookback
+
+
+def fresh(at: int, now: int) -> bool:
+    """Whether a reading made at `at` is fresh at `now` (`FRESH_FOR`)."""
+
+    return now - at <= FRESH_FOR
+
 
 class _Timed(Protocol):
     @property

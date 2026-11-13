@@ -27,6 +27,9 @@ else the one account of the organization whose samples name the same seat
 (`account_of_seat`). A seat key names one week's reset, so the same key is the same week.
 A seat no sample with a UUID names, or that two accounts' samples name, is provisional:
 the seat is known for that week and its account is not.
+
+`account_samples` is the one read of samples by account, for whatever reads the quota
+of an account: the alerts and the Analytics read.
 """
 
 from __future__ import annotations
@@ -83,6 +86,86 @@ def account_of_seat(conn: sqlite3.Connection, organization: str, seat: str) -> s
         (organization, seat),
     ).fetchall()
     return str(found[0][0]) if len(found) == 1 else None
+
+
+@dataclass(frozen=True)
+class AccountSample:
+    """One sample whose account can be named, with its organization and its account's UUID.
+
+    `account_uuid` is the sample's own, or else the one `account_of_seat` gives its seat;
+    `None` leaves the sample on its provisional seat, which it then always has.
+    """
+
+    at: str
+    source: str
+    organization: str
+    seat: str | None
+    account_uuid: str | None
+    kind: str
+    model: str | None
+    percent: float | None
+    resets_at: str | None
+
+
+#: Every sample of some kinds since a moment, in the order they were made.
+_SINCE = (
+    "SELECT at, source, organization, session_id, account_uuid, seat, kind, model, percent,"
+    " resets_at FROM quota_samples WHERE at >= ? AND kind IN ({}) ORDER BY at, id"
+)
+
+
+def account_samples(
+    conn: sqlite3.Connection, since: str, kinds: tuple[str, ...]
+) -> list[AccountSample]:
+    """The samples of `kinds` since `since` whose account can be named, oldest first.
+
+    A session's sample takes the organization the session was working for at its moment
+    (`organization_at`) and is passed over while that is not known. A sample with neither
+    an account's UUID nor a seat names no account and is passed over too.
+    """
+
+    organizations: dict[tuple[str, str], str | None] = {}
+    accounts: dict[tuple[str, str], str | None] = {}
+    known: list[AccountSample] = []
+    query = _SINCE.format(", ".join("?" * len(kinds)))
+    for (
+        at,
+        source,
+        organization,
+        session,
+        uuid,
+        seat,
+        kind,
+        model,
+        percent,
+        resets_at,
+    ) in conn.execute(query, (since, *kinds)):
+        if uuid is None and seat is None:
+            continue
+        if organization is None:
+            if (session, at) not in organizations:
+                organizations[session, at] = organization_at(conn, session, at)
+            organization = organizations[session, at]
+            if organization is None:
+                continue
+        if uuid is None:
+            if (organization, seat) not in accounts:
+                accounts[organization, seat] = account_of_seat(conn, organization, seat)
+            uuid = accounts[organization, seat]
+        known.append(
+            AccountSample(
+                at,
+                source,
+                organization,
+                seat,
+                uuid,
+                kind,
+                model,
+                None if percent is None else float(percent),
+                resets_at,
+            )
+        )
+    return known
 
 
 def _week_end(seat: str) -> str:
@@ -168,4 +251,12 @@ def seat_of_segment(
     )
 
 
-__all__ = ["UNKNOWN", "Seat", "account_of_seat", "organization_at", "seat_of_segment"]
+__all__ = [
+    "UNKNOWN",
+    "AccountSample",
+    "Seat",
+    "account_of_seat",
+    "account_samples",
+    "organization_at",
+    "seat_of_segment",
+]
